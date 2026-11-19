@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { can, formatNumber, type ChannelRole } from '@al-ummah/shared-types';
+import { englishOf, hasAnyLanguage, primaryText, trimPair } from '@/lib/localized-input';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
@@ -44,9 +45,9 @@ const EMPTY_ABOUT: ChannelAboutValues = { handle: '', links: [], contactEmail: '
 
 function textFieldsOf(channel: ChannelData): TextFields {
   return {
-    nameEn: channel.nameLocalized?.en || channel.name || '',
+    nameEn: englishOf(channel.name, channel.nameLocalized),
     nameAr: channel.nameLocalized?.ar || '',
-    descriptionEn: channel.descriptionLocalized?.en || channel.description || '',
+    descriptionEn: englishOf(channel.description, channel.descriptionLocalized),
     descriptionAr: channel.descriptionLocalized?.ar || '',
   };
 }
@@ -128,9 +129,10 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
     try {
       const handle = about.handle.trim();
       const result = await updateChannelProfile(channelId, {
-        name: fields.nameEn,
-        nameLocalized: { en: fields.nameEn, ar: fields.nameAr },
-        description: fields.descriptionEn,
+        // Plain fields: English when filled, else Arabic (user content needs one language only)
+        name: primaryText({ en: fields.nameEn, ar: fields.nameAr }),
+        nameLocalized: trimPair({ en: fields.nameEn, ar: fields.nameAr }),
+        description: primaryText({ en: fields.descriptionEn, ar: fields.descriptionAr }),
         descriptionLocalized: { en: fields.descriptionEn, ar: fields.descriptionAr },
         // Only a changed handle is sent (an empty field keeps the current one); admins never send one
         ...(!handleLocked && handle && handle.replace(/^@+/, '') !== (channel.handle || '') ? { handle } : {}),
@@ -228,7 +230,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
     );
   }
 
-  const initial = (fields.nameEn || channel.name || '?').charAt(0).toUpperCase();
+  const initial = (primaryText({ en: fields.nameEn, ar: fields.nameAr }) || channel.name || '?').charAt(0).toUpperCase();
   const counter = (n: number, max: number) => text.count.replace('{n}', formatNumber(lang, n)).replace('{max}', formatNumber(lang, max));
 
   return (
@@ -253,7 +255,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
         <div className="px-4 pb-4 md:px-6">
           <EditableAvatar
             url={images.avatarUrl}
-            alt={fields.nameEn || channel.name || t.channel.currentAvatar}
+            alt={primaryText({ en: fields.nameEn, ar: fields.nameAr }) || channel.name || t.channel.currentAvatar}
             onPick={() => document.getElementById('studio-avatar-input')?.click()}
             onRemove={() => void removeImage('avatar')}
             labels={{ pick: t.channel.clickToChangeAvatar, change: t.channel.changeAvatar, remove: t.channel.removeAvatar }}
@@ -300,9 +302,9 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor="channel-name-en" className="mb-1.5 block text-sm font-medium text-foreground">
-              {text.nameEn} <span aria-hidden="true" className="text-[var(--fanous-color-error-text)]">*</span>
+              {text.nameEn}{!fields.nameAr.trim() && <span aria-hidden="true" className="text-[var(--fanous-color-error-text)]"> *</span>}
             </label>
-            <input id="channel-name-en" dir="ltr" required maxLength={NAME_MAX} value={fields.nameEn} onChange={setField('nameEn')} className={FIELD} disabled={saving} />
+            <input id="channel-name-en" dir="ltr" required={!fields.nameAr.trim()} maxLength={NAME_MAX} value={fields.nameEn} onChange={setField('nameEn')} className={FIELD} disabled={saving} />
           </div>
           <div>
             <label htmlFor="channel-name-ar" className="mb-1.5 block text-sm font-medium text-foreground">{text.nameAr}</label>
@@ -338,7 +340,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
           <Button
             type="submit"
             className="min-h-11"
-            disabled={saving || !fields.nameEn.trim() || !canSubmitAboutFields(about, handleStatus)}
+            disabled={saving || !hasAnyLanguage({ en: fields.nameEn, ar: fields.nameAr }) || !canSubmitAboutFields(about, handleStatus)}
             data-testid="channel-edit-save"
           >
             {saving && <Loader2 aria-hidden="true" className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
