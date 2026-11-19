@@ -43,7 +43,7 @@ import { isSystemPlaylist } from "../../lib/library";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { cachedBan } from "../../lib/admin/bans";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
-import { waitUntilOf } from "../../lib/search/ownership";
+import { ownedChannelIds, waitUntilOf } from "../../lib/search/ownership";
 import type { SearchDb } from "@al-ummah/shared-types";
 
 type ProfileType = z.infer<typeof BusinessProfile>;
@@ -214,7 +214,11 @@ export class UserByHandleFetch extends OptionalAuthRoute {
 		if (!found) return notFound(c);
 		const { userId, profile, privacy } = found;
 		const locale = nameLocale(c);
-		const channels = await readChannels(c.env.channels, [...new Set(profile.channels || [])]);
+		// Channels the user owns: the ownership index (channel create never writes profile.channels),
+		// plus any legacy ids on the profile; each one is re-checked as owned by this user and public
+		const indexed = await ownedChannelIds(c.env as never, userId).catch(() => null);
+		const channels = (await readChannels(c.env.channels, [...new Set([...(indexed ?? []), ...(profile.channels || [])])]))
+			.filter((ch) => (ch as { userId?: string }).userId === userId);
 		// Main channel first, then oldest first
 		channels.sort((a, b) => Number(b.isMain === true) - Number(a.isMain === true) || String(a.dateCreated).localeCompare(String(b.dateCreated)));
 		const name = resolveDisplayName(profile, locale);

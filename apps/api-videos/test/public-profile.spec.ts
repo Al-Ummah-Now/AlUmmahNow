@@ -201,6 +201,14 @@ describe('public profile reads', () => {
 		assert.equal(p.subscribedTo, undefined);
 	});
 
+	it("a channel id on the profile that another user owns is never listed as theirs", async () => {
+		const e = env();
+		e.profiles = new MemoryBucket({ me: profile('me', { channels: ['pub', 'other'] }), you: profile('you') });
+		await put(e, { handle: 'Sara' });
+		const res = await call(e, '/api/users/by-handle/@sara');
+		assert.deepEqual(res.body.result.profile.channels.map((c: any) => c.id), ['pub']);
+	});
+
 	it('a profile an admin removed is not shown', async () => {
 		const e = env();
 		await put(e, { handle: 'Sara' });
