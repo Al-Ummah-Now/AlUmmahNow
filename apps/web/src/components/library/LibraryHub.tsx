@@ -1,6 +1,5 @@
 'use client';
 
-import { formatNumber } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Bookmark, Clock, History, ListVideo, ThumbsUp, Library as LibraryIcon } from 'lucide-react';
@@ -10,8 +9,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { LibraryService, type SavedPost } from '@/services/api/library';
 import { WatchHistoryService } from '@/services/api/watch-history';
 import { listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
-import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
 import { logger } from '@/lib/logger-client';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 import { LibraryVideoTile, type LibraryTileVideo } from './LibraryVideoTile';
 import { SavedPostCard } from './SavedPostCard';
 
@@ -224,7 +223,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
           >
             <ListVideo className="mb-2 h-6 w-6 text-gray-500" aria-hidden="true" />
             <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">{p.name || (p as { title?: string }).title}</p>
-            <p className="text-xs text-gray-500">{fillTemplate(texts.videosCount, { count: formatNumber(lang, p.videos?.length || 0) })}</p>
+            <p className="text-xs text-gray-500">{formatVideoCount(p.videos?.length ?? 0, lang)}</p>
           </Link>
         )}
       />
