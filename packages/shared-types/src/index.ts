@@ -26,6 +26,7 @@ export * from './comment';
 export * from './analytics';
 export * from './analytics-collection';
 export * from './site-visits';
+export * from './request-origin';
 export * from './short-links';
 export * from './common';
 export * from './watch-history';

@@ -32,6 +32,7 @@
 --   apps/admin-api/migrations/0037_error_event_context.sql
 --   apps/admin-api/migrations/0038_contact_inbox_read_spam.sql
 --   apps/admin-api/migrations/0039_admin_staff.sql
+--   apps/admin-api/migrations/0040_error_event_origin.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -52,7 +53,7 @@ CREATE TABLE email_templates (key TEXT PRIMARY KEY, version INTEGER NOT NULL, co
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
 CREATE TABLE erased_users (user_key TEXT PRIMARY KEY, erased_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE error_actions (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, environment TEXT NOT NULL, item_key TEXT NOT NULL, app TEXT NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, detail TEXT, item_type TEXT, item_id TEXT, item_url TEXT, retry_json TEXT, retry_label TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'retrying', 'resolved', 'dismissed')), occurrences INTEGER NOT NULL DEFAULT 1, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_attempt_result TEXT, last_attempt_by TEXT, last_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, UNIQUE (environment, item_key));
-CREATE TABLE error_events (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, ref TEXT NOT NULL, kind TEXT NOT NULL, occurred_at TEXT NOT NULL, received_at TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 1, release TEXT, worker_version TEXT, environment TEXT, route TEXT, method TEXT, status INTEGER, locale TEXT, theme TEXT, browser TEXT, os TEXT, user_id TEXT, request_id TEXT, name TEXT, message TEXT NOT NULL, stack TEXT, symbolicated_stack TEXT, shown INTEGER NOT NULL DEFAULT 0, extra_json TEXT, context_json TEXT);
+CREATE TABLE error_events (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, ref TEXT NOT NULL, kind TEXT NOT NULL, occurred_at TEXT NOT NULL, received_at TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 1, release TEXT, worker_version TEXT, environment TEXT, route TEXT, method TEXT, status INTEGER, locale TEXT, theme TEXT, browser TEXT, os TEXT, user_id TEXT, request_id TEXT, name TEXT, message TEXT NOT NULL, stack TEXT, symbolicated_stack TEXT, shown INTEGER NOT NULL DEFAULT 0, extra_json TEXT, context_json TEXT, origin_surface TEXT, origin_source TEXT);
 CREATE TABLE error_group_activity (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('created', 'status', 'assign', 'note', 'reopened', 'alert', 'retry', 'item')), from_status TEXT, to_status TEXT, body TEXT, actor_id TEXT, actor_email TEXT, created_at TEXT NOT NULL);
 CREATE TABLE error_group_releases (group_id TEXT NOT NULL, release TEXT NOT NULL, occurrences INTEGER NOT NULL DEFAULT 0, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, PRIMARY KEY (group_id, release));
 CREATE TABLE error_group_users (group_id TEXT NOT NULL, user_key TEXT NOT NULL, PRIMARY KEY (group_id, user_key));
@@ -118,6 +119,7 @@ CREATE INDEX idx_erased_users_erased_at ON erased_users (erased_at);
 CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);
 CREATE INDEX idx_error_actions_status ON error_actions (status, updated_at DESC);
 CREATE INDEX idx_error_events_group ON error_events (group_id, occurred_at DESC);
+CREATE INDEX idx_error_events_origin ON error_events (origin_surface, received_at);
 CREATE INDEX idx_error_events_received ON error_events (received_at);
 CREATE INDEX idx_error_events_request ON error_events (request_id);
 CREATE INDEX idx_error_events_user ON error_events (user_id);

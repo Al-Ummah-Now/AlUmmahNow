@@ -102,6 +102,9 @@ export interface ErrorEventRow {
   extra_json: string | null;
   /** eventContext() as JSON (migration 0037); null on events stored before it */
   context_json: string | null;
+  /** context.origin.surface / .source (migration 0040), for the Origin filter */
+  origin_surface?: string | null;
+  origin_source?: string | null;
 }
 
 export interface ErrorActivityRow {
@@ -374,13 +377,13 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
         db
           .prepare(
             `INSERT INTO error_events (id, group_id, ref, kind, occurred_at, received_at, count, release, worker_version, environment, route, method, status,
-                                       locale, theme, browser, os, user_id, request_id, name, message, stack, symbolicated_stack, shown, extra_json, context_json)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                       locale, theme, browser, os, user_id, request_id, name, message, stack, symbolicated_stack, shown, extra_json, context_json, origin_surface, origin_source)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             eventId, gid, e.ref, e.kind, occurredAt, nowIso, count, e.release ?? null, e.workerVersion ?? null, environment, e.route ?? null, e.method ?? null, e.status ?? null,
             e.locale ?? null, e.theme ?? null, ctx.browser || null, ctx.os || null, e.userId ?? null, e.requestId ?? null, e.name ?? null, e.message, e.stack ?? null,
-            symbolicated, e.shown ? 1 : 0, e.extra ? JSON.stringify(e.extra) : null, contextJson(e, environment),
+            symbolicated, e.shown ? 1 : 0, e.extra ? JSON.stringify(e.extra) : null, contextJson(e, environment), e.context?.origin?.surface ?? null, e.context?.origin?.source ?? null,
           ),
         db.prepare('UPDATE error_refs SET event_id = ? WHERE ref = ? AND group_id = ?').bind(eventId, e.ref, gid),
         db.prepare('UPDATE error_groups SET samples = samples + 1 WHERE id = ?').bind(gid),

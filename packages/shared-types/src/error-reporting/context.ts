@@ -6,6 +6,7 @@
  * Workers is in ./trail.ts.
  */
 import { scrubText, scrubUrl } from './scrub';
+import { scrubOrigin, type RequestOrigin } from '../request-origin';
 
 export interface ErrorBreadcrumb {
   /** ISO time */
@@ -36,6 +37,8 @@ export interface ErrorContext {
   channelId?: string;
   videoId?: string;
   upstream?: ErrorUpstream;
+  /** Where the failing request came from (request-origin.ts): surface, source, country, device; no PII */
+  origin?: RequestOrigin;
   breadcrumbs?: ErrorBreadcrumb[];
   job?: ErrorJob;
 }
@@ -86,6 +89,7 @@ export function scrubContext(raw: unknown): ErrorContext | undefined {
       : undefined,
     breadcrumbs: crumbs.length ? crumbs : undefined,
     job: job ? compact<ErrorJob>({ queue: name(job.queue), id: name(job.id), attempt: int(job.attempt, 1000) }) : undefined,
+    origin: scrubOrigin(c.origin),
   }) as ErrorContext | undefined;
 }
 
@@ -141,3 +145,6 @@ export function batchJob(batch: { queue?: string; messages: readonly { id?: stri
   if (attempts.length) job.attempt = Math.max(...attempts);
   return job;
 }
+
+/** A path as a route template for an origin's entry page ("/ar/video/abc123" → "/:locale/video/:id"). */
+export { normalizeRoute as normalizeRouteForOrigin } from './fingerprint';
