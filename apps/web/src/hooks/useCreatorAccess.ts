@@ -104,4 +104,11 @@ export function useCreatorAccess(): CreatorAccessState {
 
 /** False only when the server said so; while loading or unknown the server's answer decides. */
 export const mayUpload = (state: CreatorAccessState) => state.status !== 'ready' || state.access.canUpload;
+/**
+ * Whether to show an entry point to uploading (the header and tab bar Upload, "upload your first
+ * video" invitations): only once the server said this account's tier allows it. Signed out, while
+ * loading and when the answer could not be read there is none: a feature the visitor can't use is
+ * never shown or teased (uploads are by invitation).
+ */
+export const showsUpload = (state: CreatorAccessState) => state.status === 'ready' && state.access.canUpload;
 export const mayCreateChannel = (state: CreatorAccessState) => state.status !== 'ready' || state.access.canCreateChannel;

@@ -12,6 +12,7 @@ import { UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPl
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { useLanguage } from '@/hooks/useLanguage';
+import { showsUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -54,6 +55,7 @@ function getVideoStatus(video: VideoObject): VideoStatus {
 
 export default function VideoDashboardPage() {
   const { t, lang } = useLanguage();
+  const uploadsOn = showsUpload(useCreatorAccess());
   const { user } = useAuth();
   const { user: multiAccountUser, loading: multiAccountLoading } = useMultiAccount();
   const router = useRouter();
@@ -557,7 +559,8 @@ export default function VideoDashboardPage() {
           <div data-testid="dashboard-empty" className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
             <UploadCloud size={64} className="mx-auto mb-4 text-gray-400" />
             <h2 className="text-2xl font-semibold mb-2 dark:text-white">{t.video.noVideosFound}</h2>
-            <p className="text-gray-600 dark:text-gray-400">{t.video.uploadFirstVideo}</p>
+            {/* The upload invitation only for an account whose tier allows uploads (by invitation) */}
+            {uploadsOn && <p className="text-gray-600 dark:text-gray-400" data-testid="dashboard-empty-upload">{t.video.uploadFirstVideo}</p>}
           </div>
         ) : (
           <div data-testid="dashboard-video-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

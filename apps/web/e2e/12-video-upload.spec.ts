@@ -383,6 +383,7 @@ test.describe('Video Upload - Error Handling', () => {
       await expect(page.getByText(/by invitation/i)).toHaveCount(0);
       await expect(ui.dropzone).toHaveCount(0);
       await expect(page.getByTestId('header-upload')).toHaveCount(0);
+      await expect(page.getByTestId('tab-upload')).toHaveCount(0);
     });
 
     test('the upload page is not found without a tier in Arabic', async ({ page }) => {

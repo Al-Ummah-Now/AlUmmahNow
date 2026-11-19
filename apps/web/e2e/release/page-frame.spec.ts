@@ -3,9 +3,9 @@
  * "Header"). The top bar holds the menu button, the logo lockup, the header search (#475), then
  * Upload, the bell, language, light/dark and the account (Sign in when signed out);
  * desktop has a sidebar the menu button widens; phones have a drawer and a bottom tab bar that
- * also carries Upload and More (the drawer). Upload is a link for signed-out visitors
- * (the upload page asks them to sign in), disabled for a signed-in user with
- * no channel, and opens the upload form once they have one.
+ * also carries Upload and More (the drawer). Uploading is by invitation (creator tiers): a
+ * signed-out visitor sees no Upload anywhere (header or tab bar); a creator sees it disabled with
+ * no channel, and it opens the upload form once they have one.
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
@@ -62,15 +62,10 @@ test.describe('Release: page frame', () => {
         const header = page.locator('header.ah');
         await expect(header).toBeVisible();
         const toggle = header.getByTestId('nav-drawer-toggle');
-        const upload = header.getByTestId('header-upload');
         await expect(toggle).toBeVisible();
-        await expect(upload).toBeVisible();
-        await expectUploadAfterSearch(page, locale);
-        // Labelled on desktop, and a link to the upload page for a signed-out visitor
-        await expect(upload).toHaveAttribute('data-state', 'signed-out');
-        await expect(upload).toHaveAttribute('href', `/${locale}/upload`);
-        await expect(upload).toHaveAccessibleName(UPLOAD_LABEL[locale]);
-        await expect(upload.locator('.upload-action-label')).toBeVisible();
+        // Uploading is by invitation: a signed-out visitor has no Upload (never a teaser)
+        await expect(header.getByTestId('header-sign-in')).toBeVisible();
+        await expect(page.getByTestId('header-upload')).toHaveCount(0);
         // Signed out the account control is the solid Sign in; language and light/dark sit beside it
         await expect(header.getByTestId('header-sign-in')).toBeVisible();
         await expect(header.getByTestId('nav-menu-trigger')).toHaveCount(0);
@@ -113,31 +108,28 @@ test.describe('Release: page frame', () => {
         await expectNoSidewaysScroll(page);
       });
 
-      test('Upload takes a signed-out visitor to the sign-in prompt', async ({ page, context }) => {
+      test('a signed-out visitor sees no Upload in the header, tab bar or drawer', async ({ page, context }) => {
         await answerConsent(context);
         await page.goto(`${target().web}/${locale}`);
-        await page.getByTestId('header-upload').click();
-        await expect(page).toHaveURL(`${target().web}/${locale}/upload`);
-        await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
-        // The page asks for sign-in instead of the form
-        await expect(page.locator('main').getByRole('button').or(page.locator('main').getByRole('link')).first()).toBeVisible();
+        await expect(page.getByTestId('header-sign-in')).toBeVisible();
+        await expect(page.getByTestId('header-upload')).toHaveCount(0);
+        await expect(page.getByTestId('tab-upload')).toHaveCount(0);
+        await expect(page.locator('header.ah, nav.tabbar, [data-testid="side-nav"]').locator('a[href*="/upload"]')).toHaveCount(0);
       });
     });
 
     test.describe(`phone (${locale})`, () => {
       test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-      test('tab bar with Upload and More, drawer, and the header tools', async ({ page, context }) => {
+      test('tab bar with More, drawer, and the header tools (no Upload signed out)', async ({ page, context }) => {
         await answerConsent(context);
         await page.goto(`${target().web}/${locale}`);
-        // Below 640px Upload and the drawer's button leave the header for the tab bar
+        // Below 640px the drawer's button leaves the header for the tab bar; signed out there is no
+        // Upload in either (uploading is by invitation)
         const toggle = page.getByTestId('nav-more-tab');
-        const upload = page.getByTestId('tab-upload');
         await expect(page.getByTestId('nav-drawer-toggle')).toBeHidden();
-        await expect(page.getByTestId('header-upload')).toBeHidden();
-        await expect(upload).toBeVisible();
-        await expect(upload).toHaveAttribute('href', `/${locale}/upload`);
-        await expect(upload).toHaveAccessibleName(UPLOAD_LABEL[locale]);
+        await expect(page.getByTestId('header-upload')).toHaveCount(0);
+        await expect(page.getByTestId('tab-upload')).toHaveCount(0);
         // The header keeps the logo, search, language, light/dark and Sign in on one 56px line
         const header = page.locator('header.ah');
         expect(Math.round((await header.boundingBox())!.height)).toBe(56);
@@ -146,11 +138,10 @@ test.describe('Release: page frame', () => {
         await expect(page.getByTestId('header-search-open')).toBeVisible();
         await expect(page.getByTestId('header-search-input')).toBeHidden();
 
-        // Bottom tab bar: home, explore, Upload, subscriptions, library, More; home is current
+        // Bottom tab bar signed out: home, explore, subscriptions, library, More; home is current
         const tabs = page.locator('nav.tabbar a');
         await expect(page.locator('nav.tabbar')).toBeVisible();
-        await expect(tabs).toHaveCount(5);
-        await expect(tabs.nth(2)).toHaveAttribute('data-testid', 'tab-upload');
+        await expect(tabs).toHaveCount(4);
         await expect(tabs.nth(0)).toHaveAttribute('aria-current', 'page');
         const bar = (await page.locator('nav.tabbar').boundingBox())!;
         expect(Math.round(bar.y + bar.height)).toBe(PHONE.height);
@@ -273,10 +264,23 @@ test.describe('Release: page frame', () => {
       .toBe(true);
 
     await expect(upload).toHaveAttribute('data-state', 'ready', { timeout: 30000 });
-    await expect(upload).toHaveAccessibleName('Upload Video');
+    await expect(upload).toHaveAccessibleName(UPLOAD_LABEL.en);
+    // A creator's Upload is the first header tool after the search, labelled on desktop
+    await expectUploadAfterSearch(page, 'en');
+    await expect(upload.locator('.upload-action-label')).toBeVisible();
     await upload.click();
     // Upload opens on the active channel (the picker reads ?channel=)
     await expect(page).toHaveURL(new RegExp(`^${target().web}/en/upload\\?channel=[^&]+$`));
     await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+
+    // On a phone the creator's Upload is the tab bar's centre item, in Arabic too
+    await page.setViewportSize(PHONE);
+    await page.goto(`${target().web}/ar`);
+    const tab = page.getByTestId('tab-upload');
+    await expect(tab).toBeVisible({ timeout: 30000 });
+    await expect(tab).toHaveAttribute('href', /^\/ar\/upload\?channel=[^&]+$/);
+    await expect(tab).toHaveAccessibleName(UPLOAD_LABEL.ar);
+    await expect(page.locator('nav.tabbar a').nth(2)).toHaveAttribute('data-testid', 'tab-upload');
+    await expect(page.getByTestId('header-upload')).toBeHidden();
   });
 });

@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit, ListPlus, MoreVertical, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { showsUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
@@ -36,6 +37,7 @@ const MAX_VIDEO_PAGES = 10;
 
 export default function ChannelVideosPage() {
   const { t, lang } = useLanguage();
+  const uploadsOn = showsUpload(useCreatorAccess());
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -380,7 +382,8 @@ export default function ChannelVideosPage() {
           <div className="c empty">
             <UploadCloud size={64} aria-hidden="true" />
             <h2 className="text-2xl font-semibold text-[var(--fanous-color-text-primary)]">{t.video.noVideosFound}</h2>
-            <p>{t.video.uploadFirstVideo}</p>
+            {/* The upload invitation only for an account whose tier allows uploads (by invitation) */}
+            {uploadsOn && <p data-testid="channel-videos-empty-upload">{t.video.uploadFirstVideo}</p>}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
