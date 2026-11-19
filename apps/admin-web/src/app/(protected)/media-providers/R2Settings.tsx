@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { dateTimeFormat, TRANSCODE_LIMIT_FLOOR, type TranscodeLimitView, type TranscodeRange } from '@al-ummah/shared-types';
+import { dateTimeFormat, numberFormat, TRANSCODE_LIMIT_FLOOR, type TranscodeLimitView, type TranscodeRange } from '@al-ummah/shared-types';
 import { setTranscodeLimit } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
@@ -28,8 +28,10 @@ export function R2Settings({ initial }: { initial: TranscodeLimitView | null }) 
   const router = useRouter();
   const { run } = useUndoableAction();
   const [view, setView] = useState<TranscodeLimitView | null>(initial);
-  const [minText, setMinText] = useState(initial ? String(initial.min) : '');
-  const [maxText, setMaxText] = useState(initial ? String(initial.max) : '');
+  // The fields show the admin's digits («٢», not "2"); either digit set may be typed (limit-form.ts)
+  const digits = (n: number) => numberFormat(locale, { useGrouping: false }).format(n);
+  const [minText, setMinText] = useState(initial ? digits(initial.min) : '');
+  const [maxText, setMaxText] = useState(initial ? digits(initial.max) : '');
   const [error, setError] = useState<{ text: string; field: 'min' | 'max' | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const ids = { min: useId(), max: useId(), help: useId(), cost: useId(), error: useId() };
@@ -62,8 +64,8 @@ export function R2Settings({ initial }: { initial: TranscodeLimitView | null }) 
     const result = await setTranscodeLimit(next, undo);
     if (!result.ok || !result.data) throw new Error(result.ok ? 'empty answer' : `HTTP ${result.status}: ${result.error}`);
     setView(result.data);
-    setMinText(String(result.data.min));
-    setMaxText(String(result.data.max));
+    setMinText(digits(result.data.min));
+    setMaxText(digits(result.data.max));
     router.refresh();
     return result.data;
   };
@@ -102,11 +104,10 @@ export function R2Settings({ initial }: { initial: TranscodeLimitView | null }) 
       <label htmlFor={ids[which]} className="block text-sm font-medium text-fg mb-1">{t(label)}</label>
       <input
         id={ids[which]}
-        type="number"
+        // Text, not type="number": a number field holds only 0–9 and refuses ٠–٩ on an Arabic page
+        type="text"
         inputMode="numeric"
-        min={TRANSCODE_LIMIT_FLOOR}
-        max={ceiling ?? undefined}
-        step={1}
+        autoComplete="off"
         value={value}
         onChange={(e) => {
           set(e.target.value);
