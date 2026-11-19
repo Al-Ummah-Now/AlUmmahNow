@@ -1691,7 +1691,7 @@ const ar: Messages = {
     channel: 'القناة',
     none: '—',
     noChannel: 'بلا قناة (قديم)',
-    openReports: '{count} مفتوحة',
+    openReports: 'بلاغات مفتوحة: {count}',
     reports: 'البلاغات',
     reportsEmpty: 'لا توجد بلاغات',
     reportOpen: 'فتح البلاغ',
