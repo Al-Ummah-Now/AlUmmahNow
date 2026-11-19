@@ -16,7 +16,7 @@ export default function TextPost({ post, isRTL = false }: TextPostProps) {
       'prose dark:prose-invert max-w-none',
       isRTL && 'text-right'
     )}>
-      <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
+      <p dir="auto" className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
         {post.content}
       </p>
     </div>

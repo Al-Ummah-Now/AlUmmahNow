@@ -29,4 +29,9 @@ describe('CommentBody author link', () => {
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByAltText(/Sara/)).toBeInTheDocument();
   });
+
+  it('the comment text takes its own direction (an English comment keeps its full stop at the end on Arabic pages)', () => {
+    render(<CommentBody {...base} dir="rtl" text="This recitation is beautiful." />);
+    expect(screen.getByTestId('comment-text')).toHaveAttribute('dir', 'auto');
+  });
 });

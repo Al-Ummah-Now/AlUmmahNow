@@ -404,7 +404,7 @@ export default function Comment({
             </div>
           </div>
         ) : (
-          <p className={cn('mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words', isRTL && 'text-right')}>
+          <p dir="auto" className={cn('mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words', isRTL && 'text-right')}>
             {comment.deletedAt ? (isRTL ? '[تم حذف هذا التعليق]' : '[This comment has been deleted]') : comment.content}
           </p>
         )}
