@@ -40,6 +40,11 @@ describe('admin date field', () => {
     for (const bad of ['2026-11-18', '2026-11-18 24:00', '2026-11-18 9:60', '2026-02-30 10:00']) assert.equal(parseDateTimeInput(bad), null, bad);
   });
 
+  it('an active date filter chip shows the day in the admin digits, not the raw ISO', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/components/list/FiltersBar.tsx', import.meta.url)), 'utf8');
+    assert.match(src, /field\.kind === 'date'\) return formatDateInput\(value, locale\)/);
+  });
+
   it('every admin date filter uses the shared field (no bare type="date" left)', () => {
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
       const p = join(dir, n);

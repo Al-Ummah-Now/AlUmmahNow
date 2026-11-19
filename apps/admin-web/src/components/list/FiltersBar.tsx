@@ -17,7 +17,7 @@ import type { FilterField } from '@/components/content/FilterForm';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { fieldClass, linkClass } from '@/components/ui';
 import type { ListChanges, ListValues } from '@/lib/list/params';
-import { DateField } from '@/components/DateField';
+import { DateField, formatDateInput } from '@/components/DateField';
 
 export type { FilterField };
 
@@ -35,14 +35,16 @@ interface FiltersBarProps {
   formRef?: React.Ref<HTMLFormElement>;
 }
 
-function fieldText(field: FilterField, value: string, on: string): string {
+function fieldText(field: FilterField, value: string, on: string, locale: string): string {
   if (field.kind === 'select') return field.options.find((o) => o.value === value)?.label ?? value;
   if (field.kind === 'flag') return on;
+  // A day as the date field shows it, in the admin's digits («٢٠٢٦/١١/١٨»), never the raw ISO
+  if (field.kind === 'date') return formatDateInput(value, locale) || value;
   return value;
 }
 
 export function FiltersBar({ label, fields, values, onChange, onText, onClear, resetKey = 0, testId, formRef }: FiltersBarProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const id = useId();
   const textNames = new Set(fields.filter((f) => f.kind === 'search').map((f) => f.name));
   const key = `${JSON.stringify(Object.entries(values).filter(([k]) => !textNames.has(k)))}|${resetKey}`;
@@ -133,7 +135,7 @@ export function FiltersBar({ label, fields, values, onChange, onText, onClear, r
       {active && (
         <ul className="flex flex-wrap items-center gap-2" aria-label={t('list.activeFilters')} data-testid={`${testId}-chips`}>
           {chips.map((field) => {
-            const text = `${field.label}: ${fieldText(field, values[field.name], t('list.on'))}`;
+            const text = `${field.label}: ${fieldText(field, values[field.name], t('list.on'), locale)}`;
             return (
               <li key={field.name}>
                 <button
