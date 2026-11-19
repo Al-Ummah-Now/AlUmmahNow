@@ -47,6 +47,7 @@ import { googleClientSecret, readYtSettings, type YtSettingsEnv } from '../youtu
 import { checkBulkScheduleAllowed } from '../studioLimits';
 import { readSettings as readSiteSettings, type SitesEnv } from '../sites/store';
 import { logger } from '../logger';
+import { enabledProviders } from '../billing/config';
 import { readQuranCurrent } from '../quran/copy';
 
 export { featureOff } from './off';
@@ -293,6 +294,20 @@ export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channe
 		// Not on this channel's team: none of its Studio features
 		if (!scope.role) return features;
 	}
+
+	// Billing (Settings › Billing): payments are on, or the account has records to see. Both reads are indexed.
+	const [payProviders, billingRecord] = await Promise.all([
+		enabledProviders(env as never).catch((error: unknown) => {
+			logger.warn('[features] Payment providers not read', { error: error instanceof Error ? error.message : String(error) });
+			return [];
+		}),
+		db
+			.prepare('SELECT 1 AS x FROM billing_subscriptions WHERE user_id = ? UNION ALL SELECT 1 AS x FROM billing_payments WHERE user_id = ? LIMIT 1')
+			.bind(userId, userId)
+			.first()
+			.catch(() => null),
+	]);
+	features.billing = payProviders.length > 0 || !!billingRecord;
 
 	const roles = who.roles ?? null;
 	const [creator, deletion] = await Promise.all([

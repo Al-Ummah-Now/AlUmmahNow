@@ -88,7 +88,7 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'profile-edit', path: '/profile/edit', role: 'single' },
     { id: 'settings', path: '/settings', role: 'single' },
     { id: 'upload-defaults', path: '/settings/upload-defaults', role: 'single' },
-    // Settings › Billing (wiki AUN-SUBS): no subscriptions, the empty states
+    // Settings › Billing (wiki AUN-SUBS): payments off and no records for this account, so the site's 404 (hidden when off)
     { id: 'billing', path: '/settings/billing', role: 'single' },
     { id: 'channel-settings', path: ch, role: 'single' },
     { id: 'channel-settings-edit', path: `${ch}/edit`, role: 'single' },

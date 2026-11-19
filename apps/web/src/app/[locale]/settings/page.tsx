@@ -75,7 +75,8 @@ export default function SettingsPage() {
       href: `/${lang}/settings/tier`,
       available: true,
     },
-    {
+    // Hidden when off: Billing only while payments are on or the account has billing records
+    features.billing && {
       title: t.billing.settings.title,
       description: t.billing.settings.description,
       icon: CreditCard,
