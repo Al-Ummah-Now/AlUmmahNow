@@ -362,6 +362,7 @@ const TierBody = z
 		channels: z.boolean().optional(),
 		pages: z.boolean().optional(),
 		requestable: z.boolean().optional(),
+		hidden: z.boolean().optional(),
 		sortOrder: z.coerce.number().optional(),
 		nameAr: z.string().max(60).nullable().optional(),
 		description: z.string().max(200).nullable().optional(),

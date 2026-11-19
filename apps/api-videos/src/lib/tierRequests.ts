@@ -174,7 +174,8 @@ export async function createTierRequest(
 ): Promise<TierRequest> {
 	const body = validateRequestInput(input);
 	const tier = await readTier(db, body.tierId);
-	if (!tier || !tier.requestable) throw new TierRequestError(404, TIER_REQUEST_ERRORS.tierNotRequestable, 'This tier cannot be requested');
+	// Hidden tiers cannot be requested: to anyone not on them they do not exist (same 404 as an unknown tier)
+	if (!tier || !tier.requestable || tier.hidden) throw new TierRequestError(404, TIER_REQUEST_ERRORS.tierNotRequestable, 'This tier cannot be requested');
 	const current = await resolveCreator(db, who);
 	const fromTierId = current.tier?.id ?? NO_DEFAULT_TIER;
 	if (fromTierId === tier.id) throw new TierRequestError(409, TIER_REQUEST_ERRORS.alreadyHeld, 'You already hold this tier');
@@ -260,7 +261,8 @@ export async function upgradeOverview(
 	const floor = who ? tierRank(current?.tier) : -1;
 	return {
 		mode,
-		tiers: tiers.filter((t) => t.id === currentTierId || ((t.requestable || soldTierIds.has(t.id)) && tierRank(t) > floor)).map(toPublicTier),
+		// A hidden tier shows only as the current tier of the people on it (owner, 2026-11-19)
+		tiers: tiers.filter((t) => t.id === currentTierId || (!t.hidden && (t.requestable || soldTierIds.has(t.id)) && tierRank(t) > floor)).map(toPublicTier),
 		currentTierId,
 		currentTierSince: current?.since ?? null,
 		...(who ? { currentIsDefault: current?.via === 'default' || current?.via === 'none' } : {}),

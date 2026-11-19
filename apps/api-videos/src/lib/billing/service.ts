@@ -28,7 +28,7 @@ import {
 	type PaymentProviderId,
 	type MyCheckout,
 } from '@al-ummah/shared-types';
-import { readTiers } from '../creatorTiers';
+import { readTiers, resolveCreator } from '../creatorTiers';
 import { logger } from '../logger';
 import { createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
 import {
@@ -222,6 +222,8 @@ export async function billingPlans(env: ServiceEnv): Promise<BillingPlans> {
 	const offers: BillingOffer[] = [];
 	if (providers.length) {
 		for (const tier of tiers) {
+			// Hidden tiers are never offered publicly (owner, 2026-11-19); their holders keep them through admins
+			if (tier.hidden) continue;
 			const sellable = prices
 				.filter((p) => p.tierId === tier.id && p.active)
 				.map((p) => ({ period: p.period, currency: p.currency, amount: p.amount, providers: providers.filter((cfg) => providerTakesCurrency(cfg.id, p.currency) && sellableLink(p, cfg.id, cfg.mode)).map((cfg) => cfg.id) }))
@@ -266,6 +268,12 @@ export async function startCheckout(env: ServiceEnv, user: { userId: string; ema
 	const price = (await readPrices(env)).find((p) => p.tierId === input.tierId && p.period === input.period && p.currency === input.currency.toUpperCase() && p.active);
 	const link = price ? sellableLink(price, provider, cfg.mode) : null;
 	if (!price || !link || !providerTakesCurrency(provider, price.currency)) throw new BillingError(404, BILLING_ERRORS.notForSale, 'No price for that period and currency');
+	// A hidden tier does not exist for anyone not on it: the same 404 as a tier without a price (owner, 2026-11-19)
+	const tier = (await readTiers(env.SEARCH_DB as D1Database)).find((t) => t.id === price.tierId);
+	if (tier?.hidden) {
+		const current = await resolveCreator(env.SEARCH_DB as D1Database, { userId: user.userId });
+		if (current.tier?.id !== tier.id) throw new BillingError(404, BILLING_ERRORS.notForSale, 'No price for that period and currency');
+	}
 	const at = now.toISOString();
 	const subs = await userSubscriptions(env, user.userId);
 	if (subs.some((s) => s.tier_id === price.tierId && (s.status === 'active' || s.status === 'past_due') && s.provider !== 'manual')) {

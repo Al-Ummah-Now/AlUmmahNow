@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { formatBillingAmount, parseBillingAmount, SUPER_ADMIN_TIER_ASSIGNER } from '@al-ummah/shared-types';
-import { assignTier, readAssignment } from '../src/lib/creatorTiers';
+import { assignTier, readAssignment, saveTier } from '../src/lib/creatorTiers';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { markCredential, readPrices, readProvider, savePrice, updateProvider } from '../src/lib/billing/config';
@@ -580,3 +580,27 @@ describe('credential status', () => {
 		assert.equal((await readProvider(ctx.env, 'paddle')).credentials.apiKey.test, undefined);
 	});
 });
+
+describe('hidden tiers and payments (owner, 2026-11-19)', () => {
+	let ctx: ReturnType<typeof setup>;
+	beforeEach(() => {
+		ctx = setup();
+	});
+
+	it('a hidden tier is never offered, and its checkout is a 404 for anyone not on it', async () => {
+		await sellCreator(ctx);
+		assert.deepEqual((await billingPlans(ctx.env)).offers.map((o) => o.tierId), ['creator']);
+		await saveTier(ctx.env.SEARCH_DB as D1Database, 'creator', { hidden: true }, 'admin-1');
+		assert.deepEqual((await billingPlans(ctx.env)).offers, [], 'no public offer');
+		assert.equal((await soldTierIds(ctx.env)).has('creator'), false);
+		await assert.rejects(
+			startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' }),
+			(e: { status: number; code: string }) => e.status === 404 && e.code === 'billing_not_for_sale',
+		);
+		// Someone on it (an admin gave it) may still pay for it
+		await assignTier(ctx.env.SEARCH_DB as D1Database, USER, 'creator', 'admin-1');
+		const checkout = await startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' });
+		assert.match(checkout.checkoutId, /^bco_/);
+	});
+});
+

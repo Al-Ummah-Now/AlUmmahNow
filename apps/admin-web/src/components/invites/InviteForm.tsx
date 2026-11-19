@@ -33,7 +33,7 @@ function isEmailAddress(value: string): boolean {
 }
 
 interface Props {
-  tiers: Array<{ id: string; name: string; nameAr?: string | null }>;
+  tiers: Array<{ id: string; name: string; nameAr?: string | null; hidden?: boolean }>;
   /** The tier a sign-up gets: the picker starts on it (every account has a tier) */
   defaultTierId: string;
   /** creators:manage: may pick another tier than the default */
@@ -185,7 +185,7 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
               {/* Without creators:manage only the default can be given: shown, not changeable */}
               <select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} disabled={!canPlan} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
                 {tiers.map((tier) => (
-                  <option key={tier.id} value={tier.id}>{tierLabel(tier, uiLocale)}</option>
+                  <option key={tier.id} value={tier.id}>{tier.hidden ? `${tierLabel(tier, uiLocale)} (${t('creators.hiddenChip')})` : tierLabel(tier, uiLocale)}</option>
                 ))}
               </select>
               <span id={`${ids}-plan-hint`} className="text-xs text-fg-subtle">{t('invites.planHint')}</span>

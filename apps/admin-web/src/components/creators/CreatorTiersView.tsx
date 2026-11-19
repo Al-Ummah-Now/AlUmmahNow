@@ -25,6 +25,7 @@ const FIELD_LABEL: Record<string, MessageKey> = {
   uploads: 'creators.tierUploadsFlag',
   channels: 'creators.tierChannelsFlag',
   requestable: 'creators.tierRequestable',
+  hidden: 'creators.tierHidden',
   sortOrder: 'creators.tierSortOrder',
 };
 

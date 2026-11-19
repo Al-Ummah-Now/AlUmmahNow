@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function NewInvitePage() {
   const { t } = await getI18n();
   let permissions: AdminContentPermission[] | null = null;
-  let tiers: Array<{ id: string; name: string; nameAr: string | null }> = [];
+  let tiers: Array<{ id: string; name: string; nameAr: string | null; hidden?: boolean }> = [];
   let defaultTierId = 'member';
   // The default video per language (Settings › Emails › Creator invite): prefilled, editable or clearable per invite
   let defaultVideoItems: InviteVideoItems = { en: null, ar: null };
@@ -24,7 +24,7 @@ export default async function NewInvitePage() {
     // Every invite gives a tier: the default, or (creators:manage) another one
     const choices = await listCreatorTierChoices();
     // Lowest rank first, like everywhere tiers are listed
-    tiers = [...choices.items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
+    tiers = [...choices.items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null, hidden: tier.hidden === true }));
     defaultTierId = choices.defaultTierId;
     defaultVideoItems = await getInviteDefaultVideos().catch((e) => {
       logger.warn('[invites] Default videos not loaded', { error: e instanceof Error ? e.message : String(e) });
