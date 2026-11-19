@@ -58,7 +58,6 @@ async function expectNoCreatorUi(page: Page, locale: 'en' | 'ar'): Promise<void>
   await page.goto(`${target().web}/${locale}/upload`);
   // Hidden when off: the upload page does not exist for this account, and nothing says why
   await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
-  await expect(page.getByTestId('upload-by-invitation')).toHaveCount(0);
   await expect(page.getByText(/by invitation|بدعوة/)).toHaveCount(0);
   await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
   await expect(page.getByTestId('header-upload')).toHaveCount(0);
@@ -107,7 +106,6 @@ test.describe('Release: creator tiers', () => {
       // The UI follows on the next page load
       await page.goto(`${target().web}/en/upload`);
       await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-      await expect(page.getByTestId('upload-by-invitation')).toHaveCount(0);
       await expect(page.getByTestId('header-upload')).toBeVisible();
 
       // 3. Tier removed: the very next request is refused, the same token

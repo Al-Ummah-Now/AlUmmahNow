@@ -214,7 +214,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
     currentAccount: 'الحساب الحالي',
     switchToAccount: 'التبديل إلى {name}',
     writeArticle: 'اكتب مقالًا',
-    upgrade: 'الترقية',
     myArticles: 'مقالاتي',
     scholarPage: 'صفحة العالم',
     navigationMenu: 'قائمة التنقل',
@@ -873,8 +872,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   creator: {
-    invitationTitle: 'الرفع بدعوة فقط حاليًا',
-    invitationMessage: 'رفع المرئيات وإنشاء القنوات متاحان بالطلب خلال المرحلة التجريبية. ما زال بإمكانك مشاهدة المرئيات وحفظها والاشتراك في القنوات.',
     invitationShort: 'الرفع بدعوة فقط حاليًا',
     requestAccess: 'اطلب فئة',
     upgrade: 'ترقية',

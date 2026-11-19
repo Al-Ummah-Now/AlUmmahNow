@@ -25,8 +25,9 @@ jest.mock('@/hooks/useMultiAccount', () => ({
     logout: jest.fn(), logoutAll: jest.fn(),
   }),
 }));
+let mockCreatorAccess: Record<string, unknown> = { status: 'loading' };
 jest.mock('@/hooks/useCreatorAccess', () => ({
-  useCreatorAccess: () => ({ status: 'loading' }),
+  useCreatorAccess: () => mockCreatorAccess,
   mayCreateChannel: () => false,
   refreshCreatorAccess: jest.fn(),
 }));
@@ -43,7 +44,7 @@ jest.mock('@/lib/channels/invites-count', () => ({ useChannelInviteCount: () => 
 const channel = { id: 'ch1', name: 'Community Corner', userId: 'u1', isMain: true, role: 'owner' };
 
 describe('account menu: Acting as', () => {
-  beforeEach(() => { lang = 'en'; });
+  beforeEach(() => { lang = 'en'; mockCreatorAccess = { status: 'loading' }; });
 
   it('labels the identity layer "Acting as" and shows the member when no channel is active', async () => {
     user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', channel: null, channels: [channel] };
@@ -91,5 +92,18 @@ describe('account menu: Acting as', () => {
     expect(screen.queryByTestId('nav-menu-channel-invites')).toBeNull();
     inviteCount = 0;
   });
-});
 
+  it('has no Upgrade item, whether requests or payments are on (owner: no upgrade marketing)', async () => {
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', channel: null, channels: [] };
+    for (const upgradeMode of ['request', 'pay', 'closed']) {
+      mockCreatorAccess = { status: 'ready', access: { upgradeMode, canCreateChannel: false, pendingDeletion: false, maxChannels: null, channelsOwned: 0 } };
+      const { unmount } = render(<UnifiedNavigation />);
+      act(() => requestAccountMenu({ open: true }));
+      const menu = await screen.findByTestId('nav-menu');
+      expect(screen.queryByTestId('nav-menu-upgrade')).toBeNull();
+      expect(menu.querySelector('a[href$="/upgrade"]')).toBeNull();
+      expect(menu).not.toHaveTextContent(/Upgrade/);
+      unmount();
+    }
+  });
+});

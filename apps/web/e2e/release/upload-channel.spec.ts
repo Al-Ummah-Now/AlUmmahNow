@@ -238,7 +238,6 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
       await expect.poll(async () => (await access())?.canUpload, { message: 'the editor can still upload', timeout: 30000 }).toBe(false);
       await editor.page.goto(`${target().web}/en/upload`);
       await expect(editor.page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
-      await expect(editor.page.getByTestId('upload-by-invitation')).toHaveCount(0);
     } finally {
       if (videoId) await apiFetch(owner.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
       await owner.close();
