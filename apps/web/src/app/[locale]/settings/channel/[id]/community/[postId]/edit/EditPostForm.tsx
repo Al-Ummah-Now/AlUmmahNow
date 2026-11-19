@@ -7,14 +7,13 @@
  * the linked video stay as posted; the page says so instead of offering fields that would be refused.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Switch } from '@/components/common/Switch';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { PostStatus, PostType, PostVisibility, type CommunityPost, type UpdateCommunityPostRequest } from '@al-ummah/shared-types';
-import Link from '@/components/common/AppLink';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,7 +21,7 @@ import { TextPostForm } from '@/components/Community/management/forms/TextPostFo
 import { ArticlePostForm, type ArticleFormData } from '@/components/Community/management/forms/ArticlePostForm';
 import { CardsPostForm, type CardsFormData } from '@/components/Community/management/forms/CardsPostForm';
 import { LinkPostForm, type LinkFormData } from '@/components/Community/management/forms/LinkPostForm';
-import { PostSchedulePicker, scheduleProblem, scheduleStateFrom, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
+import { PostSchedulePicker, preferredZone, scheduleProblem, scheduleStateFrom, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { updateCommunityPost } from '@/lib/api/community-posts';
 import { reportError } from '@/lib/errors/reporter';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -67,6 +66,9 @@ function linkFrom(post: CommunityPost): LinkFormData {
   };
 }
 
+/** The composer's panel: the shared frosted card over the theme's card surface (see NewPostForm). */
+const PANEL = 'pb-glass rounded-xl border border-[var(--fanous-color-divider)] bg-card p-4 md:p-6';
+
 export default function EditPostForm({ locale, channelId, post, channelName, channelHandle }: EditPostFormProps) {
   const router = useRouter();
   const { t } = useLanguage();
@@ -86,7 +88,11 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
   const [postLocale, setPostLocale] = useState<'en' | 'ar'>(post.locale === 'ar' ? 'ar' : post.locale === 'en' ? 'en' : (locale === 'ar' ? 'ar' : 'en'));
   const [visibility, setVisibility] = useState<PostVisibility>(post.visibility ?? PostVisibility.PUBLIC);
   const [commentsEnabled, setCommentsEnabled] = useState(post.commentsEnabled !== false);
-  const [schedule, setSchedule] = useState<ScheduleState>(() => scheduleStateFrom(isScheduled ? post.scheduledAt : null));
+  // The wall-clock time depends on the viewer's zone, so it is set on the client (no hydration mismatch)
+  const [schedule, setSchedule] = useState<ScheduleState>({ later: isScheduled, local: '' });
+  useEffect(() => {
+    setSchedule(scheduleStateFrom(isScheduled ? post.scheduledAt : null, preferredZone()));
+  }, [isScheduled, post.scheduledAt]);
   const [scheduleError, setScheduleError] = useState<ScheduleProblem | null>(null);
   const [saving, setSaving] = useState<'save' | 'publish' | null>(null);
   // A field problem (shown by the form, or below it) and a failed save (always below)
@@ -125,7 +131,7 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
     if (visibility !== (post.visibility ?? PostVisibility.PUBLIC)) body.visibility = visibility;
     if (commentsEnabled !== (post.commentsEnabled !== false)) body.commentsEnabled = commentsEnabled;
     if (isScheduled) {
-      const problem = scheduleProblem(schedule.local);
+      const problem = scheduleProblem(schedule.local, Date.now(), schedule.zone);
       const iso = scheduledIso({ ...schedule, later: true });
       const before = post.scheduledAt ? new Date(post.scheduledAt).toISOString() : null;
       // An unchanged time that has come close (or passed) is left as it is
@@ -179,17 +185,15 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 md:px-6">
+      <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <ChannelSettingsBreadcrumb channelId={channelId} channelName={channelName} channelHandle={channelHandle} locale={locale} currentPage="community" subPage={texts.editPostTitle} />
       </div>
-      <div className="border-b bg-card sticky top-0 z-10">
-        <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
+      {/* A flat bar as wide as the columns (the composer's, owner review) */}
+      <div className="sticky top-0 z-10 bg-[var(--fanous-color-background)]">
+        <div className="container mx-auto max-w-7xl px-4 md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--fanous-color-divider)] py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3">
-            <Button asChild variant="ghost" size="icon" className="w-11 h-11">
-              <Link href={listHref} aria-label={texts.backToPosts} data-testid="edit-post-back">
-                <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
-            </Button>
+            {/* The way back is the breadcrumb's arrow above (one back link per page, owner review) */}
             <h1 className="text-lg md:text-2xl font-bold">{texts.editPostTitle}</h1>
             <Badge variant="secondary">{typeLabel[post.type] ?? post.type}</Badge>
           </div>
@@ -206,12 +210,13 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
             </Button>
           </div>
         </div>
+        </div>
       </div>
 
       <div className="container mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
         <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <Card className="p-4 md:p-6">
+            <section className={PANEL}>
               {cmsArticle ? (
                 <p className="text-sm text-muted-foreground" data-testid="edit-post-locked">{texts.articleManagedInCms}</p>
               ) : locked ? (
@@ -237,11 +242,11 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
               {actionError && (
                 <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="edit-post-error">{actionError}</p>
               )}
-            </Card>
+            </section>
           </div>
 
           <div className="space-y-6">
-            <Card className="p-4 md:p-6">
+            <section className={PANEL}>
               <h2 className="mb-4 text-base font-semibold md:text-lg">{isRTL ? 'الإعدادات' : 'Settings'}</h2>
               <div className="space-y-4">
                 {isScheduled && (
@@ -281,21 +286,18 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
                   </Select>
                 </div>
                 {/* Ids without "comments": the themes pad [id*="comments"] (the comment section) */}
-                <div className="flex items-center justify-between">
-                  <span id="edit-post-allow-comment-label" className="text-sm font-medium md:text-base">{isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}</span>
-                  <Button
-                    variant={commentsEnabled ? 'default' : 'outline'}
-                    size="sm"
+                <div className="flex items-center justify-between gap-3">
+                  <label id="edit-post-allow-comment-label" htmlFor="edit-post-allow-comment-toggle" className="text-sm font-medium md:text-base">{t.community.allowComments}</label>
+                  <Switch
                     id="edit-post-allow-comment-toggle"
-                    aria-pressed={commentsEnabled}
-                    aria-labelledby="edit-post-allow-comment-label edit-post-allow-comment-toggle"
-                    onClick={() => setCommentsEnabled(!commentsEnabled)}
-                  >
-                    {commentsEnabled ? (isRTL ? 'مفعّل' : 'Enabled') : (isRTL ? 'معطّل' : 'Disabled')}
-                  </Button>
+                    checked={commentsEnabled}
+                    onCheckedChange={setCommentsEnabled}
+                    aria-labelledby="edit-post-allow-comment-label"
+                    data-testid="edit-post-allow-comments"
+                  />
                 </div>
               </div>
-            </Card>
+            </section>
           </div>
         </div>
       </div>

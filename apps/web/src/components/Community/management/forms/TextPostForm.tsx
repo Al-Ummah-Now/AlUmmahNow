@@ -34,13 +34,11 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
           : 'Share your thoughts with your community...'
         }
         dir={isRTL ? 'rtl' : 'ltr'}
-        className={`
-          min-h-[150px]    /* Mobile: shorter */
-          md:min-h-[200px] /* Desktop: taller */
-          resize-y
-          text-sm md:text-base
-          ${error ? 'border-destructive' : ''}
-        `}
+        // A full editor area (owner review), sized for the rich text editor that replaces it.
+        // Inline: theme/system.css sets textarea { min-height: 44px } unlayered, above any utility.
+        style={{ minHeight: 'clamp(16rem, 45vh, 28rem)', resize: 'none', fieldSizing: 'content' } as React.CSSProperties}
+        className={`text-sm leading-relaxed md:text-base ${error ? 'border-destructive' : ''}`}
+        data-testid="post-content-editor"
         maxLength={MAX_CHARS}
       />
 

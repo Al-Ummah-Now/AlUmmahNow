@@ -124,11 +124,24 @@ async function openNewPost(page: Page, locale: 'en' | 'ar' = 'en') {
 }
 
 /** Selects a post type card (retried: the first click can land before hydration) */
-/** The composer's date and time fields, from a `YYYY-MM-DDTHH:mm` local time. */
+/**
+ * Picks a `YYYY-MM-DDTHH:mm` local time in the composer: the day in the localized calendar (by its
+ * full English name), then the time from the 15-minute list (rounded down to its step).
+ */
 async function fillSchedule(page: Page, local: string) {
   const [date, time] = local.split('T');
-  await page.getByTestId('post-schedule-date').fill(date);
-  await page.getByTestId('post-schedule-time').fill(time);
+  const [y, m, d] = date.split('-').map(Number);
+  const dayName = new Intl.DateTimeFormat('en-u-nu-latn', { timeZone: 'UTC', dateStyle: 'full' }).format(new Date(Date.UTC(y, m - 1, d)));
+  const calendar = page.getByTestId('post-schedule-date-calendar');
+  if (!(await calendar.isVisible())) await page.getByTestId('post-schedule-date-button').click();
+  const day = calendar.getByRole('button', { name: dayName, exact: true });
+  for (let i = 0; i < 2 && !(await day.isVisible()); i++) await page.getByTestId('post-schedule-date-next').click();
+  await day.click();
+  await expect(calendar).toBeHidden();
+  const [hh, mm] = time.split(':').map(Number);
+  const slot = `${String(hh).padStart(2, '0')}:${String(mm - (mm % 15)).padStart(2, '0')}`;
+  await page.getByTestId('post-schedule-time').click();
+  await page.getByTestId(`post-schedule-time-${slot}`).click();
 }
 
 async function selectType(page: Page, type: string) {
@@ -185,7 +198,9 @@ test.describe('Post manager', () => {
     try {
       await openNewPost(page);
       await expect(page.getByRole('heading', { level: 1, name: 'New post' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
+      // Publish is never a dead disabled pill: without a type it says what is missing
+      await page.getByRole('button', { name: 'Publish' }).click();
+      await expect(page.getByTestId('new-post-type-error')).toHaveText('Select a post type');
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 
       await selectType(page, 'text');
@@ -305,7 +320,9 @@ test.describe('Post manager', () => {
       await fillStable(page.getByLabel('Content'), `${marker} for later`);
       await page.getByTestId('post-schedule-later').check();
       await expect(page.getByTestId('new-post-submit')).toHaveText('Schedule');
-      await expect(page.getByTestId('post-schedule-timezone')).toContainText('Time zone:');
+      // The zone by a friendly name with its offset, never the raw id; changeable through search
+      await expect(page.getByTestId('post-schedule-timezone')).toContainText('(GMT');
+      await expect(page.getByTestId('post-schedule-timezone')).not.toContainText('/');
       // Too soon is refused in the composer
       await fillSchedule(page, localIn(60_000));
       await page.getByTestId('new-post-submit').click();
@@ -393,11 +410,21 @@ test.describe('Post manager', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'تعديل المنشور' })).toBeVisible();
     await expect(page.getByTestId('edit-post-save')).toHaveText('حفظ التغييرات');
-    await expect(page.getByTestId('edit-post-back')).toHaveAccessibleName('العودة إلى المنشورات');
+    // One way back: the breadcrumb's arrow to the post list (no second arrow in the bar)
+    await expect(page.getByTestId('settings-back')).toHaveAccessibleName('العودة إلى منشورات المجتمع');
+    await expect(page.getByTestId('edit-post-back')).toHaveCount(0);
     await openNewPost(page, 'ar');
     await expect(page.getByText('وقت النشر')).toBeVisible();
     await page.getByTestId('post-schedule-later').check();
     await expect(page.getByTestId('new-post-submit')).toHaveText('جدولة');
+    // Arabic date, time and zone: Arabic-Indic digits, no browser date or time field
+    await expect(page.locator('input[type="date"], input[type="time"]')).toHaveCount(0);
+    await page.getByTestId('post-schedule-date-button').click();
+    await expect(page.getByTestId('post-schedule-date-calendar').getByRole('grid')).toContainText('١٥');
+    await expect(page.getByTestId('post-schedule-timezone')).toContainText('GMT');
+    await expect(page.getByTestId('post-schedule-timezone')).not.toContainText(/[0-9]/);
+    await expect(page.getByTestId('new-post-allow-comments')).toHaveAttribute('role', 'switch');
+    await expect(page.getByTestId('new-post-allow-comments')).toHaveAccessibleName('السماح بالتعليقات');
   });
 
   test('COMM-006 Arabic post editor is RTL and translated', async ({ page }) => {
@@ -405,8 +432,9 @@ test.describe('Post manager', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'منشور جديد' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'اختر نوع المنشور' })).toBeVisible();
-    // The way back is a link to the post list, named for it (00bb5d05), not a "رجوع" button
-    const back = page.getByTestId('new-post-back');
+    // The way back is the breadcrumb's link to the post list, named for it (00bb5d05); no second arrow in the bar
+    await expect(page.getByTestId('new-post-back')).toHaveCount(0);
+    const back = page.getByTestId('settings-back');
     await expect(back).toHaveAccessibleName('العودة إلى منشورات المجتمع');
     await expect(back).toHaveAttribute('href', `/ar/settings/channel/${channelId()}/community`);
     await selectType(page, 'text');

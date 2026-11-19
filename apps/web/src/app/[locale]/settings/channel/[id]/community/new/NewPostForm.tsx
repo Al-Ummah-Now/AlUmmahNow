@@ -4,14 +4,13 @@ import { logger } from '@/lib/logger-client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
-import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
-import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/common/Switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { PostTypeSelector } from '@/components/Community/management/PostTypeSelector';
@@ -28,7 +27,7 @@ import { uploadPostImage } from '@/components/Community/management/forms/PostIma
 import { tooLargeMessage } from '@/lib/community/upload-limits';
 import { PostSchedulePicker, scheduleProblem, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { createCommunityPost } from '@/lib/api/community-posts';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface NewPostFormProps {
   locale: string;
@@ -37,6 +36,13 @@ interface NewPostFormProps {
   channelName: string;
   channelHandle: string | null;
 }
+
+/**
+ * The composer's panels: the shared frosted card (`pb-glass`, packages/shared-types
+ * page-blocks.css, #1481) over the theme's card surface. page-blocks.css is unlayered, so once it
+ * is loaded its glass wins over these utilities; until then the panel is the plain card.
+ */
+const PANEL = 'pb-glass rounded-xl border border-[var(--fanous-color-divider)] bg-card p-4 md:p-6';
 
 export default function NewPostForm({ locale, id, channelName, channelHandle }: NewPostFormProps) {
   const router = useRouter();
@@ -145,7 +151,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
       setError(validationError);
       return;
     }
-    const timing = schedule.later ? scheduleProblem(schedule.local) : null;
+    const timing = schedule.later ? scheduleProblem(schedule.local, Date.now(), schedule.zone) : null;
     setScheduleError(timing);
     if (timing) return;
 
@@ -275,39 +281,16 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 md:px-6">
+      <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <ChannelSettingsBreadcrumb channelId={id} channelName={channelName} channelHandle={channelHandle} locale={locale} currentPage="communityNew" />
       </div>
-      <div className="
-        border-b
-        bg-card
-        sticky top-0
-        z-10
-      ">
-        <div className="
-          container
-          mx-auto
-          px-4 py-3
-          md:px-6 md:py-4
-          flex
-          items-center
-          justify-between
-        ">
+      {/* A flat bar exactly as wide as the columns below (owner review): the page's own
+          background (it stays readable while sticky) and a divider, no card band */}
+      <div className="sticky top-0 z-10 bg-[var(--fanous-color-background)]" data-testid="new-post-bar">
+        <div className="container mx-auto max-w-7xl px-4 md:px-6">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--fanous-color-divider)] py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              className="w-11 h-11"
-            >
-              <Link
-                href={`/${locale}/settings/channel/${id}/community`}
-                aria-label={t.common.backTo ? t.common.backTo.replace('{page}', t.channel.communitySettings || t.community.community) : t.common.back}
-                data-testid="new-post-back"
-              >
-                <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
-            </Button>
+            {/* The way back is the breadcrumb's arrow above (one back link per page, owner review) */}
             <ComposerAvatar src={postChannel?.avatarUrl} name={postChannelName} as="channel" testId="post-identity" />
             <h1 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New post'}
@@ -318,13 +301,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           <div className="flex gap-2">
             <Button
               onClick={handlePublish}
-              disabled={loading || !selectedType}
+              // Never a pale disabled pill before a type is picked: Publish says what is missing
+              disabled={loading}
               data-testid="new-post-submit"
             >
-              {loading && <Loader2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0 animate-spin" />}
+              {loading && <Loader2 className="w-4 h-4 me-2 animate-spin" aria-hidden="true" />}
               {schedule.later ? t.community.schedule : (isRTL ? 'نشر' : 'Publish')}
             </Button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -342,21 +327,24 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           gap-6 md:gap-8
         ">
           <div className="lg:col-span-2 space-y-6">
-            <Card className="p-4 md:p-6">
+            <section className={PANEL}>
               <h2 className="text-base md:text-lg font-semibold mb-4">
-                {isRTL ? 'اختر نوع المنشور' : 'Select Post Type'}
+                {isRTL ? 'اختر نوع المنشور' : 'Select post type'}
               </h2>
               <PostTypeSelector
                 selected={selectedType}
-                onSelect={setSelectedType}
+                onSelect={(type) => { setSelectedType(type); setError(''); }}
                 locale={locale}
               />
-            </Card>
+              {!selectedType && error && (
+                <p role="alert" className="mt-3 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-type-error">{error}</p>
+              )}
+            </section>
 
             {selectedType && (
-              <Card className="p-4 md:p-6">
+              <section className={PANEL}>
                 <h2 className="text-base md:text-lg font-semibold mb-4">
-                  {isRTL ? 'محتوى المنشور' : 'Post Content'}
+                  {isRTL ? 'محتوى المنشور' : 'Post content'}
                 </h2>
 
                 {selectedType === PostType.TEXT && (
@@ -430,12 +418,12 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
                   <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-error">{error}</p>
                 )}
-              </Card>
+              </section>
             )}
           </div>
 
           <div className="space-y-6">
-            <Card className="p-4 md:p-6">
+            <section className={PANEL}>
               <h3 className="text-base md:text-lg font-semibold mb-4">
                 {isRTL ? 'الإعدادات' : 'Settings'}
               </h3>
@@ -486,26 +474,21 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                   </Select>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <Label id="new-post-allow-comment-label" className="text-sm md:text-base">
-                    {isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}
+                {/* A real switch (owner review): named by its label, its state is aria-checked */}
+                <div className="flex items-center justify-between gap-3">
+                  <Label id="new-post-allow-comment-label" htmlFor="new-post-allow-comment-toggle" className="text-sm md:text-base">
+                    {t.community.allowComments}
                   </Label>
-                  <Button
-                    variant={commentsEnabled ? 'default' : 'outline'}
-                    size="sm"
+                  <Switch
                     id="new-post-allow-comment-toggle"
-                    aria-pressed={commentsEnabled}
-                    aria-labelledby="new-post-allow-comment-label new-post-allow-comment-toggle"
-                    onClick={() => setCommentsEnabled(!commentsEnabled)}
-                  >
-                    {commentsEnabled
-                      ? (isRTL ? 'مفعّل' : 'Enabled')
-                      : (isRTL ? 'معطّل' : 'Disabled')
-                    }
-                  </Button>
+                    checked={commentsEnabled}
+                    onCheckedChange={setCommentsEnabled}
+                    aria-labelledby="new-post-allow-comment-label"
+                    data-testid="new-post-allow-comments"
+                  />
                 </div>
               </div>
-            </Card>
+            </section>
           </div>
         </div>
       </div>
