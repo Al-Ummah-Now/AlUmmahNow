@@ -288,3 +288,29 @@ export async function createProfile(user: WebUser): Promise<void> {
   });
   expect(res.status, `POST /api/profiles: ${await res.clone().text()}`).toBeLessThan(300);
 }
+
+/** Switches the acting channel in the videos header's account menu. */
+export async function switchChannelInHeader(page: Page, channelId: string, locale: Locale = 'en'): Promise<void> {
+  await page.goto(`${target().web}/${locale}`, { waitUntil: 'load' });
+  const switchChannel = page.locator('[data-testid="nav-switch-channel"]:visible').first();
+  await expect(async () => {
+    if (!(await switchChannel.isVisible())) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
+    await expect(switchChannel).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30000 });
+  await switchChannel.click();
+  const option = page.locator(`[data-testid="nav-channel-option"][data-channel-id="${channelId}"]:visible`).first();
+  await expect(option).toBeVisible({ timeout: 30000 });
+  // The switch is a Server Action whose response sets the session cookie: see
+  // it take effect on this page (the menu closes) before navigating away
+  await option.click();
+  const activeChannel = page.locator('[data-testid="nav-active-channel"]:visible').first();
+  await expect(async () => {
+    if (!(await activeChannel.isVisible())) {
+      const back = page.locator('[data-testid="nav-menu-back"]:visible').first();
+      if (await back.isVisible()) await back.click();
+      else await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click({ timeout: 3000 });
+    }
+    await expect(activeChannel).toHaveAttribute('href', new RegExp(`/channels/${channelId}$`), { timeout: 3000 });
+  }).toPass({ timeout: 45000 });
+  await page.keyboard.press('Escape');
+}

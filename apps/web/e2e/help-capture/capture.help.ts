@@ -270,13 +270,14 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     type Box = { x: number; y: number; w: number; h: number };
-    // An annotation, never UI (owner review 2026-11-16): a dashed outline in the theme's live red with
-    // a white halo, offset from the control, and its number attached to the outline. Red markup is
-    // what a screenshot annotation looks like; no control on the site is drawn this way.
+    // An annotation, never UI (owner review 2026-11-16): a dashed outline in annotation red with a
+    // white halo, offset from the control, and its number attached to the outline. A fixed red, not a
+    // theme token: in Fawanees the 'live' colour is gold, which reads as the site's own focus ring
+    // (design audit 2026-11-19). No control on the site is drawn this way.
     const S = 24;
     const GAP = 6;
-    const INK = 'var(--fanous-color-live)';
-    const ON_INK = 'var(--fanous-color-on-live)';
+    const INK = '#d92418';
+    const ON_INK = '#ffffff';
     const HALO = 'rgb(255 255 255 / 0.92)';
     const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     const visible = (el: Element) => {
@@ -313,12 +314,27 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const k = round ? (1 - Math.SQRT1_2) * (o.w / 2) : 0;
       const cornerStartX = rtl ? startX - k : startX + k;
       const cornerEndX = rtl ? endX + k : endX - k;
+      // A small round target (an avatar) keeps its face clear: the number sits just outside the
+      // circle, touching it, above or below (design audit 2026-11-19: '1' covered the composer avatar)
+      const centreX = o.x + o.w / 2 - S / 2;
+      const outside: Array<[number, number]> = round && o.w <= 64 ? [[centreX, o.y - S + 2], [centreX, o.y + o.h - 2]] : [];
       const candidates: Array<[number, number]> = above
-        ? [[cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k]]
-        : [[startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k]];
-      const others = controls
-        .filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el))
-        .map((c) => ({ x: c.r.x + 2, y: c.r.y + 2, w: Math.max(0, c.r.width - 4), h: Math.max(0, c.r.height - 4) }));
+        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k]]
+        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k]];
+      // The target's own avatar or logo stays clear too: a number on it hides who the row is
+      // (design audit 2026-11-19: '١' over «أ» in the phone picker)
+      const ownPictures = [...target.querySelectorAll<HTMLElement>('img, svg, span, div')]
+        .filter((el) => {
+          if (!visible(el)) return false;
+          const b = el.getBoundingClientRect();
+          const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+          return b.width >= 16 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && (el.tagName === 'IMG' || rr >= b.width / 2 - 0.5);
+        })
+        .map((el) => el.getBoundingClientRect());
+      const others = [
+        ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => c.r),
+        ...ownPictures,
+      ].map((r) => ({ x: r.x + 2, y: r.y + 2, w: Math.max(0, r.width - 4), h: Math.max(0, r.height - 4) }));
       const fits = ([x, y]: [number, number]) => {
         const box = { x, y, w: S, h: S };
         return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
