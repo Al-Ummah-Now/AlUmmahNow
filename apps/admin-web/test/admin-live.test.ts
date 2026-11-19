@@ -209,6 +209,34 @@ describe('admin live client', () => {
     assert.equal(h.ticketCalls(), 5);
   });
 
+  it('a rate-limited subscribe starts over on a new socket with a backoff that a sign-in does not reset (#1599)', async () => {
+    const h = harness();
+    const live: boolean[] = [];
+    h.client.subscribe('moderation', () => {}, (l) => live.push(l));
+    await flush();
+    const first = h.sockets[0];
+    first.open();
+    first.receive({ type: 'authenticated', userId: 'u', sessionId: 's' });
+    assert.deepEqual(first.last(), { type: 'subscribe', channel: 'admin:moderation' });
+    // The server dropped the subscribe: without a retry the topic would never go live
+    first.receive({ type: 'error', code: 'RATE_LIMIT' });
+    await h.advance(999);
+    assert.equal(h.sockets.length, 1, 'waits 1 s');
+    await h.advance(1);
+    await flush();
+    const second = h.sockets[1];
+    second.open();
+    second.receive({ type: 'authenticated', userId: 'u', sessionId: 's' });
+    second.receive({ type: 'error', code: 'RATE_LIMIT' });
+    // Signed in again but still limited: 2 s now, not back to 1 s
+    await h.advance(1999);
+    assert.equal(h.sockets.length, 2);
+    await h.advance(1);
+    await goLive(h.sockets, ['moderation']);
+    assert.equal(h.sockets.length, 3);
+    assert.equal(live.at(-1), true);
+  });
+
   it('a topic the role may not follow stays not live; the others still subscribe', async () => {
     const h = harness();
     const jobsLive: boolean[] = [];

@@ -100,6 +100,8 @@ export class AdminLiveClient {
   /** The channel whose subscribe reply is awaited (subscriptions go one at a time). */
   private pendingSubscribe: AdminLiveTopic | null = null;
   private connecting = false;
+  /** Rate-limited sockets since a subscription last held: backs RATE_LIMIT reconnects off (not reset by a mere sign-in). */
+  private rateLimitAttempt = 0;
   /** Re-authentications since one last held (a topic subscribed after it): backs AUTH_EXPIRED retries off. */
   private reauthAttempt = 0;
 
@@ -240,6 +242,7 @@ export class AdminLiveClient {
         if (topic) this.setLive(topic, true);
         // The token held long enough to subscribe: re-authentication is healthy again
         this.reauthAttempt = 0;
+        this.rateLimitAttempt = 0;
         this.subscribeNext();
         return;
       }
@@ -287,6 +290,22 @@ export class AdminLiveClient {
       this.deps.log?.('debug', '[admin-live] Topic refused', { topic: this.pendingSubscribe, code });
       this.pendingSubscribe = null;
       this.subscribeNext();
+      return;
+    }
+    if (code === 'RATE_LIMIT') {
+      // The server dropped a message (often the subscribe), so a topic would never go live. Start
+      // over on a new socket after a backoff that only a held subscription resets: a sign-in alone
+      // must not restart it at 1 s, or a limited socket would keep the limiter busy.
+      const socket = this.socket;
+      this.teardown();
+      socket?.close(4002, 'rate limited');
+      if (this.paused || this.topics.size === 0 || this.reconnectTimer !== null) return;
+      const delay = backoffMs(this.rateLimitAttempt++, this.deps.random);
+      this.deps.log?.('debug', '[admin-live] Rate limited; reconnecting', { delay });
+      this.reconnectTimer = this.deps.setTimeout(() => {
+        this.reconnectTimer = null;
+        this.ensureConnected();
+      }, delay);
       return;
     }
     if (code === 'AUTH_FAILED' || code === 'AUTH_REQUIRED') {

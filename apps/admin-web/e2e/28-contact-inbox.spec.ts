@@ -56,13 +56,16 @@ test.describe('contact inbox', () => {
   });
 
   test('INBOX-01 the whole row opens the message, which reads it; the badge counts unread only and follows changes live on any page', async ({ page }) => {
-    // The admin live socket's subscription replies, to publish only once the page follows contact changes
+    // The admin live socket's subscription replies, to publish only once the page follows contact
+    // changes, and its error replies (RATE_LIMIT, FORBIDDEN…) so a failure says why (#1599)
     const subscriptions: string[] = [];
+    const errors: string[] = [];
     page.on('websocket', (ws) =>
       ws.on('framereceived', (f) => {
         try {
-          const msg = JSON.parse(String(f.payload)) as { type?: string; channel?: string };
+          const msg = JSON.parse(String(f.payload)) as { type?: string; channel?: string; code?: string };
           if (msg.channel === 'admin:moderation' && (msg.type === 'subscribed' || msg.type === 'unsubscribed')) subscriptions.push(msg.type);
+          if (msg.type === 'error') errors.push(msg.code ?? 'error');
         } catch {
           // not JSON
         }
@@ -94,10 +97,26 @@ test.describe('contact inbox', () => {
 
     // Another admin marks it unread while this admin is on another page (the dashboard): the
     // badge follows there too, without a reload
-    const seen = subscriptions.length;
+    // Each visit of the dashboard (and each attempt of this test) needs its own fresh subscription:
+    // wait for this page's; if none came, open the dashboard once more on a new socket and ticket
+    const followed = async (since: number, timeout: number) => {
+      try {
+        await expect.poll(() => subscriptions.slice(since).at(-1), { timeout }).toBe('subscribed');
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    let seen = subscriptions.length;
     await page.goto('/dashboard');
     await expect.poll(() => badgeCount(page)).toBe(before - 1);
-    await expect.poll(() => subscriptions.slice(seen).at(-1), { timeout: 15_000, message: 'the dashboard follows admin:moderation' }).toBe('subscribed');
+    if (!(await followed(seen, 15_000))) {
+      seen = subscriptions.length;
+      await page.reload();
+      await expect.poll(() => badgeCount(page)).toBe(before - 1);
+    }
+    const ok = await followed(seen, 30_000);
+    expect(ok, `the dashboard follows admin:moderation (socket errors: ${errors.join(', ') || 'none'})`).toBe(true);
     await page.evaluate(() => { (window as unknown as { __sameDocument?: boolean }).__sameDocument = true; });
     const res = await adminApi(`/api/contact/messages/${encodeURIComponent(m1)}`, { method: 'PATCH', body: JSON.stringify({ read: false }) });
     expect(res.status).toBe(200);
