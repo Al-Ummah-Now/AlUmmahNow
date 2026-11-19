@@ -196,9 +196,9 @@ export function CommentsTab({ locale, channel, role, tab, target }: Props) {
   const tabLink = (item: StudioCommentTab) => `${base}?tab=${item}${target ? `&target=${encodeURIComponent(target)}` : ''}`;
 
   return (
-    <section className="max-w-5xl" aria-labelledby="studio-comments-heading" data-testid="studio-comments" data-tab={tab}>
+    <section className="max-w-5xl" aria-labelledby="studio-moderation-heading" data-testid="studio-comments" data-tab={tab}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="studio-comments-heading" className="text-lg font-semibold text-foreground">{text.heading}</h2>
+        <h2 id="studio-moderation-heading" className="text-lg font-semibold text-foreground">{text.heading}</h2>
         <Button variant="outline" className="min-h-11" onClick={() => setBlocksOpen(true)} data-testid="studio-comments-blocks">
           <Ban aria-hidden="true" className="me-2 h-4 w-4" />
           {text.blocks.open}
