@@ -15,7 +15,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { AdminContentPermission, AdminVideoRow } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
-import { formatClock } from '@al-ummah/shared-types';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
 import { Chip, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
