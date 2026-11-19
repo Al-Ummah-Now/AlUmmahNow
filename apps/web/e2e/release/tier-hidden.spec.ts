@@ -35,7 +35,7 @@ test.describe('Release: hidden tiers', () => {
     const id = `hidden-${ns().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24)}`;
     try {
       await sql(`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, per_hour, per_day, max_concurrent, requestable, hidden, sort_order, updated_at, updated_by)
-        VALUES (${q(id)}, 'Study circle', 'حلقة دراسية', 'For one study circle.', 'لحلقة دراسية واحدة.', 5, 50, 2, 1, 1, 15, ${q(new Date().toISOString())}, 'e2e')`);
+        VALUES (${q(id)}, 'Partners', 'الشركاء', 'For our partner organisations.', 'للمؤسسات الشريكة.', 5, 50, 2, 1, 1, 15, ${q(new Date().toISOString())}, 'e2e')`);
       ownData.onCleanup('hidden tier', async () => {
         await sql(`DELETE FROM creator_tier_assignments WHERE tier_id = ${q(id)}`);
         await sql(`DELETE FROM creator_tiers WHERE id = ${q(id)}`);
@@ -50,9 +50,9 @@ test.describe('Release: hidden tiers', () => {
         await gotoSettled(page, `${target().web}/${locale}/upgrade`);
         await expect(page.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current', { timeout: 30_000 });
         await expect(page.getByTestId(`tier-card-${id}`)).toHaveCount(0);
-        await expect(page.getByTestId('upgrade-page')).not.toContainText(locale === 'en' ? 'Study circle' : 'حلقة دراسية');
+        await expect(page.getByTestId('upgrade-page')).not.toContainText(locale === 'en' ? 'Partners' : 'الشركاء');
       }
-      const ask = await apiFetch(outsider, '/api/me/tier-requests', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tierId: id, name: 'Amina Hassan', about: 'I lead a weekly study circle and would like to share its recordings.' }) });
+      const ask = await apiFetch(outsider, '/api/me/tier-requests', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tierId: id, name: 'Amina Hassan', about: 'I work with a partner organisation and would like to share its videos.' }) });
       expect(ask.status, 'a hidden tier cannot be requested').toBe(404);
 
       // On it: an admin gave it (written straight to the stack, as the release helpers do)
@@ -67,7 +67,7 @@ test.describe('Release: hidden tiers', () => {
       await gotoSettled(insiderPage, `${target().web}/en/upgrade`);
       const own = insiderPage.getByTestId(`tier-card-${id}`);
       await expect(own).toHaveAttribute('data-state', 'current', { timeout: 30_000 });
-      await expect(own).toContainText('Study circle');
+      await expect(own).toContainText('Partners');
       await insiderContext.close();
     } finally {
       await release();
