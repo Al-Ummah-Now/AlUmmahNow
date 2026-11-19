@@ -28,6 +28,7 @@
 --   apps/admin-api/migrations/0027_csam_cases.sql
 --   apps/admin-api/migrations/0028_newsletter.sql
 --   apps/admin-api/migrations/0029_audit_feed_indexes.sql
+--   apps/admin-api/migrations/0032_seed_profile_public.sql
 --   apps/admin-api/migrations/0036_email_templates.sql
 --   apps/admin-api/migrations/0037_error_event_context.sql
 --   apps/admin-api/migrations/0038_contact_inbox_read_spam.sql

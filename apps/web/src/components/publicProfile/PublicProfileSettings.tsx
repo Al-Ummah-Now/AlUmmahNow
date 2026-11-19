@@ -10,7 +10,7 @@
 import React, { useEffect, useId, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Switch } from '@/components/common/Switch';
-import { publicProfileTranslations } from '@al-ummah/shared-types';
+import { fillTemplate, publicProfileTranslations } from '@al-ummah/shared-types';
 import { HANDLE_MAX_LENGTH, localHandleProblem } from '@/lib/channel-url';
 import { userProfilePath } from '@/lib/user-url';
 import type { HandleProblem } from '@/lib/api/channel-profile';
@@ -41,7 +41,8 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
   const [origin, setOrigin] = useState('');
 
   useEffect(() => {
-    setOrigin(window.location.origin);
+    // Host and path only (no scheme): it reads as the address people share
+    setOrigin(window.location.host);
     let cancelled = false;
     getMyPublicProfileSettings()
       .then((settings) => {
@@ -102,8 +103,8 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
   }, [normalized, current]);
 
   const problemText: Record<HandleProblem, string> = {
-    too_short: t.handleTooShort,
-    too_long: t.handleTooLong,
+    too_short: fillTemplate(locale, t.handleTooShort),
+    too_long: fillTemplate(locale, t.handleTooLong),
     invalid_characters: t.handleInvalid,
     reserved: t.handleReserved,
     taken: t.handleTaken,
@@ -205,7 +206,7 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
           </div>
           <p id={ids.help} className="mt-2 break-words text-sm text-[var(--fanous-color-text-muted)]">{(() => {
             // The URL is isolated left to right so its dots and slashes don't reorder inside the Arabic sentence
-            const [before, after = ''] = t.handleHelp.split('{url}');
+            const [before, after = ''] = fillTemplate(locale, t.handleHelp).split('{url}');
             return (
               <>
                 {before}

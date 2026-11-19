@@ -89,7 +89,8 @@ test.describe('public profile page (signed out)', () => {
     expect(response.status()).toBe(200);
     expect(response.headers()['x-robots-tag']).toBe('noindex, nofollow');
 
-    await expect(page.getByTestId('public-profile-handle')).toHaveText(`@${HANDLE}`);
+    // A person is shown by name, never by @handle (the handle is only in the URL)
+    await expect(page.getByTestId('public-profile-header')).not.toContainText(`@${HANDLE}`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByTestId('profile-section-playlists')).toBeVisible();
     await expect(page.getByTestId('profile-section-subscriptions')).toBeVisible();
