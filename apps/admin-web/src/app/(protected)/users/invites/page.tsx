@@ -66,9 +66,9 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
       {data && data.items.length === 0 && <EmptyState>{t('content.empty')}</EmptyState>}
       {data && data.items.length > 0 && (
         <div className={tableWrapClass}>
-          <table className="w-full" data-testid="invites-table">
+          <table className="w-full max-md:block" data-testid="invites-table">
             <caption className="sr-only">{t('invites.tableCaption')}</caption>
-            <thead className="border-b border-border">
+            <thead className="border-b border-border max-md:hidden">
               <tr>
                 <th className={thClass} scope="col">{t('invites.colPerson')}</th>
                 <th className={thClass} scope="col">{t('invites.colStatus')}</th>
@@ -77,18 +77,18 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                 <th className={thClass} scope="col">{t('invites.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="max-md:block">
               {data.items.map((inv) => {
                 const daysLeft = inv.purgeAfter ? Math.max(0, Math.ceil((Date.parse(inv.purgeAfter) - Date.now()) / DAY)) : null;
                 return (
-                  <tr key={inv.id} className="border-b border-border last:border-0" data-testid="invite-row" data-invite-id={inv.id} data-user-id={inv.userId} data-status={inv.status}>
-                    <td className={tdClass}>
+                  <tr key={inv.id} className="border-b border-border last:border-0 max-md:flex max-md:flex-col max-md:gap-2 max-md:p-4" data-testid="invite-row" data-invite-id={inv.id} data-user-id={inv.userId} data-status={inv.status}>
+                    <td className={`${tdClass} max-md:p-0`}>
                       <Link href={`/users/${encodeURIComponent(inv.userId)}`} className={`${linkClass} font-medium break-words`} dir="ltr" data-testid="invite-user-link">
                         {inv.email}
                       </Link>
                       {inv.name && <span className="block text-sm text-fg-muted" dir="auto">{inv.name}</span>}
                     </td>
-                    <td className={tdClass}>
+                    <td className={`${tdClass} max-md:p-0`}>
                       <div className="flex flex-col items-start gap-1">
                         <InviteStatusChip status={inv.status} t={t} />
                         {inv.status === 'invited' && inv.expiresAt && <span className="text-xs text-fg-muted">{t('invites.expiresAt', { date: formatDate(inv.expiresAt, locale) })}</span>}
@@ -113,7 +113,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                       <time dateTime={inv.createdAt}>{formatDate(inv.createdAt, locale)}</time>
                       {inv.createdByEmail && <span className="block text-xs" dir="ltr">{t('invites.byWhom', { who: inv.createdByEmail })}</span>}
                     </td>
-                    <td className={tdClass}>
+                    <td className={`${tdClass} max-md:p-0`}>
                       <InviteActions invite={inv} canManage={canManage} />
                     </td>
                   </tr>
