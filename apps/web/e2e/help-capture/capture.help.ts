@@ -291,7 +291,14 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       .map((el) => ({ el, r: el.getBoundingClientRect() }));
     // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
     // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
-    const allText: DOMRect[] = [];
+    // The letters, not the line box: about 0.8 em tall, centred in the line, full width (Arabic
+    // letters overhang their box, so nothing is shaved off the sides)
+    const glyphBox = (b: DOMRect, el: Element | null) => {
+      const fs = parseFloat(el ? getComputedStyle(el).fontSize : '16') || 16;
+      const h = Math.min(b.height, fs * 0.8);
+      return { x: b.x, y: b.y + (b.height - h) / 2, w: b.width, h };
+    };
+    const allText: Box[] = [];
     // ...and the sticky header, for page text scrolled under it
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"], [role="banner"], body > header, .ah')].filter(visible);
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -309,7 +316,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           const r = ov.getBoundingClientRect();
           return cx > r.left && cx < r.right && cy > r.top && cy < r.bottom && !ov.contains(node.parentElement);
         });
-        if (!behind) allText.push(b);
+        if (!behind) allText.push(glyphBox(b, node.parentElement));
       }
     }
     const placed: Box[] = [];
@@ -379,23 +386,20 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         .map((el) => el.getBoundingClientRect());
       // ...and so does the target's own text: a number never covers a letter (the Studio title read
       // "②te tour", 2026-11-19)
-      const ownText: DOMRect[] = [];
+      const ownText: Box[] = [];
       const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
       for (let node = words.nextNode(); node; node = words.nextNode()) {
         if (!node.textContent?.trim()) continue;
         const range = document.createRange();
         range.selectNodeContents(node);
-        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0));
+        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0).map((b) => glyphBox(b, node.parentElement)));
       }
       const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
-      // A text box is the line's box, taller than its letters: trimmed to the glyphs, so a number in
-      // the line spacing above a heading is not counted as covering it
-      // Full width: Arabic letters overhang their box, so nothing is shaved off the sides
-      const glyphs = (b: DOMRect) => ({ x: b.x, y: b.y + b.height * 0.15, w: b.width, h: Math.max(0, b.height * 0.7) });
-      // A number reaches past its circle (white halo and shadow): text is kept that far away
-      const HALO_PX = 4;
+      // Text boxes are the letters (glyphBox), so a number in the line spacing above a heading is clear
+      // A number reaches past its circle (its 2 px white halo): text is kept that far away
+      const HALO_PX = 2;
       const reach = (b: Box) => ({ x: b.x - HALO_PX, y: b.y - HALO_PX, w: b.w + HALO_PX * 2, h: b.h + HALO_PX * 2 });
-      const texts = [...ownText, ...allText].map(glyphs);
+      const texts = [...ownText, ...allText];
       const others = [
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
         ...ownPictures.map(shrink),
