@@ -132,7 +132,7 @@ export default function CommentForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn('flex gap-3', isRTL && 'flex-row-reverse')}
+      className={cn('flex gap-3')}
     >
       {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
       <ComposerAvatar src={userAvatar} name={userDisplayName} as={channelId ? 'channel' : 'member'} className="w-10 h-10" />
@@ -158,8 +158,7 @@ export default function CommentForm({
                 ? 'border-gray-900 dark:border-gray-100'
                 : 'border-gray-300 dark:border-gray-600',
               'text-gray-900 dark:text-gray-100',
-              'placeholder:text-gray-500 dark:placeholder:text-gray-400',
-              isRTL && 'text-right'
+              'placeholder:text-gray-500 dark:placeholder:text-gray-400'
             )}
             rows={isFocused ? 4 : 1}
             disabled={loading}
@@ -193,8 +192,7 @@ export default function CommentForm({
         {error && (
           <div
             className={cn(
-              'mt-2 text-sm text-red-600 dark:text-red-400',
-              isRTL && 'text-right'
+              'mt-2 text-sm text-red-600 dark:text-red-400'
             )}
           >
             {error}
@@ -205,8 +203,7 @@ export default function CommentForm({
         {isFocused && (
           <div
             className={cn(
-              'flex items-center gap-2 mt-4',
-              isRTL && 'flex-row-reverse'
+              'flex items-center gap-2 mt-4'
             )}
           >
             <button

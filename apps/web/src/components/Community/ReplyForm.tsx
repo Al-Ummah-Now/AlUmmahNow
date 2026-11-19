@@ -135,8 +135,7 @@ export default function ReplyForm({
     <form
       onSubmit={handleSubmit}
       className={cn(
-        'flex gap-3 mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg',
-        isRTL && 'flex-row-reverse'
+        'flex gap-3 mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg'
       )}
     >
       {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
@@ -145,7 +144,7 @@ export default function ReplyForm({
       {/* Input Area */}
       <div className="flex-1">
         {/* Reply To Indicator */}
-        <div className={cn('mb-2 text-sm text-gray-600 dark:text-gray-400', isRTL && 'text-right')}>
+        <div className={cn('mb-2 text-sm text-gray-600 dark:text-gray-400')}>
           {isRTL ? (
             <>
               رد على <span className="font-medium text-blue-600 dark:text-blue-400">@{replyToUsername}</span>
@@ -169,8 +168,7 @@ export default function ReplyForm({
               'bg-white dark:bg-gray-800',
               'focus:outline-none focus:ring-2 focus:ring-blue-500',
               'text-gray-900 dark:text-gray-100',
-              'placeholder:text-gray-500 dark:placeholder:text-gray-400',
-              isRTL && 'text-right'
+              'placeholder:text-gray-500 dark:placeholder:text-gray-400'
             )}
             rows={3}
             disabled={loading}
@@ -202,13 +200,13 @@ export default function ReplyForm({
 
         {/* Error Message */}
         {error && (
-          <div className={cn('mt-2 text-sm text-red-600 dark:text-red-400', isRTL && 'text-right')}>
+          <div className={cn('mt-2 text-sm text-red-600 dark:text-red-400')}>
             {error}
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className={cn('flex items-center gap-2 mt-3', isRTL && 'flex-row-reverse')}>
+        <div className={cn('flex items-center gap-2 mt-3')}>
           <button
             type="button"
             onClick={handleCancel}
