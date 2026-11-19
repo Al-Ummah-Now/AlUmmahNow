@@ -17,7 +17,7 @@ import type {
 import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
-import { can, channelRoleOf, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { can, channelParams, channelRoleOf, localizedChannelNames, localizedDisplayNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
 import { isBlocked } from '../../lib/channelComments/blocks';
 import { logger } from '../../lib/logger';
@@ -213,9 +213,12 @@ export class CreatePostComment extends AuthenticatedRoute {
 
     // Posted as a channel: the channel's name. Without one: the user's resolved name (display name, else first + last)
     let profileName = '';
+    let profileNames: Record<string, string> = {};
     if (!actorChannel?.name?.trim()) {
       const profileObj = await c.env.profiles?.get(userId).catch(() => null);
-      profileName = profileObj ? resolveDisplayName((await profileObj.json().catch(() => null)) as NameFields | null) : '';
+      const profile = profileObj ? ((await profileObj.json().catch(() => null)) as NameFields | null) : null;
+      profileName = resolveDisplayName(profile);
+      profileNames = localizedDisplayNames(profile);
     }
 
     // A person the post's channel blocked is held silently: only they see it (#771).
@@ -313,7 +316,8 @@ export class CreatePostComment extends AuthenticatedRoute {
       notifyUserInBackground(c, replyToUserId, {
         notificationType: 'comment',
         notificationKey: 'commentReply',
-        params: { actorName: comment.userDisplayName || '' },
+        // Posted as a channel: its name per language (actorName_ar…), so an Arabic reader sees the Arabic name (#1610)
+        params: actorChannel?.name?.trim() ? channelParams('actorName', actorChannel) : { actorName: comment.userDisplayName || '' },
         actionUrl: `/channels/${postChannelId}?tab=community`,
         actorUserId: userId,
         entityId: comment.id,
@@ -323,7 +327,10 @@ export class CreatePostComment extends AuthenticatedRoute {
 
     const response: PostCommentCreateResponse = {
       success: true,
-      comment,
+      // The channel's names per language on the answer only (never stored), as the lists add them (#1610)
+      comment: actorChannel?.name?.trim()
+        ? (Object.keys(localizedChannelNames(actorChannel)).length ? { ...comment, userDisplayNameLocalized: localizedChannelNames(actorChannel) } : comment)
+        : (Object.keys(profileNames).length ? { ...comment, userDisplayNameLocalized: profileNames } : comment),
     };
 
     return c.json(response, 201);

@@ -20,6 +20,7 @@ import {
 } from '@/lib/api/post-comments';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { channelLabel } from '@/lib/channel-name';
 
 interface CommentProps {
   comment: PostComment;
@@ -88,7 +89,9 @@ export default function Comment({
   viewerAvatar,
   viewerName = '',
 }: CommentProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  // The page language's name when the channel has one (#1610)
+  const authorName = channelLabel({ channelName: comment.userDisplayName, channelNameLocalized: comment.userDisplayNameLocalized }, lang) || comment.userDisplayName;
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
@@ -271,20 +274,20 @@ export default function Comment({
   }
 
   return (
-    <div className={cn('flex gap-3', isRTL && 'flex-row-reverse')}>
+    <div className={cn('flex gap-3')}>
       {confirmDialog}
       {/* Avatar */}
       <div className="relative w-10 h-10 flex-shrink-0">
         {comment.userAvatarUrl && !comment.deletedAt ? (
           <Image
             src={comment.userAvatarUrl}
-            alt={comment.userDisplayName}
+            alt={authorName}
             fill
             className="rounded-full object-cover"
           />
         ) : (
           <div className="w-full h-full rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center text-white font-bold text-sm">
-            {comment.deletedAt ? '?' : comment.userDisplayName.charAt(0).toUpperCase()}
+            {comment.deletedAt ? '?' : authorName.charAt(0).toUpperCase()}
           </div>
         )}
         {comment.channelVerified && !comment.deletedAt && (
@@ -303,11 +306,11 @@ export default function Comment({
       {/* Content */}
       <div className="flex-1 min-w-0">
         {/* Header */}
-        <div className={cn('flex items-start gap-2', isRTL && 'flex-row-reverse')}>
-          <div className={cn('flex-1', isRTL && 'text-right')}>
-            <div className={cn('flex items-center gap-2 flex-wrap', isRTL && 'flex-row-reverse')}>
+        <div className={cn('flex items-start gap-2')}>
+          <div className={cn('flex-1')}>
+            <div className={cn('flex items-center gap-2 flex-wrap')}>
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {comment.deletedAt ? (isRTL ? '[محذوف]' : '[deleted]') : comment.userDisplayName}
+                {comment.deletedAt ? (isRTL ? '[محذوف]' : '[deleted]') : <bdi>{authorName}</bdi>}
               </span>
               {pinned && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -379,10 +382,10 @@ export default function Comment({
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className={cn('w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100', isRTL && 'text-right')}
+              className={cn('w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100')}
               rows={3}
             />
-            <div className={cn('flex gap-2 mt-2', isRTL && 'flex-row-reverse')}>
+            <div className={cn('flex gap-2 mt-2')}>
               <button onClick={handleCancelEdit} className="px-3 py-1 rounded-full text-sm hover:bg-gray-100 dark:hover:bg-gray-700">
                 {isRTL ? 'إلغاء' : 'Cancel'}
               </button>
@@ -392,16 +395,16 @@ export default function Comment({
             </div>
           </div>
         ) : (
-          <p className={cn('mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words', isRTL && 'text-right')}>
+          <p className="mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir={comment.deletedAt ? undefined : 'auto'}>
             {comment.deletedAt ? (isRTL ? '[تم حذف هذا التعليق]' : '[This comment has been deleted]') : comment.content}
           </p>
         )}
 
         {/* Action Buttons */}
         {!comment.deletedAt && (
-          <div className={cn('flex items-center gap-4 mt-2', isRTL && 'flex-row-reverse')}>
+          <div className={cn('flex items-center gap-4 mt-2')}>
             {/* Like Button */}
-            <button onClick={handleLike} disabled={!userId} className={cn('flex items-center gap-1 group', isRTL && 'flex-row-reverse')}>
+            <button onClick={handleLike} disabled={!userId} className={cn('flex items-center gap-1 group')}>
               <svg className={cn('w-4 h-4', liked ? 'text-blue-600 dark:text-blue-400 fill-current' : 'text-gray-600 dark:text-gray-400 group-hover:text-blue-600')} fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={liked ? 0 : 2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
               </svg>
@@ -442,7 +445,7 @@ export default function Comment({
 
         {/* Show Replies Button */}
         {!comment.parentCommentId && repliesCount > 0 && !showReplies && (
-          <button onClick={handleLoadReplies} disabled={loadingReplies} className={cn('flex items-center gap-2 mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300', isRTL && 'flex-row-reverse')}>
+          <button onClick={handleLoadReplies} disabled={loadingReplies} className={cn('flex items-center gap-2 mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300')}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -462,7 +465,7 @@ export default function Comment({
             postChannelId={postChannelId}
             postId={postId}
             parentCommentId={comment.id}
-            replyToUsername={comment.userDisplayName}
+            replyToUsername={authorName}
             userAvatar={viewerAvatar}
             userDisplayName={viewerName}
             isRTL={isRTL}

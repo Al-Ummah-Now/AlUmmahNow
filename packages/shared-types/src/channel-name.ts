@@ -44,3 +44,16 @@ export function channelNameParams(channel?: NamedChannel | null, fallback = ''):
   for (const [lang, name] of Object.entries(channelNameLocalized ?? {})) params[`channelName_${lang}`] = name;
   return params;
 }
+
+/**
+ * A notification param that names a channel, in every language it has: `<key>` (the default name)
+ * plus `<key>_<lang>` per localized name, which the notification text picks for its language
+ * (web lib/websocket/notification-text.ts). E.g. channelParams('actorName', channel) for a reply
+ * posted as a channel (#1610).
+ */
+export function channelParams(key: string, channel?: NamedChannel | null, fallback = ''): Record<string, string> {
+  const { channelName, channelNameLocalized } = channelNameFields(channel, fallback);
+  const params: Record<string, string> = { [key]: channelName };
+  for (const [lang, name] of Object.entries(channelNameLocalized ?? {})) params[`${key}_${lang}`] = name;
+  return params;
+}

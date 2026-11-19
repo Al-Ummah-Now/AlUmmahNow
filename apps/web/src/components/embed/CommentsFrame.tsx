@@ -15,6 +15,7 @@ import { readAncestorOrigins, resolvePartnerOrigin, RESIZE_TYPE } from '@/lib/em
 import type { EmbedLang } from '@/lib/embed/params';
 import { embedStrings, fill } from '@/lib/embed/strings';
 import type { EmbedComment } from '@/lib/embed/content';
+import { channelLabel } from '@/lib/channel-name';
 
 interface CommentsFrameProps {
   videoId: string;
@@ -73,6 +74,7 @@ export default function CommentsFrame({ videoId, videoTitle, lang, origin, initi
           repliesCount: Number(c.repliesCount) || 0,
           isPinned: !!c.isPinned,
           authorName: String((c.author as { displayName?: string } | undefined)?.displayName || ''),
+          authorNameLocalized: (c.author as { displayNameLocalized?: Record<string, string> } | undefined)?.displayNameLocalized,
           authorAvatar: (c.author as { avatarUrl?: string } | undefined)?.avatarUrl,
         }));
       setComments((prev) => [...prev, ...more.filter((m) => !prev.some((p) => p.id === m.id))]);
@@ -124,7 +126,7 @@ export default function CommentsFrame({ videoId, videoTitle, lang, origin, initi
               )}
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">{comment.authorName}</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200"><bdi>{channelLabel({ channelName: comment.authorName, channelNameLocalized: comment.authorNameLocalized }, lang)}</bdi></span>
                   <time dateTime={comment.dateCreated}>{formatDate(comment.dateCreated, lang)}</time>
                   {comment.isPinned && (
                     <span className="inline-flex items-center gap-1"><Pin className="h-3 w-3" aria-hidden="true" />{s.pinned}</span>

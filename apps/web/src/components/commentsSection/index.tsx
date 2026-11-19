@@ -20,6 +20,7 @@ import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { userDisplayName } from '@/lib/display-name';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -141,8 +142,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   // Map the API comment (with its own author) to the presentational props
   const toCommentProps = (comment: Comments, isReply: boolean): CommentProps => {
     const isOwnComment = !!user && comment.userId === user.id;
-    const authorName = comment.author?.displayName?.trim()
-      || (isOwnComment ? (activeChannel?.name?.trim() || userDisplayName(profile, lang)) : '')
+    // The page language's name when the author has one (#1610: a channel's English name showed on /ar)
+    const authorName = channelLabel({ channelName: comment.author?.displayName, channelNameLocalized: comment.author?.displayNameLocalized }, lang)
+      || (isOwnComment ? (channelLabel({ channelName: activeChannel?.name, channelNameLocalized: (activeChannel as { nameLocalized?: Record<string, string> } | null)?.nameLocalized }, lang) || userDisplayName(profile, lang)) : '')
       || t.comments.unknownAuthor;
     const authorAvatar = comment.author?.avatarUrl
       || (isOwnComment ? (activeChannel?.avatarUrl || profile?.avatarUrl) : undefined)
