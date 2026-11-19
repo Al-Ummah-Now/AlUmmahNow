@@ -210,7 +210,9 @@ for (const locale of ['en', 'ar'] as const) {
       await page.setViewportSize({ width: 390, height: 844 });
       await stubFeed(page);
       await openShort(page, locale, first);
-      const box = (await page.locator('#video-player .video-js').first().boundingBox())!;
+      // Playable or the codec error screen (bundled Chromium): either way the player frame is up
+      await waitForPlayer(page);
+      const box = (await page.locator('.custom-video-player').first().boundingBox())!;
       expect(Math.abs(box.width / box.height - 9 / 16), 'a 9:16 box, no side bars').toBeLessThan(0.02);
       const nav = (await page.getByTestId('shorts-nav').boundingBox())!;
       const player = (await page.locator('#video-player').boundingBox())!;
@@ -219,7 +221,7 @@ for (const locale of ['en', 'ar'] as const) {
       await page.getByTestId('comments-section').scrollIntoViewIfNeeded();
       await expect(page.locator('.custom-video-player').first()).not.toHaveAttribute('data-pinned', 'true');
       const overlap = await page.evaluate(() => {
-        const v = document.querySelector('#video-player .video-js')!.getBoundingClientRect();
+        const v = document.querySelector('.custom-video-player')!.getBoundingClientRect();
         const c = document.querySelector('[data-testid=comments-section]')!.getBoundingClientRect();
         return v.bottom > c.top && c.bottom > v.top && v.bottom > 0;
       });
