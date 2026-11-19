@@ -7346,6 +7346,12 @@
                               "displayName": {
                                 "type": "string"
                               },
+                              "displayNameLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
                               "avatarUrl": {
                                 "type": "string"
                               }
@@ -7889,6 +7895,12 @@
                               },
                               "displayName": {
                                 "type": "string"
+                              },
+                              "displayNameLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
                               },
                               "avatarUrl": {
                                 "type": "string"
@@ -42376,6 +42388,13 @@
                                   "displayName": {
                                     "type": "string"
                                   },
+                                  "displayNameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    },
+                                    "description": "The name per language (en, ar) when the channel or person has localized names; show the page language's, else displayName"
+                                  },
                                   "avatarUrl": {
                                     "type": "string"
                                   },
@@ -42628,6 +42647,13 @@
                                 },
                                 "displayName": {
                                   "type": "string"
+                                },
+                                "displayNameLocalized": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  },
+                                  "description": "The name per language (en, ar) when the channel or person has localized names; show the page language's, else displayName"
                                 },
                                 "avatarUrl": {
                                   "type": "string"
@@ -44219,6 +44245,13 @@
                                   },
                                   "displayName": {
                                     "type": "string"
+                                  },
+                                  "displayNameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    },
+                                    "description": "The name per language (en, ar) when the channel or person has localized names; show the page language's, else displayName"
                                   },
                                   "avatarUrl": {
                                     "type": "string"

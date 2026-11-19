@@ -316,6 +316,8 @@ export interface EmbedComment {
   repliesCount: number;
   isPinned: boolean;
   authorName: string;
+  /** The author's name per language (en, ar); CommentsFrame shows its own language's (#1610) */
+  authorNameLocalized?: Record<string, string>;
   authorAvatar?: string;
 }
 
@@ -336,7 +338,7 @@ interface ApiCommentList {
       isPinned?: boolean;
       isDeleted?: boolean;
       isHeld?: boolean;
-      author?: { displayName?: string; avatarUrl?: string };
+      author?: { displayName?: string; displayNameLocalized?: Record<string, string>; avatarUrl?: string };
     }>;
     nextCursor?: string | null;
     total?: number;
@@ -358,6 +360,7 @@ export async function loadPublicComments(videoId: string, cursor?: string | null
       repliesCount: c.repliesCount || 0,
       isPinned: !!c.isPinned,
       authorName: c.author?.displayName || '',
+      ...(c.author?.displayNameLocalized ? { authorNameLocalized: c.author.displayNameLocalized } : {}),
       authorAvatar: c.author?.avatarUrl,
     }));
   return { comments, nextCursor: body?.result?.nextCursor ?? null, total: body?.result?.total ?? comments.length };

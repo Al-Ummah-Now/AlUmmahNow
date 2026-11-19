@@ -43,7 +43,7 @@ export const StudioCommentSchema = z.object({
 	parentId: z.string().nullable(),
 	text: z.string(),
 	createdAt: z.string(),
-	author: z.object({ userId: z.string(), channelId: z.string().nullable(), displayName: z.string(), avatarUrl: z.string().optional() }),
+	author: z.object({ userId: z.string(), channelId: z.string().nullable(), displayName: z.string(), displayNameLocalized: z.record(z.string(), z.string()).optional(), avatarUrl: z.string().optional() }),
 	status: z.enum(['published', 'held', 'removed']),
 	heldBy: z.enum(['moderation', 'channel_block']).optional(),
 	isPinned: z.boolean(),
