@@ -19,7 +19,8 @@ test.describe('Payments forms: autofill', () => {
     await page.goto('/payments?tab=tax');
     const tax = page.getByTestId('payments-tax');
     await expect(tax).toBeVisible();
-    const fields = await tax.locator('input[name], textarea[name]').evaluateAll((els) =>
+    // Visible fields only: a hidden input (NumberField submits its Latin value in one) is never filled or seen
+    const fields = await tax.locator('input[name]:not([type="hidden"]), textarea[name]').evaluateAll((els) =>
       els.map((el) => {
         const f = el as HTMLInputElement;
         return { name: f.name, autocomplete: f.getAttribute('autocomplete'), inForm: !!f.form, label: f.labels?.[0]?.textContent?.trim() ?? null };
