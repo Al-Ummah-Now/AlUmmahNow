@@ -154,6 +154,26 @@ test.describe('Release: a real live stream (ffmpeg → watch → end → recordi
     await expect(watch.getByTestId('live-watch-title')).toHaveText(title);
     await expectPlaying(watch, 'live');
 
+    // The recording is checked for ~10 s of video below: before ending, wait until the live playlist
+    // has listed at least 6 of the 2 s segments. Ending as soon as the viewer played raced the
+    // encoder: on a fast stage only 2 segments were pushed (v2026.11.19.8)
+    if (live.provider !== 'bunny' && live.playbackUrl) {
+      const listed = new Set<string>();
+      await expect
+        .poll(
+          async () => {
+            const top = await (await fetch(live.playbackUrl!, { cache: 'no-store' })).text();
+            const variant = top.includes('#EXT-X-STREAM-INF') ? top.split('\n').find((line) => line && !line.startsWith('#')) : undefined;
+            const media = variant ? await (await fetch(new URL(variant.trim(), live.playbackUrl!), { cache: 'no-store' })).text() : top;
+            // Signed segment URLs differ per fetch: count the path only
+            for (const line of media.split('\n')) if (line.trim() && !line.startsWith('#')) listed.add(line.trim().split('?')[0]!);
+            return listed.size;
+          },
+          { message: 'the live playlist never listed 6 segments (about 12 s of the stream)', timeout: 60000, intervals: [2000] },
+        )
+        .toBeGreaterThanOrEqual(6);
+    }
+
     // End in Studio (in-app confirm), then stop the encoder
     await page.getByTestId('studio-golive-end').click();
     await confirmInApp(page, webConfirm('studio-golive-end-dialog'));

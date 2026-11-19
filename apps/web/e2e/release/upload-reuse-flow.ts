@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
-import { expect, type Browser, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
 import { trackRunUploads } from './run-videos';
 import { target } from './targets';
 import { apiFetch, createProfile, signInAgain, signUpOnWeb, type WebUser } from './web-session';
@@ -84,11 +84,14 @@ async function startUpload(page: Page, file: string, title: string): Promise<voi
 export interface ReuseFlowOptions {
   /** Runs once the first browser context is gone, before the retry (e.g. a fake Bunny blip) */
   afterInterrupt?: (videoId: string, title: string) => Promise<void>;
+  /** Makes the flow's browser contexts (provider-retry.ts watches and cleans up its attempt's); default browser.newContext() */
+  newContext?: () => Promise<BrowserContext>;
 }
 
 /** Interrupted, then retried in a fresh browser context: one video, resumed at its offset, no second TUS upload. */
 export async function interruptedUploadIsReused(browser: Browser, testInfo: TestInfo, opts: ReuseFlowOptions = {}): Promise<void> {
-    const first = await browser.newContext();
+    const newContext = opts.newContext ?? (() => browser.newContext());
+    const first = await newContext();
     const page = await first.newPage();
     const u = await uploader(page);
     const file = paddedVideo(testInfo.outputDir, 'reuse-me.mp4', 5 * CHUNK + 4321); // 6 chunks
@@ -124,7 +127,7 @@ export async function interruptedUploadIsReused(browser: Browser, testInfo: Test
       await opts.afterInterrupt?.(videoId, title);
 
       // Retry in a fresh context: no cookies, no localStorage
-      const second = await browser.newContext();
+      const second = await newContext();
       const page2 = await second.newPage();
       const log: Log = { initiates: [], posts: 0, patches: [] };
       watch(page2, log);

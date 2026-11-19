@@ -16,6 +16,7 @@
  */
 import { test } from '@playwright/test';
 import { interruptedUploadIsReused } from './upload-reuse-flow';
+import { providerAttempts } from './provider-retry';
 
 // Signs users in through the auth server: traces would hold the password.
 test.use({ trace: 'off' });
@@ -27,6 +28,7 @@ test.describe('Release: retried uploads reuse their video', () => {
   test.describe.configure({ timeout: 360000 });
 
   test('interrupted, then retried in a fresh browser context: one video, resumed at its offset', async ({ browser }, testInfo) => {
-    await interruptedUploadIsReused(browser, testInfo);
+    // A provider slowdown gets one more attempt with a fresh upload; real failures still fail (provider-retry.ts)
+    await providerAttempts(browser, testInfo, { perAttemptMs: 360000 }, ({ newContext }) => interruptedUploadIsReused(browser, testInfo, { newContext }));
   });
 });
