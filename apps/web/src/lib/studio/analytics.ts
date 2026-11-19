@@ -66,6 +66,29 @@ export interface TrafficData {
   totalViews: number;
   sources: Record<string, number>;
   externalHosts: Array<{ host: string; views: number }>;
+  /** Views per client surface, device class, country (top 50 + "other") and utm_source; older APIs omit them */
+  surfaces?: Record<string, number>;
+  devices?: Record<string, number>;
+  countries?: Record<string, number>;
+  campaigns?: Record<string, number>;
+}
+
+/** The overflow bucket of a capped breakdown (processor OTHER_ORIGIN). */
+export const OTHER_ORIGIN = 'other';
+
+/**
+ * One origin breakdown as rows by views, its overflow ("other") last; with `limit`, rows past it
+ * fold into that last row too (countries show the top 10).
+ */
+export function originRows(counts: Record<string, number> | undefined, totalViews: number, limit?: number): Array<{ key: string; views: number; share: number }> {
+  if (!counts || !totalViews) return [];
+  const named = Object.entries(counts)
+    .filter(([key, views]) => key !== OTHER_ORIGIN && views > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const kept = limit === undefined ? named : named.slice(0, limit);
+  const rest = (limit === undefined ? 0 : named.slice(limit).reduce((n, [, v]) => n + v, 0)) + (counts[OTHER_ORIGIN] ?? 0);
+  const rows = rest > 0 ? [...kept, [OTHER_ORIGIN, rest] as [string, number]] : kept;
+  return rows.map(([key, views]) => ({ key, views, share: Math.round((views / totalViews) * 1000) / 1000 }));
 }
 
 /** Sources by views, with "Not shared" last so the known sources read as a ranking. */

@@ -22,6 +22,36 @@ export interface SiteVisitsReport {
   landing: { kind: string; visits: number }[];
   sources: { source: string; visits: number }[];
   referrers: { host: string; visits: number }[];
+  /** Request origin (shared-types request-origin.ts), since collection began; older api-videos omits them */
+  surfaces?: { surface: string; visits: number }[];
+  devices?: { device: string; visits: number }[];
+  /** Top 50 countries; the rest are counted under "other" */
+  countries?: { country: string; visits: number }[];
+  /** utm_source values (top 30, the rest under "other") */
+  campaigns?: { campaign: string; visits: number }[];
+}
+
+/** The overflow bucket of a capped breakdown (processor OTHER_ORIGIN). */
+export const OTHER_ORIGIN = 'other';
+
+/** Countries shown by name before the rest fold into "Other countries". */
+export const TOP_COUNTRIES = 10;
+
+/** A country code in the page language ("EG" → "Egypt" / «مصر»); unknown codes as they are. */
+export function countryName(code: string, locale: string): string {
+  if (!/^[A-Z]{2}$/.test(code)) return code;
+  try {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/** The top countries by visits, the rest (and the stored overflow) as one "other" row last. */
+export function topCountries(countries: { country: string; visits: number }[], limit = TOP_COUNTRIES): { country: string; visits: number }[] {
+  const named = countries.filter((c) => c.country !== OTHER_ORIGIN && c.visits > 0).sort((a, b) => b.visits - a.visits || a.country.localeCompare(b.country));
+  const rest = named.slice(limit).reduce((n, c) => n + c.visits, 0) + countries.filter((c) => c.country === OTHER_ORIGIN).reduce((n, c) => n + c.visits, 0);
+  return rest > 0 ? [...named.slice(0, limit), { country: OTHER_ORIGIN, visits: rest }] : named.slice(0, limit);
 }
 
 export const VISIT_PERIODS = [7, 30, 90] as const;

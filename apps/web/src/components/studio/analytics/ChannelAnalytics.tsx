@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger-client';
 import { formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
-import { StatCard, TrafficSources } from './parts';
+import { StatCard, TrafficSources, ViewerOrigins } from './parts';
 
 type Metric = 'views' | 'watchTime' | 'likes' | 'comments' | 'subscribers';
 type SortKey = 'views' | 'watchTime' | 'avgViewDuration';
@@ -181,6 +181,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               </section>
 
               {overview && <TrafficSources traffic={overview.traffic} locale={locale} />}
+              {overview && <ViewerOrigins traffic={overview.traffic} locale={locale} />}
             </>
           )}
 
