@@ -51,7 +51,7 @@ test.describe('default creator tier', () => {
     const email = accounts.moderator.email;
     const find = async () =>
       ((await adminApi<UsersPage>(`/api/content/users?q=${encodeURIComponent(email)}`)).body.result?.items ?? []).find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    let row = await find();
+    const row = await find();
     if (!row) {
       const id = (await createVideosProfile(readTokens().moderator, email, 'Admin E2E moderator')).id;
       await expect.poll(async () => ((await adminApi<UsersPage>(`/api/content/users?q=${encodeURIComponent(id)}`)).body.result?.items ?? []).some((u) => u.id === id), { timeout: 90_000, intervals: [2_000, 5_000] }).toBe(true);
