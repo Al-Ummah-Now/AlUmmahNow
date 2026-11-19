@@ -292,7 +292,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
     // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
     const allText: DOMRect[] = [];
-    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
+    // ...and the sticky header, for page text scrolled under it
+    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"], [role="banner"], body > header, .ah')].filter(visible);
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!node.textContent?.trim() || node.parentElement?.closest('[data-help-marker],script,style')) continue;
@@ -387,7 +388,10 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0));
       }
       const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
-      const texts = [...ownText, ...allText].map(shrink);
+      // A text box is the line's box, taller than its letters: trimmed to the glyphs, so a number in
+      // the line spacing above a heading is not counted as covering it
+      const glyphs = (b: DOMRect) => ({ x: b.x + 2, y: b.y + b.height * 0.15, w: Math.max(0, b.width - 4), h: Math.max(0, b.height * 0.7) });
+      const texts = [...ownText, ...allText].map(glyphs);
       const others = [
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
         ...ownPictures.map(shrink),
