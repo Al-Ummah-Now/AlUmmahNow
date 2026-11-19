@@ -8,10 +8,11 @@ import { useState } from 'react';
 
 interface ImagePostProps {
   post: CommunityPost;
+  /** Unused: text keeps its own direction (dir="auto") */
   isRTL?: boolean;
 }
 
-export default function ImagePost({ post, isRTL = false }: ImagePostProps) {
+export default function ImagePost({ post }: ImagePostProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
 
   if (!post.images || post.images.length === 0) return null;
@@ -30,10 +31,7 @@ export default function ImagePost({ post, isRTL = false }: ImagePostProps) {
     <div className="space-y-3">
       {/* Text content if present */}
       {post.content && (
-        <p className={cn(
-          'text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words',
-          isRTL && 'text-right'
-        )}>
+        <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir="auto">
           {post.content}
         </p>
       )}

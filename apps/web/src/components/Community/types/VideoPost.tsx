@@ -16,10 +16,7 @@ export default function VideoPost({ post, isRTL = false }: VideoPostProps) {
     <div className="space-y-3">
       {/* Text content */}
       {post.content && (
-        <p className={cn(
-          'text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words',
-          isRTL && 'text-right'
-        )}>
+        <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir="auto">
           {post.content}
         </p>
       )}
