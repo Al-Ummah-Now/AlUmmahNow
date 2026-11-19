@@ -406,7 +406,8 @@ export function Autocomplete({
             aria-describedby={hint ? hintId : undefined}
             autoComplete="off"
             spellCheck={false}
-            dir="auto"
+            // Empty, the box follows the page (an Arabic placeholder starts at the right); typed text sets its own
+            dir={state.query ? 'auto' : undefined}
             maxLength={200}
             disabled={disabled}
             value={state.query}
@@ -422,7 +423,7 @@ export function Autocomplete({
             onClick={() => {
               if (initialOn && !state.open) openInitial();
             }}
-            className={`${fieldClass} w-full`}
+            className={`${fieldClass} w-full text-ellipsis`}
             data-testid={testId ? `${testId}-input` : undefined}
           />
           <div

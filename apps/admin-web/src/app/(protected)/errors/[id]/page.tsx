@@ -482,7 +482,7 @@ function OriginBreakdown({ origins, t, locale }: { origins: { surface: string; s
                 <Link href={`/errors?origin=${encodeURIComponent(o.surface)}`} className={`${linkClass} truncate`}>
                   {translateDynamic(t, 'originSurface', o.surface)}
                 </Link>
-                <span className="h-2 rounded-full bg-surface-2 overflow-hidden" aria-hidden="true">
+                <span className="h-2 rounded-full bg-border overflow-hidden" aria-hidden="true">
                   <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, Math.round(share * 100))}%` }} />
                 </span>
                 <span className="tabular-nums text-fg-muted text-end">
