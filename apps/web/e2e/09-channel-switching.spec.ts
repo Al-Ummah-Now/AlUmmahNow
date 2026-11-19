@@ -160,10 +160,11 @@ test.describe('Channel Switching - English', () => {
       await showMenuView(menu, 'channel');
       await expect(option(menu, ch.id)).toHaveAttribute('aria-checked', 'false');
     }
-    // Upload needs an active channel: it stays in place, disabled, with no destination
+    // Acting as yourself, Upload stays a working Upload (owner review 2026-11-16: never greyed for someone
+    // who may upload); the upload page asks for the channel
     const upload = page.getByRole('banner').getByTestId('header-upload');
-    await expect(upload).toHaveAttribute('aria-disabled', 'true');
-    await expect(upload).not.toHaveAttribute('href', /./);
+    await expect(upload).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(upload).toHaveAttribute('href', '/en/upload');
   });
 });
 

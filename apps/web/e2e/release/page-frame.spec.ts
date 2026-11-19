@@ -238,7 +238,7 @@ test.describe('Release: page frame', () => {
     }
   }
 
-  test('Upload is disabled without a channel and opens the upload form with one', async ({ page, context }) => {
+  test('Upload stays a working Upload without a channel (the form offers Create a channel) and opens the upload form with one', async ({ page, context }) => {
     await answerConsent(context);
     await page.setViewportSize(DESKTOP);
     const user = await signUpOnWeb(page, 'rel-frame-upload');
@@ -248,10 +248,11 @@ test.describe('Release: page frame', () => {
 
     await page.goto(`${target().web}/en`);
     const upload = page.getByTestId('header-upload');
-    await expect(upload).toHaveAttribute('data-state', 'disabled');
-    await expect(upload).toHaveAttribute('aria-disabled', 'true');
-    await expect(upload).not.toHaveAttribute('href', /.*/);
-    await expect(upload).toHaveAccessibleName(/^Upload Video\. .+/);
+    // A tier that may create channels gets the normal Upload, never a greyed control (owner review 2026-11-16):
+    // the upload page offers "Create a channel"
+    await expect(upload).toHaveAttribute('data-state', 'ready');
+    await expect(upload).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(upload).toHaveAttribute('href', '/en/upload');
 
     // Create the channel the way users do (account menu), which refreshes the session's channels
     const channelName = `Release E2E frame ${Date.now().toString(36)}`;
