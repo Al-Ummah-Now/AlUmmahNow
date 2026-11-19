@@ -1760,6 +1760,8 @@ const en = {
     },
     searchPlaceholder: 'Type to search',
     pickPlaceholder: 'Name, @handle or email',
+    videoPlaceholder: 'Video title or channel',
+    postPlaceholder: 'Post text or channel',
     searching: 'Searching…',
     loadingList: 'Loading the newest…',
     emptyList: 'Nothing here yet.',

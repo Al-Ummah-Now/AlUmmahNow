@@ -116,6 +116,8 @@ export function NewRun() {
                 kind="video"
                 mode="pick"
                 label={t('mediaBackfill.videoIds')}
+                placeholder={t('autocomplete.videoPlaceholder')}
+                showIds={false}
                 initialResults
                 hint={t('mediaBackfill.videoIdsHint', { max: f.integer(BACKFILL_LIMITS.maxVideoIds) })}
                 onChange={(id, item) => {
