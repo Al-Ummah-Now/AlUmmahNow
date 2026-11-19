@@ -208,15 +208,27 @@ export function pathOf(url: unknown): string {
 
 async function pathTrace(app: string, script: string, needles: string[], since: Date, until: Date): Promise<void> {
 	p(`## Requests: ${app} (${script}) matching ${needles.join(', ')}`);
-	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
-		queryId: `prod-errors-paths-${script}`,
-		timeframe: { from: since.getTime(), to: until.getTime() },
-		view: 'events',
-		limit: 2000,
-		parameters: { datasets: ['cloudflare-workers'], filters: [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }], filterCombination: 'and' },
-	});
-	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
-	const all: any[] = r.body.result?.events?.events ?? [];
+	// One query per needle, filtered on the request URL by Observability itself, so a
+	// busy window's cap never hides the matching requests
+	const all: any[] = [];
+	for (const needle of needles) {
+		const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
+			queryId: `prod-errors-paths-${script}`,
+			timeframe: { from: since.getTime(), to: until.getTime() },
+			view: 'events',
+			limit: 2000,
+			parameters: {
+				datasets: ['cloudflare-workers'],
+				filters: [
+					{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script },
+					...(needle === '/' ? [] : [{ key: '$workers.event.request.url', operation: 'includes', type: 'string', value: needle }]),
+				],
+				filterCombination: 'and',
+			},
+		});
+		if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+		all.push(...(r.body.result?.events?.events ?? []));
+	}
 	const hit = (e: any) => {
 		const path = pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
 		return path && needles.some((n) => path.includes(n));
