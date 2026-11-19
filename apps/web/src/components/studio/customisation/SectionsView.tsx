@@ -59,7 +59,7 @@ const isSpotlight = (section: { type: string }) => section.type === 'channel_spo
  * channel.edit; `ownerId` decides who may grant featured-channel consent.
  */
 export function SectionsView({ channelId, ownerId }: { channelId: string; ownerId: string | null }) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const s = t.channelManage.sections;
   const cs = t.channelSections;
   const { user } = useAuth();
@@ -292,7 +292,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
             {s.title}
           </h2>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
-            {s.description.replace('{max}', formatCountNoun(locale, MAX_SECTIONS, 'section'))}
+            {s.description.replace('{max}', formatCountNoun(lang, MAX_SECTIONS, 'section'))}
           </p>
         </div>
 
@@ -320,7 +320,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
       )}
 
       <div className="text-sm text-muted-foreground" data-testid="sections-count">
-        {s.sectionsUsed.replace('{count}', formatNumber(locale, sections.length)).replace('{max}', formatCountNoun(locale, MAX_SECTIONS, 'section'))}
+        {s.sectionsUsed.replace('{count}', formatNumber(lang, sections.length)).replace('{max}', formatCountNoun(lang, MAX_SECTIONS, 'section'))}
         {hasChanges && (
           <span className="ms-2 font-medium text-foreground" data-testid="sections-unpublished">
             {s.unpublishedChanges}

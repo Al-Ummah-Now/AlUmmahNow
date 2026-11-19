@@ -455,65 +455,66 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
             </p>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {tab === 'held' && !heldByModeration && (
-              <Button size="sm" className="min-h-11" disabled={busy} onClick={onApprove} data-testid="studio-comment-approve">
-                <Check aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.approve}
-              </Button>
-            )}
-            {tab !== 'removed' && !heldByModeration && (
-              <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={onRemove} data-testid="studio-comment-remove">
-                <Trash2 aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.remove}
-              </Button>
-            )}
-            {tab === 'removed' && (
-              <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={onRestore} data-testid="studio-comment-restore">
-                <RotateCcw aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.restore}
-              </Button>
-            )}
-            {canReply && (
-              <Button size="sm" variant="ghost" className="hidden min-h-11 md:inline-flex" aria-expanded={replying} onClick={onReply} data-testid="studio-comment-reply">
-                <MessageSquareReply aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.reply}
-              </Button>
-            )}
-            {/* Non-modal: a modal menu that opens a dialog leaves pointer-events: none on the page after the dialog closes */}
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="min-h-11 min-w-11" aria-label={text.actions.label} data-testid="studio-comment-more">
-                  <MoreVertical aria-hidden="true" className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {canReply && (
-                  <DropdownMenuItem className="md:hidden" onSelect={onReply}>{text.actions.reply}</DropdownMenuItem>
-                )}
-                {tab === 'inbox' && isTopLevel && (
-                  <DropdownMenuItem onSelect={() => onFlag(comment.isPinned ? 'unpin' : 'pin')} data-testid="studio-comment-pin">
-                    {comment.isPinned ? text.actions.unpin : text.actions.pin}
-                  </DropdownMenuItem>
-                )}
-                {tab === 'inbox' && (
-                  <DropdownMenuItem onSelect={() => onFlag(comment.isHearted ? 'unheart' : 'heart')} data-testid="studio-comment-heart">
-                    {comment.isHearted ? text.actions.unheart : text.actions.heart}
-                  </DropdownMenuItem>
-                )}
-                {tab === 'inbox' && (
-                  <DropdownMenuItem onSelect={onHold} data-testid="studio-comment-hold">{text.actions.hide}</DropdownMenuItem>
-                )}
-                <DropdownMenuItem asChild>
-                  <Link href={`${base}?tab=${tab}&target=${encodeURIComponent(targetKey)}`} data-testid="studio-comment-only-this">{text.filters.onlyThis}</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onReport} data-testid="studio-comment-report">{text.actions.report}</DropdownMenuItem>
-                {comment.author.userId && (
-                  <DropdownMenuItem onSelect={onBlock} className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]" data-testid="studio-comment-block">{text.actions.block}</DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
 
           {replying && <ReplyForm comment={comment} channel={channel} onDone={onReplied} onCancel={onReply} />}
         </div>
+      </div>
+      {/* Card footer: the actions sit at the end edge (mirrors in RTL) */}
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3" data-testid="studio-comment-actions">
+        {tab === 'held' && !heldByModeration && (
+          <Button size="sm" className="min-h-11" disabled={busy} onClick={onApprove} data-testid="studio-comment-approve">
+            <Check aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.approve}
+          </Button>
+        )}
+        {tab !== 'removed' && !heldByModeration && (
+          <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={onRemove} data-testid="studio-comment-remove">
+            <Trash2 aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.remove}
+          </Button>
+        )}
+        {tab === 'removed' && (
+          <Button size="sm" variant="outline" className="min-h-11" disabled={busy} onClick={onRestore} data-testid="studio-comment-restore">
+            <RotateCcw aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.restore}
+          </Button>
+        )}
+        {canReply && (
+          <Button size="sm" variant="ghost" className="hidden min-h-11 md:inline-flex" aria-expanded={replying} onClick={onReply} data-testid="studio-comment-reply">
+            <MessageSquareReply aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.reply}
+          </Button>
+        )}
+        {/* Non-modal: a modal menu that opens a dialog leaves pointer-events: none on the page after the dialog closes */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="ghost" className="min-h-11 min-w-11" aria-label={text.actions.label} data-testid="studio-comment-more">
+              <MoreVertical aria-hidden="true" className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {canReply && (
+              <DropdownMenuItem className="md:hidden" onSelect={onReply}>{text.actions.reply}</DropdownMenuItem>
+            )}
+            {tab === 'inbox' && isTopLevel && (
+              <DropdownMenuItem onSelect={() => onFlag(comment.isPinned ? 'unpin' : 'pin')} data-testid="studio-comment-pin">
+                {comment.isPinned ? text.actions.unpin : text.actions.pin}
+              </DropdownMenuItem>
+            )}
+            {tab === 'inbox' && (
+              <DropdownMenuItem onSelect={() => onFlag(comment.isHearted ? 'unheart' : 'heart')} data-testid="studio-comment-heart">
+                {comment.isHearted ? text.actions.unheart : text.actions.heart}
+              </DropdownMenuItem>
+            )}
+            {tab === 'inbox' && (
+              <DropdownMenuItem onSelect={onHold} data-testid="studio-comment-hold">{text.actions.hide}</DropdownMenuItem>
+            )}
+            <DropdownMenuItem asChild>
+              <Link href={`${base}?tab=${tab}&target=${encodeURIComponent(targetKey)}`} data-testid="studio-comment-only-this">{text.filters.onlyThis}</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onReport} data-testid="studio-comment-report">{text.actions.report}</DropdownMenuItem>
+            {comment.author.userId && (
+              <DropdownMenuItem onSelect={onBlock} className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]" data-testid="studio-comment-block">{text.actions.block}</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </li>
   );

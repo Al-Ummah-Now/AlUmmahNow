@@ -255,22 +255,25 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                                 {nameOf(m).charAt(0).toUpperCase()}
                               </span>
                             )}
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
+                            <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
                               {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
                             </span>
-                            {manageable ? (
-                              <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
-                                onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
-                                disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
-                                {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-                              </select>
-                            ) : roleBadge(m.role)}
-                            {manageable && (
-                              <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                                className={`${BUTTON} b-danger`} data-testid="team-member-remove">
-                                {tr.remove}
-                              </button>
-                            )}
+                            {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
+                            <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
+                              {manageable ? (
+                                <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                                  onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                                  disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
+                                  {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                                </select>
+                              ) : roleBadge(m.role)}
+                              {manageable && (
+                                <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                                  className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                                  {tr.remove}
+                                </button>
+                              )}
+                            </span>
                           </li>
                         );
                       })}
@@ -346,22 +349,25 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                             {nameOf(m).charAt(0).toUpperCase()}
                           </span>
                         )}
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
+                        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
                           {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
                         </span>
-                        {manageable ? (
-                          <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
-                            onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
-                            disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
-                            {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-                          </select>
-                        ) : roleBadge(m.role)}
-                        {manageable && (
-                          <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                            className={`${BUTTON} b-danger`} data-testid="team-member-remove">
-                            {tr.remove}
-                          </button>
-                        )}
+                        {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
+                        <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
+                          {manageable ? (
+                            <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                              onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                              disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
+                              {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                            </select>
+                          ) : roleBadge(m.role)}
+                          {manageable && (
+                            <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                              className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                              {tr.remove}
+                            </button>
+                          )}
+                        </span>
                       </li>
                     );
                   })}

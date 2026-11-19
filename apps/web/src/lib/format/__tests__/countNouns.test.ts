@@ -22,6 +22,7 @@ describe('formatCountNoun', () => {
       comment: ['لا توجد تعليقات', 'تعليق واحد', 'تعليقان', '٣ تعليقات', '١٤ تعليقًا'],
       message: ['لا توجد رسائل', 'رسالة واحدة', 'رسالتان', '٣ رسائل', '١٤ رسالة'],
       audioTrack: ['لا توجد مسارات صوتية', 'مسار صوتي واحد', 'مساران صوتيان', '٣ مسارات صوتية', '١٤ مسارًا صوتيًا'],
+      section: ['لا توجد أقسام', 'قسم واحد', 'قسمان', '٣ أقسام', '١٤ قسمًا'],
     };
     for (const [noun, forms] of Object.entries(table)) {
       expect([0, 1, 2, 3, 14].map((n) => formatCountNoun('ar', n, noun as CountNoun))).toEqual(forms);

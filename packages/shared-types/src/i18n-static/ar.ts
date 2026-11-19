@@ -246,7 +246,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       changes_saved: 'تم حفظ إعدادات التبويبات بنجاح',
       save_failed: 'فشل في حفظ إعدادات التبويبات',
       drag_to_reorder: 'اسحب لإعادة الترتيب',
-      at_least_one_visible: 'يجب أن يكون تبويب واحد على الأقل مرئياً',
+      at_least_one_visible: 'يبقى التبويب الافتراضي ظاهرًا دائمًا، فتعرض القناة تبويبًا واحدًا على الأقل.',
       default_must_be_visible: 'يجب أن يكون التبويب الافتراضي مرئياً',
     },
     // Channel Sections

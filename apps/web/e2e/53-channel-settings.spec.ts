@@ -319,12 +319,12 @@ test.describe('Tab management', () => {
   test('CHSET-040 shows every tab with the default marked (en)', async ({ page }) => {
     const config = await getTabConfig(target().id);
     await openTabs(page);
-    await expect(page.getByRole('heading', { level: 2, name: 'Manage Channel Tabs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage channel tabs' })).toBeVisible();
     await expect(page.getByTestId('studio-layout-view-tabs')).toHaveAttribute('aria-current', 'page');
     const ids = await page.getByTestId('tab-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab-id')));
     expect(ids).toEqual([...config.tabs].sort((a, b) => a.position - b.position).map((t) => t.id));
-    await expect(row(page, config.defaultTab)).toContainText('Default Tab');
-    await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    await expect(row(page, config.defaultTab)).toContainText('Default tab');
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     // The default tab cannot be hidden
     await expect(row(page, config.defaultTab).getByRole('button', { name: /^Hide Tab/ })).toBeDisabled();
   });
@@ -336,7 +336,7 @@ test.describe('Tab management', () => {
       const name = (await row(page, hide).locator('span').first().innerText()).trim();
       await row(page, hide).getByRole('button', { name: `Hide Tab ${name}` }).click();
       await expect(row(page, hide)).toContainText('(Hidden)');
-      const save = page.getByRole('button', { name: 'Save Changes' });
+      const save = page.getByRole('button', { name: 'Save changes' });
       await expect(save).toBeEnabled();
       await save.click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
@@ -359,9 +359,9 @@ test.describe('Tab management', () => {
       await openTabs(page);
       const name = (await row(page, next).locator('span').first().innerText()).trim();
       await row(page, next).getByRole('button', { name: `Set as default tab ${name}` }).click();
-      await expect(row(page, next)).toContainText('Default Tab');
-      await expect(row(page, original.defaultTab)).not.toContainText('Default Tab');
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await expect(row(page, next)).toContainText('Default tab');
+      await expect(row(page, original.defaultTab)).not.toContainText('Default tab');
+      await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
       await expect.poll(async () => (await getTabConfig(target().id)).defaultTab).toBe(next);
 
@@ -382,7 +382,7 @@ test.describe('Tab management', () => {
         .poll(async () => (await page.getByTestId('tab-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab-id')))).slice(0, 2))
         .toEqual([second, first]);
 
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
       await expect.poll(async () => visibleTabIds(await getTabConfig(target().id)).slice(0, 2)).toEqual(
         [second, first].filter((id) => original.tabs.find((t) => t.id === id)?.visible)
