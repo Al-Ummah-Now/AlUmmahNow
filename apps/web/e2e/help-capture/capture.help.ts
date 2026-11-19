@@ -292,6 +292,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
     // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
     const allText: DOMRect[] = [];
+    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (!node.textContent?.trim() || node.parentElement?.closest('[data-help-marker],script,style')) continue;
@@ -299,9 +300,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       range.selectNodeContents(node);
       for (const b of range.getClientRects()) {
         if (!(b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < window.innerHeight && b.right > 0 && b.left < window.innerWidth)) continue;
-        // Only text a reader can see: not text hidden behind a menu or dialog on top of it
-        const top = document.elementFromPoint(Math.min(window.innerWidth - 1, Math.max(0, b.x + b.width / 2)), Math.min(window.innerHeight - 1, Math.max(0, b.y + b.height / 2)));
-        if (top && (top === node.parentElement || top.contains(node.parentElement) || node.parentElement?.contains(top))) allText.push(b);
+        // Only text a reader can see: not text behind an open menu, dialog or popover that does not
+        // contain it (elementFromPoint is no help: it skips pointer-events:none, as menu labels are)
+        const cx = b.x + b.width / 2;
+        const cy = b.y + b.height / 2;
+        const behind = overlays.some((ov) => {
+          const r = ov.getBoundingClientRect();
+          return cx > r.left && cx < r.right && cy > r.top && cy < r.bottom && !ov.contains(node.parentElement);
+        });
+        if (!behind) allText.push(b);
       }
     }
     const placed: Box[] = [];
