@@ -91,7 +91,8 @@ describe('Allow tier requests (the Upgrade page mode)', () => {
 
   it('says what the Upgrade page does in each of the three states', () => {
     assert.match(html({ allowed: true, providerEnabled: false }), /data-mode="request"[\s\S]*shows the request form/);
-    assert.match(html({ allowed: false, providerEnabled: false }), /data-mode="closed"[\s\S]*upgrades aren(&#x27;|')t available right now/);
+    // Closed: the Upgrade page is an off feature (owner decision 2026-11-19, O37)
+    assert.match(html({ allowed: false, providerEnabled: false }), /data-mode="closed"[\s\S]*don(&#x27;|')t see the Upgrade page or any link to it/);
     assert.match(html({ allowed: true, providerEnabled: true }), /data-mode="pay"[\s\S]*sells tiers, and requests are off/);
     assert.match(html({ allowed: false, providerEnabled: false }, 'ar'), /الطلبات متوقفة/);
   });
