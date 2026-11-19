@@ -17,6 +17,7 @@ describe('formatCountNoun', () => {
     const table: Record<CountNoun, string[]> = {
       view: ['لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٤ مشاهدة'],
       subscriber: ['لا يوجد مشتركون', 'مشترك واحد', 'مشتركان', '٣ مشتركين', '١٤ مشتركًا'],
+      newSubscriber: ['لا يوجد مشتركون جدد', 'مشترك جديد واحد', 'مشتركان جديدان', '٣ مشتركين جدد', '١٤ مشتركًا جديدًا'],
       video: ['لا توجد مرئيات', 'مرئي واحد', 'مرئيان', '٣ مرئيات', '١٤ مرئيًا'],
       like: ['لا توجد إعجابات', 'إعجاب واحد', 'إعجابان', '٣ إعجابات', '١٤ إعجابًا'],
       comment: ['لا توجد تعليقات', 'تعليق واحد', 'تعليقان', '٣ تعليقات', '١٤ تعليقًا'],
@@ -51,6 +52,10 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('ar', 100, 'like')).toBe('١٠٠ إعجاب');
     expect(formatCountNoun('en', 1, 'audioTrack')).toBe('1 audio track');
     expect(formatCountNoun('en', 1, 'comment')).toBe('1 comment');
+  });
+
+  it('new subscribers (analytics chart) in English: "No new subscribers", "1 new subscriber", plural', () => {
+    expect([0, 1, 5].map((n) => formatCountNoun('en', n, 'newSubscriber'))).toEqual(['No new subscribers', '1 new subscriber', '5 new subscribers']);
   });
 
   it('treats missing, invalid and negative counts as zero', () => {

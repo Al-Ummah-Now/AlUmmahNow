@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { formatCountNoun, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -149,7 +149,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               <p className="text-sm font-medium text-gray-800 dark:text-white">{d.topPerformingVideo}</p>
               <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{summary.topVideo.title}</p>
               <p className="text-sm text-blue-600 dark:text-blue-400">
-                {d.viewsCount.replace('{count}', fmt(summary.topVideo.views))}
+                {formatCountNoun(lang, summary.topVideo.views, 'view')}
               </p>
             </div>
           )}
@@ -179,7 +179,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 </div>
                 <div className="text-end">
                   <p className="font-semibold text-gray-800 dark:text-white">
-                    {d.viewsCount.replace('{count}', fmt(video.views))}
+                    {formatCountNoun(lang, video.views, 'view')}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
                     {d.likesAndComments.replace('{likes}', fmt(video.likes)).replace('{comments}', fmt(video.comments))}

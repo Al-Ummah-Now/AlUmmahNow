@@ -11,13 +11,14 @@
  */
 import { formatCompact, formatInteger, formatNumber, pluralCategory, type FormatLocale } from './locale-format';
 
-export type CountNoun = 'view' | 'subscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack';
+export type CountNoun = 'view' | 'subscriber' | 'newSubscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack';
 
 type ArabicForms = { zero: string; one: string; two: string; few: string; many: string; other: string };
 
 const AR: Record<CountNoun, ArabicForms> = {
   view: { zero: 'لا توجد مشاهدات', one: 'مشاهدة واحدة', two: 'مشاهدتان', few: 'مشاهدات', many: 'مشاهدة', other: 'مشاهدة' },
   subscriber: { zero: 'لا يوجد مشتركون', one: 'مشترك واحد', two: 'مشتركان', few: 'مشتركين', many: 'مشتركًا', other: 'مشترك' },
+  newSubscriber: { zero: 'لا يوجد مشتركون جدد', one: 'مشترك جديد واحد', two: 'مشتركان جديدان', few: 'مشتركين جدد', many: 'مشتركًا جديدًا', other: 'مشترك جديد' },
   video: { zero: 'لا توجد مرئيات', one: 'مرئي واحد', two: 'مرئيان', few: 'مرئيات', many: 'مرئيًا', other: 'مرئي' },
   like: { zero: 'لا توجد إعجابات', one: 'إعجاب واحد', two: 'إعجابان', few: 'إعجابات', many: 'إعجابًا', other: 'إعجاب' },
   comment: { zero: 'لا توجد تعليقات', one: 'تعليق واحد', two: 'تعليقان', few: 'تعليقات', many: 'تعليقًا', other: 'تعليق' },
@@ -28,6 +29,7 @@ const AR: Record<CountNoun, ArabicForms> = {
 const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
   view: { zero: 'No views', one: 'view', other: 'views' },
   subscriber: { zero: 'No subscribers', one: 'subscriber', other: 'subscribers' },
+  newSubscriber: { zero: 'No new subscribers', one: 'new subscriber', other: 'new subscribers' },
   video: { zero: 'No videos', one: 'video', other: 'videos' },
   like: { zero: 'No likes', one: 'like', other: 'likes' },
   comment: { zero: 'No comments', one: 'comment', other: 'comments' },
