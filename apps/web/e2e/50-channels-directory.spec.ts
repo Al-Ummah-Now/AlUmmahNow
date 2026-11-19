@@ -192,18 +192,21 @@ test.describe('Create channel dialog (profile)', () => {
     expect(after.data.filter((c) => c.userId === channelsOf('single').userId).length).toBe(ownedBefore);
   });
 
-  test('CHL-011 Arabic dialog is RTL and surfaces the English-name error', async ({ page }) => {
+  test('CHL-011 Arabic dialog is RTL; the name is needed in one language only', async ({ page }) => {
     const dialog = await openDialog(page, 'ar');
     await expect(dialog).toHaveAttribute('dir', 'rtl');
     await expect(dialog.getByRole('heading', { name: 'إنشاء قناة جديدة' })).toBeVisible();
 
-    // Arabic users start on the Arabic name tab; only the Arabic name is filled
-    await fillStable(dialog.getByPlaceholder('اسم القناة بالعربية'), 'قناة تجريبية');
+    // Nothing filled: the error shows on the Arabic tab the user is on
     await dialog.getByRole('button', { name: 'إنشاء القناة' }).click();
-
-    // The English name is required: the dialog switches to it and shows the error
     await expect(dialog.getByTestId('create-channel-name-error')).toHaveText('اسم القناة مطلوب');
-    await expect(dialog.getByPlaceholder('Channel name in English')).toBeVisible();
+    await expect(dialog.getByPlaceholder('اسم القناة بالعربية')).toBeVisible();
+
+    // An Arabic name alone is enough (user content, 2026-11-19 prod report): typing clears
+    // the error and the dialog never sends the user to the English tab
+    await fillStable(dialog.getByPlaceholder('اسم القناة بالعربية'), 'قناة تجريبية');
+    await expect(dialog.getByTestId('create-channel-name-error')).toHaveCount(0);
+    await expect(dialog.getByPlaceholder('Channel name in English')).toHaveCount(0);
 
     await dialog.getByRole('button', { name: 'إلغاء' }).click();
     await expect(dialog).toBeHidden();
