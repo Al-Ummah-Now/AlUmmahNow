@@ -19,7 +19,7 @@ import { InviteVideoPickers, type InviteVideoItems, type InviteVideoValue } from
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
-import { parseDigits } from '@al-ummah/shared-types';
+import { localizeDigits, parseDigits } from '@al-ummah/shared-types';
 import { tierLabel } from '@/lib/creator-tiers';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
@@ -61,7 +61,9 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
   // The email's one language: picked next to Send, the admin UI's language until changed
   const [locale, setLocale] = useState<EmailLanguage>(uiLocale === 'ar' ? 'ar' : 'en');
   const [note, setNote] = useState('');
-  const [days, setDays] = useState(14);
+  // The link's days as typed, in the page's digits (٠–٩ in Arabic; either digit set accepted), clamped to 1–90 when sent
+  const [daysText, setDaysText] = useState(() => localizeDigits(uiLocale, 14));
+  const days = Math.min(90, Math.max(1, Math.round(Number(parseDigits(daysText.trim()))) || 14));
   const [newChannels, setNewChannels] = useState<Array<{ key: number; name: string; handle: string }>>([]);
   const [existing, setExisting] = useState<AdminSuggestion[]>([]);
   const [pickerRound, setPickerRound] = useState(0);
@@ -200,7 +202,7 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-days`} className="text-sm text-fg-muted">{t('invites.expires')}</label>
-            <input id={`${ids}-days`} type="number" min={1} max={90} value={days} onChange={(e) => setDays(Math.min(90, Math.max(1, Number(parseDigits(e.target.value)) || 14)))} className={fieldClass} aria-describedby={`${ids}-days-hint`} data-testid="invite-days" />
+            <input id={`${ids}-days`} type="text" inputMode="numeric" autoComplete="off" value={daysText} onChange={(e) => setDaysText(e.target.value)} onBlur={() => setDaysText(localizeDigits(uiLocale, days))} className={fieldClass} aria-describedby={`${ids}-days-hint`} data-testid="invite-days" />
             <span id={`${ids}-days-hint`} className="text-xs text-fg-subtle">{t('invites.expiresHint')}</span>
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">
