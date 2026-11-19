@@ -2,7 +2,12 @@
  * Read-only report of the errors one environment recorded (production or stage).
  *
  *   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node --experimental-strip-types scripts/ops/prod-errors.ts \
- *     --env production [--hours 72]
+ *     --env production [--hours 72] [--paths /passkeys/,/account/passkeys]
+ *
+ * --paths: also list every request whose path contains one of the
+ * comma-separated substrings (time, method, path without query, status,
+ * outcome, browser family) with the log lines of those requests. No query
+ * strings, headers, bodies or ids are printed.
  *
  * Prints, as markdown (stdout, also the job summary):
  *  - the error groups (admin Errors page) seen in the window: app, kind, route/culprit, message, status,
@@ -187,6 +192,53 @@ async function costRuns(env: EnvName, since: Date): Promise<void> {
 	p();
 }
 
+/** Browser and OS family only (never the full User-Agent). */
+export function uaFamily(ua: unknown): string {
+	const s = typeof ua === 'string' ? ua : '';
+	if (!s) return '';
+	const os = /iPhone|iPad|iPod/.test(s) ? 'iOS' : /Android/.test(s) ? 'Android' : /Mac OS X|Macintosh/.test(s) ? 'macOS' : /Windows/.test(s) ? 'Windows' : /Linux|CrOS/.test(s) ? 'Linux' : 'other';
+	const br = /Edg\//.test(s) ? 'Edge' : /SamsungBrowser/.test(s) ? 'Samsung' : /Firefox|FxiOS/.test(s) ? 'Firefox' : /CriOS|Chrome\//.test(s) ? 'Chrome' : /Safari\//.test(s) ? 'Safari' : 'other';
+	return `${br}/${os}`;
+}
+
+/** Path of a request URL without host or query. */
+export function pathOf(url: unknown): string {
+	return String(url ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]!.split('#')[0]!;
+}
+
+async function pathTrace(app: string, script: string, needles: string[], since: Date, until: Date): Promise<void> {
+	p(`## Requests: ${app} (${script}) matching ${needles.join(', ')}`);
+	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
+		queryId: `prod-errors-paths-${script}`,
+		timeframe: { from: since.getTime(), to: until.getTime() },
+		view: 'events',
+		limit: 2000,
+		parameters: { datasets: ['cloudflare-workers'], filters: [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }], filterCombination: 'and' },
+	});
+	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+	const all: any[] = r.body.result?.events?.events ?? [];
+	const hit = (e: any) => {
+		const path = pathOf(e.$workers?.event?.request?.url ?? e.$workers?.event?.request?.path);
+		return path && needles.some((n) => path.includes(n));
+	};
+	const matched = all.filter(hit);
+	const ids = new Set(matched.map((e) => e.$workers?.requestId).filter(Boolean));
+	p(`${matched.length} matching events (of ${all.length} read)`);
+	const rows = all
+		.filter((e) => hit(e) || (e.$workers?.requestId && ids.has(e.$workers.requestId)))
+		.sort((a, b) => Number(a.timestamp ?? 0) - Number(b.timestamp ?? 0));
+	for (const e of rows.slice(-200)) {
+		const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
+		const req = e.$workers?.event?.request;
+		const status = e.$workers?.event?.response?.status ?? '';
+		const level = e.$metadata?.level ?? e.source?.level ?? '';
+		const msg = String(e.$metadata?.message ?? e.source?.message ?? '').slice(0, 300);
+		const ua = uaFamily(req?.headers?.['user-agent'] ?? req?.headers?.['User-Agent']);
+		p(`- ${t} ${req?.method ?? ''} ${pathOf(req?.url ?? req?.path)} ${status ? `→ ${status}` : ''} ${e.$workers?.outcome ?? ''} ${ua} ${level ? `[${level}] ` : ''}${msg}`.replace(/\s+/g, ' ').trim());
+	}
+	p();
+}
+
 async function logs(app: string, script: string, since: Date, until: Date): Promise<void> {
 	p(`## Logs: ${app} (${script})`);
 	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
@@ -235,6 +287,8 @@ async function main(): Promise<void> {
 	// Observability keeps 7 days at most; the query window is capped at 72 h to bound the read
 	const logSince = new Date(Math.max(since.getTime(), until.getTime() - 72 * 3600_000));
 	for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await logs(app, s, logSince, until);
+	const needles = arg('paths', '').split(',').map((n) => n.trim()).filter((n) => n.startsWith('/')).slice(0, 10);
+	if (needles.length) for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await pathTrace(app, s, needles, logSince, until);
 	process.stdout.write(out.join('\n') + '\n');
 }
 
