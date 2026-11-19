@@ -219,7 +219,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
         render={(p) => (
           <Link
             href={`/${lang}/playlist/${encodeURIComponent(p.id)}`}
-            className="block rounded-lg border border-gray-200 p-3 hover:border-[var(--fanous-color-accent)] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="c group block !p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
             data-testid="library-playlist"
           >
             <ListVideo className="mb-2 h-6 w-6 text-gray-500" aria-hidden="true" />
