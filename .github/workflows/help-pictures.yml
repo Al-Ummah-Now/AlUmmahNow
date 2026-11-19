@@ -85,6 +85,8 @@ jobs:
     timeout-minutes: 60
     env:
       E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      # Pictures people see: the header shows no QA badge (scripts/local-stack/stack.ts)
+      LOCAL_STACK_NEXTJS_ENV: production
     steps:
       - uses: actions/checkout@v4
 
