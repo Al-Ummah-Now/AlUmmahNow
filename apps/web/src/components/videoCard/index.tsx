@@ -35,7 +35,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ imageLoading, ...video }) => {
 
                 {/* Video Details */}
                 <div className="p-4 pe-12">
-                    <h3 className="text-lg truncate font-[Tahoma]">
+                    <h3 dir="auto" className="text-lg truncate font-[Tahoma]">
                         {removeUnwantedChars(title)}
                     </h3>
                     <p className="text-sm truncate">{channelLabel(video, lang)}</p>
