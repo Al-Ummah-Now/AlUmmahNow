@@ -53,4 +53,9 @@ describe('Library cards on the shared surface (#1634)', () => {
     render(<SavedPostCard post={{ id: 'p1', channelId: 'ch2', channelName: 'Morning Adhkar', content: 'Remember Allah often.' } as never} />);
     onSurface(screen.getByTestId('library-saved-post'));
   });
+
+  it('a saved post takes its own text direction (an Arabic post on the English page)', () => {
+    render(<SavedPostCard post={{ id: 'p2', channelId: 'ch2', channelName: 'Evening Adhkar Circle', content: 'تبدأ سلسلتنا الجديدة يوم الجمعة.' } as never} />);
+    expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveAttribute('dir', 'auto');
+  });
 });
