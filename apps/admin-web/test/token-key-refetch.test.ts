@@ -54,7 +54,7 @@ test('a token signed by a key published after the client cached JWKS verifies', 
   const oldKey = await key('kid-old');
   const newKey = await key('kid-new');
   const { state, make } = await issuer([oldKey.jwk]);
-  let now = Date.now();
+  const now = Date.now();
   const client = withKeyRefetch(make, () => now);
   assert.ok(!(await client.verify(subjects, await oldKey.sign())).err);
 
