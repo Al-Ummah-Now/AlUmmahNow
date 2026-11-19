@@ -139,7 +139,11 @@ describe('the new owner field', () => {
       assert.match(html, /role="status"[^>]*aria-live="polite"[^>]*data-testid="p-status" data-status="idle"/);
       assert.ok(html.includes(t('channels.newOwner')));
       assert.ok(html.includes(t('channels.newOwnerPlaceholder')));
-      assert.match(html, /dir="auto"/, 'Arabic and Latin names both read in their own direction');
+      // Empty, the box follows the page direction (an Arabic placeholder starts at the right); once a
+      // name is typed it takes dir="auto", so Arabic and Latin names both read in their own direction
+      const input = html.match(/<input[^>]*role="combobox"[^>]*>/)?.[0] ?? '';
+      assert.ok(input, 'renders the combobox input');
+      assert.doesNotMatch(input, /\sdir=/, 'an empty box follows the page direction');
     });
   }
 
