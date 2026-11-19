@@ -103,6 +103,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     settingsTier: {
       title: 'Tier',
       description: 'Your tier and your tier requests',
+      descriptionTierOnly: 'Your tier and what it lets you do',
       current: 'Your tier: {tier}',
       since: 'Since {date}',
       seeTiers: 'See all tiers',

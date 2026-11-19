@@ -146,6 +146,9 @@ describe('Settings › Tier', () => {
     expect(screen.getByTestId('settings-tier-current')).toHaveTextContent('Upload up to 2,000 videos a day');
     expect(screen.queryByTestId('settings-tier-see-all')).toBeNull();
     expect(screen.queryByTestId('tier-request-history')).toBeNull();
+    // The lead no longer mentions requests
+    expect(screen.getByText('Your tier and what it lets you do')).toBeInTheDocument();
+    expect(screen.queryByText('Your tier and your tier requests')).toBeNull();
     expect(fetchMyTierRequests).not.toHaveBeenCalled();
   });
 
