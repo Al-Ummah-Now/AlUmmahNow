@@ -37,7 +37,6 @@ describe('ChannelManagementSection, hidden when off', () => {
   it('no tier and no channels: renders nothing (no notice, no empty state)', () => {
     const { container } = render(<ChannelManagementSection initialChannels={[]} />);
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByTestId('uploads-by-invitation')).toBeNull();
     expect(screen.queryByText(/invitation/i)).toBeNull();
   });
 
@@ -46,7 +45,6 @@ describe('ChannelManagementSection, hidden when off', () => {
     render(<ChannelManagementSection initialChannels={[]} />);
     expect(screen.getByText('Noor')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /create channel/i })).toBeNull();
-    expect(screen.queryByTestId('uploads-by-invitation')).toBeNull();
   });
 
   it('a tier at its channel limit: the limit as a plain fact', () => {

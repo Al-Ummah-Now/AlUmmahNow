@@ -214,7 +214,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
     currentAccount: 'Current account',
     switchToAccount: 'Switch to {name}',
     writeArticle: 'Write article',
-    upgrade: 'Upgrade',
     myArticles: 'My articles',
     scholarPage: 'Scholar page',
     navigationMenu: 'Navigation menu',
@@ -875,8 +874,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   creator: {
-    invitationTitle: 'Uploading is by invitation for now',
-    invitationMessage: 'Uploading videos and creating channels are open by request during the beta. You can still watch, save and subscribe to channels.',
     invitationShort: 'Uploading is by invitation for now',
     requestAccess: 'Request tier',
     upgrade: 'Upgrade',

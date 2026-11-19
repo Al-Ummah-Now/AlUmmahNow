@@ -164,8 +164,6 @@ export interface AppTranslations {
   };
   /** Creator tiers: uploading and creating channels are by invitation */
   creator: {
-    invitationTitle: string;
-    invitationMessage: string;
     /** A refused upload on an account that can no longer upload: a plain fact, no upsell (hidden when off) */
     uploadsOff: string;
     invitationShort: string;
@@ -402,8 +400,6 @@ export interface AppTranslations {
   navigation: {
     /** Scholars (AlUmmahNowCMS docs/SCHOLARS.md): articles are written in the CMS. */
     writeArticle: string;
-    /** Account menu: the /upgrade page (request a tier; wiki AUN-TIER-REQUESTS) */
-    upgrade: string;
     myArticles: string;
     scholarPage: string;
     navigationMenu: string;
