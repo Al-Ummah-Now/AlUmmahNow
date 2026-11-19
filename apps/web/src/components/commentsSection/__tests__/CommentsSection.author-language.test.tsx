@@ -1,6 +1,6 @@
 /**
- * #1610: a comment posted as a channel named the channel in English on Arabic pages. The author
- * shows in the page language, falling back to the default name when that language has none.
+ * #1610 / #1618: comment authors (channels and people) showed English or saved names on Arabic
+ * pages. The author shows in the page language, falling back to the default name when that language has none.
  */
 import React from 'react';
 import { render, screen } from '@testing-library/react';
@@ -50,11 +50,15 @@ describe('comment authors in the page language', () => {
     comments = [
       comment('c1', { channelId: 'ch1', displayName: 'Community Corner', displayNameLocalized: { en: 'Community Corner', ar: 'ركن المجتمع' } }),
       comment('c2', { channelId: 'ch2', displayName: 'Weekend Sessions' }),
+      comment('c3', { channelId: null, displayName: 'Sara Ahmed', displayNameLocalized: { en: 'Sara Ahmed', ar: 'سارة أحمد' } }),
     ];
     render(<CommentsSection videoId="v1" user={viewer} />);
     expect(screen.getByText('ركن المجتمع')).toBeInTheDocument();
     expect(screen.queryByText('Community Corner')).toBeNull();
     expect(screen.getByText('Weekend Sessions')).toBeInTheDocument();
+    // A person (#1618): their Arabic display name
+    expect(screen.getByText('سارة أحمد')).toBeInTheDocument();
+    expect(screen.queryByText('Sara Ahmed')).toBeNull();
   });
 
   it('English page: the English name', () => {
