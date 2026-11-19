@@ -186,9 +186,9 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
               {held.items.map((comment) => (
                 <li key={comment.id} className="min-w-0">
                   {/* Each line keeps its own text direction (plaintext) but all of them align to the page's start */}
-                  <p className="line-clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
-                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
+                  <p className="clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere] [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
+                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block text-xs text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground hover:underline">
                     {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
                     {text.held.on.split('{title}')[0]}
                     <bdi>{comment.targetTitleLocalized?.[locale]?.trim() || comment.targetTitle}</bdi>
