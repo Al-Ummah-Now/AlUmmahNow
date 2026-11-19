@@ -18,6 +18,10 @@ on:
         description: Hours back (1-168; logs at most 72)
         type: string
         default: '72'
+      paths:
+        description: Also list requests whose path contains one of these (comma-separated, each starting with /), e.g. /passkeys/
+        type: string
+        default: ''
   pull_request:
     paths:
       - scripts/ops/prod-errors.ts
@@ -49,9 +53,10 @@ jobs:
           # A PR run reads stage only
           ENV_NAME: ${{ inputs.env || 'stage' }}
           HOURS: ${{ inputs.hours || '24' }}
+          PATHS: ${{ inputs.paths || '' }}
         run: |
           set -o pipefail
-          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" | tee report.md
+          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" --paths "$PATHS" | tee report.md
           head -c 900000 report.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
