@@ -5,10 +5,11 @@
  * saves when either tab is filled, the plain (legacy) field carries the
  * filled one (English first), and display falls back to the other language.
  */
-export interface LangPair {
+// A type (not an interface) so it is assignable to Record<string, string>
+export type LangPair = {
   en: string;
   ar: string;
-}
+};
 
 export function trimPair(pair: Partial<Record<'en' | 'ar', string | null | undefined>> | null | undefined): LangPair {
   return { en: (pair?.en ?? '').trim(), ar: (pair?.ar ?? '').trim() };
