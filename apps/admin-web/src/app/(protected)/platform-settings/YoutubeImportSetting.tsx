@@ -12,6 +12,7 @@ import {
   saveErrorMessage,
   scopePurpose,
   secretChecksOnBlur,
+  urlSegments,
   secretNameFor,
   secretSaveErrorMessage,
   settingsPatch,
@@ -34,6 +35,20 @@ const BADGE: Record<YoutubeImportReadiness, { tone: ChipTone; label: MessageKey 
   needsClientId: { tone: 'warn', label: 'youtubeImport.badgeNeedsClientId' },
   needsSecret: { tone: 'warn', label: 'youtubeImport.badgeNeedsSecret' },
 };
+
+/** A URL, left to right, that wraps only after a "/" (copying it gives the exact URL). */
+function Url({ url, testId }: { url: string; testId?: string }) {
+  return (
+    <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg [overflow-wrap:normal]" dir="ltr" data-testid={testId}>
+      {urlSegments(url).map((part, i) => (
+        <span key={i}>
+          {i > 0 && <wbr />}
+          <span className="whitespace-nowrap">{part}</span>
+        </span>
+      ))}
+    </code>
+  );
+}
 
 const STEPS: MessageKey[] = [
   'youtubeImport.step1',
@@ -308,7 +323,7 @@ export function YoutubeImportSetting({
           <div className="rounded border border-border p-3">
             <dt className={term}>{t('youtubeImport.redirectUri')}</dt>
             <dd className="mt-1 flex flex-wrap items-center gap-2">
-              <code className="min-w-0 break-all rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg" dir="ltr" data-testid="youtube-import-redirect-uri">{view.redirectUri}</code>
+              <span className="min-w-0"><Url url={view.redirectUri} testId="youtube-import-redirect-uri" /></span>
               <button type="button" onClick={copyRedirect} className={`${secondaryButtonClass} !py-1 !px-3 text-sm`} data-testid="youtube-import-copy-redirect">
                 {copied ? t('youtubeImport.copied') : t('youtubeImport.copy')}
               </button>
@@ -350,9 +365,9 @@ export function YoutubeImportSetting({
 
       <details className="mt-6 rounded border border-border p-3" data-testid="youtube-import-setup">
         <summary className="cursor-pointer text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded">{t('youtubeImport.setupTitle')}</summary>
-        <ol className={`mt-3 ${locale === 'ar' ? '[list-style-type:arabic-indic]' : 'list-decimal'} space-y-2 ps-5 text-sm text-fg-muted [overflow-wrap:anywhere]`}>
+        <ol className={`mt-3 ${locale === 'ar' ? '[list-style-type:arabic-indic]' : 'list-decimal'} space-y-2 ps-5 text-sm text-fg-muted [overflow-wrap:break-word]`}>
           {STEPS.map((step) => (
-            <li key={step}>{t(step, { redirectUri: view.redirectUri, secretName })}</li>
+            <li key={step}>{fillNodes(t(step, { secretName }), { redirectUri: <Url url={view.redirectUri} /> })}</li>
           ))}
         </ol>
         <p className="mt-3 text-sm text-fg-muted">{t('youtubeImport.quota')}</p>

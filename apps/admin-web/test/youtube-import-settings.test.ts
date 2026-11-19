@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YoutubeImportSettingsView } from '@al-ummah/shared-types';
-import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretChecksOnBlur, secretNameFor, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
+import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretChecksOnBlur, secretNameFor, urlSegments, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { YoutubeImportSetting } from '../src/app/(protected)/platform-settings/YoutubeImportSetting';
 import en from '../src/i18n/messages/en';
@@ -92,6 +92,13 @@ describe('YouTube import settings: form rules', () => {
     assert.equal(secretSaveErrorMessage({ status: 502 }), 'youtubeImport.secretSaveFailed');
   });
 
+  it('cuts a URL only after its slashes, and loses nothing', () => {
+    const url = 'https://videos.api.alummahnow.net/api/youtube-import/oauth/callback';
+    assert.deepEqual(urlSegments(url), ['https://', 'videos.api.alummahnow.net/', 'api/', 'youtube-import/', 'oauth/', 'callback']);
+    assert.equal(urlSegments(url).join(''), url);
+    assert.deepEqual(urlSegments('http://localhost:3086/'), ['http://', 'localhost:3086/']);
+  });
+
   it('leaving an empty secret field says nothing (Cancel stays where the pointer is); a typed value is checked', () => {
     assert.equal(secretChecksOnBlur(''), false);
     assert.equal(secretChecksOnBlur('   '), false);
@@ -119,7 +126,9 @@ describe('YouTube import settings: the section', () => {
     assert.match(html, /data-state="needsSecret"/);
     assert.match(html, /data-present="false"/);
     assert.doesNotMatch(html, /google-oauth-client-secret/, 'a missing secret is set here, not in Cloudflare');
-    assert.match(html, /https:\/\/videos\.api\.qa\.alummahnow\.net\/api\/youtube-import\/oauth\/callback/);
+    // The URL is in pieces that wrap only after a "/" (<wbr>); its text is the whole URL
+    assert.match(html.replace(/<[^>]+>/g, ''), /https:\/\/videos\.api\.qa\.alummahnow\.net\/api\/youtube-import\/oauth\/callback/);
+    assert.match(html, /youtube-import\/<\/span><\/span><span><wbr\/><span class="whitespace-nowrap">oauth\//);
     assert.match(html, /youtube\.readonly/);
     assert.match(html, /youtube\.force-ssl/);
     // Missing: an "Add client secret" button, no field (and so no value) until it is pressed

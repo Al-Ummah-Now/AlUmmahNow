@@ -42,6 +42,14 @@ export function clientSecretError(value: string): MessageKey | null {
 }
 
 /**
+ * A URL in pieces that end at each "/" ("https://", "videos.api…net/", "api/", …, "callback"):
+ * the page lets a long URL wrap only between pieces, never inside a word ("youtube-import").
+ */
+export function urlSegments(url: string): string[] {
+  return url.match(/[^/]*\/+|[^/]+$/g) ?? [url];
+}
+
+/**
  * Whether leaving the secret field shows its check. An empty field stays quiet (its "paste it
  * first" message is for Save): otherwise the line it adds moves Cancel down under the pointer
  * between press and release, and the click that leaves the field misses Cancel.
