@@ -16,6 +16,7 @@ import { TierChangeDialog } from '@/components/creators/TierChangeDialog';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { adminUserName } from '@/lib/user-name';
+import { Select } from '@/components/select/Select';
 
 
 /** Banned / active, profile deleted, and the invite's status when not signed in yet. */
@@ -112,12 +113,12 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
           </span>
           <label className="flex flex-col gap-1 text-sm text-fg-muted">
             {t('creators.bulkTier')}
-            <select value={bulkTier} onChange={(e) => setBulkTier(e.target.value)} className={`${fieldClass} py-1 text-sm`} data-testid="users-bulk-tier">
+            <Select value={bulkTier} onChange={(e) => setBulkTier(e.target.value)} className={`${fieldClass} py-1 text-sm`} data-testid="users-bulk-tier">
               <option value="">{t('creators.bulkChoose')}</option>
               {tiers.map((tier) => (
                 <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <button
             type="button"

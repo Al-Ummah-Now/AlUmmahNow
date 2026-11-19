@@ -16,6 +16,7 @@ import { translateDynamic } from '@/i18n/translate';
 import { findingCategoryLabel, findingSourceLabel } from '@/lib/review-labels';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { Select } from '@/components/select/Select';
 
 const SPEEDS = [1, 1.5, 2, 3];
 const NSFW = new Set(['sexual', 'gore', 'disturbing', 'sexual_explicit_language', 'S12', 'minor_present']);
@@ -244,10 +245,10 @@ export function ReviewWorkspace({ detail, media }: Props) {
           {open && (
             <>
               <label className="block text-sm text-fg" htmlFor="review-reason">{t('review.reason')}</label>
-              <select id="review-reason" value={reason} onChange={(e) => setReason(e.target.value)} className={`${fieldClass} w-full`}>
+              <Select id="review-reason" value={reason} onChange={(e) => setReason(e.target.value)} className={`${fieldClass} w-full`}>
                 <option value="">—</option>
                 {Object.keys(REVIEW_REASON_CODES).map((code) => <option key={code} value={code}>{translateDynamic(t, 'review.reasonCodes', code)}</option>)}
-              </select>
+              </Select>
               <label className="block text-sm text-fg" htmlFor="review-note">{t('review.note')}</label>
               <textarea id="review-note" dir="auto" rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} className={`${fieldClass} w-full`} />
               <div className="flex flex-wrap gap-2">

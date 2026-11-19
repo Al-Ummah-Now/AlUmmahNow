@@ -7,6 +7,7 @@ import { fieldClass } from '@/components/ui';
 import { MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
 import { PROVIDER_LABEL, moveProvider, parseWhole, toggleProvider, weightShares, withUnlisted, type OverrideDraft } from '@/lib/media/providers-form';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 export const checkClass = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 const iconButtonClass =
@@ -166,7 +167,7 @@ export function OverrideEditor({
       )}
       <div className="flex flex-col gap-1">
         <label htmlFor={`${idPrefix}-strategy`} className="text-sm font-medium text-fg">{t('mediaProviders.overrideStrategy')}</label>
-        <select
+        <Select
           id={`${idPrefix}-strategy`}
           value={draft.strategy}
           onChange={(e) => onDraft({ ...draft, strategy: e.target.value as OverrideDraft['strategy'] })}
@@ -176,7 +177,7 @@ export function OverrideEditor({
           <option value="">{t('mediaProviders.overrideStrategyInherit')}</option>
           <option value="priority">{t('mediaProviders.strategyPriority')}</option>
           <option value="weighted">{t('mediaProviders.strategyWeighted')}</option>
-        </select>
+        </Select>
       </div>
       <div>
         <label className="flex items-start gap-2 cursor-pointer">

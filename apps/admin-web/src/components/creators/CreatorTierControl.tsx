@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog } from './TierChangeDialog';
 import { useNames } from '@/components/audit/useNames';
+import { Select } from '@/components/select/Select';
 
 export interface CurrentTier {
   tierId: string;
@@ -145,7 +146,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
 
       {canManage && !locked && (
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Select
             aria-label={t('creators.changeTierFor', { name: userName })}
             data-testid={`${testId}-select`}
             value={pending === undefined ? current?.tierId ?? '' : pending ?? ''}
@@ -163,7 +164,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
             {tiers.map((tier) => (
               <option key={tier.id} value={tier.id}>{tier.hidden ? `${tierLabel(tier, locale)} (${t('creators.hiddenChip')})` : tierLabel(tier, locale)}</option>
             ))}
-          </select>
+          </Select>
           {needsTier && !current && tiers.some((tier) => tier.id === CREATOR_TIER_IDS.creator) && (
             <button type="button" className={smallButtonClass} disabled={status.kind === 'saving'} onClick={() => setPending(CREATOR_TIER_IDS.creator)} data-testid="creator-assign-creator">
               {t('creators.assignCreator')}

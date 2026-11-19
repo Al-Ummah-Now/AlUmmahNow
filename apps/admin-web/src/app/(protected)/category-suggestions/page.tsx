@@ -10,6 +10,7 @@ import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { CategorizeSettings, CategoryBackfill } from './CategorizeControls';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,12 +138,12 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
         {videoId && <input type="hidden" name="video" value={videoId} />}
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           {t('categorySuggestions.filterCategory')}
-          <select name="category" defaultValue={category ?? ''} className={fieldClass} data-testid="category-filter">
+          <Select name="category" defaultValue={category ?? ''} className={fieldClass} data-testid="category-filter">
             <option value="">{t('categorySuggestions.anyCategory')}</option>
             {categories.map((c) => (
               <option key={c.value} value={c.value}>{c.label[locale] ?? c.label.en}{c.retired ? ` (${t('videoCategories.retiredTag')})` : ''}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('categorySuggestions.filter')}</button>
       </form>

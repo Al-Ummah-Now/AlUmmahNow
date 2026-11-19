@@ -6,6 +6,7 @@ import { AUTH_REQUEST_STATUSES, authRequestNeedsAttention, type AuthRequestList,
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { AuthRequestStatusChip, DeliveryChip } from '@/components/auth-requests/AuthRequestStatusChip';
 import { logger } from '@/lib/logger';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,19 +31,19 @@ export default async function AuthRequestsPage({ searchParams }: { searchParams:
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3">
         <label>
           <span className="sr-only">{t('authRequests.colStatus')}</span>
-          <select name="status" defaultValue={status ?? ''} className={fieldClass}>
+          <Select name="status" defaultValue={status ?? ''} className={fieldClass}>
             <option value="">{t('authRequests.allStatuses')}</option>
             {AUTH_REQUEST_STATUSES.map((s) => (
               <option key={s} value={s}>{translateDynamic(t, 'authRequests.status', s)}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label>
           <span className="sr-only">{t('authRequests.deliveryFilterFailed')}</span>
-          <select name="delivery" defaultValue={delivery ?? ''} className={fieldClass}>
+          <Select name="delivery" defaultValue={delivery ?? ''} className={fieldClass}>
             <option value="">{t('authRequests.allDeliveries')}</option>
             <option value="failed">{t('authRequests.deliveryFilterFailed')}</option>
-          </select>
+          </Select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('authRequests.filter')}</button>
       </form>

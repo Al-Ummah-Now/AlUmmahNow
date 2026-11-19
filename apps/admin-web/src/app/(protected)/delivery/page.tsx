@@ -16,6 +16,7 @@ import { TranscodeTroubleshooting } from './TranscodeTroubleshooting';
 import { R2_SETTINGS_ID } from '../media-providers/limit-form';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,11 +143,11 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
             <input type="hidden" name="days" value={days} />
             <label className="flex flex-col gap-1 text-sm text-fg-muted">
               {t('mediaDelivery.filterLabel')}
-              <select name="status" defaultValue={filter} className={fieldClass}>
+              <Select name="status" defaultValue={filter} className={fieldClass}>
                 {JOB_FILTERS.map((s) => (
                   <option key={s} value={s}>{s === 'all' ? t('mediaDelivery.filterAll') : t(JOB_STATUS_LABEL[s])}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <button type="submit" className={secondaryButtonClass}>{t('mediaDelivery.apply')}</button>
           </form>

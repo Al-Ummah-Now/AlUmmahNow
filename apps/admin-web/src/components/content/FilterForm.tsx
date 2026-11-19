@@ -8,6 +8,7 @@ import type { AdminSuggestKind } from '@al-ummah/shared-types';
 import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { DateField } from '@/components/DateField';
+import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
 /**
  * search: free text, with live suggestions of `suggest` items as the admin types.
@@ -37,7 +38,7 @@ interface Props {
 export function FilterForm({ action, label, fields, values, testId }: Props) {
   const { t } = useLanguage();
   const id = useId();
-  const submit = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => e.currentTarget.form?.requestSubmit();
+  const submit = (e: React.ChangeEvent<HTMLInputElement> | SelectChangeEvent) => e.currentTarget.form?.requestSubmit();
   const active = Object.keys(values).some((k) => k !== 'page' && values[k]);
   // Re-mount the fields when the URL changes so defaultValue follows it
   const key = JSON.stringify(values);
@@ -75,14 +76,14 @@ export function FilterForm({ action, label, fields, values, testId }: Props) {
               {field.label}
             </label>
             {field.kind === 'select' ? (
-              <select id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={submit} className={fieldClass}>
+              <Select id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={submit} className={fieldClass}>
                 <option value="">{field.allLabel ?? t('content.all')}</option>
                 {field.options.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : (
               <DateField id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} submitOnChange />
             )}

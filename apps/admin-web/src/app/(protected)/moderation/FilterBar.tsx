@@ -7,6 +7,7 @@ import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { ENTITY_TYPES, REPORT_STATUSES, entitySuggestKind } from './filters';
+import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
 interface FilterBarProps {
   status?: string;
@@ -23,7 +24,7 @@ interface FilterBarProps {
 export function FilterBar({ status, entityType, entityId, reporterId }: FilterBarProps) {
   const { t } = useLanguage();
 
-  const submitOnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const submitOnChange = (e: SelectChangeEvent) => {
     const form = e.currentTarget.form;
     // A reported item belongs to one type: a new type drops it
     if (e.currentTarget.name === 'entity_type') {
@@ -45,7 +46,7 @@ export function FilterBar({ status, entityType, entityId, reporterId }: FilterBa
         <label htmlFor="filter-status" className="text-sm text-fg-muted">
           {t('moderation.statusFilter')}
         </label>
-        <select
+        <Select
           id="filter-status"
           name="status"
           defaultValue={status ?? ''}
@@ -59,13 +60,13 @@ export function FilterBar({ status, entityType, entityId, reporterId }: FilterBa
               {translateDynamic(t, 'status', value)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="filter-type" className="text-sm text-fg-muted">
           {t('moderation.typeFilter')}
         </label>
-        <select
+        <Select
           id="filter-type"
           name="entity_type"
           defaultValue={entityType ?? ''}
@@ -79,7 +80,7 @@ export function FilterBar({ status, entityType, entityId, reporterId }: FilterBa
               {translateDynamic(t, 'entityType', value)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {entitySuggestKind(entityType as never) ? (
         <Autocomplete

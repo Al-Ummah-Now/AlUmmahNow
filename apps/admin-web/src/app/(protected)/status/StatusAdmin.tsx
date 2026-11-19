@@ -15,6 +15,7 @@ import { cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { createIncident, deleteIncident, postIncidentUpdate, purgeIncident, restoreIncident } from '@/lib/api/status';
 import type { StatusIncident } from '@/lib/api/status-types';
 import { DateTimeField } from '@/components/DateField';
+import { Select } from '@/components/select/Select';
 
 type Kind = 'incident' | 'maintenance';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
@@ -95,16 +96,16 @@ export function NewIncidentForm() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label htmlFor="status-status" className={labelClass}>{t('statusPage.new.status')}</label>
-            <select id="status-status" name="status" className={`${fieldClass} w-full`} key={kind} data-testid="status-status">
+            <Select id="status-status" name="status" className={`${fieldClass} w-full`} key={kind} data-testid="status-status">
               {statuses.map((s) => <option key={s} value={s}>{t(`statusPage.statuses.${s}` as MessageKey)}</option>)}
-            </select>
+            </Select>
           </div>
           {kind === 'incident' && (
             <div>
               <label htmlFor="status-impact" className={labelClass}>{t('statusPage.new.impact')}</label>
-              <select id="status-impact" name="impact" defaultValue="partial" className={`${fieldClass} w-full`} data-testid="status-impact">
+              <Select id="status-impact" name="impact" defaultValue="partial" className={`${fieldClass} w-full`} data-testid="status-impact">
                 {INCIDENT_IMPACTS.map((s) => <option key={s} value={s}>{t(`statusPage.impacts.${s}` as MessageKey)}</option>)}
-              </select>
+              </Select>
             </div>
           )}
         </div>
@@ -170,16 +171,16 @@ function UpdateForm({ incident }: { incident: StatusIncident }) {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <label htmlFor={`st-${incident.id}`} className={labelClass}>{t('statusPage.new.status')}</label>
-          <select id={`st-${incident.id}`} name="status" defaultValue={incident.status} className={`${fieldClass} w-full`} data-testid="status-update-status">
+          <Select id={`st-${incident.id}`} name="status" defaultValue={incident.status} className={`${fieldClass} w-full`} data-testid="status-update-status">
             {statuses.map((s) => <option key={s} value={s}>{t(`statusPage.statuses.${s}` as MessageKey)}</option>)}
-          </select>
+          </Select>
         </div>
         {incident.kind === 'incident' && (
           <div>
             <label htmlFor={`im-${incident.id}`} className={labelClass}>{t('statusPage.new.impact')}</label>
-            <select id={`im-${incident.id}`} name="impact" defaultValue={incident.impact} className={`${fieldClass} w-full`}>
+            <Select id={`im-${incident.id}`} name="impact" defaultValue={incident.impact} className={`${fieldClass} w-full`}>
               {INCIDENT_IMPACTS.map((s) => <option key={s} value={s}>{t(`statusPage.impacts.${s}` as MessageKey)}</option>)}
-            </select>
+            </Select>
           </div>
         )}
       </div>

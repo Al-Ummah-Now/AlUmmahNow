@@ -19,6 +19,7 @@ import { Autocomplete } from '@/components/search/Autocomplete';
 import type { AdminSuggestKind } from '@al-ummah/shared-types';
 import { NCMEC_CYBERTIPLINE_URL, csamDownloadHref, csamFactsText, validReportId, type CsamFactId, type CsamFactRow } from '../model';
 import { DateTimeField } from '@/components/DateField';
+import { Select } from '@/components/select/Select';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 const STEPS = ['open', 'type', 'fields', 'files', 'submit', 'record'] as const;
@@ -288,10 +289,10 @@ export function MapForm({ caseId }: { caseId: string }) {
             {kind === 'profile_image' ? pick('ownerId', 'user', 'csamPage.map.userId') : pick('ownerId', 'channel', 'csamPage.map.channelId')}
             <div>
               <label htmlFor={`${id}-field`} className={labelClass}>{t('csamPage.map.field')}</label>
-              <select id={`${id}-field`} name="field" className={`${fieldClass} w-full`} data-testid="csam-map-field">
+              <Select id={`${id}-field`} name="field" className={`${fieldClass} w-full`} data-testid="csam-map-field">
                 <option value="avatarUrl">{t('csamPage.map.avatar')}</option>
                 <option value="coverUrl">{t('csamPage.map.cover')}</option>
-              </select>
+              </Select>
             </div>
           </div>
         )}

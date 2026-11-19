@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger-client';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { CONTACT_STATUSES } from '../filters';
 import { AssigneePicker } from '../AssigneePicker';
+import { Select } from '@/components/select/Select';
 
 interface Props {
   id: string;
@@ -82,7 +83,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             <label htmlFor={`${ids}-status`} className="text-sm text-fg-muted">
               {t('contact.changeStatus')}
             </label>
-            <select
+            <Select
               id={`${ids}-status`}
               value={nextStatus}
               onChange={(e) => setNextStatus(e.target.value as ContactStatus)}
@@ -94,7 +95,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
                   {translateDynamic(t, 'contactStatus', s)}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <button
             type="button"

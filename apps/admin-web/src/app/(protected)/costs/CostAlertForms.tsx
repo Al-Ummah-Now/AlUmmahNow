@@ -16,6 +16,7 @@ import { opsFormats } from '../operations/model';
 import { hourName, settingsToForm, toggleKind, validateSettingsForm, weekdayNames, type SettingsField, type SettingsForm } from './model';
 import { FeedbackLine, useCostAction } from './useCostAction';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 const labelClass = 'block text-sm font-medium text-fg';
 const helpClass = 'mt-1 block text-xs text-fg-muted';
@@ -189,24 +190,24 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor={`${ids}-weekday`} className={labelClass}>{t('costs.thresholds.digestWeekday')}</label>
-              <select id={`${ids}-weekday`} value={form.digestWeekday} onChange={(e) => set('digestWeekday', Number(e.target.value))} className={`${fieldClass} mt-1 w-full`} data-testid="costs-threshold-digestWeekday">
+              <Select id={`${ids}-weekday`} value={form.digestWeekday} onChange={(e) => set('digestWeekday', Number(e.target.value))} className={`${fieldClass} mt-1 w-full`} data-testid="costs-threshold-digestWeekday">
                 {days.map((name, i) => <option key={i} value={i}>{name}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label htmlFor={`${ids}-hour`} className={labelClass}>{t('costs.thresholds.digestHour')}</label>
-              <select id={`${ids}-hour`} value={form.digestHour} onChange={(e) => set('digestHour', Number(e.target.value))} className={`${fieldClass} mt-1 w-full`} data-testid="costs-threshold-digestHour">
+              <Select id={`${ids}-hour`} value={form.digestHour} onChange={(e) => set('digestHour', Number(e.target.value))} className={`${fieldClass} mt-1 w-full`} data-testid="costs-threshold-digestHour">
                 {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourName(h, locale)}</option>)}
-              </select>
+              </Select>
             </div>
           </div>
         </fieldset>
 
         <div className={groupClass}>
           <label htmlFor={`${ids}-plan`} className={labelClass}>{t('costs.thresholds.resendPlan')}</label>
-          <select id={`${ids}-plan`} value={form.resendPlan} onChange={(e) => set('resendPlan', e.target.value as ResendPlan)} aria-describedby={`${ids}-plan-help`} className={`${fieldClass} w-full`} data-testid="costs-threshold-resendPlan">
+          <Select id={`${ids}-plan`} value={form.resendPlan} onChange={(e) => set('resendPlan', e.target.value as ResendPlan)} aria-describedby={`${ids}-plan-help`} className={`${fieldClass} w-full`} data-testid="costs-threshold-resendPlan">
             {(Object.keys(RESEND_PLANS) as ResendPlan[]).map((p) => <option key={p} value={p}>{planLabel(p)}</option>)}
-          </select>
+          </Select>
           <span id={`${ids}-plan-help`} className={helpClass}>{t('costs.thresholds.resendPlanHelp')}</span>
         </div>
 

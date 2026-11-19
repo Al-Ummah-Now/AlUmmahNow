@@ -7,6 +7,7 @@ import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { numberFormat } from '@al-ummah/shared-types';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,19 +54,19 @@ export default async function AbusePage({ searchParams }: PageProps) {
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3" data-testid="abuse-filters">
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('abusePage.environment')}
-          <select name="env" defaultValue={env} className={fieldClass} data-testid="abuse-env">
+          <Select name="env" defaultValue={env} className={fieldClass} data-testid="abuse-env">
             {ABUSE_ENVS.map((e) => (
               <option key={e} value={e}>{e}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('abusePage.window')}
-          <select name="hours" defaultValue={String(hours)} className={fieldClass} data-testid="abuse-hours">
+          <Select name="hours" defaultValue={String(hours)} className={fieldClass} data-testid="abuse-hours">
             {HOURS.map((h) => (
               <option key={h} value={h}>{t(h === 24 ? 'abusePage.hours24' : 'abusePage.hours168')}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('abusePage.show')}</button>
       </form>

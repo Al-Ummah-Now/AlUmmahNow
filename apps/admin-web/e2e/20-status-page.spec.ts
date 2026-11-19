@@ -8,6 +8,7 @@
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, RUN_TAG } from './support/env';
+import { pickOption } from './support/ui';
 
 const STATUS_URL = process.env.STATUS_URL || 'http://localhost:3095';
 /** Unique per worker: the specs run fully parallel, so two workers never share a title */
@@ -58,7 +59,7 @@ test.describe('status page', () => {
     await form.getByTestId('status-title-ar').fill(TITLE_AR);
     await form.getByTestId('status-body-en').fill('Some videos are slow to start.');
     await form.getByTestId('status-body-ar').fill('بعض المرئيات بطيئة في البدء.');
-    await form.getByTestId('status-impact').selectOption('partial');
+    await pickOption(form.getByTestId('status-impact'), 'partial');
     await form.getByTestId('status-component-playback').check();
     await form.getByTestId('status-new-submit').click();
     await expect(page.getByTestId('status-new-feedback')).toContainText('Incident posted');
@@ -88,7 +89,7 @@ test.describe('status page', () => {
     expect(listed.components).toEqual(['playback']);
 
     // Resolve: the incident moves to past incidents and the component is operational again
-    await card.getByTestId('status-update-status').selectOption('resolved');
+    await pickOption(card.getByTestId('status-update-status'), 'resolved');
     await card.getByTestId('status-update-body-en').fill('Fixed.');
     await card.getByTestId('status-update-body-ar').fill('تم الإصلاح.');
     await card.getByTestId('status-update-submit').click();

@@ -15,7 +15,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { E2E_ENTITY_PREFIX, LOCAL_STACK, accounts } from './support/env';
 import { stackSql } from './support/local-stack';
-import { expectNoAxeViolations, horizontalOverflow, setPreferences } from './support/ui';
+import { expectNoAxeViolations, horizontalOverflow, setPreferences, pickOption } from './support/ui';
 
 const REPORTS = 'al-ummah-now-reports';
 const hex = crypto.randomBytes(6).toString('hex');
@@ -132,7 +132,7 @@ test.describe('contact inbox', () => {
     await page.getByTestId('contact-mark-read').click();
     await expect(page.getByTestId('contact-message')).toHaveAttribute('data-read', 'true');
 
-    await page.getByTestId('contact-status-select').selectOption('in_progress');
+    await pickOption(page.getByTestId('contact-status-select'), 'in_progress');
     await page.getByTestId('contact-save-status').click();
     await expect(page.getByTestId('contact-message')).toHaveAttribute('data-status', 'in_progress');
 
@@ -164,7 +164,7 @@ test.describe('contact inbox', () => {
     await page.getByTestId('contact-bulk-read').click();
     await expect(row(page, m1)).toHaveAttribute('data-read', 'true');
 
-    await page.getByTestId('contact-bulk-status').selectOption('closed');
+    await pickOption(page.getByTestId('contact-bulk-status'), 'closed');
     await page.getByTestId('contact-bulk-status-apply').click();
     await expect(row(page, m1)).toHaveAttribute('data-status', 'closed');
     await expect(row(page, m2)).toHaveAttribute('data-status', 'closed');

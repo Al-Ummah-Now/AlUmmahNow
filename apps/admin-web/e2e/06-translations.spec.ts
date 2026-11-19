@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
 import { fetchJson, openEditor, row } from './support/translations';
+import { pickOption } from './support/ui';
 
 interface Metadata {
   version: string;
@@ -19,7 +20,7 @@ test.describe('translations editor', () => {
 
   test('TR-02 lists the keys of the default section with a matching count', async ({ page }) => {
     await openEditor(page);
-    await expect(page.getByLabel('Section')).toHaveValue('common');
+    await expect(page.getByLabel('Section')).toHaveAttribute('data-value', 'common');
     const rows = page.getByTestId('translation-row');
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
@@ -29,7 +30,7 @@ test.describe('translations editor', () => {
 
   test('TR-03 nested groups are flattened instead of showing [object Object]', async ({ page }) => {
     await openEditor(page);
-    await page.getByLabel('Section').selectOption('channel');
+    await pickOption(page.getByLabel('Section'), 'channel');
     await expect(page.locator('[data-testid="translation-row"][data-key^="tabs."]').first()).toBeVisible();
     await expect(page.getByTestId('translation-table')).not.toContainText('[object Object]');
   });
@@ -45,7 +46,7 @@ test.describe('translations editor', () => {
 
   test('TR-05 Arabic translations render right-to-left', async ({ page }) => {
     await openEditor(page);
-    await page.getByTestId('translation-locale').selectOption('ar');
+    await pickOption(page.getByTestId('translation-locale'), 'ar');
     const value = row(page, 'appName').getByTestId('translation-value');
     await expect(value).toHaveAttribute('dir', 'rtl');
     await expect(value).toHaveText(/[؀-ۿ]/);

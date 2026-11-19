@@ -18,6 +18,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_ID, VIDEOS_API_URL } from './support/env';
 import { skipUntilClientListsDeployed } from './support/deployed';
+import { pickOption } from './support/ui';
 
 const superToken = () => readTokens().superadmin;
 let channelId = '';
@@ -91,7 +92,7 @@ test.describe('videos list', () => {
     await openListed(page, `/videos?q=${encodeURIComponent(videoId)}`);
 
     // A filter applies at once and is written to the URL without a reload
-    await page.getByTestId('videos-filters-visibility').selectOption('public');
+    await pickOption(page.getByTestId('videos-filters-visibility'), 'public');
     await expect(page).toHaveURL(new RegExp(`\\?q=${videoId}&visibility=public$`));
     await expect(row(page)).toBeVisible();
     await expect(page.locator('[data-testid="filter-chip"][data-filter="visibility"]')).toBeVisible();
@@ -107,7 +108,7 @@ test.describe('videos list', () => {
     // Reload: the same list
     await page.reload();
     await expect(row(page)).toBeVisible();
-    await expect(page.getByTestId('videos-filters-visibility')).toHaveValue('public');
+    await expect(page.getByTestId('videos-filters-visibility')).toHaveAttribute('data-value', 'public');
     await expect(page.getByTestId('videos-filters-q-input')).toHaveValue(videoId);
 
     // The detail page's Back link returns to the filtered list
@@ -123,7 +124,7 @@ test.describe('videos list', () => {
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`/videos\\?q=${videoId}&visibility=public$`));
     await expect(row(page)).toBeVisible();
-    await expect(page.getByTestId('videos-filters-visibility')).toHaveValue('public');
+    await expect(page.getByTestId('videos-filters-visibility')).toHaveAttribute('data-value', 'public');
 
     // A saved view replaces the filters
     await page.getByTestId('saved-view-all').click();

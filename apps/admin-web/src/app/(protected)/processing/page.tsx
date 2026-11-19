@@ -11,6 +11,7 @@ import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
 import { ProcessingTable } from './ProcessingTable';
 import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
 import { LiveRefresh } from '@/components/LiveRefresh';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,11 +69,11 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
       <form method="get" className="mb-6 flex flex-wrap items-end gap-2" data-testid="processing-filter">
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           {t('processing.filterLabel')}
-          <select name="status" defaultValue={filter} className={fieldClass}>
+          <Select name="status" defaultValue={filter} className={fieldClass}>
             {PROCESSING_FILTERS.map((f) => (
               <option key={f} value={f}>{t(FILTER_LABEL[f])}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('processing.apply')}</button>
       </form>

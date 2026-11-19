@@ -7,6 +7,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, fieldClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { Select } from '@/components/select/Select';
 
 interface TranslationEditorProps {
   availableLocales: string[];
@@ -152,7 +153,7 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
           <label htmlFor={localeId} className="text-fg-muted text-sm">
             {t('translations.language')}
           </label>
-          <select
+          <Select
             id={localeId}
             data-testid="translation-locale"
             value={selectedLocale}
@@ -167,14 +168,14 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
                 {locale.toUpperCase()} - {translateDynamic(t, 'translations.localeName', locale)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1">
           <label htmlFor={sectionId} className="text-fg-muted text-sm">
             {t('translations.section')}
           </label>
-          <select
+          <Select
             id={sectionId}
             data-testid="translation-section"
             value={activeSection}
@@ -190,7 +191,7 @@ export function TranslationEditor({ availableLocales }: TranslationEditorProps) 
                 {section}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1 flex-1 min-w-[200px]">

@@ -12,6 +12,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { Select } from '@/components/select/Select';
 
 interface Props {
   /** The drafts as documents; null for one that still has problems */
@@ -90,23 +91,23 @@ export function DryRun({ documents }: Props) {
       <form onSubmit={run} className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)]">
         <label className="flex min-w-0 flex-col gap-1 text-sm">
           <span className="text-fg-muted">{t('appConfig.platform')}</span>
-          <select value={context.platform} onChange={(e) => setContext((c) => ({ ...c, platform: e.target.value as AppConfigPlatform }))} className={`${fieldClass} w-full`} data-testid="app-config-dry-platform">
+          <Select value={context.platform} onChange={(e) => setContext((c) => ({ ...c, platform: e.target.value as AppConfigPlatform }))} className={`${fieldClass} w-full`} data-testid="app-config-dry-platform">
             {APP_CONFIG_PLATFORMS.map((p) => (
               <option key={p} value={p}>
                 {t(`appConfig.platformNames.${p}` as MessageKey)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-sm">
           <span className="text-fg-muted">{t('appConfig.app')}</span>
-          <select value={context.app} onChange={(e) => setContext((c) => ({ ...c, app: e.target.value as AppConfigApp }))} className={`${fieldClass} w-full`} data-testid="app-config-dry-app">
+          <Select value={context.app} onChange={(e) => setContext((c) => ({ ...c, app: e.target.value as AppConfigApp }))} className={`${fieldClass} w-full`} data-testid="app-config-dry-app">
             {APP_CONFIG_APPS.map((a) => (
               <option key={a} value={a}>
                 {t(`appConfig.appNames.${a}` as MessageKey)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {input('version', 'appConfig.versionHint')}
         {input('locale', 'appConfig.localeHint')}

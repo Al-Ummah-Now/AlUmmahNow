@@ -8,11 +8,12 @@ import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { CONTACT_STATUSES, CONTACT_TOPICS, SEND_FAILED, type ContactInboxFilters } from './filters';
 import { DateField } from '@/components/DateField';
+import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
 export function ContactFilterBar({ filters, active }: { filters: ContactInboxFilters; active: boolean }) {
   const { t } = useLanguage();
-  const submitOnChange = (e: React.ChangeEvent<HTMLSelectElement>) => e.currentTarget.form?.requestSubmit();
+  const submitOnChange = (e: SelectChangeEvent) => e.currentTarget.form?.requestSubmit();
   const key = JSON.stringify(filters);
 
   return (
@@ -33,7 +34,7 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
         <label htmlFor="contact-status" className="text-sm text-fg-muted">
           {t('contact.statusFilter')}
         </label>
-        <select id="contact-status" name="status" defaultValue={filters.status ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="contact-status-filter">
+        <Select id="contact-status" name="status" defaultValue={filters.status ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="contact-status-filter">
           <option value="">{t('contact.allStatuses')}</option>
           {CONTACT_STATUSES.map((s) => (
             <option key={s} value={s}>
@@ -41,30 +42,30 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
             </option>
           ))}
           <option value={SEND_FAILED}>{t('contact.sendFailed')}</option>
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="contact-topic" className="text-sm text-fg-muted">
           {t('contact.topicFilter')}
         </label>
-        <select id="contact-topic" name="topic" defaultValue={filters.topic ?? ''} onChange={submitOnChange} className={fieldClass}>
+        <Select id="contact-topic" name="topic" defaultValue={filters.topic ?? ''} onChange={submitOnChange} className={fieldClass}>
           <option value="">{t('contact.allTopics')}</option>
           {CONTACT_TOPICS.map((s) => (
             <option key={s} value={s}>
               {translateDynamic(t, 'contactTopic', s)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="contact-assignee" className="text-sm text-fg-muted">
           {t('contact.assigneeFilter')}
         </label>
-        <select id="contact-assignee" name="assignee" defaultValue={filters.assignee ?? ''} onChange={submitOnChange} className={fieldClass}>
+        <Select id="contact-assignee" name="assignee" defaultValue={filters.assignee ?? ''} onChange={submitOnChange} className={fieldClass}>
           <option value="">{t('contact.assigneeAny')}</option>
           <option value="me">{t('contact.assigneeMe')}</option>
           <option value="unassigned">{t('contact.assigneeNone')}</option>
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="contact-from" className="text-sm text-fg-muted">
