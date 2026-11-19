@@ -135,7 +135,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
   const name = (p: MediaProviderId | null) => (p ? t(PROVIDER_LABEL[p]) : t('mediaProviders.none'));
   const problemText = (p: { problem: string; detail?: string }) => {
     const key = PROBLEM_LABEL[p.problem as keyof typeof PROBLEM_LABEL];
-    const detail = p.detail && (MEDIA_PROVIDER_IDS as readonly string[]).includes(p.detail) ? name(p.detail as MediaProviderId) : (p.detail ?? '');
+    // A provider by its name; a channel (an override's problem) by its name too, never its id
+    const detail = !p.detail ? '' : (MEDIA_PROVIDER_IDS as readonly string[]).includes(p.detail) ? name(p.detail as MediaProviderId) : form.channels[p.detail] ? itemView('channel', p.detail, channelNames, t).label : p.detail;
     return key ? t(key, { detail }) : p.problem;
   };
   const update = (patch: Partial<FormState>) => {
@@ -471,6 +472,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                 mode="pick"
                 label={t('mediaProviders.channelId')}
                 initialResults
+                showIds={false}
                 hint={channelError ?? t('mediaProviders.channelIdHint')}
                 onChange={(id) => {
                   setNewChannel(id);

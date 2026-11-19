@@ -224,6 +224,8 @@ export function MapForm({ caseId }: { caseId: string }) {
       mode="pick"
       name={name}
       label={t(labelKey)}
+      placeholder={suggest === 'video' ? t('autocomplete.videoPlaceholder') : suggest === 'post' ? t('autocomplete.postPlaceholder') : undefined}
+      showIds={false}
       initialResults
       onChange={(_, item) => {
         setMissing(false);

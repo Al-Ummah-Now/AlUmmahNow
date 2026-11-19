@@ -1760,6 +1760,8 @@ const ar: Messages = {
     },
     searchPlaceholder: 'اكتب للبحث',
     pickPlaceholder: 'الاسم أو البريد أو @المعرّف',
+    videoPlaceholder: 'عنوان المرئي أو القناة',
+    postPlaceholder: 'نص المنشور أو القناة',
     searching: 'جارٍ البحث…',
     loadingList: 'جارٍ تحميل الأحدث…',
     emptyList: 'لا يوجد شيء هنا بعد.',
