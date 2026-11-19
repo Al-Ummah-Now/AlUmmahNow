@@ -14,6 +14,7 @@ import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/co
 import { cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { createIncident, deleteIncident, postIncidentUpdate, purgeIncident, restoreIncident } from '@/lib/api/status';
 import type { StatusIncident } from '@/lib/api/status-types';
+import { DateTimeField } from '@/components/DateField';
 
 type Kind = 'incident' | 'maintenance';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
@@ -111,11 +112,11 @@ export function NewIncidentForm() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label htmlFor="status-starts" className={labelClass}>{t('statusPage.new.startsAt')}</label>
-              <input id="status-starts" name="startsAt" type="datetime-local" required className={`${fieldClass} w-full`} data-testid="status-starts" />
+              <DateTimeField id="status-starts" name="startsAt" required className="w-full" testId="status-starts" />
             </div>
             <div>
               <label htmlFor="status-ends" className={labelClass}>{t('statusPage.new.endsAt')}</label>
-              <input id="status-ends" name="endsAt" type="datetime-local" required className={`${fieldClass} w-full`} data-testid="status-ends" />
+              <DateTimeField id="status-ends" name="endsAt" required className="w-full" testId="status-ends" />
             </div>
             <p className="text-sm text-fg-muted md:col-span-2">{t('statusPage.new.localTime')}</p>
           </div>

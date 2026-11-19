@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatDateInput, parseDateInput, toAsciiDigits } from '../src/components/DateField';
+import { formatDateInput, formatDateTimeInput, parseDateInput, parseDateTimeInput, toAsciiDigits } from '../src/components/DateField';
 
 describe('admin date field', () => {
   it('shows the day in the admin language digits: 2026-11-18 / ٢٠٢٦/١١/١٨', () => {
@@ -30,13 +30,23 @@ describe('admin date field', () => {
     for (const bad of ['2026-02-30', '2026-13-01', '18/11/26', 'yesterday', '2026-11']) assert.equal(parseDateInput(bad), null, bad);
   });
 
+  it('date and time: shown in the admin digits, read in either, 24-hour', () => {
+    assert.equal(formatDateTimeInput('2026-11-18T14:05', 'en'), '2026-11-18 14:05');
+    assert.equal(formatDateTimeInput('2026-11-18T14:05', 'ar'), '٢٠٢٦/١١/١٨ ١٤:٠٥');
+    for (const typed of ['2026-11-18 14:05', '٢٠٢٦/١١/١٨ ١٤:٠٥', '18/11/2026 14:05', '2026-11-18T14:05', '20261118 14:05']) {
+      assert.equal(parseDateTimeInput(typed), '2026-11-18T14:05', typed);
+    }
+    assert.equal(parseDateTimeInput(''), '');
+    for (const bad of ['2026-11-18', '2026-11-18 24:00', '2026-11-18 9:60', '2026-02-30 10:00']) assert.equal(parseDateTimeInput(bad), null, bad);
+  });
+
   it('every admin date filter uses the shared field (no bare type="date" left)', () => {
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
       const p = join(dir, n);
       return statSync(p).isDirectory() ? walk(p) : /\.tsx$/.test(n) ? [p] : [];
     });
     const root = fileURLToPath(new URL('../src', import.meta.url));
-    const bare = walk(root).filter((f) => !f.endsWith('DateField.tsx') && /type="date"/.test(readFileSync(f, 'utf8')));
+    const bare = walk(root).filter((f) => !f.endsWith('DateField.tsx') && /type="(date|datetime-local)"/.test(readFileSync(f, 'utf8')));
     assert.deepEqual(bare, []);
   });
 });

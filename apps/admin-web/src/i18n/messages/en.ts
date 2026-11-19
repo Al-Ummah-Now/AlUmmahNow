@@ -1738,6 +1738,8 @@ const en = {
     none: 'No indices have been built yet',
   },
   dateField: {
+    placeholderTime: 'YYYY-MM-DD HH:MM',
+    invalidTime: 'Enter a real date and 24-hour time as YYYY-MM-DD HH:MM.',
     placeholder: 'YYYY-MM-DD',
     choose: 'Choose a date',
     invalid: 'Enter a real date as YYYY-MM-DD.',
