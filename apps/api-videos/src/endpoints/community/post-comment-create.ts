@@ -17,7 +17,7 @@ import type {
 import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
-import { can, channelRoleOf, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { can, channelParams, channelRoleOf, localizedChannelNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
 import { isBlocked } from '../../lib/channelComments/blocks';
 import { logger } from '../../lib/logger';
@@ -313,7 +313,8 @@ export class CreatePostComment extends AuthenticatedRoute {
       notifyUserInBackground(c, replyToUserId, {
         notificationType: 'comment',
         notificationKey: 'commentReply',
-        params: { actorName: comment.userDisplayName || '' },
+        // Posted as a channel: its name per language (actorName_ar…), so an Arabic reader sees the Arabic name (#1610)
+        params: actorChannel?.name?.trim() ? channelParams('actorName', actorChannel) : { actorName: comment.userDisplayName || '' },
         actionUrl: `/channels/${postChannelId}?tab=community`,
         actorUserId: userId,
         entityId: comment.id,
@@ -323,7 +324,10 @@ export class CreatePostComment extends AuthenticatedRoute {
 
     const response: PostCommentCreateResponse = {
       success: true,
-      comment,
+      // The channel's names per language on the answer only (never stored), as the lists add them (#1610)
+      comment: actorChannel?.name?.trim() && Object.keys(localizedChannelNames(actorChannel)).length
+        ? { ...comment, userDisplayNameLocalized: localizedChannelNames(actorChannel) }
+        : comment,
     };
 
     return c.json(response, 201);

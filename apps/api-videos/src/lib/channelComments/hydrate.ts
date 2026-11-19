@@ -9,6 +9,7 @@ import type { CommunityPost, PostComment, SearchDb, StudioComment, StudioComment
 import { logger } from '../logger';
 import { findStoredComment, isCommentVisible, type StoredComment } from '../comments';
 import { resolveCommentAuthors } from '../commentAuthors';
+import { channelNamesByIds } from '../channelNames';
 import { projectPostComment, projectVideoComments, syncVideoCommentRows, writePostRow, type ChannelCommentRow } from './index';
 
 export interface HydrateEnv {
@@ -126,15 +127,30 @@ export async function hydrateRows(env: HydrateEnv, rows: ChannelCommentRow[], ta
 		// Who removed a comment: their own name (never a channel)
 		...kept.filter((l) => l.fresh?.removedByUserId).map((l) => ({ userId: l.fresh!.removedByUserId!, channelId: null })),
 	]);
+	// Post comments carry the name stored when written: the channel's current names win, per language (#1610)
+	const postChannelNames = await channelNamesByIds(env.channels, kept.filter((l) => l.storedAuthor).map((l) => l.author.channelId));
 	const order = new Map(rows.map((r, i) => [r.commentId, i]));
 	return kept
 		.sort((a, b) => (order.get(a.row.commentId) ?? 0) - (order.get(b.row.commentId) ?? 0))
 		.map((l) => {
 			const fresh = l.fresh!;
 			const resolved = l.storedAuthor ? null : authorOf(l.author);
+			const named = l.storedAuthor && l.author.channelId ? postChannelNames.get(l.author.channelId) : undefined;
 			const author = l.storedAuthor
-				? { userId: l.author.userId, channelId: l.author.channelId, displayName: l.storedAuthor.displayName, ...(l.storedAuthor.avatarUrl ? { avatarUrl: l.storedAuthor.avatarUrl } : {}) }
-				: { userId: resolved!.userId, channelId: resolved!.channelId, displayName: resolved!.displayName, ...(resolved!.avatarUrl ? { avatarUrl: resolved!.avatarUrl } : {}) };
+				? {
+					userId: l.author.userId,
+					channelId: l.author.channelId,
+					displayName: named?.channelName || l.storedAuthor.displayName,
+					...(named?.channelNameLocalized ? { displayNameLocalized: named.channelNameLocalized } : {}),
+					...(l.storedAuthor.avatarUrl ? { avatarUrl: l.storedAuthor.avatarUrl } : {}),
+				}
+				: {
+					userId: resolved!.userId,
+					channelId: resolved!.channelId,
+					displayName: resolved!.displayName,
+					...(resolved!.displayNameLocalized ? { displayNameLocalized: resolved!.displayNameLocalized } : {}),
+					...(resolved!.avatarUrl ? { avatarUrl: resolved!.avatarUrl } : {}),
+				};
 			const item: StudioComment = {
 				id: fresh.commentId,
 				kind: fresh.targetKind,

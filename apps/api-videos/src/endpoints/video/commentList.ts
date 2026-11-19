@@ -22,6 +22,7 @@ const CommentAuthorSchema = z.object({
 	userId: z.string(),
 	channelId: z.string().nullable().describe("null: posted by the member themselves, without a channel"),
 	displayName: z.string(),
+	displayNameLocalized: z.record(z.string(), z.string()).optional().describe("The name per language (en, ar) when the channel or person has localized names; show the page language's, else displayName"),
 	avatarUrl: z.string().optional(),
 	handle: z.string().optional().describe("Posted as the member (no channel) and they have a public profile: link the name and avatar to /{locale}/u/@{handle}"),
 });

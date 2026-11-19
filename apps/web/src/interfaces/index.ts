@@ -214,6 +214,8 @@ export interface CommentAuthor {
     userId: string;
     channelId: string;
     displayName: string;
+    /** The name per language (en, ar): show the page language's via channelLabel, #1610 */
+    displayNameLocalized?: Record<string, string>;
     avatarUrl?: string;
     /** Their public profile handle: only on comments posted as the member, when they have one */
     handle?: string;

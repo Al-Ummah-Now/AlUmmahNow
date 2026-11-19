@@ -74,3 +74,21 @@ export function resolveDisplayName(profile: NameFields | null | undefined, local
   }
   return '';
 }
+
+/**
+ * The user's name per page language (en, ar), each by the rule above, for payloads a page picks
+ * from (comment authors, #1610). Empty when the profile holds no localized name at all: then the
+ * plain name is the same on every page.
+ */
+export function localizedDisplayNames(profile: NameFields | null | undefined): Record<string, string> {
+  if (!profile || typeof profile !== 'object') return {};
+  const any = [profile.displayNameLocalized, profile.firstNameLocalized, profile.lastNameLocalized]
+    .some((map) => map && typeof map === 'object' && Object.values(map).some((v) => clean(v)));
+  if (!any) return {};
+  const out: Record<string, string> = {};
+  for (const lang of ['en', 'ar']) {
+    const name = resolveDisplayName(profile, lang);
+    if (name) out[lang] = name;
+  }
+  return out;
+}

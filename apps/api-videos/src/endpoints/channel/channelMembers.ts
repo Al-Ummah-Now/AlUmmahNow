@@ -38,6 +38,7 @@ import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { cancelInvitesSentBy, cancelInvitesTo, inviteAuditTarget, stampMemberChanges, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
 import { memberChannelRoles, ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { channelParams } from '../../lib/channelName';
 
 export type ChannelType = z.infer<typeof BusinessChannel> & { isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
 
@@ -379,7 +380,7 @@ export class ChannelMemberUpdate extends AuthenticatedRoute {
 			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: 'role_changed', targetUserId: params.userId, oldRole, newRole: body.role }]);
 			await notifyTeam(c.env as never, params.userId, actorId, {
 				notificationKey: 'channelRoleChanged',
-				params: { channel: channel!.name, role: body.role },
+				params: { ...channelParams('channel', channel!), role: body.role },
 				actionUrl: `/settings/channel/${params.id}/team`,
 				entityId: params.id,
 				dedupeKey: `channel-role:${params.id}:${params.userId}:${body.role}:${Date.now()}`,
@@ -434,7 +435,7 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 				const { displayName } = await profileSummary(c, actorId);
 				await notifyTeam(c.env as never, channel.userId, actorId, {
 					notificationKey: 'channelMemberLeft',
-					params: { member: displayName ?? '', channel: channel.name },
+					params: { member: displayName ?? '', ...channelParams('channel', channel) },
 					actionUrl: `/settings/channel/${params.id}/team`,
 					entityId: params.id,
 					dedupeKey: `channel-left:${params.id}:${actorId}:${Date.now()}`,
@@ -442,7 +443,7 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 			} else {
 				await notifyTeam(c.env as never, params.userId, actorId, {
 					notificationKey: 'channelMemberRemoved',
-					params: { channel: channel.name },
+					params: { ...channelParams('channel', channel) },
 					actionUrl: `/channels/${params.id}`,
 					entityId: params.id,
 					dedupeKey: `channel-removed:${params.id}:${params.userId}:${Date.now()}`,

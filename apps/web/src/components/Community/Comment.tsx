@@ -22,6 +22,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import Link from '@/components/common/AppLink';
 import { userProfilePath } from '@/lib/user-url';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { channelLabel } from '@/lib/channel-name';
 
 interface CommentProps {
   comment: PostComment;
@@ -93,6 +94,8 @@ export default function Comment({
   const { t, lang } = useLanguage();
   // The only way to a user's profile: their name on a comment they posted as themselves
   const authorHref = comment.userHandle && !comment.deletedAt ? userProfilePath(lang, comment.userHandle) : undefined;
+  // The page language's name when the channel has one (#1610)
+  const authorName = channelLabel({ channelName: comment.userDisplayName, channelNameLocalized: comment.userDisplayNameLocalized }, lang) || comment.userDisplayName;
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
@@ -286,13 +289,13 @@ export default function Comment({
         {comment.userAvatarUrl && !comment.deletedAt ? (
           <Image
             src={comment.userAvatarUrl}
-            alt={authorHref ? '' : comment.userDisplayName}
+            alt={authorHref ? '' : authorName}
             fill
             className="rounded-full object-cover"
           />
         ) : (
           <div className="w-full h-full rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center text-white font-bold text-sm">
-            {comment.deletedAt ? '?' : comment.userDisplayName.charAt(0).toUpperCase()}
+            {comment.deletedAt ? '?' : authorName.charAt(0).toUpperCase()}
           </div>
         )}
         {comment.channelVerified && !comment.deletedAt && (
@@ -318,8 +321,8 @@ export default function Comment({
                 {comment.deletedAt
                   ? (isRTL ? '[محذوف]' : '[deleted]')
                   : authorHref
-                    ? <Link href={authorHref} className="hover:underline" data-testid="post-comment-author-link">{comment.userDisplayName}</Link>
-                    : comment.userDisplayName}
+                    ? <Link href={authorHref} className="hover:underline" data-testid="post-comment-author-link"><bdi>{authorName}</bdi></Link>
+                    : <bdi>{authorName}</bdi>}
               </span>
               {pinned && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -474,7 +477,7 @@ export default function Comment({
             postChannelId={postChannelId}
             postId={postId}
             parentCommentId={comment.id}
-            replyToUsername={comment.userDisplayName}
+            replyToUsername={authorName}
             userAvatar={viewerAvatar}
             userDisplayName={viewerName}
             isRTL={isRTL}

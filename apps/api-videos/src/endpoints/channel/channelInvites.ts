@@ -56,6 +56,7 @@ import {
 } from "../../lib/channelTeam";
 import { memberChannelRoles } from "../../lib/search/ownership";
 import { MembersResponse, NO_STORE, changeMembers, fail, loadLiveChannel, profileSummary, teamState } from "./channelMembers";
+import { channelParams } from '../../lib/channelName';
 
 const MemberRoleEnum = z.enum(CHANNEL_MEMBER_ROLES as [ChannelMemberRole, ...ChannelMemberRole[]]);
 
@@ -159,7 +160,7 @@ export class ChannelInviteCreate extends AuthenticatedRoute {
 			const { displayName } = await profileSummary(c, actorId);
 			await notifyTeam(c.env as never, inviteeUserId, actorId, {
 				notificationKey: 'channelInviteReceived',
-				params: { inviter: displayName ?? '', channel: channel.name, role },
+				params: { inviter: displayName ?? '', ...channelParams('channel', channel), role },
 				actionUrl: '/settings/channel-invites',
 				entityId: channel.id,
 				dedupeKey: `channel-invite:${invite.id}`,
@@ -405,7 +406,7 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 			const { displayName } = await profileSummary(c, userId);
 			await notifyTeam(c.env as never, invite.invited_by, userId, {
 				notificationKey: 'channelInviteAccepted',
-				params: { member: displayName ?? '', channel: channel!.name, role: invite.role },
+				params: { member: displayName ?? '', ...channelParams('channel', channel!), role: invite.role },
 				actionUrl: `/settings/channel/${invite.channel_id}/team`,
 				entityId: invite.channel_id,
 				dedupeKey: `channel-invite-accepted:${invite.id}`,
