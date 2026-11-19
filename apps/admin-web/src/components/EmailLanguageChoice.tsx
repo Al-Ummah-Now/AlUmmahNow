@@ -20,7 +20,7 @@ export function EmailLanguageChoice({ value, onChange, disabled, testId = 'email
   const { t } = useLanguage();
   const name = useId();
   return (
-    <fieldset className="inline-flex items-center gap-2" disabled={disabled} data-testid={testId}>
+    <fieldset className="inline-flex flex-wrap items-center gap-2" disabled={disabled} data-testid={testId}>
       <legend className="sr-only">{t('emailLanguage.legend')}</legend>
       <span aria-hidden="true" className="text-sm text-fg-muted">
         {t('emailLanguage.legend')}
@@ -31,7 +31,7 @@ export function EmailLanguageChoice({ value, onChange, disabled, testId = 'email
             key={option.value}
             lang={option.value}
             dir={option.value === 'ar' ? 'rtl' : 'ltr'}
-            className={`cursor-pointer px-3 py-1.5 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] ${
+            className={`relative cursor-pointer px-3 py-1.5 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] ${
               value === option.value ? 'bg-accent text-on-accent font-semibold' : 'bg-surface text-fg hover:bg-surface-hover'
             }`}
           >
