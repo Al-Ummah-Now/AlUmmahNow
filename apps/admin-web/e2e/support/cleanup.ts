@@ -69,6 +69,17 @@ export async function eraseVideosData(account: Account): Promise<boolean> {
   } catch {
     return false;
   }
+  await eraseVideosDataWithToken(token, account.email);
+  return true;
+}
+
+/**
+ * The account's own "Delete my data" (DELETE /api/privacy/data, resumed until complete) with an
+ * access token the caller already has. For accounts with no password to sign in with, such as an
+ * invited creator who was signed in straight from the invite link: the spec that signed them in
+ * erases them, since the global teardown cannot (#1611).
+ */
+export async function eraseVideosDataWithToken(token: string, label: string): Promise<void> {
   let resumeToken: string | undefined;
   for (let round = 0; round < 20; round++) {
     const res = await fetch(`${VIDEOS_API_URL}/api/privacy/data`, {
@@ -76,12 +87,12 @@ export async function eraseVideosData(account: Account): Promise<boolean> {
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) }),
     });
-    if (!res.ok) throw new Error(`erasing ${account.email}'s videos data -> ${res.status}`);
+    if (!res.ok) throw new Error(`erasing ${label}'s videos data -> ${res.status}`);
     const body = (await res.json()) as { complete?: boolean; resumeToken?: string };
-    if (body.complete) return true;
+    if (body.complete) return;
     resumeToken = body.resumeToken;
   }
-  throw new Error(`erasing ${account.email}'s videos data did not complete in 20 rounds`);
+  throw new Error(`erasing ${label}'s videos data did not complete in 20 rounds`);
 }
 
 /**
