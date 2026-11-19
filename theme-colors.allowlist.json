@@ -122,7 +122,7 @@
   "apps/web/src/components/library/LibraryHub.tsx": 23,
   "apps/web/src/components/library/LibraryVideoTile.tsx": 11,
   "apps/web/src/components/library/SavePostButton.tsx": 5,
-  "apps/web/src/components/library/SavedPostCard.tsx": 7,
+  "apps/web/src/components/library/SavedPostCard.tsx": 4,
   "apps/web/src/components/library/VideoCardMenu.tsx": 7,
   "apps/web/src/components/live-streaming/EmptyState/index.tsx": 28,
   "apps/web/src/components/live-streaming/EmptyState/rtl/index.tsx": 28,
