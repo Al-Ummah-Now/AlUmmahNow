@@ -875,6 +875,12 @@ export interface AppTranslations {
     deleteMultipleSuccess?: string;
     noVideosFound?: string;
     uploadFirstVideo?: string;
+    /** Home with no videos (#1629): what will appear, and where to go meanwhile; no upload invitation */
+    homeEmptyTitle: string;
+    homeEmptyBody: string;
+    homeEmptyAction: string;
+    /** Home when the first page of videos could not be read */
+    homeLoadFailed: string;
     clearSearch?: string;
     bulkDeletePartial?: string;
     selectVideo?: string;

@@ -19,6 +19,8 @@ import { SignInBanner } from "@/components/home/SignInBanner";
 import { HomeRails } from "@/components/home/HomeRails";
 import { getHomeRails } from "@/lib/api/discovery-home";
 import type { HomeRail } from "@/lib/discovery/home-rails";
+import Link from "@/components/common/AppLink";
+import { AlertCircle, Compass, Film } from "lucide-react";
 
 /** Never featured on the home hero (kept from the original pick). */
 const HOME_HERO_EXCLUDED: ReadonlySet<string> = new Set(["e42e5deb-c86a-40b0-b8ec-6072fc550dba"]);
@@ -59,6 +61,8 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
   // Without a server page it starts true: the first page is fetched on mount, and rendering the
   // placeholders from the first paint avoids a layout shift
   const [loading, setLoading] = useState(!initialPage);
+  // The first page could not be read (API down or slow): a retry instead of an empty grid
+  const [failed, setFailed] = useState(false);
   const [isCollapsed, _setIsCollapsed] = useState(true);
 
   // Select VideoCard component based on locale
@@ -69,11 +73,13 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
 
   const fetchVideos = useCallback(async (cursor: string | null) => {
     setLoading(true);
+    setFailed(false);
     try {
       const data = await fetchVideosWithPagination(cursor);
 
       if (!data) {
         logger.error("Failed to fetch videos");
+        setFailed(true);
         return;
       }
 
@@ -87,6 +93,7 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
       setNextCursor(getNextVideosCursor(data));
     } catch (error) {
       logger.error("Error fetching videos:", error);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -171,6 +178,25 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
                   </div>
                 </div>
               ))}
+            </div>
+          ) : videos.length === 0 && failed ? (
+            // The first page failed: say so and offer a retry (never a blank page)
+            <div role="alert" data-testid="home-load-failed" className="c empty">
+              <AlertCircle aria-hidden="true" />
+              <p>{t.video.homeLoadFailed}</p>
+              <button type="button" className="b b-secondary" onClick={() => fetchVideos(null)}>{t.common.retry}</button>
+            </div>
+          ) : videos.length === 0 ? (
+            // No public videos yet (#1629, no hollow pages): what will appear here and where to go
+            // meanwhile. No upload invitation: uploading is by invitation (creator tiers).
+            <div data-testid="home-empty" className="c empty">
+              <Film aria-hidden="true" />
+              <h4>{t.video.homeEmptyTitle}</h4>
+              <p>{t.video.homeEmptyBody}</p>
+              <Link href={`/${lang}/explore`} className="b b-secondary" data-testid="home-empty-explore">
+                <Compass aria-hidden="true" />
+                {t.video.homeEmptyAction}
+              </Link>
             </div>
           ) : (
             <div data-testid="video-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
