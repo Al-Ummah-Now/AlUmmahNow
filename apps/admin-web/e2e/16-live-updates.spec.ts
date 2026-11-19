@@ -22,13 +22,20 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'dev-internal-api-key';
  */
 const CAN_PUBLISH = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL) || (!!process.env.REALTIME_URL && !!process.env.INTERNAL_API_KEY);
 
-/** Opens `path` and resolves with the page's realtime socket and the frames it received. */
+/**
+ * Opens `path` and resolves with the page's first realtime socket and the frames every realtime
+ * socket of the page received. Listening starts before the navigation (the server's replies can
+ * arrive before goto() returns) and follows reconnects (a new socket is the client's job, not a
+ * failure); the update must still arrive without a page reload.
+ */
 async function openLive(page: Page, path: string): Promise<{ ws: WebSocket; frames: string[] }> {
   const frames: string[] = [];
+  page.on('websocket', (ws) => {
+    if (ws.url().endsWith('/ws')) ws.on('framereceived', (f) => frames.push(String(f.payload)));
+  });
   const socket = page.waitForEvent('websocket', (ws) => ws.url().endsWith('/ws'));
   await page.goto(path);
   const ws = await socket;
-  ws.on('framereceived', (f) => frames.push(String(f.payload)));
   return { ws, frames };
 }
 
@@ -58,6 +65,8 @@ test.describe('live admin pages (admin)', () => {
 
   test('the Jobs page subscribes to admin:jobs and re-renders on an update, without a reload', async ({ page }) => {
     test.skip(!CAN_PUBLISH, 'publishes through the local stack\'s realtime worker (REALTIME_URL + INTERNAL_API_KEY); not available against a deployed target');
+    let tickets = 0;
+    page.on('request', (r) => { if (new URL(r.url()).pathname === '/api/realtime/token') tickets++; });
     const { frames } = await openLive(page, '/jobs');
     await expect.poll(() => received(frames, (m) => m.type === 'subscribed' && m.channel === 'admin:jobs'), { timeout: 15_000 }).toBe(true);
 
@@ -69,6 +78,9 @@ test.describe('live admin pages (admin)', () => {
     // The refresh and the frame event arrive in either order (the poll fallback may refresh first)
     await expect.poll(() => received(frames, (m) => m.type === 'admin.update' && m.data?.events?.[0]?.key === 'job:e2e-live'), { timeout: 10_000 }).toBe(true);
     expect(navigations, 'no full reload').toBe(0);
+    // One ticket per socket and re-authentication: a loop (a 30-day token's re-auth timer overflowing,
+    // v2026.11.19.3) asked hundreds of times a second
+    expect(tickets, 'realtime ticket requests (a re-authentication loop asks hundreds of times)').toBeLessThanOrEqual(5);
   });
 
   test('the token route refuses cross-site reads and answers same-origin ones without caching', async ({ page, request }) => {

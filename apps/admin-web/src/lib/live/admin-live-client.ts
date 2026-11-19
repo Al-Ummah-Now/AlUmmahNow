@@ -59,6 +59,15 @@ export const IDLE_CLOSE_MS = 10_000;
 export const HIDDEN_CLOSE_MS = 5 * 60_000;
 /** Re-authenticate this long before the token expires. */
 export const REAUTH_LEAD_MS = 60_000;
+/**
+ * The longest re-authentication wait. Browsers keep a timer delay in a signed 32-bit int
+ * (2^31 - 1 ms, about 24.8 days) and fire a longer one at once: a 30-day token (Auth's
+ * default access lifetime when ACCESS_TOKEN_TTL is unset, as on the local stack, and
+ * legacy 30-day tokens) re-authenticated, rescheduled and fired again in a loop, hundreds
+ * of ticket requests a second, and the Jobs page never stayed subscribed (v2026.11.19.3,
+ * 16-live-updates). A still-valid token re-sent after a day is harmless.
+ */
+export const REAUTH_MAX_WAIT_MS = 24 * 60 * 60_000;
 
 /**
  * A ticket whose token expires within this is not used: the realtime worker
@@ -336,7 +345,7 @@ export class AdminLiveClient {
   private scheduleReauth(expiresAt?: number): void {
     this.clearTimer('reauthTimer');
     if (!expiresAt) return;
-    const wait = Math.max(5_000, expiresAt * 1000 - this.deps.now() - REAUTH_LEAD_MS);
+    const wait = Math.min(REAUTH_MAX_WAIT_MS, Math.max(5_000, expiresAt * 1000 - this.deps.now() - REAUTH_LEAD_MS));
     this.reauthTimer = this.deps.setTimeout(() => {
       this.reauthTimer = null;
       void this.reauthenticate();
