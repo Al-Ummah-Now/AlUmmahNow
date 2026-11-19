@@ -1,5 +1,6 @@
 'use client';
 import { formatBytes, formatPercent } from '@al-ummah/shared-types';
+import { hasAnyLanguage, primaryText } from '@/lib/localized-input';
 import { logger } from '@/lib/logger-client';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
 import { reportUploadError, uploadErrorMessage, type UploadStep } from '@/lib/upload/report-upload-error';
@@ -383,7 +384,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         const fingerprint = await tryFileFingerprint(selectedFile);
         const initiateResult = await initiateVideoUpload(
           {
-            title: metadata.titleEn || metadata.title,
+            title: primaryText({ en: metadata.titleEn, ar: metadata.titleAr }) || metadata.title,
             titleLocalized: {
               en: metadata.titleEn,
               ar: metadata.titleAr
@@ -905,7 +906,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 aria-label={t.upload.titlePlaceholderEn}
                 data-testid="upload-title-en"
                 dir="ltr"
-                required
+                required={!metadata.titleAr.trim()}
                 disabled={uploadProgress?.state === 'uploading'}
               />
             )}
@@ -1066,7 +1067,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               <UploadButton
                 onClick={uploadVideo}
                 text={t.upload.uploadTitle}
-                disabled={!metadata.titleEn.trim()}
+                disabled={!hasAnyLanguage({ en: metadata.titleEn, ar: metadata.titleAr })}
                 className="flex-1 justify-center"
                 showIcon={false}
                 testId="upload-submit"

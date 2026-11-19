@@ -11,6 +11,7 @@ import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
+import { hasAnyLanguage, primaryText, tabForMissing, trimPair } from '@/lib/localized-input';
 
 const ProfileCreatePage = () => {
   const { t, lang } = useLanguage();
@@ -61,35 +62,29 @@ const ProfileCreatePage = () => {
     const bioEn = (formData.get('bioEn') as string) || '';
     const bioAr = (formData.get('bioAr') as string) || '';
 
-    // Validation
-    if (!firstNameEn.trim()) {
+    // A person's own name needs one language only (owner rule: user content
+    // is exempt from en + ar); the first name in either tab is enough
+    const firstNames = trimPair({ en: firstNameEn, ar: firstNameAr });
+    if (!hasAnyLanguage(firstNames)) {
       setSaveState('error');
       setErrorMessage(t.validation.required);
+      setActiveTab(tabForMissing(locale));
       return;
     }
+    const lastNames = trimPair({ en: lastNameEn, ar: lastNameAr });
+    const displayNames = trimPair({ en: displayNameEn, ar: displayNameAr });
+    const bios = trimPair({ en: bioEn, ar: bioAr });
 
     try {
       const result = await createProfile({
-        firstName: firstNameEn.trim(),
-        firstNameLocalized: {
-          en: firstNameEn.trim() || '',
-          ar: firstNameAr.trim() || ''
-        },
-        lastName: lastNameEn.trim(),
-        lastNameLocalized: {
-          en: lastNameEn.trim() || '',
-          ar: lastNameAr.trim() || ''
-        },
-        displayName: displayNameEn || '',
-        displayNameLocalized: {
-          en: displayNameEn || '',
-          ar: displayNameAr || ''
-        },
-        bio: bioEn || '',
-        bioLocalized: {
-          en: bioEn || '',
-          ar: bioAr || ''
-        },
+        firstName: primaryText(firstNames),
+        firstNameLocalized: firstNames,
+        lastName: primaryText(lastNames),
+        lastNameLocalized: lastNames,
+        displayName: primaryText(displayNames),
+        displayNameLocalized: displayNames,
+        bio: primaryText(bios),
+        bioLocalized: bios,
         timezone: timezone || getBrowserTimezone(),
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
@@ -184,100 +179,91 @@ const ProfileCreatePage = () => {
 
             {/* First Name with Language Tabs */}
             <div>
-              <label htmlFor="profile-firstName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor={activeTab === 'ar' ? 'profile-firstName-ar' : 'profile-firstName'} className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.firstName} <span className="text-red-500 dark:text-red-400">*</span>
               </label>
-              {activeTab === 'en' && (
-                <input
+              <input
+                  hidden={activeTab !== 'en'}
                   type="text"
                   id="profile-firstName" name="firstNameEn"
-                  required
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourFirstName}
                 />
-              )}
-              {activeTab === 'ar' && (
-                <input
+              <input
+                  hidden={activeTab !== 'ar'}
                   type="text"
-                  id="profile-firstName" name="firstNameAr"
+                  id="profile-firstName-ar" name="firstNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.firstNameArabic || 'الاسم الأول'}
                   dir="rtl"
                 />
-              )}
             </div>
 
             {/* Last Name with Language Tabs */}
             <div>
-              <label htmlFor="profile-lastName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor={activeTab === 'ar' ? 'profile-lastName-ar' : 'profile-lastName'} className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.lastName}
               </label>
-              {activeTab === 'en' && (
-                <input
+              <input
+                  hidden={activeTab !== 'en'}
                   type="text"
                   id="profile-lastName" name="lastNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.yourLastName}
                 />
-              )}
-              {activeTab === 'ar' && (
-                <input
+              <input
+                  hidden={activeTab !== 'ar'}
                   type="text"
-                  id="profile-lastName" name="lastNameAr"
+                  id="profile-lastName-ar" name="lastNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.lastNameArabic || 'اسم العائلة'}
                   dir="rtl"
                 />
-              )}
             </div>
 
             {/* Display Name */}
             <div>
-              <label htmlFor="profile-displayName" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor={activeTab === 'ar' ? 'profile-displayName-ar' : 'profile-displayName'} className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.displayName}
               </label>
-              {activeTab === 'en' && (
-                <input
+              <input
+                  hidden={activeTab !== 'en'}
                   type="text"
                   id="profile-displayName" name="displayNameEn"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.displayNameOptional}
                 />
-              )}
-              {activeTab === 'ar' && (
-                <input
+              <input
+                  hidden={activeTab !== 'ar'}
                   type="text"
-                  id="profile-displayName" name="displayNameAr"
+                  id="profile-displayName-ar" name="displayNameAr"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.displayNameArabic}
                   dir="rtl"
                 />
-              )}
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.profile.displayNameEmpty}</p>
             </div>
 
             {/* Bio */}
             <div>
-              <label htmlFor="profile-bio" className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+              <label htmlFor={activeTab === 'ar' ? 'profile-bio-ar' : 'profile-bio'} className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                 {t.profile.bio}
               </label>
-              {activeTab === 'en' && (
-                <textarea
+              <textarea
+                  hidden={activeTab !== 'en'}
                   id="profile-bio" name="bioEn"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.bioOptional}
                 />
-              )}
-              {activeTab === 'ar' && (
-                <textarea
-                  id="profile-bio" name="bioAr"
+              <textarea
+                  hidden={activeTab !== 'ar'}
+                  id="profile-bio-ar" name="bioAr"
                   rows={3}
                   className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
                   placeholder={t.profile.bioArabic}
                   dir="rtl"
                 />
-              )}
             </div>
 
             {/* Timezone Selector */}

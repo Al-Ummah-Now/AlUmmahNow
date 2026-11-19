@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { englishOf, primaryText, trimPair } from '@/lib/localized-input';
 import { useParams } from 'next/navigation';
 import Link from '@/components/common/AppLink';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
@@ -82,10 +83,10 @@ function ChannelEditPage() {
           setChannel(channelData);
           setFormData({
             name: channelData.name || '',
-            nameEn: channelData.nameLocalized?.en || channelData.name || '',
+            nameEn: englishOf(channelData.name, channelData.nameLocalized),
             nameAr: channelData.nameLocalized?.ar || '',
             description: channelData.description || '',
-            descriptionEn: channelData.descriptionLocalized?.en || channelData.description || '',
+            descriptionEn: englishOf(channelData.description, channelData.descriptionLocalized),
             descriptionAr: channelData.descriptionLocalized?.ar || '',
             avatarUrl: channelData.avatarUrl || '',
             coverUrl: channelData.coverUrl || '',
@@ -125,12 +126,10 @@ function ChannelEditPage() {
 
     try {
       const result = await updateChannelProfile(channelId, {
-        name: formData.nameEn || formData.name, // Legacy field (English)
-        nameLocalized: {
-          en: formData.nameEn,
-          ar: formData.nameAr
-        },
-        description: formData.descriptionEn || formData.description,
+        // Plain field: English when filled, else Arabic (user content needs one language only)
+        name: primaryText({ en: formData.nameEn, ar: formData.nameAr }) || formData.name,
+        nameLocalized: trimPair({ en: formData.nameEn, ar: formData.nameAr }),
+        description: primaryText({ en: formData.descriptionEn, ar: formData.descriptionAr }),
         descriptionLocalized: {
           en: formData.descriptionEn || '',
           ar: formData.descriptionAr || ''
@@ -381,7 +380,7 @@ function ChannelEditPage() {
                   type="text"
                   value={formData.nameEn}
                   onChange={(e) => setFormData({ ...formData, nameEn: e.target.value, name: e.target.value })}
-                  required
+                  required={!formData.nameAr.trim()}
                   maxLength={100}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder={t.channel.channelNameEnglish}

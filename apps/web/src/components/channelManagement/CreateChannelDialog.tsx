@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger-client';
+import { primaryText, trimPair } from '@/lib/localized-input';
 import React, { useState } from 'react';
 import { CreateChannelDialogProps, CreateChannelFormData } from './types';
 import {
@@ -77,26 +78,25 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
 
     // Validate
     const newErrors: { name?: string; description?: string } = {};
-    const nameEn = formData.nameLocalized?.en || '';
+    // A creator's channel name needs one language only (user content): either tab
+    const names = trimPair(formData.nameLocalized);
+    const descriptions = trimPair(formData.descriptionLocalized);
+    const filledNames = [names.en, names.ar].filter(Boolean);
 
-    if (!nameEn.trim()) {
+    if (filledNames.length === 0) {
       newErrors.name = t.required;
-    } else if (nameEn.length < 3) {
+    } else if (filledNames.some((n) => n.length < 3)) {
       newErrors.name = t.minLength;
-    } else if (nameEn.length > 50) {
+    } else if (filledNames.some((n) => n.length > 50)) {
       newErrors.name = t.maxLength;
     }
 
-    const descriptionEn = formData.descriptionLocalized?.en || '';
-    if (descriptionEn && descriptionEn.length > 500) {
+    if (descriptions.en.length > 500) {
       newErrors.description = t.descMaxLength;
     }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // Validation targets the English fields; show that tab so the error is visible
-      // (Arabic users start on the Arabic tab, where it was previously hidden)
-      setActiveTab('en');
       logger.warn('CreateChannelDialog: Validation failed', { fields: Object.keys(newErrors) });
       return;
     }
@@ -104,16 +104,10 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
     // Submit with properly formatted data
     try {
       await onSubmit({
-        name: nameEn,
-        nameLocalized: {
-          en: nameEn,
-          ar: formData.nameLocalized?.ar || ''
-        },
-        description: descriptionEn,
-        descriptionLocalized: {
-          en: descriptionEn,
-          ar: formData.descriptionLocalized?.ar || ''
-        }
+        name: primaryText(names),
+        nameLocalized: names,
+        description: primaryText(descriptions),
+        descriptionLocalized: descriptions
       });
       // Reset form on success
       setFormData({
@@ -216,12 +210,13 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
                       ...formData,
                       nameLocalized: { ...formData.nameLocalized, ar: e.target.value }
                     });
+                    setErrors({ ...errors, name: undefined });
                   }}
                   disabled={isLoading}
                   dir="rtl"
                 />
               )}
-              {errors.name && activeTab === 'en' && (
+              {errors.name && (
                 <p role="alert" data-testid="create-channel-name-error" className="text-sm text-red-600 dark:text-red-400">{errors.name}</p>
               )}
             </div>
