@@ -50,6 +50,8 @@ export const USER_FEATURE_KEYS = [
   'aiCategorySuggest',
   /** Bulk scheduling in Studio Videos */
   'bulkSchedule',
+  /** Settings › Billing: a payment provider is on, or the account has subscriptions or payments (wiki AUN-SUBS) */
+  'billing',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];
