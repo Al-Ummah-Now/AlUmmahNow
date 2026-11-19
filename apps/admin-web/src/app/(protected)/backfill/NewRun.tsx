@@ -90,7 +90,7 @@ export function NewRun() {
         <p id={ids.legend} className="sr-only">{t('mediaBackfill.newHint')}</p>
       </fieldset>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {kind === 'channel' && (
           <div className="sm:col-span-2">
             <Autocomplete kind="channel" mode="pick" label={t('mediaBackfill.channelId')} defaultValue={channelId} onChange={(id) => setChannelId(id)} testId="backfill-channel" />
@@ -109,7 +109,7 @@ export function NewRun() {
           </>
         )}
         {kind === 'videos' && (
-          <div className="flex flex-col gap-2 sm:col-span-2" data-testid="backfill-videos">
+          <div className="flex min-w-0 flex-col gap-2 sm:col-span-2" data-testid="backfill-videos">
             {videos.length < BACKFILL_LIMITS.maxVideoIds && (
               <Autocomplete
                 key={videoPicker}
@@ -128,11 +128,13 @@ export function NewRun() {
               />
             )}
             {videos.length > 0 && (
-              <ul className="flex flex-wrap gap-2" aria-label={t('mediaBackfill.videoIdsChosen', { count: f.integer(videos.length) })} data-testid="backfill-video-ids">
+              <ul className="flex min-w-0 flex-col gap-2" aria-label={t('mediaBackfill.videoIdsChosen', { count: f.integer(videos.length) })} data-testid="backfill-video-ids">
                 {videos.map((v) => (
-                  <li key={v.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-border bg-surface-2 py-1 ps-1 pe-2" data-id={v.id}>
-                    {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-7 w-12 shrink-0 rounded-full object-cover" /> : null}
-                    <bdi className="min-w-0 truncate text-sm text-fg">{v.label}</bdi>
+                  <li key={v.id} className="flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-border bg-surface-2 py-1 ps-1 pe-1" data-id={v.id}>
+                    {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-8 w-14 shrink-0 rounded object-cover" /> : null}
+                    <span className="min-w-0 flex-1 truncate text-sm text-fg" title={v.label}>
+                      <bdi>{v.label}</bdi>
+                    </span>
                     <button
                       type="button"
                       className="grid size-7 shrink-0 place-items-center rounded-full text-fg-muted hover:bg-surface-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"

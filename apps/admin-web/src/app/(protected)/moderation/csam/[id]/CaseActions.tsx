@@ -37,7 +37,7 @@ export function ReportChecklist({ caseId, rows, reported, canDownload, files }: 
             {step === 'open' ? (
               <>
                 {t('csamPage.checklist.steps.open')}{' '}
-                <a href={NCMEC_CYBERTIPLINE_URL} target="_blank" rel="noopener noreferrer" className={linkClass} data-testid="csam-cybertipline-link">
+                <a href={NCMEC_CYBERTIPLINE_URL} target="_blank" rel="noopener noreferrer" className={`${linkClass} underline underline-offset-2`} data-testid="csam-cybertipline-link">
                   {t('csamPage.checklist.openForm')}
                 </a>
               </>
