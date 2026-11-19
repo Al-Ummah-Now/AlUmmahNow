@@ -61,7 +61,7 @@ export async function runCron(app: 'api-videos' | 'admin-api', cron: string, tim
  * MessageType.UserDataErased (shared-types queue.ts). The e2e suite keeps its imports local;
  * test/e2e-message-types.test.ts fails when the enum moves.
  */
-export const USER_DATA_ERASED = 83;
+export const USER_DATA_ERASED = 68;
 
 /**
  * Queues the processor's account-erasure step (UserDataErased) for a user, as the product does when
