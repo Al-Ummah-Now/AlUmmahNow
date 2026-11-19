@@ -16,6 +16,7 @@ import { cardClass, fieldClass, linkClass, primaryButtonClass } from '@/componen
 import { mapCsamCase, markCsamReported, retryCsamCase, setCsamLegalHold, type CsamHandMapping } from '@/lib/api/csam';
 import { CopyButton } from '../CsamAdmin';
 import { NCMEC_CYBERTIPLINE_URL, csamDownloadHref, csamFactsText, validReportId, type CsamFactId, type CsamFactRow } from '../model';
+import { DateTimeField } from '@/components/DateField';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 const STEPS = ['open', 'type', 'fields', 'files', 'submit', 'record'] as const;
@@ -134,7 +135,7 @@ export function ReportedForm({ caseId, reportId, reportedAt, timeFixed }: { case
         {!timeFixed && (
           <div>
             <label htmlFor={`${id}-at`} className={labelClass}>{t('csamPage.reported.reportedAt')}</label>
-            <input id={`${id}-at`} name="reportedAt" type="datetime-local" className={`${fieldClass} w-full`} aria-describedby={`${id}-at-hint`} data-testid="csam-reported-at" />
+            <DateTimeField id={`${id}-at`} name="reportedAt" className="w-full" aria-describedby={`${id}-at-hint`} testId="csam-reported-at" />
             <p id={`${id}-at-hint`} className="text-xs text-fg-muted mt-1">{t('csamPage.reported.reportedAtHint')}</p>
           </div>
         )}

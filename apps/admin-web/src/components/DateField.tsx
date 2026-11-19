@@ -11,15 +11,19 @@
  * - a calendar button that opens the browser's own picker (keyboard and screen reader friendly);
  * - a hidden `name` input carrying the ISO day, so GET filter forms and URLs stay as they were.
  *
+ * DateTimeField (below) is the same field with a 24-hour time: "2026-11-18 14:30" / «٢٠٢٦/١١/١٨ ١٤:٣٠»,
+ * placeholder "YYYY-MM-DD HH:MM" / «سنة/شهر/يوم س:د», value "YYYY-MM-DDTHH:mm" (datetime-local's).
+ *
  * `onChange` gets the ISO day (or undefined when cleared) once a value is committed: on blur,
  * Enter, or a pick in the calendar. `submitOnChange` also submits the enclosing form then.
  */
 import { useEffect, useId, useRef, useState } from 'react';
-import { dateTimeFormat } from '@al-ummah/shared-types';
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_LOCAL = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/;
 
 /** Eastern Arabic (٠–٩) and Persian (۰–۹) digits as 0–9; everything else unchanged. */
 export function toAsciiDigits(text: string): string {
@@ -50,6 +54,31 @@ export function parseDateInput(text: string): string | null {
   return null;
 }
 
+/**
+ * A local date and time as typed: the day as parseDateInput reads it, then a 24-hour time "14:30"
+ * («١٤:٣٠»), after a space or a "T". Returns "YYYY-MM-DDTHH:mm" (what datetime-local carries),
+ * '' when empty, null when either part is not real.
+ */
+export function parseDateTimeInput(text: string): string | null {
+  const t = toAsciiDigits(text).trim();
+  if (!t) return '';
+  const m = /^(.*?)[\sT]+(\d{1,2})[:.\u066B](\d{2})$/.exec(t);
+  if (!m) return null;
+  const day = parseDateInput(m[1]!);
+  const h = Number(m[2]);
+  const min = Number(m[3]);
+  if (!day || h > 23 || min > 59) return null;
+  return `${day}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/** "YYYY-MM-DDTHH:mm" as the field shows it: "2026-11-18 14:30" / «٢٠٢٦/١١/١٨ ١٤:٣٠». */
+export function formatDateTimeInput(value: string | undefined | null, locale: string): string {
+  const m = value ? ISO_LOCAL.exec(value) : null;
+  if (!m) return '';
+  const two = numberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false });
+  return `${formatDateInput(m[1], locale)} ${two.format(Number(m[2]))}:${two.format(Number(m[3]))}`;
+}
+
 /** The ISO day as the field shows it: "2026-11-18" in English, «٢٠٢٦/١١/١٨» in Arabic. */
 export function formatDateInput(iso: string | undefined | null, locale: string): string {
   const m = iso ? ISO_DAY.exec(iso) : null;
@@ -76,16 +105,20 @@ export interface DateFieldProps {
   className?: string;
   testId?: string;
   'aria-describedby'?: string;
+  /** A date and a time ("YYYY-MM-DDTHH:mm", local), the datetime-local value; see DateTimeField. */
+  withTime?: boolean;
 }
 
-export function DateField({ id, name, value, defaultValue, onChange, submitOnChange, min, max, required, className = '', testId, ...rest }: DateFieldProps) {
+export function DateField({ id, name, value, defaultValue, onChange, submitOnChange, min, max, required, className = '', testId, withTime = false, ...rest }: DateFieldProps) {
+  const show = withTime ? formatDateTimeInput : formatDateInput;
+  const read = withTime ? parseDateTimeInput : parseDateInput;
   const { t, locale } = useLanguage();
   const ownId = useId();
   const fieldId = id ?? ownId;
   const errorId = `${fieldId}-error`;
   const controlled = value !== undefined;
   const [iso, setIso] = useState<string>((controlled ? value : defaultValue) ?? '');
-  const [text, setText] = useState(() => formatDateInput(iso, locale));
+  const [text, setText] = useState(() => show(iso, locale));
   const [invalid, setInvalid] = useState(false);
   const hidden = useRef<HTMLInputElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -95,10 +128,10 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
     if (controlled && (value ?? '') !== iso) setIso(value ?? '');
   }, [controlled, value]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    setText(formatDateInput(iso, locale));
+    setText(show(iso, locale));
     setInvalid(false);
     if (hidden.current) hidden.current.value = iso;
-  }, [iso, locale]);
+  }, [iso, locale, show]);
 
   const commit = (next: string) => {
     if (next && ((min && next < min) || (max && next > max))) {
@@ -106,7 +139,7 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
       return;
     }
     setInvalid(false);
-    setText(formatDateInput(next, locale));
+    setText(show(next, locale));
     if (next === iso) return;
     if (!controlled) setIso(next);
     if (hidden.current) hidden.current.value = next;
@@ -115,7 +148,7 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
   };
 
   const commitText = () => {
-    const next = parseDateInput(text);
+    const next = read(text);
     if (next === null) setInvalid(true);
     else commit(next);
   };
@@ -143,7 +176,8 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
         autoComplete="off"
         spellCheck={false}
         value={text}
-        placeholder={t('dateField.placeholder')}
+        data-date-field={withTime ? 'datetime' : 'date'}
+        placeholder={t(withTime ? 'dateField.placeholderTime' : 'dateField.placeholder')}
         onChange={(e) => {
           setText(e.currentTarget.value);
           if (invalid) setInvalid(false);
@@ -178,7 +212,7 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
       {/* The browser's calendar, opened by the button; never shown or focused itself */}
       <input
         ref={picker}
-        type="date"
+        type={withTime ? 'datetime-local' : 'date'}
         tabIndex={-1}
         aria-hidden="true"
         min={min}
@@ -188,9 +222,14 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
       />
       {invalid && (
         <p id={errorId} className="mt-1 text-xs text-danger-fg" role="alert">
-          {t('dateField.invalid')}
+          {t(withTime ? 'dateField.invalidTime' : 'dateField.invalid')}
         </p>
       )}
     </div>
   );
+}
+
+/** The admin's date-and-time field: DateField with a 24-hour time, value "YYYY-MM-DDTHH:mm" (local). */
+export function DateTimeField(props: Omit<DateFieldProps, 'withTime'>) {
+  return <DateField {...props} withTime />;
 }
