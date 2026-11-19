@@ -95,7 +95,7 @@ test.describe('Settings - dark theme', () => {
     // The site theme paints the card with its material (--m-card, a gradient over the theme's
     // surface tokens) or, without one, with dark:bg-gray-800, which the bridge maps to
     // --fanous-color-surface. Either way it is drawn from the active theme's dark surface
-    // colours, whichever theme the site runs.
+    // colours, whichever theme the site runs, or with the frosted-glass card made from them (O36).
     const paint = await card.evaluate((el) => {
       const resolve = (token: string) => {
         const probe = document.createElement('span');
@@ -109,7 +109,8 @@ test.describe('Settings - dark theme', () => {
       return {
         color: style.backgroundColor,
         image: style.backgroundImage,
-        surfaces: [resolve('--fanous-color-surface'), resolve('--fanous-color-surface-raised')],
+        // the frosted-glass card (O36) is the theme's own dark background lifted toward white, translucent
+        surfaces: [resolve('--fanous-color-surface'), resolve('--fanous-color-surface-raised'), resolve('--aun-glass-surface')],
       };
     });
     const painted = `${paint.color} ${paint.image}`;

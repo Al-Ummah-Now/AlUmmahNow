@@ -55,8 +55,10 @@ async function textBoxes(box: Locator): Promise<TextBox[]> {
       range.selectNodeContents(n);
       for (const r of range.getClientRects()) {
         if (r.width < 2 || r.height < 2 || r.bottom <= 0 || r.top >= innerHeight) continue;
-        const cx = r.left + r.width / 2;
-        const ends = [document.elementFromPoint(cx, r.top + 1), document.elementFromPoint(cx, r.bottom - 1)];
+        // the line's start, middle and end, top and bottom: a fixed layer (the cookie banner, the tab bar) over any
+        // part of it would be read as its background, so a line not wholly on the glass is left out
+        const xs = [r.left + 1, r.left + r.width / 2, r.right - 1];
+        const ends = xs.flatMap((x) => [document.elementFromPoint(x, r.top + 1), document.elementFromPoint(x, r.bottom - 1)]);
         if (ends.some((e) => !e || !panel.contains(e))) continue;
         const inset = Math.max(0, (r.height - size) / 2);
         out.push({ x: r.left, y: r.top + inset, w: r.width, h: r.height - 2 * inset, rgb: rgbOf(cs.color), large, text: text.slice(0, 40) });

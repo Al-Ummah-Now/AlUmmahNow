@@ -38,7 +38,8 @@ test.describe('Release: static pages in frosted-glass boxes', () => {
         test.setTimeout(240_000);
         await page.emulateMedia({ reducedMotion: 'reduce' });
         await page.goto(`${target().web}/${locale}/${p.path}`);
-        const boxes = page.locator('main .pb-glass');
+        // the shared card (pb-glass) or a page-builder raised section, which page-blocks.css draws as the same glass
+        const boxes = page.locator('main :is(.pb-glass, .pb-t-raised:not(.pb-w-full) > .pb-in)');
         await expect(boxes.first()).toBeVisible({ timeout: 30000 });
         const count = await boxes.count();
         expect(count, 'glass boxes').toBeGreaterThanOrEqual(p.boxes);

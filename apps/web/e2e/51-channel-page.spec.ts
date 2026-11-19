@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import { formatCountNoun } from '@al-ummah/shared-types';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 import {
@@ -173,7 +174,8 @@ test.describe('Subscribe button - signed in', () => {
       await expect(button).toHaveAttribute('aria-pressed', 'true');
       const subscribed = await subscriptionStatus('single', subscriber(), target());
       expect(subscribed.isSubscribed).toBe(true);
-      await expect(page.getByTestId('channel-subscriber-count')).toContainText(new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en').format(subscribed.subscriberCount ?? 0));
+      // The count agrees with its noun («مشترك واحد», «مشتركان», «٣ مشتركين»): the shared formatter the header uses
+      await expect(page.getByTestId('channel-subscriber-count')).toHaveText(formatCountNoun(locale, subscribed.subscriberCount ?? 0, 'subscriber', { compact: true }));
 
       // Persisted across reloads
       await page.reload();
