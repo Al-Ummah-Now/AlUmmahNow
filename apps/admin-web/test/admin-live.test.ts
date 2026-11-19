@@ -11,6 +11,7 @@ import {
   BACKOFF_MAX_MS,
   HIDDEN_CLOSE_MS,
   IDLE_CLOSE_MS,
+  REAUTH_MAX_WAIT_MS,
   backoffMs,
   socketUrlOf,
   type ClientDeps,
@@ -54,7 +55,8 @@ function harness(tickets: Array<RealtimeTicket | null> = []) {
     },
     setTimeout: (fn, ms) => {
       const id = nextId++;
-      timers.set(id, { at: clock + ms, fn });
+      // Like a browser: a delay past a signed 32-bit int fires at once
+      timers.set(id, { at: clock + (ms > 2 ** 31 - 1 ? 0 : ms), fn });
       return id;
     },
     clearTimeout: (id) => { timers.delete(id as number); },
@@ -284,6 +286,22 @@ describe('admin live client', () => {
     assert.notEqual(s.sent.filter((m) => m.type === 'authenticate').length, 2);
     await h.advance(1);
     assert.deepEqual(s.sent.filter((m) => m.type === 'authenticate').map((m) => m.token), ['t1', 't2']);
+  });
+});
+
+describe('admin live client: long-lived tokens', () => {
+  it('a 30-day token re-authenticates after a day, not in a loop (timer overflow, v2026.11.19.3)', async () => {
+    const thirtyDays = 30 * 24 * 60 * 60;
+    const ticket = (n: number) => ({ url: 'https://realtime.qa.example', token: `long${n}`, expiresAt: Math.floor(1_000_000 / 1000) + thirtyDays });
+    const h = harness([ticket(1), ticket(2), ticket(3)]);
+    h.client.subscribe('jobs', () => {}, () => {});
+    const s = await goLive(h.sockets, ['jobs']);
+    await h.advance(60_000);
+    assert.equal(h.ticketCalls(), 1, 'no re-authentication within the first minute');
+    assert.deepEqual(s.sent.filter((m) => m.type === 'authenticate').map((m) => m.token), ['long1']);
+    await h.advance(REAUTH_MAX_WAIT_MS - 60_000);
+    assert.deepEqual(s.sent.filter((m) => m.type === 'authenticate').map((m) => m.token), ['long1', 'long2']);
+    assert.equal(h.client.isLive('jobs'), true);
   });
 });
 
