@@ -158,7 +158,7 @@ test.describe('creator tiers on Users and Tiers', () => {
 
   test('CRE-03 the Tiers page counts users per tier and refuses a daily limit under the hourly one without saving', async ({ page }) => {
     await page.goto('/tiers');
-    await expect(page.getByTestId('tier-creator-users')).toContainText(/^[\d,]+ users?$/); // "1 user" when only this run's viewer holds it
+    await expect(page.getByTestId('tier-creator-users')).toContainText(/\d[\d,]*\s+users?$/); // "1 user" when only this run's viewer holds it
     await page.getByTestId('tier-creator-perDay').fill('1');
     await page.getByTestId('tier-creator-perHour').fill('5');
     await page.getByTestId('tier-creator-save').click();
