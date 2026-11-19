@@ -373,7 +373,7 @@ export const LiveStream = z.object({
 // Phase 2: Content Moderation models
 export const Report = z.object({
     id: Str(),
-    entityType: z.enum(['video', 'comment', 'channel', 'livestream']),
+    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'post']),
     entityId: Str(),
     reporterId: Str(),
     reporterChannelId: Str(),

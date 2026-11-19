@@ -21306,7 +21306,8 @@
                       "video",
                       "comment",
                       "channel",
-                      "livestream"
+                      "livestream",
+                      "post"
                     ]
                   },
                   "entityId": {
@@ -21364,7 +21365,8 @@
                                 "video",
                                 "comment",
                                 "channel",
-                                "livestream"
+                                "livestream",
+                                "post"
                               ]
                             },
                             "entityId": {

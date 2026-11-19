@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger-client';
 import { useEffect, useState } from 'react';
 import { PostComment, formatNumber } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/format/videoMeta';
 import Image from 'next/image';
 import ReplyForm from './ReplyForm';
 import {
@@ -38,40 +39,6 @@ interface CommentProps {
   viewerName?: string;
 }
 
-function getTimeAgo(date: Date, isRTL: boolean): string {
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  const intervals = {
-    year: 31536000,
-    month: 2592000,
-    week: 604800,
-    day: 86400,
-    hour: 3600,
-    minute: 60,
-  };
-
-  for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-    const interval = Math.floor(seconds / secondsInUnit);
-    if (interval >= 1) {
-      if (isRTL) {
-        const units: Record<string, string> = {
-          year: interval === 1 ? 'سنة' : interval === 2 ? 'سنتان' : 'سنوات',
-          month: interval === 1 ? 'شهر' : interval === 2 ? 'شهران' : 'أشهر',
-          week: interval === 1 ? 'أسبوع' : interval === 2 ? 'أسبوعان' : 'أسابيع',
-          day: interval === 1 ? 'يوم' : interval === 2 ? 'يومان' : 'أيام',
-          hour: interval === 1 ? 'ساعة' : interval === 2 ? 'ساعتان' : 'ساعات',
-          minute: interval === 1 ? 'دقيقة' : interval === 2 ? 'دقيقتان' : 'دقائق',
-        };
-        return `منذ ${formatNumber('ar', interval)} ${units[unit]}`;
-      } else {
-        return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
-      }
-    }
-  }
-
-  return isRTL ? 'الآن' : 'just now';
-}
 
 export default function Comment({
   comment,
@@ -111,7 +78,8 @@ export default function Comment({
   }, [comment.isPinned]);
 
   const isOwner = userId === comment.userId;
-  const timeAgo = getTimeAgo(new Date(comment.createdAt), isRTL);
+  // The shared relative time, like the post card above it («قبل ساعتين», "2 hours ago")
+  const timeAgo = formatRelativeTime(comment.createdAt, isRTL ? 'ar' : 'en');
 
   const handleLike = async () => {
     if (!userId) return;
@@ -405,7 +373,7 @@ export default function Comment({
               <svg className={cn('w-4 h-4', liked ? 'text-blue-600 dark:text-blue-400 fill-current' : 'text-gray-600 dark:text-gray-400 group-hover:text-blue-600')} fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={liked ? 0 : 2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
               </svg>
-              {likes > 0 && <span className={cn('text-xs', liked ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400')}>{likes}</span>}
+              {likes > 0 && <span className={cn('text-xs', liked ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400')}>{formatNumber(isRTL ? 'ar' : 'en', likes)}</span>}
             </button>
 
             {/* Reply Button */}

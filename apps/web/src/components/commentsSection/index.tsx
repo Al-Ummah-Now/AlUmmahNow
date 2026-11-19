@@ -17,9 +17,9 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
-import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { userDisplayName } from '@/lib/display-name';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
+import { SignInToComment } from '@/components/comments-shared/SignInToComment';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -348,17 +348,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
           </div>
         </div>
       ) : (
-        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center">
-          <p className="text-gray-600 dark:text-gray-400 mb-3">
-            {t.comments.signInToComment}
-          </p>
-          <Button
-            size="sm"
-            onClick={() => window.location.href = loginRoutePath(window.location.pathname, lang)}
-          >
-            {t.comments.signIn}
-          </Button>
-        </div>
+        <SignInToComment />
       )}
 
       {heldNotice && (

@@ -12,6 +12,8 @@ export interface MenuButtonItem {
   /** Renders as menuitemradio with aria-checked when defined. */
   checked?: boolean;
   testId?: string;
+  /** A destructive row (Delete): the theme's error text colour */
+  danger?: boolean;
   onSelect: () => void | Promise<void>;
 }
 
@@ -228,6 +230,8 @@ export function MenuButton({ label, children, items, buttonClassName = '', menuC
               }}
               // Theme menu row (.mi): token hover/focus; no bg-gray-* class (the theme turns those buttons primary)
               className="mi w-full py-2 text-start focus:outline-none"
+              style={item.danger ? { color: 'var(--fanous-color-error-text)' } : undefined}
+              data-danger={item.danger || undefined}
             >
               {item.icon && <span className="flex-shrink-0" aria-hidden="true">{item.icon}</span>}
               <span className="min-w-0">

@@ -1344,6 +1344,7 @@ export interface AppTranslations {
       comment: string;
       channel: string;
       playlist: string;
+      post: string;
       allTypes: string;
     };
     reportReasonEnum: {
@@ -1450,6 +1451,17 @@ export interface AppTranslations {
     comment: string;
     commenting: string;
     signInToComment: string;
+    // Community post comments (#1622)
+    title: string;
+    addPublicComment: string;
+    enterComment: string;
+    tooLong: string;
+    postFailed: string;
+    charsRemaining: string;
+    charsOver: string;
+    postCommentsOff: string;
+    beFirst: string;
+    shareThoughts: string;
     signIn: string;
     noComments: string;
     liveUpdates: string;
@@ -1651,6 +1663,11 @@ export interface AppTranslations {
     searchTimezone: string;
     timezoneLabel: string;
     allowComments: string;
+    /** The post card's menu (#1515) */
+    copyLink: string;
+    linkCopied: string;
+    copyLinkFailed: string;
+    reportPost: string;
     scheduleRequired: string;
     scheduleTooSoon: string;
     scheduleTooFar: string;

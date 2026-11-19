@@ -14,7 +14,7 @@ import {
   listCommunityPosts,
   updateCommunityPost
 } from '@/lib/api/community-posts';
-import { editPostHref } from '@/components/Community/PostManageMenu';
+import { editPostHref } from '@/components/Community/PostActionsMenu';
 import { reportError } from '@/lib/errors/reporter';
 import { deletePostWithUndo } from '@/lib/community/delete-post';
 import { Plus, Search, Filter } from 'lucide-react';
