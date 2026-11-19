@@ -9,6 +9,7 @@ import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import type { ErrorFacets } from '@/lib/api/error-groups-types';
 import { errorsHref, type ErrorListFilters } from './filters';
+import { DateField } from '@/components/DateField';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
 export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorListFilters; facets: ErrorFacets | null; active: boolean }) {
@@ -88,13 +89,13 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
         <label htmlFor="errors-from" className="text-sm text-fg-muted">
           {t('errorsPage.fromFilter')}
         </label>
-        <input id="errors-from" name="from" type="date" defaultValue={filters.from ?? ''} className={fieldClass} />
+        <DateField id="errors-from" name="from" defaultValue={filters.from ?? ''} />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-to" className="text-sm text-fg-muted">
           {t('errorsPage.toFilter')}
         </label>
-        <input id="errors-to" name="to" type="date" defaultValue={filters.to ?? ''} className={fieldClass} />
+        <DateField id="errors-to" name="to" defaultValue={filters.to ?? ''} />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-sort" className="text-sm text-fg-muted">

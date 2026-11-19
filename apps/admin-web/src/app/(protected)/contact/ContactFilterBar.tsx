@@ -7,6 +7,7 @@ import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { CONTACT_STATUSES, CONTACT_TOPICS, SEND_FAILED, type ContactInboxFilters } from './filters';
+import { DateField } from '@/components/DateField';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
 export function ContactFilterBar({ filters, active }: { filters: ContactInboxFilters; active: boolean }) {
@@ -69,13 +70,13 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
         <label htmlFor="contact-from" className="text-sm text-fg-muted">
           {t('contact.fromFilter')}
         </label>
-        <input id="contact-from" name="from" type="date" defaultValue={filters.from ?? ''} className={fieldClass} />
+        <DateField id="contact-from" name="from" defaultValue={filters.from ?? ''} />
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="contact-to" className="text-sm text-fg-muted">
           {t('contact.toFilter')}
         </label>
-        <input id="contact-to" name="to" type="date" defaultValue={filters.to ?? ''} className={fieldClass} />
+        <DateField id="contact-to" name="to" defaultValue={filters.to ?? ''} />
       </div>
       <button
         type="submit"

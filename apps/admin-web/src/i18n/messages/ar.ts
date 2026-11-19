@@ -1653,6 +1653,11 @@ const ar: Messages = {
     fresh: 'حديث',
     none: 'لم يتم إنشاء أي فهارس بعد',
   },
+  dateField: {
+    placeholder: 'سنة/شهر/يوم',
+    choose: 'اختر تاريخًا',
+    invalid: 'اكتب تاريخًا صحيحًا بالشكل سنة/شهر/يوم.',
+  },
   autocomplete: {
     badges: {
       invited: 'مدعو',

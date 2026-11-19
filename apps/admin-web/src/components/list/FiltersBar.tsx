@@ -17,6 +17,7 @@ import type { FilterField } from '@/components/content/FilterForm';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { fieldClass, linkClass } from '@/components/ui';
 import type { ListChanges, ListValues } from '@/lib/list/params';
+import { DateField } from '@/components/DateField';
 
 export type { FilterField };
 
@@ -123,7 +124,7 @@ export function FiltersBar({ label, fields, values, onChange, onText, onClear, r
                   ))}
                 </select>
               ) : (
-                <input id={fieldId} name={field.name} type="date" defaultValue={values[field.name] ?? ''} onChange={(e) => onChange({ [field.name]: e.currentTarget.value || undefined })} className={fieldClass} />
+                <DateField id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={(iso) => onChange({ [field.name]: iso })} />
               )}
             </div>
           );

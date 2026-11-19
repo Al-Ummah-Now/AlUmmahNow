@@ -7,6 +7,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { AdminSuggestKind } from '@al-ummah/shared-types';
 import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
+import { DateField } from '@/components/DateField';
 
 /**
  * search: free text, with live suggestions of `suggest` items as the admin types.
@@ -83,7 +84,7 @@ export function FilterForm({ action, label, fields, values, testId }: Props) {
                 ))}
               </select>
             ) : (
-              <input id={fieldId} name={field.name} type="date" defaultValue={values[field.name] ?? ''} onChange={submit} className={fieldClass} />
+              <DateField id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} submitOnChange />
             )}
           </div>
         );

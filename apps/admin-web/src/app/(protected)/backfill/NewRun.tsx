@@ -11,6 +11,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/compone
 import { useFormats } from './useFormats';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { logger } from '@/lib/logger-client';
+import { DateField } from '@/components/DateField';
 
 
 const KINDS: { kind: BackfillScopeKind; label: MessageKey; hint: MessageKey }[] = [
@@ -92,11 +93,11 @@ export function NewRun() {
           <>
             <div className="flex flex-col gap-1">
               <label htmlFor={ids.from} className="text-sm font-medium text-fg">{t('mediaBackfill.from')}</label>
-              <input id={ids.from} type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={fieldClass} />
+              <DateField id={ids.from} value={from} onChange={(iso) => setFrom(iso ?? '')} />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor={ids.to} className="text-sm font-medium text-fg">{t('mediaBackfill.to')}</label>
-              <input id={ids.to} type="date" value={to} onChange={(e) => setTo(e.target.value)} className={fieldClass} />
+              <DateField id={ids.to} value={to} onChange={(iso) => setTo(iso ?? '')} />
             </div>
           </>
         )}

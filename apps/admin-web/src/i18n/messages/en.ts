@@ -1654,6 +1654,11 @@ const en = {
     fresh: 'Fresh',
     none: 'No indices have been built yet',
   },
+  dateField: {
+    placeholder: 'YYYY-MM-DD',
+    choose: 'Choose a date',
+    invalid: 'Enter a real date as YYYY-MM-DD.',
+  },
   autocomplete: {
     badges: {
       invited: 'Invited',
