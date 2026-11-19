@@ -14,13 +14,13 @@ import { getChannelContentCounts, listChannelContent, type StudioVideo } from '@
 import { logger } from '@/lib/logger-client';
 import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
-import { legacyHref } from '@/lib/studio/nav';
 import { studioVideoTitle } from '@/lib/studio/videos';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 
 /** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
 const RECENT_DAYS = 28;
+import { RecentComments } from './RecentComments';
 
 interface Props {
   locale: string;
@@ -143,8 +143,8 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
   const quickLinks = [
     can(role, 'video.upload') && uploadOn && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
     can(role, 'live.manage') && liveOn && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
-    can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
-    can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
+    can(role, 'post.manage') && { label: text.quick.newPost, href: `/${locale}/studio/${encodeURIComponent(channelId)}/content/posts/new` },
+    can(role, 'channel.edit') && { label: text.quick.customise, href: `/${locale}/studio/${encodeURIComponent(channelId)}/customisation/profile` },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   const heading = (
@@ -186,9 +186,9 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
               {held.items.map((comment) => (
                 <li key={comment.id} className="min-w-0">
                   {/* Each line keeps its own text direction (plaintext) but all of them align to the page's start */}
-                  <p className="line-clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
-                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
+                  <p className="clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground [overflow-wrap:anywhere] [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
+                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block text-xs text-muted-foreground [overflow-wrap:anywhere] hover:text-foreground hover:underline">
                     {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
                     {text.held.on.split('{title}')[0]}
                     <bdi>{comment.targetTitleLocalized?.[locale]?.trim() || comment.targetTitle}</bdi>
@@ -208,7 +208,12 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
     return (
       <div data-testid="studio-dashboard">
         {heading}
-        <div className="grid items-start gap-4 md:grid-cols-2">{heldCard}</div>
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          {heldCard}
+          <Card title={text.recentComments.title} testId="studio-dash-comments">
+            <RecentComments locale={locale} channelId={channelId} />
+          </Card>
+        </div>
       </div>
     );
   }
@@ -224,6 +229,14 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           <p className="mb-4 text-sm text-muted-foreground">{text.welcome.body}</p>
           <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>
         </div>
+        {/* No videos yet, but posts can already have comments */}
+        {can(role, 'comment.moderate') && (
+          <div className="mt-4">
+            <Card title={text.recentComments.title} testId="studio-dash-comments">
+              <RecentComments locale={locale} channelId={channelId} />
+            </Card>
+          </div>
+        )}
       </div>
     );
   }
@@ -358,6 +371,11 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           </Card>
         )}
 
+        {can(role, 'comment.moderate') && (
+          <Card title={text.recentComments.title} testId="studio-dash-comments">
+            <RecentComments locale={locale} channelId={channelId} />
+          </Card>
+        )}
         {links && <Card title={text.quick.title} testId="studio-dash-quick">{links}</Card>}
       </div>
     </div>

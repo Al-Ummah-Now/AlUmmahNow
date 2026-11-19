@@ -11,7 +11,7 @@
  */
 import { formatCompact, formatInteger, formatNumber, pluralCategory, type FormatLocale } from './locale-format';
 
-export type CountNoun = 'view' | 'subscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack';
+export type CountNoun = 'view' | 'subscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack' | 'section';
 
 type ArabicForms = { zero: string; one: string; two: string; few: string; many: string; other: string };
 
@@ -23,6 +23,7 @@ const AR: Record<CountNoun, ArabicForms> = {
   comment: { zero: 'لا توجد تعليقات', one: 'تعليق واحد', two: 'تعليقان', few: 'تعليقات', many: 'تعليقًا', other: 'تعليق' },
   message: { zero: 'لا توجد رسائل', one: 'رسالة واحدة', two: 'رسالتان', few: 'رسائل', many: 'رسالة', other: 'رسالة' },
   audioTrack: { zero: 'لا توجد مسارات صوتية', one: 'مسار صوتي واحد', two: 'مساران صوتيان', few: 'مسارات صوتية', many: 'مسارًا صوتيًا', other: 'مسار صوتي' },
+  section: { zero: 'لا توجد أقسام', one: 'قسم واحد', two: 'قسمان', few: 'أقسام', many: 'قسمًا', other: 'قسم' },
 };
 
 const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
@@ -33,6 +34,7 @@ const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
   comment: { zero: 'No comments', one: 'comment', other: 'comments' },
   message: { zero: 'No messages', one: 'message', other: 'messages' },
   audioTrack: { zero: 'No audio tracks', one: 'audio track', other: 'audio tracks' },
+  section: { zero: 'No sections', one: 'section', other: 'sections' },
 };
 
 /** True when a compact number carries a scale word («٤٨٫٢ ألف», «١٫٢ مليون»): any character that is not a digit, a separator or a direction mark. */

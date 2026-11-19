@@ -13,14 +13,16 @@ import {
 import { useOwnData, type CreatedVideo, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
 
+/** Escapes every regular-expression metacharacter, backslash included. */
+
 /** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
 const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
 
 /**
- * Channel settings: overview (/settings/channel/[id]), the ownership guard on
- * every settings page, edit (/edit), videos (now Studio: /videos 301s to
- * /studio/[id]/content/videos) and tab management (/tabs: visibility, default
- * tab, keyboard reorder).
+ * Channel settings, all in Studio now (the old /settings/channel/[id]/… pages
+ * 301 there, lib/studio/redirects.ts): Settings → General, the access check on
+ * every channel page, Customisation → Profile, videos (Content → Videos) and
+ * Customisation → Layout → Tabs (visibility, default tab, keyboard reorder).
  *
  * Own data (release/builders.ts): an owner (a creator with one channel, a
  * public and a private video) and another creator with a channel of its own,
@@ -94,68 +96,75 @@ test.beforeAll(async ({ browser, creators }) => {
   ];
 });
 
-const SETTINGS_PAGES = ['', '/edit', '/tabs', '/sections', '/playlists', '/community', '/community/new'];
+/** Studio's channel pages that moved from /settings/channel/[id]/…, each with its old path */
+const STUDIO_PAGES: Array<[old: string, studio: string]> = [
+  ['', '/dashboard'],
+  ['/edit', '/customisation/profile'],
+  ['/tabs', '/customisation/layout?view=tabs'],
+  ['/sections', '/customisation/layout?view=sections'],
+  ['/playlists', '/playlists'],
+  ['/community', '/content/posts'],
+  ['/community/new', '/content/posts/new'],
+  ['/team', '/settings/permissions'],
+];
+const studioUrl = (locale: string, id: string, rest: string) => `/${locale}/studio/${id}${rest}`;
 /** Video management moved to Studio (lib/studio/redirects.ts): the old page 301s there */
 const studioVideos = (locale: string, id: string) => `/${locale}/studio/${id}/content/videos`;
 
-test.describe('Settings overview', () => {
+test.describe('Settings → General', () => {
   test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
-  test('CHSET-001 lists every settings area with working links (en)', async ({ page }) => {
+  test('CHSET-001 the owner sees ownership, limits, upload defaults and the danger zone (en)', async ({ page }) => {
     const main = channel();
-    await page.goto(`/en/settings/channel/${main.id}`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Channel Settings' })).toBeVisible();
+    await page.goto(studioUrl('en', main.id, '/settings/general'));
+    await expect(page.getByTestId('studio-frame')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'General' })).toBeVisible();
+    await expect(page.getByTestId('studio-general-ownership')).toContainText('You own this channel.');
+    await expect(page.getByTestId('studio-general-limits')).not.toBeEmpty();
+    await expect(page.getByTestId('studio-general-upload-defaults').getByRole('link', { name: 'Edit upload defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
+    await expect(page.getByTestId('studio-general-danger')).toBeVisible();
+    // Delete asks in the in-app dialog (typed name), never a browser prompt; dismissed here
+    await page.getByTestId('studio-delete-channel').click();
+    const dialog = page.getByTestId('delete-channel-dialog');
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
 
-    const cards: Array<[RegExp, string]> = [
-      [/General Settings/, '/edit'],
-      [/Manage Playlists/i, '/playlists'],
-      [/Manage Channel Tabs/, '/tabs'],
-      [/Manage Sections/, '/sections'],
-      [/Community Posts/, '/community'],
-    ];
-    for (const [name, suffix] of cards) {
-      await expect(page.getByRole('link', { name })).toHaveAttribute('href', `/en/settings/channel/${main.id}${suffix}`);
-    }
-    // Video Management opens Studio, the creator home
-    await expect(page.getByRole('link', { name: /Video Management/ })).toHaveAttribute('href', studioVideos('en', main.id));
-    await expect(page.getByRole('link', { name: 'Back to Channel' })).toHaveAttribute('href', `/en/channels/${main.id}`);
-
-    await clickUntil(page.getByRole('link', { name: /Manage Channel Tabs/ }), async () =>
-      expect(page).toHaveURL(new RegExp(`/settings/channel/${main.id}/tabs$`), { timeout: 5000 })
+    // The rail reaches every moved page; Customisation opens on Profile
+    await expect(page.getByTestId('studio-nav-playlists')).toHaveAttribute('href', studioUrl('en', main.id, '/playlists'));
+    await clickUntil(page.getByTestId('studio-nav-customisation').first(), async () =>
+      expect(page).toHaveURL(new RegExp(`${studioUrl('en', main.id, '/customisation/profile')}$`), { timeout: 5000 })
     );
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Channel Tabs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Profile' })).toBeVisible();
   });
 
-  test('CHSET-002 Arabic overview is RTL with icons at the inline start', async ({ page }) => {
+  test('CHSET-002 Arabic General is RTL and translated, the rail at the right', async ({ page }) => {
     const main = channel();
-    await page.goto(`/ar/settings/channel/${main.id}`);
+    await page.goto(studioUrl('ar', main.id, '/settings/general'));
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إعدادات القناة' })).toBeVisible();
-    const card = page.getByRole('link', { name: /الإعدادات العامة/ });
-    await expect(card).toHaveAttribute('href', `/ar/settings/channel/${main.id}/edit`);
-    // In RTL the icon sits to the right of the card title
-    const icon = card.locator('svg').first();
-    const heading = card.getByRole('heading');
-    expect(await centerX(icon)).toBeGreaterThan(await centerX(heading));
-    await expect(page.getByRole('link', { name: /^العودة (إلى ال|لل)قناة$/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'عام' })).toBeVisible();
+    await expect(page.getByTestId('studio-general-ownership')).toContainText('أنت مالك هذه القناة.');
+    await expect(page.getByTestId('studio-delete-channel')).toHaveText('حذف القناة');
+    const rail = page.getByRole('navigation', { name: 'الاستوديو' }).first();
+    if (await rail.isVisible()) expect(await centerX(rail)).toBeGreaterThan(await centerX(page.getByTestId('studio-settings-general')));
   });
 });
 
-test.describe('Ownership guard', () => {
+test.describe('Access', () => {
   test.describe('anonymous visitor', () => {
     test.use({ storageState: ANONYMOUS_STATE });
 
-    test('CHSET-010 every settings page redirects to the public channel page', async ({ page }) => {
+    test('CHSET-010 every old settings page 301s to Studio, which signs visitors in first', async ({ page }) => {
       const main = channel();
-      for (const suffix of SETTINGS_PAGES) {
-        await page.goto(`/en/settings/channel/${main.id}${suffix}`);
-        await expect(page, `settings${suffix || ' overview'}`).toHaveURL(channelPageUrl('en', main.id, '$'));
-        await expect(page.getByTestId('channel-tabs')).toBeVisible();
+      for (const [old, studio] of [...STUDIO_PAGES, ['/videos', '/content/videos'] as [string, string]]) {
+        const res = await page.request.get(`/en/settings/channel/${main.id}${old}`, { maxRedirects: 0 });
+        expect(res.status(), `settings${old || ' overview'}`).toBe(301);
+        const location = res.headers()['location'] ?? '';
+        expect(location.endsWith(studioUrl('en', main.id, studio)), `settings${old || ' overview'} → ${location}`).toBe(true);
+        // Studio renders no channel page for a signed-out visitor (it sends them to sign in)
+        const page2 = await page.request.get(studioUrl('en', main.id, studio));
+        expect(await page2.text(), `studio${studio}`).not.toContain('data-testid="studio-frame"');
       }
-      // The old videos page is a permanent redirect to Studio, which signs visitors in first
-      const res = await page.request.get(`/en/settings/channel/${main.id}/videos`, { maxRedirects: 0 });
-      expect(res.status()).toBe(301);
-      expect(res.headers()['location']).toMatch(new RegExp(`${studioVideos('en', main.id)}$`));
     });
   });
 
@@ -163,19 +172,22 @@ test.describe('Ownership guard', () => {
     test.use({ storageState: async ({ creators }, use) => use(creators.other.state) });
 
     for (const locale of ['en', 'ar'] as const) {
-      test(`CHSET-011 settings pages of a channel you do not own redirect (${locale})`, async ({ page }) => {
+      test(`CHSET-011 Studio pages of a channel you have no role on are not found (${locale})`, async ({ page }) => {
         const main = channel();
-        for (const suffix of SETTINGS_PAGES) {
-          await page.goto(`/${locale}/settings/channel/${main.id}${suffix}`);
-          await expect(page, `settings${suffix || ' overview'}`).toHaveURL(channelPageUrl(locale, main.id, '$'));
+        // Not found, the same as a channel that doesn't exist: private channels are not revealed
+        for (const [, studio] of STUDIO_PAGES) {
+          const res = await page.goto(studioUrl(locale, main.id, studio));
+          expect(res?.status(), `studio${studio}`).toBe(404);
+          await expect(page.getByTestId('studio-frame')).toHaveCount(0);
         }
-        // No management UI leaked on the public page
-        await expect(page.getByTestId('channel-settings-link')).toHaveCount(0);
-        await expect(page.getByTestId('channel-subscribe-button')).toBeVisible();
         // The old videos page goes to Studio, which is not found for someone else's channel
         const res = await page.goto(`/${locale}/settings/channel/${main.id}/videos`);
         await expect(page).toHaveURL(new RegExp(`${studioVideos(locale, main.id)}$`));
         expect(res?.status()).toBe(404);
+        // No management UI on the public page
+        await page.goto(`/${locale}/channels/${main.id}`);
+        await expect(page.getByTestId('channel-settings-link')).toHaveCount(0);
+        await expect(page.getByTestId('channel-subscribe-button')).toBeVisible();
       });
     }
   });
@@ -189,20 +201,20 @@ test.describe('Edit channel', () => {
     const original = await getChannel(target.id);
     const marker = `وصف اختبار ${Date.now()}`;
     try {
-      await page.goto(`/en/settings/channel/${target.id}/edit`);
-      await expect(page.getByRole('heading', { level: 1, name: 'Edit Channel' })).toBeVisible();
-      await expect(page.getByLabel(/Channel Name/)).toHaveValue(original.nameLocalized?.en || original.name);
+      await page.goto(studioUrl('en', target.id, '/customisation/profile'));
+      await expect(page.getByRole('heading', { level: 2, name: 'Profile' })).toBeVisible();
+      await expect(page.getByLabel('Channel name (English)')).toHaveValue(original.nameLocalized?.en || original.name);
 
-      await clickUntil(page.getByRole('button', { name: 'Arabic', exact: true }), async () =>
-        expect(page.locator('#channel-description-ar')).toBeVisible({ timeout: 3000 })
-      );
-      await fillStable(page.locator('#channel-description-ar'), marker);
-      await expect(page.getByText(`${marker.length}/500`)).toBeVisible();
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      // English and Arabic side by side: no language toggle
+      const arabic = page.locator('#channel-description-ar');
+      await expect(arabic).toHaveAttribute('dir', 'rtl');
+      await fillStable(arabic, marker);
+      await expect(page.locator('#channel-description-ar-count')).toHaveText(`${marker.length}/500`);
+      await page.getByTestId('channel-edit-save').click();
 
-      // Saving lands on the channel page: /@handle once the channel has one, else /channels/{id}
-      const channelUrl = original.handle ? `/en/@${original.handle}` : `/en/channels/${target.id}`;
-      await expect(page).toHaveURL(new RegExp(`${channelUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+      // Saving stays in Studio and says so politely
+      await expect(page.getByTestId('channel-edit-status')).toHaveText('Saved.');
+      await expect(page).toHaveURL(new RegExp(`${studioUrl('en', target.id, '/customisation/profile')}$`));
       await expect.poll(async () => (await getChannel(target.id)).descriptionLocalized?.ar).toBe(marker);
       await page.goto(`/ar/channels/${target.id}`);
       await expect(page.getByTestId('channel-header')).toContainText(marker);
@@ -222,23 +234,20 @@ test.describe('Edit channel', () => {
     }
   });
 
-  test('CHSET-021 requires the English name and Cancel returns to settings (ar)', async ({ page }) => {
+  test('CHSET-021 requires the English name; nothing is saved without it (ar)', async ({ page }) => {
     const target = channel();
     const { name: before } = await getChannel(target.id);
-    await page.goto(`/ar/settings/channel/${target.id}/edit`);
+    await page.goto(studioUrl('ar', target.id, '/customisation/profile'));
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'تعديل القناة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'الملف الشخصي' })).toBeVisible();
     const name = page.locator('#channel-name-en');
     await expectHydrated(name);
+    // The English name stays left to right inside the Arabic page
+    await expect(name).toHaveAttribute('dir', 'ltr');
     await fillStable(name, '');
-    await page.getByRole('button', { name: 'حفظ التغييرات' }).click();
-    // Native validation blocks the submit
-    expect(await name.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
-    await expect(page).toHaveURL(/\/edit$/);
-
-    await page.getByRole('link', { name: 'إلغاء' }).click();
-    // Cancel returns to the channel settings overview
-    await expect(page).toHaveURL(new RegExp(`/ar/settings/channel/${target.id}$`));
+    const save = page.getByTestId('channel-edit-save');
+    await expect(save).toHaveText('حفظ');
+    await expect(save).toBeDisabled();
     // Nothing was saved
     expect((await getChannel(target.id)).name).toBe(before);
   });
@@ -301,7 +310,7 @@ test.describe('Tab management', () => {
   }
 
   async function openTabs(page: Page, locale: 'en' | 'ar' = 'en') {
-    await page.goto(`/${locale}/settings/channel/${target().id}/tabs`);
+    await page.goto(studioUrl(locale, target().id, '/customisation/layout?view=tabs'));
     await expect(page.getByTestId('tab-item').first()).toBeVisible();
   }
 
@@ -310,11 +319,12 @@ test.describe('Tab management', () => {
   test('CHSET-040 shows every tab with the default marked (en)', async ({ page }) => {
     const config = await getTabConfig(target().id);
     await openTabs(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Channel Tabs' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage channel tabs' })).toBeVisible();
+    await expect(page.getByTestId('studio-layout-view-tabs')).toHaveAttribute('aria-current', 'page');
     const ids = await page.getByTestId('tab-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab-id')));
     expect(ids).toEqual([...config.tabs].sort((a, b) => a.position - b.position).map((t) => t.id));
-    await expect(row(page, config.defaultTab)).toContainText('Default Tab');
-    await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    await expect(row(page, config.defaultTab)).toContainText('Default tab');
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     // The default tab cannot be hidden
     await expect(row(page, config.defaultTab).getByRole('button', { name: /^Hide Tab/ })).toBeDisabled();
   });
@@ -326,7 +336,7 @@ test.describe('Tab management', () => {
       const name = (await row(page, hide).locator('span').first().innerText()).trim();
       await row(page, hide).getByRole('button', { name: `Hide Tab ${name}` }).click();
       await expect(row(page, hide)).toContainText('(Hidden)');
-      const save = page.getByRole('button', { name: 'Save Changes' });
+      const save = page.getByRole('button', { name: 'Save changes' });
       await expect(save).toBeEnabled();
       await save.click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
@@ -349,9 +359,9 @@ test.describe('Tab management', () => {
       await openTabs(page);
       const name = (await row(page, next).locator('span').first().innerText()).trim();
       await row(page, next).getByRole('button', { name: `Set as default tab ${name}` }).click();
-      await expect(row(page, next)).toContainText('Default Tab');
-      await expect(row(page, original.defaultTab)).not.toContainText('Default Tab');
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await expect(row(page, next)).toContainText('Default tab');
+      await expect(row(page, original.defaultTab)).not.toContainText('Default tab');
+      await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
       await expect.poll(async () => (await getTabConfig(target().id)).defaultTab).toBe(next);
 
@@ -372,7 +382,7 @@ test.describe('Tab management', () => {
         .poll(async () => (await page.getByTestId('tab-item').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab-id')))).slice(0, 2))
         .toEqual([second, first]);
 
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByText(/^Tab configuration saved/)).toBeVisible();
       await expect.poll(async () => visibleTabIds(await getTabConfig(target().id)).slice(0, 2)).toEqual(
         [second, first].filter((id) => original.tabs.find((t) => t.id === id)?.visible)
@@ -389,7 +399,7 @@ test.describe('Tab management', () => {
     const config = await getTabConfig(target().id);
     await openTabs(page, 'ar');
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إدارة تبويبات القناة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'إدارة تبويبات القناة' })).toBeVisible();
     await expect(row(page, config.defaultTab)).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('button', { name: 'حفظ التغييرات' })).toBeDisabled();
     // System tabs carry Arabic names

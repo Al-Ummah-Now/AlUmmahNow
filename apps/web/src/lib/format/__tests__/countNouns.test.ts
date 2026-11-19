@@ -22,6 +22,7 @@ describe('formatCountNoun', () => {
       comment: ['لا توجد تعليقات', 'تعليق واحد', 'تعليقان', '٣ تعليقات', '١٤ تعليقًا'],
       message: ['لا توجد رسائل', 'رسالة واحدة', 'رسالتان', '٣ رسائل', '١٤ رسالة'],
       audioTrack: ['لا توجد مسارات صوتية', 'مسار صوتي واحد', 'مساران صوتيان', '٣ مسارات صوتية', '١٤ مسارًا صوتيًا'],
+      section: ['لا توجد أقسام', 'قسم واحد', 'قسمان', '٣ أقسام', '١٤ قسمًا'],
     };
     for (const [noun, forms] of Object.entries(table)) {
       expect([0, 1, 2, 3, 14].map((n) => formatCountNoun('ar', n, noun as CountNoun))).toEqual(forms);
@@ -51,6 +52,12 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('ar', 100, 'like')).toBe('١٠٠ إعجاب');
     expect(formatCountNoun('en', 1, 'audioTrack')).toBe('1 audio track');
     expect(formatCountNoun('en', 1, 'comment')).toBe('1 comment');
+  });
+
+  it('channel sections (Studio layout limit): «١٢ قسمًا», "12 sections"', () => {
+    expect(formatCountNoun('ar', 12, 'section')).toBe('١٢ قسمًا');
+    expect(formatCountNoun('ar', 3, 'section')).toBe('٣ أقسام');
+    expect(formatCountNoun('en', 12, 'section')).toBe('12 sections');
   });
 
   it('treats missing, invalid and negative counts as zero', () => {

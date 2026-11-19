@@ -44,7 +44,7 @@ const POST_TYPES: PostTypeCard[] = [
     type: PostType.IMAGE,
     icon: Image,
     label: { en: 'Image', ar: 'صورة' },
-    description: { en: 'Upload up to 10 images', ar: 'ارفع حتى 10 صور' }
+    description: { en: 'Upload up to 10 images', ar: 'ارفع حتى ١٠ صور' }
   },
   {
     type: PostType.POLL,
@@ -176,7 +176,6 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
                   text-xs        /* Mobile: extra small */
                   md:text-sm     /* Desktop: small */
                   text-muted-foreground
-                  line-clamp-2
                 ">
                   {description}
                 </p>

@@ -9,9 +9,9 @@ import { apiFetch, expectHydrated } from './release/web-session';
 const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
 
 /**
- * Community posts: the owner's post manager
- * (/settings/channel/[id]/community and /community/new: text, poll and quiz
- * posts, validation, delete) and how posts render on the channel Community
+ * Community posts: the owner's post manager in Studio
+ * (/studio/[id]/content/posts, /new and /[postId]/edit: text, poll and quiz
+ * posts, validation, edit, delete) and how posts render on the channel Community
  * tab (post card, like/unlike, comments as they exist today).
  *
  * Own data (release/builders.ts): an owner and a viewer, each a creator with
@@ -110,7 +110,7 @@ async function openCommunityTab(page: Page): Promise<Page> {
 }
 
 async function openNewPost(page: Page, locale: 'en' | 'ar' = 'en') {
-  await page.goto(`/${locale}/settings/channel/${channelId()}/community/new`);
+  await page.goto(`/${locale}/studio/${channelId()}/content/posts/new`);
   await expect(page.getByRole('radiogroup')).toBeVisible();
 }
 
@@ -136,9 +136,12 @@ test.describe('Post manager', () => {
   test('COMM-001 lists published posts with search and type filter (en)', async ({ page }) => {
     const marker = tempName('Listed');
     await createTextPost(`${marker} hello community`);
-    await page.goto(`/en/settings/channel/${channelId()}/community`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Posts' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Published/ })).toHaveAttribute('aria-selected', 'true');
+    await page.goto(`/en/studio/${channelId()}/content/posts`);
+    await expect(page.getByTestId('studio-frame')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage Posts' })).toBeVisible();
+    // Status is a link in the URL (?status=); Published is the default
+    await expect(page.getByTestId('studio-posts-status-published')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('studio-posts-status-scheduled')).toHaveAttribute('href', `/en/studio/${channelId()}/content/posts?status=scheduled`);
 
     const card = page.getByTestId('managed-post').filter({ hasText: marker });
     await expect(card).toBeVisible();
@@ -158,7 +161,7 @@ test.describe('Post manager', () => {
     await search.fill('');
     await search.press('Escape');
     await card.getByTestId('post-actions').click();
-    await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
     await page.getByRole('menuitem', { name: 'View' }).click();
     await expect(page).toHaveURL(channelPageUrl('en', channelId(), '\\?tab=community$'));
     await expect(postCard(page, marker)).toBeVisible();
@@ -168,7 +171,7 @@ test.describe('Post manager', () => {
     const marker = tempName('Text');
     try {
       await openNewPost(page);
-      await expect(page.getByRole('heading', { level: 1, name: 'New Post' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'New post' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 
@@ -177,7 +180,7 @@ test.describe('Post manager', () => {
       await expect(page.getByText(/characters remaining/)).toBeVisible();
       await page.getByRole('button', { name: 'Publish' }).click();
 
-      await expect(page).toHaveURL(new RegExp(`/en/settings/channel/${channelId()}/community$`));
+      await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId()}/content/posts$`));
       const managed = page.getByTestId('managed-post').filter({ hasText: marker });
       await expectListed(page, managed);
 
@@ -214,7 +217,7 @@ test.describe('Post manager', () => {
       await page.getByRole('button', { name: 'Add Option' }).click();
       await page.getByPlaceholder('Option 3').fill('Thursday');
       await page.getByRole('button', { name: 'Publish' }).click();
-      await expect(page).toHaveURL(new RegExp(`/settings/channel/${channelId()}/community$`));
+      await expect(page).toHaveURL(new RegExp(`/studio/${channelId()}/content/posts$`));
 
       const community = await openCommunityTab(page);
       const card = postCard(community, marker);
@@ -238,7 +241,7 @@ test.describe('Post manager', () => {
       await options.nth(0).fill('Five');
       await options.nth(1).fill('Three');
       await page.getByRole('button', { name: 'Publish' }).click();
-      await expect(page).toHaveURL(new RegExp(`/settings/channel/${channelId()}/community$`));
+      await expect(page).toHaveURL(new RegExp(`/studio/${channelId()}/content/posts$`));
       const managed = page.getByTestId('managed-post').filter({ hasText: marker });
       await expectListed(page, managed);
       await expect(managed).toContainText('Quiz');
@@ -256,18 +259,43 @@ test.describe('Post manager', () => {
     await selectType(page, 'text');
     await page.getByRole('button', { name: 'Publish' }).click();
     await expect(page.getByText('Content is required')).toBeVisible();
-    await expect(page).toHaveURL(/\/community\/new$/);
+    await expect(page).toHaveURL(/\/content\/posts\/new$/);
+  });
+
+  test('COMM-007 edits a text post in Studio and keeps it published', async ({ page }) => {
+    const marker = tempName('Edit');
+    const { id } = await createTextPost(`${marker} before`);
+    await page.goto(`/en/studio/${channelId()}/content/posts`);
+    const managed = page.getByTestId('managed-post').filter({ hasText: marker });
+    await expectListed(page, managed);
+    await managed.getByTestId('post-actions').click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
+    await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId()}/content/posts/${id}/edit$`));
+    await expect(page.getByRole('heading', { level: 2, name: 'Edit post' })).toBeVisible();
+    // The type can't change after publishing: no type picker
+    await expect(page.getByRole('radiogroup')).toHaveCount(0);
+    const content = page.getByLabel('Content');
+    await expect(content).toHaveValue(`${marker} before`);
+    await fillStable(content, `${marker} after`);
+    await page.getByTestId('post-save').click();
+    await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId()}/content/posts$`));
+    await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).find((p) => p.id === id)?.content).toBe(`${marker} after`);
+  });
+
+  test('COMM-008 an unknown post id is a 404, never an empty editor', async ({ page }) => {
+    const res = await page.goto(`/en/studio/${channelId()}/content/posts/no-such-post/edit`);
+    expect(res?.status()).toBe(404);
   });
 
   test('COMM-006 Arabic post editor is RTL and translated', async ({ page }) => {
     await openNewPost(page, 'ar');
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'منشور جديد' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'منشور جديد' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'اختر نوع المنشور' })).toBeVisible();
     // The way back is a link to the post list, named for it (00bb5d05), not a "رجوع" button
-    const back = page.getByTestId('new-post-back');
-    await expect(back).toHaveAccessibleName('العودة إلى منشورات المجتمع');
-    await expect(back).toHaveAttribute('href', `/ar/settings/channel/${channelId()}/community`);
+    const back = page.getByTestId('studio-back');
+    await expect(back).toHaveAccessibleName('العودة إلى المنشورات');
+    await expect(back).toHaveAttribute('href', `/ar/studio/${channelId()}/content/posts`);
     await selectType(page, 'text');
     await expect(page.getByPlaceholder('شارك أفكارك مع مجتمعك...')).toHaveAttribute('dir', 'rtl');
     await page.getByRole('button', { name: 'نشر' }).click();

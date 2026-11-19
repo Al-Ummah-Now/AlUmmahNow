@@ -128,7 +128,7 @@ test.describe('Channel owner - handle, About and delete', () => {
     await page.goto(`/en/channels/${channel!.id}`);
     const actions = page.getByTestId('channel-owner-actions');
     await expect(actions).toBeVisible();
-    await expect(actions.getByRole('link', { name: 'Customize channel' })).toHaveAttribute('href', `/en/settings/channel/${channel!.id}/edit`);
+    await expect(actions.getByRole('link', { name: 'Customize channel' })).toHaveAttribute('href', `/en/studio/${channel!.id}/customisation/profile`);
     // Studio is the creator home: Manage videos opens its Content list (lib/studio/redirects.ts)
     await expect(actions.getByRole('link', { name: 'Manage videos' })).toHaveAttribute('href', `/en/studio/${channel!.id}/content/videos`);
     await expect(page.getByRole('button', { name: /^Subscribe$/ })).toHaveCount(0);
@@ -150,7 +150,7 @@ test.describe('Channel owner - handle, About and delete', () => {
 
   test('claims a new handle with an availability check and fills the About tab', async ({ page }) => {
     const handle = `e2e-${uniqueSuffix()}`;
-    await page.goto(`/en/settings/channel/${channel!.id}/edit`);
+    await page.goto(`/en/studio/${channel!.id}/customisation/profile`);
 
     const input = page.getByTestId('channel-handle-input');
     await expect(input).toHaveValue(channel!.handle || '');
@@ -171,7 +171,11 @@ test.describe('Channel owner - handle, About and delete', () => {
     await page.getByTestId('channel-contact-input').fill('e2e@example.org');
 
     await page.getByTestId('channel-edit-save').click();
-    await expect(page).toHaveURL(new RegExp(`/en/@${handle}$`), { timeout: 60000 });
+    // Studio stays on Customisation → Profile and says it saved (politely), never navigates away
+    await expect(page.getByTestId('channel-edit-status')).toHaveText('Saved.', { timeout: 60000 });
+    await expect(page).toHaveURL(new RegExp(`/en/studio/${channel!.id}/customisation/profile$`));
+
+    await page.goto(`/en/@${handle}`);
     await expect(page.getByTestId('channel-handle')).toHaveText(`@${handle}`);
 
     await page.goto(`/en/@${handle}?tab=about`);

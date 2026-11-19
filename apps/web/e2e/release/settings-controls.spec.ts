@@ -265,30 +265,24 @@ async function expectNoDeadHelp(page: Page): Promise<void> {
 }
 
 /**
- * The page at `path` has a breadcrumb whose back link goes to `parent`, and clicking it gets there.
- * User settings pages start at the user's Settings (/settings). Channel settings pages belong to the
- * channel: "<channel> › Settings › <page>", Settings being that channel's settings (`channelSettings`),
- * never the user's /settings. `parent: 'channel'` = the channel page, read from the first crumb.
+ * The page at `path` has a back link to `parent`, and clicking it gets there. User settings pages
+ * have a breadcrumb starting at the user's Settings (/settings). Channel settings are in Studio
+ * (`studio`): its sub-pages have a "Back to …" link (studio-back) to their list.
  */
-async function checkBackTo(page: Page, path: string, parent: string, locale: Locale, phone: boolean, channelSettings?: string): Promise<void> {
+async function checkBackTo(page: Page, path: string, parent: string, locale: Locale, phone: boolean, studio = false): Promise<void> {
   const web = target().web;
   await gotoSettled(page, `${web}${path}`);
-  const crumbs = page.locator('[data-testid=settings-breadcrumb],[data-testid=channel-settings-breadcrumb]').first();
-  await expect(crumbs, `${path}: no breadcrumb`).toBeVisible({ timeout: 30000 });
-  const settingsLink = crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ });
-  if (channelSettings) {
-    // On the overview itself, Settings is the current crumb (text), not a link to the page it is on
-    if (path === channelSettings) await expect(crumbs.getByText(/^(Settings|الإعدادات)$/), `${path}: no Settings crumb`).toBeVisible();
-    else await expect(settingsLink, `${path}: Settings should be the channel's settings`).toHaveAttribute('href', channelSettings);
-    await expect(crumbs.locator(`a[href="/${locale}/settings"]`), `${path}: channel settings must not link to the user's Settings`).toHaveCount(0);
-    const first = crumbs.locator('.sb-list a').first();
-    await expect(first, `${path}: breadcrumb does not start at the channel`).not.toHaveAttribute('href', channelSettings);
-    if (parent === 'channel') parent = (await first.getAttribute('href')) as string;
+  let back;
+  if (studio) {
+    // Studio sub-pages (a new post, a new playlist) have a "Back to …" link above them; the rail does the rest
+    back = page.getByTestId('studio-back').first();
   } else {
-    await expect(settingsLink, `${path}: breadcrumb does not start at Settings`).toHaveAttribute('href', `/${locale}/settings`);
+    const crumbs = page.getByTestId('settings-breadcrumb').first();
+    await expect(crumbs, `${path}: no breadcrumb`).toBeVisible({ timeout: 30000 });
+    await expect(crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ }), `${path}: breadcrumb does not start at Settings`).toHaveAttribute('href', `/${locale}/settings`);
+    back = crumbs.getByTestId('settings-back');
   }
-  const back = crumbs.getByTestId('settings-back');
-  await expect(back, `${path}: no back link`).toBeVisible();
+  await expect(back, `${path}: no back link`).toBeVisible({ timeout: 30000 });
   await expect(back).toHaveAttribute('href', parent);
   const geo = await back.evaluate((el) => {
     const r = el.getBoundingClientRect();
@@ -352,7 +346,8 @@ test.describe('Release: settings controls', () => {
     test(`every settings sub-page leads back to its parent (${locale})`, async ({ page, context }) => {
       const user = await signIn(page, `rel-settings-back-${locale}`, locale);
       await answerConsent(context);
-      const channel = `/${locale}/settings/channel/${await ownChannel(user)}`;
+      const channelId = await ownChannel(user);
+      const studio = `/${locale}/studio/${channelId}`;
       const settings = `/${locale}/settings`;
 
       // The cards on /settings
@@ -364,26 +359,27 @@ test.describe('Release: settings controls', () => {
 
       // The user's Settings no longer links to any channel's settings
       expect(hrefs.filter((h) => h.includes('/settings/channel/')), 'channel settings on the user Settings page').toEqual([]);
-      const pages: Array<[string, string, string?]> = [
+      const pages: Array<[string, string, boolean?]> = [
         ...hrefs.map((h): [string, string] => [h, settings]),
-        [channel, 'channel', channel],
-        // Videos moved into Studio (301 to /studio/<id>/content/videos): checked below, no breadcrumb there
-        ...['edit', 'playlists', 'tabs', 'sections', 'community'].map((s): [string, string, string] => [`${channel}/${s}`, channel, channel]),
-        [`${channel}/community/new`, `${channel}/community`, channel],
+        // Channel settings moved into Studio (the old /settings/channel/<id>/… pages 301 there)
+        [`${studio}/content/posts/new`, `${studio}/content/posts`, true],
+        [`${studio}/playlists/new`, `${studio}/playlists`, true],
       ];
       const seen = new Set<string>();
       for (const vp of VIEWPORTS) {
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        for (const [path, parent, channelSettings] of pages) {
+        for (const [path, parent, inStudio] of pages) {
           if (seen.has(`${vp.name}${path}`)) continue;
           seen.add(`${vp.name}${path}`);
-          await checkBackTo(page, path, parent, locale, vp.name === 'phone', channelSettings);
+          await checkBackTo(page, path, parent, locale, vp.name === 'phone', inStudio);
         }
       }
 
-      // The channel's videos are managed in Studio; the old settings page redirects there
-      await gotoSettled(page, `${target().web}${channel}/videos`);
-      await expect(page).toHaveURL(new RegExp(`/${locale}/studio/[^/]+/content/videos`));
+      // The old channel settings pages redirect into Studio
+      await gotoSettled(page, `${target().web}/${locale}/settings/channel/${channelId}/videos`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/studio/${channelId}/content/videos`));
+      await gotoSettled(page, `${target().web}/${locale}/settings/channel/${channelId}`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/studio/${channelId}/dashboard$`));
     });
   }
 });

@@ -40,28 +40,6 @@ export interface StudioNavItem {
   tabs?: readonly StudioTab[];
 }
 
-/**
- * Studio sections whose page is still the channel settings page that came
- * before Studio. Studio links there (and its own URL redirects there), so no
- * Studio link is a dead end; each moves into Studio when it is rebuilt.
- */
-const LEGACY_PAGES: Readonly<Record<string, string>> = {
-  'content/posts': 'community',
-  'content/posts/new': 'community/new',
-  playlists: 'playlists',
-  'customisation/profile': 'edit',
-  'customisation/layout': 'sections',
-  'settings/general': '',
-  'settings/permissions': 'team',
-};
-
-/** The existing page a Studio path opens, or null when Studio has its own. */
-export function legacyHref(locale: string, channelId: string, path: string): string | null {
-  const page = LEGACY_PAGES[path.replace(/^\/+|\/+$/g, '')];
-  if (page === undefined) return null;
-  return `/${locale}/settings/channel/${encodeURIComponent(channelId)}${page ? `/${page}` : ''}`;
-}
-
 export const STUDIO_NAV: readonly StudioNavItem[] = [
   // Its sections: videos (recent uploads, drafts and scheduled, latest) or comments awaiting review.
   // A role with neither has no Dashboard, and Studio opens its first section instead (studioHomePath).
@@ -77,7 +55,7 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
     ],
   },
   { id: 'analytics', requires: ['analytics.view'] },
-  { id: 'comments', requires: ['comment.moderate'], available: false },
+  { id: 'comments', requires: ['comment.moderate'] },
   { id: 'playlists', requires: ['playlist.manage'] },
   {
     id: 'customisation',
@@ -141,7 +119,9 @@ export function checkPath(role: StudioRole, segments: readonly string[], feature
 
   // A role without access still gets "no access"; for a role with access, a feature that is off is unknown
   if (!item.tabs) {
-    if (segments.length > 1) return { status: 'unknown' };
+    // Playlists has its own pages: playlists/new and playlists/{playlistId}
+    const depth = item.id === 'playlists' ? 2 : 1;
+    if (segments.length > depth) return { status: 'unknown' };
     if (!meets(role, item.requires)) return { status: 'forbidden' };
     return featureOn(features, item.feature) ? { status: 'ok' } : { status: 'unknown' };
   }
@@ -160,6 +140,15 @@ export function checkPath(role: StudioRole, segments: readonly string[], feature
     if (segments.length !== 3) return { status: 'unknown' };
     if (!can(role, 'live.manage')) return { status: 'forbidden' };
   }
+
+  // A post's pages: content/posts/new and content/posts/{postId}/edit
+  if (item.id === 'content' && tab.id === 'posts' && segments.length > 2) {
+    const ok = (segments.length === 3 && segments[2] === 'new') || (segments.length === 4 && segments[3] === 'edit');
+    if (!ok) return { status: 'unknown' };
+  }
+
+  // Other tabs have no pages below them (Videos and Live are handled here and below)
+  if (item.id !== 'content' && segments.length > 2) return { status: 'unknown' };
 
   // Per-video pages under the Videos tab have their own capability
   if (item.id === 'content' && tab.id === 'videos' && action) {

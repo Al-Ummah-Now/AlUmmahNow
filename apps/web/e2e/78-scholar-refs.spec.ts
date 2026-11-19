@@ -74,7 +74,7 @@ async function refSlug(locale: 'en' | 'ar', title: string): Promise<string> {
 }
 
 async function openNewPost(page: Page, locale: 'en' | 'ar') {
-  await page.goto(`/${locale}/settings/channel/${channelId()}/community/new`);
+  await page.goto(`/${locale}/studio/${channelId()}/content/posts/new`);
   await expect(page.getByRole('radiogroup')).toBeVisible();
 }
 
@@ -115,7 +115,7 @@ test.describe('Scholar post → www reference', () => {
     await fillStable(page.locator('#article-title'), title);
     await fillStable(page.locator('#article-body'), `## Heading\n\n${body}`);
     await page.getByRole('button', { name: 'Publish' }).click();
-    await expect(page).toHaveURL(new RegExp(`/en/settings/channel/${channelId()}/community$`));
+    await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId()}/content/posts$`));
 
     const slug = await refSlug('en', title);
     const www = await page.context().newPage();
@@ -135,7 +135,7 @@ test.describe('Scholar post → www reference', () => {
     await selectType(page, 'text');
     await fillStable(page.getByLabel('المحتوى'), text);
     await page.getByRole('button', { name: 'نشر' }).click();
-    await expect(page).toHaveURL(new RegExp(`/ar/settings/channel/${channelId()}/community$`));
+    await expect(page).toHaveURL(new RegExp(`/ar/studio/${channelId()}/content/posts$`));
 
     const slug = await refSlug('ar', marker);
     const www = await page.context().newPage();

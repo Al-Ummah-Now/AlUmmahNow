@@ -19,7 +19,7 @@ import {
 import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
- * Playlists: the channel playlist manager (/settings/channel/[id]/playlists:
+ * Playlists: the channel playlist manager (/studio/[id]/playlists:
  * create, rename, change visibility, delete; adding videos is in
  * 56-playlist-tools) and the playlist page
  * (/playlist/[id]: info, Play all, owner reorder/remove).
@@ -48,7 +48,7 @@ const channelId = () => channelsOf(owner).main.id;
 const PLAYLIST_LIST_TIMEOUT = 90_000;
 
 async function openManager(page: Page, locale: 'en' | 'ar' = 'en') {
-  await page.goto(`/${locale}/settings/channel/${channelId()}/playlists`);
+  await page.goto(`/${locale}/studio/${channelId()}/playlists`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   // List finished loading (either rows or the empty state)
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: PLAYLIST_LIST_TIMEOUT });
@@ -141,7 +141,7 @@ test.describe('Playlist manager', () => {
     const title = tempName('Keep');
     const { id } = await createPlaylist(owner, channelId(), { title });
     try {
-      await page.goto(`/en/settings/channel/${channelId()}/playlists/new`);
+      await page.goto(`/en/studio/${channelId()}/playlists/new`);
       await fillStable(nameField(page), '   ');
       await page.getByRole('button', { name: 'Create playlist' }).click();
       // (Next's route announcer is also role=alert)

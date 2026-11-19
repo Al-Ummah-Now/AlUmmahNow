@@ -163,7 +163,7 @@ test.describe('Playlist tools', () => {
   test('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
     const title = `${tag()} Create`;
     const arabic = `قائمة ${title.slice(-6)}`;
-    await page.goto(`/en/settings/channel/${channelId}/playlists`);
+    await page.goto(`/en/studio/${channelId}/playlists`);
     const newLink = page.getByTestId('new-playlist-link');
     await expectHydrated(newLink);
     await newLink.click();
@@ -195,7 +195,7 @@ test.describe('Playlist tools', () => {
 
     // Lands on the new playlist's editor with the videos in that order, saved
     // Not /playlists/new: the form's own URL matches [\w-]+ too, before the redirect
-    const editorUrl = new RegExp(`/en/settings/channel/${channelId}/playlists/(?!new$)([\\w-]+)$`);
+    const editorUrl = new RegExp(`/en/studio/${channelId}/playlists/(?!new$)([\\w-]+)$`);
     await expect(page).toHaveURL(editorUrl, { timeout: 30000 });
     const id = editorUrl.exec(page.url())![1];
     adopt(id);
@@ -212,14 +212,14 @@ test.describe('Playlist tools', () => {
     expect(record.sortMode ?? 'manual').toBe('manual');
     // Each viewer sees their language
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
-    await page.goto(`/ar/settings/channel/${channelId}/playlists/${id}`);
+    await page.goto(`/ar/studio/${channelId}/playlists/${id}`);
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: arabic })).toBeVisible({ timeout: 30000 });
   });
 
   test('PLT-002 editor: add with the picker, reorder by keyboard and buttons, automatic order, remove', async ({ page }) => {
     const id = await data.createPlaylist(owner.user, channelId, { title: `${tag()} Edit` });
-    await page.goto(`/en/settings/channel/${channelId}/playlists/${id}`);
+    await page.goto(`/en/studio/${channelId}/playlists/${id}`);
     await expect(page.getByTestId('playlist-editor')).toBeVisible();
     await expect(page.getByText('This playlist has no videos yet.')).toBeVisible();
 
@@ -362,7 +362,7 @@ test.describe('Playlist tools', () => {
 
   test('PLT-004 Arabic editor is translated and RTL', async ({ page }) => {
     const id = await data.createPlaylist(owner.user, channelId, { title: `${tag()} Ar`, videoIds: [] });
-    await page.goto(`/ar/settings/channel/${channelId}/playlists/${id}`);
+    await page.goto(`/ar/studio/${channelId}/playlists/${id}`);
     await expectRtl(page);
     await expect(page.getByTestId('playlist-editor')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'المرئيات في هذه القائمة' })).toBeVisible();

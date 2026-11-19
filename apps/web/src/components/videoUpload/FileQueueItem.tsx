@@ -157,9 +157,8 @@ export function FileQueueItem({
               <h3 data-testid="batch-file-name" className="
                 text-sm font-medium
                 text-gray-900 dark:text-white
-                truncate
               ">
-                <bdi>{displayTitle || file.metadata.title || file.file.name}</bdi>
+                <bdi className="block truncate">{displayTitle || file.metadata.title || file.file.name}</bdi>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {formatSize(file.bytesTotal)}

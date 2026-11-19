@@ -2,8 +2,8 @@
  * Settings Index Page
  *
  * The signed-in user's own settings (upload defaults, profile, privacy,
- * contact). Channel settings are not part of it: each channel has its own
- * settings, opened from the channel (see ChannelSettingsBreadcrumb).
+ * contact). Channel settings are not part of it: they are in Studio
+ * (/studio/{channelId}/settings).
  */
 
 'use client';
