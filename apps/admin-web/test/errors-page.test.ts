@@ -174,8 +174,8 @@ describe('index out of sync (ownership index drift)', () => {
       'colSkipped', 'colUnreadable', 'colExamples', 'rebuild', 'rebuilding', 'rebuildQueued', 'rebuildRunning', 'rebuildFailed', 'rebuildStatus',
     ] as const;
     for (const key of keys) {
-      const e = (en.errorsPage as Record<string, string>)[key];
-      const a = (ar.errorsPage as Record<string, string>)[key];
+      const e = (en.errorsPage as unknown as Record<string, string>)[key];
+      const a = (ar.errorsPage as unknown as Record<string, string>)[key];
       assert.ok(e && !ARABIC.test(e), `en errorsPage.${key}`);
       assert.ok(a && ARABIC.test(a), `ar errorsPage.${key}`);
     }
