@@ -205,5 +205,25 @@ for (const locale of ['en', 'ar'] as const) {
       await swipe(page, -30);
       await expect(page).toHaveURL(shortPath(locale, first));
     });
+
+    test(`SHORTS-007 on a phone the Short fills the width at 9:16, the ↑/↓ buttons sit in it, and it scrolls away instead of pinning over the comments (${locale})`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await stubFeed(page);
+      await openShort(page, locale, first);
+      const box = (await page.locator('#video-player .video-js').first().boundingBox())!;
+      expect(Math.abs(box.width / box.height - 9 / 16), 'a 9:16 box, no side bars').toBeLessThan(0.02);
+      const nav = (await page.getByTestId('shorts-nav').boundingBox())!;
+      const player = (await page.locator('#video-player').boundingBox())!;
+      expect(nav.x >= player.x && nav.x + nav.width <= player.x + player.width, 'buttons inside the player').toBe(true);
+      // Scrolled to the comments: never pinned, never on top of them (#1513)
+      await page.getByTestId('comments-section').scrollIntoViewIfNeeded();
+      await expect(page.locator('.custom-video-player').first()).not.toHaveAttribute('data-pinned', 'true');
+      const overlap = await page.evaluate(() => {
+        const v = document.querySelector('#video-player .video-js')!.getBoundingClientRect();
+        const c = document.querySelector('[data-testid=comments-section]')!.getBoundingClientRect();
+        return v.bottom > c.top && c.bottom > v.top && v.bottom > 0;
+      });
+      expect(overlap, 'the player is not over the comments').toBe(false);
+    });
   });
 }

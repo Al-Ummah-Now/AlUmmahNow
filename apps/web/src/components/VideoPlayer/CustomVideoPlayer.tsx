@@ -1207,9 +1207,10 @@ export default function CustomVideoPlayer({
    */
   useEffect(() => {
     const frame = frameRef.current;
-    // A Short is never pinned: on a phone it scrolls away with the page, so the details and
-    // comments are never underneath a pinned portrait player (#1513)
-    if (!frame || isShort || !playerUi.miniPlayerAvailable || typeof window.matchMedia !== 'function') {
+    // The Shorts viewer never pins: on a phone a Short there scrolls away with the page, so the
+    // details and comments are never underneath a pinned portrait player (#1513). A video (vertical
+    // or not) on the watch page keeps the pin.
+    if (!frame || frame.closest('.shorts-viewer') || !playerUi.miniPlayerAvailable || typeof window.matchMedia !== 'function') {
       setPinned(false);
       return undefined;
     }
@@ -1242,7 +1243,7 @@ export default function CustomVideoPlayer({
       phone.removeEventListener?.('change', schedule);
       for (const name of ['fullscreenchange', 'webkitfullscreenchange']) document.removeEventListener(name, schedule);
     };
-  }, [playerUi.miniPlayerAvailable, isShort]);
+  }, [playerUi.miniPlayerAvailable]);
 
   /**
    * Theatre on or off keeps the frame's top in view (lib/video/theatre-scroll.ts). It runs in the
