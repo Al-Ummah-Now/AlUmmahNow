@@ -46,6 +46,24 @@ function profileForm(page: Page) {
   return page.locator('form').filter({ has: page.locator('input[name="firstNameEn"], input[name="firstNameAr"]') });
 }
 
+/**
+ * Bodies of the create-profile server action (POST to the page with a
+ * Next-Action header), answered with a 500 so no profile is created.
+ */
+function captureCreateProfile(page: Page): string[] {
+  const bodies: string[] = [];
+  void page.route(/\/profile\/create(\?|$)/, async (route) => {
+    const req = route.request();
+    if (req.method() === 'POST' && req.headers()['next-action']) {
+      bodies.push(req.postData() ?? '');
+      await route.fulfill({ status: 500, body: '' });
+      return;
+    }
+    await route.fallback();
+  });
+  return bodies;
+}
+
 // ProfileGuard sends a user who has a profile away from /profile/create, so the
 // create form is checked as the one user without a profile (a new user)
 test.describe('Profile Pages - signed in without a profile', () => {
@@ -66,17 +84,40 @@ test.describe('Profile Pages - signed in without a profile', () => {
     await expect(page).toHaveURL(/\/en\/profile\/create$/);
   });
 
-  test('profile create validates the required first name', async ({ page }) => {
+  test('profile create asks for a first name in either language when both are empty', async ({ page }) => {
     await page.goto('/en/profile/create');
 
     const firstName = page.locator('input[name="firstNameEn"]');
     await expect(firstName).toBeVisible();
+    // No browser-only "required" on one language: user content needs one language only
+    await expect(firstName).not.toHaveAttribute('required', /.*/);
+    const posts = captureCreateProfile(page);
     await profileForm(page).locator('button[type="submit"]').click();
-
-    // HTML5 validation blocks submission while the required field is empty
-    expect(await firstName.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
+    await expect(profileForm(page).getByText(/required/i).first()).toBeVisible();
+    expect(posts).toHaveLength(0);
     await expect(page).toHaveURL(/\/en\/profile\/create/);
   });
+
+  // 2026-11-19 prod report: "filled everything in Arabic, pressed Save: this field is required"
+  for (const only of ['ar', 'en'] as const) {
+    test(`profile create saves with only the ${only === 'ar' ? 'Arabic' : 'English'} tab filled`, async ({ page }) => {
+      await page.goto(`/${only}/profile/create`);
+      const name = only === 'ar' ? 'محمد' : 'Muhammad';
+      if (only === 'ar') await profileForm(page).getByRole('button', { name: /^(Arabic|العربية)$/ }).click();
+      const field = page.locator(`input[name="firstName${only === 'ar' ? 'Ar' : 'En'}"]`);
+      await expect(field).toBeVisible();
+      await field.fill(name);
+      // Switch tabs and back: the typed name stays (both tabs stay mounted)
+      await profileForm(page).getByRole('button', { name: only === 'ar' ? /^(English|الإنجليزية|الانجليزية)$/ : /^(Arabic|العربية)$/ }).click();
+      await profileForm(page).getByRole('button', { name: only === 'ar' ? /^(Arabic|العربية)$/ : /^(English|الإنجليزية|الانجليزية)$/ }).click();
+      await expect(field).toHaveValue(name);
+      const posts = captureCreateProfile(page);
+      await profileForm(page).locator('button[type="submit"]').click();
+      // The save goes out (stopped before it reaches the API, so nothing is created)
+      await expect.poll(() => posts.length).toBeGreaterThan(0);
+      expect(posts[0]).toContain(name);
+    });
+  }
 
   test('Arabic profile create page renders RTL', async ({ page }) => {
     await page.goto('/ar/profile/create');

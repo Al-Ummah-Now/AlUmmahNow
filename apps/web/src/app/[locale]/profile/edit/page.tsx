@@ -1,5 +1,6 @@
 "use client";
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
+import { englishOf, primaryText, trimPair } from '@/lib/localized-input';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
@@ -42,13 +43,13 @@ const ProfileEditPage = () => {
 
   useEffect(() => {
     if (profile) {
-      setFirstNameEn(profile.firstNameLocalized?.en || profile.firstName || '');
+      setFirstNameEn(englishOf(profile.firstName, profile.firstNameLocalized));
       setFirstNameAr(profile.firstNameLocalized?.ar || '');
-      setLastNameEn(profile.lastNameLocalized?.en || profile.lastName || '');
+      setLastNameEn(englishOf(profile.lastName, profile.lastNameLocalized));
       setLastNameAr(profile.lastNameLocalized?.ar || '');
-      setDisplayNameEn(profile.displayNameLocalized?.en || profile.displayName || '');
+      setDisplayNameEn(englishOf(profile.displayName, profile.displayNameLocalized));
       setDisplayNameAr(profile.displayNameLocalized?.ar || '');
-      setBioEn(profile.bioLocalized?.en || profile.bio || '');
+      setBioEn(englishOf(profile.bio, profile.bioLocalized));
       setBioAr(profile.bioLocalized?.ar || '');
       setTimezone(profile.timezone || getBrowserTimezone());
     }
@@ -63,26 +64,14 @@ const ProfileEditPage = () => {
       const newProfile = {
         id: auth.user!.id,
         email: auth.user!.email,
-        firstName: firstNameEn || '',
-        firstNameLocalized: {
-          en: firstNameEn || '',
-          ar: firstNameAr || ''
-        },
-        lastName: lastNameEn || '',
-        lastNameLocalized: {
-          en: lastNameEn || '',
-          ar: lastNameAr || ''
-        },
-        displayName: displayNameEn || '',
-        displayNameLocalized: {
-          en: displayNameEn || '',
-          ar: displayNameAr || ''
-        },
-        bio: bioEn || '',
-        bioLocalized: {
-          en: bioEn || '',
-          ar: bioAr || ''
-        },
+        firstName: primaryText({ en: firstNameEn, ar: firstNameAr }),
+        firstNameLocalized: trimPair({ en: firstNameEn, ar: firstNameAr }),
+        lastName: primaryText({ en: lastNameEn, ar: lastNameAr }),
+        lastNameLocalized: trimPair({ en: lastNameEn, ar: lastNameAr }),
+        displayName: primaryText({ en: displayNameEn, ar: displayNameAr }),
+        displayNameLocalized: trimPair({ en: displayNameEn, ar: displayNameAr }),
+        bio: primaryText({ en: bioEn, ar: bioAr }),
+        bioLocalized: trimPair({ en: bioEn, ar: bioAr }),
         avatarUrl: profile?.avatarUrl,
         coverUrl: profile?.coverUrl,
         timezone: timezone || getBrowserTimezone(),

@@ -8,6 +8,7 @@
  */
 
 import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { hasAnyLanguage, primaryText, trimPair } from '@/lib/localized-input';
 import { pickerCategories } from '@/lib/api/categories';
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { useChannelTags } from '@/hooks/useChannelTags';
@@ -143,13 +144,14 @@ export function TemplateEditorModal({
 
     try {
       // Validation
-      if (!nameEn.trim()) {
+      // A template is the creator's own text: one language is enough (either tab)
+      if (!hasAnyLanguage({ en: nameEn, ar: nameAr })) {
         setError(isRTL ? 'اسم القالب مطلوب' : 'Template name is required');
         setSaving(false);
         return;
       }
 
-      if (!titleEn.trim()) {
+      if (!hasAnyLanguage({ en: titleEn, ar: titleAr })) {
         setError(isRTL ? 'العنوان مطلوب' : 'Title is required');
         setSaving(false);
         return;
@@ -160,13 +162,13 @@ export function TemplateEditorModal({
 
       // Build request
       const templateData: CreateTemplateRequest | UpdateTemplateRequest = {
-        name: nameEn,
-        nameLocalized: nameAr ? { en: nameEn, ar: nameAr } : undefined,
+        name: primaryText({ en: nameEn, ar: nameAr }),
+        nameLocalized: nameAr.trim() ? trimPair({ en: nameEn, ar: nameAr }) : undefined,
         description: description || undefined,
         isDefault,
         template: {
-          title: titleEn,
-          titleLocalized: titleAr ? { en: titleEn, ar: titleAr } : undefined,
+          title: primaryText({ en: titleEn, ar: titleAr }),
+          titleLocalized: titleAr.trim() ? trimPair({ en: titleEn, ar: titleAr }) : undefined,
           description: descriptionEn || undefined,
           descriptionLocalized: descriptionAr ? { en: descriptionEn, ar: descriptionAr } : undefined,
           tags: tagArray.length > 0 ? tagArray : undefined,
