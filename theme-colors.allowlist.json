@@ -72,7 +72,7 @@
   "apps/web/src/components/SaveButton/index.tsx": 14,
   "apps/web/src/components/SaveToPlaylist/index.tsx": 32,
   "apps/web/src/components/TabManagement/SortableTabItem.tsx": 33,
-  "apps/web/src/components/TabManagement/index.tsx": 26,
+  "apps/web/src/components/TabManagement/index.tsx": 20,
   "apps/web/src/components/UploadButton/index.tsx": 6,
   "apps/web/src/components/UserAvatar/index.tsx": 3,
   "apps/web/src/components/VerifiedBadge/index.tsx": 2,

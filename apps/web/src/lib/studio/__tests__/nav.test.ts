@@ -88,7 +88,8 @@ describe('Live off for the channel (GET /api/me/features)', () => {
 
   it('has no Live tab, and a moderator (Live was its only Content tab) has no Content', () => {
     expect(visibleTabs('owner', content).map((tab) => tab.id)).toEqual(['videos', 'posts']);
-    expect(visibleNav('moderator').map((item) => item.id)).toEqual(['dashboard']);
+    // Comments is the moderator's own page (#771), not a Content tab
+    expect(visibleNav('moderator').map((item) => item.id)).toEqual(['dashboard', 'comments']);
   });
 
   it('answers not found for Live and a Go live page; a role without access is still "no access"', () => {

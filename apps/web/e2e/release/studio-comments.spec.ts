@@ -78,7 +78,8 @@ test.describe('Release: Studio Comments', () => {
         const made = await apiFetch(commenter.user, `/api/community/channels/${channelId}/posts/${postId}/comments`, json({ content: marker }));
         expect(made.status, `POST post comment: ${await made.clone().text()}`).toBeLessThan(300);
 
-        // Inbox lists it
+        // Inbox lists it (cookie choice made, so the fixed consent banner doesn't cover the card footers)
+        await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
         await page.goto(`${studio}/comments`);
         await expect(page.getByTestId('studio-comments')).toHaveAttribute('data-tab', 'inbox');
         const row = await expectComment(page, marker);
