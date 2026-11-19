@@ -3,8 +3,8 @@
  * shared-types UPGRADE_MODES), decided ONLY by a payment provider being
  * enabled and the admin's "Allow tier requests":
  * - request (no provider, requests allowed): the request form;
- * - closed (no provider, requests off): the tiers, the current one lit, no request, no pay and no
- *   word about it (an off feature leaves no trace); the server refuses a request (403);
+ * - closed (no provider, requests off): /upgrade is an off feature: the site's 404, no header pill,
+ *   404 feature_off from the API; Settings › Tier still shows the user's tier, with no link to /upgrade;
  * - pay (a provider on, whatever the setting): no request form; the server refuses a request.
  * Both inputs are written to the stack's database (the admin switch has its own
  * admin spec) and put back however the test ends. Changes the mode for the
@@ -52,19 +52,25 @@ test.describe('Release: the Upgrade page modes', () => {
       await expect(page.getByTestId('tier-creator-request')).toBeEnabled();
       await expect(page.getByTestId('upgrade-beta-notice')).toBeVisible();
 
-      // closed
+      // closed: /upgrade is an off feature (owner decision 2026-11-19): the site's 404, no entry point, the server agrees
       await setRequests(false);
-      await open('en', 'closed');
-      await expect(page.getByTestId('upgrade-unavailable')).toHaveCount(0);
-      await expect(page.getByTestId('upgrade-page')).not.toContainText(/not available|aren't available/i);
-      await expect(page.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
-      await expect(page.getByTestId('tier-creator-request')).toHaveCount(0);
-      await open('ar', 'closed');
-      await expect(page.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
-      await expect(page.getByTestId('upgrade-page')).not.toContainText('غير متاحة');
+      for (const locale of ['en', 'ar'] as const) {
+        await gotoSettled(page, `${target().web}/${locale}/upgrade`);
+        await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
+        await expect(page.getByTestId('upgrade-page')).toHaveCount(0);
+        await expect(page.getByTestId('header-request-access')).toHaveCount(0);
+      }
+      const overview = await apiFetch(user, '/api/tiers/upgrade');
+      expect(overview.status).toBe(404);
+      expect(((await overview.json()) as { code: string }).code).toBe('feature_off');
       const closed = await ask();
-      expect(closed.status).toBe(403);
-      expect(((await closed.json()) as { code: string }).code).toBe('tier_requests_off');
+      expect(closed.status).toBe(404);
+      expect(((await closed.json()) as { code: string }).code).toBe('feature_off');
+      // The user's tier still shows in Settings › Tier, with no way to /upgrade
+      await gotoSettled(page, `${target().web}/en/settings/tier`);
+      await expect(page.getByTestId('settings-tier-name')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId('settings-tier-see-all')).toHaveCount(0);
+      await expect(page.getByTestId('tier-request-history')).toHaveCount(0);
 
       // pay: a provider on decides, whatever the setting (requests allowed here)
       await setRequests(true);
