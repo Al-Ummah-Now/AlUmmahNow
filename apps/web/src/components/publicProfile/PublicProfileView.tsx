@@ -5,12 +5,12 @@
  *
  * Server-rendered with the first page of every list the owner shows; "Show more" loads further
  * pages through the server actions. One component for both directions: logical insets and `dir`
- * (handles and the profile URL stay LTR). Colours come from the theme tokens only.
+ * (channel handles stay LTR; a person is shown by name, never by @handle). Colours come from the theme tokens only.
  */
 
 import React, { useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { publicProfileTranslations, type Channel, type Playlist } from '@al-ummah/shared-types';
+import { formatDate, formatInteger, publicProfileTranslations, type Channel, type Playlist } from '@al-ummah/shared-types';
 import { PlaylistCard } from '@/components/PlaylistCard';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { channelPath, formatHandle } from '@/lib/channel-url';
@@ -33,7 +33,7 @@ interface PublicProfileViewProps {
 function joinedLabel(template: string, date: string, locale: string): string {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return '';
-  return template.replace('{date}', new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { year: 'numeric', month: 'long' }).format(parsed));
+  return template.replace('{date}', formatDate(locale, parsed, { year: 'numeric', month: 'long' }));
 }
 
 /** First letter or digit of the name (whole code point), skipping direction marks, combining marks and punctuation */
@@ -42,9 +42,9 @@ export function nameInitial(name: string): string {
   return letter ? letter.toLocaleUpperCase() : '';
 }
 
-function Avatar({ src, alt, size }: { src?: string | null; alt: string; size: 'lg' | 'sm' }) {
+function Avatar({ src, alt, name, size }: { src?: string | null; alt: string; name: string; size: 'lg' | 'sm' }) {
   const box = size === 'lg' ? 'h-24 w-24 md:h-32 md:w-32 text-4xl' : 'h-16 w-16 text-xl';
-  const initial = nameInitial(alt);
+  const initial = nameInitial(name);
   // A picture that fails to load falls back to the initial (never the alt text spilling out)
   const [failed, setFailed] = useState(false);
   return (
@@ -64,7 +64,7 @@ function Section({ id, title, count, locale, children }: { id: string; title: st
     <section aria-labelledby={`${id}-title`} data-testid={`profile-section-${id}`} className="pp-section rounded-xl border border-[var(--fanous-color-divider)] bg-[var(--fanous-color-surface)] p-4 md:p-6">
       <h2 id={`${id}-title`} className="mb-4 flex items-baseline gap-2 text-lg font-semibold text-[var(--fanous-color-text-primary)]">
         <span>{title}</span>
-        {typeof count === 'number' && count > 0 && <span className="text-sm font-normal text-[var(--fanous-color-text-muted)]">{count.toLocaleString(locale === 'ar' ? 'ar' : 'en')}</span>}
+        {typeof count === 'number' && count > 0 && <span className="text-sm font-normal text-[var(--fanous-color-text-muted)]">{formatInteger(locale, count)}</span>}
       </h2>
       {children}
     </section>
@@ -80,7 +80,7 @@ function ChannelTile({ channel, locale }: { channel: PublicProfileChannel | Chan
       data-channel-id={channel.id}
       className="pp-channel group flex min-w-0 flex-col items-center gap-2 rounded-lg p-2 text-center hover:bg-[var(--fanous-color-surface-raised)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
     >
-      <Avatar src={channel.avatarUrl} alt="" size="sm" />
+      <Avatar src={channel.avatarUrl} alt="" name={name} size="sm" />
       <span className="flex max-w-full items-center gap-1">
         <span className="truncate text-sm font-medium text-[var(--fanous-color-text-primary)] group-hover:underline">{name}</span>
         {channel.isVerified && <VerifiedBadge size="sm" />}
@@ -158,16 +158,13 @@ export function PublicProfileView({ profile, locale, initial, isOwner }: PublicP
       <div className="mx-auto max-w-5xl px-4 pb-12">
         <header className="pp-header relative -mt-12 flex flex-col gap-4 md:-mt-16 md:flex-row md:items-end" data-testid="public-profile-header">
           <span className="rounded-full border-4 border-[var(--fanous-color-background)] self-start">
-            <Avatar src={profile.avatarUrl} alt={t.avatarAlt.replace('{name}', name)} size="lg" />
+            <Avatar src={profile.avatarUrl} alt={t.avatarAlt.replace('{name}', name)} name={name} size="lg" />
           </span>
           <div className="min-w-0 flex-1 md:pb-2">
             <h1 className="break-words text-2xl font-bold text-[var(--fanous-color-text-primary)] md:text-3xl" data-testid="public-profile-name">{name}</h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--fanous-color-text-secondary)]">
-              <span dir="ltr" data-testid="public-profile-handle">@{profile.handle}</span>
-              {joinedLabel(t.joined, profile.dateCreated, locale) && (
-                <span>{joinedLabel(t.joined, profile.dateCreated, locale)}</span>
-              )}
-            </p>
+            {joinedLabel(t.joined, profile.dateCreated, locale) && (
+              <p className="mt-1 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="public-profile-joined">{joinedLabel(t.joined, profile.dateCreated, locale)}</p>
+            )}
           </div>
         </header>
 

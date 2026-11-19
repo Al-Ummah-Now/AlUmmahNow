@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PUBLIC_PROFILE_AR, PUBLIC_PROFILE_EN } from '@al-ummah/shared-types';
+import { PUBLIC_PROFILE_AR, PUBLIC_PROFILE_EN, fillTemplate } from '@al-ummah/shared-types';
 import { EN_TRANSLATIONS } from '@/lib/i18n/translations/en';
 
 jest.mock('@/hooks/useLanguage', () => ({
@@ -56,7 +56,9 @@ describe('PublicProfileView', () => {
       />,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Sara' })).toBeInTheDocument();
-    expect(screen.getByTestId('public-profile-handle')).toHaveTextContent('@Sara');
+    // A person is shown by name only: no @handle on the page (owner rule; handles are for channels)
+    expect(screen.queryByTestId('public-profile-handle')).not.toBeInTheDocument();
+    expect(screen.getByTestId('public-profile-header')).not.toHaveTextContent('@');
     expect(screen.getByText('Joined January 2026')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Channels/ })).toBeInTheDocument();
     expect(screen.getAllByTestId('profile-channel').map((el) => el.getAttribute('href'))).toEqual(['/en/@noor', '/en/@a']);
@@ -82,11 +84,16 @@ describe('PublicProfileView', () => {
     expect(screen.getByRole('link', { name: PUBLIC_PROFILE_EN.page.editSettings })).toHaveAttribute('href', '/en/settings/public-profile');
   });
 
-  it('Arabic: right to left, localized name, handle stays LTR', () => {
-    render(<PublicProfileView profile={profile} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [] }} />);
+  it('Arabic: right to left, localized name, ٠–٩ digits, initial from the name', () => {
+    render(<PublicProfileView profile={{ ...profile, avatarUrl: null }} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [] }} />);
     expect(screen.getByTestId('public-profile')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByRole('heading', { level: 1, name: 'سارة' })).toBeInTheDocument();
-    expect(screen.getByTestId('public-profile-handle')).toHaveAttribute('dir', 'ltr');
+    // The joined date and the section counts use Eastern Arabic digits
+    expect(screen.getByTestId('public-profile-joined')).toHaveTextContent('٢٠٢٦');
+    expect(screen.getByTestId('public-profile-joined').textContent).not.toMatch(/[0-9]/);
+    expect(screen.getByTestId('profile-section-channels').querySelector('h2')?.textContent).not.toMatch(/[0-9]/);
+    // The avatar letter is the name's first letter, not the alt sentence's («صورة …»)
+    expect(screen.getByRole('img', { name: PUBLIC_PROFILE_AR.page.avatarAlt.replace('{name}', 'سارة') })).toHaveTextContent('س');
     expect(screen.getByText(PUBLIC_PROFILE_AR.page.emptySubscriptions)).toBeInTheDocument();
   });
 
@@ -162,7 +169,7 @@ describe('PublicProfileSettings', () => {
     await settled();
     expect(screen.getByTestId('public-profile-handle-status')).toHaveTextContent(PUBLIC_PROFILE_EN.settings.handleCurrent);
     fireEvent.change(screen.getByTestId('public-profile-handle-input'), { target: { value: 'ab' } });
-    expect(screen.getByTestId('public-profile-handle-status')).toHaveTextContent(PUBLIC_PROFILE_EN.settings.handleTooShort);
+    expect(screen.getByTestId('public-profile-handle-status')).toHaveTextContent(fillTemplate('en', PUBLIC_PROFILE_EN.settings.handleTooShort));
     expect(mockApi.checkUserHandleAvailability).not.toHaveBeenCalled();
     fireEvent.change(screen.getByTestId('public-profile-handle-input'), { target: { value: 'taken' } });
     await act(async () => {
@@ -181,7 +188,10 @@ describe('PublicProfileSettings', () => {
     expect(screen.getByTestId('public-profile-settings')).toHaveAttribute('dir', 'rtl');
     // The profile URL stays left to right inside the Arabic help text
     expect(screen.getByTestId('public-profile-url')).toHaveAttribute('dir', 'ltr');
-    expect(screen.getByTestId('public-profile-url')).toHaveTextContent('/ar/u/@mine');
+    expect(screen.getByTestId('public-profile-url')).toHaveTextContent(/^[^/]+\/ar\/u\/@mine$/);
+    expect(screen.getByTestId('public-profile-url').textContent).not.toMatch(/^https?:/);
+    // The help sentence's own numbers are ٠–٩
+    expect(screen.getByTestId('public-profile-settings').textContent).toContain('من ٣ إلى ٣٠');
     fireEvent.click(screen.getByRole('button', { name: PUBLIC_PROFILE_AR.settings.removeHandle }));
     fireEvent.click(screen.getByTestId('public-profile-save'));
     await settled();
