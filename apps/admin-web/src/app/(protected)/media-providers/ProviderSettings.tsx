@@ -24,6 +24,10 @@ import {
 } from '@/lib/media/providers-form';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
+import { ItemName } from '@/components/audit/Named';
+import { itemView } from '@/components/audit/audit-model';
+import { useNames } from '@/components/audit/useNames';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import { fillNodes } from '@/components/audit/fill';
 
 type HealthKey = Exclude<keyof ProviderHealthSettings, 'enabled'>;
@@ -121,6 +125,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
   const [draft, setDraft] = useState<OverrideDraft>(() => draftOf(null));
   const [newChannel, setNewChannel] = useState('');
   const [channelError, setChannelError] = useState<string | null>(null);
+  // A new key empties the picker once its channel is added
+  const [pickerKey, setPickerKey] = useState(0);
 
   const next = settingsOf(form, saved);
   const problems = next ? settingsProblems(next) : [];
@@ -207,6 +213,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
     if (form.channels[id]) return setChannelError(t('mediaProviders.channelDuplicate'));
     setChannelError(null);
     setNewChannel('');
+    setPickerKey((k) => k + 1);
     setEditing(id);
     setDraft({ ...draftOf(null), order: [...form.order] });
   }
@@ -231,6 +238,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
   const radio = checkClass;
   const listText = (list: MediaProviderId[] | undefined) => (list?.length ? list.map((p) => name(p)).join(' → ') : t('mediaProviders.followsSettings'));
   const channelIds = Object.keys(form.channels).sort();
+  // Channel names for the overrides (and the one being edited): names, never ids
+  const channelNames = useNames([...channelIds, ...(editing && !form.channels[editing] ? [editing] : [])].map((id) => ({ kind: 'channel', id })));
 
   return (
     <section className={`${cardClass} mb-6`} aria-labelledby={labelledBy} data-testid="providers-settings">
@@ -411,7 +420,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                   <li key={id} className="flex flex-wrap items-start justify-between gap-3 p-3" data-testid={`providers-channel-${id}`}>
                     <dl className="grid min-w-0 flex-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
                       <dt className="text-fg-muted">{t('mediaProviders.colChannel')}</dt>
-                      <dd className="font-mono text-fg break-all">{id}</dd>
+                      {/* The channel by name (its page linked), never its id */}
+                      <dd className="text-fg break-words"><ItemName item={itemView('channel', id, channelNames, t)} /></dd>
                       <dt className="text-fg-muted">{t('mediaProviders.colIngest')}</dt>
                       <dd className="text-fg">{listText(o.ingest)}</dd>
                       <dt className="text-fg-muted">{t('mediaProviders.colPlayback')}</dt>
@@ -428,7 +438,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                     </dl>
                     <span className="flex gap-2">
                       <button type="button" className={`${secondaryButtonClass} !py-2 !px-3 text-sm`} onClick={() => startEdit(id)} disabled={!!editing} data-testid={`providers-channel-${id}-edit`}>{t('mediaProviders.editChannel')}</button>
-                      <button type="button" className={`${secondaryButtonClass} !py-2 !px-3 text-sm`} onClick={() => removeChannel(id)} aria-label={t('mediaProviders.removeChannelLabel', { channel: id })} data-testid={`providers-channel-${id}-remove`}>{t('mediaProviders.removeChannel')}</button>
+                      <button type="button" className={`${secondaryButtonClass} !py-2 !px-3 text-sm`} onClick={() => removeChannel(id)} aria-label={t('mediaProviders.removeChannelLabel', { channel: itemView('channel', id, channelNames, t).label })} data-testid={`providers-channel-${id}-remove`}>{t('mediaProviders.removeChannel')}</button>
                     </span>
                   </li>
                 );
@@ -438,7 +448,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
           {editing && (
             <div className="rounded-lg border border-accent bg-surface-2 p-4 mb-3" data-testid="providers-channel-editor">
               <p className="mb-3 text-sm text-fg">
-                {t('mediaProviders.colChannel')}: <span className="font-mono">{editing}</span>
+                {t('mediaProviders.colChannel')}: <ItemName item={itemView('channel', editing, channelNames, t)} testId="providers-channel-editing" />
               </p>
               <OverrideEditor
                 idPrefix={`${ids}-ch`}
@@ -454,27 +464,22 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
           )}
           {!editing && (
             <div className="flex flex-wrap items-end gap-2">
-              <div className="flex flex-col gap-1">
-                <label htmlFor={`${ids}-new-channel`} className="text-sm font-medium text-fg">{t('mediaProviders.channelId')}</label>
-                <input
-                  id={`${ids}-new-channel`}
-                  type="text"
-                  value={newChannel}
-                  onChange={(e) => setNewChannel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addChannel();
-                    }
-                  }}
-                  aria-invalid={!!channelError || undefined}
-                  aria-describedby={`${ids}-new-channel-hint`}
-                  className={`${fieldClass} w-full sm:w-72 font-mono`}
-                  data-testid="providers-channel-id"
-                />
-              </div>
+              {/* A channel is chosen by searching its name (initial results, avatars), never by typing its id */}
+              <Autocomplete
+                key={pickerKey}
+                kind="channel"
+                mode="pick"
+                label={t('mediaProviders.channelId')}
+                initialResults
+                hint={channelError ?? t('mediaProviders.channelIdHint')}
+                onChange={(id) => {
+                  setNewChannel(id);
+                  if (channelError) setChannelError(null);
+                }}
+                className="w-full sm:w-80"
+                testId="providers-channel-id"
+              />
               <button type="button" className={`${secondaryButtonClass} !py-2 !px-4 text-sm`} onClick={addChannel} data-testid="providers-channel-add">{t('mediaProviders.addChannel')}</button>
-              <p id={`${ids}-new-channel-hint`} className={`basis-full text-sm ${channelError ? 'text-danger-fg' : 'text-fg-muted'}`}>{channelError ?? t('mediaProviders.channelIdHint')}</p>
             </div>
           )}
         </div>

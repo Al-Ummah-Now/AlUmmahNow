@@ -21,6 +21,7 @@ type Settings = { providers: Record<string, { enabled: boolean }>; ingest: strin
 
 let original: Settings | null = null;
 let channelId = '';
+let channelName = '';
 let videoId = '';
 
 async function videosApi(path: string, init: RequestInit = {}) {
@@ -52,7 +53,8 @@ test.describe('video providers', () => {
       expect((await adminApi('/api/media/providers', { method: 'PUT', token: superToken(), body: JSON.stringify({ settings: start }) })).status, 'start settings').toBe(200);
     }
     const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
-    const channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: `E2E providers ${tag}`, description: '[e2e-admin] providers', isMain: false }) });
+    channelName = `E2E providers ${tag}`;
+    const channel = await videosApi('/api/channels', { method: 'POST', body: JSON.stringify({ name: channelName, description: '[e2e-admin] providers', isMain: false }) });
     channelId = String((channel.body.result as { channel?: { id?: string } } | undefined)?.channel?.id ?? '');
     expect(channelId, `channel create -> ${channel.status}`).toBeTruthy();
     const video = await videosApi('/api/videos/upload/initiate', {
@@ -114,7 +116,12 @@ test.describe('video providers', () => {
     await expect(page.getByTestId('providers-updated')).not.toHaveText(/Never changed/);
 
     // A channel override: this run's channel uploads to R2 only
-    await page.getByTestId('providers-channel-id').fill(channelId);
+    // The channel is picked by name (#1609: no raw id inputs), never typed as an id
+    const picker = page.getByTestId('providers-channel-id-input');
+    await picker.click();
+    await picker.fill(channelName);
+    await page.getByTestId('providers-channel-id-option').filter({ hasText: channelName }).first().click();
+    await expect(page.getByTestId('providers-channel-id-chip')).toHaveAttribute('data-id', channelId);
     await page.getByTestId('providers-channel-add').click();
     const editor = page.getByTestId('providers-channel-editor');
     await expect(editor).toBeVisible();
@@ -124,6 +131,9 @@ test.describe('video providers', () => {
     await page.getByTestId('providers-channel-override-note').fill('[e2e-admin] R2 only');
     await page.getByTestId('providers-channel-done').click();
     await expect(page.getByTestId(`providers-channel-${channelId}`)).toBeVisible();
+    // The override names its channel, never shows the id
+    await expect(page.getByTestId(`providers-channel-${channelId}`)).toContainText(channelName);
+    await expect(page.getByTestId(`providers-channel-${channelId}`)).not.toContainText(channelId);
     await save.click();
     await expect(page.getByTestId('providers-saved')).toHaveText(/saved/i);
     await expect.poll(async () => (await providerSettings()).channels[channelId]?.ingest).toEqual(['r2']);

@@ -12,6 +12,7 @@ import { useFormats } from './useFormats';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { logger } from '@/lib/logger-client';
 import { DateField } from '@/components/DateField';
+import type { AdminSuggestion } from '@al-ummah/shared-types';
 
 
 const KINDS: { kind: BackfillScopeKind; label: MessageKey; hint: MessageKey }[] = [
@@ -29,7 +30,9 @@ export function NewRun() {
   const [channelId, setChannelId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [videoIds, setVideoIds] = useState('');
+  // Videos chosen one by one through the search picker (#1609: never pasted ids), with their title and picture
+  const [videos, setVideos] = useState<AdminSuggestion[]>([]);
+  const [videoPicker, setVideoPicker] = useState(0);
   const [onlyMissing, setOnlyMissing] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,12 +40,16 @@ export function NewRun() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (kind === 'videos' && videos.length === 0) {
+      setError(t('mediaBackfill.videosPickFirst'));
+      return;
+    }
     const draft: BackfillScope = {
       kind,
       onlyMissing,
       ...(kind === 'channel' ? { channelId: channelId.trim() } : {}),
       ...(kind === 'dates' ? { ...(from ? { from } : {}), ...(to ? { to } : {}) } : {}),
-      ...(kind === 'videos' ? { videoIds: videoIds.split(/[\s,]+/).filter(Boolean) } : {}),
+      ...(kind === 'videos' ? { videoIds: videos.map((v) => v.id) } : {}),
     };
     const parsed = parseBackfillScope(draft);
     if (!parsed.ok) {
@@ -102,10 +109,42 @@ export function NewRun() {
           </>
         )}
         {kind === 'videos' && (
-          <div className="flex flex-col gap-1 sm:col-span-2">
-            <label htmlFor={ids.videos} className="text-sm font-medium text-fg">{t('mediaBackfill.videoIds')}</label>
-            <textarea id={ids.videos} rows={4} value={videoIds} onChange={(e) => setVideoIds(e.target.value)} className={`${fieldClass} font-mono text-sm`} dir="ltr" required data-testid="backfill-video-ids" />
-            <p className="text-xs text-fg-muted">{t('mediaBackfill.videoIdsHint', { max: f.integer(BACKFILL_LIMITS.maxVideoIds) })}</p>
+          <div className="flex flex-col gap-2 sm:col-span-2" data-testid="backfill-videos">
+            {videos.length < BACKFILL_LIMITS.maxVideoIds && (
+              <Autocomplete
+                key={videoPicker}
+                kind="video"
+                mode="pick"
+                label={t('mediaBackfill.videoIds')}
+                initialResults
+                hint={t('mediaBackfill.videoIdsHint', { max: f.integer(BACKFILL_LIMITS.maxVideoIds) })}
+                onChange={(id, item) => {
+                  if (!id || !item) return;
+                  setVideos((list) => (list.some((v) => v.id === id) ? list : [...list, item]));
+                  // An empty picker for the next one
+                  setVideoPicker((k) => k + 1);
+                }}
+                testId="backfill-video-pick"
+              />
+            )}
+            {videos.length > 0 && (
+              <ul className="flex flex-wrap gap-2" aria-label={t('mediaBackfill.videoIdsChosen', { count: f.integer(videos.length) })} data-testid="backfill-video-ids">
+                {videos.map((v) => (
+                  <li key={v.id} className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-border bg-surface-2 py-1 ps-1 pe-2" data-id={v.id}>
+                    {v.imageUrl ? <img src={v.imageUrl} alt="" className="h-7 w-12 shrink-0 rounded-full object-cover" /> : null}
+                    <bdi className="min-w-0 truncate text-sm text-fg">{v.label}</bdi>
+                    <button
+                      type="button"
+                      className="grid size-7 shrink-0 place-items-center rounded-full text-fg-muted hover:bg-surface-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                      aria-label={t('mediaBackfill.videoRemove', { title: v.label })}
+                      onClick={() => setVideos((list) => list.filter((x) => x.id !== v.id))}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>
