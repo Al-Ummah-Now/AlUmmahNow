@@ -310,7 +310,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             </Button>
             <ComposerAvatar src={postChannel?.avatarUrl} name={postChannelName} as="channel" testId="post-identity" />
             <h1 className="text-lg md:text-2xl font-bold">
-              {isRTL ? 'منشور جديد' : 'New Post'}
+              {isRTL ? 'منشور جديد' : 'New post'}
             </h1>
           </div>
 

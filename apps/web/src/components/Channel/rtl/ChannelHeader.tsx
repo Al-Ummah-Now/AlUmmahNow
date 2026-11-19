@@ -150,7 +150,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
                 <>
-                  <span>•</span>
+                  {subscriberCount !== undefined && <span aria-hidden="true">•</span>}
                   <span>
                     {formatVideoCount(channel.videosCount, locale)}
                   </span>

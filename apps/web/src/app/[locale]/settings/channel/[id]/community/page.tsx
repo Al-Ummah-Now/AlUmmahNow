@@ -145,26 +145,24 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="
-        border-b
-        bg-card
-        sticky top-0
-        z-10
-      ">
+      <div className="container mx-auto px-4 pt-3 md:px-6 md:pt-4">
+        <ChannelSettingsBreadcrumb
+          channelId={id}
+          channelName={channelName}
+          locale={locale}
+          currentPage="community"
+        />
+      </div>
+      {/* A flat bar on the page's own background, like the composer's (owner review): the
+          breadcrumb sits above it, so the theme's tab-bar band (sticky + nav) never paints it */}
+      <div className="sticky top-0 z-10 bg-[var(--fanous-color-background)]" data-testid="community-posts-bar">
         <div className="
           container
           mx-auto
+          border-b border-[var(--fanous-color-divider)]
           px-4 py-3
           md:px-6 md:py-4
         ">
-          <ChannelSettingsBreadcrumb
-            channelId={id}
-            channelName={channelName}
-            locale={locale}
-            currentPage="community"
-            className="mb-4"
-          />
-
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-lg md:text-2xl font-bold">
               {t.community.managePosts}

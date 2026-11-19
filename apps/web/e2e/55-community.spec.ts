@@ -153,7 +153,7 @@ test.describe('Post manager', () => {
     const marker = tempName('Listed');
     await createTextPost(`${marker} hello community`);
     await page.goto(`/en/settings/channel/${channelId()}/community`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Manage Posts' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Manage posts' })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Published/ })).toHaveAttribute('aria-selected', 'true');
 
     const card = page.getByTestId('managed-post').filter({ hasText: marker });
@@ -184,7 +184,7 @@ test.describe('Post manager', () => {
     const marker = tempName('Text');
     try {
       await openNewPost(page);
-      await expect(page.getByRole('heading', { level: 1, name: 'New Post' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'New post' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 

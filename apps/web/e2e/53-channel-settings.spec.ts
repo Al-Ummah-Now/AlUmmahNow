@@ -111,7 +111,7 @@ test.describe('Settings overview', () => {
       [/Manage Playlists/i, '/playlists'],
       [/Manage Channel Tabs/, '/tabs'],
       [/Manage Sections/, '/sections'],
-      [/Community Posts/, '/community'],
+      [/Community posts/i, '/community'],
     ];
     for (const [name, suffix] of cards) {
       await expect(page.getByRole('link', { name })).toHaveAttribute('href', `/en/settings/channel/${main.id}${suffix}`);
