@@ -17,7 +17,7 @@ import type {
 import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
-import { can, channelParams, channelRoleOf, localizedChannelNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { can, channelParams, channelRoleOf, localizedChannelNames, localizedDisplayNames, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
 import { isBlocked } from '../../lib/channelComments/blocks';
 import { logger } from '../../lib/logger';
@@ -213,9 +213,12 @@ export class CreatePostComment extends AuthenticatedRoute {
 
     // Posted as a channel: the channel's name. Without one: the user's resolved name (display name, else first + last)
     let profileName = '';
+    let profileNames: Record<string, string> = {};
     if (!actorChannel?.name?.trim()) {
       const profileObj = await c.env.profiles?.get(userId).catch(() => null);
-      profileName = profileObj ? resolveDisplayName((await profileObj.json().catch(() => null)) as NameFields | null) : '';
+      const profile = profileObj ? ((await profileObj.json().catch(() => null)) as NameFields | null) : null;
+      profileName = resolveDisplayName(profile);
+      profileNames = localizedDisplayNames(profile);
     }
 
     // A person the post's channel blocked is held silently: only they see it (#771).
@@ -325,9 +328,9 @@ export class CreatePostComment extends AuthenticatedRoute {
     const response: PostCommentCreateResponse = {
       success: true,
       // The channel's names per language on the answer only (never stored), as the lists add them (#1610)
-      comment: actorChannel?.name?.trim() && Object.keys(localizedChannelNames(actorChannel)).length
-        ? { ...comment, userDisplayNameLocalized: localizedChannelNames(actorChannel) }
-        : comment,
+      comment: actorChannel?.name?.trim()
+        ? (Object.keys(localizedChannelNames(actorChannel)).length ? { ...comment, userDisplayNameLocalized: localizedChannelNames(actorChannel) } : comment)
+        : (Object.keys(profileNames).length ? { ...comment, userDisplayNameLocalized: profileNames } : comment),
     };
 
     return c.json(response, 201);
