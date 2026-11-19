@@ -565,6 +565,8 @@ export interface ErrorGroupFilters {
   sort?: ErrorSort;
   /** Only groups with open needs-action items */
   needsAction?: boolean;
+  /** Only groups with a sample from this client surface (request origin, migration 0040) */
+  origin?: string;
   limit: number;
   offset: number;
 }
@@ -640,6 +642,11 @@ export async function listErrorGroups(db: D1Database, f: ErrorGroupFilters, now 
   } else if (f.assignee === 'unassigned') where.push('g.assignee_id IS NULL');
   if (!f.includeTest) where.push('g.test = 0');
   if (f.needsAction) where.push("EXISTS (SELECT 1 FROM error_actions a WHERE a.group_id = g.id AND a.status IN ('open', 'retrying'))");
+  if (f.origin) {
+    // A group's samples are bounded (ERROR_SAMPLE_LIMITS.maxPerGroup) and read by idx_error_events_group
+    where.push('EXISTS (SELECT 1 FROM error_events e WHERE e.group_id = g.id AND e.origin_surface = ?)');
+    args.push(f.origin);
+  }
   if (f.q) {
     const search = errorSearchCondition(f.q);
     where.push(search.sql);
@@ -694,6 +701,15 @@ export async function hourlyCounts(db: D1Database, groupId: string, hours: numbe
 
 export async function getErrorGroup(db: D1Database, groupId: string): Promise<ErrorGroupRow | null> {
   return db.prepare('SELECT * FROM error_groups WHERE id = ?').bind(groupId).first<ErrorGroupRow>();
+}
+
+/** Samples of a group per client surface (request origin): the detail page's "Where it came from". */
+export async function groupOrigins(db: D1Database, groupId: string): Promise<{ surface: string; samples: number }[]> {
+  const rows = await db
+    .prepare('SELECT origin_surface AS surface, COUNT(*) AS samples FROM error_events WHERE group_id = ? AND origin_surface IS NOT NULL GROUP BY origin_surface ORDER BY samples DESC LIMIT 20')
+    .bind(groupId)
+    .all<{ surface: string; samples: number }>();
+  return (rows.results ?? []).map((r) => ({ surface: r.surface, samples: Number(r.samples) }));
 }
 
 export async function listGroupEvents(db: D1Database, groupId: string, limit = 20): Promise<ErrorEventRow[]> {

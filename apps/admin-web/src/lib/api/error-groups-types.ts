@@ -123,4 +123,6 @@ export interface ErrorGroupDetail {
   activity: ErrorActivity[];
   hourly: { hour: string; occurrences: number }[];
   daily: number[];
+  /** Samples per request-origin surface (newest admin-api; older ones omit it) */
+  origins?: { surface: string; samples: number }[];
 }

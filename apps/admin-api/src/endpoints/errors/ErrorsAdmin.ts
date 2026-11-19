@@ -5,7 +5,7 @@
  * activity log (audit + timeline).
  */
 import { z } from 'zod';
-import { ERROR_APPS, ERROR_KINDS, ERROR_QUEUE_OUTCOMES, ERROR_QUEUE_SORTS, ERROR_STATUSES, parseErrorRef } from '@al-ummah/shared-types';
+import { CLIENT_SURFACES, ERROR_APPS, ERROR_KINDS, ERROR_QUEUE_OUTCOMES, ERROR_QUEUE_SORTS, ERROR_STATUSES, parseErrorRef } from '@al-ummah/shared-types';
 import { listErrorQueue } from '../../lib/queue/errors-queue';
 import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { AdminRoute, AppContext } from '../../base';
@@ -24,6 +24,7 @@ import {
   hourlyCounts,
   listErrorGroups,
   listGroupActivity,
+  groupOrigins,
   listGroupEvents,
   listGroupReleases,
   setErrorAssignee,
@@ -73,6 +74,7 @@ export class ErrorGroupList extends ErrorsRoute {
         sort: z.enum(ERROR_SORTS).default('last_seen'),
         includeTest: z.enum(['0', '1']).optional(),
         needsAction: z.enum(['0', '1']).optional(),
+        origin: z.enum(CLIENT_SURFACES).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(25),
         offset: z.coerce.number().int().min(0).default(0),
       }),
@@ -197,17 +199,18 @@ export class ErrorGroupGet extends ErrorsRoute {
     const db = c.env.REPORTS_DB;
     const group = await getErrorGroup(db, params.id);
     if (!group) return c.json({ success: false, error: 'Error group not found' }, 404);
-    const [actions, events, releases, activity, hourly, daily] = await Promise.all([
+    const [actions, events, releases, activity, hourly, daily, origins] = await Promise.all([
       listGroupActions(db, params.id),
       listGroupEvents(db, params.id, 20),
       listGroupReleases(db, params.id),
       listGroupActivity(db, params.id),
       hourlyCounts(db, params.id, 48),
       dailyCounts(db, [params.id], 30),
+      groupOrigins(db, params.id),
     ]);
     // The retry spec stays server side: the page only needs to know a Retry exists
     const items = actions.map(({ retry_json, ...a }) => ({ ...a, can_retry: !!parseRetry(retry_json) }));
-    return { success: true, result: { group, actions: items, events, releases, activity, hourly, daily: daily.get(params.id) ?? [] } };
+    return { success: true, result: { group, actions: items, events, releases, activity, hourly, daily: daily.get(params.id) ?? [], origins } };
   }
 }
 

@@ -39,6 +39,7 @@ import {
   groupIdFor,
   ingestErrorEvents,
   listErrorGroups,
+  groupOrigins,
   listGroupActions,
   listGroupActivity,
   listGroupEvents,
@@ -178,6 +179,21 @@ describe('ingest and grouping', () => {
     assert.equal(g.route, '/:locale/video/:id');
     assert.equal(g.daily.at(-1), 5);
     assert.equal(g.daily.length, 14);
+  });
+
+  it('filters groups by origin and counts samples per origin', async () => {
+    const o = (surface: 'web' | 'ios', device: 'desktop' | 'phone') => ({ context: { origin: { surface, source: 'direct', device } } }) as Partial<ErrorEventInput>;
+    await ingestErrorEvents(db, [ev(o('web', 'desktop')), ev(o('ios', 'phone')), ev(o('ios', 'phone'))], ctx());
+    await ingestErrorEvents(db, [ev({ message: 'other failure', name: 'RangeError', stack: undefined })], ctx());
+    assert.equal((await listErrorGroups(db, { limit: 10, offset: 0 })).total, 2);
+    const ios = await listErrorGroups(db, { origin: 'ios', limit: 10, offset: 0 });
+    assert.equal(ios.total, 1);
+    assert.equal((await listErrorGroups(db, { origin: 'android', limit: 10, offset: 0 })).total, 0);
+    const gid = groupIdFor('production', ios.groups[0].fingerprint);
+    assert.deepEqual(await groupOrigins(db, gid), [
+      { surface: 'ios', samples: 2 },
+      { surface: 'web', samples: 1 },
+    ]);
   });
 
   it('finds a group by any reference, even after its sample was trimmed', async () => {

@@ -1,4 +1,4 @@
-import { ERROR_APPS, ERROR_STATUSES, parseErrorRef, type ErrorApp, type ErrorStatus } from '@al-ummah/shared-types';
+import { CLIENT_SURFACES, ERROR_APPS, ERROR_STATUSES, parseErrorRef, type ClientSurface, type ErrorApp, type ErrorStatus } from '@al-ummah/shared-types';
 import type { ErrorSort } from '@/lib/api/error-groups-types';
 
 export const ERROR_SORTS: ErrorSort[] = ['last_seen', 'count', 'users'];
@@ -12,6 +12,8 @@ export interface ErrorListFilters {
   environment?: string;
   release?: string;
   status?: ErrorStatus;
+  /** Where the failing requests came from (request-origin surface) */
+  origin?: ClientSurface;
   from?: string;
   to?: string;
   q?: string;
@@ -28,6 +30,7 @@ export function parseErrorFilters(params: Record<string, string | string[] | und
   const environment = first(params.environment);
   const release = first(params.release);
   const status = first(params.status);
+  const origin = first(params.origin);
   const from = first(params.from);
   const to = first(params.to);
   const q = first(params.q)?.trim().slice(0, 200);
@@ -38,6 +41,7 @@ export function parseErrorFilters(params: Record<string, string | string[] | und
     environment: environment && ENVIRONMENT.test(environment) ? environment : undefined,
     release: release && RELEASE.test(release) ? release : undefined,
     status: (ERROR_STATUSES as readonly string[]).includes(status ?? '') ? (status as ErrorStatus) : undefined,
+    origin: (CLIENT_SURFACES as readonly string[]).includes(origin ?? '') ? (origin as ClientSurface) : undefined,
     from: from && DAY.test(from) ? from : undefined,
     to: to && DAY.test(to) ? to : undefined,
     q: q || undefined,
@@ -50,7 +54,7 @@ export function parseErrorFilters(params: Record<string, string | string[] | und
 /** The admin-api GET /api/errors/groups query string for these filters. */
 export function errorGroupsQuery(f: ErrorListFilters, pageSize = ERRORS_PAGE_SIZE): string {
   const search = new URLSearchParams();
-  for (const key of ['app', 'environment', 'release', 'status', 'from', 'to', 'q'] as const) {
+  for (const key of ['app', 'environment', 'release', 'status', 'origin', 'from', 'to', 'q'] as const) {
     const value = f[key];
     if (value) search.set(key, value);
   }
@@ -65,7 +69,7 @@ export function errorGroupsQuery(f: ErrorListFilters, pageSize = ERRORS_PAGE_SIZ
 export function errorsHref(f: Partial<ErrorListFilters>): string {
   const search = new URLSearchParams();
   if (f.needsAction) search.set('tab', 'needs-action');
-  for (const key of ['app', 'environment', 'release', 'status', 'from', 'to', 'q'] as const) {
+  for (const key of ['app', 'environment', 'release', 'status', 'origin', 'from', 'to', 'q'] as const) {
     const value = f[key];
     if (value) search.set(key, value);
   }
@@ -75,7 +79,7 @@ export function errorsHref(f: Partial<ErrorListFilters>): string {
   return query ? `/errors?${query}` : '/errors';
 }
 
-export const hasErrorFilters = (f: ErrorListFilters) => !!(f.app || f.environment || f.release || f.status || f.from || f.to || f.q);
+export const hasErrorFilters = (f: ErrorListFilters) => !!(f.app || f.environment || f.release || f.status || f.origin || f.from || f.to || f.q);
 
 /** A search that is a reference (also typed loosely: "err 3k9f 2b7q") jumps to its group. */
 export function searchedRef(f: ErrorListFilters): string | null {
