@@ -1,25 +1,22 @@
 'use client';
 
 import { CommunityPost } from '@al-ummah/shared-types';
-import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
 interface GifPostProps {
   post: CommunityPost;
+  /** Unused: text keeps its own direction (dir="auto") */
   isRTL?: boolean;
 }
 
-export default function GifPost({ post, isRTL = false }: GifPostProps) {
+export default function GifPost({ post }: GifPostProps) {
   if (!post.gif) return null;
 
   return (
     <div className="space-y-3">
       {/* Text content */}
       {post.content && (
-        <p className={cn(
-          'text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words',
-          isRTL && 'text-right'
-        )}>
+        <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir="auto">
           {post.content}
         </p>
       )}
