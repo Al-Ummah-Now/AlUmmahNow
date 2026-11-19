@@ -271,6 +271,9 @@ export function Select(props: SelectProps & { ref?: React.Ref<HTMLButtonElement>
         tabIndex={-1}
         className="absolute start-0 top-full z-40 mt-1 max-h-80 min-w-full overflow-y-auto rounded border border-border bg-surface py-1 shadow-lg"
         data-testid={rest['data-testid'] ? `${rest['data-testid']}-list` : undefined}
+        // Inside a <label> (dialogs wrap their fields in one), a click in the list would also
+        // activate the label, which clicks the button and opens the list again over the next field
+        onClick={(e) => e.preventDefault()}
       >
         {options.flatMap((o, i) => [
           groups && o.group && o.group !== options[i - 1]?.group ? (

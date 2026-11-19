@@ -101,9 +101,9 @@ test.describe('language and direction', () => {
   test('I18N-05 moderation filters and table headers are translated', async ({ page }) => {
     await setPreferences(page, { locale: 'ar' });
     await page.goto('/moderation');
-    await expect(page.getByLabel('الحالة')).toBeVisible();
-    await expect(page.getByLabel('نوع المحتوى')).toBeVisible();
-    const statuses = await optionTexts(page.getByLabel('الحالة'));
+    await expect(page.getByRole('combobox', { name: 'الحالة', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'نوع المحتوى', exact: true })).toBeVisible();
+    const statuses = await optionTexts(page.getByRole('combobox', { name: 'الحالة', exact: true }));
     expect(statuses).toEqual(['كل الحالات', 'قيد الانتظار', 'قيد المراجعة', 'تمت المعالجة', 'مرفوض']);
     const headers = await page.getByRole('columnheader').allTextContents();
     if (headers.length) expect(headers).toEqual(['النوع', 'السبب', 'الحالة', 'التاريخ', 'الإجراءات']);

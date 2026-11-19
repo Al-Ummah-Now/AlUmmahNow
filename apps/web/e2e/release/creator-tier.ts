@@ -10,6 +10,7 @@ import { expect } from '@playwright/test';
 import { workerAdminPage } from './admin-session';
 import { releaseEnv, target } from './targets';
 import { apiFetch, type WebUser } from './web-session';
+import { chooseOption } from './choose-option';
 
 /**
  * Sets the user's creator tier in admin-web and waits until saved and in effect. Every account
@@ -30,7 +31,7 @@ export async function setCreatorTier(user: WebUser, wanted: string | null): Prom
     // A failure that persists still fails, with the control's message.
     for (let attempt = 1; ; attempt++) {
       await expect(select, 'the creator tier selector').toBeEnabled({ timeout: 30000 });
-      await select.selectOption(tierId);
+      await chooseOption(select, tierId);
       // Every change is confirmed in a dialog that states its effect
       const dialog = control.getByTestId('user-creator-tier-control-change-dialog');
       await expect(dialog).toBeVisible();

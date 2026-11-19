@@ -14,6 +14,7 @@ import { target } from './targets';
 import { signInAsAdmin } from './admin-session';
 import { fetchRetry } from './net';
 import { expectHydrated } from './web-session';
+import { chooseOption } from './choose-option';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -179,7 +180,7 @@ test.describe('Release: theme builder', () => {
       await page.getByTestId('asset-file-input').setInputFiles({ name: 'rel-ornament.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(ORNAMENT) });
       await expect(page.getByTestId('image-slot-ornament').locator('img')).toBeVisible({ timeout: 30000 });
       await page.getByTestId('section-components').click();
-      await page.getByTestId('component-select').selectOption('page');
+      await chooseOption(page.getByTestId('component-select'), 'page');
       const background = page.getByTestId('style-page-background-text');
       const before = await background.inputValue();
       await background.fill(`{asset:assets/rel-ornament.svg} top/48px repeat,${before}`);
