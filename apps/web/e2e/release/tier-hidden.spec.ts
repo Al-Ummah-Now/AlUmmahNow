@@ -12,6 +12,9 @@ import { target } from './targets';
 import { apiFetch, gotoSettled } from './web-session';
 import { lockUpgradeMode } from './upgrade-mode-lock';
 
+// Signs users up and in: no trace or video (they would record the session)
+test.use({ trace: 'off', video: 'off' });
+
 const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
 async function sql(statement: string): Promise<void> {
   const res = await fetch(`${CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: statement });
