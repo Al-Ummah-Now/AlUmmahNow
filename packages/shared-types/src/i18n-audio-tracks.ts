@@ -81,7 +81,7 @@ export interface AudioTracksTranslations {
 export const AUDIO_TRACKS_EN: AudioTracksTranslations = {
   title: 'Audio tracks',
   hint: 'Add dubs, commentary or audio description. Viewers pick a track in the player settings.',
-  used: '{used} of {allowed} audio tracks used',
+  used: '{used} of {allowedTracks} used',
   usedUnlimited: '{used} audio tracks added',
   add: 'Add audio track',
   notIncluded: 'Your creator tier does not include extra audio tracks.',
@@ -152,7 +152,7 @@ export const AUDIO_TRACKS_EN: AudioTracksTranslations = {
 export const AUDIO_TRACKS_AR: AudioTracksTranslations = {
   title: 'المسارات الصوتية',
   hint: 'أضف دبلجة أو تعليقًا أو وصفًا صوتيًا. يختار المشاهدون المسار من إعدادات المشغل.',
-  used: 'استُخدم {used} من {allowed} مسارات صوتية',
+  used: 'المسموح: {allowedTracks} · المستخدم: {used}',
   usedUnlimited: 'أُضيف {used} من المسارات الصوتية',
   add: 'إضافة مسار صوتي',
   notIncluded: 'لا تشمل فئة صانع المحتوى الخاصة بك مسارات صوتية إضافية.',

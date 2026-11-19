@@ -6,7 +6,7 @@
  * a file or pick a track found in the video's file) and the tier's limit.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AUDIO_TRACK_LANGUAGES, type AudioTracksTranslations, formatNumber } from '@al-ummah/shared-types';
+import { AUDIO_TRACK_LANGUAGES, type AudioTracksTranslations, formatNumber, formatCountNoun } from '@al-ummah/shared-types';
 import { AlertTriangle, AudioLines, Loader2, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -185,7 +185,7 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
   const canAdd = view.ready && !limitText;
   const usage = view.limit.unlimited
     ? ta.usedUnlimited.replace('{used}', formatNumber(lang, view.limit.used))
-    : ta.used.replace('{used}', formatNumber(lang, view.limit.used)).replace('{allowed}', formatNumber(lang, view.limit.allowed));
+    : ta.used.replace('{used}', formatNumber(lang, view.limit.used)).replace('{allowedTracks}', formatCountNoun(lang, view.limit.allowed, 'audioTrack'));
 
   return (
     <section aria-labelledby={`audio-tracks-${videoId}`} data-testid="audio-tracks" className="space-y-4">

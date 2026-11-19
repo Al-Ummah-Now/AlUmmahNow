@@ -43,6 +43,16 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('ar', 3, 'comment', { joiner: ' ' })).toBe('٣ تعليقات');
   });
 
+  it('Studio counts (Dashboard latest video, audio-track quota): 10 and 100+ forms and English singulars', () => {
+    expect(formatCountNoun('ar', 10, 'audioTrack')).toBe('١٠ مسارات صوتية');
+    expect(formatCountNoun('ar', 100, 'audioTrack')).toBe('١٠٠ مسار صوتي');
+    expect(formatCountNoun('ar', 9, 'comment')).toBe('٩ تعليقات');
+    expect(formatCountNoun('ar', 11, 'like')).toBe('١١ إعجابًا');
+    expect(formatCountNoun('ar', 100, 'like')).toBe('١٠٠ إعجاب');
+    expect(formatCountNoun('en', 1, 'audioTrack')).toBe('1 audio track');
+    expect(formatCountNoun('en', 1, 'comment')).toBe('1 comment');
+  });
+
   it('treats missing, invalid and negative counts as zero', () => {
     expect(formatCountNoun('en', undefined, 'view')).toBe('No views');
     expect(formatCountNoun('ar', 'x', 'video')).toBe('لا توجد مرئيات');
