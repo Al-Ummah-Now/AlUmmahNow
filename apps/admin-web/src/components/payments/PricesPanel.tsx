@@ -29,6 +29,7 @@ import { billingRequest } from '@/lib/list/api-client';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { LINK_TONE, linkFor, linkState, pricesByTier } from '@/lib/payments';
 import { ToneChip, hintClass, labelClass, providerName, sectionTitle, useBillingAction } from './shared';
+import { NumberField } from '@/components/forms/NumberField';
 
 export interface TierOption {
   id: string;
@@ -209,7 +210,7 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
               <label htmlFor={`${ids}-amount`} className={labelClass}>
                 {t('payments.prices.amount')}
               </label>
-              <input id={`${ids}-amount`} dir="ltr" inputMode="decimal" className={`${fieldClass} w-full`} value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-describedby={`${ids}-amount-hint`} aria-invalid={invalid ? true : undefined} data-testid="payments-price-amount" />
+              <NumberField decimal id={`${ids}-amount`} dir="ltr" className={`${fieldClass} w-full`} value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-describedby={`${ids}-amount-hint`} aria-invalid={invalid ? true : undefined} data-testid="payments-price-amount" />
               <p id={`${ids}-amount-hint`} className={hintClass}>
                 {isCurrencyCode(currency) ? t('payments.prices.amountHint', { currency, example: exponentExample(currency) }) : ''}
               </p>

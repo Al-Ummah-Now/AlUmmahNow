@@ -85,7 +85,6 @@ export function NumberField(props: NumberFieldProps) {
         ref={ref}
         type="text"
         inputMode={decimal ? 'decimal' : 'numeric'}
-        autoComplete={rest.autoComplete ?? 'off'}
         value={showNumber(locale, typed)}
         aria-invalid={rest['aria-invalid'] ?? (problem ? true : undefined)}
         data-value={typed}
