@@ -1,4 +1,5 @@
 import Link from '@/components/AppLink';
+import { MissingLanguageBadge } from '@/components/localized/LocalizedFieldPair';
 import { getAdminSession } from '@/lib/auth';
 import { canManageNewsletter } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -127,7 +128,8 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
                     {issues.items.map((i) => (
                       <tr key={i.id} className="border-t border-border" data-testid="newsletter-issue-row" data-status={i.status}>
                         <th scope="row" className="p-2 text-start font-normal">
-                          <Link className={linkClass} href={`/newsletter?issue=${encodeURIComponent(i.id)}`}>{subjectOf(i)}</Link>
+                          <Link className={linkClass} href={`/newsletter?issue=${encodeURIComponent(i.id)}`}>{subjectOf(i)}</Link>{' '}
+                          <MissingLanguageBadge pairs={[{ en: i.subject_en, ar: i.subject_ar }, { en: i.body_en, ar: i.body_ar }]} />
                         </th>
                         <td className={`p-2 font-medium ${ISSUE_TONE[i.status]}`}>{t(`newsletter.issueStatuses.${i.status}` as MessageKey)}</td>
                         <td className="p-2 text-end tabular-nums text-fg-muted">{i.status === 'draft' ? '—' : number(i.counts.sent + i.counts.sunk)}</td>

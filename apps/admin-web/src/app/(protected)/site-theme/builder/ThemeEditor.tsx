@@ -13,6 +13,7 @@ import { useConfirm } from '@/components/content/actions';
 import type { MessageKey } from '@/i18n/translate';
 import { setSiteTheme } from '@/lib/api/admin';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { ThemeApiError, deleteAsset, draftAssetUrl, exportUrl, publish, saveDraft, uploadAsset } from './api';
 import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
@@ -103,6 +104,13 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
   // A failing pair is also shown at the role or brand colour it comes from
   const traced = useMemo(() => traceIssues(theme, issues), [theme, issues]);
   const errorsAt = (path: string) => traced.get(path) ?? [];
+  // Both names are required (L10N rule): said at the field before a save is refused
+  const descriptionError = (l: 'en' | 'ar') => {
+    const d = theme.description;
+    const other = l === 'en' ? 'ar' : 'en';
+    return !d?.[l]?.trim() && d?.[other]?.trim() ? t('localized.required', { lang: t(l === 'en' ? 'localized.langEnglish' : 'localized.langArabic') }) : undefined;
+  };
+  const nameError = (l: 'en' | 'ar') => (theme.name?.[l]?.trim() ? errorsAt(`name.${l}`).join(' ') || undefined : t('localized.required', { lang: t(l === 'en' ? 'localized.langEnglish' : 'localized.langArabic') }));
   const unlinked = useMemo(() => unlinkedBrandColors(theme), [theme]);
   const usage = useMemo(() => brandUsage(theme), [theme]);
 
@@ -225,17 +233,25 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
 
           {section === 'general' && (
             <div className="space-y-3">
-              {(['en', 'ar'] as const).map((l) => (
-                <label key={l} className="block text-sm text-fg">{l === 'en' ? t('themeBuilder.nameEn') : t('themeBuilder.nameAr')}
-                  <input dir={l === 'ar' ? 'rtl' : 'ltr'} className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.name?.[l] ?? ''} onChange={(e) => update(['name', l], e.target.value)} data-testid={`general-name-${l}`} />
-                  <IssueText messages={errorsAt(`name.${l}`)} />
-                </label>
-              ))}
-              {(['en', 'ar'] as const).map((l) => (
-                <label key={l} className="block text-sm text-fg">{l === 'en' ? t('themeBuilder.descriptionEn') : t('themeBuilder.descriptionAr')}
-                  <input dir={l === 'ar' ? 'rtl' : 'ltr'} className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.description?.[l] ?? ''} onChange={(e) => update(['description'], { en: theme.description?.en ?? '', ar: theme.description?.ar ?? '', [l]: e.target.value })} />
-                </label>
-              ))}
+              <LocalizedFieldPair
+                id="general-name"
+                label={t('themeBuilder.namePair')}
+                field="themes.name"
+                value={{ en: theme.name?.en ?? '', ar: theme.name?.ar ?? '' }}
+                onChange={(v) => update(['name'], v)}
+                disabled={readOnly}
+                errors={{ en: nameError('en'), ar: nameError('ar') }}
+              />
+              <LocalizedFieldPair
+                id="general-description"
+                label={t('themeBuilder.descriptionPair')}
+                field="themes.description"
+                value={{ en: theme.description?.en ?? '', ar: theme.description?.ar ?? '' }}
+                onChange={(v) => update(['description'], v)}
+                required={false}
+                disabled={readOnly}
+                errors={{ en: descriptionError('en'), ar: descriptionError('ar') }}
+              />
               <label className="block text-sm text-fg">{t('themeBuilder.author')}
                 <input className={`${fieldClass} w-full mt-1`} readOnly={readOnly} value={theme.author ?? ''} onChange={(e) => update(['author'], e.target.value)} />
               </label>

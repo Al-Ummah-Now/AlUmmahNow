@@ -9,14 +9,14 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
-import { cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { createNewsletterIssue, deleteNewsletterIssue, deleteNewsletterSubscriber, saveNewsletterIssue, sendNewsletterIssue } from '@/lib/api/newsletter';
 import type { NewsletterIssueContent } from '@/lib/api/newsletter-types';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 
 /** The same limits as admin-api lib/newsletter.ts NEWSLETTER_LIMITS. */
 const SUBJECT_MAX = 150;
 const BODY_MAX = 20000;
-const labelClass = 'block text-sm font-medium text-fg mb-1';
 const FIELDS = ['subject_en', 'subject_ar', 'body_en', 'body_ar'] as const;
 
 export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueContent & { id: string }) | null; confirmed: number }) {
@@ -51,31 +51,26 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
     await run('send', () => sendNewsletterIssue(target), { success: t('newsletter.sending') });
   }
 
-  const field = (f: (typeof FIELDS)[number]) => {
-    const lang = f.endsWith('_ar') ? 'ar' : 'en';
-    const isBody = f.startsWith('body');
-    const props = {
-      id: `${id}-${f}`,
-      value: values[f],
-      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setValues((v) => ({ ...v, [f]: e.target.value })),
-      maxLength: isBody ? BODY_MAX : SUBJECT_MAX,
-      dir: lang === 'ar' ? 'rtl' : 'ltr',
-      lang,
-      className: `${fieldClass} w-full`,
-      'data-testid': `newsletter-${f}`,
-    } as const;
-    return (
-      <div key={f}>
-        <label htmlFor={props.id} className={labelClass}>{t(`newsletter.fields.${f}`)}</label>
-        {isBody ? <textarea {...props} rows={10} aria-describedby={`${id}-body-hint`} /> : <input {...props} type="text" />}
-      </div>
-    );
-  };
+  // A draft may be saved with a language missing (it is never shown to anyone); Send needs all four
+  const pair = (kind: 'subject' | 'body') => (
+    <LocalizedFieldPair
+      id={`${id.replace(/:/g, '')}-${kind}`}
+      testId={`newsletter-${kind}`}
+      label={t(kind === 'subject' ? 'newsletter.fields.subjectPair' : 'newsletter.fields.bodyPair')}
+      field={`newsletter.${kind}`}
+      value={{ en: values[`${kind}_en`], ar: values[`${kind}_ar`] }}
+      onChange={(v) => setValues((x) => ({ ...x, [`${kind}_en`]: v.en, [`${kind}_ar`]: v.ar }))}
+      maxLength={kind === 'body' ? BODY_MAX : SUBJECT_MAX}
+      multiline={kind === 'body'}
+      rows={10}
+      required={false}
+      help={kind === 'body' ? t('newsletter.bodyHint') : undefined}
+    />
+  );
 
   return (
     <section className={`${cardClass} mb-6`} aria-labelledby={`${id}-title`} data-testid="newsletter-editor">
       <h2 id={`${id}-title`} className="text-lg font-semibold text-fg mb-1">{issue ? t('newsletter.editTitle') : t('newsletter.newTitle')}</h2>
-      <p id={`${id}-body-hint`} className="text-sm text-fg-muted mb-4">{t('newsletter.bodyHint')}</p>
       {/* The action row sits outside the form: ConfirmButton's dialog is a form of its own */}
       <form
         id={`${id}-form`}
@@ -85,8 +80,8 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
           void save();
         }}
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{field('subject_en')}{field('subject_ar')}</div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{field('body_en')}{field('body_ar')}</div>
+        {pair('subject')}
+        {pair('body')}
       </form>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">

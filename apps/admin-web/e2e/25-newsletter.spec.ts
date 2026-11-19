@@ -57,7 +57,7 @@ test.describe('newsletter', () => {
     await page.getByTestId('newsletter-save').click();
     await expect(page).toHaveURL(/\/newsletter\?issue=/);
     await expect(page.getByRole('heading', { level: 2, name: 'Edit draft' })).toBeVisible();
-    await expect(page.getByTestId('newsletter-subject_ar')).toHaveValue(SUBJECT_AR);
+    await expect(page.getByTestId('newsletter-subject-ar')).toHaveValue(SUBJECT_AR);
     await expectNoAxeViolations(page, 'newsletter draft (en)');
 
     // Send asks first and names the count; with no confirmed subscribers it stays off

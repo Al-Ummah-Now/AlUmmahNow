@@ -88,6 +88,15 @@ export class ThemeError extends Error {
 const prefix = (id: string, version: 'draft' | string) => `themes/${id}/${version}/`;
 const bytesOf = (s: string) => new TextEncoder().encode(s);
 
+/** The en/ar problems of a theme's own text: name in both languages, description in both or neither. */
+export function localizedProblems(theme: Pick<ThemePackage, 'name' | 'description'>): Array<{ path: string; message: string }> {
+  const out: Array<{ path: string; message: string }> = [];
+  for (const l of ['en', 'ar'] as const) if (!theme.name?.[l]?.trim()) out.push({ path: `name.${l}`, message: 'is required' });
+  const d = theme.description as { en?: string; ar?: string } | undefined;
+  if (d && !!d.en?.trim() !== !!d.ar?.trim()) out.push({ path: `description.${d.en?.trim() ? 'ar' : 'en'}`, message: 'is required when the other language is set' });
+  return out;
+}
+
 export class ThemeStore {
   constructor(private readonly db: Db, private readonly bucket: R2Bucket) {}
 
@@ -219,7 +228,7 @@ export class ThemeStore {
     const draft: ThemePackage = { ...theme, kind: 'custom' };
     const validation = validatePackage(draft, { assets: files.assets });
     // A draft may be incomplete; only the schema's shape for the list (id and names) is required
-    if (!draft.name?.en || !draft.name?.ar) throw new ThemeError(422, 'The package needs name.en and name.ar', validation.errors);
+    if (localizedProblems(draft).length) throw new ThemeError(422, 'The package needs name.en and name.ar (and the description in both or neither)', [...localizedProblems(draft), ...validation.errors]);
     const at = prefix(theme.id, 'draft');
     await Promise.all(Object.entries(files.assets).map(([path, bytes]) => this.bucket.put(`${at}${path}`, bytes, { httpMetadata: { contentType: contentTypeOf(path) } })));
     await this.bucket.put(`${at}theme.json`, bytesOf(JSON.stringify(draft, null, 2)), { httpMetadata: { contentType: 'application/json' } });
@@ -237,12 +246,15 @@ export class ThemeStore {
     if (!row) throw new ThemeError(404, `No custom theme ${id}`);
     if (theme?.id !== id) throw new ThemeError(400, `theme.json id must stay ${id}`);
     const draft: ThemePackage = { ...theme, kind: 'custom' };
+    // Staff-set en/ar text (L10N rule): both names, and the description in both or neither; never kept silently
+    const missing = localizedProblems(draft);
+    if (missing.length) throw new ThemeError(422, 'The theme needs its name in English and Arabic, and its description in both or neither', missing);
     const assets = await this.files(`${prefix(id, 'draft')}assets/`);
     const validation = validatePackage(draft, { assets: Object.fromEntries(Object.entries(assets).map(([k, v]) => [`assets/${k}`, v])) });
     await this.bucket.put(`${prefix(id, 'draft')}theme.json`, bytesOf(JSON.stringify(draft, null, 2)), { httpMetadata: { contentType: 'application/json' } });
     await this.db
       .prepare('UPDATE theme_packages SET name_en = ?, name_ar = ?, draft_updated_by = ?, draft_updated_at = ? WHERE id = ?')
-      .bind(draft.name?.en || row.name_en, draft.name?.ar || row.name_ar, actor, now, id)
+      .bind(draft.name.en.trim(), draft.name.ar.trim(), actor, now, id)
       .run();
     return validation;
   }
