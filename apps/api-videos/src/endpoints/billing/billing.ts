@@ -3,9 +3,9 @@
  *
  *   GET  /api/billing/plans                      what /upgrade sells (public; empty while payments are off)
  *   GET  /api/me/billing                         the user's subscriptions and billing history
- *   POST /api/me/billing/checkout                start a checkout → { url | paddleTransactionId }
+ *   POST /api/me/billing/checkout                start a checkout → { url }
  *   POST /api/me/billing/subscriptions/:id/cancel cancel (at period end where the provider can)
- *   POST /api/me/billing/portal                  the provider's customer portal URL (Paddle)
+ *   POST /api/me/billing/portal                  the provider's customer portal URL (providers that host one)
  *
  *   POST /webhooks/billing/:provider             provider webhooks (signature checked, queued)
  *   GET  /webhooks/billing/fake/checkout/:id     the test provider's checkout page (never production)

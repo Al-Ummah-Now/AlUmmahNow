@@ -9,8 +9,8 @@
  * request-only.
  *
  * Providers sit behind one interface (api-videos lib/billing/provider.ts).
- * Never Stripe (T2). The shipped adapters are Paddle (a global merchant of
- * record from the S16 shortlist) and PayGood. 'manual' is the always-present
+ * Never Stripe (T2). The one shipped provider is PayGood (P1, owner
+ * 2026-11-19: PayGood only, off until the owner enables it). 'manual' is the always-present
  * provider (T2) that records admin comps. 'fake' is the test double
  * (QA/local only, never production): it moves no money.
  *
@@ -22,7 +22,7 @@
 import { formatMoney } from './locale-format';
 
 /** Providers an admin can configure. 'fake' exists only where PAYMENTS_FAKE_PROVIDER is on (never production). */
-export const PAYMENT_PROVIDER_IDS = ['paddle', 'paygood', 'fake'] as const;
+export const PAYMENT_PROVIDER_IDS = ['paygood', 'fake'] as const;
 export type PaymentProviderId = (typeof PAYMENT_PROVIDER_IDS)[number];
 
 /** Every provider a subscription can come from: the configurable ones plus the manual (admin comp) provider. */
@@ -73,29 +73,7 @@ export interface PaymentProviderSpec {
   docsUrl: string;
 }
 
-/** Paddle tax categories (Paddle Billing product `tax_category`). */
-export const PADDLE_TAX_CATEGORIES = ['standard', 'digital-goods', 'saas', 'ebooks', 'implementation-services', 'professional-services', 'training-services', 'website-hosting'] as const;
-/** Paddle price `tax_mode`. */
-export const PADDLE_TAX_MODES = ['account_setting', 'internal', 'external'] as const;
-
 export const PAYMENT_PROVIDERS: Readonly<Record<PaymentProviderId, PaymentProviderSpec>> = {
-  paddle: {
-    id: 'paddle',
-    name: 'Paddle',
-    currencies: null,
-    merchantOfRecord: true,
-    customerPortal: true,
-    partialRefunds: true,
-    receiptsOnRequest: true,
-    cancelAtPeriodEnd: true,
-    docsUrl: 'https://developer.paddle.com/api-reference/overview',
-    settings: [
-      // Paddle.js client-side token (public; opens the checkout on the videos site)
-      { key: 'clientToken', perMode: true, kind: 'text', pattern: '^(test|live)_[A-Za-z0-9]{10,80}$', maxLength: 90, required: true },
-      { key: 'taxCategory', perMode: false, kind: 'choice', options: PADDLE_TAX_CATEGORIES, required: true },
-      { key: 'taxMode', perMode: false, kind: 'choice', options: PADDLE_TAX_MODES, required: true },
-    ],
-  },
   paygood: {
     id: 'paygood',
     name: 'PayGood',
@@ -298,8 +276,6 @@ export interface BillingPlans {
   offers: BillingOffer[];
   pricesIncludeTax: boolean;
   taxRatePercent: number | null;
-  /** Paddle.js client token and environment when Paddle is enabled (public values) */
-  paddle: { clientToken: string; environment: 'sandbox' | 'production' } | null;
 }
 
 /** POST /api/me/billing/checkout body. */
@@ -312,11 +288,10 @@ export interface BillingCheckoutInput {
   returnPath?: string;
 }
 
-/** POST /api/me/billing/checkout answer: open `url` (or Paddle's overlay for `paddleTransactionId`). */
+/** POST /api/me/billing/checkout answer: send the browser to `url` (the provider's hosted checkout). */
 export interface BillingCheckout {
   checkoutId: string;
   url: string | null;
-  paddleTransactionId: string | null;
 }
 
 /** GET /api/me/billing/checkouts/:id: what the return page polls after a checkout. */
@@ -417,8 +392,8 @@ export const BILLING_REFUND_REASON_MAX = 500;
 /** The admin-api Secrets Store secret name of a credential (env suffix added by the caller: '', '-qa', '-stage'). */
 /**
  * The Secrets Store secret holding a credential. One store serves every
- * environment, so QA and stage carry a suffix: pay-paddle-api-key-live (production),
- * pay-paddle-api-key-live-qa, pay-paddle-api-key-live-stage.
+ * environment, so QA and stage carry a suffix: pay-paygood-api-key-live (production),
+ * pay-paygood-api-key-live-qa, pay-paygood-api-key-live-stage.
  */
 export function paymentSecretName(provider: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode, environment?: string | null): string {
   const f = field === 'apiKey' ? 'api-key' : 'webhook-secret';
@@ -426,7 +401,7 @@ export function paymentSecretName(provider: PaymentProviderId, field: PaymentCre
   return `pay-${provider}-${f}-${mode}${suffix}`;
 }
 
-/** The api-videos binding that reads a credential (PAY_PADDLE_API_KEY_TEST, ...). */
+/** The api-videos binding that reads a credential (PAY_PAYGOOD_API_KEY_TEST, ...). */
 export function paymentSecretBinding(provider: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode): string {
   const f = field === 'apiKey' ? 'API_KEY' : 'WEBHOOK_SECRET';
   return `PAY_${provider.toUpperCase()}_${f}_${mode.toUpperCase()}`;

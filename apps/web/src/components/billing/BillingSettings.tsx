@@ -214,7 +214,7 @@ function SubscriptionRow({ sub, name, lang, copy, date, onCancel }: { sub: Billi
   );
 }
 
-/** Paddle's receipts are short-lived links: fetched when asked for, opened in a new tab. */
+/** Receipts of providers that make short-lived links (receiptsOnRequest): fetched when asked for, opened in a new tab. */
 function ReceiptOnRequest({ paymentId, copy }: { paymentId: string; copy: BillingCopy }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

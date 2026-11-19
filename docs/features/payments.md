@@ -8,16 +8,19 @@ Subscribe button. The provider's webhook then assigns the tier automatically. A 
 
 Everything is off by default: no provider is enabled and no tier has a price.
 
+**Provider decision (P1, owner 2026-11-19): PayGood only, off until the owner enables it.**
+Paddle, from the earlier AUN-SUBS shortlist, was removed (search migration 0067 drops any stored
+Paddle config).
+
 ## Providers
 
 | Provider | Id | Role | Currencies | Portal | Partial refunds | Cancel at period end |
 |---|---|---|---|---|---|---|
-| Paddle | `paddle` | Merchant of record (collects and remits VAT/sales tax) | many | yes | yes | yes |
 | PayGood | `paygood` | Merchant processor | USD, CAD | no | yes | no: billing stops at once; we keep access until the paid period ends |
 | Test provider | `fake` | QA and the local stack only, never production | USD, EUR, GBP, SAR, AED, CAD | no | yes | yes |
 | Comp | `manual` | An admin grants a tier for free (no provider) | n/a | n/a | n/a | n/a |
 
-Stripe is not used (decision T2/O4 in the wiki: "never Stripe"). Both real adapters sit
+Stripe is not used (decision T2/O4 in the wiki: "never Stripe"). The PayGood adapter and the test provider sit
 behind one interface (`apps/api-videos/src/lib/billing/provider.ts`), which covers:
 - checkout
 - webhook signature check and event mapping
@@ -51,10 +54,10 @@ Adding a provider means adding one adapter, plus its entry in `PAYMENT_PROVIDERS
 ## Flow
 
 1. **Checkout.** `/upgrade` → `POST /api/me/billing/checkout`. api-videos creates a checkout row,
-   then gets either a Paddle transaction (opened with Paddle.js) or a hosted checkout URL
-   (PayGood, the test provider).
+   then gets the provider's hosted checkout URL (PayGood, the test provider) and sends the
+   browser there.
 2. **Webhook.** `POST /webhooks/billing/:provider`:
-   - The signature is checked on the raw body (Paddle `Paddle-Signature`; PayGood
+   - The signature is checked on the raw body (PayGood
      `Merchant-Webhook-*`, 5-minute window; test `X-Fake-Signature`).
    - The event is stored once in `billing_events`. `(provider, mode, event_id)` is the
      idempotency key, so a redelivery stores nothing new.
@@ -86,17 +89,17 @@ Adding a provider means adding one adapter, plus its entry in `PAYMENT_PROVIDERS
 
 After checkout the user lands back on `/upgrade?checkout=<id>`. The page polls
 `GET /api/me/billing/checkouts/:id` (open, completed or expired, and whether the subscription is
-active yet) until the tier is assigned. A checkout the user left unpaid reads `expired` (Paddle's
-overlay closed, the test page's Cancel: `POST /api/me/billing/checkouts/:id/abandon`), and the page
+active yet) until the tier is assigned. A checkout the user left unpaid reads `expired` (the
+test page's Cancel: `POST /api/me/billing/checkouts/:id/abandon`), and the page
 says nothing was charged. A payment that still arrives later completes it.
 
 A tier on sale appears on `/upgrade` even if it can't be requested.
 
 Users see their subscriptions and billing history on `/settings/billing`. From there they can:
 - cancel (at period end where the provider supports it)
-- open the provider's portal, for Paddle
-- open receipts. Paddle's receipts are short-lived links, fetched when asked for
-  (`GET /api/me/billing/payments/:id/receipt`) and never stored.
+- open the provider's portal, where the provider hosts one (PayGood does not)
+- open receipts. A provider whose receipts are short-lived links (`receiptsOnRequest`) has them
+  fetched when asked for (`GET /api/me/billing/payments/:id/receipt`) and never stored.
 
 Account deletion keeps payment records as bookkeeping, but under the erased placeholder
 instead of the user id, with provider customer ids and receipt links dropped. It empties webhook
@@ -120,8 +123,8 @@ payloads and deletes customer links and checkouts
    (and stage/QA with their suffixed names). A binding to a secret that doesn't exist fails the
    deploy, which is why this comes after step 2:
    ```jsonc
-   { "binding": "PAY_PADDLE_API_KEY_LIVE", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "pay-paddle-api-key-live" },
-   { "binding": "PAY_PADDLE_WEBHOOK_SECRET_LIVE", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "pay-paddle-webhook-secret-live" }
+   { "binding": "PAY_PAYGOOD_API_KEY_LIVE", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "pay-paygood-api-key-live" },
+   { "binding": "PAY_PAYGOOD_WEBHOOK_SECRET_LIVE", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "pay-paygood-webhook-secret-live" }
    ```
 4. **Set up the webhook.** In the provider's dashboard, add the webhook URL shown on the
    Payments page (`https://videos.api.alummahnow.net/webhooks/billing/<provider>`).

@@ -4,10 +4,10 @@
  * The pay flow's calls to api-videos (wiki AUN-SUBS):
  *   GET  /api/billing/plans                        what /upgrade sells (public)
  *   GET  /api/me/billing                           the user's subscriptions and payments
- *   POST /api/me/billing/checkout                  start a checkout → { url | paddleTransactionId }
+ *   POST /api/me/billing/checkout                  start a checkout → { url }
  *   GET  /api/me/billing/checkouts/:id             the return page's poll (open / completed / expired, active)
- *   POST /api/me/billing/checkouts/:id/abandon     the user closed Paddle's overlay without paying
- *   GET  /api/me/billing/payments/:id/receipt      a receipt link the provider makes on request (Paddle)
+ *   POST /api/me/billing/checkouts/:id/abandon     the user left the checkout without paying
+ *   GET  /api/me/billing/payments/:id/receipt      a receipt link the provider makes on request
  *   POST /api/me/billing/subscriptions/:id/cancel  cancel at the end of the paid period (queued job)
  *   POST /api/me/billing/portal                    the provider's customer portal URL
  */

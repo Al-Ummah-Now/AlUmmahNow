@@ -46,9 +46,9 @@ describe('Payments forms autofill', () => {
   });
 
   it('a provider API key: masked, named, labelled, and kept out of password managers (no save, no generate)', () => {
-    const paddle = { id: 'paddle', enabled: false, mode: 'test', settings: {}, credentials: { apiKey: {}, webhookSecret: {} }, webhookUrl: 'https://x', missing: [], updatedAt: null, updatedBy: null } as unknown as PaymentProviderConfig;
-    const html = render(el(ProvidersPanel, { providers: [paddle], credentialStorage: true, canManage: true, onRefresh: async () => {} }));
-    const key = field(html, 'paddle-apiKey-test');
+    const paygood = { id: 'paygood', enabled: false, mode: 'test', settings: {}, credentials: { apiKey: {}, webhookSecret: {} }, webhookUrl: 'https://x', missing: [], updatedAt: null, updatedBy: null } as unknown as PaymentProviderConfig;
+    const html = render(el(ProvidersPanel, { providers: [paygood], credentialStorage: true, canManage: true, onRefresh: async () => {} }));
+    const key = field(html, 'paygood-apiKey-test');
     assert.ok(key, 'the key field');
     assert.equal(attr(key, 'type'), 'password');
     assert.equal(attr(key, 'autocomplete'), 'off');

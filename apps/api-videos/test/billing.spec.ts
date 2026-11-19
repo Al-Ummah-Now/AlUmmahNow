@@ -19,7 +19,6 @@ import { handleCreateTierRequest, handleUpgradeOverview } from '../src/endpoints
 import { handleCreatorAccess } from '../src/endpoints/creator/creatorAccess';
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../src/lib/upgradeMode';
 import { FAKE_SECRET, fakeAdapter, signFake, type FakeEventBody } from '../src/lib/billing/fake';
-import { paddleAdapter } from '../src/lib/billing/paddle';
 import { paygoodAdapter, splitName } from '../src/lib/billing/paygood';
 import { ProviderError, providerJson } from '../src/lib/billing/provider';
 import {
@@ -137,17 +136,6 @@ describe('webhook signatures', () => {
 		assert.equal(await paygoodAdapter.verifyWebhook(raw, headers(good), 'another_secret', at), null);
 	});
 
-	it('Paddle: h1 over "ts:body"; wrong secret, missing h1 and stale ts are refused', async () => {
-		const raw = JSON.stringify({ event_id: 'evt_01', event_type: 'subscription.created', occurred_at: '2026-11-14T11:59:00.000Z', data: {} });
-		const ts = Math.floor(T0.getTime() / 1000);
-		const h1 = createHmac('sha256', 'pdl_secret').update(`${ts}:${raw}`).digest('hex');
-		const parsed = await paddleAdapter.verifyWebhook(raw, new Headers({ 'Paddle-Signature': `ts=${ts};h1=${h1}` }), 'pdl_secret', T0);
-		assert.deepEqual([parsed?.eventId, parsed?.type, parsed?.occurredAt], ['evt_01', 'subscription.created', '2026-11-14T11:59:00.000Z']);
-		assert.equal(await paddleAdapter.verifyWebhook(raw, new Headers({ 'Paddle-Signature': `ts=${ts};h1=${h1}` }), 'other', T0), null);
-		assert.equal(await paddleAdapter.verifyWebhook(raw, new Headers({ 'Paddle-Signature': `ts=${ts}` }), 'pdl_secret', T0), null);
-		assert.equal(await paddleAdapter.verifyWebhook(raw, new Headers({ 'Paddle-Signature': `ts=${ts};h1=${h1}` }), 'pdl_secret', new Date(T0.getTime() + 10 * 60_000)), null);
-	});
-
 	it('test provider: signFake verifies with the fixed secret only', async () => {
 		const body = JSON.stringify(subEvent('fake_evt_1', { subscriptionRef: 's1' }, T0.toISOString()));
 		assert.ok(await fakeAdapter.verifyWebhook(body, await signFake(body, T0), FAKE_SECRET, T0));
@@ -158,8 +146,10 @@ describe('webhook signatures', () => {
 	it('intake: unknown provider 404, unconfigured provider 404, bad signature 401', async () => {
 		const { env } = setup();
 		assert.equal((await receiveWebhook(env, 'stripe', '{}', new Headers())).status, 404);
-		// Paddle has no webhook secret bound here
+		// Paddle was removed (P1: PayGood only): its old webhook path is an unknown provider
 		assert.equal((await receiveWebhook(env, 'paddle', '{}', new Headers())).status, 404);
+		// PayGood has no webhook secret bound here
+		assert.equal((await receiveWebhook(env, 'paygood', '{}', new Headers())).status, 404);
 		const body = JSON.stringify(subEvent('e', { subscriptionRef: 's' }, T0.toISOString()));
 		assert.equal((await receiveWebhook(env, 'fake', body, new Headers({ 'X-Fake-Signature': 't=1,v1=00' }))).status, 401);
 		// The test provider does not exist in production
@@ -434,7 +424,7 @@ describe('validation', () => {
 		await assert.rejects(savePrice(env, { tierId: 'creator', period: 'month', currency: 'US1', amount: 500 }, 'a', async () => true), { code: 'invalid_billing_request' });
 		await assert.rejects(savePrice(env, { tierId: 'creator', period: 'month', currency: 'USD', amount: -1 }, 'a', async () => true), { code: 'invalid_billing_request' });
 		await assert.rejects(savePrice(env, { tierId: 'nope', period: 'month', currency: 'USD', amount: 500 }, 'a', async () => false), { status: 404 });
-		await assert.rejects(updateProvider(env, 'paddle', { enabled: true }, 'a'), { code: 'billing_provider_incomplete' });
+		await assert.rejects(updateProvider(env, 'paygood', { enabled: true }, 'a'), { code: 'billing_provider_incomplete' });
 		await assert.rejects(updateProvider(env, 'fake', { mode: 'live' }, 'a'), { code: 'invalid_billing_request' });
 	});
 
@@ -456,21 +446,6 @@ describe('validation', () => {
 		await assert.rejects(call(400), (e: unknown) => e instanceof ProviderError && e.permanent);
 		await assert.rejects(call(429), (e: unknown) => e instanceof ProviderError && !e.permanent);
 		await assert.rejects(call(503), (e: unknown) => e instanceof ProviderError && !e.permanent);
-	});
-
-	it('Paddle checkout sends our ids in custom_data and returns the transaction for Paddle.js', async () => {
-		const calls: { url: string; body: Record<string, unknown> }[] = [];
-		const fetchImpl = (async (url: string, init: RequestInit) => {
-			calls.push({ url, body: JSON.parse(String(init.body)) });
-			return new Response(JSON.stringify({ data: { id: 'txn_01', customer_id: 'ctm_01', checkout: { url: 'https://pay.example/txn_01' } } }), { status: 201 });
-		}) as unknown as typeof fetch;
-		const r = await paddleAdapter.createCheckout(
-			{ mode: 'test', apiKey: 'k', settings: {}, tax: { pricesIncludeTax: true }, fetch: fetchImpl },
-			{ checkoutId: 'bco_1', userId: USER, email: 'b@example.com', name: null, tierId: 'creator', priceRef: 'pri_01', priceCheckoutUrl: null, customerRef: null, returnUrl: 'https://qa.example/upgrade' },
-		);
-		assert.equal(calls[0].url, 'https://sandbox-api.paddle.com/transactions');
-		assert.deepEqual((calls[0].body as { custom_data: unknown }).custom_data, { userId: USER, checkoutId: 'bco_1', tierId: 'creator' });
-		assert.equal(r.paddleTransactionId, 'txn_01');
 	});
 });
 
@@ -541,7 +516,7 @@ describe('the return page, tiers on sale and receipts', () => {
 		assert.equal((await soldTierIds(ctx.env)).size, 0);
 	});
 
-	it('receipts: a stored link is returned, Paddle makes one on request, others have none', async () => {
+	it('receipts: a stored link is returned, none otherwise', async () => {
 		const ctx = setup();
 		await sellCreator(ctx);
 		const checkout = await startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' });
@@ -553,31 +528,17 @@ describe('the return page, tiers on sale and receipts', () => {
 		await ctx.sql.prepare('UPDATE billing_payments SET receipt_url = ? WHERE id = ?').bind('https://receipts.example/1', payment.id).run();
 		assert.equal(await paymentReceipt(ctx.env, USER, payment.id), 'https://receipts.example/1');
 		await assert.rejects(paymentReceipt(ctx.env, 'usr_other', payment.id), { code: 'billing_not_found' });
-		// A Paddle payment without a stored link is marked as on request (not when it failed)
-		await ctx.sql.prepare(`UPDATE billing_payments SET provider = 'paddle', receipt_url = NULL WHERE id = ?`).bind(payment.id).run();
-		assert.equal((await userPayments(ctx.env, USER))[0].receiptOnRequest, true);
-		await ctx.sql.prepare(`UPDATE billing_payments SET status = 'failed' WHERE id = ?`).bind(payment.id).run();
-		assert.equal((await userPayments(ctx.env, USER))[0].receiptOnRequest, false);
-
-		const calls: string[] = [];
-		const fetchImpl = (async (url: string) => {
-			calls.push(url);
-			return new Response(JSON.stringify({ data: { url: 'https://paddle-invoices.example/txn_01.pdf' } }), { status: 200 });
-		}) as unknown as typeof fetch;
-		const url = await paddleAdapter.receiptUrl!({ mode: 'test', apiKey: 'k', settings: {}, tax: { pricesIncludeTax: true }, fetch: fetchImpl }, 'txn_01');
-		assert.equal(calls[0], 'https://sandbox-api.paddle.com/transactions/txn_01/invoice');
-		assert.equal(url, 'https://paddle-invoices.example/txn_01.pdf');
 	});
 });
 
 describe('credential status', () => {
 	it('records that a key is present and its last 4 (never the value); clearing removes both', async () => {
 		const ctx = setup();
-		await markCredential(ctx.env, 'paddle', 'apiKey', 'test', 'admin-1', false, '2026-11-16T10:00:00.000Z', 'Ab12');
-		const status = (await readProvider(ctx.env, 'paddle')).credentials.apiKey.test;
+		await markCredential(ctx.env, 'paygood', 'apiKey', 'test', 'admin-1', false, '2026-11-16T10:00:00.000Z', 'Ab12');
+		const status = (await readProvider(ctx.env, 'paygood')).credentials.apiKey.test;
 		assert.deepEqual(status, { setAt: '2026-11-16T10:00:00.000Z', setBy: 'admin-1', last4: 'Ab12' });
-		await markCredential(ctx.env, 'paddle', 'apiKey', 'test', 'admin-1', true);
-		assert.equal((await readProvider(ctx.env, 'paddle')).credentials.apiKey.test, undefined);
+		await markCredential(ctx.env, 'paygood', 'apiKey', 'test', 'admin-1', true);
+		assert.equal((await readProvider(ctx.env, 'paygood')).credentials.apiKey.test, undefined);
 	});
 });
 

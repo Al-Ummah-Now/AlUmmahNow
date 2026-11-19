@@ -29,7 +29,6 @@ const plans: BillingPlans = {
   ],
   pricesIncludeTax: true,
   taxRatePercent: null,
-  paddle: null,
 };
 
 describe('pay form autofill', () => {

@@ -78,7 +78,7 @@ describe('Upgrade page', () => {
     fetchBillingPlans.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      result: { providers: [], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null, paddle: null },
+      result: { providers: [], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null },
     } as never);
     render(<UpgradePage locale="en" />);
     expect(await screen.findByTestId('tier-creator-request')).toBeEnabled();
@@ -103,7 +103,7 @@ describe('Upgrade page', () => {
     fetchBillingPlans.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      result: { providers: [{ id: 'fake', name: 'Test provider', mode: 'test' }], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null, paddle: null },
+      result: { providers: [{ id: 'fake', name: 'Test provider', mode: 'test' }], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null },
     } as never);
     render(<UpgradePage locale="en" />);
     expect(await screen.findByTestId('tier-creator-pay')).toBeInTheDocument();

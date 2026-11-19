@@ -37,7 +37,7 @@ test.describe('Payments forms: autofill', () => {
 
   test('PAY-AUTOFILL-02 a provider API key is not a password: masked, labelled, no save or generate', async ({ page }) => {
     await page.goto('/payments');
-    const key = page.locator('input[name="paddle-apiKey-test"]');
+    const key = page.locator('input[name="paygood-apiKey-test"]');
     await expect(key).toBeVisible();
     const facts = await key.evaluate((el: HTMLInputElement) => ({
       type: el.type,

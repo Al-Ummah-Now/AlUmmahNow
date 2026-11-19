@@ -122,7 +122,7 @@ The owner asked "what free tier?". Viewers always watch for free, so this is abo
 |---|---|---|---|---|
 | **A. Free with small allowances** | Anyone who signs up can create one channel, store ~5 GB, upload ~2 h a month, and get ~30 caption minutes | Unbounded in number: 10,000 sign-ups × full use ≈ $15–25k storage-months a year, plus moderation of their content | **No**: contradicts O25 (invite-only uploads) | Abuse, spam, moderation load, CSAM exposure on R2 (M4) |
 | **B. Invite / admin grant only** *(recommended for launch)* | No public free creator tier. Admins grant a creator plan, often **sponsored** (waqf) at no charge, with a reason and an optional expiry. This is what O25 does today | Bounded by the admin's choices: number of grants × the plan's full-use cost (§4.3) | **Yes**: O25, D4 | Growth depends on admin time. The invite flow (`USER_INVITES.md`) makes that cheap |
-| **C. Paid only** | Every creator pays; scholars and masjids are sponsored by admin grant | Self-funding | Needs a payment provider (P1, open) and conflicts with D4 (no monetisation at launch) | Excludes small creators. Can't launch until P1 |
+| **C. Paid only** | Every creator pays; scholars and masjids are sponsored by admin grant | Self-funding | Needs a payment provider (P1: PayGood, off until enabled) and conflicts with D4 (no monetisation at launch) | Excludes small creators. Can't launch until P1 |
 
 **Recommendation:** B at launch. When a payment provider exists, add C beside it: paid self-serve plans, with grants still available. Revisit A only if growth needs it, and then only behind sign-up checks (verified email, account age, a first upload held for review).
 
@@ -205,7 +205,9 @@ Everything below exists or is specified in Epic 27 and the captions spec. This p
 - The **admin Users list** (tier column, filter, bulk change; formerly the Creators page) keeps its workflow ("Invite creator", "raise a limit"), but writes plan assignments and grants instead of creator-tier rows.
 - **Budgets:** one screen holds every global monthly budget per environment: captions, inline translation, CMS assist, moderation, live, transcode and X (§5.3).
 
-### 3.7 Payment providers (listed; not decided: P1 stays open)
+### 3.7 Payment providers (P1 decided 2026-11-19: PayGood only, off until the owner enables it)
+
+**Decision P1 (owner, 2026-11-19): PayGood only, off until the owner enables it.** The candidate list below is kept as history; Paddle, which was built from this shortlist while P1 was open, was removed (PR: remove Paddle).
 
 Never Stripe. Card data never touches our systems. A **manual provider is always present**: admin grants, bank transfer, invoices, sponsored and waqf accounts. Candidates, by the Epic 27.7 criteria (MENA coverage, recurring billing, payouts, fees, PCI scope, Shariah):
 
@@ -383,7 +385,7 @@ One per line, with a recommendation.
 | S13 | Global budget stops for transcode, moderation and live, plus a Budgets screen | **Yes**; the S3 envelope in §5.5 |
 | S14 | Workers Logs sampling in production | **Yes**, ~10% head sampling, errors always kept |
 | S15 | Add-ons as additive grants (`entitlement_grants`) | **Yes**, from the captions spec |
-| S16 | Payment provider candidates (P1 stays open): drop Lemon Squeezy, Gumroad and Polar (Stripe-based); shortlist Paddle or FastSpring + PayPal + one GCC gateway (Tap or Moyasar) | **Approve the shortlist**; decide P1 when C is wanted |
+| S16 | Payment provider candidates (superseded: P1 decided 2026-11-19, PayGood only, off until the owner enables it): drop Lemon Squeezy, Gumroad and Polar (Stripe-based); shortlist Paddle or FastSpring + PayPal + one GCC gateway (Tap or Moyasar) | **Approve the shortlist**; decide P1 when C is wanted |
 | S17 | Native apps sell nothing until Epic 24; they show the plan as plain text | **Yes** (Q27-2) |
 | S18 | Inline title translation free with fair use on every creator tier (captions O5) | **Yes**; it costs ≈ $2–7 per 100k titles |
 

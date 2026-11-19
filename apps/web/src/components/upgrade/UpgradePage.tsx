@@ -122,20 +122,14 @@ export function UpgradePage({ locale }: { locale: string }) {
     };
   }, []);
 
-  const { confirm: checkout, startConfirm } = useCheckoutReturn(
+  const { confirm: checkout } = useCheckoutReturn(
     () => {
       void reload();
       void refreshCreatorAccess();
     },
     () => setNotice(bc.pay.canceledReturn),
   );
-  const pay = useSubscribe({
-    plans,
-    locale,
-    copy: bc,
-    onCompleted: (checkoutId) => startConfirm(checkoutId),
-    onClosed: () => setNotice(bc.pay.canceledReturn),
-  });
+  const pay = useSubscribe({ locale, copy: bc });
 
   const withdraw = async (request: TierRequest) => {
     const ok = await confirm({
