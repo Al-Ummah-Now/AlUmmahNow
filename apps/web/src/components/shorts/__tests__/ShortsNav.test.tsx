@@ -17,10 +17,11 @@ describe('ShortsNav previous', () => {
   beforeEach(() => {
     pathname = '/en/shorts/a';
     back.mockReset();
+    document.body.innerHTML = '<section id="video-player"></section>';
   });
 
   it('is disabled on the first Short and enabled once the tab moved to the next one', () => {
-    const { rerender } = render(<ShortsNav />);
+    const { rerender } = render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
     expect(screen.getByTestId('shorts-prev')).toBeDisabled();
     pathname = '/en/shorts/b';
     act(() => rerender(<ShortsNav />));
@@ -33,7 +34,7 @@ describe('ShortsNav previous', () => {
   });
 
   it('a downward swipe goes back once the tab moved forward', () => {
-    const { rerender } = render(<ShortsNav />);
+    const { rerender } = render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
     pathname = '/en/shorts/b';
     act(() => rerender(<ShortsNav />));
     const touch = (type: string, y: number) => {
@@ -48,37 +49,23 @@ describe('ShortsNav previous', () => {
   });
 });
 
-describe('ShortsNav over the comments', () => {
-  let callback: IntersectionObserverCallback | null = null;
+describe('ShortsNav inside the player box', () => {
   beforeEach(() => {
     pathname = '/en/shorts/a';
-    callback = null;
-    (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver = class {
-      constructor(cb: IntersectionObserverCallback) { callback = cb; }
-      observe() {}
-      disconnect() {}
-    };
-    document.body.innerHTML = '<section id="video-player"></section>';
-  });
-  afterEach(() => {
-    delete (globalThis as unknown as { IntersectionObserver?: unknown }).IntersectionObserver;
+    push.mockReset();
+    document.body.innerHTML = '<section id="video-player"></section><section id="comments"></section>';
   });
 
-  const ratio = (r: number) => act(() => callback?.([{ intersectionRatio: r } as IntersectionObserverEntry], {} as IntersectionObserver));
-
-  it('hides the ↑/↓ buttons once the player scrolls away (they would sit on the comment box) and shows them again', () => {
+  it('puts the ↑/↓ buttons inside the player (they scroll with it, never over the comments or Related)', () => {
     render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
-    expect(screen.getByTestId('shorts-nav')).toBeInTheDocument();
-    ratio(0.1);
-    expect(screen.queryByTestId('shorts-nav')).toBeNull();
-    ratio(0.9);
-    expect(screen.getByTestId('shorts-nav')).toBeInTheDocument();
+    const nav = screen.getByTestId('shorts-nav');
+    expect(nav.parentElement?.id).toBe('video-player');
+    expect(document.getElementById('comments')?.contains(nav)).toBe(false);
   });
 
-  it('keys still move to the next Short while the buttons are hidden', async () => {
+  it('keys move to the next Short wherever the page is scrolled', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'b' }] }) }) as unknown as typeof fetch;
     render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
-    ratio(0);
     await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' })); });
     expect(push).toHaveBeenCalledWith('/en/shorts/b');
   });

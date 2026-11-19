@@ -8,6 +8,7 @@
  * URL, history and the page's metadata follow, and the watch shell keeps the player mounted.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getApiUrl } from '@/lib/runtime-config';
@@ -17,8 +18,6 @@ import { VIDEO_PLAYER_ID } from '@/components/SkipLinks/SkipLinksBase';
 const SHORT_PATH = /^\/(en|ar)\/shorts\/([^/?#]+)\/?$/;
 const SWIPE_MIN_PX = 80;
 const SWIPE_MAX_MS = 700;
-/** The buttons show while at least this share of the player is on screen (never over the comments below) */
-const PLAYER_VISIBLE_RATIO = 0.35;
 
 /** The next Short after `id` in the public feed, or null at the end. */
 export async function nextShortId(api: string, id: string, fetcher: typeof fetch = fetch): Promise<string | null> {
@@ -41,9 +40,10 @@ export function ShortsNav() {
   const [trail, setTrail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [atEnd, setAtEnd] = useState(false);
-  /** The buttons float at the screen's end edge: once the player scrolls away they would sit on the
-      comment box, so they show only while the player is on screen (keys and swipes always work). */
-  const [playerOnScreen, setPlayerOnScreen] = useState(true);
+  /** The player box the buttons sit in. They live inside it (its inline-end edge, vertically centred),
+      so they scroll with the player and never sit on the comments, the Related column or anything
+      else on the page (#1513). Keys and swipes work wherever the page is scrolled. */
+  const [host, setHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -113,37 +113,26 @@ export function ShortsNav() {
   }, [id, next, previous]);
 
   useEffect(() => {
-    if (!id || typeof IntersectionObserver === 'undefined') return;
-    let observer: IntersectionObserver | null = null;
+    if (!id) return;
     let frame = 0;
     let tries = 0;
     const attach = () => {
       const player = document.getElementById(VIDEO_PLAYER_ID);
-      if (!player) {
-        if (tries++ < 60) frame = requestAnimationFrame(attach);
-        return;
-      }
-      observer = new IntersectionObserver(
-        ([entry]) => setPlayerOnScreen(!!entry && entry.intersectionRatio >= PLAYER_VISIBLE_RATIO),
-        { threshold: [0, PLAYER_VISIBLE_RATIO, 1] },
-      );
-      observer.observe(player);
+      if (player) setHost(player);
+      else if (tries++ < 120) frame = requestAnimationFrame(attach);
     };
     attach();
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-      setPlayerOnScreen(true);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [id]);
 
-  if (!id || !playerOnScreen) return null;
+  if (!id || !host) return null;
   const button =
-    'inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fanous-color-border,currentColor)] bg-[var(--fanous-color-surface,transparent)] text-lg shadow disabled:opacity-40 focus-visible:outline focus-visible:outline-2';
-  return (
+    // Opaque face (the dialog colour, never see-through over the video); disabled fades only the arrow
+    'pointer-events-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fanous-color-border,currentColor)] bg-[var(--fanous-c-dialog-bg,var(--fanous-color-surface))] text-lg text-[var(--fanous-color-text-primary)] shadow disabled:cursor-default disabled:[&>span]:opacity-40 focus-visible:outline focus-visible:outline-2';
+  return createPortal(
     <nav
       aria-label={t.video.nextShort && t.video.previousShort ? `${t.video.previousShort} / ${t.video.nextShort}` : 'Shorts'}
-      className="fixed end-4 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-3"
+      className="shorts-nav pointer-events-none absolute end-3 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-3"
       data-testid="shorts-nav"
     >
       <button type="button" className={button} onClick={previous} disabled={!canGoBack} aria-label={t.video.previousShort ?? 'Previous Short'} data-testid="shorts-prev">
@@ -152,6 +141,7 @@ export function ShortsNav() {
       <button type="button" className={button} onClick={() => void next()} disabled={busy || atEnd} aria-label={t.video.nextShort ?? 'Next Short'} data-testid="shorts-next">
         <span aria-hidden="true">↓</span>
       </button>
-    </nav>
+    </nav>,
+    host,
   );
 }
