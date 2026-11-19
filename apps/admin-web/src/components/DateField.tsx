@@ -68,7 +68,9 @@ export function parseDateTimeInput(text: string): string | null {
   const h = Number(m[2]);
   const min = Number(m[3]);
   if (!day || h > 23 || min > 59) return null;
-  return `${day}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  // The machine value datetime-local carries (never shown), so zero-padded ASCII digits
+  const two = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return `${day}T${two(h)}:${two(min)}`;
 }
 
 /** "YYYY-MM-DDTHH:mm" as the field shows it: "2026-11-18 14:30" / «٢٠٢٦/١١/١٨ ١٤:٣٠». */
