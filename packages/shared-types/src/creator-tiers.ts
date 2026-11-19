@@ -88,6 +88,11 @@ export interface CreatorTier {
   channels: boolean;
   /** Listed on /upgrade, where users may request it */
   requestable: boolean;
+  /**
+   * Hidden (owner, 2026-11-19): never on the Upgrade page or any tier list a user sees, except as the
+   * current tier of the people on it. Admins still list, invite to and grant it. The default tier is never hidden.
+   */
+  hidden: boolean;
   /** Order on /upgrade and in the admin (low first) */
   sortOrder: number;
   /** Upload sessions (one per video) per hour */
@@ -149,6 +154,7 @@ export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> =
   uploads: false,
   channels: false,
   requestable: false,
+  hidden: false,
   sortOrder: 0,
   perHour: 10,
   perDay: 50,
@@ -174,6 +180,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   uploads: true,
   channels: true,
   requestable: true,
+  hidden: false,
   sortOrder: 10,
   perHour: 300,
   perDay: 2000,
@@ -201,6 +208,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   uploads: true,
   channels: true,
   requestable: false,
+  hidden: false,
   sortOrder: 100,
   perHour: 0,
   perDay: 0,

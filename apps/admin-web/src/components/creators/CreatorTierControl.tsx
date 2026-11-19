@@ -161,7 +161,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
             {/* Not backfilled yet: no stored tier to select (works as Free) */}
             {!current && <option value="" disabled>{currentName}</option>}
             {tiers.map((tier) => (
-              <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
+              <option key={tier.id} value={tier.id}>{tier.hidden ? `${tierLabel(tier, locale)} (${t('creators.hiddenChip')})` : tierLabel(tier, locale)}</option>
             ))}
           </select>
           {needsTier && !current && tiers.some((tier) => tier.id === CREATOR_TIER_IDS.creator) && (

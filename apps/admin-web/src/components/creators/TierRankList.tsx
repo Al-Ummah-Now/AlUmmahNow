@@ -122,6 +122,7 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
               <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <span className="font-medium text-fg">{tierLabel(tier, locale)}</span>
                 {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
+                {tier.hidden && <Chip tone="neutral" testId={`tiers-rank-${id}-hidden`}>{t('creators.hiddenChip')}</Chip>}
                 {arabicMissing(tier) && <Chip tone="warn" testId={`tiers-rank-${id}-arabic-missing`}>{t('creators.arabicMissing')}</Chip>}
               </span>
               {editable && (

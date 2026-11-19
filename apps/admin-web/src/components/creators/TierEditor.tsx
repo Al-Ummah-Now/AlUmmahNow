@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog, confirmButtonClass } from './TierChangeDialog';
 import { DefaultTierButton, type SetDefaultTierAction } from './DefaultTierButton';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 
 type Message = { kind: 'ok' | 'error'; text: string } | null;
 
@@ -45,6 +46,70 @@ const HELP: Record<NumberField | 'maxChannels', MessageKey> = {
   liveMaxConcurrent: 'creators.helpLiveConcurrent',
   liveMaxStreamMinutes: 'creators.helpLiveMaxMinutes',
 };
+
+/**
+ * The Hidden switch of an existing tier: saves at once (audited by the tier save) and offers Undo. It sends
+ * the stored tier with only `hidden` changed, so unsaved edits in the form are never saved with it. The
+ * default tier cannot be hidden (the server refuses it too).
+ */
+function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier: CreatorTier; canManage: boolean; isDefault: boolean; save: TierActions['save']; describedBy: string }) {
+  const router = useRouter();
+  const { t, locale } = useLanguage();
+  const { run } = useUndoableAction();
+  const [hidden, setHidden] = useState(tier.hidden);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const name = tierLabel(tier, locale);
+  const send = async (value: boolean) => {
+    const result = await save({ ...tierFormPayload(tierToForm(tier)), hidden: value }, false);
+    if (!result.ok) throw new HiddenFailure(result);
+    setHidden(value);
+    router.refresh();
+    return value;
+  };
+  async function toggle(next: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      await run({
+        action: () => send(next),
+        undo: async () => send(!next),
+        message: t(next ? 'creators.tierHiddenOn' : 'creators.tierHiddenOff', { tier: name }),
+        undoneMessage: t('creators.tierHiddenUndone'),
+      });
+    } catch (e) {
+      const result = e instanceof HiddenFailure ? e.result : { ok: false as const, status: 0 };
+      logger.warn('[creators] Tier hidden switch failed', { id: tier.id, status: result.status, code: 'code' in result ? result.code : undefined });
+      if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
+      setError(t(tierActionMessage(result)));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          checked={hidden}
+          disabled={!canManage || busy || (isDefault && !hidden)}
+          aria-describedby={describedBy}
+          onChange={(e) => void toggle(e.target.checked)}
+          className="h-4 w-4 accent-accent"
+          data-testid={`tier-${tier.id}-hidden`}
+        />
+        {t('creators.tierHidden')}
+      </label>
+      {error && <span role="alert" className="ps-6 text-xs text-danger-fg" data-testid={`tier-${tier.id}-hidden-error`}>{error}</span>}
+    </>
+  );
+}
+
+class HiddenFailure extends Error {
+  constructor(readonly result: ActionResult<unknown>) {
+    super(`Tier hidden switch failed: ${result.status}`);
+  }
+}
 
 /** One tier's limits, editable by admins (creators:manage); saved through admin-api with an audit row. */
 function TierCard({ tier, users, invites = 0, canManage, actions, create = false, isDefault = false }: { tier?: CreatorTier; users: number; invites?: number; canManage: boolean; actions: TierActions; create?: boolean; isDefault?: boolean }) {
@@ -123,7 +188,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
     );
   };
 
-  const flag = (field: 'uploads' | 'channels' | 'requestable', label: string, forcedOn: boolean, describedBy?: string) => (
+  const flag = (field: 'uploads' | 'channels' | 'requestable' | 'hidden', label: string, forcedOn: boolean, describedBy?: string) => (
     <label className="flex items-center gap-2 text-sm text-fg">
       <input
         type="checkbox"
@@ -223,6 +288,11 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         <div className="flex flex-col gap-1 text-sm">
           {flag('requestable', t('creators.tierRequestable'), false, `${ids}-requestable-help`)}
           <span id={`${ids}-requestable-help`} className="ps-6 text-xs text-fg-muted" data-testid={`tier-${key}-requestable-help`}>{t('creators.helpRequestable')}</span>
+        </div>
+        {/* Hidden (owner, 2026-11-19): a new tier sets it with Create; an existing tier switches at once, with Undo */}
+        <div className="flex flex-col gap-1 text-sm">
+          {create || !tier ? flag('hidden', t('creators.tierHidden'), false, `${ids}-hidden-help`) : <HiddenSwitch tier={tier} canManage={canManage} isDefault={isDefault} save={actions.save} describedBy={`${ids}-hidden-help`} />}
+          <span id={`${ids}-hidden-help`} className="ps-6 text-xs text-fg-muted" data-testid={`tier-${key}-hidden-help`}>{t(isDefault ? 'creators.helpHiddenDefault' : 'creators.helpHidden')}</span>
         </div>
         {/* Rank is set by reordering the Rank list above (drag or move up/down), not typed here */}
       </div>
@@ -344,7 +414,8 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
           onConfirm={() =>
             void (pending === 'delete'
               ? run(() => actions.remove(tier.id), t('creators.tierDeleted'))
-              : run(() => actions.save(tierFormPayload(form), false), t('creators.tierSaved')))
+              // Hidden has its own switch (saved at once): Save keeps the stored value, never the form's stale copy
+              : run(() => actions.save({ ...tierFormPayload(form), hidden: tier?.hidden ?? form.hidden }, false), t('creators.tierSaved')))
           }
         />
       )}
@@ -360,6 +431,7 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
         <section key={tier.id} id={`tier-${tier.id}`} aria-labelledby={`tier-${tier.id}-title`} className="scroll-mt-6">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h2 id={`tier-${tier.id}-title`} className="text-lg font-semibold text-fg">{tierLabel(tier, locale)}</h2>
+            {tier.hidden && <Chip tone="neutral" testId={`tier-${tier.id}-hidden-chip`}>{t('creators.hiddenChip')}</Chip>}
             {arabicMissing(tier) && (
               <Chip tone="warn" testId={`tier-${tier.id}-arabic-missing`}>
                 <span title={t('creators.arabicMissingHelp')}>{t('creators.arabicMissing')}</span>
@@ -371,7 +443,8 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
             {tier.id === defaultTierId ? (
               <Chip tone="info" testId={`tier-${tier.id}-default`}>{t('creators.tierDefaultChip')}</Chip>
             ) : (
-              canManage && actions.setDefault && (
+              // A hidden tier cannot be the default (every new account gets the default): show it first
+              canManage && actions.setDefault && !tier.hidden && (
                 <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} />
               )
             )}

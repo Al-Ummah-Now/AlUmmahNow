@@ -100,6 +100,8 @@ export interface TierFormValues {
   uploads: boolean;
   channels: boolean;
   requestable: boolean;
+  /** Hidden from users except the people on it (owner, 2026-11-19) */
+  hidden: boolean;
   sortOrder: number;
   perHour: number;
   perDay: number;
@@ -167,6 +169,7 @@ export function tierToForm(tier?: CreatorTier): TierFormValues {
     uploads: tier?.uploads ?? true,
     channels: tier?.channels ?? true,
     requestable: tier?.requestable ?? false,
+    hidden: tier?.hidden ?? false,
     sortOrder: tier?.sortOrder ?? 50,
     perHour: tier?.perHour || 300,
     perDay: tier?.perDay || 2000,
@@ -238,6 +241,7 @@ export function tierActionMessage(result: { status: number; code?: string }): Me
   if (result.code === 'tier_is_default') return 'creators.tierIsDefault';
   if (result.code === 'tier_has_invites') return 'creators.errorTierHasInvites';
   if (result.code === 'default_tier_deleted') return 'creators.errorDefaultDeleted';
+  if (result.code === 'default_tier_hidden') return 'creators.errorDefaultHidden';
   if (result.code === 'tier_in_use' || result.status === 409) return 'creators.tierInUse';
   if (result.code === 'tier_text_missing') return 'creators.errorTextMissing';
   if (result.code === 'tier_name_not_english') return 'creators.errorNameNotEnglish';

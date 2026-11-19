@@ -76,6 +76,7 @@ interface TierRow {
 	uploads?: number | null;
 	channels?: number | null;
 	requestable?: number | null;
+	hidden?: number | null;
 	sort_order?: number | null;
 	name_ar?: string | null;
 	description?: string | null;
@@ -113,6 +114,7 @@ function toTier(row: TierRow): CreatorTier {
 		uploads: flag(row.uploads, shipped?.uploads ?? true),
 		channels: flag(row.channels, shipped?.channels ?? true),
 		requestable: flag(row.requestable, shipped?.requestable ?? false),
+		hidden: flag(row.hidden, false),
 		sortOrder: row.sort_order === null || row.sort_order === undefined ? shipped?.sortOrder ?? 50 : Number(row.sort_order),
 		perHour: Number(row.per_hour),
 		perDay: Number(row.per_day),
@@ -262,6 +264,7 @@ export async function setDefaultTier(
 		if (deleted) throw new CreatorTierError(409, 'default_tier_deleted', 'A deleted tier cannot be the default; restore it first');
 		throw new CreatorTierError(404, 'tier_not_found');
 	}
+	if ((await readTier(db, tierId))?.hidden) throw new CreatorTierError(409, 'default_tier_hidden', 'A hidden tier cannot be the default; show it first');
 	const previous = await readDefaultTierId(db);
 	await db
 		.prepare(
@@ -400,6 +403,7 @@ export interface TierInput {
 	uploads?: unknown;
 	channels?: unknown;
 	requestable?: unknown;
+	hidden?: unknown;
 	sortOrder?: unknown;
 	nameAr?: unknown;
 	description?: unknown;
@@ -444,10 +448,12 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	if (typeof rawImport !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'importCountsAgainstLimits must be true or false');
 	const importCountsAgainstLimits = rawImport;
 	const requestable = bool(input.requestable, current?.requestable, false);
+	if (input.hidden !== undefined && typeof input.hidden !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'hidden must be true or false');
+	const hidden = bool(input.hidden, current?.hidden, false);
 	const sortOrder = intIn(input.sortOrder ?? current?.sortOrder ?? 50, 'sortOrder');
 	if (unlimited) {
 		return {
-			id, name, ...text, unlimited, uploads: true, channels: true, requestable, sortOrder, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0,
+			id, name, ...text, unlimited, uploads: true, channels: true, requestable, hidden, sortOrder, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0,
 			importCountsAgainstLimits, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0,
 		};
 	}
@@ -469,7 +475,7 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	const liveLimit = (field: 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes') =>
 		intIn(input[field] ?? (current?.[field] || DEFAULT_CREATOR_TIER[field]), field);
 	return {
-		id, name, ...text, unlimited, uploads, channels, requestable, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo,
+		id, name, ...text, unlimited, uploads, channels, requestable, hidden, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo,
 		live, liveHoursMonth: liveLimit('liveHoursMonth'), liveMaxConcurrent: liveLimit('liveMaxConcurrent'), liveMaxStreamMinutes: liveLimit('liveMaxStreamMinutes'),
 	};
 }
@@ -539,6 +545,10 @@ export async function saveTier(
 	}
 	if (!opts.create && !previous) throw new CreatorTierError(404, 'tier_not_found');
 	const tier = { ...validateTier(id, input, previous), updatedAt: now, updatedBy: actorId };
+	// The default tier is what every new account gets, so it is never hidden (owner, 2026-11-19)
+	if (tier.hidden && !previous?.hidden && (await readDefaultTierId(db)) === id) {
+		throw new CreatorTierError(409, 'default_tier_hidden', 'The default tier cannot be hidden; set another default first');
+	}
 	if (opts.requireLocalized) {
 		// Localized fields (owner rule 2026-11-16): the name and the description in English and in Arabic, no fallback
 		const missing = (['nameAr', 'description', 'descriptionAr'] as const).filter((f) => !tier[f]?.trim());
@@ -548,13 +558,13 @@ export async function saveTier(
 	}
 	await db
 		.prepare(
-			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, sort_order,
+			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, hidden, sort_order,
 			   per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video,
 			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_ar = excluded.name_ar, description = excluded.description,
 			   description_ar = excluded.description_ar, unlimited = excluded.unlimited, uploads = excluded.uploads, channels = excluded.channels,
-			   requestable = excluded.requestable, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
+			   requestable = excluded.requestable, hidden = excluded.hidden, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
 			   per_day = excluded.per_day, max_concurrent = excluded.max_concurrent, max_channels = excluded.max_channels,
 			   caption_minutes_month = excluded.caption_minutes_month, import_counts_limits = excluded.import_counts_limits, audio_tracks_per_video = excluded.audio_tracks_per_video,
 			   live = excluded.live, live_hours_month = excluded.live_hours_month,
@@ -563,7 +573,7 @@ export async function saveTier(
 		)
 		.bind(
 			id, tier.name, tier.nameAr, tier.description, tier.descriptionAr, tier.unlimited ? 1 : 0, tier.uploads ? 1 : 0, tier.channels ? 1 : 0,
-			tier.requestable ? 1 : 0, tier.sortOrder, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth,
+			tier.requestable ? 1 : 0, tier.hidden ? 1 : 0, tier.sortOrder, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth,
 			tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes, now, actorId,
 		)
 		.run();
