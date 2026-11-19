@@ -102,7 +102,16 @@ export async function glassContrast(page: Page, box: Locator, label: string): Pr
   const problems: string[] = [];
   let measured = 0;
   for (const block of ['start', 'center', 'end'] as const) {
-    await box.evaluate((e, b) => e.scrollIntoView({ block: b as ScrollLogicalPosition }), block);
+    await box.evaluate((e, b) => {
+      e.scrollIntoView({ block: b as ScrollLogicalPosition });
+      // 'start' stops below the sticky header, as a reader sees it: under the header its edge glow lay over the
+      // box's first lines and was read as their background (Contact's side box, 3.06:1 in Fawanees dark)
+      if (b === 'start') {
+        const bar = document.querySelector('header');
+        const bottom = bar && /^(sticky|fixed)$/.test(getComputedStyle(bar).position) ? bar.getBoundingClientRect().bottom : 0;
+        if (bottom > 0) window.scrollBy(0, -(bottom + 24));
+      }
+    }, block);
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const boxes = await textBoxes(box);
     if (!boxes.length) continue;
