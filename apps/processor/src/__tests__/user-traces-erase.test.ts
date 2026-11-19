@@ -42,6 +42,17 @@ function seed() {
     search.raw.prepare(`INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, 'upload', 'day', 1, 3)`).run(userId);
     search.raw.prepare(`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at) VALUES (?, 'upload', 'lease_1', 9999999999999)`).run(userId);
     search.raw.prepare(`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'creator', 'admin', 'usr_admin', '2026-11-13')`).run(userId);
+    search.raw.prepare(`INSERT INTO caption_minute_usage (user_id, period, minutes, updated_at) VALUES (?, '2026-11', 12, ?)`).run(userId, now);
+    search.raw.prepare(`INSERT INTO caption_minute_overdraft (user_id, minutes, updated_at) VALUES (?, 3, ?)`).run(userId, now);
+    search.raw
+      .prepare(`INSERT INTO caption_minute_grants (id, user_id, minutes, scope, period, reason, created_by, created_at) VALUES (?, ?, 60, 'month', '2026-11', 'pilot', 'usr_admin', ?)`)
+      .run(`grant_${userId}`, userId, now);
+    search.raw
+      .prepare(`INSERT INTO caption_minute_holds (hold_id, user_id, period, minutes, month_minutes, state, created_at, updated_at) VALUES (?, ?, '2026-11', 5, 5, 'committed', ?, ?)`)
+      .run(`hold_${userId}`, userId, now, now);
+    search.raw
+      .prepare(`INSERT INTO caption_minute_ledger (id, user_id, hold_id, kind, minutes, balance_after, period, created_at) VALUES (?, ?, ?, 'settle', 5, 55, '2026-11', ?)`)
+      .run(`led_${userId}`, userId, `hold_${userId}`, now);
   }
   return { reports, search };
 }
@@ -50,7 +61,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -66,12 +77,16 @@ describe('eraseUserTraces (#1059)', () => {
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_windows').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_leases').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM creator_tier_assignments').all()).toEqual([{ user_id: OTHER }]);
+    // Caption minutes (usage, overdraft, holds, ledger, grants): the erased user's rows only
+    for (const table of ['caption_minute_usage', 'caption_minute_overdraft', 'caption_minute_holds', 'caption_minute_ledger', 'caption_minute_grants']) {
+      expect(search.raw.prepare(`SELECT user_id FROM ${table}`).all()).toEqual([{ user_id: OTHER }]);
+    }
   });
 
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });
