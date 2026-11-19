@@ -1,4 +1,4 @@
-import { changePercent, rangeDates, sumMetrics, trafficRows } from '../analytics';
+import { changePercent, originRows, rangeDates, sumMetrics, trafficRows } from '../analytics';
 
 const NOW = new Date('2026-11-09T12:00:00.000Z');
 
@@ -52,5 +52,28 @@ describe('trafficRows', () => {
 
   it('is empty with no views', () => {
     expect(trafficRows({ totalViews: 0, sources: {}, externalHosts: [] })).toEqual([]);
+  });
+});
+
+describe('originRows (where viewers watch)', () => {
+  it('ranks by views with the stored overflow last', () => {
+    expect(originRows({ other: 2, web: 5, ios: 3 }, 10)).toEqual([
+      { key: 'web', views: 5, share: 0.5 },
+      { key: 'ios', views: 3, share: 0.3 },
+      { key: 'other', views: 2, share: 0.2 },
+    ]);
+  });
+
+  it('folds rows past the limit into "other" (countries show the top 10)', () => {
+    expect(originRows({ EG: 4, GB: 3, US: 2, other: 1 }, 10, 2)).toEqual([
+      { key: 'EG', views: 4, share: 0.4 },
+      { key: 'GB', views: 3, share: 0.3 },
+      { key: 'other', views: 3, share: 0.3 },
+    ]);
+  });
+
+  it('is empty before anything was collected (older APIs omit the field)', () => {
+    expect(originRows(undefined, 10)).toEqual([]);
+    expect(originRows({ web: 3 }, 0)).toEqual([]);
   });
 });

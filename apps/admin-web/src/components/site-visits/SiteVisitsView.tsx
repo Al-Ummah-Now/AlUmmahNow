@@ -16,7 +16,10 @@ import { ListError } from '@/components/list/ListStates';
 import { cardClass } from '@/components/ui';
 import { contentApi } from '@/lib/list/api-client';
 import {
+  OTHER_ORIGIN,
+  countryName,
   dailyPoints,
+  topCountries,
   groupSources,
   shareOf,
   sourceName,
@@ -129,6 +132,27 @@ export function SiteVisitsPanel({ report, t, locale }: { report: SiteVisitsRepor
       return { key: l.kind, label: label === key ? l.kind : label, visits: l.visits, testId: `site-visits-landing-${l.kind}` };
     });
   const referrerRows: Row[] = report.referrers.filter((r) => r.visits > 0).map((r) => ({ key: r.host, label: r.host, visits: r.visits, testId: 'site-visits-referrer' }));
+  // Request origin: app or site, device, country, campaign (counted since collection began)
+  const label = (prefix: string, value: string) => {
+    const key = `siteVisits.${prefix}.${value}` as MessageKey;
+    const text = t(key);
+    return text === key ? value : text;
+  };
+  const surfaceRows: Row[] = (report.surfaces ?? []).filter((r) => r.visits > 0).map((r) => ({ key: r.surface, label: label('surfaces', r.surface), visits: r.visits, testId: `site-visits-surface-${r.surface}` }));
+  const deviceRows: Row[] = (report.devices ?? []).filter((r) => r.visits > 0).map((r) => ({ key: r.device, label: label('devices', r.device), visits: r.visits, testId: `site-visits-device-${r.device}` }));
+  const countryRows: Row[] = topCountries(report.countries ?? []).map((r) => ({
+    key: r.country,
+    label: r.country === OTHER_ORIGIN ? t('siteVisits.otherCountries') : countryName(r.country, locale),
+    visits: r.visits,
+    testId: `site-visits-country-${r.country}`,
+  }));
+  const campaignRows: Row[] = (report.campaigns ?? []).filter((r) => r.visits > 0).map((r) => ({
+    key: r.campaign,
+    label: r.campaign === OTHER_ORIGIN ? t('siteVisits.otherCampaigns') : r.campaign,
+    visits: r.visits,
+    testId: 'site-visits-campaign',
+  }));
+  const hasOrigin = surfaceRows.length + deviceRows.length + countryRows.length > 0;
 
   return (
     <div className="space-y-6" data-testid="site-visits-panel" data-days={report.days}>
@@ -177,6 +201,15 @@ export function SiteVisitsPanel({ report, t, locale }: { report: SiteVisitsRepor
           <div className="lg:col-span-2">
             <Breakdown id="site-visits-referrers-title" title={t('siteVisits.referrersTitle')} rows={referrerRows} total={total} empty={t('siteVisits.referrersEmpty')} t={t} f={f} testId="site-visits-referrers" />
           </div>
+          {hasOrigin && (
+            <>
+              <p className="text-sm text-fg-muted lg:col-span-2" data-testid="site-visits-origin-note">{t('siteVisits.originNote')}</p>
+              <Breakdown id="site-visits-surfaces-title" title={t('siteVisits.surfacesTitle')} rows={surfaceRows} total={total} empty={t('siteVisits.chart.empty')} t={t} f={f} testId="site-visits-surfaces" />
+              <Breakdown id="site-visits-devices-title" title={t('siteVisits.devicesTitle')} rows={deviceRows} total={total} empty={t('siteVisits.chart.empty')} t={t} f={f} testId="site-visits-devices" />
+              <Breakdown id="site-visits-countries-title" title={t('siteVisits.countriesTitle')} rows={countryRows} total={total} empty={t('siteVisits.chart.empty')} t={t} f={f} testId="site-visits-countries" />
+              <Breakdown id="site-visits-campaigns-title" title={t('siteVisits.campaignsTitle')} rows={campaignRows} total={total} empty={t('siteVisits.campaignsEmpty')} t={t} f={f} testId="site-visits-campaigns" />
+            </>
+          )}
         </div>
       )}
     </div>

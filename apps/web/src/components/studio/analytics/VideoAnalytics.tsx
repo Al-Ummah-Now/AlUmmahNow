@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger-client';
 import { formatDuration, formatWatchTime, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { RANGE_PRESETS, rangeDates, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
-import { StatCard, TrafficSources } from './parts';
+import { StatCard, TrafficSources, ViewerOrigins } from './parts';
 
 interface Props {
   locale: string;
@@ -139,6 +139,7 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
           </section>
 
           <TrafficSources traffic={data.traffic} locale={locale} />
+          <ViewerOrigins traffic={data.traffic} locale={locale} />
         </div>
       )}
     </div>

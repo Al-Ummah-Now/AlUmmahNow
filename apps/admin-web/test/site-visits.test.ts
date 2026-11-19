@@ -8,7 +8,7 @@ import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { LANDING_KINDS } from '@al-ummah/shared-types';
+import { CLIENT_SURFACES, DEVICE_CLASSES, LANDING_KINDS } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
@@ -21,6 +21,7 @@ import {
   shareOf,
   sourceGroupOf,
   sourceName,
+  topCountries,
   visitFormats,
   visitPeriodLabel,
   type SiteVisitsReport,
@@ -171,6 +172,37 @@ describe('site visits panel', () => {
     assert.match(html, /data-testid="site-visits-chart-empty"/);
     assert.doesNotMatch(html, /site-visits-sources/);
     assert.match(html, /data-testid="site-visits-total">0</);
+  });
+
+  it('shows where visitors come from: app or site, device, top countries + other, campaigns', () => {
+    const countries = Array.from({ length: 12 }, (_, i) => ({ country: ['EG', 'GB', 'US', 'SA', 'FR', 'DE', 'TR', 'PK', 'ID', 'MY', 'NG', 'CA'][i]!, visits: 12 - i }));
+    const html = render({ ...report, surfaces: [{ surface: 'web', visits: 9 }, { surface: 'embed', visits: 1 }], devices: [{ device: 'phone', visits: 7 }, { device: 'desktop', visits: 3 }], countries: [...countries, { country: 'other', visits: 2 }], campaigns: [{ campaign: 'newsletter', visits: 2 }] });
+    assert.match(html, /data-testid="site-visits-surface-web" data-visits="9"/);
+    assert.match(html, /Embedded players/);
+    assert.match(html, /data-testid="site-visits-device-phone" data-visits="7"/);
+    assert.match(html, /data-testid="site-visits-country-EG" data-visits="12"/);
+    assert.match(html, />Egypt</);
+    // NG (2) and CA (1) fold into Other countries with the stored overflow (2)
+    assert.match(html, /data-testid="site-visits-country-other" data-visits="5"/);
+    assert.doesNotMatch(html, /site-visits-country-NG/);
+    assert.match(html, />newsletter</);
+    const ar = render({ ...report, countries: [{ country: 'EG', visits: 3 }] }, 'ar');
+    assert.match(ar, />مصر</);
+  });
+
+  it('hides the origin breakdowns when nothing was collected yet', () => {
+    const html = render(report);
+    assert.doesNotMatch(html, /site-visits-surfaces|site-visits-origin-note/);
+  });
+
+  it('folds countries beyond the top 10 and the stored overflow into one row', () => {
+    assert.deepEqual(topCountries([{ country: 'other', visits: 4 }, { country: 'EG', visits: 1 }], 10), [{ country: 'EG', visits: 1 }, { country: 'other', visits: 4 }]);
+    assert.deepEqual(topCountries([{ country: 'EG', visits: 1 }]), [{ country: 'EG', visits: 1 }]);
+  });
+
+  it('has en and ar labels for every surface and device', () => {
+    for (const s of CLIENT_SURFACES) assert.ok(en.siteVisits.surfaces[s] && ar.siteVisits.surfaces[s], s);
+    for (const d of DEVICE_CLASSES) assert.ok(en.siteVisits.devices[d] && ar.siteVisits.devices[d], d);
   });
 
   it('renders in Arabic with Arabic digits and words', () => {
