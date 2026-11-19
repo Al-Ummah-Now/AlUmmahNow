@@ -1451,6 +1451,17 @@ export interface AppTranslations {
     comment: string;
     commenting: string;
     signInToComment: string;
+    // Community post comments (#1622)
+    title: string;
+    addPublicComment: string;
+    enterComment: string;
+    tooLong: string;
+    postFailed: string;
+    charsRemaining: string;
+    charsOver: string;
+    postCommentsOff: string;
+    beFirst: string;
+    shareThoughts: string;
     signIn: string;
     noComments: string;
     liveUpdates: string;

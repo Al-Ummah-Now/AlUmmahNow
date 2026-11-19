@@ -4,7 +4,9 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PostComment, formatNumber } from '@al-ummah/shared-types';
+import { PostComment, formatCountNoun } from '@al-ummah/shared-types';
+import { useLanguage } from '@/hooks/useLanguage';
+import { SignInToComment } from '@/components/comments-shared/SignInToComment';
 import { cn } from '@/lib/utils';
 import CommentForm from './CommentForm';
 import Comment from './Comment';
@@ -39,6 +41,7 @@ export default function CommentsSection({
   channelId,
   userId,
 }: CommentsSectionProps) {
+  const { t, lang } = useLanguage();
   const [comments, setComments] = useState<PostComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -135,13 +138,8 @@ export default function CommentsSection({
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {totalComments > 0
-            ? isRTL
-              ? `${formatNumber('ar', totalComments)} ${totalComments === 1 ? 'تعليق' : 'تعليقات'}`
-              : `${totalComments} ${totalComments === 1 ? 'Comment' : 'Comments'}`
-            : isRTL
-            ? 'التعليقات'
-            : 'Comments'}
+          {/* The shared count grammar: «تعليق واحد», «تعليقان», «٣ تعليقات», «١١ تعليقًا» (#1622) */}
+          {totalComments > 0 ? formatCountNoun(lang, totalComments, 'comment') : t.comments.title}
         </h3>
 
         {/* Sort Selector */}
@@ -160,15 +158,20 @@ export default function CommentsSection({
                 'cursor-pointer'
               )}
             >
-              <option value="top">{isRTL ? 'الأكثر إعجاباً' : 'Top comments'}</option>
-              <option value="newest">{isRTL ? 'الأحدث أولاً' : 'Newest first'}</option>
+              <option value="top">{t.comments.sortTop}</option>
+              <option value="newest">{t.comments.sortNewest}</option>
             </ThemedSelectField>
           </div>
         )}
       </div>
 
-      {/* Comment Form */}
-      {commentsEnabled && (
+      {/* Comment Form: signed out, the watch page's sign-in prompt instead of a guest composer (#1622) */}
+      {commentsEnabled && !userId && (
+        <div className="mb-6">
+          <SignInToComment testId="post-comments-sign-in" />
+        </div>
+      )}
+      {commentsEnabled && userId && (
         <div className="mb-6">
           <CommentForm
             postChannelId={postChannelId}
@@ -186,7 +189,7 @@ export default function CommentsSection({
 
       {!commentsEnabled && (
         <div className={cn('text-center py-8 text-gray-500 dark:text-gray-400', isRTL && 'text-right')}>
-          {isRTL ? 'التعليقات معطلة لهذا المنشور' : 'Comments are disabled for this post'}
+          {t.comments.postCommentsOff}
         </div>
       )}
 
@@ -223,12 +226,10 @@ export default function CommentsSection({
             />
           </svg>
           <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">
-            {isRTL ? 'كن أول من يعلق!' : 'Be the first to comment!'}
+            {t.comments.beFirst}
           </p>
           <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
-            {isRTL
-              ? 'شارك أفكارك حول هذا المنشور'
-              : 'Share your thoughts about this post'}
+            {t.comments.shareThoughts}
           </p>
         </div>
       )}
@@ -298,14 +299,14 @@ export default function CommentsSection({
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    {isRTL ? 'جارٍ التحميل...' : 'Loading...'}
+                    {t.comments.loading}
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
-                    {isRTL ? 'عرض المزيد من التعليقات' : 'Show more comments'}
+                    {t.comments.loadMore}
                   </>
                 )}
               </button>
