@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_API_URL, runPassword, type Account } from './env';
 import { getAccessToken } from './oauth';
-import { eraseRowsMentioning, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
+import { eraseRowsMentioning, queueErasureStep, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
 import { ARCHIVE_BUCKETS, archiveHits, processorBatchTimeoutMs, quietPeriodState, type QuietPeriod } from './archive-hits';
 import { parseJsonc } from './jsonc';
@@ -219,6 +219,8 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
   const users = ledgerUsers();
   if (process.env.E2E_RUN_USER_IDS_FILE) writeRunUserIds(process.env.E2E_RUN_USER_IDS_FILE);
   const problems: string[] = [];
+  // Accounts the GDPR delete could not reach (no password: an invited creator never set one)
+  const unreached: LedgerUser[] = [];
   try {
     await eraseLocalRows(users);
   } catch (error) {
@@ -227,6 +229,7 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
   for (const user of users) {
     try {
       const erased = await eraseVideosData({ role: 'nonadmin', email: user.email, password: runPassword() });
+      if (!erased) unreached.push(user);
       log(`[teardown] ${user.email}: videos data ${erased ? 'erased' : 'already gone'}`);
     } catch (error) {
       problems.push(`${user.email}: ${(error as Error).message}`);
@@ -244,6 +247,15 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     // The purges the specs requested (channels, creator tiers, invites) run on the crons: run them now
     for (const [app, cron, time] of [['api-videos', '47 * * * *', new Date()], ['admin-api', '*/5 * * * *', topOfHour()]] as const) {
       await runCron(app, cron, time).catch((error) => problems.push((error as Error).message));
+    }
+    // Accounts that could not sign in to erase themselves (an invited creator has no password): the
+    // erasure's processor step for them, which removes their invite, caption-minute and job-link
+    // rows (processor erasure/user-traces.ts). Their channels are the specs' own and already purged;
+    // their profile record goes in eraseLocalCopies below.
+    for (const user of unreached) {
+      await queueErasureStep(user.userId)
+        .then(() => log(`[teardown] ${user.email}: erasure step queued`))
+        .catch((error) => problems.push((error as Error).message));
     }
     // Roles and tiers once more: deleting the account may have re-read them
     await eraseLocalRows(users).catch((error) => problems.push(`local rows: ${(error as Error).message}`));

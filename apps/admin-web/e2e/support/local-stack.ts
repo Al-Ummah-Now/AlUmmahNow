@@ -57,6 +57,18 @@ export async function runCron(app: 'api-videos' | 'admin-api', cron: string, tim
   if (!res.ok || body.outcome !== 'ok') throw new Error(`${app} cron ${cron} -> ${res.status} ${body.outcome ?? body.error ?? ''}`);
 }
 
+/**
+ * Queues the processor's account-erasure step (UserDataErased) for a user, as the product does when
+ * an erasure completes (idempotent). For a run account the GDPR delete cannot reach: one that never
+ * had a password (an invited creator) cannot sign in to erase itself.
+ */
+export async function queueErasureStep(userId: string): Promise<void> {
+  const { MessageType } = await import('../../../../packages/shared-types/src/queue');
+  const message = { id: crypto.randomUUID(), type: MessageType.UserDataErased, payload: { userId, timestamp: new Date().toISOString(), source: 'e2e-teardown' }, timestamp: Date.now() };
+  const res = await fetch(`${control()}/__stack/queue/api-videos/queue`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(message) });
+  if (!res.ok) throw new Error(`erasure step for ${userId} -> ${res.status} ${await res.text()}`);
+}
+
 /** The top of the current UTC hour (admin-api's hourly tick). */
 export function topOfHour(now = new Date()): Date {
   const t = new Date(now);
