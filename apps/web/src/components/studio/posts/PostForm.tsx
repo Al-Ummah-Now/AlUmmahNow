@@ -11,7 +11,8 @@ import { useHumanCheck } from '@/hooks/useHumanCheck';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { Card } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
+import { Switch } from '@/components/common/Switch';
 import { Label } from '@/components/ui/label';
 import { PostTypeSelector } from '@/components/Community/management/PostTypeSelector';
 import { TextPostForm } from '@/components/Community/management/forms/TextPostForm';
@@ -471,15 +472,16 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                   <Label htmlFor="community-post-language" className="text-sm md:text-base">
                     {t.community.postLanguage}
                   </Label>
-                  <Select value={postLocale} onValueChange={(v) => setPostLocale(v === 'ar' ? 'ar' : 'en')}>
-                    <SelectTrigger id="community-post-language" className="mt-2" aria-describedby="community-post-language-hint">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="ar">العربية</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <ThemedSelectField
+                    id="community-post-language"
+                    className="mt-2 w-full"
+                    aria-describedby="community-post-language-hint"
+                    value={postLocale}
+                    onChange={(e) => setPostLocale(e.target.value === 'ar' ? 'ar' : 'en')}
+                  >
+                    <option value="en">English</option>
+                    <option value="ar">العربية</option>
+                  </ThemedSelectField>
                   <p id="community-post-language-hint" className="mt-1 text-xs text-muted-foreground">{t.community.postLanguageHint}</p>
                 </div>
 
@@ -487,38 +489,30 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                   <Label htmlFor="community-post-visibility" className="text-sm md:text-base">
                     {t.studio.postForm.visibility}
                   </Label>
-                  <Select value={visibility} onValueChange={(v) => setVisibility(v as PostVisibility)}>
-                    <SelectTrigger id="community-post-visibility" className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={PostVisibility.PUBLIC}>
-                        {t.studio.postForm.public}
-                      </SelectItem>
-                      <SelectItem value={PostVisibility.SUBSCRIBERS}>
-                        {t.studio.postForm.subscribers}
-                      </SelectItem>
-                      <SelectItem value={PostVisibility.MEMBERS}>
-                        {t.studio.postForm.members}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <ThemedSelectField
+                    id="community-post-visibility"
+                    className="mt-2 w-full"
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value as PostVisibility)}
+                  >
+                    <option value={PostVisibility.PUBLIC}>{t.studio.postForm.public}</option>
+                    <option value={PostVisibility.SUBSCRIBERS}>{t.studio.postForm.subscribers}</option>
+                    <option value={PostVisibility.MEMBERS}>{t.studio.postForm.members}</option>
+                  </ThemedSelectField>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm md:text-base">
+                {/* The site's on/off switch (a toggle, not an Enabled/Disabled button) */}
+                <div className="flex items-center justify-between gap-3">
+                  <Label id="community-post-comments-label" htmlFor="community-post-comments" className="text-sm md:text-base">
                     {t.studio.postForm.allowComments}
                   </Label>
-                  <Button
-                    variant={commentsEnabled ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setCommentsEnabled(!commentsEnabled)}
-                  >
-                    {commentsEnabled
-                      ? t.studio.postForm.enabled
-                      : t.studio.postForm.disabled
-                    }
-                  </Button>
+                  <Switch
+                    id="community-post-comments"
+                    aria-labelledby="community-post-comments-label"
+                    checked={commentsEnabled}
+                    onCheckedChange={setCommentsEnabled}
+                    data-testid="community-post-comments"
+                  />
                 </div>
               </div>
             </Card>
