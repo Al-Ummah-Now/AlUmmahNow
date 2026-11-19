@@ -100,7 +100,7 @@ test.describe('creator tiers on Users and Tiers', () => {
     // The tier filter: their tier finds them; another does not
     for (const [tier, found] of [['creator', true], ['member', false]] as const) {
       await page.goto(`/users?q=${encodeURIComponent(searchTerm())}&tier=${tier}`);
-      await expect(page.getByTestId('users-filters').locator('select[name="tier"]')).toHaveValue(tier);
+      await expect(page.getByTestId('users-filters').locator('input[type="hidden"][name="tier"]')).toHaveValue(tier);
       await expect(page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`)).toHaveCount(found ? 1 : 0);
     }
   });
@@ -153,7 +153,7 @@ test.describe('creator tiers on Users and Tiers', () => {
     await expect(page).toHaveURL(/\/tiers$/);
     await page.goto('/creators?filter=limited&q=abc');
     await expect(page).toHaveURL(/\/users\?q=abc&tier=hit_limit$/);
-    await expect(page.getByTestId('users-filters').locator('select[name="tier"]')).toHaveValue('hit_limit');
+    await expect(page.getByTestId('users-filters').locator('input[type="hidden"][name="tier"]')).toHaveValue('hit_limit');
   });
 
   test('CRE-03 the Tiers page counts users per tier and refuses a daily limit under the hourly one without saving', async ({ page }) => {
