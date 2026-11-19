@@ -3,7 +3,7 @@
  * sink user through the real UI and OAuth round trip; nothing is seeded.
  */
 import { appendFileSync } from 'node:fs';
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
 import { fetchRetry } from './net';
 import { readSinkCode } from './sink';
@@ -228,6 +228,18 @@ export async function webAccessToken(page: Page): Promise<{ accessToken: string;
   });
   expect(body.accessToken, 'signed in, but /api/auth/token has no access token').toBeTruthy();
   return { accessToken: body.accessToken as string, userId: body.userId ?? '' };
+}
+
+/**
+ * The signed-in account's access token for a browser context, without a page (the web app
+ * refreshes an expired one with the session cookie; the context keeps the rotated cookie).
+ * Undefined when it has none.
+ */
+export async function contextAccessToken(context: BrowserContext): Promise<string | undefined> {
+  const res = await context.request.get(`${target().web}/api/auth/token`, { timeout: 30_000 }).catch(() => null);
+  if (!res?.ok()) return undefined;
+  const body = (await res.json().catch(() => ({}))) as { accessToken?: string | null };
+  return body.accessToken ?? undefined;
 }
 
 /** Registers a new sink user on the web app and leaves the page signed in. */
