@@ -22,7 +22,7 @@ jest.mock('@/components/common/AppLink', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
 }));
 
-const params = { ready: '2', failed: '1', channelTitle: 'Fixture channel' };
+const params = { ready: 2, failed: 1, channelTitle: 'Al-Fajr Channel' };
 const event = {
   type: 'notification' as const,
   notificationId: 'n1',
@@ -53,7 +53,7 @@ describe('youtubeImportFinished notification', () => {
     expect(resolveNotificationText(event, EN_TRANSLATIONS, 'en')).toEqual({ title: 'Your YouTube import finished', message: 'Imported: 2. Need another try: 1.' });
     const ar = resolveNotificationText(event, AR_TRANSLATIONS, 'ar');
     expect(ar.title).toBe('اكتمل نقل قناتك من يوتيوب');
-    expect(ar.message).toBe('نُقل 2، ويحتاج 1 إلى محاولة أخرى');
+    expect(ar.message).toBe('نُقل: ٢. يحتاج إلى محاولة أخرى: ١.');
   });
 
   it('opens the wizard on the import, in the viewer language', () => {

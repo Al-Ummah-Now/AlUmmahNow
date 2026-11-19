@@ -605,7 +605,8 @@ export async function finishImport(env: YtJobsEnv, row: ImportRow): Promise<void
 			notificationId: crypto.randomUUID(),
 			recipientUserId: row.user_id,
 			notificationKey: 'youtubeImportFinished',
-			params: { ready: String(counts.ready), failed: String(counts.failed), channelTitle: ytChannelOf(row)?.title ?? '' },
+			// Counts as numbers: clients write them in the page's digits (٠–٩ in Arabic)
+			params: { ready: counts.ready, failed: counts.failed, channelTitle: ytChannelOf(row)?.title ?? '' },
 			actionUrl: `/studio/${row.channel_id}/content/youtube?import=${row.id}`,
 			entityId: row.id,
 			dedupeKey: `youtube-import:${row.id}:finished`,

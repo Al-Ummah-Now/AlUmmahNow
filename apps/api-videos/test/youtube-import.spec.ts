@@ -673,7 +673,7 @@ describe('YouTube import: uploads, captions, thumbnails, playlists and the close
 		assert.deepEqual(google.revoked, ['rt-1']);
 		const notification = env.queue.messages.find((m: { payload?: { notificationKey?: string } }) => m.payload?.notificationKey === 'youtubeImportFinished');
 		assert.ok(notification, 'the creator is told');
-		assert.equal(notification.payload.params.ready, '3');
+		assert.equal(notification.payload.params.ready, 3);
 		assert.equal(notification.payload.recipientUserId, OWNER);
 
 		const csv = await linkBack(env as never, caller, importId, 'en');

@@ -26,7 +26,7 @@ describe('navigation per role', () => {
   });
 
   it('has no Move from YouTube tab while the feature is off or not configured', () => {
-    expect(tabs('owner', 'content', { youtubeImport: false })).toEqual(['videos', 'live', 'posts']);
+    expect(tabs('owner', 'content', { live: true, youtubeImport: false })).toEqual(['videos', 'live', 'posts']);
     expect(visibleTabs('editor', STUDIO_NAV.find((item) => item.id === 'content')!).map((tab) => tab.id)).toEqual(['videos', 'posts']);
   });
 
@@ -81,6 +81,10 @@ describe('checkPath', () => {
     ['owner', ['content', 'videos', 'v1', 'nope'], 'unknown'],
   ])('%s %j is %s', (role, segments, status) => {
     expect(checkPath(role, segments, LIVE).status).toBe(status);
+  });
+
+  it('Move from YouTube is an unknown path (404) while the feature is off for the account', () => {
+    expect(checkPath('owner', ['content', 'youtube'], { live: true, youtubeImport: false }).status).toBe('unknown');
   });
 });
 
