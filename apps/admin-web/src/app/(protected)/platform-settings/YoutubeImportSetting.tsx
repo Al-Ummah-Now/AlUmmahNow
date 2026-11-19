@@ -11,6 +11,7 @@ import {
   readiness,
   saveErrorMessage,
   scopePurpose,
+  secretChecksOnBlur,
   secretNameFor,
   secretSaveErrorMessage,
   settingsPatch,
@@ -265,7 +266,7 @@ export function YoutubeImportSetting({
                     // Uncontrolled: React would mirror a controlled value into the value attribute (page markup)
                     defaultValue=""
                     onChange={(e) => setSecretValue(e.target.value)}
-                    onBlur={() => setSecretTouched(true)}
+                    onBlur={(e) => setSecretTouched(secretChecksOnBlur(e.currentTarget.value))}
                     onKeyDown={(e) => {
                       // The editor sits inside the settings form: Enter saves the secret, not the settings
                       if (e.key === 'Enter') {
