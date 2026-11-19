@@ -386,6 +386,7 @@ function ChannelEditPage() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder={t.channel.channelNameEnglish}
                   id="channel-name-en"
+                  dir="ltr"
                 />
               )}
               {activeTab === 'ar' && (
@@ -417,6 +418,7 @@ function ChannelEditPage() {
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder={t.channel.channelDescriptionEnglish}
                     id="channel-description-en"
+                    dir="ltr"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     {formatNumber(lang, formData.descriptionEn.length)}/{formatNumber(lang, 500)} {t.channel.charactersRemaining}
