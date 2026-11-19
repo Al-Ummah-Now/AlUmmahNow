@@ -2,7 +2,7 @@
 
 // The error-page family's card (vendored as is by www, sites, Auth and the CMS)
 import '../../../../../packages/fanous-tokens/errors/aun-error-page.css';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   ERROR_KIND_STATUS,
   ERROR_PAGE_ICONS,
@@ -113,12 +113,29 @@ function ActionButton({ action, variant }: { action: ErrorAction; variant: 'prim
   return <button type="button" onClick={action.onClick} className={cls} data-testid={action.testId}>{inner}</button>;
 }
 
+const noSubscribe = () => () => undefined;
+
+/** This document's HTTP status, when the Worker set it (lib/seo/gone.ts: a purged item's 404 → 410). */
+function documentStatus(): number | undefined {
+  const value = (window as unknown as Record<string, unknown>).__aunHttpStatus;
+  return typeof value === 'number' ? value : undefined;
+}
+
 export function ErrorScreen(props: ErrorScreenProps) {
-  const { locale, kind, alternate, search, primary, secondary = [], back, reference, contactHref, role, testId = 'error-screen', dataKind } = props;
+  const { locale, kind: baseKind, alternate, search, primary, secondary = [], back, reference, contactHref, role, testId = 'error-screen', dataKind } = props;
   const s = errorScreenStrings(locale);
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
-  const head: Head = { kind, title: props.title ?? s.kinds[kind].title, body: props.body ?? s.kinds[kind].body };
+  // The alternate screen when the Worker answered with its status (410 for a purged item); the server
+  // render and hydration use the base screen, so nothing mismatches
+  const altStatus = alternate ? ERROR_KIND_STATUS[alternate] : undefined;
+  const swapped = useSyncExternalStore(noSubscribe, () => altStatus !== undefined && documentStatus() === altStatus, () => false);
+  const kind = swapped && alternate ? alternate : baseKind;
+  const other = swapped ? baseKind : alternate;
+  const head: Head = swapped ? { kind, title: s.kinds[kind].title, body: s.kinds[kind].body } : { kind, title: props.title ?? s.kinds[kind].title, body: props.body ?? s.kinds[kind].body };
   const status = ERROR_KIND_STATUS[kind];
+  useEffect(() => {
+    if (swapped) document.title = s.kinds[kind].title;
+  }, [swapped, kind, s]);
   const [copied, setCopied] = useState(false);
   // After mount only (the server can't know the history): no hydration mismatch
   const [canGoBack, setCanGoBack] = useState(false);
@@ -152,7 +169,7 @@ export function ErrorScreen(props: ErrorScreenProps) {
     >
       <section className="ep-card" aria-labelledby={`ep-title-${status ?? kind}`}>
         <HeadBlock head={head} locale={locale} />
-        {alternate ? <HeadBlock head={{ kind: alternate, title: s.kinds[alternate].title, body: s.kinds[alternate].body }} locale={locale} hidden /> : null}
+        {other ? <HeadBlock head={{ kind: other, title: s.kinds[other].title, body: s.kinds[other].body }} locale={locale} hidden /> : null}
 
         {search ? (
           <form className="ep-search" role="search" action={`/${locale}/search`} method="get">
