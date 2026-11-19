@@ -85,7 +85,7 @@ describe('PublicProfileView', () => {
   });
 
   it('Arabic: right to left, localized name, ٠–٩ digits, initial from the name', () => {
-    render(<PublicProfileView profile={{ ...profile, avatarUrl: null }} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [] }} />);
+    render(<PublicProfileView profile={{ ...profile, avatarUrl: undefined }} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [] }} />);
     expect(screen.getByTestId('public-profile')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByRole('heading', { level: 1, name: 'سارة' })).toBeInTheDocument();
     // The joined date and the section counts use Eastern Arabic digits
