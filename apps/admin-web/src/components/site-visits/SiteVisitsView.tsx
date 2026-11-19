@@ -35,7 +35,7 @@ const STALE_MS = 60_000;
 
 function Bar({ share }: { share: number }) {
   return (
-    <span className="block h-2 w-full overflow-hidden rounded bg-surface-2" aria-hidden="true">
+    <span className="block h-2 w-full overflow-hidden rounded bg-border" aria-hidden="true">
       <span className="block h-full rounded bg-accent" style={{ width: `${(share * 100).toFixed(1)}%` }} />
     </span>
   );
