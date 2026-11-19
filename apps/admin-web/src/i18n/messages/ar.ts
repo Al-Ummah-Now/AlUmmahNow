@@ -1737,6 +1737,7 @@ const ar: Messages = {
     none: 'لم يتم إنشاء أي فهارس بعد',
   },
   dateField: {
+    close: 'إغلاق',
     prevMonth: 'الشهر السابق',
     nextMonth: 'الشهر التالي',
     today: 'اليوم',

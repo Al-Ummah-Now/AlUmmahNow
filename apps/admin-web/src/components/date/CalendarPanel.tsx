@@ -224,6 +224,11 @@ export function CalendarPanel({ id, locale, t, value, time, min, max, required, 
                 {t('dateField.clear')}
               </button>
             )}
+            {!time && (
+              <button type="button" className={textButton} onClick={onClose} data-testid={`${id}-close`}>
+                {t('dateField.close')}
+              </button>
+            )}
             {time && (
               <button type="button" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2" onClick={onClose} data-testid={`${id}-done`}>
                 {t('dateField.done')}

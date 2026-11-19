@@ -93,6 +93,8 @@ describe('calendar panel, as rendered', () => {
     assert.match(timed, /role="spinbutton"[^>]*aria-label="الساعة"[^>]*aria-valuemax="23"[^>]*aria-valuenow="9"[^>]*aria-valuetext="٠٩"/);
     assert.match(timed, /aria-valuetext="٠٥"/);
     assert.match(timed, /data-testid="cal-done"/);
+    assert.doesNotMatch(timed, /data-testid="cal-close"/);
+    assert.match(render('en'), /data-testid="cal-close"[^>]*>Close</, 'a date-only calendar has a visible Close (the phone sheet needs one)');
   });
   it('Today is offered only when today is inside min/max', () => {
     assert.match(render('en', { max: '2026-11-18' }), /data-testid="cal-today"[^>]*disabled=""|disabled=""[^>]*data-testid="cal-today"/);

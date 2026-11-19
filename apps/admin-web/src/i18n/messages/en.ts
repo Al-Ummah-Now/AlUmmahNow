@@ -1738,6 +1738,7 @@ const en = {
     none: 'No indices have been built yet',
   },
   dateField: {
+    close: 'Close',
     prevMonth: 'Previous month',
     nextMonth: 'Next month',
     today: 'Today',
