@@ -150,7 +150,7 @@ export function R2Settings({ initial }: { initial: TranscodeLimitView | null }) 
           <span data-testid="delivery-limit-updated">
             {view.isDefault || !updated || Number.isNaN(updated.getTime())
               ? t('mediaDelivery.limitDefault')
-              : t('mediaDelivery.limitUpdated', { time: dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(updated) + ' UTC' })}
+              : t('mediaDelivery.limitUpdated', { time: dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(updated) + ' ' + t('mediaDelivery.utc') })}
           </span>
         </p>
         <p id={ids.cost} className="mt-1 text-sm text-fg-muted" data-testid="delivery-limit-cost">{cost}</p>

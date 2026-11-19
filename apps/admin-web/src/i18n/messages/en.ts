@@ -3930,6 +3930,7 @@ const en = {
     limitEnforced: 'Enforced now: {min}–{max} at once. Cloudflare limit: {ceiling}.',
     limitDefault: 'Default (never changed).',
     limitUpdated: 'Changed {time}.',
+    utc: 'UTC',
     limitErrorMin: 'Minimum: enter a whole number from {floor} to {ceiling}.',
     limitErrorMax: 'Maximum: enter a whole number from {floor} to {ceiling}.',
     limitErrorMinAboveMax: 'The minimum can’t be more than the maximum.',
