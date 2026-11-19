@@ -211,3 +211,14 @@ export async function optionTexts(select: Locator): Promise<string[]> {
   const list = select.page().locator(`[id="${await select.getAttribute('aria-controls')}"]`);
   return (await list.locator('[role="option"]').allTextContents()).map((s) => s.trim());
 }
+
+/**
+ * The options of an admin Select (its listbox sits next to the button, open or not), or the one
+ * with a value. Use them where a native <select> would be read with locator('option').
+ */
+export function selectOptions(select: Locator): Locator {
+  return select.locator('xpath=following-sibling::ul[@role="listbox"]').locator('[role="option"]');
+}
+export function selectOption(select: Locator, value: string): Locator {
+  return select.locator('xpath=following-sibling::ul[@role="listbox"]').locator(`[role="option"][data-value="${value}"]`);
+}
