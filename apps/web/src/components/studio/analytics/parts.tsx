@@ -45,7 +45,7 @@ export function TrafficSources({ traffic, locale }: { traffic: TrafficData; loca
                 <span className="text-foreground">{text.traffic.sources[row.source as keyof typeof text.traffic.sources] ?? row.source}</span>
                 <span className="tabular-nums text-muted-foreground">{number.format(row.views)} ({share(row.share, row.views)})</span>
               </div>
-              <div className="mt-1 h-1.5 rounded bg-muted">
+              <div className="mt-1 h-1.5 rounded bg-muted-foreground/30">
                 <div className="h-1.5 rounded bg-primary" style={{ inlineSize: `${Math.max(1, row.share * 100)}%` }} />
               </div>
             </li>
@@ -113,7 +113,7 @@ export function ViewerOrigins({ traffic, locale }: { traffic: TrafficData; local
                     <span className="truncate text-foreground" dir={list.ltr && row.key !== OTHER_ORIGIN ? 'ltr' : undefined}>{list.label(row.key)}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">{number.format(row.views)} ({percent.format(row.share)})</span>
                   </div>
-                  <div className="mt-1 h-1.5 rounded bg-muted">
+                  <div className="mt-1 h-1.5 rounded bg-muted-foreground/30">
                     <div className="h-1.5 rounded bg-primary" style={{ inlineSize: `${Math.max(1, row.share * 100)}%` }} />
                   </div>
                 </li>
