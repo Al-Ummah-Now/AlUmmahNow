@@ -61,6 +61,7 @@ async function expectNoCreatorUi(page: Page, locale: 'en' | 'ar'): Promise<void>
   await expect(page.getByText(/by invitation|بدعوة/)).toHaveCount(0);
   await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
   await expect(page.getByTestId('header-upload')).toHaveCount(0);
+  await expect(page.getByTestId('tab-upload')).toHaveCount(0);
 
   await page.getByTestId('nav-menu-trigger').click();
   await expect(page.locator('[role="menu"]').first()).toBeVisible();
