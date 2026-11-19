@@ -123,7 +123,7 @@ export function CommentBody({
       <img src={avatar} alt={t.comments.authorAvatar.replace('{name}', author)} className={`${avatarSize} rounded-full flex-shrink-0`} />
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <h4 className="font-bold">{author}</h4>
+          <h4 className="font-bold"><bdi>{author}</bdi></h4>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {time}
             {isEdited && <span className="ms-1" data-testid="comment-edited">{t.comments.edited}</span>}
@@ -168,7 +168,9 @@ export function CommentBody({
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-line break-words" data-testid="comment-text">
+          <p className="whitespace-pre-line break-words" dir="auto" data-testid="comment-text">
+            {/* dir="auto": a comment keeps its own direction on a page in the other language (an
+                English comment on an Arabic page read ".Thank you") */}
             <CommentText text={text} videoId={videoId} />
           </p>
         )}
