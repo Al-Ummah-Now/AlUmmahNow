@@ -319,7 +319,7 @@ export const STUDIO_EN = {
     retry: 'Try again',
     tasks: { title: 'Needs attention', none: 'Nothing needs attention.', failed: 'Failed', processing: 'Processing' },
     totals: { title: 'Channel totals', views: 'Lifetime views', subscribers: 'Subscribers', videos: 'Videos', last28: 'Views, last {days} days' },
-    quick: { title: 'Quick links', upload: 'Upload', goLive: 'Go live', newPost: 'New post', customise: 'Customise' },
+    quick: { title: 'Quick links', upload: 'Upload', goLive: 'Go live', newPost: 'New post', customise: 'Customize' },
     welcome: { title: 'Welcome to your Studio', body: 'Upload a video to get started.', upload: 'Upload your first video' },
     inviteWelcome: {
       title: 'Welcome to Al Ummah Now',
