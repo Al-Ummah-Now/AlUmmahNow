@@ -12,6 +12,11 @@ export interface SiteVisitsReport {
   landing: { kind: string; visits: number }[];
   sources: { source: string; visits: number }[];
   referrers: { host: string; visits: number }[];
+  /** Request origin breakdowns (shared-types request-origin.ts) */
+  surfaces: { surface: string; visits: number }[];
+  devices: { device: string; visits: number }[];
+  countries: { country: string; visits: number }[];
+  campaigns: { campaign: string; visits: number }[];
 }
 
 const DAY_MS = 86_400_000;
@@ -21,7 +26,7 @@ export async function siteVisitsReport(db: D1Database | undefined, days: number,
   const span = Math.min(Math.max(Math.round(days) || 30, 1), 365);
   const to = isoDay(now);
   const from = isoDay(now - (span - 1) * DAY_MS);
-  const empty: SiteVisitsReport = { days: span, from, to, visits: 0, daily: [], landing: [], sources: [], referrers: [] };
+  const empty: SiteVisitsReport = { days: span, from, to, visits: 0, daily: [], landing: [], sources: [], referrers: [], surfaces: [], devices: [], countries: [], campaigns: [] };
   if (!db) return empty;
   const { results } = await db
     .prepare(
@@ -32,7 +37,15 @@ export async function siteVisitsReport(db: D1Database | undefined, days: number,
     .bind(from, to)
     .all<{ day: string; metric: string; dim: string; total: number }>();
   const perDay = new Map<string, number>();
-  const sums = { landing: new Map<string, number>(), source: new Map<string, number>(), referrer_host: new Map<string, number>() };
+  const sums = {
+    landing: new Map<string, number>(),
+    source: new Map<string, number>(),
+    referrer_host: new Map<string, number>(),
+    surface: new Map<string, number>(),
+    device: new Map<string, number>(),
+    country: new Map<string, number>(),
+    campaign: new Map<string, number>(),
+  };
   for (const r of results ?? []) {
     const n = Number(r.total) || 0;
     if (r.metric === 'visits') perDay.set(r.day, (perDay.get(r.day) ?? 0) + n);
@@ -56,6 +69,10 @@ export async function siteVisitsReport(db: D1Database | undefined, days: number,
     landing: top(sums.landing, 20).map(([kind, visits]) => ({ kind, visits })),
     sources: top(sums.source, 30).map(([source, visits]) => ({ source, visits })),
     referrers: top(sums.referrer_host, 30).map(([host, visits]) => ({ host, visits })),
+    surfaces: top(sums.surface, 16).map(([surface, visits]) => ({ surface, visits })),
+    devices: top(sums.device, 5).map(([device, visits]) => ({ device, visits })),
+    countries: top(sums.country, 51).map(([country, visits]) => ({ country, visits })),
+    campaigns: top(sums.campaign, 30).map(([campaign, visits]) => ({ campaign, visits })),
   };
 }
 

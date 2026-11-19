@@ -20,6 +20,7 @@
  * imported yet (api-videos lib/analytics.ts loadRollups).
  */
 
+import { originIncrements } from './site-visits';
 import {
   RETENTION_BUCKET_COUNT,
   TRAFFIC_SOURCES,
@@ -90,6 +91,11 @@ export interface ViewEventPayload {
   referrerHost?: unknown;
   /** True when the player started the video on its own (up next, playlist advance) */
   autoplay?: unknown;
+  /** Request origin of the view (api-videos videoView, request-origin.ts) */
+  originSurface?: unknown;
+  originDevice?: unknown;
+  originCountry?: unknown;
+  originCampaign?: unknown;
 }
 
 /** Pure: the rollup dimensions a tracked view carries (invalid values dropped). */
@@ -159,6 +165,8 @@ export function viewIncrements(payload: ViewEventPayload, messageTimestamp: numb
     out.push({ ...base, metric: 'traffic', dim: traffic.trafficSource ?? 'unknown', value: 1, maxDims: MAX_TRAFFIC_SOURCES });
     // Autoplayed views apart from views the viewer chose (both add up to `views`)
     out.push({ ...base, metric: 'playback', dim: payload.autoplay === true ? 'autoplay' : 'chosen', value: 1, maxDims: 2 });
+    // Where the viewer is: client surface, device class, country (top 50 + other), utm_source
+    out.push(...originIncrements(base, { surface: payload.originSurface, device: payload.originDevice, country: payload.originCountry, campaign: payload.originCampaign }));
     if (traffic.referrerHost) {
       out.push({ ...base, metric: 'external_host', dim: traffic.referrerHost, value: 1, maxDims: MAX_EXTERNAL_HOSTS });
     }

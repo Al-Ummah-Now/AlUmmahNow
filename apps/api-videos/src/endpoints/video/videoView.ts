@@ -1,5 +1,5 @@
 import { OpenAPIRoute, Str } from "chanfana";
-import { TRAFFIC_SOURCES, normalizeReferrerHost } from "@al-ummah/shared-types";
+import { TRAFFIC_SOURCES, campaignOf, normalizeReferrerHost, originOf } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -174,6 +174,8 @@ export class VideoView extends OptionalAuthRoute {
 				: {}),
 			deviceType: viewData.deviceType,
 			location: viewData.location,
+			// Request origin (request-origin.ts): bounded dimensions only, no UA, IP or URL
+			...viewOrigin(c.req.raw, viewData.source === "embed"),
 			timestamp: new Date().toISOString(),
 			sessionId: crypto.randomUUID(), // Generate unique session ID for this view
 		});
@@ -186,4 +188,22 @@ export class VideoView extends OptionalAuthRoute {
 			},
 		};
 	}
+}
+
+/** The view's origin dimensions: surface, device, country, and the watch page's utm_source. */
+export function viewOrigin(request: Request, embed: boolean): { originSurface: string; originDevice: string; originCountry?: string; originCampaign?: string } {
+	const origin = originOf(request, { app: "api", embed });
+	let campaign: string | undefined;
+	try {
+		const page = request.headers.get("referer");
+		campaign = page ? campaignOf(new URL(page).searchParams.get("utm_source")) : undefined;
+	} catch {
+		campaign = undefined;
+	}
+	return {
+		originSurface: origin.surface,
+		originDevice: origin.device,
+		...(origin.country ? { originCountry: origin.country } : {}),
+		...(campaign ? { originCampaign: campaign } : {}),
+	};
 }

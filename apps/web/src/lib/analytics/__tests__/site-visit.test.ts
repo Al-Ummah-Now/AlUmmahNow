@@ -39,10 +39,18 @@ const nav = (path: string, headers: Record<string, string> = {}, method = 'GET')
 
 describe('visitFromRequest (server-side, cookieless)', () => {
   it('counts a page load from a search engine or another site, and a direct one', () => {
-    expect(visitFromRequest(nav('/en/video/abc', { referer: 'https://www.google.com/' }))).toEqual({ landing: 'watch', source: 'search:google', referrerHost: 'www.google.com' });
-    expect(visitFromRequest(nav('/ar/@chan', { referer: 'https://www.alummahnow.net/ar/' }))).toEqual({ landing: 'channel', source: 'platform', referrerHost: 'www.alummahnow.net' });
-    expect(visitFromRequest(nav('/en'))).toEqual({ landing: 'home', source: 'direct' });
+    expect(visitFromRequest(nav('/en/video/abc', { referer: 'https://www.google.com/' }))).toMatchObject({ landing: 'watch', source: 'search:google', referrerHost: 'www.google.com' });
+    expect(visitFromRequest(nav('/ar/@chan', { referer: 'https://www.alummahnow.net/ar/' }))).toMatchObject({ landing: 'channel', source: 'platform', referrerHost: 'www.alummahnow.net' });
+    expect(visitFromRequest(nav('/en'))).toMatchObject({ landing: 'home', source: 'direct' });
   });
+  it('carries the request origin: surface, device, country, utm_source and the finer sources; no UA kept', () => {
+    const phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
+    const v = visitFromRequest(nav('/en/video/abc?utm_source=Newsletter&utm_medium=email', { 'user-agent': phone, 'cf-ipcountry': 'EG' }));
+    expect(v).toEqual({ landing: 'watch', source: 'email', surface: 'web', device: 'phone', country: 'EG', campaign: 'newsletter' });
+    expect(visitFromRequest(nav('/en', { referer: 'https://alummahnow.link/v/abc', 'user-agent': phone }))).toMatchObject({ source: 'short_link', surface: 'web' });
+    expect(JSON.stringify(v)).not.toContain('Mozilla');
+  });
+
   it('a page load coming from this site (a link, a reload) is the same visit', () => {
     expect(visitFromRequest(nav('/en/video/x', { referer: 'https://videos.alummahnow.net/en' }))).toBeNull();
   });

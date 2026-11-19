@@ -55,6 +55,11 @@ export interface DailyRollupEntry {
   watchTime: number;
   traffic?: Record<string, number>;
   externalHosts?: Record<string, number>;
+  /** Request-origin breakdowns (processor originIncrements) */
+  surfaces?: Record<string, number>;
+  devices?: Record<string, number>;
+  countries?: Record<string, number>;
+  campaigns?: Record<string, number>;
 }
 
 export interface MonthlyRollup {
@@ -439,7 +444,7 @@ export async function loadRollups(
       const result = await db
         .prepare(
           `SELECT entity_id, day, metric, dim, value FROM analytics_daily
-           WHERE entity_type = ? AND entity_id IN (${ids.map(() => '?').join(', ')}) AND day >= ? AND day <= ? AND metric IN ('views', 'watch_time', 'traffic', 'external_host')`
+           WHERE entity_type = ? AND entity_id IN (${ids.map(() => '?').join(', ')}) AND day >= ? AND day <= ? AND metric IN ('views', 'watch_time', 'traffic', 'external_host', 'surface', 'device', 'country', 'campaign')`
         )
         .bind(entityType, ...ids, fromDay, toDay)
         .all<CounterRow>();
@@ -453,6 +458,10 @@ export async function loadRollups(
         else if (row.metric === 'watch_time') entry.watchTime += row.value;
         else if (row.metric === 'traffic') (entry.traffic ??= {})[dim] = (entry.traffic[dim] ?? 0) + row.value;
         else if (row.metric === 'external_host') (entry.externalHosts ??= {})[dim] = (entry.externalHosts[dim] ?? 0) + row.value;
+        else if (row.metric === 'surface') (entry.surfaces ??= {})[dim] = (entry.surfaces[dim] ?? 0) + row.value;
+        else if (row.metric === 'device') (entry.devices ??= {})[dim] = (entry.devices[dim] ?? 0) + row.value;
+        else if (row.metric === 'country') (entry.countries ??= {})[dim] = (entry.countries[dim] ?? 0) + row.value;
+        else if (row.metric === 'campaign') (entry.campaigns ??= {})[dim] = (entry.campaigns[dim] ?? 0) + row.value;
       }
     }
     out.push(...byEntityMonth.values());
@@ -553,12 +562,21 @@ export interface TrafficBreakdown {
   /** Views per source. Views from before collection began count as unknown, so the rows add up. */
   sources: Record<string, number>;
   externalHosts: Array<{ host: string; views: number }>;
+  /** Views per client surface, device class, country (top 50 + other) and utm_source, since collection began */
+  surfaces: Record<string, number>;
+  devices: Record<string, number>;
+  countries: Record<string, number>;
+  campaigns: Record<string, number>;
 }
 
 export function buildTraffic(rollups: MonthlyRollup[], range: DateRange): TrafficBreakdown {
   const inRange = new Set(daysInRange(range));
   const sources: Record<string, number> = {};
   const hosts: Record<string, number> = {};
+  const surfaces: Record<string, number> = {};
+  const devices: Record<string, number> = {};
+  const countries: Record<string, number> = {};
+  const campaigns: Record<string, number> = {};
   let totalViews = 0;
   for (const rollup of rollups) {
     for (const [day, entry] of Object.entries(rollup?.days || {})) {
@@ -574,13 +592,16 @@ export function buildTraffic(rollups: MonthlyRollup[], range: DateRange): Traffi
       for (const [host, views] of Object.entries(entry.externalHosts || {})) {
         hosts[host] = (hosts[host] || 0) + views;
       }
+      for (const [key, into] of [['surfaces', surfaces], ['devices', devices], ['countries', countries], ['campaigns', campaigns]] as const) {
+        for (const [dim, views] of Object.entries(entry[key] || {})) into[dim] = (into[dim] || 0) + views;
+      }
     }
   }
   const externalHosts = Object.entries(hosts)
     .map(([host, views]) => ({ host, views }))
     .sort((a, b) => b.views - a.views || a.host.localeCompare(b.host))
     .slice(0, MAX_EXTERNAL_HOSTS_SHOWN);
-  return { totalViews, sources, externalHosts };
+  return { totalViews, sources, externalHosts, surfaces, devices, countries, campaigns };
 }
 
 /**

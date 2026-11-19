@@ -9,7 +9,7 @@
  * Moves inside the site (client-side navigations, links, reloads with this site as Referer) are not
  * new visits. Prefetches, framework data requests and known crawlers are never counted.
  */
-import { isCrawlerUserAgent, landingKindOf, normalizeReferrerHost, visitSourceOf, type SiteVisitEvent } from '@al-ummah/shared-types';
+import { isCrawlerUserAgent, landingKindOf, normalizeReferrerHost, originOf, visitSourceOf, type SiteVisitEvent } from '@al-ummah/shared-types';
 
 /** The visit event for a landing path and a Referer, or a direct visit without one. */
 export function classifyVisit(path: string, referrer: string | null | undefined): SiteVisitEvent {
@@ -57,7 +57,30 @@ export function visitFromRequest(request: RequestLike): SiteVisitEvent | null {
   }
   // Coming from this site (a link, a reload): the same visit, not a new one
   if (referrerHost && referrerHost === url.hostname) return null;
-  return classifyVisit(url.pathname, referrer);
+  return { ...classifyVisit(url.pathname, referrer), ...visitOrigin(request, url) };
+}
+
+/**
+ * The visit's request origin (shared-types request-origin.ts): client surface, device class,
+ * country and utm_source, plus the finer source classes (short link, email, push, campaign). The
+ * User-Agent is only classified, never kept; nothing is stored per person.
+ */
+export function visitOrigin(request: RequestLike, url: URL): Pick<SiteVisitEvent, 'surface' | 'device' | 'country' | 'campaign'> & { source?: string } {
+  try {
+    const headers = new Headers();
+    for (const name of ['user-agent', 'referer', 'sec-ch-ua-mobile', 'cf-ipcountry', 'x-aun-client']) {
+      const v = request.headers.get(name);
+      if (v) headers.set(name, v);
+    }
+    const req = new Request(url.toString(), { headers });
+    const cf = (request as { cf?: { country?: unknown } }).cf;
+    if (cf) Object.defineProperty(req, 'cf', { value: cf });
+    const o = originOf(req, { app: 'web', embed: url.pathname.startsWith('/embed') });
+    const finer = ['short_link', 'email', 'push', 'campaign'].includes(o.source) ? { source: o.source } : {};
+    return { surface: o.surface, device: o.device, ...(o.country ? { country: o.country } : {}), ...(o.campaign ? { campaign: o.campaign } : {}), ...finer };
+  } catch {
+    return {};
+  }
 }
 
 /**
