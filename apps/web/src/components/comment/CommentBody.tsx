@@ -182,7 +182,7 @@ export function CommentBody({
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-line break-words" data-testid="comment-text">
+          <p dir="auto" className="whitespace-pre-line break-words" data-testid="comment-text">
             <CommentText text={text} videoId={videoId} />
           </p>
         )}
