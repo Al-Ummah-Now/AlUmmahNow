@@ -337,7 +337,7 @@ export function YoutubeImportSetting({
           <ul className="space-y-2" data-testid="youtube-import-scopes">
             {view.scopes.map((scope) => (
               <li key={scope} className="text-sm">
-                <code className="break-all font-mono text-xs text-fg" dir="ltr">{scope}</code>
+                <Url url={scope} />
                 <span className="block text-fg-muted">{t(scopePurpose(scope))}</span>
               </li>
             ))}
