@@ -50,7 +50,7 @@ const MAX_IDS = 50;
 
 type Env = MediaEnv & ErrorReporterEnv & {
 	BUNNY_SIGN_URLS?: string;
-	/** Hard ceiling of the admin's max concurrent transcodes: apps/media's container max_instances ("10" production, "2" stage and QA) */
+	/** Hard ceiling of the admin's max concurrent transcodes: apps/media's container max_instances ("3371" production, "2" stage and QA); unset means no ceiling, never a made-up one */
 	MEDIA_TRANSCODE_CEILING?: string;
 };
 
