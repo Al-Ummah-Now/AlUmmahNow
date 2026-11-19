@@ -99,6 +99,9 @@ fieldset[data-invalid] .ct-topic{border-color:color-mix(in srgb,var(--fanous-col
 
 /* Aside: a raised panel */
 .ct-aside{border-radius:var(--r-xl,20px);padding:22px}
+/* the small side box sits over the brightest lanterns at the top of the page: the denser glass surface keeps its
+   text AA there (4.26:1 on the standard glass, dark), with the same blur, edge and glow */
+.ct-aside.pb-glass{--pb-glass:var(--aun-glass-lite-surface)}
 .ct-aside-title{margin:0 0 14px;font-size:16px;font-weight:700}
 /* primary text: secondary text on the glass fell under AA over the lit street in dark (2.63:1, Fawanees) */
 .ct-tips{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.55;color:var(--fanous-color-text-primary)}
