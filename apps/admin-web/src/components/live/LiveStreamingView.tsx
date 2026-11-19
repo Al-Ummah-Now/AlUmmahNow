@@ -56,6 +56,7 @@ import {
 } from '@/lib/live-streaming';
 import { UserName } from '@/components/audit/UserName';
 import { DateField } from '@/components/DateField';
+import { NumberField } from '@/components/forms/NumberField';
 
 interface Initial {
   view: LiveSettingsView | null;
@@ -477,11 +478,11 @@ function ProviderCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-max`} className="text-sm text-fg-muted">{t('live.provider.maxConcurrent')}</label>
-              <input id={`${id}-max`} inputMode="numeric" value={maxConcurrent} onChange={(e) => setMaxConcurrent(e.target.value)} placeholder={t('live.provider.noLimit')} className={fieldClass} dir="ltr" data-testid={`live-max-${provider}`} />
+              <NumberField id={`${id}-max`} value={maxConcurrent} onChange={(e) => setMaxConcurrent(e.target.value)} placeholder={t('live.provider.noLimit')} className={fieldClass} dir="ltr" data-testid={`live-max-${provider}`} />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor={`${id}-budget`} className="text-sm text-fg-muted">{t('live.provider.budget')}</label>
-              <input id={`${id}-budget`} inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={t('live.provider.noLimit')} className={fieldClass} dir="ltr" data-testid={`live-budget-${provider}`} />
+              <NumberField decimal id={`${id}-budget`} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={t('live.provider.noLimit')} className={fieldClass} dir="ltr" data-testid={`live-budget-${provider}`} />
             </div>
           </div>
           <p className="text-xs text-fg-muted">{t('live.provider.limitHelp')}</p>
@@ -498,7 +499,7 @@ function ProviderCard({
               {Object.keys(rates).map((k) => (
                 <div key={k} className="flex flex-col gap-1">
                   <label htmlFor={`${id}-${k}`} className="text-sm text-fg-muted">{t(`live.provider.${k}` as MessageKey)}</label>
-                  <input id={`${id}-${k}`} inputMode="decimal" value={rateText[k] ?? ''} onChange={(e) => setRateText((r) => ({ ...r, [k]: e.target.value }))} className={fieldClass} dir="ltr" data-testid={`live-rate-${provider}-${k}`} />
+                  <NumberField decimal id={`${id}-${k}`} value={rateText[k] ?? ''} onChange={(e) => setRateText((r) => ({ ...r, [k]: e.target.value }))} className={fieldClass} dir="ltr" data-testid={`live-rate-${provider}-${k}`} />
                 </div>
               ))}
             </div>
@@ -536,12 +537,12 @@ function SelfHostedSection({ settings, canManage, busy, onChange, onInvalid }: {
         <fieldset disabled={locked} className="grid gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-idle`} className="text-sm text-fg-muted">{t('live.selfhosted.idleTimeout')}</label>
-            <input id={`${id}-idle`} inputMode="numeric" value={idle} onChange={(e) => setIdle(e.target.value)} aria-describedby={`${id}-idle-help`} className={fieldClass} dir="ltr" data-testid="live-idle-timeout" />
+            <NumberField id={`${id}-idle`} value={idle} onChange={(e) => setIdle(e.target.value)} aria-describedby={`${id}-idle-help`} className={fieldClass} dir="ltr" data-testid="live-idle-timeout" />
             <span id={`${id}-idle-help`} className="text-xs text-fg-muted">{t('live.selfhosted.idleTimeoutHelp')}</span>
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-qoe`} className="text-sm text-fg-muted">{t('live.selfhosted.qoe')}</label>
-            <input id={`${id}-qoe`} inputMode="decimal" value={qoe} onChange={(e) => setQoe(e.target.value)} aria-describedby={`${id}-qoe-help`} className={fieldClass} dir="ltr" data-testid="live-qoe-rate" />
+            <NumberField decimal id={`${id}-qoe`} value={qoe} onChange={(e) => setQoe(e.target.value)} aria-describedby={`${id}-qoe-help`} className={fieldClass} dir="ltr" data-testid="live-qoe-rate" />
             <span id={`${id}-qoe-help`} className="text-xs text-fg-muted">{t('live.selfhosted.qoeHelp')}</span>
           </div>
           <div>

@@ -14,6 +14,7 @@ import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/co
 import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { generateCsamWebhookSecret, setCsamRetentionDays, submitCsamIntake, type CsamIntakeResult } from '@/lib/api/csam';
+import { NumberField } from '@/components/forms/NumberField';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 
@@ -122,10 +123,9 @@ export function SettingsCard({ settings }: { settings: CsamSettings }) {
       <form onSubmit={saveRetention} className="mb-6 max-w-xl">
         <label htmlFor={`${id}-days`} className={labelClass}>{t('csamPage.settings.retentionLabel')}</label>
         <div className="flex flex-wrap items-center gap-2">
-          <input
+          <NumberField
             id={`${id}-days`}
             name="retentionDays"
-            type="number"
             required
             min={CSAM_RETENTION_MIN_DAYS}
             max={CSAM_RETENTION_MAX_DAYS}

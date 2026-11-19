@@ -18,6 +18,7 @@ import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/compo
 import { logger } from '@/lib/logger-client';
 import { REMOVAL_LABEL, REMOVAL_TONE, dangerLargeButtonClass } from './labels';
 import { useFormats } from './useFormats';
+import { NumberField } from '@/components/forms/NumberField';
 
 const DEFAULT_GRACE_DAYS = 30;
 
@@ -134,7 +135,7 @@ function Library({ lib }: { lib: BunnyLibraryView }) {
         <div className="mt-4 flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
             <label htmlFor={graceId} className="text-sm font-medium text-fg">{t('mediaBackfill.graceDays')}</label>
-            <input id={graceId} type="number" inputMode="numeric" min={BACKFILL_LIMITS.minGraceDays} max={BACKFILL_LIMITS.maxGraceDays} value={grace} onChange={(e) => setGrace(e.target.value)} className={`${fieldClass} w-28`} data-testid="backfill-grace" />
+            <NumberField id={graceId} min={BACKFILL_LIMITS.minGraceDays} max={BACKFILL_LIMITS.maxGraceDays} value={grace} onChange={(e) => setGrace(e.target.value)} className={`${fieldClass} w-28`} data-testid="backfill-grace" />
           </div>
           <button type="button" disabled={busy || lib.verified === 0} onClick={schedule} className={dangerLargeButtonClass} data-testid="backfill-retire-go">{t('mediaBackfill.retire')}</button>
           {lib.scheduled > 0 && <button type="button" disabled={busy} onClick={cancel} className={secondaryButtonClass} data-testid="backfill-retire-cancel">{t('mediaBackfill.retireCancel')}</button>}

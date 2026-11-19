@@ -6,6 +6,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 import { MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
 import { PROVIDER_LABEL, moveProvider, parseWhole, toggleProvider, weightShares, withUnlisted, type OverrideDraft } from '@/lib/media/providers-form';
+import { NumberField } from '@/components/forms/NumberField';
 
 export const checkClass = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 const iconButtonClass =
@@ -67,10 +68,8 @@ export function ProviderOrderEditor({
             {strategy === 'weighted' && listed && (
               <span className="flex flex-col gap-1">
                 <label htmlFor={`${idPrefix}-w-${p}`} className="sr-only">{t('mediaProviders.weight', { provider: name })}</label>
-                <input
+                <NumberField
                   id={`${idPrefix}-w-${p}`}
-                  type="number"
-                  inputMode="numeric"
                   min={0}
                   max={100}
                   step={1}

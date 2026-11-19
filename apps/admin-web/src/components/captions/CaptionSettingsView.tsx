@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { parseDigits } from '@al-ummah/shared-types';
+import { NumberField } from '@/components/forms/NumberField';
 
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
@@ -74,13 +75,11 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
             <h2 id={`${ids}-budget`} className="text-lg font-semibold text-fg mb-1">{t('captionSettings.budgetTitle')}</h2>
             <p className="text-sm text-fg-muted mb-4">{t('captionSettings.budgetHint')}</p>
             <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-budget-usd`}>{t('captionSettings.monthlyBudget')}</label>
-            <input
+            <NumberField decimal
               id={`${ids}-budget-usd`}
-              type="number"
               min={0}
               max={500}
               step={1}
-              inputMode="decimal"
               className={`${fieldClass} mt-1 w-40`}
               value={form.monthlyBudgetUsd}
               onChange={(e) => setForm((f) => ({ ...f, monthlyBudgetUsd: Number(parseDigits(e.target.value)) }))}
@@ -149,11 +148,11 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-daily`}>{t('captionSettings.dailyItems')}</label>
-                <input id={`${ids}-daily`} type="number" min={0} max={10000} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.dailyItems} onChange={(e) => setInline({ dailyItems: Math.round(Number(e.target.value)) })} data-testid="inline-daily" />
+                <NumberField id={`${ids}-daily`} min={0} max={10000} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.dailyItems} onChange={(e) => setInline({ dailyItems: Math.round(Number(e.target.value)) })} data-testid="inline-daily" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-inline-budget`}>{t('captionSettings.inlineBudget')}</label>
-                <input id={`${ids}-inline-budget`} type="number" min={0} max={200} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.monthlyBudgetUsd} onChange={(e) => setInline({ monthlyBudgetUsd: Number(parseDigits(e.target.value)) })} data-testid="inline-budget" />
+                <NumberField id={`${ids}-inline-budget`} min={0} max={200} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.monthlyBudgetUsd} onChange={(e) => setInline({ monthlyBudgetUsd: Number(parseDigits(e.target.value)) })} data-testid="inline-budget" />
               </div>
             </div>
             <div className="mt-6 border-t border-border pt-4">

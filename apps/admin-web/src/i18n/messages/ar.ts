@@ -1787,6 +1787,13 @@ const ar: Messages = {
     choose: 'اختر تاريخًا',
     invalid: 'اكتب تاريخًا صحيحًا بالشكل سنة/شهر/يوم.',
   },
+  numberField: {
+    range: 'أدخل عددًا من {min} إلى {max}.',
+    min: 'أدخل عددًا لا يقل عن {min}.',
+    max: 'أدخل عددًا لا يزيد على {max}.',
+    whole: 'أدخل عددًا صحيحًا.',
+    invalid: 'أدخل عددًا.',
+  },
   autocomplete: {
     badges: {
       invited: 'مدعو',

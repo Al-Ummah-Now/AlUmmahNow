@@ -3,13 +3,14 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from '@/components/AppLink';
-import { formatDate as formatSharedDate, formatMoney, formatPercent, isArabicLocale, localizeDigits, parseDigits, SOCIAL_NETWORKS, X_LINK_POST_COST_MICROS, X_MONTHLY_CAP_MAX_USD, X_POST_COST_MICROS, type SocialNetwork, type SocialPlatformSettings } from '@al-ummah/shared-types';
+import { formatDate as formatSharedDate, formatMoney, formatPercent, SOCIAL_NETWORKS, X_LINK_POST_COST_MICROS, X_MONTHLY_CAP_MAX_USD, X_POST_COST_MICROS, type SocialNetwork, type SocialPlatformSettings } from '@al-ummah/shared-types';
 import { clearSocialCredentials, saveSocialCredentials, saveSocialSettings, type SocialAdminView, type SocialHistoryEntry } from '@/lib/api/admin';
 import { useConfirm } from '@/components/content/actions';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
 import { logger } from '@/lib/logger-client';
+import { NumberField } from '@/components/forms/NumberField';
 
 const STATUSES = ['sent', 'queued', 'sending', 'failed', 'blocked', 'cancelled'] as const;
 const ACCOUNT_STATUSES = ['active', 'needs_reconnect', 'revoked', 'suspended'] as const;
@@ -202,16 +203,13 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-fg">{t('socialPosting.xCapTitle')}</h3>
               <label htmlFor={`${ids}-cap`} className="block text-sm font-medium text-fg">{t('socialPosting.xCap')}</label>
-              <input
+              <NumberField decimal
                 id={`${ids}-cap`}
-                type="text"
-                inputMode="decimal"
                 autoComplete="off"
                 dir="ltr"
                 className={`${fieldClass} w-40`}
-                // Shown in the page's digits (٠–٩ and «٫» in Arabic); typed digits of either kind are kept as 0–9
-                value={isArabicLocale(locale) ? localizeDigits(locale, cap).replace('.', '٫') : cap}
-                onChange={(e) => setCap(parseDigits(e.target.value))}
+                value={cap}
+                onChange={(e) => setCap(e.target.value)}
                 aria-invalid={!capValid}
                 aria-describedby={`${ids}-cap-hint`}
                 data-testid="social-x-cap"

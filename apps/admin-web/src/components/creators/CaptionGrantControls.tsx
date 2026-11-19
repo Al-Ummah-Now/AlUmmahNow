@@ -12,6 +12,7 @@ import { reportError } from '@/lib/errors/reporter';
 import { confirmButtonClass } from './TierChangeDialog';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { NumberField } from '@/components/forms/NumberField';
 
 export interface CaptionGrantControlsProps {
   userId: string;
@@ -113,9 +114,7 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-fg-muted">
               <span className="text-fg font-medium">{t('captionMinutes.minutes')}</span>
-              <input
-                type="number"
-                inputMode="numeric"
+              <NumberField
                 min={min}
                 max={max}
                 step={1}

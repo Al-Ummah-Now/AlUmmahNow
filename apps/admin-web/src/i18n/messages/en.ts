@@ -1788,6 +1788,13 @@ const en = {
     choose: 'Choose a date',
     invalid: 'Enter a real date as YYYY-MM-DD.',
   },
+  numberField: {
+    range: 'Enter a number from {min} to {max}.',
+    min: 'Enter a number of at least {min}.',
+    max: 'Enter a number no more than {max}.',
+    whole: 'Enter a whole number.',
+    invalid: 'Enter a number.',
+  },
   autocomplete: {
     badges: {
       invited: 'Invited',
