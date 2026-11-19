@@ -65,8 +65,10 @@ export default function CommentButton({
         aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-colors',
+          // Open: the theme fills the pill (bg-blue → the filled button colour, system.css); the icon and
+          // count take the pill's own text colour, never the link colour on the gold fill (pale, rule 5)
           showComments
-            ? 'text-blue-600 dark:text-blue-400'
+            ? 'text-current'
             : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
         )}
         fill="none"
@@ -84,7 +86,7 @@ export default function CommentButton({
         className={cn(
           'text-sm font-medium transition-colors',
           showComments
-            ? 'text-blue-600 dark:text-blue-400'
+            ? 'text-current'
             : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-200'
         )}
       >

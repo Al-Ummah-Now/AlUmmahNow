@@ -50,6 +50,14 @@ describe('Autocomplete', () => {
     expect(box).not.toHaveAttribute('aria-activedescendant');
   });
 
+  it('keeps the page direction while empty (an Arabic placeholder reads right to left), and follows the text once typed', () => {
+    render(<Harness />);
+    // dir="auto" on an empty input resolves to left-to-right: the Arabic placeholder's ellipsis came first
+    expect(input()).not.toHaveAttribute('dir');
+    fireEvent.change(input(), { target: { value: 'Seerah' } });
+    expect(input()).toHaveAttribute('dir', 'auto');
+  });
+
   it('filters local options with Arabic normalisation and highlights the match', () => {
     render(<Harness />);
     fireEvent.change(input(), { target: { value: 'الصلاه' } });
