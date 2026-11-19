@@ -47,6 +47,8 @@ interface Row {
   visits: number;
   /** Indented under the row above (an engine inside "Search engines") */
   nested?: boolean;
+  /** A left-to-right token (utm value, host): isolated so it keeps its order in Arabic */
+  ltr?: boolean;
   testId?: string;
 }
 
@@ -73,7 +75,7 @@ function Breakdown({ id, title, rows, total, empty, t, f, testId }: { id: string
               const share = shareOf(r.visits, total);
               return (
                 <tr key={r.key} className={r.nested ? '' : 'border-t border-border'} data-testid={r.testId} data-visits={r.visits}>
-                  <th scope="row" className={`p-1 text-start break-all ${r.nested ? 'ps-5 font-normal text-fg-muted' : 'font-medium text-fg'}`}>{r.label}</th>
+                  <th scope="row" className={`p-1 text-start break-words ${r.nested ? 'ps-5 font-normal text-fg-muted' : 'font-medium text-fg'}`}>{r.ltr ? <bdi dir="ltr">{r.label}</bdi> : r.label}</th>
                   <td className="p-1 align-middle"><Bar share={share} /></td>
                   <td className="p-1 text-end tabular-nums text-fg">{f.count(r.visits)}</td>
                   <td className="p-1 text-end tabular-nums text-fg-muted">{f.percent(share)}</td>
@@ -131,7 +133,7 @@ export function SiteVisitsPanel({ report, t, locale }: { report: SiteVisitsRepor
       const label = t(key);
       return { key: l.kind, label: label === key ? l.kind : label, visits: l.visits, testId: `site-visits-landing-${l.kind}` };
     });
-  const referrerRows: Row[] = report.referrers.filter((r) => r.visits > 0).map((r) => ({ key: r.host, label: r.host, visits: r.visits, testId: 'site-visits-referrer' }));
+  const referrerRows: Row[] = report.referrers.filter((r) => r.visits > 0).map((r) => ({ key: r.host, label: r.host, visits: r.visits, ltr: true, testId: 'site-visits-referrer' }));
   // Request origin: app or site, device, country, campaign (counted since collection began)
   const label = (prefix: string, value: string) => {
     const key = `siteVisits.${prefix}.${value}` as MessageKey;
@@ -150,6 +152,7 @@ export function SiteVisitsPanel({ report, t, locale }: { report: SiteVisitsRepor
     key: r.campaign,
     label: r.campaign === OTHER_ORIGIN ? t('siteVisits.otherCampaigns') : r.campaign,
     visits: r.visits,
+    ltr: r.campaign !== OTHER_ORIGIN,
     testId: 'site-visits-campaign',
   }));
   const hasOrigin = surfaceRows.length + deviceRows.length + countryRows.length > 0;
