@@ -33,7 +33,7 @@ interface Props {
 
 export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportStep(props, headingRef) {
   const { locale, current, items, live, counts, done, retrying, onRetry, onCancel, resume, channelHref, contentHref, shortUrl, onDownloadCsv, onNewImport, notice } = props;
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const fill = useFill();
   const text = t.studio.youtube.progress;
   const doneText = t.studio.youtube.done;
