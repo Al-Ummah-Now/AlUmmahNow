@@ -3,8 +3,8 @@
  * shared-types UPGRADE_MODES), decided ONLY by a payment provider being
  * enabled and the admin's "Allow tier requests":
  * - request (no provider, requests allowed): the request form;
- * - closed (no provider, requests off): the tiers, the current one lit, "Upgrades
- *   aren't available right now", no request and no pay; the server refuses a request (403);
+ * - closed (no provider, requests off): the tiers, the current one lit, no request, no pay and no
+ *   word about it (an off feature leaves no trace); the server refuses a request (403);
  * - pay (a provider on, whatever the setting): no request form; the server refuses a request.
  * Both inputs are written to the stack's database (the admin switch has its own
  * admin spec) and put back however the test ends. Changes the mode for the
@@ -55,11 +55,13 @@ test.describe('Release: the Upgrade page modes', () => {
       // closed
       await setRequests(false);
       await open('en', 'closed');
-      await expect(page.getByTestId('upgrade-unavailable')).toHaveText("Upgrades aren't available right now.");
+      await expect(page.getByTestId('upgrade-unavailable')).toHaveCount(0);
+      await expect(page.getByTestId('upgrade-page')).not.toContainText(/not available|aren't available/i);
       await expect(page.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
       await expect(page.getByTestId('tier-creator-request')).toHaveCount(0);
       await open('ar', 'closed');
-      await expect(page.getByTestId('upgrade-unavailable')).toHaveText('الترقية غير متاحة حاليًا.');
+      await expect(page.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
+      await expect(page.getByTestId('upgrade-page')).not.toContainText('غير متاحة');
       const closed = await ask();
       expect(closed.status).toBe(403);
       expect(((await closed.json()) as { code: string }).code).toBe('tier_requests_off');

@@ -1,7 +1,7 @@
 /** Prices: English with the usual symbol; Arabic with ٠–٩ and the currency's Arabic name, never «US$». */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatBillingAmount } from '../src/billing.ts';
+import { formatBillingAmount } from '@al-ummah/shared-types';
 
 test('English: the usual symbol and 0–9', () => {
   assert.equal(formatBillingAmount(900, 'USD', 'en'), '$9.00');
