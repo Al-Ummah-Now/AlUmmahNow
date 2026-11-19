@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ALL_SQL, REPORTS_D1, scriptsFor, scrub, topFrames } from '../prod-errors.ts';
+import { ALL_SQL, REPORTS_D1, originLine, scriptsFor, scrub, topFrames } from '../prod-errors.ts';
 
 test('every statement is a bounded SELECT on indexed columns, no LIKE', () => {
 	for (const sql of ALL_SQL) {
@@ -29,4 +29,9 @@ test('topFrames prefers app frames', () => {
 	const stack = 'Error: x\n    at node_modules/hono/a.js:1\n    at handler (src/index.ts:10:5)\n    at y (src/lib/z.ts:2:1)';
 	assert.deepEqual(topFrames(stack, 2), ['at handler (src/index.ts:10:5)', 'at y (src/lib/z.ts:2:1)']);
 	assert.deepEqual(topFrames(null), []);
+});
+
+test('originLine prints the origin compactly', () => {
+	assert.equal(originLine(JSON.stringify({ surface: 'android', appVersion: '1.4.0', device: 'phone', country: 'EG', source: 'search:google', referrerHost: 'www.google.com', entry: '/:locale/video/:id' })), 'android 1.4.0 · phone · EG · search:google (www.google.com) · /:locale/video/:id');
+	assert.equal(originLine('nope'), '–');
 });

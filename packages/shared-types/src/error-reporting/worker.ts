@@ -12,7 +12,8 @@
 import { scrubEvent } from './scrub';
 import { fingerprint } from './fingerprint';
 import { newErrorRef } from './reference';
-import { idsFromRoute } from './context';
+import { idsFromRoute, normalizeRouteForOrigin } from './context';
+import { originOf, type OriginOptions } from '../request-origin';
 import type { ErrorContext } from './context';
 import type { ErrorApp, ErrorEventInput, ErrorKind, ErrorReportBatch, NeedsActionInput } from './types';
 
@@ -248,6 +249,26 @@ export function resolveNeedsAction(env: ErrorReporterEnv, ctx: ExecutionContextL
   if (list.length) postReport(env, ctx, { resolved: list.map((key) => ({ key })) }, fetchImpl);
 }
 
+/** Which classifier an app's requests use (request-origin.ts). */
+export function originAppOf(app: ErrorApp): OriginOptions['app'] {
+  return app === 'web' ? 'web' : app === 'admin-web' || app === 'admin-api' ? 'admin' : app === 'auth' ? 'auth' : 'api';
+}
+
+/** The request's origin for an error report; never throws (undefined when it can't be read). */
+export function requestOriginFor(app: ErrorApp, req: Request, env: ErrorReporterEnv | undefined) {
+  try {
+    const path = new URL(req.url).pathname;
+    return originOf(req, {
+      app: originAppOf(app),
+      release: env?.CF_VERSION_METADATA?.tag || undefined,
+      entry: normalizeRouteForOrigin(path),
+      embed: app === 'web' && path.startsWith('/embed'),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 /** Request id for a Worker request: Cloudflare's ray id, else the caller's X-Request-Id. */
 export function requestIdOf(req: Request): string | undefined {
   return req.headers.get('cf-ray') || req.headers.get('x-request-id') || undefined;
@@ -265,7 +286,7 @@ export function withErrorReporting<E extends ErrorReporterEnv, C extends Executi
 ): (req: Request, env: E, ctx: C) => Promise<Response> {
   const inner = async (req: Request, env: E, ctx: C): Promise<Response> => {
     const url = new URL(req.url);
-    const base = { route: url.pathname, method: req.method, requestId: requestIdOf(req) };
+    const base = { route: url.pathname, method: req.method, requestId: requestIdOf(req), context: { origin: requestOriginFor(app, req, env) } };
     try {
       const res = await handler(req, env, ctx);
       if (res.status >= 500 && !res.headers.has('X-Error-Ref')) {

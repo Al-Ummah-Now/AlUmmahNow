@@ -68,7 +68,8 @@ export const GROUPS_SQL = `SELECT id, app, kind, name, message, culprit, route, 
 
 /** The latest sample of one group (idx_error_events_group). */
 export const LATEST_EVENT_SQL = `SELECT occurred_at, release, worker_version, route, method, status, request_id, name, message,
- substr(coalesce(symbolicated_stack, stack), 1, 1500) AS stack, substr(extra_json, 1, 800) AS extra FROM error_events
+ substr(coalesce(symbolicated_stack, stack), 1, 1500) AS stack, substr(extra_json, 1, 800) AS extra,
+ json_extract(context_json, '$.origin') AS origin FROM error_events
  WHERE group_id = ?1 ORDER BY occurred_at DESC LIMIT 1`;
 
 /** Open needs-action items (idx_error_actions_status). */
@@ -108,6 +109,18 @@ export function scrub(text: string): string {
 		.replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|cookie|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
 }
 
+/** "android 1.4.0 · phone · EG · search:google (www.google.com) · /:locale/video/:id" from context.origin JSON. */
+export function originLine(json: string): string {
+	try {
+		const o = JSON.parse(json) as Record<string, string>;
+		const app = [o.surface, o.appVersion].filter(Boolean).join(' ');
+		const source = o.campaign ? `${o.source} (${o.campaign})` : o.referrerHost ? `${o.source} (${o.referrerHost})` : o.source;
+		return [app, o.device, o.country, source, o.entry].filter(Boolean).join(' · ');
+	} catch {
+		return '–';
+	}
+}
+
 /** The first `n` stack frames (lines starting with "at "), app frames first. */
 export function topFrames(stack: string | null | undefined, n = 4): string[] {
 	if (!stack) return [];
@@ -142,6 +155,7 @@ async function groups(env: EnvName, since: Date): Promise<void> {
 		if (ev) {
 			p(`- latest: ${ev.occurred_at} ${ev.method ?? ''} ${ev.route ?? ''} → ${ev.status ?? '–'}, release ${ev.release ?? '–'}, version ${ev.worker_version ?? '–'}, request ${ev.request_id ?? '–'}`);
 			if (ev.message && ev.message !== row.message) p(`- latest message: ${String(ev.message).slice(0, 400)}`);
+			if (ev.origin) p(`- origin: ${originLine(ev.origin)}`);
 			for (const f of topFrames(ev.stack)) p(`  - ${f.slice(0, 240)}`);
 			if (ev.extra) p(`- extra: ${String(ev.extra).replace(/"user_?id"\s*:\s*"[^"]*"/gi, '"userId":"…"')}`);
 		} else if (!e.ok) p(`- latest sample not readable: ${e.error}`);

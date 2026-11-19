@@ -90,6 +90,10 @@ export async function POST(req: NextRequest) {
       ...(userId ? { 'X-Client-User-Id': userId } : {}),
       'X-Client-IP': req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
       'X-Client-User-Agent': (req.headers.get('user-agent') || '').slice(0, 512),
+      // Origin, classified at ingest (no IP or UA is stored): the page, country and mobile hint
+      'X-Client-Page': (req.headers.get('referer') || '').slice(0, 512),
+      'X-Client-Country': (req.headers.get('cf-ipcountry') || '').slice(0, 2),
+      'X-Client-Mobile': (req.headers.get('sec-ch-ua-mobile') || '').slice(0, 2),
     },
     body: text,
     cache: 'no-store',

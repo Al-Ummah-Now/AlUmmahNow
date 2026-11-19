@@ -19,7 +19,7 @@
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { errorLiveEvents } from '../../lib/admin-live';
 import type { Context } from 'hono';
-import { ACTION_KEY, ERROR_LIMITS, USER_ID, buildServerEvent, parseUserAgent, scrubEvent, type ErrorApp, type ErrorEventInput, type StackFrame } from '@al-ummah/shared-types';
+import { ACTION_KEY, ERROR_LIMITS, USER_ID, buildServerEvent, originOf, normalizeRouteForOrigin, requestOriginFor, type RequestOrigin, parseUserAgent, scrubEvent, type ErrorApp, type ErrorEventInput, type StackFrame } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
 import { hashIp, safeEqual } from '../../lib/contact';
 import { allowClientEvents, ingestErrorEvents, resolveActionItems, type IngestOutcome } from '../../lib/errors-store';
@@ -59,6 +59,32 @@ export function constrainBrowserEvents(
     });
   }
   return out;
+}
+
+/**
+ * The browser's origin, from what the web / admin-web /api/errors proxy forwards: the browser's
+ * User-Agent (classified here, never stored), its Sec-CH-UA-Mobile, Cloudflare's country and the
+ * page it was on (path and utm_source only matter). Undefined without a forwarded User-Agent.
+ */
+export function browserOrigin(header: (name: string) => string | undefined): RequestOrigin | undefined {
+  const ua = header('X-Client-User-Agent');
+  if (!ua) return undefined;
+  let page = 'https://invalid.local/';
+  try {
+    page = new URL(header('X-Client-Page') || page).toString();
+  } catch {
+    // keep the placeholder
+  }
+  const headers = new Headers({ 'user-agent': ua });
+  const mobile = header('X-Client-Mobile');
+  if (mobile === '?0' || mobile === '?1') headers.set('sec-ch-ua-mobile', mobile);
+  const country = header('X-Client-Country');
+  if (country && /^[A-Z]{2}$/.test(country)) headers.set('cf-ipcountry', country);
+  const app = header('X-Report-App') === 'admin-web' ? 'admin' : 'web';
+  const path = new URL(page).pathname;
+  const origin = originOf(new Request(page, { headers }), { app, entry: page.startsWith('https://invalid.local') ? undefined : normalizeRouteForOrigin(path), embed: app === 'web' && path.startsWith('/embed') });
+  // The page posted to its own site: a same-site "referrer" says nothing about where the visit came from
+  return origin.source === 'platform' ? { ...origin, source: 'direct', referrerHost: undefined } : origin;
 }
 
 /** What goes on the queue: everything already validated and scrubbed. */
@@ -195,6 +221,9 @@ export async function errorsIngest(c: Context<{ Bindings: AdminBindings }>): Pro
       userId: c.req.header('X-Client-User-Id'),
       environment: env.ENVIRONMENT || 'development',
     });
+    // The page's own claims are dropped: the origin is what the proxy saw of the browser
+    const origin = browserOrigin((name) => c.req.header(name));
+    if (origin) events = events.map((e) => ({ ...e, context: { ...(e.context ?? {}), origin } }));
     if (events.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
   }
   const userAgent = c.req.header('X-Client-User-Agent') || undefined;
@@ -232,14 +261,21 @@ export async function errorsIngest(c: Context<{ Bindings: AdminBindings }>): Pro
  * queue (no HTTP round trip). Returns the reference.
  */
 export function reportAdminApiError(
-  c: { env: AdminBindings; req: { path: string; method: string; header(name: string): string | undefined }; executionCtx: { waitUntil(p: Promise<unknown>): void } },
+  c: { env: AdminBindings; req: { path: string; method: string; raw?: Request; header(name: string): string | undefined }; executionCtx: { waitUntil(p: Promise<unknown>): void } },
   error: unknown,
   status: number,
 ): string {
   const event = buildServerEvent(
     'admin-api',
     error,
-    { kind: error ? 'unhandled' : 'http', route: c.req.path, method: c.req.method, status, requestId: c.req.header('cf-ray') || c.req.header('x-request-id') },
+    {
+      kind: error ? 'unhandled' : 'http',
+      route: c.req.path,
+      method: c.req.method,
+      status,
+      requestId: c.req.header('cf-ray') || c.req.header('x-request-id'),
+      ...(c.req.raw ? { context: { origin: requestOriginFor('admin-api', c.req.raw, c.env as never) } } : {}),
+    },
     { ENVIRONMENT: c.env.ENVIRONMENT, CF_VERSION_METADATA: (c.env as { CF_VERSION_METADATA?: { id?: string } }).CF_VERSION_METADATA },
   );
   if (!event || !c.env.REPORTS_DB) return event?.ref ?? '';
