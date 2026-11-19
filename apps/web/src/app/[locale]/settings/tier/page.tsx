@@ -56,7 +56,8 @@ export default function SettingsTierPage() {
     <main id={MAIN_CONTENT_ID} className="upg upg-settings" data-testid="settings-tier">
       <header className="upg-head">
         <h1 className="upg-title">{copy.title}</h1>
-        <p className="upg-lead">{copy.description}</p>
+        {/* Closed: no requests anywhere, so the lead speaks of the tier only */}
+        <p className="upg-lead">{overview?.mode === 'closed' ? copy.descriptionTierOnly : copy.description}</p>
       </header>
 
       {load.status === 'loading' && <div className="upg-card upg-card-skel" data-slot="card" aria-busy="true" />}

@@ -103,6 +103,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     settingsTier: {
       title: 'الفئة',
       description: 'فئتك وطلباتك للفئات',
+      descriptionTierOnly: 'فئتك وما تتيحه لك',
       current: 'فئتك: {tier}',
       since: 'منذ {date}',
       seeTiers: 'عرض كل الفئات',

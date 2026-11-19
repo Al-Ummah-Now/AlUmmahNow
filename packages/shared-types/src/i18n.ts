@@ -273,6 +273,8 @@ export interface AppTranslations {
     settingsTier: {
       title: string;
       description: string;
+      /** While /upgrade is off ('closed'): the tier only, no requests */
+      descriptionTierOnly: string;
       current: string;
       since: string;
       seeTiers: string;
