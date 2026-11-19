@@ -33,6 +33,7 @@
 --   apps/admin-api/migrations/0038_contact_inbox_read_spam.sql
 --   apps/admin-api/migrations/0039_admin_staff.sql
 --   apps/admin-api/migrations/0040_error_event_origin.sql
+--   apps/admin-api/migrations/0043_seed_posts_scheduled.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
