@@ -15,7 +15,7 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
   return (
     <Link
       href={`/${lang}/post/${encodeURIComponent(post.id)}`}
-      className="block rounded-lg border border-gray-200 p-4 hover:border-[var(--fanous-color-accent)] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      className="c group block !p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
       data-testid="library-saved-post"
       data-post-id={post.id}
     >
