@@ -136,7 +136,7 @@ export function CommentBody({
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <h4 className="font-bold">
-            {authorHref ? <Link href={authorHref} className="hover:underline" data-testid="comment-author-link">{author}</Link> : author}
+            {authorHref ? <Link href={authorHref} className="hover:underline" data-testid="comment-author-link"><bdi>{author}</bdi></Link> : <bdi>{author}</bdi>}
           </h4>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {time}
