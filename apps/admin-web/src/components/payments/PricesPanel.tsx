@@ -30,6 +30,7 @@ import { useUndoableAction } from '@/components/undo/UndoToast';
 import { LINK_TONE, linkFor, linkState, pricesByTier } from '@/lib/payments';
 import { ToneChip, hintClass, labelClass, providerName, sectionTitle, useBillingAction } from './shared';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 export interface TierOption {
   id: string;
@@ -175,25 +176,25 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
               <label htmlFor={`${ids}-tier`} className={labelClass}>
                 {t('payments.prices.tier')}
               </label>
-              <select id={`${ids}-tier`} className={`${fieldClass} w-full`} value={draft.tierId} onChange={(e) => setDraft((d) => ({ ...d, tierId: e.target.value }))} data-testid="payments-price-tier">
+              <Select id={`${ids}-tier`} className={`${fieldClass} w-full`} value={draft.tierId} onChange={(e) => setDraft((d) => ({ ...d, tierId: e.target.value }))} data-testid="payments-price-tier">
                 {tiers.map((x) => (
                   <option key={x.id} value={x.id}>
                     {x.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label htmlFor={`${ids}-period`} className={labelClass}>
                 {t('payments.prices.period')}
               </label>
-              <select id={`${ids}-period`} className={`${fieldClass} w-full`} value={draft.period} onChange={(e) => setDraft((d) => ({ ...d, period: e.target.value as BillingPeriod }))} data-testid="payments-price-period">
+              <Select id={`${ids}-period`} className={`${fieldClass} w-full`} value={draft.period} onChange={(e) => setDraft((d) => ({ ...d, period: e.target.value as BillingPeriod }))} data-testid="payments-price-period">
                 {BILLING_PERIODS.map((p) => (
                   <option key={p} value={p}>
                     {periodName(p)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label htmlFor={`${ids}-currency`} className={labelClass}>
