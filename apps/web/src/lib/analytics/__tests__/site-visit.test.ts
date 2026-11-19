@@ -66,7 +66,7 @@ describe('visitFromRequest (server-side, cookieless)', () => {
   });
   it('without Fetch Metadata headers, only an HTML request counts', () => {
     const plain = (accept: string) => ({ method: 'GET', url: 'https://videos.alummahnow.net/en', headers: new Headers({ accept, 'user-agent': 'Mozilla/5.0' }) });
-    expect(visitFromRequest(plain('text/html,application/xhtml+xml'))).toEqual({ landing: 'home', source: 'direct' });
+    expect(visitFromRequest(plain('text/html,application/xhtml+xml'))).toMatchObject({ landing: 'home', source: 'direct', surface: 'web' });
     expect(visitFromRequest(plain('*/*'))).toBeNull();
   });
 });
@@ -85,6 +85,10 @@ describe('recordServerVisit', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://videos.api.example/api/analytics/events');
-    expect(JSON.parse(String(init.body))).toEqual({ kind: 'visit', events: [{ landing: 'home', source: 'social:x', referrerHost: 't.co' }] });
+    const body = JSON.parse(String(init.body));
+    expect(body.kind).toBe('visit');
+    expect(body.events).toHaveLength(1);
+    // The visit plus its request origin (surface and device class; no User-Agent kept)
+    expect(body.events[0]).toEqual({ landing: 'home', source: 'social:x', referrerHost: 't.co', surface: 'web', device: 'desktop' });
   });
 });
