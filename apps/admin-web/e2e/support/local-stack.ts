@@ -58,13 +58,18 @@ export async function runCron(app: 'api-videos' | 'admin-api', cron: string, tim
 }
 
 /**
+ * MessageType.UserDataErased (shared-types queue.ts). The e2e suite keeps its imports local;
+ * test/e2e-message-types.test.ts fails when the enum moves.
+ */
+export const USER_DATA_ERASED = 83;
+
+/**
  * Queues the processor's account-erasure step (UserDataErased) for a user, as the product does when
  * an erasure completes (idempotent). For a run account the GDPR delete cannot reach: one that never
  * had a password (an invited creator) cannot sign in to erase itself.
  */
 export async function queueErasureStep(userId: string): Promise<void> {
-  const { MessageType } = await import('../../../../packages/shared-types/src/queue');
-  const message = { id: crypto.randomUUID(), type: MessageType.UserDataErased, payload: { userId, timestamp: new Date().toISOString(), source: 'e2e-teardown' }, timestamp: Date.now() };
+  const message = { id: crypto.randomUUID(), type: USER_DATA_ERASED, payload: { userId, timestamp: new Date().toISOString(), source: 'e2e-teardown' }, timestamp: Date.now() };
   const res = await fetch(`${control()}/__stack/queue/api-videos/queue`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(message) });
   if (!res.ok) throw new Error(`erasure step for ${userId} -> ${res.status} ${await res.text()}`);
 }
