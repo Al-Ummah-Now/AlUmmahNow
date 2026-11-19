@@ -25,3 +25,23 @@ describe('NotFoundPage (prod 2026-11-18: crashed with 500 instead of a 404)', ()
     expect(screen.getByTestId('not-found-page')).toHaveAttribute('dir', 'rtl');
   });
 });
+
+describe('NotFoundPage: the shared error card (wiki guides/error-pages.md)', () => {
+  it('one heading, the 410 words hidden until the Worker answers 410', () => {
+    pathname = '/en/nope';
+    render(<NotFoundPage />);
+    const main = screen.getByTestId('not-found-page');
+    expect(main).toHaveAttribute('data-error-status', '404');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Page not found');
+    expect(main.querySelector('[data-when="410"]')).toHaveAttribute('hidden');
+  });
+
+  it('offers the site search, home, and contact; Arabic code line in ٠–٩', () => {
+    pathname = '/ar/nope';
+    render(<NotFoundPage />);
+    expect(screen.getByRole('search')).toHaveAttribute('action', '/ar/search');
+    expect(screen.getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', '/ar');
+    expect(screen.getByText('خطأ ٤٠٤')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'تواصل معنا' })).toHaveAttribute('href', '/ar/contact');
+  });
+});

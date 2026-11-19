@@ -45,3 +45,41 @@ describe('asGoneIfPurged', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+describe('asGonePage (the error card switches to its 410 words)', () => {
+  type El = { setAttribute(n: string, v: string): void; removeAttribute(n: string): void; setInnerContent(c: string): void };
+  const calls: string[] = [];
+  class FakeRewriter {
+    private sel: string[] = [];
+    on(selector: string, h: { element(el: El): void }) {
+      this.sel.push(selector);
+      h.element({ setAttribute: (n, v) => calls.push(`${selector} set ${n}=${v}`), removeAttribute: (n) => calls.push(`${selector} rm ${n}`), setInnerContent: (c) => calls.push(`${selector} text ${c}`) });
+      return this;
+    }
+    transform(r: Response) {
+      return r;
+    }
+  }
+  afterEach(() => {
+    delete (globalThis as { HTMLRewriter?: unknown }).HTMLRewriter;
+    calls.length = 0;
+  });
+
+  it('shows the 410 block, hides the 404 one and retitles the page in its language', async () => {
+    (globalThis as { HTMLRewriter?: unknown }).HTMLRewriter = FakeRewriter;
+    const out = await asGoneIfPurged(req('/ar/video/abc'), page(404), env, api(410));
+    expect(out.status).toBe(410);
+    expect(calls).toEqual([
+      '[data-error-status="404"] set data-error-status=410',
+      '.ep-head[data-when="404"] set hidden=',
+      '.ep-head[data-when="410"] rm hidden',
+      'title text حُذف هذا المحتوى',
+    ]);
+  });
+
+  it('without HTMLRewriter (tests, Node) the body passes through unchanged', async () => {
+    const out = await asGoneIfPurged(req('/en/video/abc'), page(404), env, api(410));
+    expect(out.status).toBe(410);
+    expect(await out.text()).toBe('<html>not found</html>');
+  });
+});

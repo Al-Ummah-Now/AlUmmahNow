@@ -1,4 +1,7 @@
 import NotFoundPage from '@/components/NotFoundPage';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
+
+export const generateMetadata = notFoundMetadata;
 
 /**
  * Unmatched URLs (e.g. /en/does-not-exist, /ar/does-not-exist) land here with
