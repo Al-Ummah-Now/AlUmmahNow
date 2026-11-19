@@ -144,8 +144,8 @@ export function AppShell() {
             </div>
           ))}
         </div>
-        {/* The scroll-shadow edge (#1620): an 8px strip below the list, outside its scroll box, so it never sits
-            over an item; shaded only while the list says more items are below (system.css .nv-edge) */}
+        {/* The scroll hint (#1620): a 14px strip below the list, outside its scroll box, so it never sits
+            over an item; with a line, a soft shadow and a small down chevron only while the list says more items are below (system.css .nv-edge) */}
         <div className="nv-edge" aria-hidden="true" />
         {/* Language and light/dark live in the header (docs/design/NAV.md); the drawer keeps its close button */}
         <div className="nv-foot">
