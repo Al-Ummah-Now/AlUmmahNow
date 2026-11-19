@@ -29,6 +29,7 @@ import {
   spikeRuleOf,
   sumByDay,
 } from '../lib/opsCost';
+import { auditOriginJson } from '../lib/request-origin';
 
 export { projectMonth, type Projection } from '../lib/opsCost';
 
@@ -347,8 +348,8 @@ app.put('/thresholds/:id', async (c) => {
   };
   const now = new Date().toISOString();
   // Audit first (same log as the other admin settings); the change follows
-  await c.env.REPORTS_DB.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), `${THRESHOLD_AUDIT_PREFIX}${id}`, JSON.stringify({ value: before.value, enabled: before.enabled, window_hours: before.window_hours }), JSON.stringify(after), actorOf(c), now)
+  await c.env.REPORTS_DB.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), `${THRESHOLD_AUDIT_PREFIX}${id}`, JSON.stringify({ value: before.value, enabled: before.enabled, window_hours: before.window_hours }), JSON.stringify(after), actorOf(c), now, auditOriginJson())
     .run();
   await db.prepare('UPDATE ops_thresholds SET value = ?, enabled = ?, window_hours = ?, updated_by = ?, updated_at = ? WHERE id = ?')
     .bind(after.value, after.enabled, after.window_hours, actorOf(c), now, id)

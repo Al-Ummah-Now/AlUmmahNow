@@ -16,6 +16,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { normalizeRoute } from './fingerprint';
 import { CONTEXT_LIMITS, type ErrorBreadcrumb, type ErrorContext, type ErrorJob, type ErrorUpstream } from './context';
+import type { RequestOrigin } from '../request-origin';
 import { setErrorTrailHooks } from './worker';
 
 interface Trail {
@@ -24,6 +25,8 @@ interface Trail {
   job?: ErrorJob;
   upstream?: ErrorUpstream;
   breadcrumbs: ErrorBreadcrumb[];
+  /** Where the request (or the job's starting request) came from */
+  origin?: RequestOrigin;
 }
 
 const als = new AsyncLocalStorage<Trail>();
@@ -34,7 +37,7 @@ function push(t: Trail, kind: string, message: string): void {
 }
 
 /** Runs fn with a fresh trail (one per request or queue message). */
-export function runWithErrorTrail<T>(init: { job?: ErrorJob; videoId?: string; channelId?: string }, fn: () => T): T {
+export function runWithErrorTrail<T>(init: { job?: ErrorJob; videoId?: string; channelId?: string; origin?: RequestOrigin }, fn: () => T): T {
   installFetchTrail();
   return als.run({ ...init, breadcrumbs: [] }, fn);
 }
@@ -61,6 +64,20 @@ export function noteUpstream(service: string, status?: number, route?: string): 
   push(t, 'upstream', `${service}${route ? ` ${normalizeRoute(route)}` : ''} → ${status ?? 'failed'}`);
 }
 
+/**
+ * The origin of the request (or of the request that queued this job) being handled: for audit
+ * rows and queued messages (request-origin.ts; no PII). Undefined outside a trail.
+ */
+export function currentRequestOrigin(): RequestOrigin | undefined {
+  return als.getStore()?.origin;
+}
+
+/** Sets the current trail's origin (a job taking it over from its message). */
+export function noteOrigin(origin: RequestOrigin | undefined): void {
+  const t = als.getStore();
+  if (t && origin) t.origin = origin;
+}
+
 /** Snapshot of the current trail as an event context (undefined outside a trail). */
 export function currentErrorContext(): ErrorContext | undefined {
   const t = als.getStore();
@@ -69,6 +86,7 @@ export function currentErrorContext(): ErrorContext | undefined {
   if (t.videoId) c.videoId = t.videoId;
   if (t.channelId) c.channelId = t.channelId;
   if (t.job) c.job = { ...t.job };
+  if (t.origin) c.origin = { ...t.origin };
   if (t.upstream) c.upstream = { ...t.upstream };
   if (t.breadcrumbs.length) c.breadcrumbs = t.breadcrumbs.slice();
   return Object.keys(c).length ? c : undefined;

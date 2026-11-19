@@ -19,6 +19,7 @@ import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -73,8 +74,8 @@ app.put('/settings', async (c) => {
   const db = c.env.REPORTS_DB;
   const auditId = crypto.randomUUID();
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(auditId, YOUTUBE_IMPORT_SETTINGS_AUDIT_KEY, JSON.stringify(before), JSON.stringify({ ...before, ...parsed.value }), actorOf(c), new Date().toISOString())
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(auditId, YOUTUBE_IMPORT_SETTINGS_AUDIT_KEY, JSON.stringify(before), JSON.stringify({ ...before, ...parsed.value }), actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   let result: YoutubeImportSettingsView;
   try {

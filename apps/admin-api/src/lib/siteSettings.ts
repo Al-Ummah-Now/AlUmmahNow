@@ -1,5 +1,6 @@
 import type { AppContext } from '../base';
 import { DEFAULT_SITE_THEME, SITE_THEME_SETTING_KEY, parseSiteThemeValue, siteThemeValue, type PublicSiteTheme, type SiteThemeRef } from '@al-ummah/shared-types';
+import { auditOriginJson } from './request-origin';
 
 type Db = AppContext['env']['REPORTS_DB'];
 
@@ -31,7 +32,7 @@ export async function writeSiteTheme(db: Db, ref: SiteThemeRef | string, actorId
   const previous = current?.value ?? null;
   if ((previous ?? DEFAULT_SITE_THEME) === theme && previous !== null) return false;
   await db.batch([
-    db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, SITE_THEME_SETTING_KEY, previous, theme, actorId, now),
+    db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, SITE_THEME_SETTING_KEY, previous, theme, actorId, now, auditOriginJson()),
     db.prepare('INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at').bind(SITE_THEME_SETTING_KEY, theme, actorId, now),
   ]);
   return true;

@@ -13,7 +13,7 @@ import { scrubEvent } from './scrub';
 import { fingerprint } from './fingerprint';
 import { newErrorRef } from './reference';
 import { idsFromRoute, normalizeRouteForOrigin } from './context';
-import { originOf, type OriginOptions } from '../request-origin';
+import { originOf, type OriginOptions, type RequestOrigin } from '../request-origin';
 import type { ErrorContext } from './context';
 import type { ErrorApp, ErrorEventInput, ErrorKind, ErrorReportBatch, NeedsActionInput } from './types';
 
@@ -51,7 +51,7 @@ export interface ServerErrorDetails {
  * imports `@al-ummah/shared-types/error-trail`; without it events carry only
  * the context the caller passes.
  */
-let trailHooks: { current(): ErrorContext | undefined; run<T>(init: { videoId?: string; channelId?: string }, fn: () => T): T } | null = null;
+let trailHooks: { current(): ErrorContext | undefined; run<T>(init: { videoId?: string; channelId?: string; origin?: RequestOrigin }, fn: () => T): T } | null = null;
 
 export function setErrorTrailHooks(hooks: typeof trailHooks): void {
   trailHooks = hooks;
@@ -317,6 +317,6 @@ export function withErrorReporting<E extends ErrorReporterEnv, C extends Executi
     } catch {
       ids = {};
     }
-    return trailHooks.run(ids, () => inner(req, env, ctx));
+    return trailHooks.run({ ...ids, origin: requestOriginFor(app, req, env) }, () => inner(req, env, ctx));
   };
 }

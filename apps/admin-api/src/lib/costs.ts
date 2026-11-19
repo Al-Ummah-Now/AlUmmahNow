@@ -40,6 +40,7 @@ import {
 } from './opsCost';
 import type { D1Database } from './types';
 import { localTime, queueCostEmails, type CostDigest } from './cost-alert-mail';
+import { auditOriginJson } from './request-origin';
 
 export const CF_ACCOUNT_ID = '0e4b6e7f9faf280c3c9bf95995edc64f';
 export const CF_API = 'https://api.cloudflare.com/client/v4';
@@ -75,8 +76,8 @@ export interface Actor {
 }
 
 async function audit(env: CostsEnv, key: string, before: unknown, after: unknown, actor: Actor, now: Date): Promise<void> {
-  await env.REPORTS_DB.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), key, before === null ? null : JSON.stringify(before), after === null ? null : JSON.stringify(after), actor.id, now.toISOString())
+  await env.REPORTS_DB.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), key, before === null ? null : JSON.stringify(before), after === null ? null : JSON.stringify(after), actor.id, now.toISOString(), auditOriginJson())
     .run();
 }
 

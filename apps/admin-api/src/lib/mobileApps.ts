@@ -16,6 +16,7 @@ import {
   type MobileAppsSettings,
 } from '@al-ummah/shared-types';
 import type { AppContext } from '../base';
+import { auditOriginJson } from './request-origin';
 
 type Db = AppContext['env']['REPORTS_DB'];
 
@@ -52,8 +53,8 @@ export async function writeMobileApps(db: Db, settings: MobileAppsSettings, acto
   if (previous === value) return false;
   await db.batch([
     db
-      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, MOBILE_APPS_SETTING_KEY, previous, value, actorId, now),
+      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, MOBILE_APPS_SETTING_KEY, previous, value, actorId, now, auditOriginJson()),
     db
       .prepare(
         'INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at'

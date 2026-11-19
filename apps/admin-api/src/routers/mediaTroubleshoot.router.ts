@@ -26,6 +26,7 @@ import { mediaNames, readContainers, readLogs, readQueues, testToken, type CfCon
 import { readToken, removeToken, saveToken, storeTest, tokenProblem, TokenError } from '../lib/media-troubleshoot/token';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv & { CLOUDFLARE_ACCOUNT_ID?: string }; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -139,8 +140,8 @@ async function action(c: C, kind: 'retry-now' | 'cancel') {
   const db = c.env.REPORTS_DB;
   const auditId = crypto.randomUUID();
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(auditId, `${MEDIA_VIDEO_AUDIT_PREFIX}${videoId}`, null, JSON.stringify({ action: kind === 'cancel' ? 'transcode_cancel' : 'transcode_retry_now' }), actorOf(c), new Date().toISOString())
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(auditId, `${MEDIA_VIDEO_AUDIT_PREFIX}${videoId}`, null, JSON.stringify({ action: kind === 'cancel' ? 'transcode_cancel' : 'transcode_retry_now' }), actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   try {
     const result = await callVideosInternal<{ job: unknown }>(c.env, '/internal/media/troubleshoot/actions', { method: 'POST', json: { action: kind, videoId, actorId: actorOf(c) } });

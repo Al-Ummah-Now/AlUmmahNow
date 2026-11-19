@@ -5,6 +5,7 @@
  * `trash:<kind>:<id>`, with { action, reason? } as JSON in new_value.
  */
 import type { TrashKind } from '@al-ummah/shared-types';
+import { auditOriginJson } from './request-origin';
 
 interface AuditDb {
   prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } };
@@ -24,14 +25,14 @@ export async function writeTrashAudit(
   now = new Date(),
 ): Promise<void> {
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(
       crypto.randomUUID(),
       trashAuditKey(entry.kind, entry.id),
       null,
       JSON.stringify({ action: entry.action, ...(entry.reason ? { reason: entry.reason } : {}) }),
       entry.actorId,
-      now.toISOString(),
+      now.toISOString(),auditOriginJson()
     )
     .run();
 }

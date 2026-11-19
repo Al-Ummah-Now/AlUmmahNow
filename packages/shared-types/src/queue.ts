@@ -264,6 +264,8 @@ export interface QueueMessage<T = Record<string, unknown>> {
   priority?: 'low' | 'normal' | 'high' | 'critical';
   failureReason?: string;
   failedAt?: string;
+  /** Where the request that queued it came from (request-origin.ts; no PII) */
+  origin?: import('./request-origin').RequestOrigin;
 }
 
 // Result of processing a queue message

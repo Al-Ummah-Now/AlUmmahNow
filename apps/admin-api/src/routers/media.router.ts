@@ -41,6 +41,7 @@ import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from
 import { logger } from '../lib/logger';
 import troubleshootRouter from './mediaTroubleshoot.router';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -94,8 +95,8 @@ async function writeAudit(c: C, rows: { key: string; oldValue: unknown; newValue
   await db.batch(
     rows.map((row, i) =>
       db
-        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(ids[i], row.key, row.oldValue === undefined ? null : JSON.stringify(row.oldValue), JSON.stringify(row.newValue), actorOf(c), now),
+        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(ids[i], row.key, row.oldValue === undefined ? null : JSON.stringify(row.oldValue), JSON.stringify(row.newValue), actorOf(c), now, auditOriginJson()),
     ),
   );
   return async () => {

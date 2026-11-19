@@ -26,6 +26,7 @@ import {
 } from '@al-ummah/theme-packages';
 import { SITE_THEME_SETTING_KEY, parseSiteThemeValue } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
+import { auditOriginJson } from './request-origin';
 
 type Db = AdminBindings['REPORTS_DB'];
 
@@ -177,8 +178,8 @@ export class ThemeStore {
 
   private log(id: string, entry: string, actor: string, now: string) {
     return this.db
-      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), THEME_LOG_KEY, id, entry, actor, now);
+      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), THEME_LOG_KEY, id, entry, actor, now, auditOriginJson());
   }
 
   /** True when the id was ever used: built in, a theme (also in Recently deleted), or one purged since (its create log). */

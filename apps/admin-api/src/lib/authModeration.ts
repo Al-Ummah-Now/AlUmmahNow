@@ -11,6 +11,7 @@
 import { deactivateStaff } from './admin-staff';
 import { z } from 'zod';
 import type { D1Database } from './types';
+import { auditOriginJson } from './request-origin';
 
 export const AUTH_REQUEST_ACTIONS = ['suspend_account', 'delete_account', 'revoke_sessions', 'require_password_reset', 'other'] as const;
 export const AUTH_REQUEST_REASONS = [
@@ -406,8 +407,8 @@ export async function audit(
 ): Promise<void> {
   if (!db) return;
   await db
-    .prepare('INSERT INTO admin_audit_log (id, actor_id, actor_email, action, target_type, target_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), entry.actorId, entry.actorEmail ?? null, entry.action, entry.targetType, entry.targetId, entry.metadata ? JSON.stringify(entry.metadata) : null, now)
+    .prepare('INSERT INTO admin_audit_log (id, actor_id, actor_email, action, target_type, target_id, metadata, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), entry.actorId, entry.actorEmail ?? null, entry.action, entry.targetType, entry.targetId, entry.metadata ? JSON.stringify(entry.metadata) : null, now, auditOriginJson())
     .run();
 }
 

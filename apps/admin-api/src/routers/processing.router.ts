@@ -20,6 +20,7 @@ import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callProcessing, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -62,8 +63,8 @@ async function writeAudit(c: C, ids: string[], action: string, details: Record<s
   await db.batch(
     rows.map(({ rowId, id }) =>
       db
-        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(rowId, `${PROCESSING_AUDIT_PREFIX}${id}`, null, JSON.stringify({ action, details }), actorOf(c), now),
+        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(rowId, `${PROCESSING_AUDIT_PREFIX}${id}`, null, JSON.stringify({ action, details }), actorOf(c), now, auditOriginJson()),
     ),
   );
   return rows.map((r) => r.rowId);

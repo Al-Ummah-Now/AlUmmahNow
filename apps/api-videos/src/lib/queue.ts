@@ -1,5 +1,6 @@
 import { MessageType, QueueMessage } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import { currentRequestOrigin } from '@al-ummah/shared-types/error-trail';
 
 // Re-export for backward compatibility
 export { MessageType, QueueMessage };
@@ -34,11 +35,14 @@ export default class Queue {
                 logger.warn("Queue binding not provided, skipping send");
                 return;
             }
+            const origin = currentRequestOrigin();
             await this.queue.send({
                 id: crypto.randomUUID(),
                 type: type,
                 payload: payload,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                // Where the request that queued it came from: a failed job's Errors entry shows it
+                ...(origin ? { origin } : {}),
             });
         }
         catch (error) {

@@ -25,6 +25,26 @@ function envelopeError(body: ApiEnvelope, fallback: string): string {
 }
 
 /**
+ * The admin's browser, for admin-api's request origin (audit rows, errors): its User-Agent (only
+ * classified there, never stored), mobile hint and country. Nothing when called outside a request.
+ */
+async function originHints(): Promise<Record<string, string>> {
+  try {
+    const h = await getHeaders();
+    const out: Record<string, string> = {};
+    const ua = h.get('user-agent');
+    if (ua) out['X-Client-User-Agent'] = ua.slice(0, 512);
+    const mobile = h.get('sec-ch-ua-mobile');
+    if (mobile === '?0' || mobile === '?1') out['X-Client-Mobile'] = mobile;
+    const country = h.get('cf-ipcountry');
+    if (country && /^[A-Z]{2}$/.test(country)) out['X-Client-Country'] = country;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Call admin-api with the session's bearer token and return the parsed JSON
  * envelope. Throws AdminApiError (with the HTTP status) on any failure.
  */
@@ -50,6 +70,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
         // FormData bodies (image uploads) get their multipart type from fetch
         ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${session.accessToken}`,
+        ...(await originHints()),
         ...options.headers,
       },
     });
