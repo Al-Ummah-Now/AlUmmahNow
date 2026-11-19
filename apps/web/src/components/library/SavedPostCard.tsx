@@ -20,7 +20,8 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
       data-post-id={post.id}
     >
       {channelLabel(post, lang) && <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{channelLabel(post, lang)}</p>}
-      <p className="line-clamp-3 text-sm text-gray-900 dark:text-gray-100">{stripHtml(post.content)}</p>
+      {/* The post's own language sets its direction (an Arabic post on the English page reads right to left) */}
+      <p dir="auto" className="line-clamp-3 text-sm text-gray-900 dark:text-gray-100">{stripHtml(post.content)}</p>
     </Link>
   );
 }
