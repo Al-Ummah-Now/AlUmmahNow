@@ -301,7 +301,7 @@ export const STUDIO_EN = {
   dashboard: {
     latest: 'Latest video',
     next: 'Next scheduled',
-    counts: '{views} views, {likes} likes, {comments} comments',
+    counts: '{views} · {likes} · {comments}',
     watchTime: 'Watch time in the last {days} days: {time}',
     cardFailed: 'Could not load this card.',
     retry: 'Try again',
@@ -832,7 +832,7 @@ export const STUDIO_AR: StudioTranslations = {
   dashboard: {
     latest: 'أحدث مرئي',
     next: 'المجدول التالي',
-    counts: '{views} مشاهدة، {likes} إعجاب، {comments} تعليق',
+    counts: '{views} · {likes} · {comments}',
     watchTime: 'وقت المشاهدة في آخر {days} يومًا: {time}',
     cardFailed: 'تعذّر تحميل هذه البطاقة.',
     retry: 'حاول مرة أخرى',
