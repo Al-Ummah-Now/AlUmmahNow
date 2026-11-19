@@ -4,7 +4,7 @@ import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox'
 import { matchesSearch } from '@/lib/search/match';
 import { use, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, PostStatus, formatNumber } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,7 +33,7 @@ interface CommunityManagementPageProps {
 export default function CommunityManagementPage({ params }: CommunityManagementPageProps) {
   const router = useRouter();
   const { locale, id } = use(params);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
   // Every post of the channel (the owner's list includes scheduled ones); the tabs split it by status
@@ -236,7 +236,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
               {t.community.published}
               {tabCounts[PostStatus.PUBLISHED] > 0 && (
                 <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
-                  {tabCounts[PostStatus.PUBLISHED]}
+                  {formatNumber(lang, tabCounts[PostStatus.PUBLISHED])}
                 </span>
               )}
             </TabsTrigger>
@@ -244,7 +244,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
               {t.community.scheduled}
               {tabCounts[PostStatus.SCHEDULED] > 0 && (
                 <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
-                  {tabCounts[PostStatus.SCHEDULED]}
+                  {formatNumber(lang, tabCounts[PostStatus.SCHEDULED])}
                 </span>
               )}
             </TabsTrigger>
