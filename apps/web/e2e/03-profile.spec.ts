@@ -48,14 +48,17 @@ function profileForm(page: Page) {
 
 /**
  * Bodies of the create-profile server action (POST to the page with a
- * Next-Action header), answered with a 500 so no profile is created.
+ * Next-Action header and the localized names), answered with a 500 so no
+ * profile is created.
  */
 function captureCreateProfile(page: Page): string[] {
   const bodies: string[] = [];
   void page.route(/\/profile\/create(\?|$)/, async (route) => {
     const req = route.request();
-    if (req.method() === 'POST' && req.headers()['next-action']) {
-      bodies.push(req.postData() ?? '');
+    // Only the create call: the page's other server actions (session, profile reads) POST here too
+    const body = req.method() === 'POST' && req.headers()['next-action'] ? req.postData() ?? '' : '';
+    if (body.includes('firstNameLocalized')) {
+      bodies.push(body);
       await route.fulfill({ status: 500, body: '' });
       return;
     }
