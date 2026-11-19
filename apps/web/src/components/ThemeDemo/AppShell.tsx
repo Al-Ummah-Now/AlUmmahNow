@@ -15,6 +15,7 @@ import { UploadAction } from '@/components/Header/UploadAction';
 import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
 import { BRAND_LOGO } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
+import { useMoreBelow } from './rail-scroll';
 import { statusPageUrl } from '@/lib/navigation/destinations';
 import { getEnvironment } from '@/lib/runtime-config';
 import { IdentityTour } from '@/components/help/IdentityTour';
@@ -44,6 +45,8 @@ export function AppShell() {
   const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
   useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
   useRailMotion(open);
+  // The rail's list: a fade at its bottom edge while more items are below (#1620)
+  const railList = useMoreBelow<HTMLDivElement>();
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => { document.documentElement.dataset.rail = open ? 'open' : 'closed'; }, [open]);
   useEffect(() => {
@@ -124,7 +127,7 @@ export function AppShell() {
 
       {open && <button type="button" className="nv-scrim" aria-label={c.close} tabIndex={-1} onClick={() => setOpen(false)} />}
       <nav className="nv-panel" data-open={open} data-testid="side-nav" aria-label={c.browse}>
-        <div className="nv-scroll">
+        <div className="nv-scroll" ref={railList} data-testid="side-nav-list">
           {groups.map((g, i) => (
             <div className="nv-group" key={g.title ?? i}>
               {g.title && <div className="nv-heading">{g.title}</div>}
