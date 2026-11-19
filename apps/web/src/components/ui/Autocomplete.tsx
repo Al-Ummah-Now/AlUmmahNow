@@ -607,7 +607,10 @@ export function Autocomplete(props: AutocompleteProps) {
         autoComplete="off"
         autoCorrect="off"
         spellCheck={false}
-        dir="auto"
+        // dir="auto" follows what is typed; an empty box keeps the page's direction, so an Arabic
+        // placeholder starts at the right and its ellipsis ends it on the left (dir="auto" on an empty
+        // input resolves to left-to-right and put «...» before «ابحث»)
+        dir={value ? 'auto' : undefined}
         {...inputProps}
         ref={(el) => {
           ownInputRef.current = el;
