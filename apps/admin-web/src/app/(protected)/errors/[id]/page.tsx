@@ -11,12 +11,13 @@ import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ErrorStatusChip, HourlyChart, TestChip, errorTitle } from '../ui';
+import { countryName, sourceLabel } from '../origin';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
 import { ErrorGroupActions } from './ErrorGroupActions';
 import { NeedsActionItemButtons } from './NeedsActionItemButtons';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
-import { dateTimeFormat, normalizeRoute, pluralCategory, scrubContext, type ErrorContext } from '@al-ummah/shared-types';
+import { dateTimeFormat, normalizeRoute, pluralCategory, scrubContext, type ErrorContext, type RequestOrigin } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
   if (missing) return <div>{back}<ErrorAlert testId="error-group-missing">{t('errorsPage.notFound')}</ErrorAlert></div>;
   if (!data) return <div>{back}<ErrorAlert testId="error-group-error">{t('errorsPage.loadFailed')}</ErrorAlert></div>;
 
-  const { group, events, releases, activity, hourly, actions } = data;
+  const { group, events, releases, activity, hourly, actions, origins } = data;
   const viewerId = session?.user.id;
   const role = session?.user.role;
   const groupActions = groupActionsFor(role, group, viewerId);
@@ -199,6 +200,8 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           )}
         </section>
       </div>
+
+      {origins && <OriginBreakdown origins={origins} t={t} locale={locale} />}
 
       <section className={cardClass} aria-labelledby="stack-heading">
         <h2 id="stack-heading" className="text-lg font-semibold text-fg mb-1">
@@ -354,6 +357,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
       </span>,
     ]);
   }
+  if (ctx?.origin) facts.push(...originFacts(ctx.origin, t, locale));
   facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ?? '—'], [t('errorsPage.theme'), e.theme ?? '—']);
   const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
@@ -430,5 +434,65 @@ function ActivityEntry({ entry: a, t, locale }: { entry: ErrorActivity; t: Trans
       </time>
       {a.body && <p className="mt-1 text-sm text-fg whitespace-pre-wrap break-words" dir="auto">{a.body}</p>}
     </li>
+  );
+}
+
+/** A sample's request origin as facts: app (with version), device, country, where it came from, entry page. */
+function originFacts(o: RequestOrigin, t: Translator, locale: Locale): [string, React.ReactNode][] {
+  const facts: [string, React.ReactNode][] = [
+    [
+      t('errorsPage.origin'),
+      <span key="o" data-testid="error-sample-origin" data-surface={o.surface} className="inline-flex flex-wrap items-baseline gap-x-2">
+        <span>{translateDynamic(t, 'originSurface', o.surface)}</span>
+        {(o.app || o.appVersion) && <code dir="ltr">{[o.app, o.appVersion].filter(Boolean).join(' ')}</code>}
+      </span>,
+    ],
+    [t('errorsPage.device'), translateDynamic(t, 'originDevice', o.device)],
+  ];
+  if (o.country) facts.push([t('errorsPage.country'), countryName(o.country, locale)]);
+  facts.push([
+    t('errorsPage.cameFrom'),
+    <span key="s" data-testid="error-sample-source" className="inline-flex flex-wrap items-baseline gap-x-2">
+      <span>{sourceLabel(o.source, t)}</span>
+      {o.referrerHost && <code dir="ltr">{o.referrerHost}</code>}
+      {o.campaign && <span>{t('errorsPage.campaign', { name: o.campaign })}</span>}
+    </span>,
+  ]);
+  if (o.entry) facts.push([t('errorsPage.entryPage'), <code key="e" dir="ltr">{o.entry}</code>]);
+  return facts;
+}
+
+/** How many of the stored samples came from each surface (web, admin, iOS…), with a share bar. */
+function OriginBreakdown({ origins, t, locale }: { origins: { surface: string; samples: number }[]; t: Translator; locale: Locale }) {
+  const total = origins.reduce((n, o) => n + o.samples, 0);
+  return (
+    <section className={cardClass} aria-labelledby="origins-heading" data-testid="error-origins">
+      <h2 id="origins-heading" className="text-lg font-semibold text-fg mb-1">
+        {t('errorsPage.origins')}
+      </h2>
+      <p className="text-sm text-fg-muted mb-4">{t('errorsPage.originsHint')}</p>
+      {origins.length === 0 ? (
+        <p className="text-fg-muted">{t('errorsPage.noOrigins')}</p>
+      ) : (
+        <ul className="space-y-3">
+          {origins.map((o) => {
+            const share = total > 0 ? o.samples / total : 0;
+            return (
+              <li key={o.surface} className="grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 text-sm" data-surface={o.surface}>
+                <Link href={`/errors?origin=${encodeURIComponent(o.surface)}`} className={`${linkClass} truncate`}>
+                  {translateDynamic(t, 'originSurface', o.surface)}
+                </Link>
+                <span className="h-2 rounded-full bg-surface-2 overflow-hidden" aria-hidden="true">
+                  <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, Math.round(share * 100))}%` }} />
+                </span>
+                <span className="tabular-nums text-fg-muted text-end">
+                  {t('errorsPage.originShare', { count: formatNumber(o.samples, locale), percent: formatNumber(Math.round(share * 100), locale) })}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

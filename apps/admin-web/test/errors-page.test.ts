@@ -5,9 +5,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canManageErrors, canReadErrors } from '../src/lib/roles';
-import { errorGroupsQuery, errorsBadgeCount, errorsHref, indexItemHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
+import { errorGroupsQuery, errorsBadgeCount, errorsHref, hasErrorFilters, indexItemHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
 import { shapesMatch } from '@al-ummah/shared-types';
 import { groupActionsFor, itemActionsFor, itemHref } from '../src/app/(protected)/errors/permissions';
+import { countryName, sourceLabel } from '../src/app/(protected)/errors/origin';
+import { createTranslator } from '../src/i18n/translate';
+import { CLIENT_SURFACES, DEVICE_CLASSES } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -55,6 +58,15 @@ describe('errors list filters → admin-api query string', () => {
     assert.equal(new URLSearchParams(errorGroupsQuery(f)).get('needsAction'), '1');
     assert.equal(errorsHref(f), '/errors?tab=needs-action&sort=count');
     assert.equal(errorsHref({ ...f, needsAction: false, sort: 'last_seen', page: 1 }), '/errors');
+  });
+
+  it('filters by request origin (known surfaces only)', () => {
+    const f = parseErrorFilters({ origin: 'ios' });
+    assert.equal(f.origin, 'ios');
+    assert.equal(new URLSearchParams(errorGroupsQuery(f)).get('origin'), 'ios');
+    assert.equal(errorsHref(f), '/errors?origin=ios');
+    assert.equal(hasErrorFilters(f), true);
+    assert.equal(parseErrorFilters({ origin: 'nokia' }).origin, undefined);
   });
 
   it('a pasted reference, even typed loosely, jumps to its group', () => {
@@ -110,7 +122,7 @@ describe('needs-action item links', () => {
 
 describe('errors labels', () => {
   it('every errors string exists in Arabic, translated', () => {
-    for (const ns of ['errorsPage', 'errorStatus', 'itemStatus', 'itemSource', 'errorActivity'] as const) {
+    for (const ns of ['errorsPage', 'errorStatus', 'itemStatus', 'itemSource', 'errorActivity', 'originSurface', 'originDevice', 'originSource'] as const) {
       const enNs = en[ns] as unknown as Record<string, unknown>;
       const arNs = ar[ns] as unknown as Record<string, unknown>;
       assert.deepEqual(Object.keys(arNs).sort(), Object.keys(enNs).sort(), ns);
@@ -185,5 +197,30 @@ describe('index out of sync (ownership index drift)', () => {
       assert.match(m.errorsPage.indexHint, /\{when\}/);
       assert.match(m.errorsPage.rebuildStatus, /\{status\}/);
     }
+  });
+});
+
+describe('request origin labels', () => {
+  it('every surface and device has a label in both languages', () => {
+    for (const s of CLIENT_SURFACES) {
+      assert.ok(en.originSurface[s], s);
+      assert.ok(ar.originSurface[s], s);
+    }
+    for (const d of DEVICE_CLASSES) assert.ok(en.originDevice[d] && ar.originDevice[d], d);
+  });
+
+  it('sources read as words, search and social engines by name', () => {
+    const tEn = createTranslator('en');
+    const tAr = createTranslator('ar');
+    assert.equal(sourceLabel('search:google', tEn), 'Search (google)');
+    assert.equal(sourceLabel('social:x', tAr), 'تواصل اجتماعي (x)');
+    assert.equal(sourceLabel('short_link', tEn), 'Short link');
+    assert.equal(sourceLabel('weird', tEn), 'weird');
+  });
+
+  it('country codes in the page language', () => {
+    assert.equal(countryName('EG', 'en'), 'Egypt');
+    assert.equal(countryName('EG', 'ar'), 'مصر');
+    assert.equal(countryName('other', 'en'), 'other');
   });
 });
