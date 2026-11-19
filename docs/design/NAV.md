@@ -136,7 +136,10 @@ width from 320px (the language, light/dark and account controls never move):
 - *Videos web.* Below 1024px the brand is the logo alone, the search is an icon that opens a sheet,
   and Upload is a 40px icon (its label stays its name). Below 640px the drawer toggle and Upload
   leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
-  the drawer).
+  the drawer). Upload shows only for a signed-in account whose creator tier allows uploads
+  (uploads are by invitation): signed out, without such a tier, or while the tier is still being
+  read there is no Upload in the bar or the tab bar at all, and no "upload your first video"
+  invitation in empty video lists.
 - *Videos admin.* Full width over the sidebar: the ⌘K search is an icon below 1280px and the
   breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out. Signed in to Al Ummah Now without the admin role (access denied), the bar shows the account menu, read from Auth (that person has no admin session), so they see who they are and can switch accounts; never Sign in.
 - *Status.* No drawer and no account: the page footer links Website and Videos.

@@ -113,7 +113,10 @@ async function expectHeader(page: Page, locale: Locale, width: number, signedIn:
     return named.map(([name, el]) => ({ name, box: box(el) })).filter((i) => i.box);
   });
   const names = items.map((i) => i.name);
-  for (const required of ['menu', 'logo', 'upload', 'search']) expect(names, `${where}: ${required} is shown`).toContain(required);
+  for (const required of ['menu', 'logo', 'search']) expect(names, `${where}: ${required} is shown`).toContain(required);
+  // Upload only for a creator (uploads are by invitation); a signed-out visitor has none at all
+  if (signedIn) expect(names, `${where}: upload is shown`).toContain('upload');
+  else await expect(page.getByTestId('header-upload'), `${where}: no Upload signed out`).toHaveCount(0);
 
   for (let i = 0; i < items.length; i++) {
     const a = items[i].box!;

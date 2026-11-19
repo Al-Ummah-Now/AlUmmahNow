@@ -4,11 +4,13 @@
 // decision 2026-11-13, replacing the "+") and a short label. On phones (below 640px) the header has no room
 // left once language and light/dark sit in it, so Upload is the centre item of the bottom tab bar instead
 // (variant "tab", the YouTube pattern); the header's copy is hidden there.
+// Uploading is by invitation (creator tiers): signed-out visitors and accounts whose tier doesn't allow
+// uploads see no Upload at all, in the header or the tab bar (never a teaser or a sign-in detour).
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { mayUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { showsUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { studioUploadHref } from '@/lib/studio/links';
 
 const Icon = () => (
@@ -25,11 +27,12 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
   // The accessible name says what it does; the visible label is the short "Upload"
   const label = t.upload.uploadVideo;
   const short = t.navigation.upload;
-  // Uploading is by invitation: no Upload for a signed-in user without a creator tier
-  if (user && !mayUpload(creator)) return null;
-  // Signed in without a channel: nowhere to upload to yet
+  // Only for a signed-in account whose tier allows uploads (not while that is still being read)
+  if (!user || !showsUpload(creator)) return null;
+  // A creator without a channel: nowhere to upload to yet
   const tab = variant === 'tab';
-  if (user && !account?.channel) {
+  const channelId = account?.channel?.id;
+  if (!channelId) {
     const why = t.upload.createChannelToUpload;
     if (tab) {
       return (
@@ -44,18 +47,17 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
       </span>
     );
   }
-  // Studio's upload for the active channel (the page's picker preselects it);
-  // signed out goes to the upload page too, which asks them to sign in first
-  const href = account?.channel?.id ? studioUploadHref(lang, account.channel.id) : `/${lang}/upload`;
+  // Studio's upload for the active channel (the page's picker preselects it)
+  const href = studioUploadHref(lang, channelId);
   if (tab) {
     return (
-      <Link href={href} className="tb tb-phone" aria-label={label} data-testid="tab-upload" data-state={user ? 'ready' : 'signed-out'}>
+      <Link href={href} className="tb tb-phone" aria-label={label} data-testid="tab-upload" data-state="ready">
         <Icon /><span>{short}</span>
       </Link>
     );
   }
   return (
-    <Link href={href} className="upload-action" aria-label={label} title={label} data-testid="header-upload" data-state={user ? 'ready' : 'signed-out'}>
+    <Link href={href} className="upload-action" aria-label={label} title={label} data-testid="header-upload" data-state="ready">
       <Icon /><span className="upload-action-label">{short}</span>
     </Link>
   );
