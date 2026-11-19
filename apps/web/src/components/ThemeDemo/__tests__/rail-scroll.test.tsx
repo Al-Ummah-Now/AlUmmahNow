@@ -44,8 +44,9 @@ describe('side rail scroll hint', () => {
 
   it('system.css: the edge strip below the list shades only while more is below, never over the list; thin scrollbar on hover/focus', () => {
     const css = readFileSync(join(__dirname, '../../../theme/system.css'), 'utf8');
-    // Outside the scroll box: its own 8px strip, shaded only when the list before it is marked
-    expect(css).toMatch(/\.nv-edge\{flex:none;height:8px;/);
+    // Outside the scroll box: its own 14px strip with a line, shadow and chevron, only when the list before it is marked
+    expect(css).toMatch(/\.nv-edge\{position:relative;flex:none;height:14px;/);
+    expect(css).toMatch(/\.nv-scroll\[data-more-below\]\+\.nv-edge::after\{[^}]*background:var\(--fanous-c-drawer-icon\)/);
     expect(css).toMatch(/\.nv-scroll\[data-more-below\]\+\.nv-edge\{[^}]*box-shadow:inset/);
     // Nothing dims the list's own text (no mask on the list)
     expect(css).not.toMatch(/\.nv-scroll[^{]*\{[^}]*mask-image/);
