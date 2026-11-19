@@ -78,7 +78,7 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
         undoneMessage: t('creators.tierHiddenUndone'),
       });
     } catch (e) {
-      const result = e instanceof HiddenFailure ? e.result : { ok: false as const, status: 0 };
+      const result: ActionFailure | { ok: false; status: number } = e instanceof HiddenFailure ? e.result : { ok: false, status: 0 };
       logger.warn('[creators] Tier hidden switch failed', { id: tier.id, status: result.status, code: 'code' in result ? result.code : undefined });
       if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
       setError(t(tierActionMessage(result)));
@@ -105,8 +105,10 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
   );
 }
 
+type ActionFailure = Extract<ActionResult<unknown>, { ok: false }>;
+
 class HiddenFailure extends Error {
-  constructor(readonly result: ActionResult<unknown>) {
+  constructor(readonly result: ActionFailure) {
     super(`Tier hidden switch failed: ${result.status}`);
   }
 }
