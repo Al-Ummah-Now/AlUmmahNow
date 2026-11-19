@@ -2,7 +2,7 @@
 
 import { forwardRef, useId } from 'react';
 import { CheckCircle2, CircleHelp, FileX2, Hand } from 'lucide-react';
-import { formatNumber, type TakeoutFile, type YtFileMatch, type YtImportItem } from '@al-ummah/shared-types';
+import { formatBytes, type TakeoutFile, type YtFileMatch, type YtImportItem } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { keyOfMatch, toFileMatch } from '@/lib/youtube-import/takeout';
@@ -25,15 +25,9 @@ const ORDER: ReviewGroup[] = ['byTitle', 'noFile', 'manual', 'byId'];
 const ICON = { byTitle: CircleHelp, noFile: FileX2, manual: Hand, byId: CheckCircle2 } as const;
 const NONE = '';
 
+/** A file size in the page's language and digits ("2.9 MB" / «٢٫٩ ميغابايت»). */
 function formatSize(bytes: number, locale: string): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  let u = 0;
-  while (v >= 1024 && u < units.length - 1) {
-    v /= 1024;
-    u++;
-  }
-  return `${formatNumber(locale === 'ar' ? 'ar' : 'en', v, { maximumFractionDigits: v < 10 && u > 0 ? 1 : 0 })} ${units[u]}`;
+  return formatBytes(locale === 'ar' ? 'ar' : 'en', bytes);
 }
 
 export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewStep({ items, files, matches, onMatch, starting, error, onBack, onStart }, headingRef) {
