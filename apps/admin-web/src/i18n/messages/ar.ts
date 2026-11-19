@@ -3929,6 +3929,7 @@ const ar: Messages = {
     limitEnforced: 'المطبَّق الآن: من {min} إلى {max} في وقت واحد. حد Cloudflare: {ceiling}.',
     limitDefault: 'القيمة الافتراضية (لم تُغيَّر).',
     limitUpdated: 'غُيِّر {time}.',
+    utc: 'بالتوقيت العالمي المنسق',
     limitErrorMin: 'الحد الأدنى: أدخل عددًا صحيحًا من {floor} إلى {ceiling}.',
     limitErrorMax: 'الحد الأقصى: أدخل عددًا صحيحًا من {floor} إلى {ceiling}.',
     limitErrorMinAboveMax: 'لا يمكن أن يزيد الحد الأدنى على الحد الأقصى.',
