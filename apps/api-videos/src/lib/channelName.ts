@@ -3,4 +3,4 @@
  * live in @al-ummah/shared-types (channel-name.ts) so the scheduler builds the same notification
  * params as api-videos (#1240).
  */
-export { channelNameFields, channelNameParams, localizedChannelNames, type ChannelNameFields, type NamedChannel } from '@al-ummah/shared-types';
+export { channelNameFields, channelNameParams, channelParams, localizedChannelNames, type ChannelNameFields, type NamedChannel } from '@al-ummah/shared-types';

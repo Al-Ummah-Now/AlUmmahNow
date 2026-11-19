@@ -1,4 +1,5 @@
 import { can, channelRoleOf, type Channel, type CommunityPost, type PostComment } from '@al-ummah/shared-types';
+import { channelNamesByIds } from '../../lib/channelNames';
 
 /**
  * Shared helpers for community post comment endpoints.
@@ -179,6 +180,26 @@ export function presentComment(comment: PostComment, viewerUserId?: string): Pos
   }
 
   return normalised;
+}
+
+/**
+ * The channel's current names on comments posted as a channel (#1610): `userDisplayName` is the
+ * default name and `userDisplayNameLocalized` the name per language, so an Arabic page shows the
+ * Arabic name. Stored comments keep the name from when they were written; a deleted comment, or
+ * one posted as a person (its channelId is the user id), keeps what it has.
+ */
+export async function withAuthorChannelNames(channels: R2Bucket | undefined, comments: PostComment[]): Promise<PostComment[]> {
+  const live = comments.filter((comment) => !comment.isDeleted && !comment.deletedAt && comment.channelId && comment.channelId !== comment.userId);
+  const names = await channelNamesByIds(channels, live.map((comment) => comment.channelId));
+  return comments.map((comment) => {
+    const named = live.includes(comment) ? names.get(comment.channelId!) : undefined;
+    if (!named) return comment;
+    return {
+      ...comment,
+      userDisplayName: named.channelName || comment.userDisplayName,
+      ...(named.channelNameLocalized ? { userDisplayNameLocalized: named.channelNameLocalized } : {}),
+    };
+  });
 }
 
 /**

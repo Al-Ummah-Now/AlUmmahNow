@@ -20,6 +20,7 @@ import {
 } from '@/lib/api/post-comments';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { channelLabel } from '@/lib/channel-name';
 
 interface CommentProps {
   comment: PostComment;
@@ -88,7 +89,9 @@ export default function Comment({
   viewerAvatar,
   viewerName = '',
 }: CommentProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  // The page language's name when the channel has one (#1610)
+  const authorName = channelLabel({ channelName: comment.userDisplayName, channelNameLocalized: comment.userDisplayNameLocalized }, lang) || comment.userDisplayName;
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
@@ -278,13 +281,13 @@ export default function Comment({
         {comment.userAvatarUrl && !comment.deletedAt ? (
           <Image
             src={comment.userAvatarUrl}
-            alt={comment.userDisplayName}
+            alt={authorName}
             fill
             className="rounded-full object-cover"
           />
         ) : (
           <div className="w-full h-full rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center text-white font-bold text-sm">
-            {comment.deletedAt ? '?' : comment.userDisplayName.charAt(0).toUpperCase()}
+            {comment.deletedAt ? '?' : authorName.charAt(0).toUpperCase()}
           </div>
         )}
         {comment.channelVerified && !comment.deletedAt && (
@@ -307,7 +310,7 @@ export default function Comment({
           <div className={cn('flex-1', isRTL && 'text-right')}>
             <div className={cn('flex items-center gap-2 flex-wrap', isRTL && 'flex-row-reverse')}>
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {comment.deletedAt ? (isRTL ? '[محذوف]' : '[deleted]') : comment.userDisplayName}
+                {comment.deletedAt ? (isRTL ? '[محذوف]' : '[deleted]') : <bdi>{authorName}</bdi>}
               </span>
               {pinned && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -462,7 +465,7 @@ export default function Comment({
             postChannelId={postChannelId}
             postId={postId}
             parentCommentId={comment.id}
-            replyToUsername={comment.userDisplayName}
+            replyToUsername={authorName}
             userAvatar={viewerAvatar}
             userDisplayName={viewerName}
             isRTL={isRTL}

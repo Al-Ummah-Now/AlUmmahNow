@@ -26,6 +26,8 @@ export interface StudioCommentAuthor {
   userId: string;
   channelId: string | null;
   displayName: string;
+  /** The name per language (en, ar) when it has localized names: show the page language's, else displayName (#1610) */
+  displayNameLocalized?: Record<string, string>;
   avatarUrl?: string;
 }
 

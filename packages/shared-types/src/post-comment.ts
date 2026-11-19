@@ -24,6 +24,8 @@ export interface PostComment extends SoftDelete, Moderation {
 
   // User info (denormalized for performance)
   userDisplayName: string;
+  /** Added on read, never stored: the channel's current name per language (en, ar), #1610 */
+  userDisplayNameLocalized?: Record<string, string>;
   userAvatarUrl?: string;
   channelVerified: boolean;
 
