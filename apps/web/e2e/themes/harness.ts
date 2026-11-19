@@ -170,6 +170,9 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
         const ar = a.getBoundingClientRect();
         // Scrolled out of view, or sideways out of a clipping box
         if (r.top < ar.top - 1 || r.bottom > ar.bottom + 1 || r.left < ar.left - 1 || r.right > ar.right + 1) { clipped = true; break; }
+        // On its way out of view: the side rail's list fades its bottom 48px while more items are below
+        // (the scroll hint, #1620; system.css .nv-scroll[data-more-below]); an item there is read once scrolled in
+        if (a.hasAttribute('data-more-below') && r.bottom > ar.bottom - 48) { clipped = true; break; }
       }
       if (clipped) continue;
       const tid = el.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
