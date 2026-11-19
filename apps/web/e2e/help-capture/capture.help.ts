@@ -167,7 +167,7 @@ test.beforeAll(async ({ browser }) => {
   // The demo videos, oldest first so "Site tour" is the newest (the home page's featured video)
   for (const demo of [...DEMOS].reverse()) {
     const video = await data.createVideo(user, channelId, { clip: 'landscape40', isPublic: true, title: demo.title.en, waitReady: true });
-    expect((await apiFetch(user, `/api/videos/${video.id}`, json({ titleLocalized: demo.title }, channelId))).status).toBeLessThan(300);
+    expect((await apiFetch(user, `/api/videos/${video.id}`, json({ titleLocalized: demo.title, description: 'A short walk through the site: where to watch, comment and switch who you act as.', descriptionLocalized: { en: 'A short walk through the site: where to watch, comment and switch who you act as.', ar: 'جولة قصيرة في الموقع: أين تشاهد وتعلّق وتبدّل الهوية التي تتصرّف بها.' } }, channelId))).status).toBeLessThan(300);
     const guid = await cdnGuid(video.id);
     if (guid) demoByGuid.set(guid, demo.key);
     else problems.push(`no CDN guid for demo video ${demo.key}: it shows the test pattern`);
