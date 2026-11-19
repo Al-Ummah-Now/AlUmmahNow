@@ -390,7 +390,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
       // A text box is the line's box, taller than its letters: trimmed to the glyphs, so a number in
       // the line spacing above a heading is not counted as covering it
-      const glyphs = (b: DOMRect) => ({ x: b.x + 2, y: b.y + b.height * 0.15, w: Math.max(0, b.width - 4), h: Math.max(0, b.height * 0.7) });
+      // Full width: Arabic letters overhang their box, so nothing is shaved off the sides
+      const glyphs = (b: DOMRect) => ({ x: b.x, y: b.y + b.height * 0.15, w: b.width, h: Math.max(0, b.height * 0.7) });
+      // A number reaches past its circle (white halo and shadow): text is kept that far away
+      const HALO_PX = 4;
+      const reach = (b: Box) => ({ x: b.x - HALO_PX, y: b.y - HALO_PX, w: b.w + HALO_PX * 2, h: b.h + HALO_PX * 2 });
       const texts = [...ownText, ...allText].map(glyphs);
       const others = [
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
@@ -400,7 +404,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const fits = ([x, y]: [number, number]) => {
         const box = { x, y, w: S, h: S };
         return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
-          && !others.some((c) => hit(box, c)) && !placed.some((q) => hit(box, q));
+          && !others.some((c) => hit(box, c)) && !texts.some((t) => hit(reach(box), t)) && !placed.some((q) => hit(box, q));
       };
       const spot = candidates.find(fits);
       if (!spot) missed++;
@@ -411,13 +415,13 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         const box = { x: cx, y: cy, w: S, h: S };
         if (cx < 2 || cy < 2 || cx + S > window.innerWidth - 2 || cy + S > window.innerHeight - 2) return Infinity;
         if (placed.some((q) => hit(box, q))) return Infinity;
-        return texts.reduce((n, t) => n + area(box, t) * 10, 0) + others.reduce((n, t) => n + area(box, t), 0);
+        return texts.reduce((n, t) => n + area(reach(box), t) * 10, 0) + others.reduce((n, t) => n + area(box, t), 0);
       };
       const [x, y] = spot ?? [...candidates].sort((a, b) => cost(a) - cost(b))[0];
       // Checked, not hoped: a number on text or on another number fails the picture (checked before
       // this number joins the placed ones, so it is never compared with itself)
       const box = { x, y, w: S, h: S };
-      if (texts.some((t) => hit(box, t))) faults.push(`number ${target.dataset.helpTarget} covers text`);
+      if (texts.some((t) => hit(reach(box), t))) faults.push(`number ${target.dataset.helpTarget} covers text`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
