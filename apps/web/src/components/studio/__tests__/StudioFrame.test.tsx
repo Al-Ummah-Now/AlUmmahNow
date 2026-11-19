@@ -1,4 +1,3 @@
-import type { StudioFeatures } from '@/lib/studio/nav';
 import { render, screen, within } from '@testing-library/react';
 import type { StudioFeatures } from '@/lib/studio/nav';
 import { StudioFrame } from '../StudioFrame';
