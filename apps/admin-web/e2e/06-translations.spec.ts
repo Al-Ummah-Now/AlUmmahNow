@@ -20,7 +20,7 @@ test.describe('translations editor', () => {
 
   test('TR-02 lists the keys of the default section with a matching count', async ({ page }) => {
     await openEditor(page);
-    await expect(page.getByLabel('Section')).toHaveAttribute('data-value', 'common');
+    await expect(page.getByRole('combobox', { name: 'Section', exact: true })).toHaveAttribute('data-value', 'common');
     const rows = page.getByTestId('translation-row');
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
@@ -30,7 +30,7 @@ test.describe('translations editor', () => {
 
   test('TR-03 nested groups are flattened instead of showing [object Object]', async ({ page }) => {
     await openEditor(page);
-    await pickOption(page.getByLabel('Section'), 'channel');
+    await pickOption(page.getByRole('combobox', { name: 'Section', exact: true }), 'channel');
     await expect(page.locator('[data-testid="translation-row"][data-key^="tabs."]').first()).toBeVisible();
     await expect(page.getByTestId('translation-table')).not.toContainText('[object Object]');
   });
