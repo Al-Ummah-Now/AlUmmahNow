@@ -7,7 +7,7 @@ import { hasMoreBelow, useMoreBelow } from '../rail-scroll';
 /**
  * The side rail's list scrolls with no visible scrollbar, so on a short window its last item was cut off with
  * nothing saying more was below (#1620). The list carries data-more-below while items are below the visible
- * area; system.css fades its bottom edge then and shows a thin scrollbar on hover/focus.
+ * area; system.css then shades the edge strip under the list (never over it) and shows a thin scrollbar on hover/focus.
  */
 describe('side rail scroll hint', () => {
   it('hasMoreBelow: true until the end is in view (sub-pixel slack)', () => {
@@ -42,9 +42,13 @@ describe('side rail scroll hint', () => {
     expect(list).not.toHaveAttribute('data-more-below');
   });
 
-  it('system.css fades only a marked list, keeps the scrollbar gutter and shows the thumb on hover/focus', () => {
+  it('system.css: the edge strip below the list shades only while more is below, never over the list; thin scrollbar on hover/focus', () => {
     const css = readFileSync(join(__dirname, '../../../theme/system.css'), 'utf8');
-    expect(css).toMatch(/\.nv-scroll\[data-more-below\]\{[^}]*mask-image:linear-gradient\(to bottom/);
+    // Outside the scroll box: its own 8px strip, shaded only when the list before it is marked
+    expect(css).toMatch(/\.nv-edge\{flex:none;height:8px;/);
+    expect(css).toMatch(/\.nv-scroll\[data-more-below\]\+\.nv-edge\{[^}]*box-shadow:inset/);
+    // Nothing dims the list's own text (no mask on the list)
+    expect(css).not.toMatch(/\.nv-scroll[^{]*\{[^}]*mask-image/);
     expect(css).toMatch(/\.nv-scroll\{scrollbar-width:thin;scrollbar-color:transparent transparent;scrollbar-gutter:stable\}/);
     expect(css).toMatch(/\.nv-scroll:hover,\.nv-scroll:focus-within\{scrollbar-color:var\(--fanous-c-drawer-icon\) transparent\}/);
     expect(css).not.toMatch(/\.nv-scroll\{scrollbar-width:none\}/);

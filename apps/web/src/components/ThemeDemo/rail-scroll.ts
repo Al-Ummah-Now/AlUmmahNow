@@ -13,7 +13,7 @@ export function hasMoreBelow(el: Pick<HTMLElement, 'scrollTop' | 'clientHeight' 
 /**
  * The side rail's list scrolls with a hidden scrollbar, so on a short window its last item was simply cut off
  * at the bottom edge (#1620). This keeps `data-more-below` on the list while items are below the visible
- * area; system.css fades the bottom edge then (and shows a thin scrollbar on hover/focus). Re-checked on
+ * area; system.css then shades the edge strip under the list, never over it (and shows a thin scrollbar on hover/focus). Re-checked on
  * scroll, when the list or the window resizes (rail open/closed, language, zoom) and when items change.
  */
 export function useMoreBelow<T extends HTMLElement>(): RefObject<T | null> {

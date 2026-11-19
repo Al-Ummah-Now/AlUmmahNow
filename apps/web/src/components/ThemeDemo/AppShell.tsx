@@ -45,7 +45,7 @@ export function AppShell() {
   const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
   useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
   useRailMotion(open);
-  // The rail's list: a fade at its bottom edge while more items are below (#1620)
+  // The rail's list: data-more-below while items are below; the edge strip under it shades then (#1620)
   const railList = useMoreBelow<HTMLDivElement>();
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => { document.documentElement.dataset.rail = open ? 'open' : 'closed'; }, [open]);
@@ -144,6 +144,9 @@ export function AppShell() {
             </div>
           ))}
         </div>
+        {/* The scroll-shadow edge (#1620): an 8px strip below the list, outside its scroll box, so it never sits
+            over an item; shaded only while the list says more items are below (system.css .nv-edge) */}
+        <div className="nv-edge" aria-hidden="true" />
         {/* Language and light/dark live in the header (docs/design/NAV.md); the drawer keeps its close button */}
         <div className="nv-foot">
           <button type="button" className="ic ic-sm nv-close" aria-label={c.close} onClick={() => setOpen(false)}><X aria-hidden="true" /></button>
