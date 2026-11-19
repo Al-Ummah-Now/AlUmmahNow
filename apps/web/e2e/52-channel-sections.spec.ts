@@ -401,7 +401,7 @@ test.describe('Section manager', () => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 2, name: 'أقسام القناة' })).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toContainText(`من ${new Intl.NumberFormat('ar-u-nu-arab').format(MAX_SECTIONS)} أقسام`);
+    await expect(page.getByTestId('sections-count')).toContainText(`من ${new Intl.NumberFormat('ar-u-nu-arab').format(MAX_SECTIONS)} قسمًا`);
     await expect(page.getByTestId('publish-sections')).toHaveText('نشر');
     await expect(page.getByRole('navigation', { name: 'عروض التخطيط' })).toBeVisible();
 

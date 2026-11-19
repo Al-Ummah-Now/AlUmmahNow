@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { can, type ChannelRole } from '@al-ummah/shared-types';
+import { can, formatNumber, type ChannelRole } from '@al-ummah/shared-types';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
 import ImageCropDialog from '@/components/ImageCropDialog';
 import { ChannelAboutFields, canSubmitAboutFields, type ChannelAboutValues, type HandleStatus } from '@/components/settings/ChannelAboutFields';
@@ -64,7 +64,7 @@ const FIELD = 'w-full rounded-md border border-input bg-background px-3 py-2 tex
  * API checks every save again, and refuses a handle change from an admin.
  */
 export function ProfileTab({ channelId, role }: { channelId: string; role: ChannelRole }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const text = t.studio.profile;
   const { confirm, dialog: confirmDialog } = useConfirm();
   const { reloadChannels } = useMultiAccount();
@@ -229,7 +229,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
   }
 
   const initial = (fields.nameEn || channel.name || '?').charAt(0).toUpperCase();
-  const counter = (n: number, max: number) => text.count.replace('{n}', String(n)).replace('{max}', String(max));
+  const counter = (n: number, max: number) => text.count.replace('{n}', formatNumber(lang, n)).replace('{max}', formatNumber(lang, max));
 
   return (
     <section aria-labelledby="studio-profile-heading" className="max-w-4xl" data-testid="studio-profile">

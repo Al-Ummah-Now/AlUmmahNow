@@ -223,6 +223,12 @@ describe('CommentsTab', () => {
     expect(await screen.findByTestId('studio-comments-indexing')).toHaveTextContent(text.indexing);
   });
 
+  it('says more may appear when comments are listed while indexing continues', async () => {
+    list.mockResolvedValue({ items: [c('a')], nextCursor: null, total: 1, indexing: true });
+    show();
+    expect(await screen.findByTestId('studio-comments-indexing')).toHaveTextContent(text.indexingMore);
+  });
+
   it('loads more pages', async () => {
     list.mockResolvedValueOnce({ items: [c('a')], nextCursor: 'next', total: 2 }).mockResolvedValueOnce({ items: [c('b')], nextCursor: null, total: 2 });
     show();

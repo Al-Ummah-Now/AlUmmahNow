@@ -264,7 +264,7 @@ export function CommentsTab({ locale, channel, role, tab, target }: Props) {
       )}
 
       {indexing && (
-        <p role="status" className="mt-3 rounded-md border border-border bg-muted p-3 text-sm text-foreground" data-testid="studio-comments-indexing">{text.indexing}</p>
+        <p role="status" className="mt-3 rounded-md border border-border bg-muted p-3 text-sm text-foreground" data-testid="studio-comments-indexing">{items.length > 0 ? text.indexingMore : text.indexing}</p>
       )}
 
       <p role="status" aria-live="polite" className="sr-only" data-testid="studio-comments-notice">{notice}</p>

@@ -153,8 +153,10 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                 <Link href={editHref} className="w-28 flex-none overflow-hidden rounded-[var(--r-sm)]" tabIndex={-1} aria-hidden="true">
                   <PlaylistCover playlist={playlist} alt="" sizes="112px" />
                 </Link>
+                {/* Phone: the cover and the text share the first row and the actions get their own row
+                    at the end, so the title wraps instead of being cut beside three buttons */}
                 <div className="min-w-0 flex-1">
-                  <h3 className={`truncate font-semibold ${TEXT}`}>
+                  <h3 className={`break-words font-semibold ${TEXT}`} dir="auto">
                     <Link href={editHref} className="hover:underline">{title}</Link>
                   </h3>
                   <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`}>
@@ -173,7 +175,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                     </span>
                   </p>
                 </div>
-                <div className="flex flex-none items-center gap-1">
+                <div className="flex w-full flex-none items-center justify-end gap-1 sm:w-auto">
                   <Link href={editHref} className="b b-secondary b-sm" aria-label={`${t.playlist.editPlaylist}: ${title}`} title={t.playlist.editPlaylist}>
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                     <span className="hidden sm:inline">{t.playlist.editPlaylist}</span>

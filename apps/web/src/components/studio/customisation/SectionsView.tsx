@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CHANNEL_SECTION_CONSTRAINTS, type ChannelSectionCreateInput, formatNumber } from '@al-ummah/shared-types';
+import { CHANNEL_SECTION_CONSTRAINTS, type ChannelSectionCreateInput, formatNumber, formatCountNoun } from '@al-ummah/shared-types';
 import type { PopulatedChannelSection } from '@/components/ChannelSections/sectionData';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { SortableSectionItem } from '@/components/ChannelSections/management/SortableSectionItem';
@@ -292,7 +292,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
             {s.title}
           </h2>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
-            {s.description.replace('{max}', formatNumber(locale, MAX_SECTIONS))}
+            {s.description.replace('{max}', formatCountNoun(locale, MAX_SECTIONS, 'section'))}
           </p>
         </div>
 
@@ -320,7 +320,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
       )}
 
       <div className="text-sm text-muted-foreground" data-testid="sections-count">
-        {s.sectionsUsed.replace('{count}', formatNumber(locale, sections.length)).replace('{max}', formatNumber(locale, MAX_SECTIONS))}
+        {s.sectionsUsed.replace('{count}', formatNumber(locale, sections.length)).replace('{max}', formatCountNoun(locale, MAX_SECTIONS, 'section'))}
         {hasChanges && (
           <span className="ms-2 font-medium text-foreground" data-testid="sections-unpublished">
             {s.unpublishedChanges}

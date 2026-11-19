@@ -53,6 +53,12 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('en', 1, 'comment')).toBe('1 comment');
   });
 
+  it('channel sections (Studio layout limit): «١٢ قسمًا», "12 sections"', () => {
+    expect(formatCountNoun('ar', 12, 'section')).toBe('١٢ قسمًا');
+    expect(formatCountNoun('ar', 3, 'section')).toBe('٣ أقسام');
+    expect(formatCountNoun('en', 12, 'section')).toBe('12 sections');
+  });
+
   it('treats missing, invalid and negative counts as zero', () => {
     expect(formatCountNoun('en', undefined, 'view')).toBe('No views');
     expect(formatCountNoun('ar', 'x', 'video')).toBe('لا توجد مرئيات');

@@ -96,10 +96,11 @@ function ChannelSwitcher({ locale, channel, segments, role }: { locale: string; 
     <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="studio-channel-header">
       <Avatar url={channel.avatarUrl} name={channel.name} />
       {/* dir keeps a name or handle in the other script in order; match-parent lines the block up
-          with the UI's start edge (a Latin name in the Arabic UI aligns right, like its neighbours) */}
+          with the UI's start edge (a Latin name in the Arabic UI aligns right, like its neighbours).
+          A long name or handle wraps onto more lines instead of being cut. */}
       <span className="min-w-0 flex-1 text-start">
-        <span dir="auto" className="block truncate text-sm font-medium text-foreground [text-align:match-parent]" data-testid="studio-channel-name">{channel.name}</span>
-        {channel.handle && <span dir="ltr" className="block truncate text-xs text-muted-foreground [text-align:match-parent]">{formatHandle(channel.handle)}</span>}
+        <span dir="auto" className="block text-sm font-medium text-foreground [overflow-wrap:anywhere] [text-align:match-parent]" data-testid="studio-channel-name">{channel.name}</span>
+        {channel.handle && <span dir="ltr" className="block text-xs text-muted-foreground [overflow-wrap:anywhere] [text-align:match-parent]">{formatHandle(channel.handle)}</span>}
       </span>
     <DropdownMenu>
       <DropdownMenuTrigger

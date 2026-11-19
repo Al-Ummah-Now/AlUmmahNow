@@ -1895,10 +1895,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     postActions: 'Post actions',
     sections: {
       title: 'Channel sections',
-      description: 'Customize your channel layout (max {max} sections)',
+      description: 'Customize your channel layout (max {max})',
       publish: 'Publish',
       publishing: 'Publishing...',
-      sectionsUsed: '{count} of {max} sections used',
+      sectionsUsed: '{count} of {max} used',
       unpublishedChanges: '(Unpublished changes)',
       empty: 'No sections yet. Add your first section to customize your channel.',
       maxReached: 'Maximum number of sections reached. Delete a section to add a new one.',

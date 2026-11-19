@@ -1893,10 +1893,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     postActions: 'إجراءات المنشور',
     sections: {
       title: 'أقسام القناة',
-      description: 'خصّص تخطيط قناتك (بحد أقصى {max} أقسام)',
+      description: 'خصّص تخطيط قناتك (بحد أقصى {max})',
       publish: 'نشر',
       publishing: 'جارٍ النشر...',
-      sectionsUsed: 'تم استخدام {count} من {max} أقسام',
+      sectionsUsed: 'تم استخدام {count} من {max}',
       unpublishedChanges: '(تغييرات غير منشورة)',
       empty: 'لا توجد أقسام بعد. أضف قسمك الأول لتخصيص قناتك.',
       maxReached: 'تم الوصول إلى الحد الأقصى لعدد الأقسام. احذف قسماً لإضافة قسم جديد.',
