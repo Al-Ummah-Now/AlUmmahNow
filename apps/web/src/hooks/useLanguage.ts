@@ -11,7 +11,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { createContext, useContext, useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { useI18n, useI18nApi } from '@/lib/i18n';
 import { parseLocaleFromPath } from '@/lib/i18n/utils';
 import type { SupportedLanguage } from '@/lib/i18n/types';
@@ -37,11 +37,9 @@ const LANGUAGE_CONFIG: Record<SupportedLanguage, {
   },
 };
 
-/**
- * Language for routes whose URL has no locale segment (embed frames use ?lang=).
- * When set, it wins over the pathname.
- */
-export const LocaleOverrideContext = createContext<SupportedLanguage | null>(null);
+export { LocaleOverrideContext } from '@/lib/i18n/locale-override';
+import { LocaleOverrideContext } from '@/lib/i18n/locale-override';
+
 
 /**
  * Extract language code from pathname

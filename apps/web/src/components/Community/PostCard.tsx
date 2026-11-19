@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CommunityPost, PostType, formatNumber } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, formatTimeAgo } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import PostEngagement from './PostEngagement';
 import CommentsSection from './CommentsSection';
@@ -17,6 +17,10 @@ import LinkPost from './types/LinkPost';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
+import { PostStatus } from '@al-ummah/shared-types';
+import PostManageMenu from './PostManageMenu';
+import { formatScheduledAt } from './management/PostSchedulePicker';
+import { useLanguage } from '@/hooks/useLanguage';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -30,41 +34,17 @@ interface PostCardProps {
   initialShowComments?: boolean;
   /** The label of the time link that opens the post's own page */
   openPostLabel?: string;
+  /** The viewer owns the post's channel and acts as it: Edit and Delete (Story 29.4) */
+  canManage?: boolean;
+  /** After the owner deleted it */
+  onDeleted?: (postId: string) => void;
+  /** Undo brought a deleted post back */
+  onRestored?: (postId: string) => void | Promise<void>;
 }
 
+/** When it was posted, the same way Studio says it (shared formatter: Arabic ٠–٩, plural forms) */
 function getTimeAgo(date: Date, isRTL: boolean): string {
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  const intervals = {
-    year: 31536000,
-    month: 2592000,
-    week: 604800,
-    day: 86400,
-    hour: 3600,
-    minute: 60,
-  };
-
-  for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-    const interval = Math.floor(seconds / secondsInUnit);
-    if (interval >= 1) {
-      if (isRTL) {
-        const units: Record<string, string> = {
-          year: interval === 1 ? 'سنة' : interval === 2 ? 'سنتان' : 'سنوات',
-          month: interval === 1 ? 'شهر' : interval === 2 ? 'شهران' : 'أشهر',
-          week: interval === 1 ? 'أسبوع' : interval === 2 ? 'أسبوعان' : 'أسابيع',
-          day: interval === 1 ? 'يوم' : interval === 2 ? 'يومان' : 'أيام',
-          hour: interval === 1 ? 'ساعة' : interval === 2 ? 'ساعتان' : 'ساعات',
-          minute: interval === 1 ? 'دقيقة' : interval === 2 ? 'دقيقتان' : 'دقائق',
-        };
-        return `منذ ${formatNumber('ar', interval)} ${units[unit]}`;
-      } else {
-        return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
-      }
-    }
-  }
-
-  return isRTL ? 'الآن' : 'just now';
+  return formatTimeAgo(isRTL ? 'ar' : 'en', date, { numeric: 'always' });
 }
 
 export default function PostCard({
@@ -77,7 +57,12 @@ export default function PostCard({
   userId,
   initialShowComments = false,
   openPostLabel,
+  canManage = false,
+  onDeleted,
+  onRestored,
 }: PostCardProps) {
+  // Only its channel sees a scheduled post before its time (the API hides it from everyone else)
+  const upcoming = post.status === PostStatus.SCHEDULED && !!post.scheduledAt && Date.parse(post.scheduledAt) > Date.now();
   const [showComments, setShowComments] = useState(initialShowComments);
   const timeAgo = getTimeAgo(new Date(post.createdAt), isRTL);
 
@@ -166,20 +151,11 @@ export default function PostCard({
               <time dateTime={post.createdAt}>{timeAgo}</time>
             </Link>
           </p>
+          {upcoming && <ScheduledLabel at={post.scheduledAt!} locale={locale} />}
         </div>
 
-        {/* Three-dot Menu */}
-        <button
-          className={cn(
-            'p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-            'shrink-0'
-          )}
-          aria-label={isRTL ? 'المزيد من الخيارات' : 'More options'}
-        >
-          <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-          </svg>
-        </button>
+        {/* The owner's menu (Edit, Delete); nobody else has actions here */}
+        {canManage && <PostManageMenu post={post} onDeleted={onDeleted} onRestored={onRestored} />}
       </div>
 
       {/* Post Content */}
@@ -222,5 +198,15 @@ export default function PostCard({
         )}
       </div>
     </article>
+  );
+}
+
+/** "Scheduled for …" on a post its channel sees before it goes live. */
+function ScheduledLabel({ at, locale }: { at: string; locale: string }) {
+  const { t } = useLanguage();
+  return (
+    <p className="mt-1 inline-flex items-center rounded-full bg-[var(--fanous-color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--fanous-color-text-secondary)]" data-testid="post-scheduled-label">
+      {t.community.scheduledFor.replace('{date}', formatScheduledAt(at, locale))}
+    </p>
   );
 }

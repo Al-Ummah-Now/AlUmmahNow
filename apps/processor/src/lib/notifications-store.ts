@@ -34,12 +34,23 @@ export function isNotificationKey(value: unknown): value is NotificationKey {
   return typeof value === 'string' && (NOTIFICATION_KEYS as readonly string[]).includes(value);
 }
 
-function fanoutKey(kind: NotificationFanoutPayload['kind']): NotificationKey {
-  return kind === 'live_started' ? 'liveStarted' : 'newVideo';
+const FANOUT_KEY: Record<NotificationFanoutPayload['kind'], NotificationKey> = {
+  new_video: 'newVideo',
+  live_started: 'liveStarted',
+  new_post: 'newPost',
+};
+const FANOUT_DEDUPE_PREFIX: Record<NotificationFanoutPayload['kind'], string> = {
+  new_video: 'video',
+  live_started: 'live',
+  new_post: 'post',
+};
+
+export function fanoutKey(kind: NotificationFanoutPayload['kind']): NotificationKey {
+  return FANOUT_KEY[kind];
 }
 
-function fanoutDedupe(kind: NotificationFanoutPayload['kind'], entityId: string): string {
-  return `${kind === 'live_started' ? 'live' : 'video'}:${entityId}`;
+export function fanoutDedupe(kind: NotificationFanoutPayload['kind'], entityId: string): string {
+  return `${FANOUT_DEDUPE_PREFIX[kind]}:${entityId}`;
 }
 
 /** Bell levels that receive a fan-out. */

@@ -26,6 +26,7 @@ import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community
 import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
 import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
 import { tooLargeMessage } from '@/lib/community/upload-limits';
+import { PostSchedulePicker, scheduleProblem, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { createCommunityPost } from '@/lib/api/community-posts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
@@ -52,6 +53,9 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
   const [selectedType, setSelectedType] = useState<PostType | null>(null);
   const [visibility, setVisibility] = useState<PostVisibility>(PostVisibility.PUBLIC);
   const [commentsEnabled, setCommentsEnabled] = useState(true);
+  // Publish now, or at a set time (Story 29.4)
+  const [schedule, setSchedule] = useState<ScheduleState>({ later: false, local: '' });
+  const [scheduleError, setScheduleError] = useState<ScheduleProblem | null>(null);
 
   const [textContent, setTextContent] = useState('');
   const [images, setImages] = useState<ImageWithCaption[]>([]);
@@ -141,6 +145,9 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
       setError(validationError);
       return;
     }
+    const timing = schedule.later ? scheduleProblem(schedule.local) : null;
+    setScheduleError(timing);
+    if (timing) return;
 
     setLoading(true);
     setError('');
@@ -152,6 +159,8 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
         commentsEnabled,
         locale: postLocale
       };
+      const scheduledAt = scheduledIso(schedule);
+      if (scheduledAt) baseData.scheduledAt = scheduledAt;
 
       switch (selectedType) {
         case PostType.TEXT:
@@ -301,18 +310,19 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             </Button>
             <ComposerAvatar src={postChannel?.avatarUrl} name={postChannelName} as="channel" testId="post-identity" />
             <h1 className="text-lg md:text-2xl font-bold">
-              {isRTL ? 'منشور جديد' : 'New Post'}
+              {isRTL ? 'منشور جديد' : 'New post'}
             </h1>
           </div>
 
-          {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish is offered */}
+          {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish (or Schedule) is offered */}
           <div className="flex gap-2">
             <Button
               onClick={handlePublish}
               disabled={loading || !selectedType}
+              data-testid="new-post-submit"
             >
               {loading && <Loader2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0 animate-spin" />}
-              {isRTL ? 'نشر' : 'Publish'}
+              {schedule.later ? t.community.schedule : (isRTL ? 'نشر' : 'Publish')}
             </Button>
           </div>
         </div>
@@ -418,7 +428,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 )}
 
                 {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
-                  <p role="alert" className="mt-4 text-sm text-destructive" data-testid="new-post-error">{error}</p>
+                  <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-error">{error}</p>
                 )}
               </Card>
             )}
@@ -431,6 +441,13 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
               </h3>
 
               <div className="space-y-4">
+                <PostSchedulePicker
+                  value={schedule}
+                  onChange={(next) => { setSchedule(next); setScheduleError(null); }}
+                  problem={scheduleError}
+                  disabled={loading}
+                />
+
                 <div>
                   <Label htmlFor="community-post-language" className="text-sm md:text-base">
                     {t.community.postLanguage}
@@ -470,12 +487,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm md:text-base">
+                  <Label id="new-post-allow-comment-label" className="text-sm md:text-base">
                     {isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}
                   </Label>
                   <Button
                     variant={commentsEnabled ? 'default' : 'outline'}
                     size="sm"
+                    id="new-post-allow-comment-toggle"
+                    aria-pressed={commentsEnabled}
+                    aria-labelledby="new-post-allow-comment-label new-post-allow-comment-toggle"
                     onClick={() => setCommentsEnabled(!commentsEnabled)}
                   >
                     {commentsEnabled

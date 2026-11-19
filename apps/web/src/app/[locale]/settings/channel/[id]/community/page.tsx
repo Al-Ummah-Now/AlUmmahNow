@@ -12,8 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PostCard } from '@/components/Community/management/PostCard';
 import {
   listCommunityPosts,
-  deleteCommunityPost
+  updateCommunityPost
 } from '@/lib/api/community-posts';
+import { editPostHref } from '@/components/Community/PostManageMenu';
+import { reportError } from '@/lib/errors/reporter';
+import { deletePostWithUndo } from '@/lib/community/delete-post';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
@@ -33,7 +36,10 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
-  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  // Every post of the channel (the owner's list includes scheduled ones); the tabs split it by status
+  const [allPosts, setAllPosts] = useState<CommunityPost[]>([]);
+  const posts = useMemo(() => allPosts.filter((p) => p.status === activeTab), [allPosts, activeTab]);
+  const [actionError, setActionError] = useState('');
   const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,40 +71,61 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     try {
       const response = await listCommunityPosts({
         channelId: id,
-        status: activeTab,
         page: 1,
         limit: 50
-      });
+      }, { channelId: id });
 
       if (response?.posts) {
-        setPosts(response.posts);
+        setAllPosts(response.posts);
       }
     } catch (error) {
-      logger.error('Failed to load posts', { error, channelId: id, status: activeTab });
+      logger.error('Failed to load posts', { error, channelId: id });
     } finally {
       setLoading(false);
     }
-  }, [activeTab, id]);
+  }, [id]);
 
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
 
-  // Posts are shown on the channel page's Community tab (there is no per-post page)
+  // A post's own page (/post/{id})
   const handleView = (post: CommunityPost) => {
-    logger.debug('Opening community post on channel page', { channelId: id, postId: post.id });
-    router.push(`/${locale}/channels/${id}?tab=community`);
+    router.push(`/${locale}/post/${encodeURIComponent(post.id)}`);
   };
 
-  const handleDelete = async (postId: string) => {
-    const result = await deleteCommunityPost(id, postId, {
-      channelId: id
-    });
+  const handleEdit = (post: CommunityPost) => {
+    router.push(editPostHref(locale, post));
+  };
 
-    if (result?.success) {
-      setPosts((prev) => prev.filter(p => p.id !== postId));
+  // No confirm: a 30-day soft delete; the Undo toast puts the post back in its place
+  const handleDelete = async (postId: string) => {
+    setActionError('');
+    let removed: { post: CommunityPost; index: number } | null = null;
+    await deletePostWithUndo({ id: postId, channelId: id }, t.community, {
+      onRemoved: () =>
+        setAllPosts((prev) => {
+          const index = prev.findIndex((p) => p.id === postId);
+          if (index >= 0) removed = { post: prev[index], index };
+          return prev.filter((p) => p.id !== postId);
+        }),
+      onRestored: () =>
+        setAllPosts((prev) => {
+          if (!removed || prev.some((p) => p.id === postId)) return prev;
+          return [...prev.slice(0, removed.index), removed.post, ...prev.slice(removed.index)];
+        }),
+    });
+  };
+
+  // A scheduled post goes live now (subscribers are notified by the processor)
+  const handlePublishNow = async (post: CommunityPost) => {
+    setActionError('');
+    const result = await updateCommunityPost(id, post.id, { publishNow: true }, { channelId: id });
+    if (result?.success && result.post) {
+      setAllPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, ...result.post } : p)));
     } else {
-      logger.error('Failed to delete community post', { channelId: id, postId });
+      reportError(new Error('Publish post now refused'), { shown: true, extra: { channelId: id, postId: post.id, action: 'publish_post_now' } });
+      setActionError(t.community.publishFailed);
     }
   };
 
@@ -112,33 +139,30 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   });
 
   const tabCounts = {
-    [PostStatus.PUBLISHED]: posts.filter(p => p.status === PostStatus.PUBLISHED).length,
-    [PostStatus.SCHEDULED]: posts.filter(p => p.status === PostStatus.SCHEDULED).length,
-    [PostStatus.DRAFT]: posts.filter(p => p.status === PostStatus.DRAFT).length
+    [PostStatus.PUBLISHED]: allPosts.filter(p => p.status === PostStatus.PUBLISHED).length,
+    [PostStatus.SCHEDULED]: allPosts.filter(p => p.status === PostStatus.SCHEDULED).length
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="
-        border-b
-        bg-card
-        sticky top-0
-        z-10
-      ">
+      <div className="container mx-auto px-4 pt-3 md:px-6 md:pt-4">
+        <ChannelSettingsBreadcrumb
+          channelId={id}
+          channelName={channelName}
+          locale={locale}
+          currentPage="community"
+        />
+      </div>
+      {/* A flat bar on the page's own background, like the composer's (owner review): the
+          breadcrumb sits above it, so the theme's tab-bar band (sticky + nav) never paints it */}
+      <div className="sticky top-0 z-10 bg-[var(--fanous-color-background)]" data-testid="community-posts-bar">
         <div className="
           container
           mx-auto
+          border-b border-[var(--fanous-color-divider)]
           px-4 py-3
           md:px-6 md:py-4
         ">
-          <ChannelSettingsBreadcrumb
-            channelId={id}
-            channelName={channelName}
-            locale={locale}
-            currentPage="community"
-            className="mb-4"
-          />
-
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-lg md:text-2xl font-bold">
               {t.community.managePosts}
@@ -207,7 +231,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
         md:px-6 md:py-8
       ">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as PostStatus)}>
-          <TabsList className="grid w-full sm:w-auto grid-cols-3 mb-6">
+          <TabsList className="grid w-full sm:w-auto grid-cols-2 mb-6">
             <TabsTrigger value={PostStatus.PUBLISHED}>
               {t.community.published}
               {tabCounts[PostStatus.PUBLISHED] > 0 && (
@@ -224,16 +248,11 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value={PostStatus.DRAFT}>
-              {t.community.drafts}
-              {tabCounts[PostStatus.DRAFT] > 0 && (
-                <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
-                  {tabCounts[PostStatus.DRAFT]}
-                </span>
-              )}
-            </TabsTrigger>
           </TabsList>
 
+          {actionError && (
+            <p role="alert" className="mb-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="community-action-error">{actionError}</p>
+          )}
           <TabsContent value={activeTab} className="mt-0">
             {loading ? (
               <div className="space-y-4">
@@ -271,7 +290,9 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                     post={post}
                     locale={locale}
                     onView={handleView}
+                    onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onPublishNow={handlePublishNow}
                   />
                 ))}
               </div>

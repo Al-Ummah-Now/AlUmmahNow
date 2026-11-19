@@ -76,7 +76,7 @@ export default function LikeButton({
       onClick={handleLikeClick}
       disabled={loading || !userId}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
+        'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 rounded-full transition-all group',
         'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'flex-row'
@@ -87,9 +87,8 @@ export default function LikeButton({
         aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-all',
-          liked
-            ? 'text-blue-600 dark:text-blue-400 fill-current scale-110'
-            : 'text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400'
+          // Idle like its neighbours, active in the primary colour (flat: no pill, no glow)
+          liked ? 'text-[var(--fanous-color-link)] fill-current' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
         fill={liked ? 'currentColor' : 'none'}
         stroke="currentColor"
@@ -104,9 +103,7 @@ export default function LikeButton({
       </svg>
       <span className={cn(
         'text-sm font-medium',
-        liked
-          ? 'text-blue-600 dark:text-blue-400'
-          : 'text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400'
+        liked ? 'text-[var(--fanous-color-link)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
       )}>
         {/* Accessible name = action + visible count (label-in-name) */}
         <span className="sr-only">{liked ? t.community.unlike : t.community.like}</span>{' '}

@@ -116,7 +116,7 @@ export function pluralText(table: PluralTexts, count: number, lang: string): str
   return template.replace(/\{count\}/g, formatNumber(lang, count));
 }
 
-const GROUPED_KINDS = ['uploadReady', 'uploadFailed', 'newComment', 'newSubscriber', 'newVideo', 'liveStarted', 'commentReply'] as const;
+const GROUPED_KINDS = ['uploadReady', 'uploadFailed', 'newComment', 'newSubscriber', 'newVideo', 'liveStarted', 'newPost', 'commentReply'] as const;
 type GroupedKind = (typeof GROUPED_KINDS)[number];
 const isGroupedKind = (kind: string): kind is GroupedKind => (GROUPED_KINDS as readonly string[]).includes(kind);
 

@@ -134,10 +134,9 @@ export default function ReplyForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn(
-        'flex gap-3 mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg',
-        isRTL && 'flex-row-reverse'
-      )}
+      // No slab of its own: it sits on the card's shared surface (owner review); the page's dir
+      // already mirrors the row, so no flex-row-reverse on top of it (that put the avatar at the end)
+      className="mt-4 flex gap-3 rounded-lg border border-[var(--fanous-color-divider)] p-4"
     >
       {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
       <ComposerAvatar src={userAvatar} name={userDisplayName} as={channelId ? 'channel' : 'member'} />
@@ -163,15 +162,8 @@ export default function ReplyForm({
             value={content}
             onChange={handleTextareaChange}
             placeholder={isRTL ? 'اكتب ردك...' : 'Write your reply...'}
-            className={cn(
-              'w-full px-3 py-2 rounded-lg resize-none transition-all',
-              'border border-gray-300 dark:border-gray-600',
-              'bg-white dark:bg-gray-800',
-              'focus:outline-none focus:ring-2 focus:ring-blue-500',
-              'text-gray-900 dark:text-gray-100',
-              'placeholder:text-gray-500 dark:placeholder:text-gray-400',
-              isRTL && 'text-right'
-            )}
+            // The shared field (theme/system.css .f-input)
+            className="f-input w-full resize-none py-2 text-start"
             rows={3}
             disabled={loading}
           />
@@ -208,7 +200,7 @@ export default function ReplyForm({
         )}
 
         {/* Action Buttons */}
-        <div className={cn('flex items-center gap-2 mt-3', isRTL && 'flex-row-reverse')}>
+        <div className="mt-3 flex items-center gap-2">
           <button
             type="button"
             onClick={handleCancel}

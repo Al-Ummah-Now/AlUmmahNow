@@ -14063,13 +14063,16 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request (a scheduledAt sooner than 5 minutes or more than a year ahead: code schedule_too_soon / schedule_too_far)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "code": {
                       "type": "string"
                     }
                   },
@@ -14096,6 +14099,42 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan does not include scheduled posts (posts.scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade_required"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "entitlement",
+                    "message"
+                  ]
                 }
               }
             }
@@ -14224,6 +14263,12 @@
                   "scheduledAt": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "publishNow": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
                   },
                   "pinned": {
                     "type": "boolean"
@@ -14467,13 +14512,16 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request (code not_scheduled: scheduledAt or publishNow on a post that is not scheduled; schedule_too_soon / schedule_too_far)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "code": {
                       "type": "string"
                     }
                   },
@@ -14500,6 +14548,42 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan does not include scheduled posts (posts.scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade_required"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "entitlement",
+                    "message"
+                  ]
                 }
               }
             }
@@ -16466,6 +16550,151 @@
         }
       }
     },
+    "/api/v1/community/channels/{channelId}/posts/{postId}/restore": {
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Restore a deleted community post (Undo)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "post_RestoreCommunityPost",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID that owns the post"
+            },
+            "required": true,
+            "description": "Channel ID that owns the post",
+            "name": "channelId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Post ID to restore"
+            },
+            "required": true,
+            "description": "Post ID to restore",
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Actor channel ID (the channel, as its owner or a member with post.manage)"
+            },
+            "required": true,
+            "description": "Actor channel ID (the channel, as its owner or a member with post.manage)",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed, or an admin removed the post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No deleted post to restore",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The permanent delete has started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/community/channels/{channelId}/posts/{postId}/results": {
       "get": {
         "tags": [
@@ -17616,6 +17845,7 @@
                       "enum": [
                         "new_videos",
                         "live",
+                        "posts",
                         "replies",
                         "comments",
                         "subscribers",
@@ -17623,7 +17853,7 @@
                         "account"
                       ]
                     },
-                    "maxItems": 7
+                    "maxItems": 8
                   }
                 },
                 "required": [
@@ -21949,6 +22179,9 @@
                         "type": "boolean"
                       },
                       "live": {
+                        "type": "boolean"
+                      },
+                      "posts": {
                         "type": "boolean"
                       },
                       "replies": {

@@ -16,6 +16,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useTextDirection } from '@/hooks/useTextDirection';
 
 export interface ConfirmOptions {
   title: string;
@@ -54,6 +55,7 @@ export function ConfirmDialog({
   testId = 'confirm-dialog',
 }: ConfirmDialogProps) {
   const { t } = useLanguage();
+  const dir = useTextDirection();
   const ids = useId();
   const [typed, setTyped] = useState('');
   const ready = typedMatches(typed, typeToConfirm);
@@ -67,11 +69,15 @@ export function ConfirmDialog({
     <AlertDialogPrimitive.Root open={open} onOpenChange={(next) => !next && finish(false)}>
       <AlertDialogPrimitive.Portal>
         <AlertDialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fanous-c-dialog-text)_45%,transparent)]"
+          // A scrim of the page's own background: dark over a dark page, light over a light one (the
+          // dialog text colour at 45% was a light wash over the dark page)
+          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fanous-color-background)_75%,transparent)]"
           data-testid={`${testId}-backdrop`}
           onClick={() => finish(false)}
         />
         <AlertDialogPrimitive.Content
+          // Portalled to the body: the page direction is set here (Arabic: right to left)
+          dir={dir}
           data-testid={testId}
           className="fixed inset-0 z-50 m-auto grid h-fit w-[calc(100%-2rem)] max-w-md gap-4 rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] p-6 text-start shadow-lg"
         >

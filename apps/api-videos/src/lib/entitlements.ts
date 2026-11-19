@@ -22,6 +22,7 @@ export const ENTITLEMENTS: ReadonlyArray<EntitlementDeclaration> = [
 	{ key: 'comments.replies', type: 'boolean', free: true, story: '29.2', description: 'Replies (one level) on video comments', atLimit: 'n/a (all plans)' },
 	{ key: 'comments.settings', type: 'boolean', free: true, story: '29.2', description: 'Per-video comment settings: on / off', atLimit: 'n/a (all plans)' },
 	{ key: 'comments.heldForReview', type: 'boolean', free: true, story: '29.2', description: 'Per-video "hold comments for review" setting', atLimit: 'n/a (all plans)' },
+	{ key: 'posts.scheduled', type: 'boolean', free: true, story: '29.4', description: 'Schedule community posts', atLimit: '402 upgrade_required; the composer offers Publish now only' },
 	{ key: 'analytics.retentionCurve', type: 'boolean', free: true, story: 'Creator Studio', description: 'Retention chart per video', atLimit: 'The chart is replaced by a note about the plan' },
 	{ key: 'studio.teamSeats', type: 'number', free: 50, story: 'CHANNEL-ROLES', description: 'Members per channel (channel roles), on the channel owner\'s plan; capped at 50', atLimit: '409 member_limit on invite and accept; the Team page says the team is full' },
 	{ key: 'analytics.trafficSources', type: 'boolean', free: true, story: 'Creator Studio', description: 'Traffic sources in analytics', atLimit: 'The section is replaced by a note about the plan' },
