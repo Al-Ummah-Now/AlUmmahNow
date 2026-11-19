@@ -71,5 +71,10 @@ test.describe('hidden tiers', () => {
     expect((await choices())?.items.some((t) => t.id === tierId && t.hidden)).toBe(true);
     await page.goto('/users/invites/new');
     await expect(page.getByTestId('invite-plan').locator(`option[value="${tierId}"]`)).toContainText('(Hidden)');
+    // The link's days are a text field in the page's digits (Arabic: ١٤), typed in either digit set
+    await expect(page.getByTestId('invite-days')).toHaveValue('14');
+    await page.getByTestId('invite-days').fill('٣٠');
+    await page.getByTestId('invite-days').blur();
+    await expect(page.getByTestId('invite-days')).toHaveValue('30');
   });
 });
