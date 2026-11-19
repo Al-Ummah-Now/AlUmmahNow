@@ -116,10 +116,11 @@ export function deviceClassOf(input: { surface: ClientSurface; chMobile?: string
     case 'bot':
       return 'unknown';
   }
-  const ua = input.userAgent ?? '';
+  // Bounded: a header is never trusted to be short (and no pattern here can backtrack on it)
+  const ua = (input.userAgent ?? '').slice(0, 512);
   if (/smart-?tv|tizen|webos|hbbtv|appletv|googletv|android tv|crkey|aft[a-z]/i.test(ua)) return 'tv';
   if (/ipad|tablet|kindle|silk|playbook/i.test(ua) || (/android/i.test(ua) && !/mobile/i.test(ua))) return 'tablet';
-  if (input.chMobile === '?1' || /mobi|iphone|ipod|android.+mobile|windows phone/i.test(ua)) return 'phone';
+  if (input.chMobile === '?1' || /mobi|iphone|ipod|windows phone/i.test(ua) || (/android/i.test(ua) && /mobile/i.test(ua))) return 'phone';
   if (input.chMobile === '?0' || ua) return 'desktop';
   return 'unknown';
 }
@@ -141,8 +142,13 @@ function hostOf(value: string | null | undefined): string | undefined {
 /** utm_source as a campaign name: lower-case letters, digits, . _ - only. */
 export function campaignOf(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
-  const v = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[-._]+|[-._]+$/g, '').slice(0, 40);
-  return v || undefined;
+  const v = value.slice(0, 200).toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  // Trim separators at both ends without a regex (no backtracking on long input)
+  let start = 0;
+  let end = v.length;
+  while (start < end && '-._'.includes(v[start]!)) start++;
+  while (end > start && '-._'.includes(v[end - 1]!)) end--;
+  return v.slice(start, end).slice(0, 40) || undefined;
 }
 
 /**

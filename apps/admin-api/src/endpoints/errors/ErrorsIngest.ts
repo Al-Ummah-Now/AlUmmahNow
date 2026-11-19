@@ -70,10 +70,15 @@ export function browserOrigin(header: (name: string) => string | undefined): Req
   const ua = header('X-Client-User-Agent');
   if (!ua) return undefined;
   let page = 'https://invalid.local/';
+  let hasPage = false;
   try {
-    page = new URL(header('X-Client-Page') || page).toString();
+    const given = header('X-Client-Page');
+    if (given) {
+      page = new URL(given).toString();
+      hasPage = true;
+    }
   } catch {
-    // keep the placeholder
+    hasPage = false;
   }
   const headers = new Headers({ 'user-agent': ua });
   const mobile = header('X-Client-Mobile');
@@ -82,7 +87,7 @@ export function browserOrigin(header: (name: string) => string | undefined): Req
   if (country && /^[A-Z]{2}$/.test(country)) headers.set('cf-ipcountry', country);
   const app = header('X-Report-App') === 'admin-web' ? 'admin' : 'web';
   const path = new URL(page).pathname;
-  const origin = originOf(new Request(page, { headers }), { app, entry: page.startsWith('https://invalid.local') ? undefined : normalizeRouteForOrigin(path), embed: app === 'web' && path.startsWith('/embed') });
+  const origin = originOf(new Request(page, { headers }), { app, entry: hasPage ? normalizeRouteForOrigin(path) : undefined, embed: app === 'web' && path.startsWith('/embed') });
   // The page posted to its own site: a same-site "referrer" says nothing about where the visit came from
   return origin.source === 'platform' ? { ...origin, source: 'direct', referrerHost: undefined } : origin;
 }
