@@ -6,7 +6,7 @@ import type { ErrorActivity, ErrorEvent, ErrorGroupDetail } from '@/lib/api/erro
 import { getAdminSession } from '@/lib/auth';
 import { canManageErrors, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatHour, formatNumber, hourDate, translateDynamic, type Translator } from '@/i18n/translate';
+import { formatDate, formatHour, formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
@@ -16,7 +16,7 @@ import { ErrorGroupActions } from './ErrorGroupActions';
 import { NeedsActionItemButtons } from './NeedsActionItemButtons';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
-import { dateTimeFormat, normalizeRoute, scrubContext, type ErrorContext } from '@al-ummah/shared-types';
+import { dateTimeFormat, normalizeRoute, pluralCategory, scrubContext, type ErrorContext } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +29,7 @@ const GROUP_ID = /^eg_[0-9a-f]{16}$/;
 const USER_ID = /^usr_[A-Za-z0-9_-]{1,64}$/;
 /** Public videos site, for items that point at a video (same config as the access-denied page). */
 const WEB_ORIGIN = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://alummahnow.net';
-const thClass = 'text-start px-3 py-2 text-fg-muted font-medium whitespace-nowrap';
+const thClass = 'text-start px-3 py-2 text-fg-muted font-medium sm:whitespace-nowrap';
 
 export default async function ErrorGroupPage({ params, searchParams }: PageProps) {
   const { id } = await params;
@@ -190,7 +190,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                   <tr key={r.release}>
                     <td className="px-3 py-2 font-mono" dir="ltr">{r.release}</td>
                     <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.occurrences, locale)}</td>
-                    <td className="px-3 py-2 text-fg-muted whitespace-nowrap">{formatDate(r.last_seen, locale)}</td>
+                    <td className="px-3 py-2 text-fg-muted sm:whitespace-nowrap">{formatDate(r.last_seen, locale)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -308,9 +308,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
     [
       t('errorsPage.user'),
       user ? (
-        <Link href={`/users/${encodeURIComponent(user)}`} className={linkClass} dir="ltr" data-testid="error-sample-user">
-          {user}
-        </Link>
+        <UserName id={user} showEmail={false} testId="error-sample-user" />
       ) : (
         t('errorsPage.anonymous')
       ),
@@ -363,7 +361,9 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
         <span className="text-sm text-fg-muted">{t('errorsPage.reference')}</span>
         <code className="font-mono font-semibold text-fg" dir="ltr" data-testid="error-event-ref">{e.ref}</code>
-        {e.count > 1 && <span className="text-xs text-fg-subtle">{t('errorsPage.repeated', { count: e.count })}</span>}
+        {e.count > 1 && (
+          <span className="text-xs text-fg-subtle">{t(`errorsPage.repeated.${pluralCategory(locale, e.count)}` as MessageKey, { count: e.count })}</span>
+        )}
         {e.shown === 1 && <span className="text-xs text-fg-subtle">{t('errorsPage.shownToUser')}</span>}
       </div>
       <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
