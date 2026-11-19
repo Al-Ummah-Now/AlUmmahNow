@@ -27,6 +27,8 @@ import {
   removeSearchDocument,
   syncOwnershipSafely,
   syncSearchDocument,
+  channelSubscriberCount,
+  refreshChannelSubscribers,
 } from '@al-ummah/shared-types';
 import type { Logger } from '@al-ummah/logger';
 import type { AlUmmahMessage, QueueEnvironment } from '../types';
@@ -68,8 +70,24 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
   }
   // Category labels in the index text come from the admin-managed list
   await loadVideoCategories(db);
-  const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
+  // A channel carries its live subscriber count (D1), never the frozen one on the R2 object (#1633)
+  const subscribers = entity === 'channel' && object ? await channelSubscriberCount(env.NOTIFICATIONS_DB, id) : undefined;
+  const result = await syncSearchDocument(db, entity, id, object ?? null, { version, ...(subscribers !== undefined ? { subscribers } : {}) });
   logger.debug('Search index synced', { entity, id, version, result });
+}
+
+/**
+ * After a subscribe or unsubscribe: the channel's indexed subscriber count and popularity follow
+ * the live D1 count (#1633), so Explore, search and suggestions show it. Throws on a D1 failure,
+ * so the queue retries the message (the subscription itself is already stored).
+ */
+export async function refreshChannelSearchSubscribers(env: QueueEnvironment, channelId: string, logger: Logger): Promise<void> {
+  const db = searchDb(env);
+  if (!db || !env.NOTIFICATIONS_DB) return;
+  const subscribers = await channelSubscriberCount(env.NOTIFICATIONS_DB, channelId);
+  if (subscribers === undefined) return;
+  const result = await refreshChannelSubscribers(db, channelId, subscribers);
+  logger.debug('Channel subscriber count refreshed in the search index', { channelId, subscribers, result });
 }
 
 /** Remove content a moderator removed, deleted or whose owner a moderator banned from the search index. */

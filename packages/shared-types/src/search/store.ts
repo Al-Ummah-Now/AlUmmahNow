@@ -39,6 +39,12 @@ export interface SearchSyncOptions {
    * Defaults to `now`.
    */
   version?: number;
+  /**
+   * Channels: the live subscriber count (NOTIFICATIONS_DB channel_subscriber_counts, read with
+   * channelSubscriberCount). It replaces the count in the R2 object, which subscriptions no longer
+   * update since they moved to D1 (SCALABILITY-AUDIT AV-4; #1633). Undefined keeps the object's.
+   */
+  subscribers?: number;
 }
 
 export const TOMBSTONE_TABLE = 'search_tombstones';
@@ -222,7 +228,10 @@ export async function syncSearchDocument(
   object: unknown,
   options: SearchSyncOptions = {},
 ): Promise<SearchSyncResult> {
-  const row = object == null ? null : projectSearchDocument(type, object);
+  const source = type === 'channel' && options.subscribers !== undefined && object && typeof object === 'object'
+    ? { ...(object as Record<string, unknown>), subscribers: undefined, subscribersCount: options.subscribers }
+    : object;
+  const row = source == null ? null : projectSearchDocument(type, source);
   if (!row) {
     const now = options.now ?? Date.now();
     // Deleted (no object) is final; present but not searchable is an ordinary version
