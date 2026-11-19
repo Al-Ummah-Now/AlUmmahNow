@@ -8,7 +8,7 @@
  * Idempotency-Key per change; a stored final state is never sent again); a
  * final failure flags the admin Errors page with Retry.
  */
-import { accountEmailDecision, newErrorRef, scrubEvent, type AccountEmailContact, type NotificationEmailLocale, type PublicTier, type TierChange } from '@al-ummah/shared-types';
+import { accountEmailDecision, formatInteger, newErrorRef, scrubEvent, type AccountEmailContact, type NotificationEmailLocale, type PublicTier, type TierChange } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from './content/videosClient';
 import { envTag, sendContactEmail, type RenderedEmail } from './contact-email';
@@ -29,7 +29,7 @@ export function isTierChangeMailJob(body: unknown): body is TierChangeMailJob {
   return !!body && typeof body === 'object' && (body as { kind?: unknown }).kind === 'tier_changed';
 }
 
-const fmt = (n: number, locale: NotificationEmailLocale) => new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en-US').format(n);
+const fmt = (n: number, locale: NotificationEmailLocale) => formatInteger(locale, n);
 
 /** What a tier allows, as label/value rows (also used by the approved-request email). */
 export function tierAllowsFacts(tier: PublicTier | null, locale: NotificationEmailLocale): [string, string][] {

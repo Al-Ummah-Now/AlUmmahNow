@@ -3,7 +3,7 @@
  * does, the request form's checks and the API error copy. Pure, so the page
  * and its tests share it. Never prices: a card offers "Request".
  */
-import { TIER_REQUEST_ERRORS, TIER_REQUEST_LIMITS, type PublicTier, type UpgradeOverview } from '@al-ummah/shared-types';
+import { formatInteger, TIER_REQUEST_ERRORS, TIER_REQUEST_LIMITS, type PublicTier, type UpgradeOverview } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
 type UpgradeCopy = AppTranslations['upgrade'];
@@ -11,7 +11,7 @@ export type Lang = 'en' | 'ar';
 
 const fill = (text: string, params: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m));
 
-export const formatCount = (n: number, lang: Lang) => new Intl.NumberFormat(lang === 'ar' ? 'ar-u-nu-arab' : 'en-US').format(n);
+export const formatCount = (n: number, lang: Lang) => formatInteger(lang, n);
 
 /** The tier's name in the page language (the admin's Arabic name, else the English one). */
 export const tierName = (tier: Pick<PublicTier, 'name' | 'nameAr'>, lang: Lang) => (lang === 'ar' && tier.nameAr ? tier.nameAr : tier.name);

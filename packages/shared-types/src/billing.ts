@@ -19,6 +19,7 @@
  * each one is set, when and by whom. Videos-side data (search D1,
  * migrations/search/0040), never Auth RBAC.
  */
+import { formatMoney } from './locale-format';
 
 /** Providers an admin can configure. 'fake' exists only where PAYMENTS_FAKE_PROVIDER is on (never production). */
 export const PAYMENT_PROVIDER_IDS = ['paddle', 'paygood', 'fake'] as const;
@@ -415,12 +416,15 @@ export const billingWebhookPath = (provider: PaymentProviderId) => `/webhooks/bi
 export const BILLING_JOB_KINDS = ['billing.webhook', 'billing.sync-prices', 'billing.cancel', 'billing.refund', 'billing.reconcile'] as const;
 export type BillingJobKind = (typeof BILLING_JOB_KINDS)[number];
 
-/** Format an amount in minor units for display (Intl, the viewer's locale). */
+/**
+ * Format an amount in minor units for display: the shared formatMoney (locale-format), so Arabic gets
+ * ٠–٩ and the currency's Arabic name («٩٫٠٠ دولار أمريكي»), never «US$».
+ */
 export function formatBillingAmount(amount: number, currency: string, locale: string): string {
   const exp = currencyExponent(currency);
   const value = amount / 10 ** exp;
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: exp, maximumFractionDigits: exp }).format(value);
+    return formatMoney(locale, value, currency, { minimumFractionDigits: exp, maximumFractionDigits: exp });
   } catch {
     return `${value.toFixed(exp)} ${currency}`;
   }
