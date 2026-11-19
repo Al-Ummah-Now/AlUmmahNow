@@ -296,12 +296,20 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       // The outline: the control's own shape (round around an avatar), GAP px outside it
       const radius = parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0;
       const round = radius >= Math.min(r.width, r.height) / 2 - 0.5;
-      const o = { x: r.x - GAP, y: r.y - GAP, w: r.width + GAP * 2, h: r.height + GAP * 2 };
+      // Neighbouring targets (rows of one menu) keep their outlines apart: the gap shrinks to half
+      // the space between them (design audit 2026-11-19: the rows' outlines overlapped)
+      const near = targets.filter((t) => t !== target).map((t) => t.getBoundingClientRect()).reduce((min, b) => {
+        const dx = Math.max(0, b.x - (r.x + r.width), r.x - (b.x + b.width));
+        const dy = Math.max(0, b.y - (r.y + r.height), r.y - (b.y + b.height));
+        return Math.min(min, Math.max(dx, dy));
+      }, Infinity);
+      const gap = Math.max(1, Math.min(GAP, Math.floor(near / 2) - 1));
+      const o = { x: r.x - gap, y: r.y - gap, w: r.width + gap * 2, h: r.height + gap * 2 };
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
       Object.assign(ring.style, {
         position: 'fixed', left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, boxSizing: 'border-box',
-        border: `2px dashed ${INK}`, borderRadius: round ? '9999px' : `${radius + GAP}px`,
+        border: `2px dashed ${INK}`, borderRadius: round ? '9999px' : `${radius + gap}px`,
         boxShadow: `0 0 0 2px ${HALO}, inset 0 0 0 2px ${HALO}`, zIndex: '2147483646', pointerEvents: 'none',
       });
       // The number sits on the outline (centred on its edge or corner), so it reads as part of it

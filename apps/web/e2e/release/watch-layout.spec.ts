@@ -8,7 +8,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
-import { createProfile, signUpOnWeb, switchChannelInHeader, type Locale } from './web-session';
+import { createProfile, signInAgain, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { useOwnVideos } from './own-videos';
 import { useOwnData } from './builders';
@@ -201,10 +201,10 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
       // The header's Upload button shows only with a creator tier (uploads are by invitation) and
       // while acting as a channel (acting as yourself there is no Upload: owner rule 6)
       await grantCreatorTier(user);
-      const channelId = await data.createChannel(user, { isMain: true });
-      // Act as it through the account menu, as a person would (a fresh sign-in in Arabic came back
-      // to /en: the sign-in lost its auth_locale cookie with the cleared cookies)
-      await switchChannelInHeader(page, channelId, locale);
+      await data.createChannel(user, { isMain: true });
+      // A fresh sign-in picks the new channel up as the active one, in English as builders'
+      // createCreator does (checkAllWidths opens each page in its own language)
+      await signInAgain(page, user.email);
       await checkAllWidths(page, id!, locale, true);
     });
   }
