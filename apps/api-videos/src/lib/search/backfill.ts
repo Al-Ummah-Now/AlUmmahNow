@@ -18,6 +18,8 @@ import {
   pruneSearchIndex,
   r2Version,
   syncSearchDocument,
+  channelSubscriberCount,
+  type SubscriberCountDb,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { SEARCH_BUCKETS, searchIdForKey } from './sync';
@@ -28,6 +30,8 @@ const BUCKET_FOR_TYPE: Record<SearchEntityType, string> = Object.fromEntries(
 
 export interface BackfillEnv {
   SEARCH_DB?: SearchDb;
+  /** Channels' live subscriber counts (#1633) */
+  NOTIFICATIONS_DB?: SubscriberCountDb;
   [binding: string]: unknown;
 }
 
@@ -80,7 +84,10 @@ export async function backfillSearchPage(
       const value = stored ? await stored.json<Record<string, unknown>>() : null;
       if (value && typeof value === 'object' && value.id !== undefined && value.id !== id) return;
       const version = r2Version(stored);
+      // A channel carries its live subscriber count (D1), never the frozen one on the R2 object (#1633)
+      const subscribers = entity === 'channel' && value ? await channelSubscriberCount(env.NOTIFICATIONS_DB, id) : undefined;
       const result = await syncSearchDocument(db, entity, id, value, {
+        ...(subscribers !== undefined ? { subscribers } : {}),
         // When this copy was written (PR-8): a newer write indexed meanwhile is kept
         ...(version !== undefined ? { version } : {}),
         force: options.mode !== 'touch',

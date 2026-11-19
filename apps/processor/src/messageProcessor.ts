@@ -5,7 +5,7 @@ import { handleChannelSectionEvent } from './handlers/channel-section';
 import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { eraseUserPostInteractions } from './lib/post-counters';
-import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
+import { applyModerationToSearchIndex, handleSearchIndexSync, refreshChannelSearchSubscribers } from './handlers/search-index';
 import { handleCategoryRelabel } from './handlers/category-relabel';
 import { recordRetentionRollup, recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
@@ -416,6 +416,9 @@ export class MessageProcessor {
     if (env.NOTIFICATIONS_DB) {
       await reconcileChannelSubscriber(env.NOTIFICATIONS_DB, channelId, userId, message.type === MessageType.Subscribe ? 'subscribe' : 'unsubscribe');
     }
+
+    // The search index's count (Explore, search, suggestions, channel popularity) follows the live one (#1633)
+    await refreshChannelSearchSubscribers(env, channelId, this.logger);
 
     // Process subscription actions
     switch (message.type) {

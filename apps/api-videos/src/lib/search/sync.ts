@@ -30,6 +30,8 @@ import {
   syncOwnership,
   r2Version,
   syncSearchDocument,
+  channelSubscriberCount,
+  type SubscriberCountDb,
   transcriptTrackForKey,
   type TranscriptIndexSyncPayload,
 } from '@al-ummah/shared-types';
@@ -86,7 +88,8 @@ type ObjectSource = () => Promise<unknown>;
 export class SearchSyncQueue {
   private chains = new Map<string, Promise<void>>();
 
-  constructor(private db: SearchDb, private waitUntil: (promise: Promise<unknown>) => void) {}
+  /** `counts`: NOTIFICATIONS_DB, for channels' live subscriber count (#1633) */
+  constructor(private db: SearchDb, private waitUntil: (promise: Promise<unknown>) => void, private counts?: SubscriberCountDb) {}
 
   /** `version`: R2 `uploaded` time of the written object, or the delete time (PR-8 order guard). */
   enqueue(type: SearchEntityType, id: string, source: ObjectSource, version: number = Date.now()): void {
@@ -99,7 +102,9 @@ export class SearchSyncQueue {
           // Not the entity record for this id (some other JSON stored under an entity-like key).
           return;
         }
-        const result = await syncSearchDocument(this.db, type, id, object ?? null, { version });
+        // A channel carries its live subscriber count (D1), never the frozen one on the R2 object (#1633)
+        const subscribers = type === 'channel' && object ? await channelSubscriberCount(this.counts, id).catch(() => undefined) : undefined;
+        const result = await syncSearchDocument(this.db, type, id, object ?? null, { version, ...(subscribers !== undefined ? { subscribers } : {}) });
         logger.debug('[SearchSync] Index updated', { type, id, result });
       } catch (error) {
         logger.warn('[SearchSync] Failed to update search index', {
@@ -335,7 +340,7 @@ export function wrapSubtitles(bucket: R2Bucket, producer: QueueBinding | undefin
 export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionContext, 'waitUntil'>): E {
   const db = (env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
   if (!db || !ctx?.waitUntil) return env;
-  const queue = new SearchSyncQueue(db, promise => ctx.waitUntil(promise));
+  const queue = new SearchSyncQueue(db, promise => ctx.waitUntil(promise), (env as { NOTIFICATIONS_DB?: SubscriberCountDb }).NOTIFICATIONS_DB);
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   // Privacy footprints (lib/privacy/footprints.ts): who each write names, so erasure needs no bucket scan
   for (const binding of FOOTPRINT_BUCKETS) {

@@ -6,3 +6,4 @@ export * from './api';
 export * from './ownership';
 export * from './suggest';
 export * from './transcripts';
+export * from './subscribers';

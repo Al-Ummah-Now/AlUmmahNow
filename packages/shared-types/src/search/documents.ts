@@ -203,6 +203,11 @@ function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** A channel's ranking weight from its subscriber and video counts (also used when only the subscriber count changes). */
+export function channelPopularity(subscribersCount: number, videosCount: number): number {
+  return round(log10p(subscribersCount) * 0.4 + log10p(videosCount) * 0.2);
+}
+
 function categoryLabels(category: string | undefined): string[] {
   if (!category) return [];
   // The live list this isolate loaded (video-categories.ts); a rename re-syncs the rows (processor category relabel)
@@ -319,7 +324,7 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
     isShort: false,
     views: Math.max(num(obj.totalViews), 0),
     createdAt: timeOf(obj.dateCreated, obj.createdAt),
-    popularity: round(log10p(subscribersCount) * 0.4 + log10p(videosCount) * 0.2),
+    popularity: channelPopularity(subscribersCount, videosCount),
     titleText: buildIndexText(name, Object.values(nameLocalized ?? {}), str(obj.handle)),
     bodyText: limitBody(buildIndexText(description, Object.values(descriptionLocalized ?? {}), tags, categoryLabels(category))),
     payload: {
