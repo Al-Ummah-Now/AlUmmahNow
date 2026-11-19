@@ -409,3 +409,38 @@ describe('legacy tiers without Arabic', () => {
     assert.equal(createTranslator('ar')('creators.arabicMissing'), 'العربية ناقصة');
   });
 });
+
+describe('hidden tiers (owner, 2026-11-19)', () => {
+  const SCHOLAR: CreatorTier = { ...CREATOR, id: 'scholar', name: 'Scholar', nameAr: 'عالِم', hidden: true, sortOrder: 15 };
+  const WITH_HIDDEN = [MEMBER, CREATOR, SCHOLAR, UNLIMITED];
+
+  it('a hidden tier: the Hidden switch on, the Hidden chip, no "Set as default", the help in en and ar', () => {
+    const html = render(el(TierEditor, { tiers: WITH_HIDDEN, counts: { scholar: 1 }, defaultTierId: 'member', canManage: true, actions: tierActions }));
+    const card = html.slice(html.indexOf('id="tier-scholar"'), html.indexOf('id="tier-unlimited"'));
+    assert.match(card, /data-testid="tier-scholar-hidden-chip"[^>]*>Hidden</);
+    assert.match(card, /data-testid="tier-scholar-hidden"/);
+    assert.match(card, /checked=""[^>]*data-testid="tier-scholar-hidden"|data-testid="tier-scholar-hidden"[^>]*checked=""/);
+    assert.doesNotMatch(card, /tier-scholar-set-default/, 'a hidden tier cannot be the default');
+    assert.match(card, /Only people on this tier see it on the Upgrade page/);
+    const arabic = render(el(TierEditor, { tiers: WITH_HIDDEN, counts: {}, defaultTierId: 'member', canManage: true, actions: tierActions }), 'ar');
+    assert.match(arabic, /لا يراها في صفحة الترقية إلا من هم عليها/);
+    assert.match(arabic, />مخفية</);
+  });
+
+  it('the default tier: its switch is off and disabled, with the reason', () => {
+    const html = render(el(TierEditor, { tiers: WITH_HIDDEN, counts: {}, defaultTierId: 'creator', canManage: true, actions: tierActions }));
+    const card = html.slice(html.indexOf('id="tier-creator"'), html.indexOf('id="tier-scholar"'));
+    assert.match(card, /disabled=""[^>]*data-testid="tier-creator-hidden"|data-testid="tier-creator-hidden"[^>]*disabled=""/);
+    assert.match(card, /The default tier is always shown/);
+  });
+
+  it('the rank list marks a hidden tier; the form keeps the flag; the 409 has words in both languages', () => {
+    const rank = render(el(TierRankList, { tiers: WITH_HIDDEN, defaultTierId: 'member', canManage: true }));
+    assert.match(rank, /data-testid="tiers-rank-scholar-hidden"[^>]*>Hidden</);
+    assert.equal(tierToForm(SCHOLAR).hidden, true);
+    assert.equal(tierToForm().hidden, false, 'a new tier is shown');
+    assert.equal(tierActionMessage({ ok: false, status: 409, code: 'default_tier_hidden' }), 'creators.errorDefaultHidden');
+    assert.match(tEn('creators.errorDefaultHidden'), /default tier can't be hidden/);
+    assert.match(tAr('creators.errorDefaultHidden'), /لا يمكن إخفاء الفئة الأساسية/);
+  });
+});
