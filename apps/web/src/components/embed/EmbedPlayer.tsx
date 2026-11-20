@@ -325,8 +325,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               )}
               <span className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/40" aria-hidden="true" />
               <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-                <span className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-600 group-hover:bg-emerald-500 shadow-lg transition-colors">
-                  <Play className="w-8 h-8 sm:w-10 sm:h-10 fill-white text-white ms-1" />
+                <span className="embed-play-button flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition-colors">
+                  <Play className="w-8 h-8 sm:w-10 sm:h-10 ms-1" />
                 </span>
               </span>
               {params.start > 0 && (
