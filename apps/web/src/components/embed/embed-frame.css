@@ -107,3 +107,75 @@ main[data-testid="embed-player"] .embed-watch-link[data-compact] .embed-watch-la
     white-space: nowrap;
   }
 }
+
+/*
+ * The unavailable frame (UnavailableFrame.tsx: unknown, private, scheduled, deleted ...): the same
+ * night colour as the player, with the theme's nav text on it, in every theme and mode (#1660).
+ * Its Tailwind colours were remapped by the theme bridge (white → the light surface, gray-300 →
+ * the divider) and its background made transparent (bridge.css `main`), so it showed pale text on
+ * the page's parchment and failed AA contrast. Own classes, never Tailwind colour utilities.
+ */
+html:has(main[data-testid="embed-unavailable"]),
+html body:has(main[data-testid="embed-unavailable"]),
+main[data-testid="embed-unavailable"] {
+  background: var(--fanous-c-nav-bg) !important;
+}
+
+main[data-testid="embed-unavailable"].embed-unavailable {
+  color: var(--fanous-c-nav-text);
+}
+
+main[data-testid="embed-unavailable"] .embed-unavailable-icon {
+  color: var(--fanous-c-nav-icon);
+}
+
+main[data-testid="embed-unavailable"] .embed-unavailable-body {
+  color: color-mix(in srgb, var(--fanous-c-nav-text) 85%, var(--fanous-c-nav-bg));
+}
+
+/* Inverse pill: nav text as the fill, so it reads in every theme (a theme's primary button colour
+   can equal its night colour, e.g. Zujaj light) */
+main[data-testid="embed-unavailable"] .embed-unavailable-link {
+  background: var(--fanous-c-nav-text);
+  color: var(--fanous-c-nav-bg);
+  box-shadow: none;
+}
+
+main[data-testid="embed-unavailable"] .embed-unavailable-link:hover {
+  background: color-mix(in srgb, var(--fanous-c-nav-text) 88%, var(--fanous-c-nav-bg));
+}
+
+main[data-testid="embed-unavailable"] .embed-unavailable-link:focus-visible {
+  outline: 2px solid var(--fanous-c-nav-text);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+/* Short frames (a 16:9 embed on a phone is ~200px tall): a smaller icon and gaps, so the card fits */
+@media (max-height: 260px) {
+  main[data-testid="embed-unavailable"] {
+    gap: 6px;
+    padding: 12px;
+  }
+
+  main[data-testid="embed-unavailable"] .embed-unavailable-icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* The facade's play button: the theme's primary button colours (the bridge remapped its
+   emerald / white utilities to a pale fill with a white triangle in light mode, #1660) */
+main[data-testid="embed-player"] .embed-play-button {
+  background: var(--fanous-c-button-primary-bg);
+  color: var(--fanous-c-button-primary-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fanous-c-button-primary-text) 35%, transparent), 0 10px 15px -3px color-mix(in srgb, var(--fanous-c-nav-bg) 45%, transparent);
+}
+
+main[data-testid="embed-player"] .embed-play-button svg {
+  fill: currentColor;
+}
+
+main[data-testid="embed-player"] .group:hover .embed-play-button {
+  background: color-mix(in srgb, var(--fanous-c-button-primary-bg) 88%, var(--fanous-c-button-primary-text));
+}

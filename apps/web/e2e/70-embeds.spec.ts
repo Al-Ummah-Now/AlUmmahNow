@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { test, expect } from './fixtures';
 import type { Page, TestInfo } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { canDecodeHls, watchUrl } from './test-utils/watch-page';
 import { createDisposableVideo, deleteVideoQuietly } from './test-utils/e2e-videos';
@@ -307,5 +308,59 @@ test.describe('embedded discussions (read-only)', () => {
     await expect(comments).toHaveAttribute('dir', 'rtl');
     // The widget sized the iframe from the frame's resize message
     await expect.poll(async () => page.locator('alummah-discussion iframe').evaluate((f: HTMLIFrameElement) => f.style.height)).toMatch(/px$/);
+  });
+});
+
+/**
+ * Colour contrast of every embed state in light and dark (#1660: the unavailable card showed pale
+ * text on the page's parchment). The frame is opened on its own so axe reads it directly. "dark" is
+ * the device's dark scheme plus the site's `dark` class: the embed does not read the viewer's saved
+ * mode today, so both token sets are covered whichever one a frame ends up with.
+ */
+test.describe('embed colour contrast (#1660)', () => {
+  const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+
+  async function expectContrast(page: Page, scope: string, mode: 'light' | 'dark', label: string) {
+    await page.emulateMedia({ colorScheme: mode });
+    await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), mode === 'dark');
+    const { violations } = await new AxeBuilder({ page }).include(scope).withTags(WCAG_TAGS).withRules(['color-contrast']).analyze();
+    const found = violations.flatMap((v) => v.nodes.map((n) => `${n.target.join(' ')}: ${n.any[0]?.message ?? v.help}`));
+    expect(found, `${label} (${mode})`).toEqual([]);
+  }
+
+  for (const lang of ['en', 'ar'] as const) {
+    test(`EMBED-012 the unavailable frame meets AA contrast in light and dark (${lang})`, async ({ page }, testInfo) => {
+      await page.goto(`${baseOrigin(testInfo)}/embed/v/${NO_SUCH_VIDEO}?lang=${lang}`);
+      await expect(page.getByTestId('embed-unavailable')).toBeVisible({ timeout: 30000 });
+      for (const mode of ['light', 'dark'] as const) await expectContrast(page, '[data-testid="embed-unavailable"]', mode, `unavailable ${lang}`);
+    });
+  }
+
+  test('EMBED-013 a private video\'s frame meets AA contrast in light and dark', async ({ page }, testInfo) => {
+    test.skip(!fs.existsSync(AUTH_STATE.single), 'needs the E2E users from global setup');
+    test.setTimeout(240000);
+    const privateVideo = await createDisposableVideo('single', 'embed-private-contrast', { isPublic: false });
+    try {
+      await page.goto(`${baseOrigin(testInfo)}/embed/v/${privateVideo.id}`);
+      await expect(page.getByTestId('embed-unavailable')).toBeVisible({ timeout: 30000 });
+      for (const mode of ['light', 'dark'] as const) await expectContrast(page, '[data-testid="embed-unavailable"]', mode, 'private');
+    } finally {
+      await deleteVideoQuietly('single', privateVideo);
+    }
+  });
+
+  test('EMBED-014 the player (before and while playing) meets AA contrast in light and dark', async ({ page, browserName }, testInfo) => {
+    const video = await ownLecture();
+    await page.goto(`${baseOrigin(testInfo)}/embed/v/${video.id}`);
+    await expect(page.getByTestId('embed-facade')).toBeVisible({ timeout: 30000 });
+    for (const mode of ['light', 'dark'] as const) await expectContrast(page, '[data-testid="embed-player"]', mode, 'facade');
+
+    test.skip(!canDecodeHls(browserName, testInfo), NO_CODEC);
+    await page.getByTestId('embed-facade').click();
+    const media = page.locator('.video-js video');
+    await expect.poll(async () => media.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 45000 }).toBeGreaterThan(1);
+    await media.evaluate((v: HTMLVideoElement) => v.pause());
+    await page.locator('.video-js').hover();
+    for (const mode of ['light', 'dark'] as const) await expectContrast(page, '[data-testid="embed-player"]', mode, 'playing');
   });
 });
