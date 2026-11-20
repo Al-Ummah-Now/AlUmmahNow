@@ -759,6 +759,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         const helpV = (window as unknown as { __help: { visible: (e: Element, r: { l: number; t: number; r: number; b: number }) => unknown } }).__help;
         const seenPart = helpV.visible(el, { l: b.left, t: b.top, r: b.right, b: b.bottom }) as { l: number; t: number; r: number; b: number } | null;
         if (!seenPart) continue;
+        const inside = Math.min(seenPart.r, frame.x + frame.w) - Math.max(seenPart.l, frame.x) >= 1 && Math.min(seenPart.b, frame.y + frame.h) - Math.max(seenPart.t, frame.y) >= 1;
+        if (!inside) continue;
         if (hidden(box, el)) { skippedNodes.push({ el, node, why: 'hidden' }); continue; }
         texts.push(box);
         // Cut by the frame's edge
@@ -1139,6 +1141,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         const b = el.getBoundingClientRect();
         return b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1);
       });
+      const barRects = barEls.map((be) => be.getBoundingClientRect());
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const el = node.parentElement;
@@ -1155,16 +1158,12 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           let by = '';
           for (const y of [v.t + 2, (v.t + v.b) / 2, v.b - 2]) for (const x of [v.l + 2, (v.l + v.r) / 2, v.r - 2]) {
             if (x < 0 || y < 0 || x >= W || y >= H) continue;
-            const top = document.elementFromPoint(x, y);
-            let cov = false;
-            if (top && top !== el && !el.contains(top) && !top.contains(el)) {
-              for (let e: Element | null = top; e && e !== document.body; e = e.parentElement) {
-                if (e.contains(el)) break;
-                // Under a bar only; behind an open menu is not 'covered' (the menu is the picture)
-                if (e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) break;
-                if (barEls.includes(e as HTMLElement)) { cov = true; by = by || `${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]}`; break; }
-              }
-            }
+            // Covered = the point is inside the header's or tab bar's own box and the line isn't part of
+            // that bar (r5: the open menu's backdrop sits inside the header element, so walking up from
+            // it made every line on the page 'under the header')
+            const bar = barRects.find((br) => x >= br.left && x <= br.right && y >= br.top && y <= br.bottom);
+            const cov = !!bar && !barEls.some((be) => be.contains(el));
+            if (cov) by = by || 'a bar';
             if (cov) covered++; else seen++;
           }
           if (covered) { avoid.push(v); if (avoidWhat.length < 3) avoidWhat.push(`"${(node.textContent ?? '').trim().slice(0, 16)}" ${Math.round(v.t)}..${Math.round(v.b)} under ${by}`); }
@@ -1211,7 +1210,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const crosses = (set: R[], axis: 'y' | 'x', at: number) => set.some((it) => axis === 'y'
         ? it.r > l && it.l < r && it.t < at - 0.5 && it.b > at + 0.5
         : it.b > t && it.t < b && it.l < at - 0.5 && it.r > at + 0.5);
-      const cardsCross = (axis: 'y' | 'x', at: number) => crosses(cards, axis, at);
+      // Sides: only a card narrower than the page counts (a page-wide container would push the edge out
+      // to the rail)
+      const cardsCross = (axis: 'y' | 'x', at: number) => crosses(axis === 'y' ? cards : cards.filter((cd) => cd.r - cd.l < W * 0.6), axis, at);
       const avoidIn = (lo: number, hi: number, axis: 'y' | 'x') => avoid.some((a) => axis === 'y'
         ? a.r > l && a.l < r && a.b > lo && a.t < hi
         : a.b > t && a.t < b && a.r > lo && a.l < hi);
