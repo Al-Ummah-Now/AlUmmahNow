@@ -6,6 +6,7 @@ import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
 import { Check, ChevronsUpDown, ExternalLink, Menu, Plus, Radio, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PriorityStrip } from '@/components/ui/PriorityStrip';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -161,6 +162,9 @@ function Rail({ locale, role, channel, segments, features, onNavigate, className
 }
 
 /** The Studio shell: left rail, phone drawer, tabs of the current page. */
+/** One Studio content tab (and its More button) */
+const STUDIO_TAB = 'flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
 export function StudioFrame({ locale, role, channel, features, children }: Props) {
   const { t } = useLanguage();
   const pathname = usePathname();
@@ -201,26 +205,33 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
           <p role="status" className="mb-4 rounded-md border border-border bg-muted p-3 text-sm text-foreground">{t.studio.channelHidden}</p>
         )}
         {item && tabs.length > 0 && (
-          // Phones: the tabs wrap onto a second row, never a tab half shown at the edge (owner rule,
-          // as Android #45 did for chips); wider screens keep one row
-          <nav aria-label={t.studio.tabsLabel} className="mb-4 flex flex-wrap gap-x-1 border-b border-border sm:flex-nowrap sm:overflow-x-auto" data-testid="studio-tabs">
-            {tabs.map((tab) => {
-              const current = segments[1] === tab.id;
-              return (
+          // One row: the tabs that fit, the rest under "More", the current tab always in the row
+          // (#1669: never a tab cut at the edge, never wrapped; as every tab strip on the site)
+          <nav aria-label={t.studio.tabsLabel} className="mb-4 flex border-b border-border" data-testid="studio-tabs">
+            <PriorityStrip
+              items={tabs.map((tab) => ({
+                id: tab.id,
+                label: t.studio.tabs[tab.id as keyof typeof t.studio.tabs],
+                href: legacyHref(locale, channel.id, `${item.id}/${tab.id}`) ?? `${base}/${item.id}/${tab.id}`,
+                current: segments[1] === tab.id,
+              }))}
+              testId="studio-tabs-strip"
+              moreLabel={t.common.moreTabs}
+              menuLabel={t.common.moreTabsMenu}
+              moreClassName={cn(STUDIO_TAB, 'border-transparent text-muted-foreground hover:text-foreground')}
+              rowProps={{ className: 'gap-x-1' }}
+              renderItem={(tab) => (
                 <Link
                   key={tab.id}
-                  href={legacyHref(locale, channel.id, `${item.id}/${tab.id}`) ?? `${base}/${item.id}/${tab.id}`}
-                  aria-current={current ? 'page' : undefined}
+                  href={tab.href!}
+                  aria-current={tab.current ? 'page' : undefined}
                   data-testid={`studio-tab-${tab.id}`}
-                  className={cn(
-                    'flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    current ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
+                  className={cn(STUDIO_TAB, tab.current ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
                 >
-                  {t.studio.tabs[tab.id as keyof typeof t.studio.tabs]}
+                  {tab.label}
                 </Link>
-              );
-            })}
+              )}
+            />
           </nav>
         )}
         {children}
