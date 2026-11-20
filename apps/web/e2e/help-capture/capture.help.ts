@@ -710,12 +710,13 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
           if (cs.overflowY === 'visible' && cs.overflowX === 'visible') continue;
           const ar = a.getBoundingClientRect();
           const abox = { x: ar.x, y: ar.y, w: ar.width, h: ar.height };
-          // A scrolling list cuts at its edge; a clipping box (overflow hidden, e.g. a one-line logo)
-          // only cuts letters when the text box runs more than 3 px past it (the box includes the
-          // font's ascent and descent, taller than the letters)
+          // A scrolling list cuts at its edge; a clipping box (overflow hidden, e.g. the one-line logo)
+          // only cuts letters when its content really overflows it (more than 3 px of layout past
+          // it), not when the font's box (ascent and descent, taller in Arabic) pokes past
           const scrolls = /auto|scroll/.test(cs.overflowY);
           const over = Math.max(abox.y - box.y, box.y + box.h - (abox.y + abox.h));
-          if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && over > (scrolls ? 0 : 3)) { out.push(`text ${box.what} is cut by its list's edge`); break; }
+          const clips = scrolls ? over > 0 : over > 0 && a.scrollHeight > a.clientHeight + 3;
+          if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && clips) { out.push(`text ${box.what} is cut by its list's edge`); break; }
         }
         // Half covered by another element (sampled across the line, inside the frame)
         const ys = [box.y + 2, box.y + box.h / 2, box.y + box.h - 2];
@@ -758,7 +759,9 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
     for (const v of nums) {
       if (!contains(frame, v)) out.push(`number ${v.what} is cut by the picture's edge`);
-      const own = ringOf(v.what);
+      // A number-only marker has no outline: its own control stands in for it
+      const target = document.querySelector(`[data-help-target="${v.what}"]`);
+      const own = ringOf(v.what) ?? (target ? fromRect(target.getBoundingClientRect()) : undefined);
       const home = own && bars.find((bar) => contains(bar, grow(own, 2)));
       if (straddlesBar(v) && !(home && bars.every((bar) => bar === home || !hit(v, bar)))) out.push(`number ${v.what} sits on the header or tab bar's edge`);
       const t = texts.find((x) => hit(grow(v, CLEAR), x));
@@ -867,6 +870,8 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const avoid: R[] = [];
       const W = innerWidth;
       const H = innerHeight;
+      // Lines of text alone: a crop edge never crosses one, even where every line crosses a picture
+      const words: R[] = [];
       const add = (b: DOMRect) => { if (b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < H && b.right > 0 && b.left < W) items.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); };
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -893,7 +898,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           }
           if (!seen) continue;
           if (covered) avoid.push({ l: b.left, t: b.top, r: b.right, b: b.bottom });
-          else add(b);
+          else { add(b); words.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); }
         }
       }
       document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => {
@@ -929,18 +934,23 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const avoidIn = (lo: number, hi: number, axis: 'y' | 'x') => avoid.some((a) => axis === 'y'
         ? a.r > l && a.l < r && a.b > lo && a.t < hi
         : a.b > t && a.t < b && a.r > lo && a.l < hi);
-      const pick = (want: number, min: number, max: number, ok: (v: number) => boolean, outward: number) => {
+      const wordsH = (y: number) => words.some((it) => it.r > l && it.l < r && it.t < y - 0.5 && it.b > y + 0.5);
+      const wordsV = (x: number) => words.some((it) => it.b > t && it.t < b && it.l < x - 0.5 && it.r > x + 0.5);
+      const pick = (want: number, min: number, max: number, ok: (v: number) => boolean, outward: number, okText?: (v: number) => boolean) => {
         // Outward from `want` first (more room), then inward toward the core
         for (let v = want; v >= min && v <= max; v += outward) if (ok(v)) return v;
         for (let v = want - outward; v >= min && v <= max; v -= outward) if (ok(v)) return v;
+        // No line clear of everything (pictures run past the core to the window's edge): the nearest
+        // line that cuts no text (audit: a crop through the side rail's "Community guidelines")
+        if (okText) for (let d = 0; d <= max - min; d++) for (const v of [want + d * outward, want - d * outward]) if (v >= min && v <= max && okText(v)) return v;
         return want;
       };
       for (let pass = 0; pass < 2; pass++) {
-        t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, core.t, (y) => !crossesH(y) && !avoidIn(y, core.t, 'y'), -1);
-        b = pick(Math.min(bottomLimit, Math.max(b, core.b)), core.b, bottomLimit, (y) => !crossesH(y) && !avoidIn(core.b, y, 'y'), 1);
+        t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, core.t, (y) => !crossesH(y) && !avoidIn(y, core.t, 'y'), -1, (y) => !wordsH(y) && !avoidIn(y, core.t, 'y'));
+        b = pick(Math.min(bottomLimit, Math.max(b, core.b)), core.b, bottomLimit, (y) => !crossesH(y) && !avoidIn(core.b, y, 'y'), 1, (y) => !wordsH(y) && !avoidIn(core.b, y, 'y'));
         if (l > 0 || r < W) {
-          l = pick(Math.max(0, Math.min(l, core.l)), 0, core.l, (x) => !crossesV(x) && !avoidIn(x, core.l, 'x'), -1);
-          r = pick(Math.min(W, Math.max(r, core.r)), core.r, W, (x) => !crossesV(x) && !avoidIn(core.r, x, 'x'), 1);
+          l = pick(Math.max(0, Math.min(l, core.l)), 0, core.l, (x) => !crossesV(x) && !avoidIn(x, core.l, 'x'), -1, (x) => !wordsV(x) && !avoidIn(x, core.l, 'x'));
+          r = pick(Math.min(W, Math.max(r, core.r)), core.r, W, (x) => !crossesV(x) && !avoidIn(core.r, x, 'x'), 1, (x) => !wordsV(x) && !avoidIn(core.r, x, 'x'));
         }
       }
       return { x: l, y: t, width: r - l, height: b - t };
