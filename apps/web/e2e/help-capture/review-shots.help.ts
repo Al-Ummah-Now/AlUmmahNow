@@ -112,15 +112,22 @@ async function backdateDemos(channelId: string, videos: Array<{ id: string; age:
   for (const v of videos) {
     const ms = now - v.age * DAY - 5 * 3_600_000;
     // The stored video (R2): its key is found by listing
+    // The video's own record: a key holding its id whose JSON is that video (not a side record)
     let key = '';
-    for (const prefix of [v.id, `videos/${v.id}`]) {
+    let obj: Record<string, unknown> = {};
+    const seen: string[] = [];
+    for (const prefix of [v.id, `videos/${v.id}`, `video/${v.id}`]) {
       const list = (await (await fetch(`${CONTROL}/__stack/r2/videos?prefix=${encodeURIComponent(prefix)}`)).json().catch(() => ({}))) as { keys?: string[] };
-      key = (list.keys ?? []).find((k) => k.endsWith('.json') && k.includes(v.id)) ?? '';
+      for (const k of list.keys ?? []) {
+        seen.push(k);
+        const got = (await (await fetch(`${CONTROL}/__stack/r2/videos/${k.split('/').map(encodeURIComponent).join('/')}`)).json().catch(() => null)) as Record<string, unknown> | null;
+        if (got && got.id === v.id && 'dateCreated' in got) { key = k; obj = got; break; }
+      }
       if (key) break;
     }
+    if (!key) notes.push(`R2 keys seen for ${v.id}: ${seen.join(', ') || 'none'}`);
     if (key) {
-      const obj = (await (await fetch(`${CONTROL}/__stack/r2/videos/${key}`)).json()) as Record<string, unknown>;
-      const put = await fetch(`${CONTROL}/__stack/r2/videos/${key}`, { method: 'PUT', body: JSON.stringify(backdate(obj, ms)) });
+      const put = await fetch(`${CONTROL}/__stack/r2/videos/${key.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body: JSON.stringify(backdate(obj, ms)) });
       if (!put.ok) problems.push(`R2 back-date ${v.id}: ${put.status}`);
     } else problems.push(`no R2 object found for video ${v.id}`);
     await sql('al-ummah-now-search', `UPDATE content_ownership SET created_at = ${ms}, views = ${v.views} WHERE kind = 'video' AND id = ${q(v.id)}`);
@@ -188,6 +195,7 @@ let creator: Creator;
 const digits: Record<string, string[]> = {};
 const strips: Record<string, unknown> = {};
 const problems: string[] = [];
+const notes: string[] = [];
 
 test.describe.configure({ mode: 'serial' });
 
@@ -412,5 +420,7 @@ test('every shot was made', () => {
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'digits.json'), JSON.stringify(digits, null, 2));
   writeFileSync(join(OUT, 'strips.json'), JSON.stringify(strips, null, 2));
+  writeFileSync(join(OUT, 'notes.txt'), notes.join('
+'));
   expect(problems, problems.join('\n')).toEqual([]);
 });
