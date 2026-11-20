@@ -299,6 +299,8 @@ export async function ensureUnsubscribed(user: AuthUser, viewerChannelId: string
 export interface TabConfig {
   defaultTab: string;
   tabs: Array<{ id: string; visible: boolean; position: number; name?: string; nameLocalized?: Record<string, string>; type?: string }>;
+  /** Read only (GET): public items per tab; visitors don't see an empty Shorts, Live, Playlists, Community or Channels tab (#1669) */
+  counts?: Record<string, number>;
 }
 
 export async function getTabConfig(channelId: string): Promise<TabConfig> {
@@ -317,8 +319,10 @@ export async function putTabConfig(user: AuthUser, channelId: string, config: Ta
 }
 
 /** Visible tab ids in display order */
-export function visibleTabIds(config: TabConfig): string[] {
-  return [...config.tabs].filter((t) => t.visible).sort((a, b) => a.position - b.position).map((t) => t.id);
+/** The tabs the config shows; `visitor`: without the ones a visitor doesn't see while empty (#1669) */
+export function visibleTabIds(config: TabConfig, opts: { visitor?: boolean } = {}): string[] {
+  const empty = (id: string) => opts.visitor && ['shorts', 'live', 'playlists', 'community', 'channels'].includes(id) && config.counts?.[id] === 0;
+  return [...config.tabs].filter((t) => t.visible && !empty(t.id)).sort((a, b) => a.position - b.position).map((t) => t.id);
 }
 
 // ---------------------------------------------------------------------------

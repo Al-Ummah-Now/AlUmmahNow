@@ -152,6 +152,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
   channelSections: CHANNEL_SECTIONS_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
+    /** The overflow menu at the end of a tab or chip row that does not fit (#1669) */
+    moreTabs: 'More',
+    moreTabsMenu: 'More tabs',
     appName: 'Al Ummah Now',
     loading: 'Loading...',
     error: 'Error',
