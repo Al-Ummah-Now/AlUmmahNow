@@ -7,7 +7,7 @@
  * Each catalogue string that puts a count before a noun uses a plural select; the guard below
  * checks every one of them, and the tables pin the exact wording of each noun and code path.
  */
-import { AR_TRANSLATIONS, EN_TRANSLATIONS, fillTemplate, formatCountNoun, type CountNoun } from '@al-ummah/shared-types';
+import { AR_TRANSLATIONS, EN_TRANSLATIONS, compactNumber, fillTemplate, formatCompact, formatCountNoun, type CountNoun } from '@al-ummah/shared-types';
 import { embedStrings } from '@/lib/embed/strings';
 import { getTranslations } from '@/lib/video/i18n/utils/getTranslations';
 import { charactersLeft, charactersMax, charactersOver } from '@/lib/format/characters';
@@ -208,3 +208,15 @@ describe('#1666: counts built in code', () => {
     expect(formatScheduledTime(later(-1), 'en', now)).toBe('1 minute ago');
   });
 });
+
+describe('compact counts: English cuts like Arabic (same number in both languages)', () => {
+  const cases: Array<[number, string, string]> = [[33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'], [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ مليون'], [15_000_000, '15M', '١٥ مليون']];
+
+  it.each(cases)('%d → %s / %s', (n, en, ar) => {
+    expect(formatCompact('en', n)).toBe(en);
+    expect(sp(formatCompact('ar', n))).toBe(ar);
+    expect(compactNumber('en')(n)).toBe(en);
+    expect(formatCountNoun('en', n, 'view', { compact: true })).toBe(`${en} views`);
+  });
+});
+

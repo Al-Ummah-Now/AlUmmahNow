@@ -151,7 +151,7 @@ test('tick labels (no noun) use the same scale words', () => {
   assert.deepEqual(ticks.map((n) => f.formatCompact('en', n)), ['500', '1K', '1.5K', '2K', '3K', '2M']);
 });
 
-test('formatCompact: English is unchanged', () => {
+test('formatCompact: English keeps its K/M suffixes', () => {
   assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '10', '11', '100', '1K', '1.3K', '2K', '2.5K', '3K', '8K', '11K', '1M', '2M', '3M', '15M']);
 });
 
@@ -179,3 +179,18 @@ test('fillTemplate plural: text around it, other placeholders inside, formatted 
   assert.equal(f.fillTemplate('en', 'last {#14} days, {count, plural, one {# time} other {# times}}', { count: 1 }), 'last 14 days, 1 time');
   assert.equal(f.fillTemplate('en', VIEWS_EN), '{count} views');
 });
+
+test('formatCompact: English cuts like Arabic, so both show the same number', () => {
+  const cases: Array<[number, string, string]> = [
+    [33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'],
+    [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ مليون'], [15_000_000, '15M', '١٥ مليون'],
+  ];
+  for (const [n, en, ar] of cases) {
+    assert.equal(f.formatCompact('en', n), en, `en ${n}`);
+    assert.equal(sp(f.formatCompact('ar', n)), ar, `ar ${n}`);
+  }
+  assert.equal(f.formatCompact('en', 1_999_999_999), '1.9B');
+  assert.equal(f.formatCompact('en', -2_999), '-2.9K');
+  assert.equal(f.formatCompact('en', 999), '999');
+});
+

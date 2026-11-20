@@ -19,7 +19,8 @@ describe('formatViewerCount', () => {
 
     it('formats thousands in compact mode', () => {
       expect(formatViewerCountEnglish(1234, 'compact')).toBe('1.2K');
-      expect(formatViewerCountEnglish(1567, 'compact')).toBe('1.6K');
+      // Cut, not rounded, like Arabic (owner 2026-11-20): both languages show the same number
+      expect(formatViewerCountEnglish(1567, 'compact')).toBe('1.5K');
       expect(formatViewerCountEnglish(15000, 'compact')).toBe('15K');
     });
 

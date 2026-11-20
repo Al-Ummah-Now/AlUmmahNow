@@ -54,3 +54,16 @@ describe('admin compact counts', () => {
     ]);
   });
 });
+
+describe('admin compact counts: English cuts like Arabic', () => {
+  const cases: Array<[number, string, string]> = [[33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'], [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ مليون'], [15_000_000, '15M', '١٥ مليون']];
+  for (const [n, en, ar] of cases) {
+    it(`${n} → ${en} / ${ar}`, () => {
+      assert.equal(compactNumber('en')(n), en);
+      assert.equal(opsFormats('en').count(n), en);
+      assert.equal(visitFormats('en').axis(n), en);
+      assert.equal(sp(compactNumber('ar')(n)), ar);
+    });
+  }
+});
+

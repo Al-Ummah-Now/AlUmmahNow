@@ -167,13 +167,25 @@ export interface CompactOptions {
 }
 
 /**
- * 4200 -> "4.2K" / «٤٫٢ ألف». Arabic cuts to `maximumFractionDigits` decimals and makes the
- * scale word agree with the number shown: «ألف», «ألفان», «٣ آلاف», «١٫٣ ألف», «مليون».
- * With `beforeNoun`, exactly two is «ألفا»/«مليونا»/«مليارا». English is unaffected.
+ * `value` cut (not rounded) at the scale the compact form shows it in, so every language shows
+ * the same number: 33,600 → 33.6K, 2,999 → 2.9K (Intl would say "3K"), 999,999 → 999.9K.
+ */
+function truncateCompact(value: number, maximumFractionDigits: number): number {
+  const safe = Number.isFinite(value) ? value : 0;
+  const abs = Math.abs(safe);
+  const size = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : abs >= 1e6 ? 1e6 : abs >= 1e3 ? 1e3 : 1;
+  return Math.sign(safe) * truncate(abs / size, maximumFractionDigits) * size;
+}
+
+/**
+ * 4200 -> "4.2K" / «٤٫٢ ألف». Every language cuts to `maximumFractionDigits` decimals (owner
+ * 2026-11-20, as Android and Apple do): 1,299 is "1.2K" and «١٫٢ ألف», never "1.3K". Arabic also
+ * makes the scale word agree with the number shown: «ألف», «ألفان», «٣ آلاف», «١٫٣ ألف»,
+ * «مليون»; with `beforeNoun`, exactly two is «ألفا»/«مليونا»/«مليارا». English keeps K/M/B.
  */
 export function formatCompact(locale: FormatLocale, value: number, maximumFractionDigits = 1, options: CompactOptions = {}): string {
   if (isArabicLocale(locale)) return formatCompactArabic(value, maximumFractionDigits, options.beforeNoun === true);
-  return formatNumber(locale, value, { notation: 'compact', maximumFractionDigits });
+  return formatNumber(locale, truncateCompact(value, maximumFractionDigits), { notation: 'compact', maximumFractionDigits });
 }
 
 /** A ratio (0.42) as a percentage: "42%" / «٤٢٪». */
