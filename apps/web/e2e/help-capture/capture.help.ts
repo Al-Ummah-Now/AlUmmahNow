@@ -1419,8 +1419,9 @@ const SCENES: Scene[] = [
       const exportCard = page.locator('section[aria-labelledby="privacy-export"]');
       const deleteCard = page.locator('section').filter({ has: page.getByRole('heading', { name: /^(Delete your data|حذف بياناتك)$/ }) }).first();
       await exportCard.scrollIntoViewIfNeeded();
-      // The two cards, never their headings alone
-      return [[exportCard, deleteCard], []];
+      // The two cards, never their headings alone; the picture is those cards (the whole window put the
+      // Arabic rail's icon right in the gap under them, r5)
+      return [[exportCard, deleteCard], [exportCard, deleteCard]];
     },
   },
   {
