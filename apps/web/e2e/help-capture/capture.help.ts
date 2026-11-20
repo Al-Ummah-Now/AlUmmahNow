@@ -473,7 +473,6 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const bare: boolean[] = [];
     for (const [i, target] of targets.entries()) {
       const r = rects[i];
-      const n = target.dataset.helpTarget;
       const mine = (b: Box) => (b.el ? target.contains(b.el) : false);
       const ownText = texts.filter(mine);
       const otherText = texts.filter((t) => !mine(t));
