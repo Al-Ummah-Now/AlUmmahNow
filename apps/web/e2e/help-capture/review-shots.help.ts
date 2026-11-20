@@ -129,7 +129,7 @@ each('playlists', async (page, lang, tag) => {
 });
 
 // Scroll so `el` sits mid-viewport, then nudge (up to 60 px) until no line of text is half cut by the
-// window's edge or half under the header or tab bar (audit r1: the title under the header, the email
+// window's edge or half under the header or tab bar (up to 150 px, the field kept in the middle half) (audit r1: the title under the header, the email
 // cut at the bottom)
 async function centre(page: Page, selector: string): Promise<void> {
   await page.evaluate((sel) => {
@@ -168,9 +168,11 @@ async function centre(page: Page, selector: string): Promise<void> {
       return false;
     };
     const y0 = window.scrollY;
-    for (const d of [0, ...Array.from({ length: 30 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
+    // The field stays in the middle half of the window
+    const keep = () => { const r2 = el.getBoundingClientRect(); return r2.top > innerHeight * 0.25 && r2.bottom < innerHeight * 0.75; };
+    for (const d of [0, ...Array.from({ length: 75 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
       window.scrollTo(0, y0 + d);
-      if (!cut()) break;
+      if (keep() && !cut()) break;
     }
   }, selector);
   await page.waitForTimeout(200);
