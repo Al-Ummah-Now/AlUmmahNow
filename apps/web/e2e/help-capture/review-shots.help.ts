@@ -135,8 +135,13 @@ async function centre(page: Page, selector: string): Promise<void> {
   await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    window.scrollBy(0, r.top + r.height / 2 - innerHeight / 2);
+    // The element that actually scrolls (the page, or an inner scroll box around the field)
+    let scroller: Element = document.scrollingElement ?? document.documentElement;
+    for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (/(auto|scroll)/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 2) { scroller = e; break; }
+    }
+    el.scrollIntoView({ block: 'center' });
     const bars = [...document.querySelectorAll<HTMLElement>('body *')].filter((e) => {
       const pos = getComputedStyle(e).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
@@ -145,7 +150,8 @@ async function centre(page: Page, selector: string): Promise<void> {
     }).map((e) => e.getBoundingClientRect());
     const top = Math.max(0, ...bars.filter((b) => b.top <= 1).map((b) => b.bottom));
     const bottom = Math.min(innerHeight, ...bars.filter((b) => b.bottom >= innerHeight - 1).map((b) => b.top));
-    const cut = () => {
+    const cut = (): number => {
+      let n = 0;
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const p = node.parentElement;
@@ -157,23 +163,32 @@ async function centre(page: Page, selector: string): Promise<void> {
         range.selectNodeContents(node);
         for (const b of range.getClientRects()) {
           if (b.height <= 0 || b.width <= 0) continue;
-          if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) return true;
+          if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) n++;
         }
-        // Form fields too (their value is not a text node)
       }
       for (const f of document.querySelectorAll('input, select, textarea')) {
         const b = f.getBoundingClientRect();
-        if (b.height > 0 && ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom))) return true;
+        if (b.height > 0 && ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom))) n++;
       }
-      return false;
+      // Buttons and other controls too
+      for (const f of document.querySelectorAll('button, a[href]')) {
+        const b = f.getBoundingClientRect();
+        const pos = getComputedStyle(f).position;
+        if (b.height > 0 && pos !== 'fixed' && !f.closest('header, nav, [role="banner"]') && ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom))) n++;
+      }
+      return n;
     };
-    const y0 = window.scrollY;
-    // The field stays in the middle half of the window
-    const keep = () => { const r2 = el.getBoundingClientRect(); return r2.top > innerHeight * 0.25 && r2.bottom < innerHeight * 0.75; };
-    for (const d of [0, ...Array.from({ length: 75 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
-      window.scrollTo(0, y0 + d);
-      if (keep() && !cut()) break;
+    const y0 = scroller.scrollTop;
+    let best = y0;
+    let bestN = Infinity;
+    for (const d of [0, ...Array.from({ length: 100 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
+      scroller.scrollTop = y0 + d;
+      if (!keep()) continue;
+      const n = cut();
+      if (n < bestN) { bestN = n; best = scroller.scrollTop; }
+      if (n === 0) break;
     }
+    scroller.scrollTop = best;
   }, selector);
   await page.waitForTimeout(200);
 }
