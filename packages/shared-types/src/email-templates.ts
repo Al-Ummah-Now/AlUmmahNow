@@ -98,7 +98,8 @@ export interface ResolvedEmailCopy {
   copy: EmailCopy;
 }
 
-export type EmailTemplateVersionAction = 'seed' | 'save' | 'restore' | 'undo';
+/** seed: the first version (migration 0036); update: a wording fix shipped by a migration (by 'system'). */
+export type EmailTemplateVersionAction = 'seed' | 'save' | 'restore' | 'undo' | 'update';
 
 export interface EmailTemplateState {
   key: EmailTemplateKey;
@@ -128,7 +129,11 @@ export interface EmailTemplateIssue {
   max?: number;
 }
 
-/** The creator invite as it was written in AlUmmahNowAuth apps/auth/src/invites/email.ts: the seed of version 1. */
+/**
+ * The creator invite's default copy: version 1 (migration 0036, the words Auth sent before the copy was
+ * editable) with the sign-in sentences (how, expires) updated by migration 0045 for the one-time link that
+ * signs the person in (AlUmmahNowAuth #434). The same words as Auth's built-in copy.
+ */
 export const CREATOR_INVITE_SEED_COPY: Record<EmailTemplateLang, EmailCopy> = {
   en: {
     subject: "You're invited to Al Ummah Now",
@@ -141,12 +146,12 @@ export const CREATOR_INVITE_SEED_COPY: Record<EmailTemplateLang, EmailCopy> = {
     createdMany: 'It comes with the channels {channels}, ready for you to manage.',
     transferredOne: 'The channel {channels} has been moved to your account.',
     transferredMany: 'The channels {channels} have been moved to your account.',
-    how: 'Sign in with {email}. If you have not set a password yet, choose "Create account" and we will email you a code to confirm it is you.',
+    how: "Accept the invite to sign in as {email}. You don't need a password: the button signs you in, and you can add a passkey (Face ID or fingerprint) right after.",
     button: 'Accept the invite',
     videoIntro: 'They also shared this video with you:',
     videoAlt: 'Play "{title}" on Al Ummah Now',
     noteLabel: 'Note from the admin',
-    expires: 'This link works until {expires}. After that you can still sign in with this email address.',
+    expires: 'This link works once, until {expires}. If it has expired or was already used, open it anyway and ask for a new one.',
     reason: "You got this email because an Al Ummah Now admin invited this address to a creator account. If you weren't expecting it, you can ignore it.",
   },
   ar: {
@@ -160,12 +165,12 @@ export const CREATOR_INVITE_SEED_COPY: Record<EmailTemplateLang, EmailCopy> = {
     createdMany: 'ويضم القنوات {channels} جاهزةً لتديرها.',
     transferredOne: 'ونُقلت إليه القناة {channels}.',
     transferredMany: 'ونُقلت إليه القنوات {channels}.',
-    how: 'سجّل الدخول باستخدام {email}. إن لم تكن قد عيّنت كلمة مرور بعد، فاختر «إنشاء حساب» وسنرسل إليك رمزًا للتأكد من أنك صاحب البريد.',
+    how: 'اقبل الدعوة لتسجيل الدخول باسم {email}. لا تحتاج إلى كلمة مرور: يسجّل الزر دخولك، ويمكنك بعدها مباشرة إضافة مفتاح مرور (بصمة الوجه أو الإصبع).',
     button: 'قبول الدعوة',
     videoIntro: 'وشارك معك هذا المرئي:',
     videoAlt: 'شغّل «{title}» على الأمة الآن',
     noteLabel: 'ملاحظة من المشرف',
-    expires: 'يعمل هذا الرابط حتى {expires}. وبعد ذلك يمكنك تسجيل الدخول بهذا البريد الإلكتروني.',
+    expires: 'يعمل هذا الرابط مرة واحدة حتى {expires}. إن انتهت صلاحيته أو استُخدم من قبل، فافتحه واطلب رابطًا جديدًا.',
     reason: 'وصلتك هذه الرسالة لأن أحد مشرفي الأمة الآن دعا هذا العنوان إلى حساب صانع محتوى. إن لم تكن تتوقعها، فيمكنك تجاهلها.',
   },
 };

@@ -9,9 +9,19 @@ import { join } from 'node:path';
 // Tests run from apps/admin-api (pnpm test)
 const MIGRATIONS = join(process.cwd(), 'migrations');
 
-export function sqliteD1(migrations: string[] = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()): D1Database {
+/**
+ * `beforeMigration(file, sql)` runs raw SQL just before a migration file is applied: a test can put the
+ * data a later migration meets in production in place (e.g. an admin's edit made before a data fix).
+ */
+export function sqliteD1(
+  migrations: string[] = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort(),
+  beforeMigration?: (file: string, sql: (statement: string) => void) => void,
+): D1Database {
   const db = new DatabaseSync(':memory:');
-  for (const file of migrations) db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
+  for (const file of migrations) {
+    beforeMigration?.(file, (statement) => db.exec(statement));
+    db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
+  }
   const exec = (sql: string, args: unknown[]) => {
     // D1 refuses LIKE/GLOB patterns over 50 bytes (SQLITE_MAX_LIKE_PATTERN_LENGTH); node:sqlite allows
     // 50,000, so a bound pattern that only works here would fail in production

@@ -37,6 +37,7 @@
 --   apps/admin-api/migrations/0042_seed_profile_public.sql
 --   apps/admin-api/migrations/0043_creator_invites_tier.sql
 --   apps/admin-api/migrations/0044_creator_invites_tier_and_video.sql
+--   apps/admin-api/migrations/0045_invite_wording_link_flow.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
