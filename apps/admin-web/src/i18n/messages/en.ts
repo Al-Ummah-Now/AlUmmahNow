@@ -5537,6 +5537,7 @@ const en = {
     restoreFailed: 'The version could not be restored. Try again.',
     actions: {
       seed: 'Original copy',
+      update: 'Updated by Al Ummah Now',
       save: 'Saved',
       restore: 'Restored version {version}',
       undo: 'Undo to version {version}',

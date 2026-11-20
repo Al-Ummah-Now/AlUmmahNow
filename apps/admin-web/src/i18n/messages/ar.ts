@@ -5536,6 +5536,7 @@ const ar: Messages = {
     restoreFailed: 'تعذّرت استعادة الإصدار. حاول مرة أخرى.',
     actions: {
       seed: 'النص الأصلي',
+      update: 'حدّثته الأمة الآن',
       save: 'حُفظ',
       restore: 'استعادة الإصدار {version}',
       undo: 'تراجع إلى الإصدار {version}',
