@@ -238,6 +238,10 @@ async function settle(page: Page, path: string, lang: Lang): Promise<void> {
 
 async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise<Locator> {
   const menu = page.getByTestId('nav-menu');
+  // The page at its top first: an open menu locks the page's scroll, so a page left part-scrolled (a
+  // title half under the header) could not be fixed afterwards
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(async () => {
     if (!(await menu.isVisible())) await page.getByTestId('nav-menu-trigger').click();
     await expect(menu).toBeVisible({ timeout: 2000 });
@@ -653,7 +657,11 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       for (const b of range.getClientRects()) {
         if (b.width <= 0 || b.height <= 0) continue;
         const box = fromRect(b, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
-        if (!hit(box, frame) || hidden(box, el)) continue;
+        // Less than a pixel of it inside the frame shows nothing (a tab strip's next tab starting at the
+        // screen's edge): not a line in the picture
+        const inW = Math.min(box.x + box.w, frame.x + frame.w) - Math.max(box.x, frame.x);
+        const inH = Math.min(box.y + box.h, frame.y + frame.h) - Math.max(box.y, frame.y);
+        if (inW < 1 || inH < 1 || hidden(box, el)) continue;
         texts.push(box);
         // Cut by the frame's edge
         if (!contains(frame, box)) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
