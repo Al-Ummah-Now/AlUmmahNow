@@ -244,6 +244,13 @@ each('studio', async (page, lang, tag) => {
   });
   mkdirSync(join(OUT, 'studio'), { recursive: true });
   writeFileSync(join(OUT, 'studio', `probe-${tag}.json`), JSON.stringify(probe, null, 2));
+  // The header search's placeholder (shared search box): on phones the search sheet, opened
+  if (tag.includes('phone')) {
+    await page.getByTestId('header-search-open').click();
+    await expect(page.getByTestId('header-search-sheet')).toBeVisible();
+    await page.waitForTimeout(400);
+  }
+  await shoot(page, 'search', `header-search-${tag}`, lang);
 });
 
 test('every shot was made', () => {
