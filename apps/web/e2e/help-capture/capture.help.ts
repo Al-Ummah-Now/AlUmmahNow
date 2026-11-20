@@ -347,6 +347,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const h = Math.min(b.height, fs * 0.8);
       return { x: b.x, y: b.y + (b.height - h) / 2, w: b.width, h };
     };
+    // Text a reader can't see: screen-reader-only labels (1 px boxes, clipped) on icon-only buttons
+    const srOnly = (el: Element | null) => {
+      for (let e = el; e && e !== document.body; e = e.parentElement) {
+        const b = e.getBoundingClientRect();
+        const cs = getComputedStyle(e);
+        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && cs.clipPath !== 'none' && /inset\(50%/.test(cs.clipPath))) return true;
+      }
+      return false;
+    };
     const allText: Box[] = [];
     // ...and the sticky header, for page text scrolled under it
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"], [role="banner"], body > header, .ah')].filter(visible);
@@ -365,7 +374,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           const r = ov.getBoundingClientRect();
           return cx > r.left && cx < r.right && cy > r.top && cy < r.bottom && !ov.contains(node.parentElement);
         });
-        if (!behind) allText.push({ ...glyphBox(b, node.parentElement), what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el: node.parentElement });
+        if (!behind && !srOnly(node.parentElement)) allText.push({ ...glyphBox(b, node.parentElement), what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el: node.parentElement });
       }
     }
     // Pictures, icons and checkboxes anywhere on screen: a number never sits on one (audit r2: ① on
@@ -373,6 +382,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const pictures: Box[] = [...document.querySelectorAll<HTMLElement>('img, svg, input[type="checkbox"], input[type="radio"], [role="img"], span, div')]
       .filter((el) => {
         if (!visible(el) || el.closest('[data-help-marker]')) return false;
+        // Not pictures behind an open menu or dialog (page images under the account menu)
+        const pb = el.getBoundingClientRect();
+        const pcx = pb.x + pb.width / 2;
+        const pcy = pb.y + pb.height / 2;
+        if (overlays.some((ov) => { const r = ov.getBoundingClientRect(); return pcx > r.left && pcx < r.right && pcy > r.top && pcy < r.bottom && !ov.contains(el); })) return false;
         const tag = el.tagName.toLowerCase();
         const b = el.getBoundingClientRect();
         if (b.bottom < 0 || b.top > window.innerHeight) return false;
@@ -404,7 +418,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const ownText: Box[] = [];
       const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
       for (let node = words.nextNode(); node; node = words.nextNode()) {
-        if (!node.textContent?.trim()) continue;
+        if (!node.textContent?.trim() || srOnly(node.parentElement)) continue;
         const range = document.createRange();
         range.selectNodeContents(node);
         ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0).map((b) => glyphBox(b, node.parentElement)));
@@ -423,11 +437,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const outline = (g: number) => rect(Math.min(r.x - g, textL), Math.min(r.y - g, textT), Math.max(r.x + r.width + g, textR), Math.max(r.y + r.height + g, textB));
       const within = (t: Box, o: Box) => t.x >= o.x + IN && t.y >= o.y + IN && t.x + t.w <= o.x + o.w - IN && t.y + t.h <= o.y + o.h - IN;
       const centreIn = (t: Box) => { const cx = t.x + t.w / 2; const cy = t.y + t.h / 2; return cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height; };
-      const mine = (t: Box) => (t.el ? target.contains(t.el) : centreIn(t));
+      const mine = (t: Box) => (t.el ? target.contains(t.el) : false) || centreIn(t);
       const foreign = allText.filter((t) => !mine(t));
       // Anything meaningful outside the target: other text, and pictures, icons, avatars and badges
       const foreignPics = pictures.filter((p) => !mine(p));
-      const near4 = (o: Box) => [...foreign, ...foreignPics].filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o));
+      // Text keeps 4 px from the band; a picture or icon only may not touch it (2 px halo)
+      const near4 = (o: Box) => [
+        ...foreign.filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o)),
+        ...foreignPics.filter((t) => hit(t, { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: o.h + 4 }) && !(t.x >= o.x + 4 && t.y >= o.y + 4 && t.x + t.w <= o.x + o.w - 4 && t.y + t.h <= o.y + o.h - 4)),
+      ];
       // Loose first (the usual gap), else as tight as the target's own letters allow
       let o = outline(gap);
       if (near4(o).length) o = outline(-1);
