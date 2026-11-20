@@ -394,6 +394,22 @@ each('channel-few', false, async (page, lang, tag) => {
   await shoot(page, 'channel-few', `channel-few-${tag}`, lang);
 });
 
+// Studio's content tabs (signed in, the full channel): one row + More since #1669 (before: wrapped, #1659)
+each('studio-tabs', true, async (page, lang, tag, device) => {
+  await settle(page, `/studio/${creator.channelIds[0]}/content/videos`, lang);
+  await expect(page.getByTestId('studio-tab-videos')).toBeVisible();
+  await expect(page.locator('[data-testid="studio-tabs-strip"][data-measuring]')).toHaveCount(0);
+  await page.waitForTimeout(500);
+  await shoot(page, 'studio-tabs', `studio-tabs-${tag}`, lang);
+  const more = page.getByTestId('studio-tabs-strip-more');
+  if (device !== 'desktop' && (await more.isVisible())) {
+    await more.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.waitForTimeout(300);
+    await shoot(page, 'studio-tabs', `studio-tabs-menu-${tag}`, lang);
+  }
+});
+
 each('search', false, async (page, lang, tag) => {
   await settle(page, `/search?q=${encodeURIComponent(lang === 'ar' ? 'الفوانيس' : 'lantern')}`, lang);
   await expect(page.getByTestId('search-type-all')).toBeVisible();
