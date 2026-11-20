@@ -236,6 +236,14 @@ each('studio', async (page, lang, tag) => {
   await settle(page, `/studio/${creator.channelIds[0]}/content/videos`, lang);
   await expect(page.getByTestId('studio-tab-videos')).toBeVisible();
   await shoot(page, 'studio', `studio-tabs-${tag}`, lang);
+  const probe = await page.getByTestId('studio-videos-search').evaluate((el) => {
+    const chain: string[] = [];
+    for (let e: Element | null = el; e; e = e.parentElement) if (e.hasAttribute('dir') || e === el) chain.push(`${e.tagName.toLowerCase()}[dir=${e.getAttribute('dir')}] ${getComputedStyle(e).direction}`);
+    const cs = getComputedStyle(el);
+    return { html: el.outerHTML, direction: cs.direction, textAlign: cs.textAlign, unicodeBidi: cs.unicodeBidi, chain };
+  });
+  mkdirSync(join(OUT, 'studio'), { recursive: true });
+  writeFileSync(join(OUT, 'studio', `probe-${tag}.json`), JSON.stringify(probe, null, 2));
 });
 
 test('every shot was made', () => {
