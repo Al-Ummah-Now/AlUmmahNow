@@ -91,7 +91,8 @@ export function PriorityStrip<T extends PriorityItem>({
     if (children.length !== items.length) return;
     const gap = parseFloat(getComputedStyle(rowRef.current).columnGap) || 0;
     setWidths({ items: children.map((c) => c.getBoundingClientRect().width), more: moreRef.current.getBoundingClientRect().width, gap });
-  });
+    // Again whenever the widths are reset (new labels, fonts in)
+  }, [widths, signature]);
 
   const recompute = useCallback(() => {
     const holder = holderRef.current;
