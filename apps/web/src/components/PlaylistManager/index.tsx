@@ -173,7 +173,9 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                     </span>
                   </p>
                 </div>
-                <div className="flex flex-none items-center gap-1">
+                {/* Phones: the actions get a row of their own, so the title and details keep the width
+                    (they were cut to "Wee…" with one word per line) */}
+                <div className="flex basis-full items-center justify-end gap-1 sm:flex-none sm:basis-auto" data-testid="playlist-manager-actions">
                   <Link href={editHref} className="b b-secondary b-sm" aria-label={`${t.playlist.editPlaylist}: ${title}`} title={t.playlist.editPlaylist}>
                     <Pencil className="h-4 w-4" aria-hidden="true" />
                     <span className="hidden sm:inline">{t.playlist.editPlaylist}</span>

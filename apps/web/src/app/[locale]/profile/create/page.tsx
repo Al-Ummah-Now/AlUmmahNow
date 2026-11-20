@@ -9,7 +9,7 @@ import { createProfile } from "@/lib/api/profiles";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneRegion, timezoneOptionLabel, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 import { hasAnyLanguage, primaryText, tabForMissing, trimPair } from '@/lib/localized-input';
 
@@ -284,7 +284,7 @@ const ProfileCreatePage = () => {
                   <optgroup key={region} label={localizedTimezoneRegion(region, lang)}>
                     {timezones.map((tz) => (
                       <option key={tz.value} value={tz.value}>
-                        {localizedTimezoneLabel(tz, lang)} ({tz.offset})
+                        {timezoneOptionLabel(tz, lang)}
                       </option>
                     ))}
                   </optgroup>

@@ -11,7 +11,7 @@ import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
-import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
+import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneRegion, timezoneOptionLabel, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import { userDisplayName } from '@/lib/display-name';
@@ -389,7 +389,7 @@ const ProfileEditPage = () => {
                   <optgroup key={region} label={localizedTimezoneRegion(region, locale)}>
                     {timezones.map((tz) => (
                       <option key={tz.value} value={tz.value}>
-                        {localizedTimezoneLabel(tz, locale)} ({tz.offset})
+                        {timezoneOptionLabel(tz, locale)}
                       </option>
                     ))}
                   </optgroup>
