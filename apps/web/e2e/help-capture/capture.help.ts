@@ -293,29 +293,64 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const uBottom = Math.max(...targets.map((b) => b.bottom)) + 40;
     if (uBottom > bottom) window.scrollBy(0, Math.min(uBottom - bottom, uTop - top));
     else if (uTop < top) window.scrollBy(0, uTop - top);
-    // A line of text cut by a bar's edge: move it fully clear when the targets stay in view
-    const t2 = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
-    const vTop = Math.min(...t2.map((b) => b.top)) - 12;
-    const vBottom = Math.max(...t2.map((b) => b.bottom)) + 12;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (!node.textContent?.trim()) continue;
-      const el = node.parentElement;
-      if (!el || bars.length === 0 || el.closest('[style*="position: fixed"]')) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      const b = range.getBoundingClientRect();
-      if (b.height <= 0) continue;
-      if (b.top < top && b.bottom > top) {
-        const down = b.bottom - top + 4; // hide it under the header
-        const up = top - b.top + 4; // or show it whole below the header
-        if (vBottom + up <= bottom) window.scrollBy(0, -up);
-        else if (vTop - down >= top) window.scrollBy(0, down);
-        break;
+    // No line of text left half under the header or tab bar: a small scroll (up to 48 px either way)
+    // that keeps the targets in view
+    const straddle = () => {
+      const tb = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
+      if (Math.min(...tb.map((b) => b.top)) < top + 4 || Math.max(...tb.map((b) => b.bottom)) > bottom - 4) return true;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const el = node.parentElement;
+        if (!node.textContent?.trim() || !el) continue;
+        const pos = getComputedStyle(el).position;
+        if (el.closest('[data-help-marker]') || pos === 'fixed' || pos === 'sticky') continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const b of range.getClientRects()) {
+          if (b.height <= 0) continue;
+          if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) {
+            // In a bar itself is fine
+            if (bars.some((br) => b.top >= br.top - 0.5 && b.bottom <= br.bottom + 0.5 && b.left >= br.left - 0.5 && b.right <= br.right + 0.5)) continue;
+            return true;
+          }
+        }
       }
+      return false;
+    };
+    const y0 = window.scrollY;
+    for (const d of [0, ...Array.from({ length: 24 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
+      window.scrollTo(0, y0 + d);
+      if (!straddle()) break;
     }
   });
   await page.waitForTimeout(150);
+  // A scrolling list that cuts an item at its own edge (the side rail's list): scrolled so no line of
+  // text straddles the list's top or bottom (audit r3: the rail's last item half under its edge)
+  await page.evaluate(() => {
+    const lists = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
+      const cs = getComputedStyle(el);
+      return /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 2 && el.getBoundingClientRect().height > 80;
+    });
+    const straddles = (list: HTMLElement) => {
+      const lr = list.getBoundingClientRect();
+      const walker = document.createTreeWalker(list, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const b of range.getClientRects()) {
+          if (b.height <= 0) continue;
+          if ((b.top < lr.top && b.bottom > lr.top) || (b.top < lr.bottom && b.bottom > lr.bottom)) return true;
+        }
+      }
+      return false;
+    };
+    for (const list of lists) {
+      const start = list.scrollTop;
+      for (let d = 0; d <= 240 && straddles(list); d += 2) list.scrollTop = start + d;
+      if (straddles(list)) for (let d = 2; d <= 240 && straddles(list); d += 2) list.scrollTop = Math.max(0, start - d);
+    }
+  });
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     type Box = { x: number; y: number; w: number; h: number; what?: string; el?: Element | null };
@@ -328,240 +363,182 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const INK = '#d92418';
     const ON_INK = '#ffffff';
     const HALO = 'rgb(255 255 255 / 0.92)';
+    // Clear space (owner audit rule 2026-11-19: touching counts as overlap)
+    const CLEAR = 4;
     const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const grow = (b: Box, d: number): Box => ({ ...b, x: b.x - d, y: b.y - d, w: b.w + d * 2, h: b.h + d * 2 });
+    const contains = (o: Box, t: Box) => t.x >= o.x && t.y >= o.y && t.x + t.w <= o.x + o.w && t.y + t.h <= o.y + o.h;
+    const fromRect = (b: DOMRect, extra: Partial<Box> = {}): Box => ({ x: b.x, y: b.y, w: b.width, h: b.height, ...extra });
     const visible = (el: Element) => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.opacity !== '0';
-    };
-    const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')];
-    const controls = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="menuitem"], [role="menuitemradio"], [role="button"], [role="tab"], [role="switch"]')]
-      .filter(visible)
-      .map((el) => ({ el, r: el.getBoundingClientRect() }));
-    // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
-    // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
-    // The letters, not the line box: about 1.15 em tall, centred in the line, full width (Arabic
-    // letters overhang their box, so nothing is shaved off the sides)
-    const glyphBox = (b: DOMRect, el: Element | null) => {
-      const fs = parseFloat(el ? getComputedStyle(el).fontSize : '16') || 16;
-      // 1.15 em: ascenders and descenders included (Arabic ق, Latin y), the line's extra leading not
-      const h = Math.min(b.height, fs * 1.15);
-      return { x: b.x, y: b.y + (b.height - h) / 2, w: b.width, h };
     };
     // Text a reader can't see: screen-reader-only labels (1 px boxes, clipped) on icon-only buttons
     const srOnly = (el: Element | null) => {
       for (let e = el; e && e !== document.body; e = e.parentElement) {
         const b = e.getBoundingClientRect();
         const cs = getComputedStyle(e);
-        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && cs.clipPath !== 'none' && /inset\(50%/.test(cs.clipPath))) return true;
+        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
       }
       return false;
     };
-    const allText: Box[] = [];
-    // ...and the sticky header, for page text scrolled under it
-    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"], [role="banner"], body > header, .ah')].filter(visible);
+    // Open menus and dialogs: what lies behind them (and is not in them) is not seen
+    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
+    const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
+      const r = ov.getBoundingClientRect();
+      return !ov.contains(el) && contains({ x: r.x, y: r.y, w: r.width, h: r.height }, b);
+    });
+    // Every line of visible text, as its line box (ascenders and descenders included, measured, not guessed)
+    const texts: Box[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (!node.textContent?.trim() || node.parentElement?.closest('[data-help-marker],script,style')) continue;
+      const el = node.parentElement;
+      if (!node.textContent?.trim() || !el || el.closest('[data-help-marker],script,style') || srOnly(el)) continue;
       const range = document.createRange();
       range.selectNodeContents(node);
       for (const b of range.getClientRects()) {
-        if (!(b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < window.innerHeight && b.right > 0 && b.left < window.innerWidth)) continue;
-        // Only text a reader can see: not text behind an open menu, dialog or popover that does not
-        // contain it (elementFromPoint is no help: it skips pointer-events:none, as menu labels are)
-        const cx = b.x + b.width / 2;
-        const cy = b.y + b.height / 2;
-        const behind = overlays.some((ov) => {
-          const r = ov.getBoundingClientRect();
-          return cx > r.left && cx < r.right && cy > r.top && cy < r.bottom && !ov.contains(node.parentElement);
-        });
-        if (!behind && !srOnly(node.parentElement)) allText.push({ ...glyphBox(b, node.parentElement), what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el: node.parentElement });
+        if (b.width <= 0 || b.height <= 0 || b.bottom < 0 || b.top > innerHeight) continue;
+        const box = fromRect(b, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
+        if (!hidden(box, el)) texts.push(box);
       }
     }
-    // Pictures, icons and checkboxes anywhere on screen: a number never sits on one (audit r2: ① on
-    // the «أ» avatar, ③ on the TV icon, ① on a row checkbox)
+    // Pictures, icons, avatars, badges and checkboxes
     const pictures: Box[] = [...document.querySelectorAll<HTMLElement>('img, svg, input[type="checkbox"], input[type="radio"], [role="img"], span, div')]
       .filter((el) => {
         if (!visible(el) || el.closest('[data-help-marker]')) return false;
-        // Not pictures behind an open menu or dialog (page images under the account menu)
-        const pb = el.getBoundingClientRect();
-        const pcx = pb.x + pb.width / 2;
-        const pcy = pb.y + pb.height / 2;
-        if (overlays.some((ov) => { const r = ov.getBoundingClientRect(); return pcx > r.left && pcx < r.right && pcy > r.top && pcy < r.bottom && !ov.contains(el); })) return false;
         const tag = el.tagName.toLowerCase();
         const b = el.getBoundingClientRect();
-        if (b.bottom < 0 || b.top > window.innerHeight) return false;
+        if (b.bottom < 0 || b.top > innerHeight) return false;
+        if (tag === 'svg' && el.parentElement?.closest('svg')) return false;
         if (tag === 'img' || tag === 'svg' || tag === 'input' || el.getAttribute('role') === 'img') return b.width <= 160 && b.height <= 160;
-        // An avatar or badge drawn as a round box (a letter on a filled circle)
         const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
         return b.width >= 12 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && rr >= b.width / 2 - 0.5;
       })
-      .map((el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}${typeof el.className === 'string' && el.className ? ` .${el.className.split(' ')[0]}` : ''}>` }; });
-    const placed: Box[] = [];
-    // Outline bands already drawn (the dashed line and its halo): a later number never sits on one
-    const bands: Box[] = [];
-    let missed = 0;
+      .map((el) => fromRect(el.getBoundingClientRect(), { el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}>` }))
+      .filter((b) => !hidden(b, b.el ?? null));
+    // The sticky header and phone tab bar
+    const bars: Box[] = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
+      const pos = getComputedStyle(el).position;
+      if (pos !== 'fixed' && pos !== 'sticky') return false;
+      const b = el.getBoundingClientRect();
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3;
+    }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
+    const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
+    const onScreen = (b: Box) => b.x >= 2 && b.y >= 2 && b.x + b.w <= innerWidth - 2 && b.y + b.h <= innerHeight - 2;
+
+    const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')];
+    const rects = targets.map((t) => t.getBoundingClientRect());
     const faults: string[] = [];
-    for (const target of targets) {
-      const r = target.getBoundingClientRect();
-      // The outline: the control's own shape (round around an avatar), GAP px outside it
-      const radius = parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0;
-      const round = radius >= Math.min(r.width, r.height) / 2 - 0.5;
-      // Neighbouring targets (rows of one menu) keep their outlines apart: the gap shrinks to half
-      // the space between them (design audit 2026-11-19: the rows' outlines overlapped)
-      const near = targets.filter((t) => t !== target).map((t) => t.getBoundingClientRect()).reduce((min, b) => {
-        const dx = Math.max(0, b.x - (r.x + r.width), r.x - (b.x + b.width));
-        const dy = Math.max(0, b.y - (r.y + r.height), r.y - (b.y + b.height));
+    let missed = 0;
+    // Pass 1: every outline. Its dashed line and halo reach 2 px outside it and 4 px inside it.
+    // Text keeps CLEAR px from that band on both sides; a picture never touches it; two outlines keep
+    // CLEAR px between their bands (so each may reach at most (gap - 2*2 - CLEAR) / 2 toward a neighbour)
+    const rings: Box[] = [];
+    const radii: number[] = [];
+    for (const [i, target] of targets.entries()) {
+      const r = rects[i];
+      const n = target.dataset.helpTarget;
+      const mine = (b: Box) => (b.el ? target.contains(b.el) : false);
+      const ownText = texts.filter(mine);
+      const otherText = texts.filter((t) => !mine(t));
+      const otherPics = pictures.filter((p) => !mine(p) && !(p.el && p.el.contains(target)));
+      // Own text stays inside the band plus CLEAR: 4 + 4 = 8 px from the outline's edge
+      const IN = 4 + CLEAR;
+      const OUT = 2 + CLEAR;
+      const own = ownText.length ? {
+        l: Math.min(...ownText.map((b) => b.x)) - IN, t: Math.min(...ownText.map((b) => b.y)) - IN,
+        r: Math.max(...ownText.map((b) => b.x + b.w)) + IN, b: Math.max(...ownText.map((b) => b.y + b.h)) + IN,
+      } : null;
+      const outline = (g: number): Box => {
+        let l = r.x - g; let t = r.y - g; let rr = r.right + g; let bb = r.bottom + g;
+        if (own) { l = Math.min(l, own.l); t = Math.min(t, own.t); rr = Math.max(rr, own.r); bb = Math.max(bb, own.b); }
+        return { x: l, y: t, w: rr - l, h: bb - t };
+      };
+      const crowded = (o: Box) => [
+        ...otherText.filter((t) => hit(t, grow(o, OUT)) && !contains(grow(o, -IN), t)),
+        ...otherPics.filter((p) => hit(p, grow(o, 2)) && !contains(grow(o, -4), p)),
+      ];
+      // Toward a neighbouring target, at most half the free space after both bands and CLEAR
+      const near = rects.filter((_, j) => j !== i).reduce((min, b) => {
+        const dx = Math.max(0, b.x - r.right, r.x - b.right);
+        const dy = Math.max(0, b.y - r.bottom, r.y - b.bottom);
         return Math.min(min, Math.max(dx, dy));
       }, Infinity);
-      const gap = Math.max(1, Math.min(GAP, Math.floor(near / 2) - 1));
-      // The target's own letters (also used for the number below)
-      const ownText: Box[] = [];
-      const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
-      for (let node = words.nextNode(); node; node = words.nextNode()) {
-        if (!node.textContent?.trim() || srOnly(node.parentElement)) continue;
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0).map((b) => glyphBox(b, node.parentElement)));
-      }
-      // The outline keeps 4 px of clear space from every letter (audit r2: it cut through "Site tour",
-      // which is wider than its link box, and hugged "English"). Its visible band is 4 px deep inside
-      // (2 px dash + 2 px halo) and 2 px outside (halo), so own letters stay 8 px inside its edge and
-      // any other text 6 px outside it.
-      const IN = 8;
-      const OUT = 6;
-      const rect = (l: number, t: number, rr: number, b: number) => ({ x: l, y: t, w: rr - l, h: b - t });
-      const textL = Math.min(...ownText.map((b) => b.x)) - IN;
-      const textT = Math.min(...ownText.map((b) => b.y)) - IN;
-      const textR = Math.max(...ownText.map((b) => b.x + b.w)) + IN;
-      const textB = Math.max(...ownText.map((b) => b.y + b.h)) + IN;
-      const outline = (g: number) => rect(Math.min(r.x - g, textL), Math.min(r.y - g, textT), Math.max(r.x + r.width + g, textR), Math.max(r.y + r.height + g, textB));
-      const within = (t: Box, o: Box) => t.x >= o.x + IN && t.y >= o.y + IN && t.x + t.w <= o.x + o.w - IN && t.y + t.h <= o.y + o.h - IN;
-      const centreIn = (t: Box) => { const cx = t.x + t.w / 2; const cy = t.y + t.h / 2; return cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height; };
-      const mine = (t: Box) => (t.el ? target.contains(t.el) : false) || centreIn(t);
-      const foreign = allText.filter((t) => !mine(t));
-      // Anything meaningful outside the target: other text, and pictures, icons, avatars and badges
-      const foreignPics = pictures.filter((p) => !mine(p));
-      // Text keeps 4 px from the band; a picture or icon only may not touch it (2 px halo)
-      const near4 = (o: Box) => [
-        ...foreign.filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o)),
-        ...foreignPics.filter((t) => hit(t, { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: o.h + 4 }) && !(t.x >= o.x + 4 && t.y >= o.y + 4 && t.x + t.w <= o.x + o.w - 4 && t.y + t.h <= o.y + o.h - 4)),
-      ];
-      // Loose first (the usual gap), else as tight as the target's own letters allow
-      let o = outline(gap);
-      if (near4(o).length) o = outline(-1);
-      const crowd = near4(o);
-      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of ${crowd.slice(0, 2).map((c) => c.what ?? '?').join(', ')}`);
-      if (ownText.some((t) => !within(t, o))) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of its own text`);
-      const ring = document.createElement('span');
-      ring.dataset.helpMarker = '';
-      Object.assign(ring.style, {
-        position: 'fixed', left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, boxSizing: 'border-box',
-        border: `2px dashed ${INK}`, borderRadius: round ? '9999px' : `${radius + gap}px`,
-        boxShadow: `0 0 0 2px ${HALO}, inset 0 0 0 2px ${HALO}`, zIndex: '2147483646', pointerEvents: 'none',
-      });
-      // The number sits on the outline (centred on its edge or corner), so it reads as part of it
+      const gMax = Math.min(GAP, Math.floor((near - 4 - CLEAR) / 2));
+      let o = outline(gMax);
+      for (let g = gMax; g >= gMax - 16 && crowded(o).length; g--) o = outline(g);
+      const crowd = crowded(o);
+      if (crowd.length) faults.push(`outline ${n} is within ${CLEAR} px of ${crowd.slice(0, 2).map((c) => c.what ?? '?').join(', ')}`);
+      if (straddlesBar(grow(o, 2))) faults.push(`outline ${n} runs under the header or tab bar`);
+      rings.push(o);
+      radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
+    }
+    for (let i = 0; i < rings.length; i++) for (let j = i + 1; j < rings.length; j++) {
+      const a = grow(rings[i], 2);
+      const b = grow(rings[j], 2);
+      if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) faults.push(`outlines ${targets[i].dataset.helpTarget} and ${targets[j].dataset.helpTarget} are within ${CLEAR} px of each other`);
+    }
+    // The bands of every outline (2 px out, 4 px in), as four strips
+    const band = (o: Box): Box[] => [
+      { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: 6 }, { x: o.x - 2, y: o.y + o.h - 4, w: o.w + 4, h: 6 },
+      { x: o.x - 2, y: o.y - 2, w: 6, h: o.h + 4 }, { x: o.x + o.w - 4, y: o.y - 2, w: 6, h: o.h + 4 },
+    ];
+    // Pass 2: the numbers. A number's visible box is its circle plus the 2 px halo
+    const numbers: Box[] = [];
+    for (const [i, target] of targets.entries()) {
+      const o = rings[i];
+      const n = target.dataset.helpTarget;
+      const r = rects[i];
+      const round = radii[i] >= Math.min(r.width, r.height) / 2 - 0.5;
+      const otherBands = rings.flatMap((ring, j) => (j === i ? [] : band(ring)));
+      const ok = ([x, y]: [number, number]) => {
+        const v = grow({ x, y, w: S, h: S }, 2);
+        return onScreen(v) && !straddlesBar(v)
+          && !texts.some((t) => hit(grow(v, CLEAR), t))
+          && !pictures.some((p) => hit(v, p))
+          && !numbers.some((q) => hit(grow(v, CLEAR), q))
+          && !otherBands.some((b) => hit(v, b));
+      };
+      const midY = o.y + o.h / 2 - S / 2;
       const startX = rtl ? o.x + o.w - S / 2 : o.x - S / 2;
       const endX = rtl ? o.x - S / 2 : o.x + o.w - S / 2;
-      const topY = o.y - S / 2;
-      const bottomY = o.y + o.h - S / 2;
-      const midY = o.y + o.h / 2 - S / 2;
-      // A round outline has no corner: the number goes on the circle at 45°
       const k = round ? (1 - Math.SQRT1_2) * (o.w / 2) : 0;
-      const cornerStartX = rtl ? startX - k : startX + k;
-      const cornerEndX = rtl ? endX + k : endX - k;
-      // A small round target (an avatar) keeps its face clear: the number sits just outside the
-      // circle, touching it, above or below (design audit 2026-11-19: '1' covered the composer avatar)
-      const centreX = o.x + o.w / 2 - S / 2;
-      const outside: Array<[number, number]> = round && o.w <= 64 ? [[centreX, o.y - S + 2], [centreX, o.y + o.h - 2]] : [];
-      // Last resorts, still touching the outline: just outside its start or end edge, or above/below
-      // its start corner
-      // (touching the outline from outside, so a text-only target keeps the outline's gap as clear space)
-      const beyond: Array<[number, number]> = [
-        [rtl ? o.x - S : o.x + o.w, midY], [rtl ? o.x + o.w : o.x - S, midY],
-        [rtl ? o.x + o.w - S : o.x, o.y - S], [rtl ? o.x + o.w - S : o.x, o.y + o.h],
-      ];
-      // Inside the outline, at its inline-start or inline-end side: full-width rows of a phone menu
-      // have no free edge (the start edge is off screen, the corners touch the next row), but their
-      // ends are empty (#1654)
-      const inside: Array<[number, number]> = round ? [] : [
-        [rtl ? o.x + o.w - S - 4 : o.x + 4, midY], [rtl ? o.x + 4 : o.x + o.w - S - 4, midY],
-      ];
-      // ...and along the row's middle line, moving in from its end past an end icon or chevron
-      // (a menu row with icons at both ends: "Switch channel")
-      if (!round && o.h >= S + 8) {
-        for (let d = 12; d <= o.w / 2; d += 8) inside.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
-      }
-      // Then anywhere along the outline, on it or just outside it, every 8 px from the inline start
-      const along: Array<[number, number]> = [];
-      for (let d = 0; d <= o.w - S; d += 8) {
+      const cands: Array<[number, number]> = [];
+      // On the outline first: its corners and edge middles, inline start before end
+      if (above) cands.push([rtl ? startX - k : startX + k, o.y - S / 2 + k], [rtl ? endX + k : endX - k, o.y - S / 2 + k]);
+      cands.push([startX, midY], [endX, midY]);
+      cands.push([rtl ? startX - k : startX + k, o.y - S / 2 + k], [rtl ? startX - k : startX + k, o.y + o.h - S / 2 - k], [rtl ? endX + k : endX - k, o.y - S / 2 + k], [rtl ? endX + k : endX - k, o.y + o.h - S / 2 - k]);
+      // Then anywhere along the outline, every 4 px, on it, just outside it or just inside it
+      for (let d = 0; d <= o.w - S; d += 4) {
         const ax = rtl ? o.x + o.w - S - d : o.x + d;
-        along.push([ax, topY], [ax, bottomY], [ax, o.y - S], [ax, o.y + o.h]);
+        cands.push([ax, o.y - S / 2], [ax, o.y + o.h - S / 2], [ax, o.y - S - 2], [ax, o.y + o.h + 2], [ax, o.y + 6], [ax, o.y + o.h - S - 6]);
       }
-      for (let d = 0; d <= o.h - S; d += 8) along.push([startX, o.y + d], [endX, o.y + d], [rtl ? o.x + o.w : o.x - S, o.y + d], [rtl ? o.x - S : o.x + o.w, o.y + d]);
-      const candidates: Array<[number, number]> = above
-        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...inside, ...beyond, ...along]
-        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...inside, ...beyond, ...along];
-      // The target's own avatar or logo stays clear too: a number on it hides who the row is
-      // (design audit 2026-11-19: '١' over «أ» in the phone picker)
-      const ownPictures = [...target.querySelectorAll<HTMLElement>('img, svg, span, div')]
-        .filter((el) => {
-          if (!visible(el)) return false;
-          const b = el.getBoundingClientRect();
-          const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-          // Icons too (the ✓ on the active row), any shape
-          if (el.tagName.toLowerCase() === 'svg') return b.width >= 8 && b.width <= 40;
-          return b.width >= 16 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && (el.tagName === 'IMG' || rr >= b.width / 2 - 0.5);
-        })
-        .map((el) => el.getBoundingClientRect());
-      // (the target's own text is an obstacle too: ownText, above)
-      const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
-      // Text boxes are the letters (glyphBox), so a number in the line spacing above a heading is clear
-      // Clear space (owner audit rule 2026-11-19: touching counts as overlap): at least 4 px between a
-      // number's visible edge, its 2 px white halo included, and any letter
-      const HALO_PX = 2 + 4;
-      const reach = (b: Box) => ({ x: b.x - HALO_PX, y: b.y - HALO_PX, w: b.w + HALO_PX * 2, h: b.h + HALO_PX * 2 });
-      const texts = [...ownText, ...allText];
-      const others = [
-        ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
-        ...ownPictures.map(shrink),
-        ...pictures.map((b) => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 })),
-        ...bands,
-        ...texts,
-      ];
-      const fits = ([x, y]: [number, number]) => {
-        const box = { x, y, w: S, h: S };
-        return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
-          && !others.some((c) => hit(box, c)) && !texts.some((t) => hit(reach(box), t)) && !placed.some((q) => hit(box, q));
-      };
-      const spot = candidates.find(fits);
-      if (!spot) missed++;
-      // No clean spot: the on-screen spot that covers the least, and never another number (#1654: the
-      // old fallback put ① and ② on the same corner, so ① vanished under ②)
-      const area = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-      const cost = ([cx, cy]: [number, number]) => {
-        const box = { x: cx, y: cy, w: S, h: S };
-        if (cx < 2 || cy < 2 || cx + S > window.innerWidth - 2 || cy + S > window.innerHeight - 2) return Infinity;
-        if (placed.some((q) => hit(box, q))) return Infinity;
-        return texts.reduce((n, t) => n + area(reach(box), t) * 10, 0) + others.reduce((n, t) => n + area(box, t), 0);
-      };
-      const [x, y] = spot ?? [...candidates].sort((a, b) => cost(a) - cost(b))[0];
-      // Checked, not hoped: a number on text or on another number fails the picture (checked before
-      // this number joins the placed ones, so it is never compared with itself)
-      const box = { x, y, w: S, h: S };
-      const nearText = texts.find((t) => hit(reach(box), t));
-      if (nearText) faults.push(`number ${target.dataset.helpTarget} is within 4 px of text ${nearText.what ?? ''}`);
-      const onPic = pictures.find((p) => hit(box, { x: p.x + 1, y: p.y + 1, w: Math.max(0, p.w - 2), h: Math.max(0, p.h - 2) }));
-      if (onPic) faults.push(`number ${target.dataset.helpTarget} covers ${onPic.what ?? 'a picture'}`);
-      if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
-      placed.push({ x, y, w: S, h: S });
-      // This outline's band (the four edges, 4 px either side of the dashed line) for the next numbers
-      for (const e of [{ x: o.x - 4, y: o.y - 4, w: o.w + 8, h: 8 }, { x: o.x - 4, y: o.y + o.h - 4, w: o.w + 8, h: 8 }, { x: o.x - 4, y: o.y - 4, w: 8, h: o.h + 8 }, { x: o.x + o.w - 4, y: o.y - 4, w: 8, h: o.h + 8 }]) bands.push(e);
+      for (let d = 0; d <= o.h - S; d += 4) {
+        cands.push([startX, o.y + d], [endX, o.y + d], [rtl ? o.x + o.w + 2 : o.x - S - 2, o.y + d], [rtl ? o.x - S - 2 : o.x + o.w + 2, o.y + d], [rtl ? o.x + o.w - S - 6 : o.x + 6, o.y + d], [rtl ? o.x + 6 : o.x + o.w - S - 6, o.y + d]);
+      }
+      // ...and its middle line, inward from the end (a row with icons at both ends)
+      for (let d = 12; d <= o.w / 2; d += 4) cands.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
+      // A number must touch its own outline (on it, or within 6 px of it)
+      const touches = ([x, y]: [number, number]) => hit(grow({ x, y, w: S, h: S }, 6), grow(o, 2)) && !contains(grow(o, -10), { x, y, w: S, h: S });
+      const spot = cands.filter(touches).find(ok);
+      if (!spot) { missed++; faults.push(`number ${n} has no spot clear of text, pictures, other numbers and outlines`); }
+      const [x, y] = spot ?? [startX, midY];
+      numbers.push(grow({ x, y, w: S, h: S }, 2));
+      const ring = document.createElement('span');
+      ring.dataset.helpMarker = '';
+      ring.dataset.helpRing = n;
+      Object.assign(ring.style, {
+        position: 'fixed', left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, boxSizing: 'border-box',
+        border: `2px dashed ${INK}`, borderRadius: round ? '9999px' : `${Math.max(4, radii[i] + 4)}px`,
+        boxShadow: `0 0 0 2px ${HALO}, inset 0 0 0 2px ${HALO}`, zIndex: '2147483646', pointerEvents: 'none',
+      });
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
-      m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
+      m.dataset.helpNum = n;
+      m.textContent = Number(n).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
       Object.assign(m.style, {
-        position: 'fixed', left: `${Math.min(window.innerWidth - S - 2, Math.max(2, x))}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
+        position: 'fixed', left: `${x}px`, top: `${y}px`, zIndex: '2147483647',
         width: `${S}px`, height: `${S}px`, borderRadius: '50%', display: 'grid', placeItems: 'center',
         font: '700 13px/1 system-ui, sans-serif', background: INK, color: ON_INK,
         boxShadow: `0 0 0 2px ${HALO}, 0 2px 6px rgb(0 0 0 / 0.35)`, pointerEvents: 'none',
@@ -573,6 +550,149 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
   // Not silent: the run lists every picture whose number had to sit on another control
   if (unplaced.missed) note(`${unplaced.missed} marker(s) found no spot clear of other controls`);
   if (unplaced.faults.length) throw new Error(`markers: ${unplaced.faults.join('; ')}`);
+}
+
+/**
+ * The final check, separate from the placement (audit r3: a checker that reuses the placer's own
+ * estimates passed pictures that broke its rules). Right before the screenshot it measures the page as
+ * it is, inside the crop: line boxes of visible text, pictures, icons and checkboxes, the drawn
+ * outlines and numbers (from the DOM, after any reflow), and the header and tab bar. Any break of a
+ * rule fails the picture:
+ * - a number (circle + 2 px halo) within 4 px of a letter, or on a picture, another number or another
+ *   outline's band;
+ * - text within 4 px of an outline's band (2 px out, 4 px in) unless it sits well inside it; a picture
+ *   touching a band; two outline bands within 4 px of each other;
+ * - a marker straddling the header or tab bar edge;
+ * - a line of text cut by the crop edge, half under a bar, half covered by another element, or cut by a
+ *   scrolling list's edge.
+ */
+async function verifyFrame(page: Page, clip: { x: number; y: number; width: number; height: number } | undefined): Promise<void> {
+  const problems = await page.evaluate((c) => {
+    type Box = { x: number; y: number; w: number; h: number; what?: string; el?: Element | null };
+    const CLEAR = 4;
+    const frame: Box = c ? { x: c.x, y: c.y, w: c.width, h: c.height } : { x: 0, y: 0, w: innerWidth, h: innerHeight };
+    const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const grow = (b: Box, d: number): Box => ({ ...b, x: b.x - d, y: b.y - d, w: b.w + d * 2, h: b.h + d * 2 });
+    const contains = (o: Box, t: Box) => t.x >= o.x - 0.5 && t.y >= o.y - 0.5 && t.x + t.w <= o.x + o.w + 0.5 && t.y + t.h <= o.y + o.h + 0.5;
+    const fromRect = (b: DOMRect, extra: Partial<Box> = {}): Box => ({ x: b.x, y: b.y, w: b.width, h: b.height, ...extra });
+    const visible = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.opacity !== '0';
+    };
+    const srOnly = (el: Element | null) => {
+      for (let e = el; e && e !== document.body; e = e.parentElement) {
+        const b = e.getBoundingClientRect();
+        const cs = getComputedStyle(e);
+        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
+      }
+      return false;
+    };
+    const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
+    const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
+      const r = ov.getBoundingClientRect();
+      return !ov.contains(el) && contains({ x: r.x, y: r.y, w: r.width, h: r.height }, b);
+    });
+    const bars: Box[] = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
+      const pos = getComputedStyle(el).position;
+      if (pos !== 'fixed' && pos !== 'sticky') return false;
+      const b = el.getBoundingClientRect();
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3;
+    }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
+    // Is (x, y) covered by something that isn't `el` or part of it? Markers ignore the pointer, so
+    // they never count; a bar does
+    const coveredAt = (el: Element, x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
+      const top = document.elementFromPoint(x, y);
+      return !!top && top !== el && !el.contains(top) && !top.contains(el);
+    };
+    const out: string[] = [];
+    const texts: Box[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (!node.textContent?.trim() || !el || el.closest('[data-help-marker],script,style') || srOnly(el)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const b of range.getClientRects()) {
+        if (b.width <= 0 || b.height <= 0) continue;
+        const box = fromRect(b, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
+        if (!hit(box, frame) || hidden(box, el)) continue;
+        texts.push(box);
+        // Cut by the frame's edge
+        if (!contains(frame, box)) out.push(`text ${box.what} is cut by the picture's edge`);
+        // Half under a bar (not in it)
+        const bar = bars.find((br) => hit(box, br) && !contains(br, box) && !(br.el && br.el.contains(el)));
+        if (bar) out.push(`text ${box.what} is half under the header or tab bar`);
+        // Cut by a scrolling list or clipping box around it
+        for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if (cs.overflowY === 'visible' && cs.overflowX === 'visible') continue;
+          const ar = a.getBoundingClientRect();
+          const abox = { x: ar.x, y: ar.y, w: ar.width, h: ar.height };
+          if (hit(box, abox) && !contains(abox, box) && (cs.overflowY !== 'visible' && (box.y < abox.y || box.y + box.h > abox.y + abox.h))) { out.push(`text ${box.what} is cut by its list's edge`); break; }
+        }
+        // Half covered by another element (sampled across the line, inside the frame)
+        const ys = [box.y + 2, box.y + box.h / 2, box.y + box.h - 2];
+        const xs = [box.x + 2, box.x + box.w / 2, box.x + box.w - 2];
+        let seen = 0;
+        let covered = 0;
+        for (const y of ys) for (const x of xs) {
+          if (!contains(frame, { x, y, w: 0, h: 0 })) continue;
+          if (coveredAt(el, x, y)) covered++; else seen++;
+        }
+        if (covered && seen) out.push(`text ${box.what} is half covered`);
+      }
+    }
+    const pictures: Box[] = [...document.querySelectorAll<HTMLElement>('img, svg, input[type="checkbox"], input[type="radio"], [role="img"], span, div')]
+      .filter((el) => {
+        if (!visible(el) || el.closest('[data-help-marker]')) return false;
+        const tag = el.tagName.toLowerCase();
+        const b = el.getBoundingClientRect();
+        if (tag === 'svg' && el.parentElement?.closest('svg')) return false;
+        if (tag === 'img' || tag === 'svg' || tag === 'input' || el.getAttribute('role') === 'img') return b.width <= 160 && b.height <= 160;
+        const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+        return b.width >= 12 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && rr >= b.width / 2 - 0.5;
+      })
+      .map((el) => fromRect(el.getBoundingClientRect(), { el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}>` }))
+      .filter((b) => hit(b, frame) && !hidden(b, b.el ?? null));
+    const rings = [...document.querySelectorAll<HTMLElement>('[data-help-ring]')].map((el) => fromRect(el.getBoundingClientRect(), { what: el.dataset.helpRing }));
+    const nums = [...document.querySelectorAll<HTMLElement>('[data-help-num]')].map((el) => grow(fromRect(el.getBoundingClientRect()), 2)).map((b, i) => ({ ...b, what: [...document.querySelectorAll<HTMLElement>('[data-help-num]')][i].dataset.helpNum }));
+    const band = (o: Box): Box[] => [
+      { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: 6 }, { x: o.x - 2, y: o.y + o.h - 4, w: o.w + 4, h: 6 },
+      { x: o.x - 2, y: o.y - 2, w: 6, h: o.h + 4 }, { x: o.x + o.w - 4, y: o.y - 2, w: 6, h: o.h + 4 },
+    ];
+    const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
+    for (const v of nums) {
+      if (!contains(frame, v)) out.push(`number ${v.what} is cut by the picture's edge`);
+      if (straddlesBar(v)) out.push(`number ${v.what} sits on the header or tab bar's edge`);
+      const t = texts.find((x) => hit(grow(v, CLEAR), x));
+      if (t) out.push(`number ${v.what} is within ${CLEAR} px of ${t.what}`);
+      const p = pictures.find((x) => hit(v, x));
+      if (p) out.push(`number ${v.what} is on ${p.what}`);
+      const q = nums.find((x) => x !== v && hit(grow(v, CLEAR), x));
+      if (q) out.push(`numbers ${v.what} and ${q.what} are within ${CLEAR} px`);
+      const other = rings.find((o) => o.what !== v.what && band(o).some((b) => hit(v, b)));
+      if (other) out.push(`number ${v.what} is on outline ${other.what}`);
+    }
+    for (const o of rings) {
+      const outer = grow(o, 2);
+      if (!contains(frame, outer)) out.push(`outline ${o.what} is cut by the picture's edge`);
+      if (straddlesBar(outer)) out.push(`outline ${o.what} runs under the header or tab bar`);
+      const t = texts.find((x) => hit(x, grow(outer, CLEAR)) && !contains(grow(o, -(4 + CLEAR)), x));
+      if (t) out.push(`outline ${o.what} is within ${CLEAR} px of ${t.what}`);
+      const p = pictures.find((x) => hit(x, outer) && !contains(grow(o, -4), x));
+      if (p) out.push(`outline ${o.what} touches ${p.what}`);
+      for (const o2 of rings) {
+        if (o2 === o || Number(o2.what) < Number(o.what)) continue;
+        const a = grow(o, 2);
+        const b = grow(o2, 2);
+        if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) out.push(`outlines ${o.what} and ${o2.what} are within ${CLEAR} px`);
+      }
+    }
+    return [...new Set(out)];
+  }, clip ?? null);
+  if (problems.length) throw new Error(`picture check: ${problems.slice(0, 8).join('; ')}${problems.length > 8 ? ` (+${problems.length - 8} more)` : ''}`);
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
@@ -617,11 +737,13 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
   if (leaks.length) throw new Error(`test data shows: ${leaks.join(' | ')}`);
   const viewport = page.viewportSize()!;
   let clip: { x: number; y: number; width: number; height: number } | undefined;
-  if (region.length) {
+  {
     // The numbers too: a header control's number sits just under the header
     const markers = await page.locator('[data-help-marker]').all();
-    const boxes = (await Promise.all([...region, ...markers].map((r) => r.boundingBox()))).filter(Boolean) as { x: number; y: number; width: number; height: number }[];
-    const pad = 24;
+    const all = (await Promise.all([...region, ...markers].map((r) => r.boundingBox()))).filter(Boolean) as { x: number; y: number; width: number; height: number }[];
+    // No region: the whole viewport, trimmed only where a line would be cut
+    const boxes = region.length ? all : [{ x: 0, y: 0, width: viewport.width, height: viewport.height }];
+    const pad = region.length ? 24 : 0;
     const x = Math.max(0, Math.min(...boxes.map((b) => b.x)) - pad);
     const y = Math.max(0, Math.min(...boxes.map((b) => b.y)) - pad);
     const right = Math.min(viewport.width, Math.max(...boxes.map((b) => b.x + b.width)) + pad);
@@ -630,16 +752,35 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     // No edge cuts through anything (audit r2: a title cut in half, tab-bar labels cut off, the logo
     // clipped at the right): each edge moves out past every text line, picture, control or marker it
     // crosses, and a sticky bar it crosses is taken whole, with the full width
-    clip = await page.evaluate((c) => {
+    // The core that must stay whole: the region (or, without one, the markers)
+    const coreBoxes = region.length ? all : (markers.length ? (await Promise.all(markers.map((m) => m.boundingBox()))).filter(Boolean) as typeof all : all);
+    const core = { l: Math.min(...coreBoxes.map((b) => b.x)), t: Math.min(...coreBoxes.map((b) => b.y)), r: Math.max(...coreBoxes.map((b) => b.x + b.width)), b: Math.max(...coreBoxes.map((b) => b.y + b.height)) };
+    clip = await page.evaluate(({ c, core }) => {
       type R = { l: number; t: number; r: number; b: number };
       const items: R[] = [];
+      // Lines partly covered by something on top (a page button half under the open menu): the crop
+      // leaves them out rather than taking them in (audit r3: «إدارة المرئيات» half under the menu)
+      const avoid: R[] = [];
       const add = (b: DOMRect) => { if (b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < innerHeight) items.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); };
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (!node.textContent?.trim()) continue;
+        const el = node.parentElement;
+        if (!node.textContent?.trim() || !el || el.closest('[data-help-marker]')) continue;
         const range = document.createRange();
         range.selectNodeContents(node);
-        for (const b of range.getClientRects()) add(b);
+        for (const b of range.getClientRects()) {
+          if (b.width <= 0 || b.height <= 0 || b.bottom < 0 || b.top > innerHeight) continue;
+          let seen = 0;
+          let covered = 0;
+          for (const y of [b.top + 2, b.top + b.height / 2, b.bottom - 2]) for (const x of [b.left + 2, b.left + b.width / 2, b.right - 2]) {
+            if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+            const top = document.elementFromPoint(x, y);
+            if (top && top !== el && !el.contains(top) && !top.contains(el)) covered++; else seen++;
+          }
+          if (!seen) continue;
+          if (covered) avoid.push({ l: b.left, t: b.top, r: b.right, b: b.bottom });
+          else add(b);
+        }
       }
       document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => add(el.getBoundingClientRect()));
       const bars: R[] = [];
@@ -662,16 +803,26 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         for (const it of items) {
           const xOver = it.r > l && it.l < r;
           const yOver = it.b > t && it.t < b;
-          if (xOver && it.t < t && it.b > t) { t = Math.max(0, it.t - 4); moved = true; }
-          if (xOver && it.t < b && it.b > b) { b = Math.min(innerHeight, it.b + 4); moved = true; }
-          if (yOver && it.l < l && it.r > l) { l = Math.max(0, it.l - 4); moved = true; }
-          if (yOver && it.l < r && it.r > r) { r = Math.min(innerWidth, it.r + 4); moved = true; }
+          // Out past it, or (at the window's edge, where it can't be taken whole) in past it
+          if (xOver && it.t < t && it.b > t) { if (it.t >= 4) t = it.t - 4; else t = Math.min(core.t, it.b + 4); moved = true; }
+          if (xOver && it.t < b && it.b > b) { if (it.b <= innerHeight - 4) b = it.b + 4; else b = Math.max(core.b, it.t - 4); moved = true; }
+          if (yOver && it.l < l && it.r > l) { if (it.l >= 4) l = it.l - 4; else l = Math.min(core.l, it.r + 4); moved = true; }
+          if (yOver && it.l < r && it.r > r) { if (it.r <= innerWidth - 4) r = it.r + 4; else r = Math.max(core.r, it.l - 4); moved = true; }
+        }
+        // Partly covered lines outside the core: the edge moves in past them
+        for (const it of avoid) {
+          if (!(it.r > l && it.l < r && it.b > t && it.t < b)) continue;
+          if (it.t >= core.b) { b = Math.max(core.b + 4, it.t - 4); moved = true; }
+          else if (it.b <= core.t) { t = Math.min(core.t - 4, it.b + 4); moved = true; }
+          else if (it.l >= core.r) { r = Math.max(core.r + 4, it.l - 4); moved = true; }
+          else if (it.r <= core.l) { l = Math.min(core.l - 4, it.r + 4); moved = true; }
         }
         if (!moved) break;
       }
       return { x: l, y: t, width: r - l, height: b - t };
-    }, clip);
+    }, { c: clip, core });
   }
+  await verifyFrame(page, clip);
   const png = join(OUT, `${file}.png`);
   await page.screenshot({ path: png, clip, animations: 'disabled' });
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-c:v', 'libwebp', '-quality', '82', '-compression_level', '6', join(OUT, `${file}.webp`)]);
