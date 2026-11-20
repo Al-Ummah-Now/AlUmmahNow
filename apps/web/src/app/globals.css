@@ -318,6 +318,13 @@
   outline: 2px solid var(--fanous-color-focus-ring, currentColor);
   outline-offset: -2px;
 }
+/* Tab rows that wrap on phones (#1669: never a tab half shown at the edge): narrower sides, so
+   fewer rows; tablet and desktop keep the full width */
+@media (max-width: 639.98px) {
+  .tab-strip > .tab-item {
+    padding: 0 1rem;
+  }
+}
 
 /* Upload page mode tabs (single video / batch). Page-level underline tabs on the tabs.* parts:
    no fill or outline, so they read as views of the page, not as actions. */

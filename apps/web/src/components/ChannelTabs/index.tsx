@@ -218,8 +218,8 @@ export function ChannelTabBar({
     return (
       <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-6xl mx-auto px-5">
-          <div className="flex items-center gap-2 py-3">
-            {/* Loading skeletons for tabs */}
+          <div className="flex flex-wrap items-center gap-2 py-3 sm:flex-nowrap">
+            {/* Loading skeletons for tabs (wrap on phones like the tabs, never cut at the edge) */}
             {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
@@ -268,7 +268,9 @@ export function ChannelTabBar({
             role="tablist"
             data-testid="channel-tabs"
             dir={isRTL ? 'rtl' : 'ltr'}
-            className="flex min-w-0 overflow-x-auto scrollbar-hide scroll-smooth"
+            // Phones: the tabs wrap onto a second row, never a tab half shown at the edge (owner rule,
+            // as Studio's tabs in #1659); wider screens keep one row that scrolls with the arrows
+            className="tab-strip flex min-w-0 flex-wrap overflow-x-auto scrollbar-hide scroll-smooth sm:flex-nowrap"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {visibleTabs.map((tab) => (
