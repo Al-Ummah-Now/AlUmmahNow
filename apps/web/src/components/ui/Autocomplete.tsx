@@ -607,7 +607,9 @@ export function Autocomplete(props: AutocompleteProps) {
         autoComplete="off"
         autoCorrect="off"
         spellCheck={false}
-        dir="auto"
+        // auto only once there is text: auto resolves an empty box to left to right, which put the
+        // Arabic placeholder on the left; empty, the box follows the page
+        dir={value ? 'auto' : undefined}
         {...inputProps}
         ref={(el) => {
           ownInputRef.current = el;

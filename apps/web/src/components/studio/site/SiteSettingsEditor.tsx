@@ -298,7 +298,7 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
         <p className="text-muted-foreground text-sm">{s.seo.hint}</p>
         <div className="space-y-1">
           <Label htmlFor="site-seo-title">{s.seo.titleTemplate}</Label>
-          <Input id="site-seo-title" dir="auto" maxLength={120} placeholder="%s · …" value={draft.seo.titleTemplate ?? ''} onChange={(e) => set('seo', { ...draft.seo, titleTemplate: e.target.value || null })} aria-describedby="site-seo-title-hint" data-testid="studio-site-seo-title" />
+          <Input id="site-seo-title" dir={draft.seo.titleTemplate ? 'auto' : undefined} maxLength={120} placeholder="%s · …" value={draft.seo.titleTemplate ?? ''} onChange={(e) => set('seo', { ...draft.seo, titleTemplate: e.target.value || null })} aria-describedby="site-seo-title-hint" data-testid="studio-site-seo-title" />
           <p id="site-seo-title-hint" className="text-muted-foreground text-xs">{s.seo.titleTemplateHint}</p>
         </div>
         {(['en', 'ar'] as const).map((l) => (
