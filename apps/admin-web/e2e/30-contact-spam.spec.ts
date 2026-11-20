@@ -13,7 +13,7 @@
  * stack's control API and removed afterwards, pass or fail.
  */
 import crypto from 'node:crypto';
-import type { Page, Route } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { E2E_ENTITY_PREFIX, LOCAL_STACK } from './support/env';
 import { stackSql } from './support/local-stack';
@@ -57,6 +57,22 @@ async function holdRefreshes(page: Page) {
     await new Promise((resolve) => setTimeout(resolve, REFRESH_HOLD_MS));
     return route.continue().catch(() => undefined);
   });
+}
+
+/**
+ * Waits until no RSC request (navigation or refresh) of the page is in flight. A page.goto that
+ * cancels a background refresh makes Next fall back to a full load of the URL it was refreshing,
+ * which then interrupts the goto (WebKit).
+ */
+function trackRsc(page: Page): () => Promise<void> {
+  const inFlight = new Set<unknown>();
+  const isRsc = (r: Request) => r.headers()['rsc'] === '1';
+  page.on('request', (r) => isRsc(r) && inFlight.add(r));
+  page.on('requestfinished', (r) => inFlight.delete(r));
+  page.on('requestfailed', (r) => inFlight.delete(r));
+  return async () => {
+    await expect.poll(() => inFlight.size, { timeout: 20_000 }).toBe(0);
+  };
 }
 
 const card = (page: Page) => page.getByTestId('contact-message');
@@ -121,30 +137,40 @@ test.describe('contact message spam', () => {
   });
 
   test('SPAM-02 the list follows: spam shows on the row and in the Spam view; a bulk change moves the row at once', async ({ page }) => {
+    const settled = trackRsc(page);
     await page.goto(detail);
     await page.getByTestId('contact-spam').click();
     await expect(page.getByTestId('contact-spam')).toHaveText('Not spam');
+    await settled();
 
     // Back to the inbox in the app (client navigation): the row shows spam
     await page.getByRole('link', { name: 'Back to contact messages' }).click();
     await expect(page).toHaveURL(/\/contact$/);
     await expect(listRow(page)).toHaveAttribute('data-status', 'spam');
     await expect(listRow(page).getByTestId('contact-status-chip')).toHaveText('Spam');
+    await settled();
 
     // In the Spam view, not in Open
     await page.goto(`/contact?status=spam&q=${hex}`);
     await expect(listRow(page)).toHaveAttribute('data-status', 'spam');
+    await settled();
     await page.goto(`/contact?status=open&q=${hex}`);
     await expect(listRow(page)).toHaveCount(0);
+    await settled();
 
     // From the Spam view, a bulk "Open" leaves the view at once, before the held refresh
     await page.goto(`/contact?status=spam&q=${hex}`);
+    await expect(listRow(page)).toHaveAttribute('data-status', 'spam');
+    await settled();
     await holdRefreshes(page);
     await listRow(page).getByTestId('contact-row-select').check();
     await pickOption(page.getByTestId('contact-bulk-status'), 'open');
     await page.getByTestId('contact-bulk-status-apply').click();
     await expect(listRow(page)).toHaveCount(0, AT_ONCE);
     await expect(page.getByTestId('contact-bulk-error')).toHaveCount(0);
+    // The held refresh lands, still without the row
+    await settled();
+    await expect(listRow(page)).toHaveCount(0);
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     await page.goto(`/contact?status=open&q=${hex}`);
     await expect(listRow(page)).toHaveAttribute('data-status', 'open');
