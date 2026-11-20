@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { addContactNote, bulkContactMessages, replyToContactMessage, restoreContactMessages, updateContactMessage } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
@@ -10,6 +10,7 @@ import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLangu
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { reportError } from '@/lib/errors/reporter';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { CONTACT_STATUSES } from '../filters';
 import { AssigneePicker } from '../AssigneePicker';
@@ -30,14 +31,35 @@ const smallButton =
   'px-3 py-2 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
 const textareaClass = `${fieldClass} w-full resize-y`;
 
-/** Read/unread, status, assignee, spam, delete (with Undo), internal note and email reply for one contact message. */
+/**
+ * Read/unread, status, assignee, spam (with Undo), delete (with Undo), internal note and email reply
+ * for one contact message.
+ *
+ * Only the control that was used shows it is working, and it keeps doing so until the refreshed page
+ * shows the change (a transition around the change and router.refresh). Before (owner bug
+ * 2026-11-19), one shared busy flag disabled every button and was cleared as soon as admin-api
+ * answered, so all buttons flickered, the old label came back while the page was still refreshing,
+ * and a second click undid the first.
+ */
 export function ContactActions({ id, name, status, read, locale, assignedToMe, hasAssignee }: Props) {
   const router = useRouter();
   const undoable = useUndoableAction();
   const [pickerKey, setPickerKey] = useState(0);
   const { t } = useLanguage();
   const ids = useId();
-  const [busy, setBusy] = useState<string | null>(null);
+  // The control whose change is saving; `refreshing` covers the change and the page's refresh
+  const [pending, setPending] = useState<string | null>(null);
+  const [refreshing, startTransition] = useTransition();
+  const [deleting, setDeleting] = useState(false);
+  const working = (control: string) => (control === 'delete' ? deleting : refreshing && pending === control);
+  // What to do once the page shows the change (the Undo toast appears with the new status, not before it)
+  const whenShown = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (refreshing || !whenShown.current) return;
+    const next = whenShown.current;
+    whenShown.current = null;
+    next();
+  }, [refreshing]);
   const [error, setError] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState<ContactStatus>(status);
   // The status changes under the panel (queue delivery, refresh): follow it
@@ -47,28 +69,57 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
   // The reply email's one language: the sender's (the language they wrote in) until changed
   const [replyLocale, setReplyLocale] = useState<EmailLanguage>(locale);
 
-  async function run<T>(name: string, action: () => Promise<ActionResult<T>>, after?: (data: T) => void): Promise<boolean> {
-    setBusy(name);
+  /** One change; resolves true once admin-api took it (the page then refreshes), false after showing the error. */
+  function run<T>(name: string, action: () => Promise<ActionResult<T>>, after?: (data: T) => void): Promise<boolean> {
+    setPending(name);
     setError(null);
-    let result: ActionResult<T>;
-    try {
-      result = await action();
-    } catch (e) {
-      logger.error('[contact] Action request failed', { id, name, error: e instanceof Error ? e.message : String(e) });
-      result = { ok: false, status: 0, error: 'request failed' };
-    }
-    setBusy(null);
-    if (!result.ok) {
-      logger.warn('[contact] Action failed', { id, name, status: result.status });
-      setError(result.status === 401 ? t('errors.notAuthenticated') : result.status === 400 && name === 'assign' ? t('contact.notStaff') : t('contact.failed'));
-      return false;
-    }
-    after?.(result.data);
-    router.refresh();
-    return true;
+    return new Promise<boolean>((resolve) => {
+      startTransition(async () => {
+        let result: ActionResult<T>;
+        try {
+          result = await action();
+        } catch (e) {
+          logger.error('[contact] Action request failed', { id, name, error: e instanceof Error ? e.message : String(e) });
+          result = { ok: false, status: 0, error: 'request failed' };
+        }
+        if (!result.ok) {
+          logger.warn('[contact] Action failed', { id, name, status: result.status });
+          if (result.status === 0 || result.status >= 500) reportError(new Error(`contact ${name} failed (${result.status})`), { shown: true, status: result.status, extra: { where: 'contact-actions', action: name } });
+          setError(result.status === 401 ? t('errors.notAuthenticated') : result.status === 400 && name === 'assign' ? t('contact.notStaff') : t('contact.failed'));
+          resolve(false);
+          return;
+        }
+        const data = result.data;
+        // Part of the same transition: this control stays "working" until the page shows the change
+        startTransition(() => {
+          after?.(data);
+          router.refresh();
+        });
+        resolve(true);
+      });
+    });
   }
 
   const isSpam = status === 'spam';
+
+  /** Spam and Not spam at once, with Undo back to the status it had (admin UX: undo, not confirm). */
+  async function toggleSpam() {
+    const from = status;
+    const to: ContactStatus = isSpam ? 'open' : 'spam';
+    const offerUndo = () =>
+      void undoable.run({
+        action: async () => to,
+        undo: async () => {
+          const result = await updateContactMessage(id, { status: from });
+          if (!result.ok) throw new Error(`undo spam ${result.status}`);
+          setNextStatus(from);
+          startTransition(() => router.refresh());
+        },
+        message: t(to === 'spam' ? 'contact.markedSpam' : 'contact.markedNotSpam'),
+      });
+    whenShown.current = null;
+    if (await run('spam', () => updateContactMessage(id, { status: to }), () => setNextStatus(to))) whenShown.current = offerUndo;
+  }
 
   return (
     <div className="space-y-6">
@@ -100,11 +151,12 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
           <button
             type="button"
             className={smallButton}
-            disabled={!!busy || nextStatus === status}
+            disabled={working('status') || nextStatus === status}
+            aria-busy={working('status') || undefined}
             onClick={() => run('status', () => updateContactMessage(id, { status: nextStatus }))}
             data-testid="contact-save-status"
           >
-            {busy === 'status' ? t('contact.working') : t('contact.saveStatus')}
+            {working('status') ? t('contact.working') : t('contact.saveStatus')}
           </button>
         </div>
 
@@ -112,11 +164,12 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
           <button
             type="button"
             className={smallButton}
-            disabled={!!busy}
+            disabled={working('read')}
+            aria-busy={working('read') || undefined}
             onClick={() => run('read', () => updateContactMessage(id, { read: !read }))}
             data-testid={read ? 'contact-mark-unread' : 'contact-mark-read'}
           >
-            {read ? t('contact.markUnread') : t('contact.markRead')}
+            {working('read') ? t('contact.working') : read ? t('contact.markUnread') : t('contact.markRead')}
           </button>
         </div>
 
@@ -124,7 +177,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
           <AssigneePicker
             key={pickerKey}
             testId="contact-assignee-picker"
-            disabled={!!busy}
+            disabled={working('assign')}
             onPick={async (assignee) => {
               if (await run('assign', () => updateContactMessage(id, { assignee }))) setPickerKey((k) => k + 1);
             }}
@@ -133,36 +186,38 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
 
         <div className="flex flex-wrap gap-2">
           {assignedToMe ? (
-            <button type="button" className={smallButton} disabled={!!busy} onClick={() => run('assign', () => updateContactMessage(id, { assignee: null }))} data-testid="contact-unassign">
-              {t('contact.unassign')}
+            <button type="button" className={smallButton} disabled={working('assign')} aria-busy={working('assign') || undefined} onClick={() => run('assign', () => updateContactMessage(id, { assignee: null }))} data-testid="contact-unassign">
+              {working('assign') ? t('contact.working') : t('contact.unassign')}
             </button>
           ) : (
-            <button type="button" className={smallButton} disabled={!!busy} onClick={() => run('assign', () => updateContactMessage(id, { assignee: 'me' }))} data-testid="contact-assign-me">
-              {t('contact.assignToMe')}
+            <button type="button" className={smallButton} disabled={working('assign')} aria-busy={working('assign') || undefined} onClick={() => run('assign', () => updateContactMessage(id, { assignee: 'me' }))} data-testid="contact-assign-me">
+              {working('assign') ? t('contact.working') : t('contact.assignToMe')}
             </button>
           )}
           {hasAssignee && !assignedToMe && (
-            <button type="button" className={smallButton} disabled={!!busy} onClick={() => run('assign', () => updateContactMessage(id, { assignee: null }))}>
+            <button type="button" className={smallButton} disabled={working('assign')} onClick={() => run('assign', () => updateContactMessage(id, { assignee: null }))}>
               {t('contact.unassign')}
             </button>
           )}
           <button
             type="button"
             className={smallButton}
-            disabled={!!busy}
-            onClick={() => run('spam', () => updateContactMessage(id, { status: isSpam ? 'open' : 'spam' }), () => setNextStatus(isSpam ? 'open' : 'spam'))}
+            disabled={working('spam')}
+            aria-busy={working('spam') || undefined}
+            onClick={toggleSpam}
             data-testid="contact-spam"
           >
-            {isSpam ? t('contact.notSpam') : t('contact.markSpam')}
+            {working('spam') ? t('contact.working') : isSpam ? t('contact.notSpam') : t('contact.markSpam')}
           </button>
           <button
             type="button"
             className={`${smallButton} text-danger-fg`}
-            disabled={!!busy}
+            disabled={deleting}
+            aria-busy={deleting || undefined}
             data-testid="contact-delete"
             onClick={async () => {
               // At once, with Undo (owner 2026-11-15); it also stays in Recently deleted for 30 days
-              setBusy('delete');
+              setDeleting(true);
               setError(null);
               try {
                 await undoable.run({
@@ -183,11 +238,11 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
                 logger.warn('[contact] Delete failed', { id, error: e instanceof Error ? e.message : String(e) });
                 setError(t('contact.failed'));
               } finally {
-                setBusy(null);
+                setDeleting(false);
               }
             }}
           >
-            {busy === 'delete' ? t('contact.working') : t('contact.delete')}
+            {deleting ? t('contact.working') : t('contact.delete')}
           </button>
         </div>
       </section>
@@ -227,9 +282,9 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             data-testid="contact-reply-body"
           />
           <div className="mt-3 flex flex-col gap-2">
-            <EmailLanguageChoice value={replyLocale} onChange={setReplyLocale} disabled={isSpam || !!busy} testId="contact-reply-locale" />
-            <button type="submit" className={`${primaryButtonClass} w-full disabled:bg-surface-2 disabled:text-fg-muted disabled:border disabled:border-border disabled:cursor-not-allowed`} disabled={isSpam || !!busy || !reply.trim()} data-testid="contact-reply-send">
-              {busy === 'reply' ? t('contact.working') : t('contact.replySend')}
+            <EmailLanguageChoice value={replyLocale} onChange={setReplyLocale} disabled={isSpam || working('reply')} testId="contact-reply-locale" />
+            <button type="submit" className={`${primaryButtonClass} w-full disabled:bg-surface-2 disabled:text-fg-muted disabled:border disabled:border-border disabled:cursor-not-allowed`} disabled={isSpam || working('reply') || !reply.trim()} aria-busy={working('reply') || undefined} data-testid="contact-reply-send">
+              {working('reply') ? t('contact.working') : t('contact.replySend')}
             </button>
           </div>
         </form>
@@ -260,8 +315,8 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             className={textareaClass}
             data-testid="contact-note-body"
           />
-          <button type="submit" className={`${secondaryButtonClass} w-full mt-3 disabled:text-fg-muted disabled:cursor-not-allowed`} disabled={!!busy || !note.trim()} data-testid="contact-note-add">
-            {busy === 'note' ? t('contact.working') : t('contact.noteAdd')}
+          <button type="submit" className={`${secondaryButtonClass} w-full mt-3 disabled:text-fg-muted disabled:cursor-not-allowed`} disabled={working('note') || !note.trim()} aria-busy={working('note') || undefined} data-testid="contact-note-add">
+            {working('note') ? t('contact.working') : t('contact.noteAdd')}
           </button>
         </form>
       </section>

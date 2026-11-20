@@ -7,7 +7,7 @@
  * work as on the other admin lists. Nothing scrolls sideways: under md every
  * row is a card, and the message text wraps.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from '@/components/AppLink';
 import type { ContactBulkChange, ContactMessage, ContactStatus } from '@/lib/api/types';
@@ -47,7 +47,11 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
   const undoable = useUndoableAction();
   const tableRef = useRef<HTMLTableElement>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<string | null>(null);
+  // The bulk control whose change is saving: it alone shows it is working, until the list shows the change
+  const [pending, setPending] = useState<string | null>(null);
+  const [refreshing, startTransition] = useTransition();
+  const [deleting, setDeleting] = useState(false);
+  const working = (control: string) => (control === 'delete' ? deleting : refreshing && pending === control);
   const [error, setError] = useState<string | null>(null);
   const [bulkStatus, setBulkStatus] = useState<ContactStatus>('in_progress');
   const [pickerKey, setPickerKey] = useState(0);
@@ -95,33 +99,36 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
     return () => table.removeEventListener('click', onClick);
   }, [router]);
 
-  /** One change on the selected messages; refreshes the list (and the nav badge). */
-  async function apply(name: string, change: ContactBulkChange, ids = chosen): Promise<string[] | null> {
-    setBusy(name);
+  /** One change on the selected messages; refreshes the list (and the nav badge) inside the same transition. */
+  function apply(name: string, change: ContactBulkChange, ids = chosen): Promise<string[] | null> {
+    setPending(name);
     setError(null);
-    try {
-      const result = await bulkContactMessages(ids, change);
-      if (!result.ok) {
-        logger.warn('[contact] Bulk change failed', { name, status: result.status });
-        setError(result.status === 400 && 'assignee' in change ? t('contact.notStaff') : t('contact.failed'));
-        return null;
-      }
-      if (result.data.missing.length) setError(t('contact.bulkPartial', { ok: result.data.ok.length, total: ids.length }));
-      router.refresh();
-      return result.data.ok;
-    } catch (e) {
-      logger.error('[contact] Bulk request failed', { name, error: e instanceof Error ? e.message : String(e) });
-      setError(t('contact.failed'));
-      return null;
-    } finally {
-      setBusy(null);
-    }
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        try {
+          const result = await bulkContactMessages(ids, change);
+          if (!result.ok) {
+            logger.warn('[contact] Bulk change failed', { name, status: result.status });
+            setError(result.status === 400 && 'assignee' in change ? t('contact.notStaff') : t('contact.failed'));
+            resolve(null);
+            return;
+          }
+          if (result.data.missing.length) setError(t('contact.bulkPartial', { ok: result.data.ok.length, total: ids.length }));
+          startTransition(() => router.refresh());
+          resolve(result.data.ok);
+        } catch (e) {
+          logger.error('[contact] Bulk request failed', { name, error: e instanceof Error ? e.message : String(e) });
+          setError(t('contact.failed'));
+          resolve(null);
+        }
+      });
+    });
   }
 
   /** Delete at once with Undo (soft delete: also restorable for 30 days from Recently deleted). */
   async function remove(ids: string[]) {
     setError(null);
-    setBusy('delete');
+    setDeleting(true);
     try {
       await undoable.run({
         action: async () => {
@@ -142,7 +149,7 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       logger.warn('[contact] Delete failed', { error: e instanceof Error ? e.message : String(e) });
       setError(t('contact.failed'));
     } finally {
-      setBusy(null);
+      setDeleting(false);
     }
   }
 
@@ -295,7 +302,7 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
               <AssigneePicker
                 key={pickerKey}
                 testId="contact-bulk-assignee"
-                disabled={!!busy}
+                disabled={working('assign')}
                 onPick={async (id) => {
                   if (await apply('assign', { assignee: id })) setPickerKey((k) => k + 1);
                 }}
@@ -303,11 +310,11 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
             </div>
           }
         >
-          <button type="button" className={smallButton} disabled={!!busy} onClick={() => apply('read', { read: true })} data-testid="contact-bulk-read">
-            {t('contact.markRead')}
+          <button type="button" className={smallButton} disabled={working('read')} aria-busy={working('read') || undefined} onClick={() => apply('read', { read: true })} data-testid="contact-bulk-read">
+            {working('read') ? t('contact.working') : t('contact.markRead')}
           </button>
-          <button type="button" className={smallButton} disabled={!!busy} onClick={() => apply('unread', { read: false })} data-testid="contact-bulk-unread">
-            {t('contact.markUnread')}
+          <button type="button" className={smallButton} disabled={working('unread')} aria-busy={working('unread') || undefined} onClick={() => apply('unread', { read: false })} data-testid="contact-bulk-unread">
+            {working('unread') ? t('contact.working') : t('contact.markUnread')}
           </button>
           <span className="inline-flex items-center gap-1">
             <label htmlFor="contact-bulk-status" className="sr-only">
@@ -320,18 +327,19 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
                 </option>
               ))}
             </Select>
-            <button type="button" className={smallButton} disabled={!!busy} onClick={() => apply('status', { status: bulkStatus })} data-testid="contact-bulk-status-apply">
-              {t('contact.setStatus')}
+            <button type="button" className={smallButton} disabled={working('status')} aria-busy={working('status') || undefined} onClick={() => apply('status', { status: bulkStatus })} data-testid="contact-bulk-status-apply">
+              {working('status') ? t('contact.working') : t('contact.setStatus')}
             </button>
           </span>
           <button
             type="button"
             className={`${smallButton} text-danger-fg`}
-            disabled={!!busy}
+            disabled={deleting}
+            aria-busy={deleting || undefined}
             onClick={() => remove(chosen)}
             data-testid="contact-bulk-delete"
           >
-            {t('contact.deleteSelected')}
+            {deleting ? t('contact.working') : t('contact.deleteSelected')}
           </button>
         </BulkBar>
       )}

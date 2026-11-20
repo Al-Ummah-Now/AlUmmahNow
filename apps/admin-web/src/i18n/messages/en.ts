@@ -1117,6 +1117,8 @@ const en = {
     unassign: 'Unassign',
     markSpam: 'Mark as spam',
     notSpam: 'Not spam',
+    markedSpam: 'Marked as spam',
+    markedNotSpam: 'Marked as not spam',
     delete: 'Delete message',
     deleteConfirm: 'Delete this message and its notes? It moves to Recently deleted, where it can be restored for {#30} days.',
     replyTitle: 'Reply by email',
