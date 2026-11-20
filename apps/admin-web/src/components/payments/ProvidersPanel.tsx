@@ -348,7 +348,7 @@ function CredentialRow({ provider, field, mode, writable, locked, confirm, run, 
         <span className="text-sm font-medium text-fg">{fieldName}</span>
         {/* Present (with the last 4 to tell keys apart) or Missing: never the value */}
         <ToneChip tone={status ? 'good' : 'neutral'} testId={`payments-credential-state-${provider.id}-${field}`}>
-          {status ? (status.last4 ? <>{t('payments.provider.present')} · <bdi dir="ltr">•••• {status.last4}</bdi></> : t('payments.provider.present')) : t('payments.provider.credentialMissing')}
+          {status ? (status.last4 ? <>{t('payments.provider.present')} • <bdi dir="ltr">•••• {status.last4}</bdi></> : t('payments.provider.present')) : t('payments.provider.credentialMissing')}
         </ToneChip>
       </div>
       {status && <p className="text-xs text-fg-muted mb-2">{t('payments.provider.savedOn', { date: formatDate(status.setAt, locale, true) })}</p>}

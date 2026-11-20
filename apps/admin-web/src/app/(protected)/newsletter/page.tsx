@@ -154,7 +154,7 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
               <h2 id="newsletter-issue-title" className="text-lg font-semibold text-fg mb-1">{subjectOf(issue)}</h2>
               <p className={`text-sm font-medium mb-4 ${ISSUE_TONE[issue.status]}`} data-testid="newsletter-issue-status">
                 {t(`newsletter.issueStatuses.${issue.status}` as MessageKey)}
-                {issue.send_started_at ? ` · ${formatDate(issue.send_started_at, locale, true)}` : ''}
+                {issue.send_started_at ? ` • ${formatDate(issue.send_started_at, locale, true)}` : ''}
               </p>
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5 mb-4" data-testid="newsletter-delivery">
                 {(['sent', 'queued', 'failed', 'skipped', 'sunk'] as const).map((k) => (

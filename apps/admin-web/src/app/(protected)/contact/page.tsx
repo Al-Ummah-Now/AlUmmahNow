@@ -77,7 +77,7 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
           {t('contact.subtitle')}
           {data && (
             <span data-testid="contact-total" data-total={data.total}>
-              {' · '}
+              {' • '}
               {formatCount(data.total, 'message', locale)}
             </span>
           )}

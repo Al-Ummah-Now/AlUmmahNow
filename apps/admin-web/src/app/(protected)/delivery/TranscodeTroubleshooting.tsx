@@ -149,7 +149,7 @@ function StatusStrip({ status, t, locale }: { status: TroubleshootStatus; t: Tra
   const inUse = c && c.ok ? (c.maxInstances === null ? f.integer(c.inUse) : t('transcodeTroubleshoot.of', { n: f.integer(c.inUse), m: f.integer(c.maxInstances) })) : unknown;
   const health = c && c.ok
     ? c.health && Object.keys(c.health).length
-      ? Object.entries(c.health).map(([name, n]) => t('transcodeTroubleshoot.healthItem', { name: healthName(name, t), n: f.integer(n) })).join(' · ')
+      ? Object.entries(c.health).map(([name, n]) => t('transcodeTroubleshoot.healthItem', { name: healthName(name, t), n: f.integer(n) })).join(' • ')
       : t('transcodeTroubleshoot.noHealth')
     : unknown;
   const backlog = (n: number | null | undefined) => (typeof n === 'number' ? t('transcodeTroubleshoot.messages', { n: f.integer(n) }) : unknown);

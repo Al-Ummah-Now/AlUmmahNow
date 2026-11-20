@@ -99,9 +99,9 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   <a href={`mailto:${m.email}`} className={`${linkClass} underline`} dir="ltr" data-testid="contact-sender-email">
                     <EmailText email={m.email} />
                   </a>
-                  {' · '}
+                  {' • '}
                   {translateDynamic(t, 'contactTopic', m.topic)}
-                  {' · '}
+                  {' • '}
                   <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>
                 </p>
               </div>
@@ -144,7 +144,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                         )}
                       </span>
                       <span className="text-fg-subtle">
-                        <UserName id={n.author_id} email={n.author_email} showEmail={false} /> · <time dateTime={n.created_at}>{formatDate(n.created_at, locale, true)}</time>
+                        <UserName id={n.author_id} email={n.author_email} showEmail={false} /> • <time dateTime={n.created_at}>{formatDate(n.created_at, locale, true)}</time>
                       </span>
                     </div>
                     <p className="text-fg whitespace-pre-wrap break-words" dir="auto">

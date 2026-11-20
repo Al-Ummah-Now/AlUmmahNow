@@ -95,7 +95,7 @@ export function VideoProvidersPanel({ videoId, media, canManage }: { videoId: st
                 <Chip tone={STATUS_TONE[c.status]}>{t(STATUS_LABEL[c.status])}</Chip>
               </div>
               <div className="mt-1 space-y-0.5 text-sm text-fg-muted">
-                {c.renditions.length > 0 && <p dir="ltr" className="text-start">{c.renditions.join(' · ')}</p>}
+                {c.renditions.length > 0 && <p dir="ltr" className="text-start">{c.renditions.join(' • ')}</p>}
                 {c.readyAt && <p>{formatDate(c.readyAt, locale, true)}</p>}
                 {c.legacy && <p>{t('mediaProviders.video.legacy')}</p>}
                 {c.error && <p className="text-danger-fg break-words">{c.error}</p>}
@@ -111,8 +111,8 @@ export function VideoProvidersPanel({ videoId, media, canManage }: { videoId: st
         {view.override ? (
           <>
             {t('mediaProviders.video.pinned')}
-            {view.override.note ? ` · ${view.override.note}` : ''}
-            {view.override.updatedAt ? ` · ${formatDate(view.override.updatedAt, locale, true)}` : ''}
+            {view.override.note ? ` • ${view.override.note}` : ''}
+            {view.override.updatedAt ? ` • ${formatDate(view.override.updatedAt, locale, true)}` : ''}
           </>
         ) : view.channelOverride ? (
           t('mediaProviders.video.followsChannel')

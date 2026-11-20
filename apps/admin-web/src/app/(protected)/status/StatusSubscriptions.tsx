@@ -90,8 +90,8 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
                   {t('statusPage.subs.lastDelivery')}:{' '}
                   {w.last ? (
                     <>
-                      <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> · {formatDate(w.last.at, locale, true)}
-                      {w.last.error && w.last.status === 'failed' && <> · <span data-testid="status-webhook-error">{deliveryErrorText(w.last.error)}</span></>}
+                      <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> • {formatDate(w.last.at, locale, true)}
+                      {w.last.error && w.last.status === 'failed' && <> • <span data-testid="status-webhook-error">{deliveryErrorText(w.last.error)}</span></>}
                     </>
                   ) : (
                     t('statusPage.subs.never')
@@ -185,7 +185,7 @@ function History({ items }: { items: Subs['notifications'] }) {
         {items.map((n) => (
           <li key={n.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
             <p className="font-medium text-fg" dir="auto">{titleOf(n)}</p>
-            <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} · {formatDate(n.createdAt, locale, true)}</p>
+            <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} • {formatDate(n.createdAt, locale, true)}</p>
             <dl className="mt-2 grid grid-cols-3 gap-2">
               <div><dt className="text-fg-muted">{t('statusPage.subs.recipients')}</dt><dd className="tabular-nums text-fg">{n.fannedOutAt ? formatNumber(n.recipients ?? 0, locale) : t('statusPage.subs.sending')}</dd></div>
               <div><dt className="text-fg-muted">{t('statusPage.subs.delivered')}</dt><dd className="tabular-nums text-fg">{formatNumber(n.sent, locale)}</dd></div>

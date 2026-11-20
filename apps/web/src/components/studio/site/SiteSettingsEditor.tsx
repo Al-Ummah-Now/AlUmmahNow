@@ -135,11 +135,11 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
         <p className="text-sm">
           <span className="font-medium">{s.address}: </span>
           <span dir="ltr" className="font-mono" data-testid="studio-site-host">{saved.primaryHost}</span>
-          {' · '}
+          {' • '}
           <span data-testid="studio-site-status">{statusText}</span>
           {site.status === 'live' && (
             <>
-              {' · '}
+              {' • '}
               <a className="underline" href={`https://${saved.primaryHost}/${lang(locale)}/`} target="_blank" rel="noopener noreferrer">{s.open}</a>
             </>
           )}

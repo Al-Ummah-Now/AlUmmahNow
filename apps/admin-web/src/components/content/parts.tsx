@@ -212,7 +212,7 @@ export function ReportsCard({ reports, t, locale }: { reports: ContentReport[]; 
             <li key={r.id} className="py-3 flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-fg text-sm">
-                  <TranslatedValue t={t} prefix="reason" value={r.reason} /> · <TranslatedValue t={t} prefix="status" value={r.status} />
+                  <TranslatedValue t={t} prefix="reason" value={r.reason} /> • <TranslatedValue t={t} prefix="status" value={r.status} />
                 </p>
                 {r.description && <p className="text-fg-muted text-sm break-words" dir="auto">{r.description}</p>}
                 <p className="text-fg-subtle text-xs">
@@ -263,7 +263,7 @@ export function MetaLine({ parts, className = '', testId }: { parts: React.React
       <span className="flex flex-wrap -ms-[1em]">
         {shown.map((part, i) => (
           <span key={i} className="relative min-w-0 ps-[1em]">
-            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">·</span>
+            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">•</span>
             <bdi>{part}</bdi>
           </span>
         ))}

@@ -313,7 +313,7 @@ export const STUDIO_EN = {
   dashboard: {
     latest: 'Latest video',
     next: 'Next scheduled',
-    counts: '{views} · {likes} · {comments}',
+    counts: '{views} • {likes} • {comments}',
     watchTime: 'Watch time in the last {days} days: {time}',
     cardFailed: 'Could not load this card.',
     retry: 'Try again',
@@ -341,10 +341,10 @@ export const STUDIO_EN = {
     statusLabel: 'Status',
     statuses: { published: 'Published', scheduled: 'Scheduled', drafts: 'Drafts', processing: 'Processing', in_review: 'In review', not_approved: 'Not approved', failed: 'Failed' },
     review: {
-      checking: 'In review · usually within {minutes} minutes',
-      held: 'A reviewer will check it · about {minutes} min',
+      checking: 'In review • usually within {minutes} minutes',
+      held: 'A reviewer will check it • about {minutes} min',
       heldNoTime: 'A reviewer will check it',
-      appealed: 'Appeal sent · a different reviewer will check it',
+      appealed: 'Appeal sent • a different reviewer will check it',
       rejected: 'Not approved: {reason}',
       appealUsed: 'Appeal decided',
       reasons: {
@@ -506,7 +506,7 @@ export const STUDIO_EN = {
     quota: {
       hoursUsedBody: 'You\'ve streamed {used} of your {hours} hours this month. They renew on the 1st.',
       pendingDeletionBody: 'Your account is being deleted, so you can\'t go live.',
-      usage: '{used} of {hours} live hours used this month · up to {minutes} minutes per stream',
+      usage: '{used} of {hours} live hours used this month • up to {minutes} minutes per stream',
     },
     goLive: {
       back: 'Back to live streams',
@@ -865,7 +865,7 @@ export const STUDIO_AR: StudioTranslations = {
   dashboard: {
     latest: 'أحدث مرئي',
     next: 'المجدول التالي',
-    counts: '{views} · {likes} · {comments}',
+    counts: '{views} • {likes} • {comments}',
     watchTime: 'وقت المشاهدة في آخر {days} يومًا: {time}',
     cardFailed: 'تعذّر تحميل هذه البطاقة.',
     retry: 'حاول مرة أخرى',
@@ -893,10 +893,10 @@ export const STUDIO_AR: StudioTranslations = {
     statusLabel: 'الحالة',
     statuses: { published: 'منشور', scheduled: 'مجدول', drafts: 'مسودات', processing: 'قيد المعالجة', in_review: 'قيد المراجعة', not_approved: 'لم تتم الموافقة', failed: 'فشل' },
     review: {
-      checking: 'قيد المراجعة · عادةً خلال {minutes} دقائق',
-      held: 'سيراجعه أحد المراجعين · نحو {minutes} دقيقة',
+      checking: 'قيد المراجعة • عادةً خلال {minutes} دقائق',
+      held: 'سيراجعه أحد المراجعين • نحو {minutes} دقيقة',
       heldNoTime: 'سيراجعه أحد المراجعين',
-      appealed: 'أُرسل الاعتراض · سيراجعه مراجع آخر',
+      appealed: 'أُرسل الاعتراض • سيراجعه مراجع آخر',
       rejected: 'لم تتم الموافقة: {reason}',
       appealUsed: 'بُتّ في الاعتراض',
       reasons: {
@@ -1058,7 +1058,7 @@ export const STUDIO_AR: StudioTranslations = {
     quota: {
       hoursUsedBody: 'بثثت {used} من أصل {hours} ساعة هذا الشهر، وتتجدد في اليوم الأول من الشهر.',
       pendingDeletionBody: 'حسابك قيد الحذف، لذا لا يمكنك البث المباشر.',
-      usage: 'استُخدمت {used} من {hours} ساعة بث هذا الشهر · حتى {minutes} دقيقة لكل بث',
+      usage: 'استُخدمت {used} من {hours} ساعة بث هذا الشهر • حتى {minutes} دقيقة لكل بث',
     },
     goLive: {
       back: 'العودة إلى البثوث المباشرة',

@@ -448,7 +448,7 @@ function StaffDevices() {
             <li key={d.installId} className="space-y-3 rounded border border-border bg-surface-2 p-4" data-install-id={d.installId}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium text-fg">{t(APP_LABEL[d.app] ?? 'reviewAlerts.appViewer')}</span>
-                <span className="text-sm text-fg" dir="ltr">{d.platform}{d.appVersion ? ` · ${d.appVersion}` : ''}</span>
+                <span className="text-sm text-fg" dir="ltr">{d.platform}{d.appVersion ? ` • ${d.appVersion}` : ''}</span>
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                 <dt className="text-fg-muted">{t('reviewAlerts.deviceUpdated')}</dt>
@@ -490,7 +490,7 @@ function StaffDevices() {
               {devices.map((d) => (
                 <tr key={d.installId} className="border-t border-border" data-install-id={d.installId}>
                   <td className="p-2">{t(APP_LABEL[d.app] ?? 'reviewAlerts.appViewer')}</td>
-                  <td className="p-2" dir="ltr">{d.platform}{d.appVersion ? ` · ${d.appVersion}` : ''}</td>
+                  <td className="p-2" dir="ltr">{d.platform}{d.appVersion ? ` • ${d.appVersion}` : ''}</td>
                   <td className="p-2 font-mono" dir="ltr">{d.tokenHint}</td>
                   <td className="p-2">{formatDate(new Date(d.updatedAt), locale, true)}</td>
                   <td className="p-2">

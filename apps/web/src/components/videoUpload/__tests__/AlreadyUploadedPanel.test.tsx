@@ -34,7 +34,7 @@ describe('AlreadyUploadedPanel', () => {
     mockLang = 'en';
     const { onUploadAgain, onChooseAnother } = panel();
     expect(screen.getByRole('region', { name: 'Already uploaded' })).toBeInTheDocument();
-    expect(screen.getByTestId('upload-already-uploaded-hint')).toHaveTextContent('lecture-1.mp4 · You already uploaded this file.');
+    expect(screen.getByTestId('upload-already-uploaded-hint')).toHaveTextContent('lecture-1.mp4 • You already uploaded this file.');
     expect(screen.getByRole('link', { name: 'View video' })).toHaveAttribute('href', '/en/video/vid-9');
     fireEvent.click(screen.getByRole('button', { name: 'Upload again as a new video' }));
     expect(onUploadAgain).toHaveBeenCalledTimes(1);

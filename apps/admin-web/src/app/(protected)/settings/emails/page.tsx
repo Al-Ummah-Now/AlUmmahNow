@@ -50,7 +50,7 @@ export default async function EmailsPage() {
               <p className="text-sm text-fg-muted">{t(`emailTemplates.keyHelp.${item.key}` as MessageKey)}</p>
               <p className="text-sm text-fg-muted">
                 {t('emailTemplates.version', { version: formatNumber(locale, item.version) })}
-                {' · '}
+                {' • '}
                 {item.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : t('emailTemplates.savedBy', { date: formatDate(item.updatedAt, locale, true), name: who(item.updatedBy) })}
               </p>
             </div>

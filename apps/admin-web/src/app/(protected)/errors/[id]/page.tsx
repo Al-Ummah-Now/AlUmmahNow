@@ -358,7 +358,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
     ]);
   }
   if (ctx?.origin) facts.push(...originFacts(ctx.origin, t, locale));
-  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ?? '—'], [t('errorsPage.theme'), e.theme ?? '—']);
+  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' • ') || '—'], [t('errorsPage.locale'), e.locale ?? '—'], [t('errorsPage.theme'), e.theme ?? '—']);
   const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
     <li className={`border rounded p-4 ${highlighted ? 'border-accent ring-1 ring-accent' : 'border-border'}`} data-testid="error-sample" data-ref={e.ref}>

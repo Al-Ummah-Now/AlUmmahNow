@@ -72,9 +72,9 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
               <p className="font-medium text-fg">{theme.name[locale]} <span className="text-xs text-fg-muted" dir="ltr">{theme.id}</span></p>
               <p className="text-xs text-fg-muted">
                 {theme.builtIn ? t('themeBuilder.builtIn') : t('themeBuilder.custom')}
-                {' · '}{theme.latestVersion ? t('themeBuilder.published', { version: theme.latestVersion }) : t('themeBuilder.notPublished')}
-                {theme.active && <> · <strong>{t('themeBuilder.active')}{theme.activeVersion ? ` (${theme.activeVersion})` : ''}</strong></>}
-                {theme.basedOn && <> · {t('themeBuilder.basedOn', { base: theme.basedOn })}</>}
+                {' • '}{theme.latestVersion ? t('themeBuilder.published', { version: theme.latestVersion }) : t('themeBuilder.notPublished')}
+                {theme.active && <> • <strong>{t('themeBuilder.active')}{theme.activeVersion ? ` (${theme.activeVersion})` : ''}</strong></>}
+                {theme.basedOn && <> • {t('themeBuilder.basedOn', { base: theme.basedOn })}</>}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

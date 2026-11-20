@@ -209,7 +209,7 @@ export function CategorySuggestionsReview({
                             <div className="mt-2 flex flex-wrap gap-1" aria-label={t('categorySuggestions.options')}>
                               {item.options.slice(1).map((o) => (
                                 <span key={o.category} className="px-2 py-0.5 rounded bg-surface-2 text-fg-muted text-xs">
-                                  {categoryLabel(o.category, locale, categories)} · {pct(o.confidence)}%
+                                  {categoryLabel(o.category, locale, categories)} • {pct(o.confidence)}%
                                 </span>
                               ))}
                             </div>

@@ -222,9 +222,9 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                         <td className="max-w-40 truncate p-2">
                           <Link href={videoHref(item.videoId)} dir="auto" className="text-foreground hover:underline">{item.title}</Link>
                         </td>
-                        <td className="p-2 text-end tabular-nums">{number.format(item.views)}</td>
-                        <td className="p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
-                        <td className="p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{number.format(item.views)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
                       </tr>
                     ))}
                   </tbody>

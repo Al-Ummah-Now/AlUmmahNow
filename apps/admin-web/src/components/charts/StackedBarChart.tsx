@@ -103,7 +103,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                     const y1 = y(base);
                     return (
                       <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
-                        <title>{`${dayLabel(day)} · ${s.label}: ${format(v)}`}</title>
+                        <title>{`${dayLabel(day)} • ${s.label}: ${format(v)}`}</title>
                       </rect>
                     );
                   })}

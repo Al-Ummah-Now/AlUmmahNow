@@ -101,7 +101,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
                       <div className="flex flex-col gap-1">
-                        <span className="text-fg-muted" data-testid="invite-tier">{t('invites.tierLine', { tier: tierName(inv.tierId) })}{inv.authRoles.includes('Scholar') ? ` · ${t('invites.scholar')}` : ''}</span>
+                        <span className="text-fg-muted" data-testid="invite-tier">{t('invites.tierLine', { tier: tierName(inv.tierId) })}{inv.authRoles.includes('Scholar') ? ` • ${t('invites.scholar')}` : ''}</span>
                         {inv.channels.map((ch) => (
                           <Link key={ch.id} href={`/channels/${encodeURIComponent(ch.id)}`} className={linkClass} dir="auto" data-testid="invite-channel">
                             {ch.name}{ch.handle ? ` (@${ch.handle})` : ''}

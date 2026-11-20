@@ -102,7 +102,7 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
         {r ? (
           <>
             {t(`csamPage.kinds.${r.kind}` as MessageKey)}
-            {(r.videoId || r.postId) && <span className="text-fg-muted"> · <bdi dir="ltr">{r.videoId ?? r.postId}</bdi></span>}
+            {(r.videoId || r.postId) && <span className="text-fg-muted"> • <bdi dir="ltr">{r.videoId ?? r.postId}</bdi></span>}
           </>
         ) : (
           t('csamPage.detail.unmapped')
@@ -136,15 +136,15 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
         ) : (
           <span data-status={job.status}>
             {t(`csamPage.job.statuses.${job.status}` as MessageKey)}
-            {job.phase && <span className="text-fg-muted"> · {t('csamPage.job.phase', { phase: translateDynamic(t, 'csamPage.job.phases', job.phase.replace(/-/g, '_')) })}</span>}
-            <span className="text-fg-muted"> · {t('csamPage.job.attempts', { count: job.attempts })}</span>
+            {job.phase && <span className="text-fg-muted"> • {t('csamPage.job.phase', { phase: translateDynamic(t, 'csamPage.job.phases', job.phase.replace(/-/g, '_')) })}</span>}
+            <span className="text-fg-muted"> • {t('csamPage.job.attempts', { count: job.attempts })}</span>
             {job.lastError && <span className="block text-danger-fg"><bdi dir="ltr">{job.lastError}</bdi></span>}
           </span>
         )}
       </Row>
       {c.reportedAt && (
         <Row label={t('csamPage.detail.reported')} testId="csam-reported">
-          <bdi dir="ltr">{c.reportId}</bdi> · {formatDate(c.reportedAt, locale, true)}
+          <bdi dir="ltr">{c.reportId}</bdi> • {formatDate(c.reportedAt, locale, true)}
         </Row>
       )}
       <Row label={t('csamPage.detail.retainUntil')}>
@@ -181,7 +181,7 @@ function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
           <li key={f.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2" data-testid="csam-evidence-file">
             <span className="text-sm break-all">
               <bdi dir="ltr" className="font-mono text-fg">{f.name}</bdi>
-              <span className="text-fg-muted"> · <bdi dir="ltr">{bytes(f.bytes, locale)}</bdi></span>
+              <span className="text-fg-muted"> • <bdi dir="ltr">{bytes(f.bytes, locale)}</bdi></span>
             </span>
             {/* A plain link (no download attribute): a refused download sends the browser to sign in again */}
             <a href={csamDownloadHref(c.id, f.name)} className={linkClass} rel="noreferrer" data-testid="csam-evidence-download">

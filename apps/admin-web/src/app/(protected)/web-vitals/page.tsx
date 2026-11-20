@@ -149,8 +149,8 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
                     </dd>
                     <dd className="text-xs text-fg-muted">
                       {t('vitalsPage.target', { value: formatVital(metric, GOOD_LIMIT[metric], locale) })}
-                      {v && <> · {t('vitalsPage.loads', { count: v.samples })}</>}
-                      {v?.few && <> · {t('vitalsPage.few')}</>}
+                      {v && <> • {t('vitalsPage.loads', { count: v.samples })}</>}
+                      {v?.few && <> • {t('vitalsPage.few')}</>}
                     </dd>
                   </div>
                 );

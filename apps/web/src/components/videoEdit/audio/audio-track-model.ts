@@ -81,5 +81,5 @@ export function fileProblem(file: Pick<File, 'name' | 'size'>, t: AudioTracksTra
 /** A detected stream's line: "Track 2 · Arabic · Dub (stereo)". */
 export function streamText(s: DetectedAudioStream, t: AudioTracksTranslations, pageLang: string): string {
   const bits = [s.language ? languageName(s.language, pageLang) : null, s.title ?? null, s.channels ? `${s.channels}ch` : null].filter(Boolean);
-  return t.form.stream.replace('{n}', formatNumber(pageLang, s.index + 1)).replace('{details}', bits.join(' · ') || '—');
+  return t.form.stream.replace('{n}', formatNumber(pageLang, s.index + 1)).replace('{details}', bits.join(' • ') || '—');
 }

@@ -56,7 +56,7 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
         {r ? (
           <p className="text-fg-muted text-sm" data-last-run={r.lastRunAt}>
             {t('processing.reconcilerLast', { date: formatDate(r.lastRunAt, locale, true), scanned: r.scanned, notReady: r.notReady, started: r.loopsStarted })}
-            {' · '}
+            {' • '}
             {t('processing.reconcilerFlagged', { reupload: r.flagged.needsReupload, stalled: r.flagged.stalled, failed: r.flagged.failed })}
           </p>
         ) : (

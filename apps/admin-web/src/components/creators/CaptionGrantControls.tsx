@@ -178,10 +178,10 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
             {ledger.map((e) => (
               <li key={e.id} className="flex flex-col gap-0.5 border-b border-border pb-2 last:border-b-0" data-testid="caption-ledger-entry" data-kind={e.kind}>
                 <span className="text-fg">
-                  {formatDate(e.createdAt, locale, true)} · {t(`captionMinutes.ledgerKind.${e.kind}` as MessageKey)} · <bdi dir="ltr">{signed(e.minutes)}</bdi>
+                  {formatDate(e.createdAt, locale, true)} • {t(`captionMinutes.ledgerKind.${e.kind}` as MessageKey)} • <bdi dir="ltr">{signed(e.minutes)}</bdi>
                   {e.balanceAfter !== null && (
                     <>
-                      {' · '}
+                      {' • '}
                       <span className={e.balanceAfter < 0 ? 'font-medium text-danger-fg' : undefined}>
                         {t('captionMinutes.ledgerBalance')} <bdi dir="ltr">{signed(e.balanceAfter)}</bdi>
                       </span>

@@ -82,7 +82,7 @@ export function ChannelPicker({ channelId, value, onChange, max, testId, label }
           selected: selectedIds.has(option.id),
           disabled: selectedIds.has(option.id) || full,
           // Already featured: marked, not added twice
-          subtitle: selectedIds.has(option.id) ? [t.autocomplete.alreadyAdded, option.subtitle].filter(Boolean).join(' · ') : option.subtitle,
+          subtitle: selectedIds.has(option.id) ? [t.autocomplete.alreadyAdded, option.subtitle].filter(Boolean).join(' • ') : option.subtitle,
         })}
         label={f.searchChannels}
         listLabel={label}

@@ -44,7 +44,7 @@ export function signedUsd(locale: string): (v: number) => string {
 }
 
 function percentList(levels: readonly number[], f: OpsFormats): string {
-  return levels.map((l) => f.percent(l)).join(' · ');
+  return levels.map((l) => f.percent(l)).join(' • ');
 }
 
 export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | null; now: Date }) {
@@ -423,7 +423,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
                       <bdi className="block break-words font-medium text-fg">{label}</bdi>
-                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi> · {envLabel(t, m.env)}</span>
+                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi> • {envLabel(t, m.env)}</span>
                     </th>
                     <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}

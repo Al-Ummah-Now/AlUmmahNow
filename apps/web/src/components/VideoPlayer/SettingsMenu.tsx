@@ -329,7 +329,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
             <span className="vjs-fanous-mi-icon vjs-fanous-mi-check" aria-hidden="true">{o.id === current && <Check />}</span>
             <span className="vjs-fanous-mi-label">
               {o.lang ? <bdi lang={o.lang} dir="auto">{o.label}</bdi> : o.label}
-              {o.suffix && ` · ${o.suffix}`}
+              {o.suffix && ` • ${o.suffix}`}
             </span>
           </button>
         ))}

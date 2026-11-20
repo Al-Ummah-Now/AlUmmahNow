@@ -16,7 +16,7 @@ export function AccessLog({ entries, t, locale }: { entries: CsamAccessLogEntry[
           <li key={e.id} className="py-2 text-sm">
             <p className="text-fg font-medium">{action(e)}</p>
             <p className="text-xs text-fg-muted">
-              {formatDate(e.createdAt, locale, true)} · <UserName id={e.actorId} showEmail={false} />
+              {formatDate(e.createdAt, locale, true)} • <UserName id={e.actorId} showEmail={false} />
             </p>
             {logDetailText(e.detail) && (
               <p className="text-xs text-fg-muted break-words"><bdi dir="ltr">{logDetailText(e.detail)}</bdi></p>

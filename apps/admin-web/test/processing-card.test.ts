@@ -116,7 +116,7 @@ describe('R2 chips', () => {
     assert.deepEqual(chipStates(html), ['360p:done', '720p:failed']);
     assert.match(html, /<button type="button" class="[^"]*bg-danger-bg[^"]*" aria-describedby="r2-720p-reason" title="Failed: put HTTP 500"/);
     assert.match(html, /<span role="tooltip" id="r2-720p-reason"[^>]*>Failed: put HTTP 500<\/span>/);
-    assert.ok(text(html).includes('720p · Failed'), 'state in words, not colour alone');
+    assert.ok(text(html).includes('720p • Failed'), 'state in words, not colour alone');
   });
 
   it('never transcoded or still queued: no chips', () => {

@@ -240,7 +240,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
       <div className="flex flex-wrap items-center gap-2">
         <Chip tone={STATUS_TONE[site.status]} testId="site-panel-status">{t(STATUS_KEY[site.status])}</Chip>
         <span dir="ltr" className="font-mono text-sm">{host}</span>
-        <span className="text-sm text-fg-muted">{t(TIER_KEY[site.tier])} · {t('scholarSites.theme')}: <span dir="ltr">{site.themeRef}</span></span>
+        <span className="text-sm text-fg-muted">{t(TIER_KEY[site.tier])} • {t('scholarSites.theme')}: <span dir="ltr">{site.themeRef}</span></span>
         {site.status === 'live' && (
           <a className="text-sm underline" href={`https://${host}/`} target="_blank" rel="noopener noreferrer">{t('scholarSites.open')}</a>
         )}
@@ -306,7 +306,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
         <ul className="text-sm space-y-1" data-testid="site-history">
           {detail?.history.map((h) => (
             <li key={h.id} className="text-fg-muted">
-              <span title={h.action}>{actionLabel(h.action, t)}</span> · {formatDateTime(locale, h.createdAt)} · <UserName id={h.actorId} showEmail={false} />
+              <span title={h.action}>{actionLabel(h.action, t)}</span> • {formatDateTime(locale, h.createdAt)} • <UserName id={h.actorId} showEmail={false} />
             </li>
           ))}
         </ul>

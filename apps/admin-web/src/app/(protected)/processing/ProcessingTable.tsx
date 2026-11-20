@@ -134,7 +134,7 @@ export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; 
             {preview.map((p) => (
               <li key={p.videoId} className="text-sm text-fg" data-video-id={p.videoId} data-outcome={p.plan?.outcome ?? 'error'}>
                 <span className="font-medium">{titleOf(p.videoId)}</span>
-                {' · '}
+                {' • '}
                 {bunnyLabel(t, p.bunny)}
                 {' → '}
                 {outcomeText(p)}

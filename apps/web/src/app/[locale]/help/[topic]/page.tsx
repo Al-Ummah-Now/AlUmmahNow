@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { locale, topic } = await params;
   if (!isHelpTopic(topic)) return {};
   const h = locale === 'ar' ? HELP_AR : HELP_EN;
-  return { title: `${h.topics[topic].title} · ${h.title}`, description: h.topics[topic].summary };
+  return { title: `${h.topics[topic].title} • ${h.title}`, description: h.topics[topic].summary };
 }
 
 export default async function HelpTopicRoute({ params }: { params: Params }) {

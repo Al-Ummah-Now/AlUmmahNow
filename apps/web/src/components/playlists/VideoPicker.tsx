@@ -142,7 +142,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
     return (result.data || []).map((video) => ({
       id: video.id,
       label: localTitle(video, lang),
-      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' • ') || undefined,
       thumbnailUrl: video.thumbnailUrl,
       thumbnailShape: 'wide' as const,
       value: video,

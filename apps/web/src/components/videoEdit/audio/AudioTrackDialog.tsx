@@ -133,7 +133,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
   const langOptions = AUDIO_TRACK_LANGUAGES.map((l) => (
     <option key={l.code} value={l.code}>
       {languageName(l.code, lang)}
-      {languageName(l.code, lang) !== l.name ? ` · ${l.name}` : ''}
+      {languageName(l.code, lang) !== l.name ? ` • ${l.name}` : ''}
     </option>
   ));
 

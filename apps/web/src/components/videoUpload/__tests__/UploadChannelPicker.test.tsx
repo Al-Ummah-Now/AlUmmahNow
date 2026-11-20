@@ -77,7 +77,7 @@ describe('UploadChannelPicker', () => {
     const listbox = screen.getByRole('listbox');
     expect(within(listbox).getAllByRole('option')).toHaveLength(3);
     expect(within(listbox).getByRole('group', { name: 'Channels you manage' })).toBeInTheDocument();
-    expect(within(listbox).getByText(/@masjid · Editor/)).toBeInTheDocument();
+    expect(within(listbox).getByText(/@masjid • Editor/)).toBeInTheDocument();
     // A channel without an avatar shows its initial
     expect(within(screen.getByTestId('upload-channel-option-c3')).getByText('Q')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('upload-channel-option-c2'));

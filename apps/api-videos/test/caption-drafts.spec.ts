@@ -144,7 +144,7 @@ describe('caption drafts', () => {
 		assert.equal(served.status, 200);
 		const vtt = await served.text();
 		assert.match(vtt, /﴿قُلْ هُوَ ٱللَّهُ أَحَدٌ﴾ \(الإخلاص ١١٢:١\)/);
-		assert.match(vtt, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
+		assert.match(vtt, /\[القرآن ١١٢:٢ • quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');
 		assert.ok(!vtt.includes(HEARD));
 		assert.ok(!/[]/.test(vtt));
@@ -159,7 +159,7 @@ describe('caption drafts', () => {
 		await app().request('/api/videos/v1/captions/drafts/ar', json('PUT', { baseVersion: 1, cues: accepted }), e as never);
 		await app().request('/api/videos/v1/captions/drafts/ar/publish', json('POST', { baseVersion: 2 }), e as never);
 		const vtt = await (await app().request('/api/videos/v1/subtitles/ar', {}, e as never)).text();
-		assert.match(vtt, /\[القرآن ١١٢:١ · quran\.com\/112\/1\]/);
+		assert.match(vtt, /\[القرآن ١١٢:١ • quran\.com\/112\/1\]/);
 		assert.ok(!vtt.includes(HEARD));
 	});
 

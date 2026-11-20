@@ -154,13 +154,13 @@ describe('BatchUploadQueue processing status', () => {
     );
   });
 
-  it('shows "Uploaded · Processing" per row, then Ready with a View video link', () => {
+  it('shows "Uploaded • Processing" per row, then Ready with a View video link', () => {
     const files = [queueItem('completed', 1), queueItem('completed', 2)];
     const { rerender } = renderQueue(files, {}, false);
     const rows = screen.getAllByTestId('batch-file');
     for (const row of rows) {
       expect(row).toHaveAttribute('data-processing', 'processing');
-      expect(within(row).getByTestId('batch-file-status')).toHaveTextContent('Uploaded · Processing');
+      expect(within(row).getByTestId('batch-file-status')).toHaveTextContent('Uploaded • Processing');
     }
     expect(screen.getByTestId('batch-notice')).toHaveAttribute('data-notice', 'processing');
     expect(screen.queryByTestId('batch-file-view')).toBeNull();
@@ -201,6 +201,6 @@ describe('BatchUploadQueue processing status', () => {
   it('shows Arabic row statuses', () => {
     mockLang = 'ar';
     renderQueue([queueItem('completed', 1)], {}, false);
-    expect(screen.getByTestId('batch-file-status')).toHaveTextContent('تم الرفع · قيد المعالجة');
+    expect(screen.getByTestId('batch-file-status')).toHaveTextContent('تم الرفع • قيد المعالجة');
   });
 });

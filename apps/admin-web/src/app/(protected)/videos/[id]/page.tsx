@@ -116,7 +116,7 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
       )}
       {v.isHidden && (holds.length > 0 || v.moderationAction) && (
         <Notice tone="warn" testId="video-holds">
-          {t('videos.holds')}: {[...holds.map((k) => t(k)), ...(v.moderationAction ? [t('videos.moderationHidden')] : [])].join(' · ')}
+          {t('videos.holds')}: {[...holds.map((k) => t(k)), ...(v.moderationAction ? [t('videos.moderationHidden')] : [])].join(' • ')}
         </Notice>
       )}
 

@@ -202,7 +202,7 @@ export function EmailTemplateEditor({ initial, initialUpdatedByName, adminEmail 
             <p className="text-sm text-fg-muted">{t('emailTemplates.editorIntro')}</p>
             <p className="text-sm text-fg-muted" data-testid="email-template-version">
               {t('emailTemplates.version', { version: formatNumber(locale, saved.version) })}
-              {' · '}
+              {' • '}
               {saved.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : t('emailTemplates.savedBy', { date: formatDate(saved.updatedAt, locale, true), name: savedByName || t('emailTemplates.unknownPerson') })}
             </p>
           </div>
@@ -570,7 +570,7 @@ function History({ templateKey, current, refresh, dirty, onRestore }: { template
             <div className="flex-1 min-w-0 text-sm">
               <p className="text-fg font-medium">
                 {t('emailTemplates.version', { version: formatNumber(locale, v.version) })}
-                {' · '}
+                {' • '}
                 {actionText(v)}
                 {v.version === current ? <span className="ms-2 inline-block rounded-full border border-border px-2 text-xs text-fg-muted">{t('emailTemplates.historyCurrent')}</span> : null}
               </p>

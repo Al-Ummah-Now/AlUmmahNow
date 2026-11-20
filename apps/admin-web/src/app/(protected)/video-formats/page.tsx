@@ -56,11 +56,11 @@ export default async function VideoFormatsPage({ searchParams }: { searchParams:
           <div className="mt-6" data-testid="video-formats-latest" data-status={run.status} data-dry-run={run.dryRun}>
             <p className="text-sm text-fg mb-4">
               {t('videoFormats.status')}: <strong>{run.status === 'done' ? t('videoFormats.statusDone') : t('videoFormats.statusRunning')}</strong>
-              {' · '}
+              {' • '}
               {run.dryRun ? t('videoFormats.kindDry') : t('videoFormats.kindApply')}
-              {' · '}
+              {' • '}
               {t('videoFormats.startedAt')} <time dateTime={run.startedAt}>{formatDate(run.startedAt, locale, true)}</time>
-              {' · '}
+              {' • '}
               {t('videoFormats.pages')} {formatNumber(run.pagesDone, locale)}
             </p>
             {run.lastError && <ErrorAlert testId="video-formats-run-error">{`${t('videoFormats.lastError')}: ${run.lastError}`}</ErrorAlert>}

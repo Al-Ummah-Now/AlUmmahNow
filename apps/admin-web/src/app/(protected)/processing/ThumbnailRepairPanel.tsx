@@ -105,7 +105,7 @@ export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | 
               date: formatDate(latest.createdAt, locale, true),
               status: t(RUN_STATUS_LABEL[latest.status]),
             })}
-            {result?.checked !== undefined && <> · {t('processing.thumbsChecked', { count: result.checked })}</>}
+            {result?.checked !== undefined && <> • {t('processing.thumbsChecked', { count: result.checked })}</>}
           </p>
           {thumbCounts(t, result?.counts) && <p className="text-sm text-fg-muted">{thumbCounts(t, result?.counts)}</p>}
           {latest.status === 'failed' && (

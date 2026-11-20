@@ -90,7 +90,7 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
           {t('errorsPage.subtitle')}
           {data && (
             <span data-testid="errors-total" data-total={data.total}>
-              {' · '}
+              {' • '}
               {t('errorsPage.totalCount', { count: data.total })}
             </span>
           )}

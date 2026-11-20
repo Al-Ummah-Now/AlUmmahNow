@@ -92,7 +92,7 @@ export function scopeText(run: BackfillRun, t: Translator, names?: AdminNames | 
     : s.kind === 'channel' ? t('mediaBackfill.scopeChannelOf', { name: s.channelId ? itemView('channel', s.channelId, names, t).label : '' })
     : s.kind === 'dates' ? t('mediaBackfill.scopeDatesOf', { from: s.from ?? '…', to: s.to ?? '…' })
     : t('mediaBackfill.scopeVideosOf', { count: s.videoIds?.length ?? 0 });
-  return s.onlyMissing ? `${base} · ${t('mediaBackfill.onlyMissing')}` : base;
+  return s.onlyMissing ? `${base} • ${t('mediaBackfill.onlyMissing')}` : base;
 }
 
 /** The channels runs are scoped to, for one names request. */

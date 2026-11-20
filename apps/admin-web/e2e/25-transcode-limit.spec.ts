@@ -1,6 +1,6 @@
 /**
  * Concurrent R2 transcodes as an autoscaling min–max range, on the local stack. The setting is in Video
- * providers → Cloudflare R2 settings; Delivery shows "N running · M waiting · range min–max" and links there.
+ * providers → Cloudflare R2 settings; Delivery shows "N running • M waiting • range min–max" and links there.
  * - an admin follows Delivery's link and sets 2–6: saved (api-videos stores it where apps/media's
  *   dispatcher reads it), the cost line shows one slot and the worst case at max, Delivery shows the new
  *   range, the change is audited, and Undo in the toast puts the old range back (audited too);
@@ -67,8 +67,8 @@ test.describe('max concurrent transcodes', () => {
 
       await setPreferences(page, { locale: 'en', theme: 'dark' });
       await page.goto('/delivery');
-      await expect(page.getByTestId('delivery-live-summary')).toHaveText(/^\d+ running · \d+ waiting · range 4–4$/, { timeout: 30_000 });
-      await expect(page.getByTestId('delivery-live-ceiling')).toHaveText('Range 4–4 · Cloudflare limit: 3,371');
+      await expect(page.getByTestId('delivery-live-summary')).toHaveText(/^\d+ running • \d+ waiting • range 4–4$/, { timeout: 30_000 });
+      await expect(page.getByTestId('delivery-live-ceiling')).toHaveText('Range 4–4 • Cloudflare limit: 3,371');
       // Delivery has no field of its own: only the figures and the link to the R2 settings
       await expect(page.getByTestId('delivery-limit')).toHaveCount(0);
       await page.getByTestId('delivery-live-limit-link').click();
@@ -149,7 +149,7 @@ test.describe('max concurrent transcodes', () => {
       await setPreferences(page, { locale: 'en', theme: 'dark' });
       await page.goto('/delivery');
       await expect(page.getByTestId('delivery-read-only')).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId('delivery-live-summary')).toHaveText(/running · \d+ waiting · range \d+–\d+$/);
+      await expect(page.getByTestId('delivery-live-summary')).toHaveText(/running • \d+ waiting • range \d+–\d+$/);
       await expect(page.getByTestId('delivery-live-limit-link')).toHaveCount(0);
       await expect(page.getByTestId('delivery-limit')).toHaveCount(0);
       await expect(page.getByTestId('delivery-jobs-section')).toHaveCount(0);

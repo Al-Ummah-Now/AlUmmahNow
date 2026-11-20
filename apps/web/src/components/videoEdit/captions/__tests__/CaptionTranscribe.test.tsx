@@ -131,7 +131,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
   it('shows the meter and the cost, picks the video language and starts after confirming', async () => {
     setup();
     render(<CaptionDraftsPanel videoId="v1" spokenLanguage="en" />);
-    expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 34 / 120 this month · resets Dec 1');
+    expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 34 / 120 this month • resets Dec 1');
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '34');
     expect(screen.getByTestId('caption-transcribe-cost')).toHaveTextContent('This uses 17 of your 86 remaining caption minutes.');
     expect(screen.getByLabelText('Language spoken in the video', { selector: 'select' })).toHaveValue('en');
@@ -183,8 +183,8 @@ describe('CaptionDraftsPanel: Transcribe', () => {
   it('a negative balance shows the overdraft in red and stops new starts', async () => {
     setup({ minutes: { usage: usage({ monthUsed: 120, overdraft: 7, remaining: -7, warning: true }), minutesNeeded: 17 } });
     const { unmount } = render(<CaptionDraftsPanel videoId="v1" />);
-    expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 127 / 120 this month · 7 over');
-    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Caption minutes: 127 / 120 this month · 7 over');
+    expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 127 / 120 this month • 7 over');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Caption minutes: 127 / 120 this month • 7 over');
     expect(screen.getByTestId('caption-minutes-short')).toHaveTextContent("You're 7 minutes over this month's caption minutes.");
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     unmount();

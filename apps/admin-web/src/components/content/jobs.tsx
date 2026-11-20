@@ -72,7 +72,7 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
               </div>
               <p className="mt-1 text-xs text-fg-muted">
                 {formatDate(job.updatedAt, locale, true)}
-                {job.attempts > 0 && <> · {t('jobs.attempts', { count: job.attempts })}</>}
+                {job.attempts > 0 && <> • {t('jobs.attempts', { count: job.attempts })}</>}
               </p>
               {job.lastError && job.status !== 'succeeded' && (
                 <p className="mt-2 text-xs text-danger-fg break-words" dir="ltr" data-testid="job-error">

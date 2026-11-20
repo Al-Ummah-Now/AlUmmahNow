@@ -51,7 +51,7 @@ function StartTimes({ live, t, locale }: { live: MediaLive; t: Translator; local
   const parts = [t('mediaDelivery.liveStart', { days: numberFormat(locale).format(s.days), p50: seconds(s.p50Ms, locale), p95: seconds(s.p95Ms, locale), n: numberFormat(locale).format(s.samples) })];
   if (s.cold.p50Ms !== null) parts.push(t('mediaDelivery.liveStartCold', { p50: seconds(s.cold.p50Ms, locale) }));
   if (s.warm.p50Ms !== null) parts.push(t('mediaDelivery.liveStartWarm', { p50: seconds(s.warm.p50Ms, locale) }));
-  return <p className="mt-3 text-sm text-fg" data-testid="delivery-live-start">{parts.join(' · ')}</p>;
+  return <p className="mt-3 text-sm text-fg" data-testid="delivery-live-start">{parts.join(' • ')}</p>;
 }
 
 export function LiveFigures({ live, t, locale, stale = false, settingsHref }: LiveFiguresProps) {
@@ -78,7 +78,7 @@ export function LiveFigures({ live, t, locale, stale = false, settingsHref }: Li
               note={
                 live.rangeMin !== null && live.rangeMax !== null
                   ? {
-                      text: [t('mediaDelivery.liveRange', { min: f.integer(live.rangeMin), max: f.integer(live.rangeMax) }), live.ceiling ? t('mediaDelivery.liveCeiling', { c: f.integer(live.ceiling) }) : null].filter(Boolean).join(' · '),
+                      text: [t('mediaDelivery.liveRange', { min: f.integer(live.rangeMin), max: f.integer(live.rangeMax) }), live.ceiling ? t('mediaDelivery.liveCeiling', { c: f.integer(live.ceiling) }) : null].filter(Boolean).join(' • '),
                       testId: 'delivery-live-ceiling',
                     }
                   : undefined

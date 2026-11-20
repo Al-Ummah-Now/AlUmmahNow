@@ -101,7 +101,7 @@ export function ReaperPanel({
           {sweep ? (
             <div className="text-fg-muted" data-testid="reaper-sweep">
               <span>{formatDate(sweep.lastRunAt, locale, true)}</span>
-              {' · '}
+              {' • '}
               <span>
                 {t('staleUploads.sweepSummary', {
                   records: sweep.recordsScanned,

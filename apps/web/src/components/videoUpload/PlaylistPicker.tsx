@@ -158,7 +158,7 @@ export function PlaylistPicker({
           data-testid={`${testId}-toggle`}
         >
           {s.choose}
-          {selected.length > 0 && <span className="text-[var(--fanous-color-text-secondary)]">· {s.selectedCount.replace('{count}', formatNumber(lang, selected.length))}</span>}
+          {selected.length > 0 && <span className="text-[var(--fanous-color-text-secondary)]">• {s.selectedCount.replace('{count}', formatNumber(lang, selected.length))}</span>}
           <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
       )}

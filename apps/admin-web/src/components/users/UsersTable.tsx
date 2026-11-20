@@ -228,7 +228,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         <span className="font-semibold text-warning-fg" data-testid="user-limit-hits">{t('creators.hitsWeek', { count: n(creator.limitHits7d) })}</span>
                         {limited && (
                           <>
-                            {' · '}
+                            {' • '}
                             <Link href={tiersHref(limited.id)} className={`${linkClass} underline`} data-testid="user-raise-limit">
                               {t('creators.raiseLimit', { tier: limited.name })}
                             </Link>

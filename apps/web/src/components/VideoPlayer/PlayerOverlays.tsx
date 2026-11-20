@@ -170,7 +170,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
       <div className="vjs-fanous-next-card" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
         <p className="vjs-fanous-next-kicker">
           {t.chrome.upNext}
-          {upNext.badge && <span className="vjs-fanous-next-badge" data-testid="player-next-badge"> · {upNext.badge}</span>}
+          {upNext.badge && <span className="vjs-fanous-next-badge" data-testid="player-next-badge"> • {upNext.badge}</span>}
         </p>
         <button
           type="button"

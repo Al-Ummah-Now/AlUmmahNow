@@ -244,7 +244,7 @@ describe('rendered components', () => {
         setTier,
       }),
     );
-    // Who and when once (no "an admin · Admin" doubling)
+    // Who and when once (no "an admin • Admin" doubling)
     assert.match(assigned, /Assigned by <bdi>Admin Name<\/bdi>, <bdi>Nov 8, 2026<\/bdi>/);
     assert.doesNotMatch(assigned, /<select/, 'read-only for moderators');
     // Only the admin's id stored and no name known (yet): "an admin", never the raw id
@@ -380,9 +380,9 @@ describe('caption minutes on the user page: overdraft and ledger', () => {
     assert.match(html, /data-testid="caption-minutes-overdraft"[^>]*>Over by 7 minutes\./);
     assert.doesNotMatch(html, /minutes available now/);
     assert.match(html, /17 minutes are charged to transcriptions still running/);
-    assert.match(html, /Job finished · <bdi dir="ltr">\u22122<\/bdi>/);
+    assert.match(html, /Job finished • <bdi dir="ltr">\u22122<\/bdi>/);
     assert.match(html, /text-danger-fg">balance <bdi dir="ltr">\u22127<\/bdi>/);
-    assert.match(html, /Job started · <bdi dir="ltr">\+17<\/bdi>/);
+    assert.match(html, /Job started • <bdi dir="ltr">\+17<\/bdi>/);
     const ar = render(el(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
     assert.match(ar, /تجاوز الرصيد بـ ٧ من الدقائق/);
     assert.match(ar, /بدأ التفريغ/);

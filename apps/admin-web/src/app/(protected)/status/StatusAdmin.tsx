@@ -204,8 +204,8 @@ export function IncidentCard({ incident, open }: { incident: StatusIncident; ope
         <div>
           <h3 className="text-lg font-semibold text-fg" dir="auto">{title}</h3>
           <p className="text-sm text-fg-muted">
-            {t(`statusPage.kinds.${incident.kind}`)} · {t(`statusPage.statuses.${incident.status}` as MessageKey)}
-            {incident.kind === 'incident' && <> · {t(`statusPage.impacts.${incident.impact}` as MessageKey)}</>}
+            {t(`statusPage.kinds.${incident.kind}`)} • {t(`statusPage.statuses.${incident.status}` as MessageKey)}
+            {incident.kind === 'incident' && <> • {t(`statusPage.impacts.${incident.impact}` as MessageKey)}</>}
           </p>
           <p className="text-sm text-fg-muted">{t('statusPage.affected', { list: names.join(locale === 'ar' ? '، ' : ', ') })}</p>
           {incident.kind === 'maintenance' && incident.endsAt && (
@@ -229,7 +229,7 @@ export function IncidentCard({ incident, open }: { incident: StatusIncident; ope
         {(incident.updates ?? []).map((u) => (
           <li key={u.id} className="border-s-2 border-border ps-3">
             <p className="text-sm text-fg-muted">
-              <strong className="text-fg">{t(`statusPage.statuses.${u.status}` as MessageKey)}</strong> · {formatDate(u.createdAt, locale, true)}
+              <strong className="text-fg">{t(`statusPage.statuses.${u.status}` as MessageKey)}</strong> • {formatDate(u.createdAt, locale, true)}
             </p>
             <p className="whitespace-pre-line text-fg" dir="auto">{locale === 'ar' ? u.bodyAr : u.bodyEn}</p>
           </li>
