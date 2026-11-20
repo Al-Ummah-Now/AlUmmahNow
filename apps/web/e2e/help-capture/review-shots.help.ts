@@ -6,7 +6,6 @@
  * Output: test-results/review-shots/<area>/<screen>-<lang>-<device>-<mode>.png, strips.json (every
  * tab/chip's box and whether it is cut) and digits.json (Latin digits on Arabic frames).
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,19 +28,17 @@ const CHANNEL = {
 };
 const ALL_TABS = ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 'channels', 'about'];
 /**
- * Real-looking content (audit r1: an empty channel read as broken): four published videos whose
- * thumbnails are the owner's lantern art (packages/app-icons/assets/crops, crop and resize only),
- * served in place of the fake CDN's test pattern, as capture.help.ts does, and some views.
+ * Real-looking content (audit r1: an empty channel read as broken): four published videos with
+ * title-card thumbnails (the review sets' style, as #1513: the video's title in the page's language
+ * over a lantern-glow gradient, one hue per video), served in place of the fake CDN's test pattern.
  */
-const ART = join(__dirname, '../../../../packages/app-icons/assets/crops');
 const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
-// Four different renders of the owner's art (audit r2: crops of one lantern read as repeats), each
-// uploaded some days ago, with views spread over the days since (audit r2: one spike on today)
+// Each uploaded some days ago, with views spread over the days since (audit r2: one spike on today)
 const DEMOS = [
-  { key: 'street', art: 'auth.webp', title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34, age: 24 },
-  { key: 'evening', art: 'profile.webp', title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21, age: 17 },
-  { key: 'writing', art: 'cms.webp', title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12, age: 9 },
-  { key: 'tour', art: 'videos.webp', title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8, age: 3 },
+  { key: 'street', hue: ['#0e4f4c', '#1f8a80'], card: { en: 'Lantern street', ar: 'شارع الفوانيس' }, title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34, age: 24 },
+  { key: 'evening', hue: ['#5a3208', '#c98a2b'], card: { en: 'Evening lights', ar: 'أضواء المساء' }, title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21, age: 17 },
+  { key: 'writing', hue: ['#1b2f5a', '#3f73b8'], card: { en: 'By lantern light', ar: 'ضوء الفانوس' }, title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12, age: 9 },
+  { key: 'tour', hue: ['#3a1b56', '#8a4fc0'], card: { en: 'The market', ar: 'السوق' }, title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8, age: 3 },
 ] as const;
 const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
 const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
@@ -134,28 +131,44 @@ async function backdateDemos(channelId: string, videos: Array<{ id: string; age:
     }
   }
 }
-const MEDIA = mkdtempSync(join(tmpdir(), 'tabs-media-'));
+const MEDIA = mkdtempSync(join(tmpdir(), 'tabs-cards-'));
 const demoByGuid = new Map<string, string>();
 const demoById = new Map<string, string>();
 const demoIds: string[] = [];
-function makeThumb(key: string, art: string): void {
-  mkdirSync(join(MEDIA, key), { recursive: true });
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(ART, art), '-vf', 'scale=960:960,crop=960:540:0:165', '-q:v', '3', join(MEDIA, key, 'thumbnail.jpg')]);
+/** A 1280x720 title card: the title over a lantern glow in the video's hue, a thin inset frame */
+async function makeCards(browser: Browser, demo: (typeof DEMOS)[number]): Promise<void> {
+  mkdirSync(join(MEDIA, demo.key), { recursive: true });
+  const [deep, glow] = demo.hue;
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  for (const lang of LANGS) {
+    const title = demo.card[lang].replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    await page.setContent(`<!doctype html><html><body style="margin:0">
+      <div style="width:1280px;height:720px;position:relative;display:grid;place-items:center;
+        background:radial-gradient(ellipse 60% 70% at 50% 42%, ${glow} 0%, ${deep} 62%, #070d14 100%);font-family:'Noto Sans Arabic','Noto Sans','DejaVu Sans',sans-serif">
+        <div style="position:absolute;inset:28px;border:2px solid #ffffff2e;border-radius:28px"></div>
+        <div dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="color:#fff8ec;font-size:118px;font-weight:700;letter-spacing:${lang === 'ar' ? '0' : '-0.01em'};text-shadow:0 4px 28px #0008;text-align:center;max-width:960px;line-height:1.15">${title}</div>
+      </div></body></html>`);
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: join(MEDIA, demo.key, `${lang}.jpg`), type: 'jpeg', quality: 90 });
+  }
+  await context.close();
 }
 const keyFor = (id: string) => DEMOS[(id.charCodeAt(0) || 0) % DEMOS.length].key;
-async function serveCdn(route: Route): Promise<void> {
+const cardPath = (key: string, lang: Lang) => join(MEDIA, key, `${lang}.jpg`);
+async function serveCdn(route: Route, lang: Lang): Promise<void> {
   const parts = new URL(route.request().url()).pathname.split('/').filter(Boolean);
   const file = parts[parts.length - 1] ?? '';
   if (!/^thumbnail(_\d+)?\.jpg$|^preview\.webp$/.test(file)) return route.continue();
   const guid = parts.find((p) => demoByGuid.has(p)) ?? parts.find((p) => /^[0-9a-f-]{36}$/i.test(p));
   if (!guid) return route.continue();
-  const path = join(MEDIA, demoByGuid.get(guid) ?? keyFor(guid), 'thumbnail.jpg');
+  const path = cardPath(demoByGuid.get(guid) ?? keyFor(guid), lang);
   if (!existsSync(path)) return route.continue();
   return route.fulfill({ status: 200, headers: { 'content-type': 'image/jpeg', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }, body: readFileSync(path) });
 }
-async function serveThumb(route: Route): Promise<void> {
+async function serveThumb(route: Route, lang: Lang): Promise<void> {
   const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '').replace(/\.jpg$/, '');
-  const path = join(MEDIA, demoById.get(id) ?? keyFor(id), 'thumbnail.jpg');
+  const path = cardPath(demoById.get(id) ?? keyFor(id), lang);
   if (!existsSync(path)) return route.continue();
   return route.fulfill({ status: 200, headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }, body: readFileSync(path) });
 }
@@ -180,7 +193,7 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(10 * 60_000);
-  for (const demo of DEMOS) makeThumb(demo.key, demo.art);
+  for (const demo of DEMOS) await makeCards(browser, demo);
   creator = await data.createCreator(browser, 'tabs', { channels: 1 });
   const user = creator.user;
   const put = (path: string, body: unknown, channelId?: string) => apiFetch(user, path, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(channelId ? { channelId } : {}) }, body: JSON.stringify(body) });
@@ -227,8 +240,8 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, si
     locale: lang === 'ar' ? 'ar' : 'en-US',
   });
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
-  await context.route((url) => url.hostname === FAKE_CDN_HOST, serveCdn);
-  await context.route((url) => url.pathname.startsWith('/thumb/'), serveThumb);
+  await context.route((url) => url.hostname === FAKE_CDN_HOST, (route) => serveCdn(route, lang));
+  await context.route((url) => url.pathname.startsWith('/thumb/'), (route) => serveThumb(route, lang));
   // Only this run's videos (the stack's seed videos carry test titles)
   await context.addInitScript((ids: string[]) => {
     const idOf = (el: Element) => el.getAttribute('data-video-id') || decodeURIComponent((el.getAttribute('href') ?? el.querySelector('a[href*="/video/"]')?.getAttribute('href') ?? '').split('/video/')[1]?.split(/[?#/]/)[0] ?? '');
