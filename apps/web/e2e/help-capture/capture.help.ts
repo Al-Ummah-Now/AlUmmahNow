@@ -468,6 +468,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     // CLEAR px between their bands (so each may reach at most (gap - 2*2 - CLEAR) / 2 toward a neighbour)
     const rings: Box[] = [];
     const radii: number[] = [];
+    // Number-only markers: where no outline can keep the clear space (a menu row right under its label,
+    // two header buttons 4 px apart), the control gets its number alone (owner, 2026-11-20)
+    const bare: boolean[] = [];
     for (const [i, target] of targets.entries()) {
       const r = rects[i];
       const n = target.dataset.helpTarget;
@@ -501,17 +504,19 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const barClash = (b: Box) => straddlesBar(grow(b, 2));
       let o = outline(gMax);
       for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
-      const crowd = crowded(o);
-      if (crowd.length) faults.push(`outline ${n} is within ${CLEAR} px of ${crowd.slice(0, 2).map((c) => c.what ?? '?').join(', ')}`);
-      if (straddlesBar(grow(o, 2))) faults.push(`outline ${n} runs under the header or tab bar`);
+      bare.push(crowded(o).length > 0 || straddlesBar(grow(o, 2)));
       rings.push(o);
       radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
     }
+    // Two outlines closer than CLEAR: the later one goes number-only
     for (let i = 0; i < rings.length; i++) for (let j = i + 1; j < rings.length; j++) {
+      if (bare[i] || bare[j]) continue;
       const a = grow(rings[i], 2);
       const b = grow(rings[j], 2);
-      if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) faults.push(`outlines ${targets[i].dataset.helpTarget} and ${targets[j].dataset.helpTarget} are within ${CLEAR} px of each other`);
+      if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) bare[j] = true;
     }
+    // A number-only marker is placed against the control itself
+    for (const [i, isBare] of bare.entries()) if (isBare) rings[i] = fromRect(rects[i]);
     // The bands of every outline (2 px out, 4 px in), as four strips
     const band = (o: Box): Box[] => [
       { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: 6 }, { x: o.x - 2, y: o.y + o.h - 4, w: o.w + 4, h: 6 },
@@ -524,7 +529,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const n = target.dataset.helpTarget;
       const r = rects[i];
       const round = radii[i] >= Math.min(r.width, r.height) / 2 - 0.5;
-      const otherBands = rings.flatMap((ring, j) => (j === i ? [] : band(ring)));
+      const otherBands = rings.flatMap((ring, j) => (j === i || bare[j] ? [] : band(ring)));
       // A control in the header: its number may hang from the header's edge, under it
       const homeBar = bars.find((bar) => contains(bar, grow(o, 2)));
       const ok = ([x, y]: [number, number]) => {
@@ -556,7 +561,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       for (let d = 12; d <= o.w / 2; d += 4) cands.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
       // A number must touch its own outline (on it, or within 6 px of it)
       const touches = ([x, y]: [number, number]) => hit(grow({ x, y, w: S, h: S }, 6), grow(o, 2)) && !contains(grow(o, -10), { x, y, w: S, h: S });
-      const spot = cands.filter(touches).find(ok);
+      // A number-only marker sits on its control or right beside it (within 6 px)
+      const spot = cands.filter(bare[i] ? (([x, y]: [number, number]) => hit(grow({ x, y, w: S, h: S }, 6), o)) : touches).find(ok);
       if (!spot) { missed++; faults.push(`number ${n} has no spot clear of text, pictures, other numbers and outlines`); }
       const [x, y] = spot ?? [startX, midY];
       numbers.push(grow({ x, y, w: S, h: S }, 2));
@@ -578,12 +584,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         font: '700 13px/1 system-ui, sans-serif', background: INK, color: ON_INK,
         boxShadow: `0 0 0 2px ${HALO}, 0 2px 6px rgb(0 0 0 / 0.35)`, pointerEvents: 'none',
       });
-      document.body.append(ring, m);
+      if (bare[i]) m.dataset.helpBare = '';
+      document.body.append(...(bare[i] ? [m] : [ring, m]));
     }
-    return { missed, faults };
+    const bareList = targets.filter((_, i) => bare[i]).map((t) => t.dataset.helpTarget);
+    return { missed, faults, bareList };
   }, { rtl: lang === 'ar', above: place === 'above' });
   // Not silent: the run lists every picture whose number had to sit on another control
   if (unplaced.missed) note(`${unplaced.missed} marker(s) found no spot clear of other controls`);
+  if (unplaced.bareList.length) note(`number-only markers: ${unplaced.bareList.join(', ')}`);
   if (unplaced.faults.length) throw new Error(`markers: ${unplaced.faults.join('; ')}`);
 }
 
@@ -702,7 +711,12 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
           if (cs.overflowY === 'visible' && cs.overflowX === 'visible') continue;
           const ar = a.getBoundingClientRect();
           const abox = { x: ar.x, y: ar.y, w: ar.width, h: ar.height };
-          if (hit(box, abox) && !contains(abox, box) && (cs.overflowY !== 'visible' && (box.y < abox.y || box.y + box.h > abox.y + abox.h))) { out.push(`text ${box.what} is cut by its list's edge`); break; }
+          // A scrolling list cuts at its edge; a clipping box (overflow hidden, e.g. a one-line logo)
+          // only cuts letters when the text box runs more than 3 px past it (the box includes the
+          // font's ascent and descent, taller than the letters)
+          const scrolls = /auto|scroll/.test(cs.overflowY);
+          const over = Math.max(abox.y - box.y, box.y + box.h - (abox.y + abox.h));
+          if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && over > (scrolls ? 0 : 3)) { out.push(`text ${box.what} is cut by its list's edge`); break; }
         }
         // Half covered by another element (sampled across the line, inside the frame)
         const ys = [box.y + 2, box.y + box.h / 2, box.y + box.h - 2];
@@ -1230,7 +1244,7 @@ test('clip watching-mini-player', async ({ browser }) => {
 });
 
 test('every picture and clip was made', () => {
-  if (notes.length) console.log(`Skipped markers:\n${notes.join('\n')}`);
+  if (notes.length) console.log(`Marker notes:\n${notes.join('\n')}`);
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
