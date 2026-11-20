@@ -295,9 +295,10 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     else if (uTop < top) window.scrollBy(0, uTop - top);
     // No line of text left half under the header or tab bar: a small scroll (up to 48 px either way)
     // that keeps the targets in view
-    const straddle = () => {
+    const straddle = (): number => {
+      let n = 0;
       const tb = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
-      if (Math.min(...tb.map((b) => b.top)) < top + 4 || Math.max(...tb.map((b) => b.bottom)) > bottom - 4) return true;
+      if (Math.min(...tb.map((b) => b.top)) < top + 4 || Math.max(...tb.map((b) => b.bottom)) > bottom - 4) n += 1000;
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const el = node.parentElement;
@@ -311,17 +312,23 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) {
             // In a bar itself is fine
             if (bars.some((br) => b.top >= br.top - 0.5 && b.bottom <= br.bottom + 0.5 && b.left >= br.left - 0.5 && b.right <= br.right + 0.5)) continue;
-            return true;
+            n++;
           }
         }
       }
-      return false;
+      return n;
     };
+    // The best offset found: targets in view first, then the fewest cut lines (never the last tried)
     const y0 = window.scrollY;
+    let best = y0;
+    let bestN = Infinity;
     for (const d of [0, ...Array.from({ length: 24 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
       window.scrollTo(0, y0 + d);
-      if (!straddle()) break;
+      const n = straddle();
+      if (n < bestN) { bestN = n; best = window.scrollY; }
+      if (n === 0) break;
     }
+    window.scrollTo(0, best);
   });
   await page.waitForTimeout(150);
   // A scrolling list that cuts an item at its own edge (the side rail's list): scrolled so no line of
@@ -386,12 +393,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     // Open menus and dialogs: what lies behind them (and is not in them) is not seen
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
     // Hidden: at least 60% of it behind an open menu or dialog that does not contain it
-    const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
+    const hidden = (b0: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
       if (ov.contains(el)) return false;
+      // The on-screen part only
+      const bx = Math.max(0, b0.x); const by = Math.max(0, b0.y);
+      const b = { x: bx, y: by, w: Math.min(innerWidth, b0.x + b0.w) - bx, h: Math.min(innerHeight, b0.y + b0.h) - by };
+      if (b.w <= 0 || b.h <= 0) return true;
       const ix = Math.max(0, Math.min(b.x + b.w, r.right) - Math.max(b.x, r.left));
       const iy = Math.max(0, Math.min(b.y + b.h, r.bottom) - Math.max(b.y, r.top));
-      return b.w * b.h > 0 && (ix * iy) / (b.w * b.h) >= 0.6;
+      return (ix * iy) / (b.w * b.h) >= 0.6;
     });
     // Every line of visible text, as its line box (ascenders and descenders included, measured, not guessed)
     const texts: Box[] = [];
@@ -597,12 +608,16 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     };
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
     // Hidden: at least 60% of it behind an open menu or dialog that does not contain it
-    const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
+    const hidden = (b0: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
       if (ov.contains(el)) return false;
+      // The on-screen part only
+      const bx = Math.max(0, b0.x); const by = Math.max(0, b0.y);
+      const b = { x: bx, y: by, w: Math.min(innerWidth, b0.x + b0.w) - bx, h: Math.min(innerHeight, b0.y + b0.h) - by };
+      if (b.w <= 0 || b.h <= 0) return true;
       const ix = Math.max(0, Math.min(b.x + b.w, r.right) - Math.max(b.x, r.left));
       const iy = Math.max(0, Math.min(b.y + b.h, r.bottom) - Math.max(b.y, r.top));
-      return b.w * b.h > 0 && (ix * iy) / (b.w * b.h) >= 0.6;
+      return (ix * iy) / (b.w * b.h) >= 0.6;
     });
     const bars: Box[] = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
       const pos = getComputedStyle(el).position;
@@ -612,10 +627,20 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
     // Is (x, y) covered by something that isn't `el` or part of it? Markers ignore the pointer, so
     // they never count; a bar does
+    // Covered: under a fixed or sticky strip (the header, tab bar) or an open menu or dialog, never by a
+    // neighbouring line's box (a heading's and its subtitle's line boxes overlap)
+    const coverer = (top: Element | null, el: Element) => {
+      if (!top || top === el || el.contains(top) || top.contains(el)) return false;
+      for (let e: Element | null = top; e && e !== document.body; e = e.parentElement) {
+        if (e.contains(el)) return false;
+        const cs = getComputedStyle(e);
+        if (cs.position === 'fixed' || cs.position === 'sticky' || e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) return true;
+      }
+      return false;
+    };
     const coveredAt = (el: Element, x: number, y: number) => {
       if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
-      const top = document.elementFromPoint(x, y);
-      return !!top && top !== el && !el.contains(top) && !top.contains(el);
+      return coverer(document.elementFromPoint(x, y), el);
     };
     const out: string[] = [];
     const texts: Box[] = [];
@@ -799,7 +824,15 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           for (const y of [b.top + 2, b.top + b.height / 2, b.bottom - 2]) for (const x of [b.left + 2, b.left + b.width / 2, b.right - 2]) {
             if (x < 0 || y < 0 || x >= W || y >= H) continue;
             const top = document.elementFromPoint(x, y);
-            if (top && top !== el && !el.contains(top) && !top.contains(el)) covered++; else seen++;
+            let cov = false;
+            if (top && top !== el && !el.contains(top) && !top.contains(el)) {
+              for (let e: Element | null = top; e && e !== document.body; e = e.parentElement) {
+                if (e.contains(el)) break;
+                const cs = getComputedStyle(e);
+                if (cs.position === 'fixed' || cs.position === 'sticky' || e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) { cov = true; break; }
+              }
+            }
+            if (cov) covered++; else seen++;
           }
           if (!seen) continue;
           if (covered) avoid.push({ l: b.left, t: b.top, r: b.right, b: b.bottom });
@@ -817,6 +850,14 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         const b = el.getBoundingClientRect();
         if (b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1)) bars.push({ l: 0, t: b.top, r: W, b: b.bottom });
       });
+      // A long region (a card running on under the tab bar) is only its visible part: the core stops
+      // at a bar no marker is in
+      const marks = [...document.querySelectorAll('[data-help-marker]')].map((m) => m.getBoundingClientRect());
+      for (const bar of bars) {
+        if (marks.some((m) => m.bottom > bar.t && m.top < bar.b)) continue;
+        if (bar.t >= H - 1 - (bar.b - bar.t) && core.b > bar.t) core.b = Math.max(core.t + 1, bar.t);
+        if (bar.t <= 1 && core.t < bar.b) core.t = Math.min(core.b - 1, bar.b);
+      }
       let l = c.x; let t = c.y; let r = c.x + c.width; let b = c.y + c.height;
       // A bar the core is in is taken whole, full width; a bar the core is not in is left out
       for (const bar of bars) {
