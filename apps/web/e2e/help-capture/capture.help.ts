@@ -340,11 +340,12 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       .map((el) => ({ el, r: el.getBoundingClientRect() }));
     // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
     // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
-    // The letters, not the line box: about 0.8 em tall, centred in the line, full width (Arabic
+    // The letters, not the line box: about 1.15 em tall, centred in the line, full width (Arabic
     // letters overhang their box, so nothing is shaved off the sides)
     const glyphBox = (b: DOMRect, el: Element | null) => {
       const fs = parseFloat(el ? getComputedStyle(el).fontSize : '16') || 16;
-      const h = Math.min(b.height, fs * 0.8);
+      // 1.15 em: ascenders and descenders included (Arabic ق, Latin y), the line's extra leading not
+      const h = Math.min(b.height, fs * 1.15);
       return { x: b.x, y: b.y + (b.height - h) / 2, w: b.width, h };
     };
     // Text a reader can't see: screen-reader-only labels (1 px boxes, clipped) on icon-only buttons
