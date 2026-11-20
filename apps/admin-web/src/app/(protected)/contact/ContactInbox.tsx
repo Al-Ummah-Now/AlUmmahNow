@@ -24,7 +24,7 @@ import { logger } from '@/lib/logger-client';
 import { AssigneePicker } from './AssigneePicker';
 import { UserName } from '@/components/audit/UserName';
 import { EmailText } from '@/components/EmailText';
-import { CONTACT_STATUSES, CONTACT_VIEWS, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
+import { CONTACT_STATUSES, CONTACT_VIEWS, SEND_FAILED, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
 import { Select } from '@/components/select/Select';
 
 const smallButton =
@@ -41,17 +41,46 @@ export interface ContactInboxProps {
 export const messageHref = (id: string) => `/contact/${encodeURIComponent(id)}`;
 const isUnread = (m: ContactMessage) => !m.read_at && m.status !== 'spam';
 
-export function ContactInbox({ messages, filters, viewerId, canManage, counts }: ContactInboxProps) {
+/** A change admin-api confirmed on one row, shown before the list refreshes; `gone` = deleted. */
+type RowChange = Partial<Pick<ContactMessage, 'status' | 'read_at'>> & { gone?: true };
+
+/** Whether a row still belongs in the open view (status and read filters) after a change. */
+function inView(m: ContactMessage, f: ContactInboxFilters): boolean {
+  if (f.status && f.status !== SEND_FAILED && m.status !== f.status) return false;
+  if (f.read === 'unread' && !isUnread(m)) return false;
+  if (f.read === 'read' && isUnread(m)) return false;
+  return true;
+}
+
+export function ContactInbox({ messages: serverMessages, filters, viewerId, canManage, counts }: ContactInboxProps) {
+  // Confirmed changes show at once (owner bug 2026-11-19: the page waited on a refresh that did not
+  // come); a server render that differs from the previous one replaces them
+  const serverKey = serverMessages.map((m) => `${m.id}:${m.status}:${m.read_at ?? ''}`).join(',');
+  const [changes, setChanges] = useState<Record<string, RowChange>>({});
+  const [changesFor, setChangesFor] = useState(serverKey);
+  if (changesFor !== serverKey) {
+    setChangesFor(serverKey);
+    setChanges({});
+  }
+  const messages = useMemo(
+    () =>
+      serverMessages
+        .map((m) => (changes[m.id] ? { ...m, ...changes[m.id] } : m))
+        .filter((m) => !(m as ContactMessage & RowChange).gone && (!changes[m.id] || inView(m, filters))),
+    [serverMessages, changes, filters],
+  );
+  const showChange = (ids: string[], change: RowChange) =>
+    setChanges((prev) => Object.fromEntries([...Object.entries(prev), ...ids.map((id) => [id, { ...prev[id], ...change }])]));
   const { t, locale } = useLanguage();
   const router = useRouter();
   const undoable = useUndoableAction();
   const tableRef = useRef<HTMLTableElement>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // The bulk control whose change is saving: it alone shows it is working, until the list shows the change
+  // The bulk control whose change is saving: it alone shows it is working
   const [pending, setPending] = useState<string | null>(null);
-  const [refreshing, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
-  const working = (control: string) => (control === 'delete' ? deleting : refreshing && pending === control);
+  const working = (control: string) => (control === 'delete' ? deleting : pending === control);
   const [error, setError] = useState<string | null>(null);
   const [bulkStatus, setBulkStatus] = useState<ContactStatus>('in_progress');
   const [pickerKey, setPickerKey] = useState(0);
@@ -99,30 +128,29 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
     return () => table.removeEventListener('click', onClick);
   }, [router]);
 
-  /** One change on the selected messages; refreshes the list (and the nav badge) inside the same transition. */
-  function apply(name: string, change: ContactBulkChange, ids = chosen): Promise<string[] | null> {
+  /** One change on the selected messages: shown at once on their rows, then the list (and nav badge) refresh. */
+  async function apply(name: string, change: ContactBulkChange, ids = chosen): Promise<string[] | null> {
     setPending(name);
     setError(null);
-    return new Promise((resolve) => {
-      startTransition(async () => {
-        try {
-          const result = await bulkContactMessages(ids, change);
-          if (!result.ok) {
-            logger.warn('[contact] Bulk change failed', { name, status: result.status });
-            setError(result.status === 400 && 'assignee' in change ? t('contact.notStaff') : t('contact.failed'));
-            resolve(null);
-            return;
-          }
-          if (result.data.missing.length) setError(t('contact.bulkPartial', { ok: result.data.ok.length, total: ids.length }));
-          startTransition(() => router.refresh());
-          resolve(result.data.ok);
-        } catch (e) {
-          logger.error('[contact] Bulk request failed', { name, error: e instanceof Error ? e.message : String(e) });
-          setError(t('contact.failed'));
-          resolve(null);
-        }
-      });
-    });
+    try {
+      const result = await bulkContactMessages(ids, change);
+      if (!result.ok) {
+        logger.warn('[contact] Bulk change failed', { name, status: result.status });
+        setError(result.status === 400 && 'assignee' in change ? t('contact.notStaff') : t('contact.failed'));
+        return null;
+      }
+      if (result.data.missing.length) setError(t('contact.bulkPartial', { ok: result.data.ok.length, total: ids.length }));
+      if ('status' in change) showChange(result.data.ok, { status: change.status });
+      else if ('read' in change) showChange(result.data.ok, { read_at: change.read ? new Date().toISOString() : null });
+      startTransition(() => router.refresh());
+      return result.data.ok;
+    } catch (e) {
+      logger.error('[contact] Bulk request failed', { name, error: e instanceof Error ? e.message : String(e) });
+      setError(t('contact.failed'));
+      return null;
+    } finally {
+      setPending((current) => (current === name ? null : current));
+    }
   }
 
   /** Delete at once with Undo (soft delete: also restorable for 30 days from Recently deleted). */
@@ -134,11 +162,13 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
         action: async () => {
           const result = await bulkContactMessages(ids, { delete: true });
           if (!result.ok) throw new Error(`delete ${result.status}`);
+          showChange(result.data.ok, { gone: true });
           router.refresh();
           return result.data.ok;
         },
         undo: async (done) => {
           await restoreContactMessages(done);
+          setChanges((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !done.includes(id))));
           router.refresh();
         },
         message: (done) => (done.length === 1 ? t('contact.deletedOne') : t('contact.deletedMany', { count: done.length })),

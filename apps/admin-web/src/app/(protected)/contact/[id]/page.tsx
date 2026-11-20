@@ -15,6 +15,7 @@ import { UserName } from '@/components/audit/UserName';
 import { EmailText } from '@/components/EmailText';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { MarkReadOnOpen } from './MarkReadOnOpen';
+import { ContactLiveProvider, ContactLiveStatusChip, ContactMessageArticle } from './ContactLiveState';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,6 +71,8 @@ export default async function ContactMessagePage({ params }: PageProps) {
     .join(',');
 
   return (
+    // The status and read state shown here update at once after a change (ContactLiveState)
+    <ContactLiveProvider status={m.status} read={!!m.read_at}>
     <div>
       {back}
       <RefreshWhileQueued signature={queued} />
@@ -85,7 +88,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
       )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <article className={`${cardClass} min-w-0`} data-testid="contact-message" data-message-id={m.id} data-status={m.status} data-read={m.read_at ? 'true' : 'false'}>
+          <ContactMessageArticle className={`${cardClass} min-w-0`} data-testid="contact-message" data-message-id={m.id}>
             <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
               <div className="min-w-0">
                 {/* The block keeps the page's direction, so a name in the other script lines up with the line below; <bdi> isolates the name itself */}
@@ -103,14 +106,14 @@ export default async function ContactMessagePage({ params }: PageProps) {
                 </p>
               </div>
               <span className="flex flex-wrap gap-2">
-                <ContactStatusChip status={m.status} label={translateDynamic(t, 'contactStatus', m.status)} large />
+                <ContactLiveStatusChip />
                 {m.send_failed_at && <ContactStatusChip status="send_failed" label={t('contact.sendFailed')} large />}
               </span>
             </div>
             <p className="text-fg whitespace-pre-wrap break-words leading-7" dir="auto" data-testid="contact-message-body">
               {m.message}
             </p>
-          </article>
+          </ContactMessageArticle>
 
           <section className={cardClass} aria-labelledby="contact-thread">
             <h2 id="contact-thread" className="text-lg font-semibold text-fg mb-4">
@@ -167,8 +170,6 @@ export default async function ContactMessagePage({ params }: PageProps) {
           <ContactActions
             id={m.id}
             name={m.name}
-            status={m.status}
-            read={!!m.read_at}
             locale={m.locale}
             assignedToMe={!!session && m.assignee_id === session.user.id}
             hasAssignee={!!m.assignee_id}
@@ -280,5 +281,6 @@ export default async function ContactMessagePage({ params }: PageProps) {
         </div>
       </div>
     </div>
+    </ContactLiveProvider>
   );
 }
