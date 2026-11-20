@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Tabs and chips (owner rule, #1669): no tab or chip is ever shown half cut at an edge. Phones wrap
@@ -54,4 +54,29 @@ export async function expectTabsAndChipsInView(page: Page, what: string): Promis
   expect.soft(report.cut, `${what}: tabs or chips half shown at an edge`).toEqual([]);
   expect.soft(report.sideways, `${what}: the page scrolls sideways`).toBeLessThanOrEqual(0);
   return report;
+}
+
+/**
+ * Opens tab `id` of a one-row strip (components/ui/PriorityStrip): its own button when it is in the
+ * row, else the entry under "More". `strip` is the strip's test id (e.g. 'channel-tabs-strip').
+ */
+export async function chooseStripItem(page: Page, strip: string, item: Locator, id: string): Promise<void> {
+  if (await item.isVisible()) {
+    await item.click();
+    return;
+  }
+  await page.getByTestId(`${strip}-more`).click();
+  await page.getByTestId(`${strip}-menu-${id}`).click();
+}
+
+/** Ids of every entry of a strip, in the row and under More (the menu is closed again) */
+export async function stripEntryIds(page: Page, strip: string, rowItems: Locator, idOf: (testId: string) => string): Promise<string[]> {
+  const row = (await rowItems.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid') ?? ''))).map(idOf);
+  const more = page.getByTestId(`${strip}-more`);
+  if (!(await more.isVisible())) return row;
+  await more.click();
+  const prefix = `${strip}-menu-`;
+  const menu = await page.locator(`[data-testid^="${prefix}"]`).evaluateAll((els, p) => els.map((e) => (e.getAttribute('data-testid') ?? '').slice(p.length)), prefix);
+  await page.keyboard.press('Escape');
+  return [...row, ...menu];
 }

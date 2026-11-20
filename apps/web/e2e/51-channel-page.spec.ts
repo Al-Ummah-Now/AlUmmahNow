@@ -19,6 +19,7 @@ import {
   type PublicChannel,
 } from './test-utils/channel-content';
 import { ownPublicVideos } from './test-utils/own-public-video';
+import { chooseStripItem, stripEntryIds } from './test-utils/tabs-in-viewport';
 
 /** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
 const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
@@ -218,22 +219,26 @@ test.describe('Subscribe button - account without a channel', () => {
 test.describe('Channel tabs', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('CHTAB-010 tab bar follows the channel tab configuration (en + ar labels)', async ({ page }) => {
+  test('CHTAB-010 tab bar follows the channel tab configuration, without empty tabs (en + ar labels)', async ({ page }) => {
     const config = await getTabConfig(lectures.id);
-    const expected = visibleTabIds(config);
+    // A visitor doesn't see the empty Shorts, Live and Channels tabs (#1669); the row and "More" hold the rest
+    const expected = visibleTabIds(config, { visitor: true });
+    expect(config.counts, 'GET /api/channels/:id/tabs counts').toBeTruthy();
 
     await openChannel(page, 'en', lectures.id);
-    const ids = await page.getByTestId('channel-tabs').getByRole('tab').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
-    expect(ids).toEqual(expected.map((id) => `tab-${id}`));
+    const ids = await stripEntryIds(page, 'channel-tabs-strip', page.getByTestId('channel-tabs').getByRole('tab'), (id) => id.replace(/^tab-/, ''));
+    expect([...ids].sort()).toEqual([...expected].sort());
     await expectTabSelected(page, config.defaultTab);
-    for (const tab of config.tabs.filter((t) => t.visible)) {
-      await expect(page.getByTestId(`tab-${tab.id}`)).toHaveText(tab.nameLocalized?.en ?? tab.name ?? tab.id);
+    for (const tab of config.tabs.filter((t) => expected.includes(t.id))) {
+      const row = page.getByTestId(`tab-${tab.id}`);
+      if (await row.isVisible()) await expect(row).toHaveText(tab.nameLocalized?.en ?? tab.name ?? tab.id);
     }
 
     await openChannel(page, 'ar', lectures.id);
     await expect(page.getByTestId('channel-tabs')).toHaveAttribute('dir', 'rtl');
-    for (const tab of config.tabs.filter((t) => t.visible)) {
-      await expect(page.getByTestId(`tab-${tab.id}`)).toHaveText(tab.nameLocalized?.ar ?? tab.name ?? tab.id);
+    for (const tab of config.tabs.filter((t) => expected.includes(t.id))) {
+      const row = page.getByTestId(`tab-${tab.id}`);
+      if (await row.isVisible()) await expect(row).toHaveText(tab.nameLocalized?.ar ?? tab.name ?? tab.id);
     }
   });
 
@@ -253,17 +258,19 @@ test.describe('Channel tabs', () => {
   });
 
   for (const locale of ['en', 'ar'] as const) {
-    test(`CHTAB-012 Shorts and Live tabs show their empty states (${locale})`, async ({ page }) => {
-      const L = locale === 'ar'
-        ? { shorts: 'لا توجد مرئيات', live: 'البث المباشر الحالي' }
-        : { shorts: 'No videos available', live: 'Current live streams' };
-      await openChannel(page, locale, lectures.id, 'shorts');
-      await expectTabSelected(page, 'shorts');
-      await expect(page.getByTestId('tabpanel-shorts').getByRole('heading', { name: L.shorts })).toBeVisible();
-
-      await clickUntil(page.getByTestId('tab-live'), async () => expect(page).toHaveURL(/tab=live/, { timeout: 3000 }));
-      await expectTabSelected(page, 'live');
-      await expect(page.getByTestId('tabpanel-live').getByRole('heading', { name: L.live })).toBeVisible();
+    test(`CHTAB-012 empty Shorts, Live and Channels tabs are hidden from visitors (${locale})`, async ({ page }) => {
+      // This file's channel has no Shorts, live streams or featured channels (#1669: no hollow pages)
+      const config = await getTabConfig(lectures.id);
+      expect(config.counts).toMatchObject({ shorts: 0, live: 0, channels: 0 });
+      await openChannel(page, locale, lectures.id);
+      const ids = await stripEntryIds(page, 'channel-tabs-strip', page.getByTestId('channel-tabs').getByRole('tab'), (id) => id.replace(/^tab-/, ''));
+      expect(ids).not.toContain('shorts');
+      expect(ids).not.toContain('live');
+      expect(ids).not.toContain('channels');
+      // A link to an empty tab falls back to the default tab
+      await page.goto(`/${locale}/channels/${lectures.id}?tab=shorts`);
+      await expect(page).not.toHaveURL(/tab=shorts/);
+      await expectTabSelected(page, config.defaultTab);
     });
   }
 
@@ -293,19 +300,6 @@ test.describe('Channel tabs', () => {
     await expect(panel.getByText(text!.content!)).toBeVisible();
   });
 
-  for (const locale of ['en', 'ar'] as const) {
-    test(`CHTAB-015 Channels tab shows the empty state when nothing is featured (${locale})`, async ({ page }) => {
-      await openChannel(page, locale, lectures.id, 'channels');
-      await expectTabSelected(page, 'channels');
-      const panel = page.getByTestId('tabpanel-channels');
-      // Arabic copy may be overridden by the translations API ("القنوات المميزة")
-      await expect(panel.getByRole('heading', { name: locale === 'ar' ? /^(ال)?قنوات (ال)?مميزة$/ : 'Featured channels' })).toBeVisible();
-      await expect(panel).toContainText(
-        locale === 'ar' ? 'لم تقم هذه القناة بإبراز أي قنوات أخرى بعد' : "This channel hasn't featured any other channels yet"
-      );
-    });
-  }
-
   test('CHTAB-016 unknown ?tab= falls back to the default tab', async ({ page }) => {
     const config = await getTabConfig(lectures.id);
     await page.goto(`/en/channels/${lectures.id}?tab=not-a-tab`);
@@ -315,9 +309,15 @@ test.describe('Channel tabs', () => {
 
   test('CHTAB-017 back/forward navigate between tabs', async ({ page }) => {
     await openChannel(page, 'en', lectures.id);
-    await clickUntil(page.getByTestId('tab-playlists'), async () => expect(page).toHaveURL(/tab=playlists/, { timeout: 3000 }));
     // Re-rendered after the first tab switch: retry a click that landed on the old node
-    await clickUntil(page.getByTestId('tab-community'), async () => expect(page).toHaveURL(/tab=community/, { timeout: 3000 }));
+    await expect(async () => {
+      await chooseStripItem(page, 'channel-tabs-strip', page.getByTestId('tab-playlists'), 'playlists');
+      await expect(page).toHaveURL(/tab=playlists/, { timeout: 3000 });
+    }).toPass();
+    await expect(async () => {
+      await chooseStripItem(page, 'channel-tabs-strip', page.getByTestId('tab-community'), 'community');
+      await expect(page).toHaveURL(/tab=community/, { timeout: 3000 });
+    }).toPass();
     await page.goBack();
     await expect(page).toHaveURL(/tab=playlists/);
     await expectTabSelected(page, 'playlists');
@@ -325,18 +325,16 @@ test.describe('Channel tabs', () => {
     await expectTabSelected(page, 'community');
   });
 
-  test('CHTAB-018 tab bar scrolls horizontally on narrow screens', async ({ page, isMobile }) => {
-    test.skip(!isMobile, 'Tab overflow only happens on phone-width viewports');
+  test('CHTAB-018 tab bar is one row on narrow screens, the rest under More', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'More appears only on phone-width viewports');
     await openChannel(page, 'en', lectures.id);
     const bar = page.getByTestId('channel-tabs');
+    // One row (#1669): nothing scrolls sideways or wraps
     const { scrollWidth, clientWidth } = await bar.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
-    expect(scrollWidth).toBeGreaterThan(clientWidth);
-    // The page itself does not scroll horizontally
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    const tops = await bar.getByRole('tab').evaluateAll((els) => [...new Set(els.map((e) => Math.round(e.getBoundingClientRect().top)))]);
+    expect(tops).toHaveLength(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
-    const last = bar.getByRole('tab').last();
-    await last.scrollIntoViewIfNeeded();
-    await last.click();
-    await expect(last).toHaveAttribute('aria-selected', 'true');
   });
 });
 

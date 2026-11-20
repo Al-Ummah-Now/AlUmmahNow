@@ -1,5 +1,6 @@
 import { ADMIN_TIER_REQUEST_FILTERS, type AdminTierRequestRow, type AdminTierRequestsPage } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
+import { PriorityTabs } from '@/components/PriorityTabs';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber, translateDynamic, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
@@ -72,27 +73,28 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
       </div>
       {settings && <AllowRequestsSwitch allowed={settings.allowed} providerEnabled={settings.providerEnabled} canManage={canDecide} setAllowed={setTierRequestsAllowed} />}
 
-      <nav aria-label={t('tierRequests.tabsLabel')} className="mb-6 flex flex-wrap gap-1 border-b border-border">
-        {ADMIN_TIER_REQUEST_FILTERS.map((f) => {
-          const active = f === filter;
-          return (
-            <Link
-              key={f}
-              href={tierRequestsHref(f)}
-              aria-current={active ? 'page' : undefined}
-              className={`px-3 py-2 -mb-px border-b-2 ${active ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
-              data-testid={`tier-requests-tab-${f}`}
-            >
-              {t(`tierRequests.filters.${f}`)}
-              {f === 'pending' && !!page?.pending && (
-                <span className="ms-2 text-xs rounded bg-chip-pending-bg text-chip-pending-fg px-1.5 py-0.5" data-testid="tier-requests-pending-count">
-                  {formatNumber(page.pending, locale)}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+      {/* One row: the tabs that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
+      <PriorityTabs
+        label={t('tierRequests.tabsLabel')}
+        testId="tier-requests-tabs"
+        className="mb-6 border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="block whitespace-nowrap px-3 py-2 -mb-px border-b-2"
+        currentClassName="border-accent text-fg font-medium"
+        idleClassName="border-transparent text-fg-muted hover:text-fg"
+        tabTestIdPrefix="tier-requests-tab-"
+        tabs={ADMIN_TIER_REQUEST_FILTERS.map((f) => ({
+          id: f,
+          label: t(`tierRequests.filters.${f}`),
+          href: tierRequestsHref(f),
+          current: f === filter,
+          extra: f === 'pending' && !!page?.pending ? (
+            <span className="ms-2 text-xs rounded bg-chip-pending-bg text-chip-pending-fg px-1.5 py-0.5" data-testid="tier-requests-pending-count">
+              {formatNumber(page.pending, locale)}
+            </span>
+          ) : undefined,
+        }))}
+      />
 
       {!page && <ErrorAlert testId="tier-requests-error">{t('tierRequests.loadFailed')}</ErrorAlert>}
       {page && page.items.length === 0 && (

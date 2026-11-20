@@ -1,4 +1,4 @@
-import Link from '@/components/AppLink';
+import { PriorityTabs } from '@/components/PriorityTabs';
 import { getI18n } from '@/i18n/server';
 import { formatNumber } from '@/i18n/translate';
 import type { BillingOverview } from '@/lib/api/billing';
@@ -42,24 +42,18 @@ export async function PaymentsHeader({ overview, tab }: { overview: BillingOverv
         </dl>
       )}
 
-      {/* Phones: the tabs wrap onto a second row, never a tab half shown at the edge (owner rule,
-          #1669); wider screens keep one row */}
-      <nav aria-label={t('payments.tabsLabel')} className="mb-6 flex flex-wrap gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none] sm:flex-nowrap" data-testid="payments-tabs">
-        {PAYMENTS_TABS.map((x) => {
-          const active = x === tab;
-          return (
-            <Link
-              key={x}
-              href={x === 'providers' ? '/payments' : `/payments?tab=${x}`}
-              aria-current={active ? 'page' : undefined}
-              className={`shrink-0 px-3 py-2 -mb-px border-b-2 ${active ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
-              data-testid={`payments-tab-${x}`}
-            >
-              {t(`payments.tabs.${x}`)}
-            </Link>
-          );
-        })}
-      </nav>
+      {/* One row: the tabs that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
+      <PriorityTabs
+        label={t('payments.tabsLabel')}
+        testId="payments-tabs"
+        className="mb-6 border-b border-border"
+        rowClassName="gap-1"
+        tabClassName="block whitespace-nowrap px-3 py-2 -mb-px border-b-2"
+        currentClassName="border-accent text-fg font-medium"
+        idleClassName="border-transparent text-fg-muted hover:text-fg"
+        tabTestIdPrefix="payments-tab-"
+        tabs={PAYMENTS_TABS.map((x) => ({ id: x, label: t(`payments.tabs.${x}`), href: x === 'providers' ? '/payments' : `/payments?tab=${x}`, current: x === tab }))}
+      />
     </>
   );
 }

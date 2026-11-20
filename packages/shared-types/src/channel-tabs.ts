@@ -20,8 +20,27 @@ export interface ChannelTab {
 /**
  * Channel tabs configuration
  */
+/**
+ * What each content tab holds for a visitor (GET /api/channels/:id/tabs, #1669): public,
+ * published items only. The channel page hides an empty Shorts, Live, Playlists, Community
+ * or Channels tab from visitors (no hollow pages); its owner still sees every tab.
+ */
+export interface ChannelTabCounts {
+  videos: number; // Long-form videos
+  shorts: number;
+  live: number; // Live streams (live, upcoming and past)
+  playlists: number; // Public playlists
+  community: number; // Public posts
+  channels: number; // Channels on the Channels tab (featured, plus 1 for public subscriptions)
+}
+
+/** Tabs that are hidden from visitors while empty (Home, Videos and About always show) */
+export const HIDE_WHEN_EMPTY_TABS: ReadonlyArray<keyof ChannelTabCounts> = ['shorts', 'live', 'playlists', 'community', 'channels'];
+
 export interface ChannelTabConfig {
   channelId: string; // Channel this config belongs to
+  /** Read only (GET): what each tab holds for a visitor; absent when it could not be read */
+  counts?: ChannelTabCounts;
   defaultTab: string; // Default tab ID when visiting channel
   tabs: ChannelTab[]; // Ordered list of tabs
   version: number; // Config version for migration support
