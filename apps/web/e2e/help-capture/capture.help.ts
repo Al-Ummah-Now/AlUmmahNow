@@ -1031,6 +1031,11 @@ const CLIP_SCRUB = `(() => {
       if (/@\\s*E2E[\\w-]+/i.test(u)) node.textContent = u.replace(/@\\s*E2E[\\w-]+/gi, '@communitycorner');
     }
     if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@example.com'; });
+    // An avatar initial taken from the run address ('E' of e2e+…) belongs to the example address too:
+    // 'A' (the account-switch clip showed 'E' beside amina@example.com while the name loaded)
+    const scope = root.querySelectorAll ? root : document.body;
+    scope.querySelectorAll('[class*="avatar"]').forEach((el) => { if (el.childElementCount === 0 && (el.textContent || '').trim() === 'E') el.textContent = 'A'; });
+    if (root.closest && root.closest('[class*="avatar"]') && (root.textContent || '').trim() === 'E') root.textContent = 'A';
   };
   const start = () => {
     if (!document.body) return void setTimeout(start, 10);
