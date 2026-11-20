@@ -420,7 +420,6 @@ test('every shot was made', () => {
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, 'digits.json'), JSON.stringify(digits, null, 2));
   writeFileSync(join(OUT, 'strips.json'), JSON.stringify(strips, null, 2));
-  writeFileSync(join(OUT, 'notes.txt'), notes.join('
-'));
+  writeFileSync(join(OUT, 'notes.txt'), notes.join('\n'));
   expect(problems, problems.join('\n')).toEqual([]);
 });
