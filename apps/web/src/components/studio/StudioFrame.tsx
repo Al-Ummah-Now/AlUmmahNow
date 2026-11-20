@@ -201,7 +201,9 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
           <p role="status" className="mb-4 rounded-md border border-border bg-muted p-3 text-sm text-foreground">{t.studio.channelHidden}</p>
         )}
         {item && tabs.length > 0 && (
-          <nav aria-label={t.studio.tabsLabel} className="mb-4 flex gap-1 overflow-x-auto border-b border-border">
+          // Phones: the tabs wrap onto a second row, never a tab half shown at the edge (owner rule,
+          // as Android #45 did for chips); wider screens keep one row
+          <nav aria-label={t.studio.tabsLabel} className="mb-4 flex flex-wrap gap-x-1 border-b border-border sm:flex-nowrap sm:overflow-x-auto" data-testid="studio-tabs">
             {tabs.map((tab) => {
               const current = segments[1] === tab.id;
               return (
