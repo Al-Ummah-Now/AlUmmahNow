@@ -161,8 +161,16 @@ test.beforeAll(async ({ browser }) => {
   const json = (body: unknown, channel?: string) => ({ method: 'PUT', headers: { 'Content-Type': 'application/json', ...(channel ? { channelId: channel } : {}) }, body: JSON.stringify(body) });
   expect((await apiFetch(user, '/api/profile', json({ displayName: NAMES.user.en, displayNameLocalized: NAMES.user, firstName: 'Amina', lastName: 'Yusuf' }))).status).toBeLessThan(300);
   const about = { en: 'Short videos about our neighbourhood and the people in it.', ar: 'مرئيات قصيرة عن حيّنا وأهله.' };
-  for (const [id, name] of [[creator.channelIds[0], NAMES.channel], [creator.channelIds[1], NAMES.second]] as const) {
+  for (const [id, name, art] of [[creator.channelIds[0], NAMES.channel, 'cms.webp'], [creator.channelIds[1], NAMES.second, 'tools.webp']] as const) {
     expect((await apiFetch(user, `/api/channels/${id}`, json({ name: name.en, nameLocalized: name, description: about.en, descriptionLocalized: about }, id))).status).toBeLessThan(300);
+    // A real logo (a crop of the owner's lantern art, resized): channels on the site have one, and
+    // without it the watch page showed the stock grey silhouette (audit r2)
+    const logo = join(MEDIA, `logo-${art}.jpg`);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(ART, art), '-vf', 'scale=400:400', '-q:v', '3', logo]);
+    const form = new FormData();
+    form.append('photo', new Blob([readFileSync(logo)], { type: 'image/jpeg' }), 'logo.jpg');
+    const res = await apiFetch(user, `/api/channels/${id}/avatar`, { method: 'PUT', body: form, headers: { channelId: id } });
+    expect(res.status, `channel logo: ${await res.clone().text()}`).toBe(200);
   }
   // The demo videos, oldest first so "Site tour" is the newest (the home page's featured video)
   for (const demo of [...DEMOS].reverse()) {
@@ -375,6 +383,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       })
       .map((el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
     const placed: Box[] = [];
+    // Outline bands already drawn (the dashed line and its halo): a later number never sits on one
+    const bands: Box[] = [];
     let missed = 0;
     const faults: string[] = [];
     for (const target of targets) {
@@ -414,12 +424,14 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const within = (t: Box, o: Box) => t.x >= o.x + IN && t.y >= o.y + IN && t.x + t.w <= o.x + o.w - IN && t.y + t.h <= o.y + o.h - IN;
       const centreIn = (t: Box) => { const cx = t.x + t.w / 2; const cy = t.y + t.h / 2; return cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height; };
       const foreign = allText.filter((t) => !centreIn(t));
-      const near4 = (o: Box) => foreign.filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o));
+      // Anything meaningful outside the target: other text, and pictures, icons, avatars and badges
+      const foreignPics = pictures.filter((p) => !centreIn(p));
+      const near4 = (o: Box) => [...foreign, ...foreignPics].filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o));
       // Loose first (the usual gap), else as tight as the target's own letters allow
       let o = outline(gap);
       if (near4(o).length) o = outline(-1);
       const crowd = near4(o);
-      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of other text`);
+      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of other text or a picture`);
       if (ownText.some((t) => !within(t, o))) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of its own text`);
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
@@ -482,6 +494,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
         ...ownPictures.map(shrink),
         ...pictures.map((b) => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 })),
+        ...bands,
         ...texts,
       ];
       const fits = ([x, y]: [number, number]) => {
@@ -508,6 +521,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       if (pictures.some((p) => hit(box, { x: p.x + 1, y: p.y + 1, w: Math.max(0, p.w - 2), h: Math.max(0, p.h - 2) }))) faults.push(`number ${target.dataset.helpTarget} covers a picture, icon or checkbox`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       placed.push({ x, y, w: S, h: S });
+      // This outline's band (the four edges, 4 px either side of the dashed line) for the next numbers
+      for (const e of [{ x: o.x - 4, y: o.y - 4, w: o.w + 8, h: 8 }, { x: o.x - 4, y: o.y + o.h - 4, w: o.w + 8, h: 8 }, { x: o.x - 4, y: o.y - 4, w: 8, h: o.h + 8 }, { x: o.x + o.w - 4, y: o.y - 4, w: 8, h: o.h + 8 }]) bands.push(e);
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
       m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
