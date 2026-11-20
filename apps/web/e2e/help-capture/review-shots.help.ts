@@ -178,6 +178,8 @@ async function centre(page: Page, selector: string): Promise<void> {
       }
       return n;
     };
+    // The field stays in the middle half of the window
+    const keep = () => { const r2 = el.getBoundingClientRect(); return r2.top > innerHeight * 0.25 && r2.bottom < innerHeight * 0.75; };
     const y0 = scroller.scrollTop;
     let best = y0;
     let bestN = Infinity;
