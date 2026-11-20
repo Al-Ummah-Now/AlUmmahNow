@@ -381,6 +381,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       list.scrollTop = best;
     }
   });
+  await page.evaluate(PAGE_HELPERS);
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     type Box = { x: number; y: number; w: number; h: number; what?: string; el?: Element | null };
@@ -506,9 +507,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         if (own) { l = Math.min(l, own.l); t = Math.min(t, own.t); rr = Math.max(rr, own.r); bb = Math.max(bb, own.b); }
         return { x: l, y: t, w: rr - l, h: bb - t };
       };
+      // A neighbouring card (the next section 8 px below) is never reached by the outline either, or
+      // no crop could show the outline whole without a sliver of that card (audit r4/r5)
+      const otherCards = (window as unknown as { __help: { cards: () => Element[] } }).__help.cards()
+        .filter((el) => !el.contains(target) && !target.contains(el))
+        .map((el) => fromRect(el.getBoundingClientRect(), { el, what: `<${el.tagName.toLowerCase()}> card` }))
+        .filter((b) => !contains({ x: r.x, y: r.y, w: r.width, h: r.height }, b));
       const crowded = (o: Box) => [
         ...otherText.filter((t) => hit(t, grow(o, OUT)) && !contains(grow(o, -IN), t)),
         ...otherPics.filter((p) => hit(p, grow(o, 2)) && !contains(grow(o, -4), p)),
+        ...otherCards.filter((cd) => hit(cd, grow(o, 2)) && !contains(cd, grow(o, 2))),
       ];
       // Toward a neighbouring target, at most half the free space after both bands and CLEAR
       const near = rects.filter((_, j) => j !== i).reduce((min, b) => {
@@ -1077,6 +1085,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
             if (top && top !== el && !el.contains(top) && !top.contains(el)) {
               for (let e: Element | null = top; e && e !== document.body; e = e.parentElement) {
                 if (e.contains(el)) break;
+                // Under a bar or the rail's fade; behind an open menu is not 'covered' (the menu is the
+                // picture; the page under it is background) (r5: page rows behind the menu blocked every edge)
+                if (e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) break;
                 const pos = getComputedStyle(e).position;
                 if (pos === 'fixed' || pos === 'sticky') { cov = true; break; }
               }
@@ -1187,8 +1198,10 @@ const SCENES: Scene[] = [
   {
     id: 'start-signin',
     signedIn: false,
-    run: async (page, lang) => {
-      await settle(page, '', lang);
+    run: async (page, lang, device) => {
+      // Desktop: over the About page. Its number hangs just under the header; on the home page the
+      // welcome banner sits there and no crop line clears both it and the rail (r5)
+      await settle(page, device === 'desktop' ? '/about' : '', lang);
       return [[page.getByTestId('header-sign-in')], [header(page)]];
     },
   },
