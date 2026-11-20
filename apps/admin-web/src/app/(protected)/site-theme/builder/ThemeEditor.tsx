@@ -396,10 +396,10 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
               {/* How boxes that show the header art frame it (compile.ts frameVars) */}
               <label className="block" data-testid="image-frame">
                 <span className="text-xs text-fg">{t('themeBuilder.headerGraphicFrame')}</span>
-                <select className={`${fieldClass} !py-1 w-full text-xs`} disabled={readOnly} value={(theme.imagery.headerGraphicFrame as string | undefined) ?? 'inset'} onChange={(e) => update(['imagery', 'headerGraphicFrame'], e.target.value === 'inset' ? undefined : e.target.value)}>
+                <Select className={`${fieldClass} !py-1 w-full text-xs`} disabled={readOnly} value={(theme.imagery.headerGraphicFrame as string | undefined) ?? 'inset'} onChange={(e) => update(['imagery', 'headerGraphicFrame'], e.target.value === 'inset' ? undefined : e.target.value)}>
                   <option value="inset">{t('themeBuilder.frameInset')}</option>
                   <option value="band">{t('themeBuilder.frameBand')}</option>
-                </select>
+                </Select>
                 <span className="text-[11px] text-fg-muted">{t('themeBuilder.headerGraphicFrameHelp')}</span>
                 <IssueText messages={errorsAt('imagery.headerGraphicFrame')} />
               </label>
