@@ -157,15 +157,17 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                   <h3 className={`truncate font-semibold ${TEXT}`}>
                     <Link href={editHref} className="hover:underline">{title}</Link>
                   </h3>
-                  <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`}>
+                  {/* A separator never ends a line: each item after the first carries its own leading
+                      bullet, so a wrapped item takes its bullet with it */}
+                  <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`} data-testid="playlist-details">
                     <span>{formatVideoCount(count, lang)}</span>
-                    <span aria-hidden="true">•</span>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <span aria-hidden="true" className="me-1">•</span>
                       {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
                       {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
                     </span>
-                    <span aria-hidden="true">•</span>
-                    <span className="inline-flex items-center gap-1" data-testid="playlist-sort-summary">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="playlist-sort-summary">
+                      <span aria-hidden="true" className="me-1">•</span>
                       <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
                       {sort.sortMode === 'auto'
                         ? `${fieldLabel(sort.sortField, t)} · ${directionLabels(sort.sortField, t)[sort.sortDirection]}`
