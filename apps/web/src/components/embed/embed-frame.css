@@ -179,3 +179,9 @@ main[data-testid="embed-player"] .embed-play-button svg {
 main[data-testid="embed-player"] .group:hover .embed-play-button {
   background: color-mix(in srgb, var(--fanous-c-button-primary-bg) 88%, var(--fanous-c-button-primary-text));
 }
+
+/* The player's first-run touch hint (lib/video/gesture-hint.ts) starts below the "Watch on" row:
+   at the top of a phone embed it sat under that link, an overlay on an overlay (#1660 follow-up) */
+main[data-testid="embed-player"] .vjs-gesture-hint {
+  top: 48px;
+}
