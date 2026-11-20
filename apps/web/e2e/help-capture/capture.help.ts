@@ -548,6 +548,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       if (above) cands.push([rtl ? startX - k : startX + k, o.y - S / 2 + k], [rtl ? endX + k : endX - k, o.y - S / 2 + k]);
       cands.push([startX, midY], [endX, midY]);
       cands.push([rtl ? startX - k : startX + k, o.y - S / 2 + k], [rtl ? startX - k : startX + k, o.y + o.h - S / 2 - k], [rtl ? endX + k : endX - k, o.y - S / 2 + k], [rtl ? endX + k : endX - k, o.y + o.h - S / 2 - k]);
+      // Then inside, on its middle line, inward from the end: the number reads as the row's own (a
+      // spot just outside the outline sat beside the next row's text, e.g. 3 beside 'Studio')
+      for (let d = 6; d <= o.w / 2; d += 4) cands.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
       // Then anywhere along the outline, every 4 px, on it, just outside it or just inside it
       for (let d = 0; d <= o.w - S; d += 4) {
         const ax = rtl ? o.x + o.w - S - d : o.x + d;
@@ -560,8 +563,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       for (let d = 12; d <= o.w / 2; d += 4) cands.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
       // A number must touch its own outline (on it, or within 6 px of it)
       const touches = ([x, y]: [number, number]) => hit(grow({ x, y, w: S, h: S }, 6), grow(o, 2)) && !contains(grow(o, -10), { x, y, w: S, h: S });
-      // A number-only marker sits on its control or right beside it (within 6 px)
-      const spot = cands.filter(bare[i] ? (([x, y]: [number, number]) => hit(grow({ x, y, w: S, h: S }, 6), o)) : touches).find(ok);
+      // A number-only marker sits on its control's middle line (inward from the end, then from the
+      // start) or right beside it, centred on it: never in the gap between two rows
+      const bareCands: Array<[number, number]> = [];
+      for (let d = 4; d <= o.w / 2; d += 4) bareCands.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
+      for (let d = 4; d <= o.w / 2; d += 4) bareCands.push([rtl ? o.x + o.w - S - d : o.x + d, midY]);
+      bareCands.push([rtl ? o.x - S - 4 : o.x + o.w + 4, midY], [rtl ? o.x + o.w + 4 : o.x - S - 4, midY]);
+      // A header control: under it, centred, hanging from the header (no room beside it)
+      bareCands.push([o.x + o.w / 2 - S / 2, o.y + o.h + 2]);
+      const spot = bare[i] ? bareCands.find(ok) : cands.filter(touches).find(ok);
       if (!spot) { missed++; faults.push(`number ${n} has no spot clear of text, pictures, other numbers and outlines`); }
       const [x, y] = spot ?? [startX, midY];
       numbers.push(grow({ x, y, w: S, h: S }, 2));
