@@ -77,7 +77,8 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
     if (items.length !== tabs.length) return;
     const gap = parseFloat(getComputedStyle(rowRef.current).columnGap) || 0;
     setWidths({ items: items.map((el) => el.getBoundingClientRect().width), more: moreRef.current.getBoundingClientRect().width, gap });
-  });
+    // Again whenever the widths are reset (new labels, fonts in)
+  }, [widths, signature]);
 
   const recompute = useCallback(() => {
     const nav = navRef.current;
