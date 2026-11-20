@@ -486,6 +486,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const inside: Array<[number, number]> = round ? [] : [
         [rtl ? o.x + o.w - S - 4 : o.x + 4, midY], [rtl ? o.x + 4 : o.x + o.w - S - 4, midY],
       ];
+      // ...and along the row's middle line, moving in from its end past an end icon or chevron
+      // (a menu row with icons at both ends: "Switch channel")
+      if (!round && o.h >= S + 8) {
+        for (let d = 12; d <= o.w / 2; d += 8) inside.push([rtl ? o.x + d : o.x + o.w - S - d, midY]);
+      }
       // Then anywhere along the outline, on it or just outside it, every 8 px from the inline start
       const along: Array<[number, number]> = [];
       for (let d = 0; d <= o.w - S; d += 8) {
