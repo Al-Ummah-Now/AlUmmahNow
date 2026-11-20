@@ -94,6 +94,15 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const [index, setIndex] = useState(() => Math.min(params.index, Math.max(0, videos.length - 1)));
   const [activated, setActivated] = useState(params.autoplay);
   const [listOpen, setListOpen] = useState(false);
+  /**
+   * A poster that failed to load (/thumb answered 404/502): dropped, so the facade shows the night
+   * backdrop instead of the browser's broken-image frame (a grey 1px edge round the frame, #1660
+   * follow-up). The server-rendered <img> can fail before hydration, so the ref checks it too.
+   */
+  const [failedPoster, setFailedPoster] = useState<string | null>(null);
+  const posterRef = useCallback((img: HTMLImageElement | null) => {
+    if (img && img.complete && img.naturalWidth === 0) setFailedPoster(img.getAttribute('src'));
+  }, []);
   /** Playing muted because of an autoplay rule: the "Tap to unmute" control shows */
   const [needsUnmute, setNeedsUnmute] = useState(false);
   /** The video has ended: the end screen (replay, up next) is up, and "Tap to unmute" would cover its buttons */
@@ -318,10 +327,17 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               aria-label={fill(s.playVideo, { title }, lang)}
               data-testid="embed-facade"
             >
-              {video.poster && (
+              {video.poster && video.poster !== failedPoster && (
                 // contain, not cover: a vertical or square poster is letterboxed like the player shows it
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={video.poster} alt="" className="absolute inset-0 w-full h-full object-contain" />
+                <img
+                  ref={posterRef}
+                  src={video.poster}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-contain"
+                  data-testid="embed-poster"
+                  onError={() => setFailedPoster(video.poster ?? null)}
+                />
               )}
               <span className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/40" aria-hidden="true" />
               <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">

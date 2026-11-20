@@ -115,6 +115,16 @@ afterEach(() => {
 });
 
 describe('EmbedPlayer', () => {
+  it('drops a poster that fails to load, so the facade shows the backdrop, not a broken-image frame', () => {
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({})} />);
+    const poster = screen.getByTestId('embed-poster');
+    expect(poster).toHaveAttribute('src', 'https://vz.example/v1/thumbnail.jpg');
+    fireEvent.error(poster);
+    expect(screen.queryByTestId('embed-poster')).toBeNull();
+    // The facade itself stays: the title and the play button are still there
+    expect(screen.getByTestId('embed-facade')).toBeInTheDocument();
+  });
+
   it('shows a facade first and loads the player on press, at the start position', () => {
     render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ start: '30' })} />);
     expect(screen.queryByTestId('mock-player')).toBeNull();
