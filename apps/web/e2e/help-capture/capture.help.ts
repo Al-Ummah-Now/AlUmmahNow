@@ -313,7 +313,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         range.selectNodeContents(node);
         for (const b of range.getClientRects()) {
           if (b.height <= 0) continue;
-          if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) {
+          // Only an edge with a bar on it: the window's own edge is the crop's job (a desktop page has no
+          // bar at the bottom, and keeping card titles whole there pushed the channel title under the header)
+          if ((top > 0 && b.top < top && b.bottom > top) || (bottom < window.innerHeight && b.top < bottom && b.bottom > bottom)) {
             // In a bar itself is fine
             if (bars.some((br) => b.top >= br.top - 0.5 && b.bottom <= br.bottom + 0.5 && b.left >= br.left - 0.5 && b.right <= br.right + 0.5)) continue;
             n++;
