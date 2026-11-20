@@ -312,17 +312,16 @@ test.describe('embedded discussions (read-only)', () => {
 });
 
 /**
- * Colour contrast of every embed state in light and dark (#1660: the unavailable card showed pale
- * text on the page's parchment). The frame is opened on its own so axe reads it directly. "dark" is
- * the device's dark scheme plus the site's `dark` class: the embed does not read the viewer's saved
- * mode today, so both token sets are covered whichever one a frame ends up with.
+ * Colour contrast of every embed state in a light-mode and a dark-mode browser (#1660: the
+ * unavailable card showed pale text on the page's parchment). The frame is opened on its own so axe
+ * reads it directly, exactly as a browser in that mode renders it: the embed never reads the
+ * viewer's saved Light/Dark, so nothing is forced in the page.
  */
 test.describe('embed colour contrast (#1660)', () => {
   const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
   async function expectContrast(page: Page, scope: string, mode: 'light' | 'dark', label: string) {
     await page.emulateMedia({ colorScheme: mode });
-    await page.evaluate((dark) => document.documentElement.classList.toggle('dark', dark), mode === 'dark');
     const { violations } = await new AxeBuilder({ page }).include(scope).withTags(WCAG_TAGS).withRules(['color-contrast']).analyze();
     const found = violations.flatMap((v) => v.nodes.map((n) => `${n.target.join(' ')}: ${n.any[0]?.message ?? v.help}`));
     expect(found, `${label} (${mode})`).toEqual([]);
