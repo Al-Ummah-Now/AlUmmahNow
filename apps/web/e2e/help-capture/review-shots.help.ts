@@ -16,15 +16,26 @@ import { target } from '../release/targets';
 import { tabsAndChipsInView } from '../test-utils/tabs-in-viewport';
 
 type Lang = 'en' | 'ar';
-type Device = 'desktop' | 'phone';
+type Device = 'phone360' | 'phone390' | 'desktop';
 type Mode = 'light' | 'dark';
 const LANGS: Lang[] = ['en', 'ar'];
-const DEVICES: Device[] = ['phone', 'desktop'];
+const DEVICES: Device[] = ['phone360', 'phone390', 'desktop'];
+const VIEWPORT: Record<Device, { width: number; height: number; scale: number; mobile: boolean }> = {
+  phone360: { width: 360, height: 780, scale: 3, mobile: true },
+  phone390: { width: 390, height: 844, scale: 3, mobile: true },
+  desktop: { width: 1280, height: 800, scale: 1, mobile: false },
+};
 const MODES: Mode[] = ['light', 'dark'];
 const OUT = join(__dirname, '../../test-results/review-shots');
+// Two channels (r4, owner 2026-11-20): one with every section filled (More is used on phones) and
+// one with few (videos only: its empty tabs are hidden, so no More)
 const CHANNEL = {
   name: { en: 'Community Corner', ar: 'ركن المجتمع' },
   description: { en: 'Weekly talks, Q&A and news from our community.', ar: 'لقاءات أسبوعية وأسئلة وأجوبة وأخبار من مجتمعنا.' },
+};
+const SECOND = {
+  name: { en: 'Lantern Market', ar: 'سوق الفوانيس' },
+  description: { en: 'Stalls, crafts and evenings at the old market.', ar: 'أكشاك وحِرف وأمسيات في السوق القديم.' },
 };
 const ALL_TABS = ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 'channels', 'about'];
 /**
@@ -34,12 +45,17 @@ const ALL_TABS = ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 
  */
 const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
 // Each uploaded some days ago, with views spread over the days since (audit r2: one spike on today)
-const DEMOS = [
-  { key: 'street', hue: ['#0e4f4c', '#1f8a80'], card: { en: 'Lantern street', ar: 'شارع الفوانيس' }, title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34, age: 24 },
-  { key: 'evening', hue: ['#5a3208', '#c98a2b'], card: { en: 'Evening lights', ar: 'أضواء المساء' }, title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21, age: 17 },
-  { key: 'writing', hue: ['#1b2f5a', '#3f73b8'], card: { en: 'By lantern light', ar: 'ضوء الفانوس' }, title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12, age: 9 },
-  { key: 'tour', hue: ['#3a1b56', '#8a4fc0'], card: { en: 'The market', ar: 'السوق' }, title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8, age: 3 },
-] as const;
+type Demo = { key: string; channel: 'a' | 'b'; short?: boolean; hue: readonly [string, string]; card: { en: string; ar: string }; title: { en: string; ar: string }; views: number; age: number };
+const DEMOS: readonly Demo[] = [
+  { key: 'street', channel: 'a', hue: ['#0e4f4c', '#1f8a80'], card: { en: 'Lantern street', ar: 'شارع الفوانيس' }, title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34, age: 24 },
+  { key: 'evening', channel: 'a', hue: ['#5a3208', '#c98a2b'], card: { en: 'Evening lights', ar: 'أضواء المساء' }, title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21, age: 17 },
+  { key: 'writing', channel: 'a', hue: ['#1b2f5a', '#3f73b8'], card: { en: 'By lantern light', ar: 'ضوء الفانوس' }, title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12, age: 9 },
+  { key: 'tour', channel: 'a', hue: ['#3a1b56', '#8a4fc0'], card: { en: 'The market', ar: 'السوق' }, title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8, age: 3 },
+  { key: 'short-tea', channel: 'a', short: true, hue: ['#4a1d1d', '#b4533c'], card: { en: 'Mint tea', ar: 'شاي بالنعناع' }, title: { en: 'Mint tea in one minute', ar: 'شاي بالنعناع في دقيقة' }, views: 15, age: 6 },
+  { key: 'short-bread', channel: 'a', short: true, hue: ['#2b3a12', '#7a9a2e'], card: { en: 'Fresh bread', ar: 'خبز طازج' }, title: { en: 'Fresh bread at dawn', ar: 'خبز طازج عند الفجر' }, views: 9, age: 2 },
+  { key: 'spices', channel: 'b', hue: ['#5a1f0a', '#d0782c'], card: { en: 'Spice stalls', ar: 'أكشاك التوابل' }, title: { en: 'The spice stalls', ar: 'أكشاك التوابل' }, views: 11, age: 12 },
+  { key: 'crafts', channel: 'b', hue: ['#123b44', '#2f8aa0'], card: { en: 'Brass crafts', ar: 'حِرف النحاس' }, title: { en: 'Brass lanterns by hand', ar: 'فوانيس نحاسية يدوية' }, views: 6, age: 5 },
+];
 const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
 const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
 async function sql(db: string, text: string): Promise<Array<Record<string, unknown>>> {
@@ -78,7 +94,7 @@ function split(total: number, weights: number[], integer: boolean): number[] {
  * upload date, and the uploads themselves back to that date (R2 video, ownership and search index),
  * with the search index's view counts matching the videos'.
  */
-async function backdateDemos(channelId: string, videos: Array<{ id: string; age: number; views: number }>): Promise<void> {
+async function backdateDemos(videos: Array<{ id: string; channelId: string; age: number; views: number }>): Promise<void> {
   const now = Date.now();
   const today = dayOf(now);
   const ids = videos.map((v) => q(v.id)).join(',');
@@ -94,7 +110,7 @@ async function backdateDemos(channelId: string, videos: Array<{ id: string; age:
         if (!value) return;
         const day = dayOf(now - (v.age - i) * DAY);
         inserts.push(`('video', ${q(v.id)}, ${q(day)}, ${q(metric)}, ${q(dim)}, ${value})`);
-        const key = `${day}|${metric}|${dim}`;
+        const key = `${v.channelId}|${day}|${metric}|${dim}`;
         channelSums.set(key, (channelSums.get(key) ?? 0) + value);
       });
     }
@@ -102,9 +118,10 @@ async function backdateDemos(channelId: string, videos: Array<{ id: string; age:
   const metrics = [...new Set(rows.map((r) => String(r.metric)))].map(q).join(',');
   if (rows.length) {
     await sql('al-ummah-now-notifications', `DELETE FROM analytics_daily WHERE entity_type = 'video' AND entity_id IN (${ids})`);
-    await sql('al-ummah-now-notifications', `DELETE FROM analytics_daily WHERE entity_type = 'channel' AND entity_id = ${q(channelId)} AND metric IN (${metrics})`);
+    const channels = [...new Set(videos.map((v) => v.channelId))].map(q).join(',');
+    await sql('al-ummah-now-notifications', `DELETE FROM analytics_daily WHERE entity_type = 'channel' AND entity_id IN (${channels}) AND metric IN (${metrics})`);
     for (const [key, value] of channelSums) {
-      const [day, metric, dim] = key.split('|');
+      const [channelId, day, metric, dim] = key.split('|');
       inserts.push(`('channel', ${q(channelId)}, ${q(day)}, ${q(metric)}, ${q(dim)}, ${value})`);
     }
     for (let i = 0; i < inserts.length; i += 100) await sql('al-ummah-now-notifications', `INSERT INTO analytics_daily (entity_type, entity_id, day, metric, dim, value) VALUES ${inserts.slice(i, i + 100).join(',')}`);
@@ -143,18 +160,19 @@ const demoByGuid = new Map<string, string>();
 const demoById = new Map<string, string>();
 const demoIds: string[] = [];
 /** A 1280x720 title card: the title over a lantern glow in the video's hue, a thin inset frame */
-async function makeCards(browser: Browser, demo: (typeof DEMOS)[number]): Promise<void> {
+async function makeCards(browser: Browser, demo: Demo): Promise<void> {
   mkdirSync(join(MEDIA, demo.key), { recursive: true });
   const [deep, glow] = demo.hue;
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
+  const [w, h] = demo.short ? [720, 1280] : [1280, 720];
+  const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   for (const lang of LANGS) {
     const title = demo.card[lang].replace(/&/g, '&amp;').replace(/</g, '&lt;');
     await page.setContent(`<!doctype html><html><body style="margin:0">
-      <div style="width:1280px;height:720px;position:relative;display:grid;place-items:center;
+      <div style="width:${w}px;height:${h}px;position:relative;display:grid;place-items:center;
         background:radial-gradient(ellipse 60% 70% at 50% 42%, ${glow} 0%, ${deep} 62%, #070d14 100%);font-family:'Noto Sans Arabic','Noto Sans','DejaVu Sans',sans-serif">
         <div style="position:absolute;inset:28px;border:2px solid #ffffff2e;border-radius:28px"></div>
-        <div dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="color:#fff8ec;font-size:118px;font-weight:700;letter-spacing:${lang === 'ar' ? '0' : '-0.01em'};text-shadow:0 4px 28px #0008;text-align:center;max-width:960px;line-height:1.15">${title}</div>
+        <div dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="color:#fff8ec;font-size:${demo.short ? 104 : 118}px;font-weight:700;letter-spacing:${lang === 'ar' ? '0' : '-0.01em'};text-shadow:0 4px 28px #0008;text-align:center;max-width:${w - 160}px;line-height:1.15">${title}</div>
       </div></body></html>`);
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: join(MEDIA, demo.key, `${lang}.jpg`), type: 'jpeg', quality: 90 });
@@ -202,37 +220,54 @@ test.describe.configure({ mode: 'serial' });
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(10 * 60_000);
   for (const demo of DEMOS) await makeCards(browser, demo);
-  creator = await data.createCreator(browser, 'tabs', { channels: 1 });
+  creator = await data.createCreator(browser, 'tabs', { channels: 2 });
   const user = creator.user;
-  const put = (path: string, body: unknown, channelId?: string) => apiFetch(user, path, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(channelId ? { channelId } : {}) }, body: JSON.stringify(body) });
+  const send = (method: string, path: string, body: unknown, channelId?: string) => apiFetch(user, path, { method, headers: { 'Content-Type': 'application/json', ...(channelId ? { channelId } : {}) }, body: JSON.stringify(body) });
+  const put = (path: string, body: unknown, channelId?: string) => send('PUT', path, body, channelId);
   expect((await put('/api/profile', { displayName: 'Amina Yusuf', displayNameLocalized: { en: 'Amina Yusuf', ar: 'أمينة يوسف' }, firstName: 'Amina', lastName: 'Yusuf' })).status).toBeLessThan(300);
-  const channel = creator.channelIds[0];
-  const named = await put(`/api/channels/${channel}`, { name: CHANNEL.name.en, nameLocalized: CHANNEL.name, description: CHANNEL.description.en, descriptionLocalized: CHANNEL.description }, channel);
-  expect(named.status, await named.clone().text()).toBeLessThan(300);
-  const tabs = await put(`/api/channels/${channel}/tabs`, { defaultTab: 'home', tabs: ALL_TABS.map((id, position) => ({ id, visible: true, position })) }, channel);
-  expect(tabs.status, await tabs.clone().text()).toBeLessThan(300);
+  const [full, few] = creator.channelIds;
+  for (const [id, c] of [[full, CHANNEL], [few, SECOND]] as const) {
+    const named = await put(`/api/channels/${id}`, { name: c.name.en, nameLocalized: c.name, description: c.description.en, descriptionLocalized: c.description }, id);
+    expect(named.status, await named.clone().text()).toBeLessThan(300);
+    // Every tab on in the config: what a visitor sees is then down to the content
+    const tabs = await put(`/api/channels/${id}/tabs`, { defaultTab: 'home', tabs: ALL_TABS.map((tab, position) => ({ id: tab, visible: true, position })) }, id);
+    expect(tabs.status, await tabs.clone().text()).toBeLessThan(300);
+  }
+  const channelOf = (d: Demo) => (d.channel === 'a' ? full : few);
+  const idOf = new Map<string, string>();
   for (const demo of [...DEMOS].reverse()) {
-    const video = await data.createVideo(user, channel, { clip: 'landscape40', isPublic: true, title: demo.title.en, waitReady: true });
+    const channel = channelOf(demo);
+    const video = await data.createVideo(user, channel, { clip: demo.short ? 'vertical' : 'landscape40', isPublic: true, title: demo.title.en, waitReady: true });
     expect((await put(`/api/videos/${video.id}`, { titleLocalized: demo.title }, channel)).status).toBeLessThan(300);
     const guid = await cdnGuid(video.id);
     if (guid) demoByGuid.set(guid, demo.key);
     else problems.push(`no CDN guid for ${demo.key}: its thumbnail is the test pattern`);
     demoById.set(video.id, demo.key);
     demoIds.push(video.id);
+    idOf.set(demo.key, video.id);
     for (let i = 0; i < demo.views; i++) {
       await apiFetch(user, `/api/videos/${video.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json', channelId: channel }, body: JSON.stringify({ watchTime: 25 + ((i * 37) % 90) }) });
     }
   }
+  // The full channel: a playlist, two posts and the second channel featured
+  const playlist = await send('POST', '/api/playlists', { title: 'Evenings in the old town', titleLocalized: { en: 'Evenings in the old town', ar: 'أمسيات في البلدة القديمة' }, description: '', videos: [idOf.get('street'), idOf.get('evening')], isPublic: true }, full);
+  expect(playlist.status, await playlist.clone().text()).toBeLessThan(300);
+  const playlistId = ((await playlist.json()) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id;
+  if (playlistId) data.onCleanup(`playlist ${playlistId}`, () => apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE', headers: { channelId: full } }));
+  await data.createPost(user, full, { text: 'This Friday after maghrib: a lantern walk through the old town. Everyone is welcome.' });
+  await data.createPost(user, full, { text: 'جولة الفوانيس يوم الجمعة بعد المغرب في البلدة القديمة. الجميع مرحَّب بهم.' });
+  const section = await send('POST', `/api/channels/${full}/sections`, { type: 'featured_channels', title: 'Neighbours', titleLocalized: { en: 'Neighbours', ar: 'جيراننا' }, channelIds: [few] }, full);
+  expect(section.status, await section.clone().text()).toBeLessThan(300);
   // The views reach the stored videos (counter flush) and the processor's analytics rows
   for (const demo of DEMOS) {
-    const id = demoIds[DEMOS.length - 1 - DEMOS.indexOf(demo)];
+    const id = idOf.get(demo.key)!;
     await expect.poll(async () => {
       const body = (await (await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' })).json().catch(() => ({}))) as { result?: { views?: number }; views?: number };
       return (body.result ?? body).views ?? 0;
     }, { timeout: 120_000, message: `views of ${demo.key}` }).toBeGreaterThanOrEqual(demo.views);
   }
   await expect.poll(async () => Number((await sql('al-ummah-now-notifications', `SELECT COALESCE(SUM(value), 0) AS n FROM analytics_daily WHERE entity_type = 'video' AND metric = 'views' AND entity_id IN (${demoIds.map(q).join(',')})`))[0]?.n ?? 0), { timeout: 120_000, message: 'analytics views' }).toBeGreaterThanOrEqual(DEMOS.reduce((a, d) => a + d.views, 0));
-  await backdateDemos(channel, DEMOS.map((d, i) => ({ id: demoIds[DEMOS.length - 1 - i], age: d.age, views: d.views })));
+  await backdateDemos(DEMOS.map((d) => ({ id: idOf.get(d.key)!, channelId: channelOf(d), age: d.age, views: d.views })));
 });
 
 async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, signedIn: boolean): Promise<{ context: BrowserContext; page: Page }> {
@@ -240,9 +275,10 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, si
     proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' },
     ignoreHTTPSErrors: true,
     storageState: signedIn ? creator.state : { cookies: [], origins: [] },
-    ...(device === 'phone'
-      ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true }
-      : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }),
+    viewport: { width: VIEWPORT[device].width, height: VIEWPORT[device].height },
+    deviceScaleFactor: VIEWPORT[device].scale,
+    isMobile: VIEWPORT[device].mobile,
+    hasTouch: VIEWPORT[device].mobile,
     colorScheme: mode,
     reducedMotion: 'reduce',
     locale: lang === 'ar' ? 'ar' : 'en-US',
@@ -306,14 +342,14 @@ async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise
   await page.screenshot({ path: join(OUT, dir, `${file}.png`), animations: 'disabled', caret: 'hide' });
 }
 
-function each(name: string, signedIn: boolean, body: (page: Page, lang: Lang, tag: string) => Promise<void>) {
+function each(name: string, signedIn: boolean, body: (page: Page, lang: Lang, tag: string, device: Device) => Promise<void>) {
   for (const lang of LANGS) test(`${name} ${lang}`, async ({ browser }) => {
     test.setTimeout(20 * 60_000);
     for (const device of DEVICES) for (const mode of MODES) {
       const tag = `${lang}-${device}-${mode}`;
       const { context, page } = await open(browser, lang, device, mode, signedIn);
       try {
-        await body(page, lang, tag);
+        await body(page, lang, tag, device);
       } catch (error) {
         problems.push(`${name} ${tag}: ${(error as Error).message.split('\n').slice(0, 3).join(' ')}`);
       } finally {
@@ -323,12 +359,39 @@ function each(name: string, signedIn: boolean, body: (page: Page, lang: Lang, ta
   });
 }
 
-// Public page: signed out. The tab strip just under the channel header, the whole strip in view
-each('channel', false, async (page, lang, tag) => {
+/** The tab strip has settled: measured (PriorityStrip), or the old scroll strip's tabs are in */
+async function tabsSettled(page: Page): Promise<void> {
+  await expect(page.getByTestId('channel-tabs').getByRole('tab').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-testid="channel-tabs-strip"][data-measuring]')).toHaveCount(0);
+  await page.waitForTimeout(500);
+}
+
+// Public pages: signed out. The full channel: every section has content (More on phones)
+each('channel-full', false, async (page, lang, tag, device) => {
   await settle(page, `/channels/${creator.channelIds[0]}`, lang);
-  await expect(page.getByTestId('channel-tabs').getByRole('tab')).toHaveCount(ALL_TABS.length, { timeout: 15_000 });
-  await page.waitForTimeout(400);
-  await shoot(page, 'channel', `channel-tabs-${tag}`, lang);
+  await tabsSettled(page);
+  await shoot(page, 'channel-full', `channel-full-${tag}`, lang);
+  // The More menu open (phones)
+  const more = page.getByTestId('channel-tabs-strip-more');
+  if (device !== 'desktop' && (await more.isVisible())) {
+    await more.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.waitForTimeout(300);
+    await shoot(page, 'channel-full', `channel-full-menu-${tag}`, lang);
+    // A tab from the menu: it is current and takes the row's last slot
+    await page.getByRole('menuitem').last().click();
+    await expect(page).toHaveURL(/tab=/);
+    await tabsSettled(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await shoot(page, 'channel-full', `channel-full-chosen-${tag}`, lang);
+  }
+});
+
+// The channel with few sections: its empty tabs are hidden, so no More
+each('channel-few', false, async (page, lang, tag) => {
+  await settle(page, `/channels/${creator.channelIds[1]}`, lang);
+  await tabsSettled(page);
+  await shoot(page, 'channel-few', `channel-few-${tag}`, lang);
 });
 
 each('search', false, async (page, lang, tag) => {
