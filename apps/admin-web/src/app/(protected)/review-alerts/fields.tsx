@@ -27,7 +27,8 @@ export function TimeZoneField({ value, zones, onChange, testId }: { value: strin
   const matches = useMemo(() => (open ? matchZones(all, query ?? '') : []), [open, all, query]);
   const shown = matches.slice(0, MAX_SHOWN);
   const optionId = (i: number) => `${ids}-tz-${i}`;
-  const display = `${current.city} (${current.offset})`;
+  // The offset kept left to right in Arabic, so its sign and brackets never flip (#1657)
+  const display = locale.startsWith('ar') ? `${current.city} \u2066(${current.offset})\u2069` : `${current.city} (${current.offset})`;
 
   const close = () => {
     setQuery(null);

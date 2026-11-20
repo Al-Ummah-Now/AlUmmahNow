@@ -1,3 +1,4 @@
+import { localizeDigits } from '@al-ummah/shared-types';
 /**
  * Timezone Utility Functions
  * Provides timezone detection, conversion, and common timezone lists
@@ -173,6 +174,23 @@ export function localizedTimezoneLabel(tz: { value: string; label: string }, loc
   return (locale === 'ar' && TIMEZONE_NAMES_AR[tz.value]) || tz.label;
 }
 
+/**
+ * A UTC offset as shown in the page language, the one place it is formatted for display: the page's
+ * digits (Arabic «UTC+٣») and, in Arabic, a left-to-right isolate so the sign and brackets never flip in
+ * a right-to-left line (#1657: «UTC (UTC+0» showed with a Latin 0 and its bracket at the start). Plain
+ * text, so it also works inside <option>.
+ */
+export function localizedTimezoneOffset(offset: string, locale: string, brackets = true): string {
+  const text = brackets ? `(${offset})` : offset;
+  if (!locale.startsWith('ar')) return text;
+  return `\u2066${localizeDigits('ar', text)}\u2069`;
+}
+
+/** A timezone option's text in the page language: "Riyadh (UTC+3)" / «الرياض (UTC+٣)». */
+export function timezoneOptionLabel(tz: { value: string; label: string; offset: string }, locale: string): string {
+  return `${localizedTimezoneLabel(tz, locale)} ${localizedTimezoneOffset(tz.offset, locale)}`;
+}
+
 /** A COMMON_TIMEZONES region name in the page language. */
 export function localizedTimezoneRegion(region: string, locale: string): string {
   return (locale === 'ar' && REGION_NAMES_AR[region]) || region;
@@ -211,13 +229,13 @@ export function getTimezoneDisplayName(timezone: string, locale: string = 'en'):
   const found = allTimezones.find(tz => tz.value === timezone);
 
   if (found) {
-    return `${localizedTimezoneLabel(found, locale)} ${found.offset}`;
+    return `${localizedTimezoneLabel(found, locale)} ${localizedTimezoneOffset(found.offset, locale, false)}`;
   }
 
   // Fallback: format the timezone name
   const offset = formatTimezoneOffset(timezone);
   const name = timezone.split('/').pop()?.replace(/_/g, ' ') || timezone;
-  return `${name} (${offset})`;
+  return `${name} ${localizedTimezoneOffset(offset, locale)}`;
 }
 
 /**

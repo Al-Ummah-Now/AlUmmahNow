@@ -1,6 +1,7 @@
 import {
   COMMON_TIMEZONES,
   getTimezoneDisplayName,
+  timezoneOptionLabel,
   isListedTimezone,
   localizedTimezoneLabel,
   localizedTimezoneRegion,
@@ -28,6 +29,10 @@ describe('localized timezone names (#299)', () => {
 
   it('keeps English labels for English', () => {
     expect(localizedTimezoneLabel({ value: 'Asia/Riyadh', label: 'Riyadh (AST)' }, 'en')).toBe('Riyadh (AST)');
-    expect(getTimezoneDisplayName('Asia/Riyadh', 'ar')).toBe('الرياض UTC+3');
+    expect(getTimezoneDisplayName('Asia/Riyadh', 'ar')).toBe('الرياض \u2066UTC+٣\u2069');
+    // #1657: Arabic digits, and the bracketed offset kept left to right so its brackets never flip
+    expect(getTimezoneDisplayName('Etc/UTC', 'ar')).toMatch(/\u2066\(UTC\+٠\)\u2069$/);
+    expect(timezoneOptionLabel({ value: 'Asia/Riyadh', label: 'Riyadh (AST)', offset: 'UTC+3' }, 'ar')).toBe('الرياض \u2066(UTC+٣)\u2069');
+    expect(timezoneOptionLabel({ value: 'Asia/Riyadh', label: 'Riyadh (AST)', offset: 'UTC+3' }, 'en')).toBe('Riyadh (AST) (UTC+3)');
   });
 });
