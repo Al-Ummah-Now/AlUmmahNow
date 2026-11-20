@@ -318,7 +318,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
   await page.waitForTimeout(150);
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
-    type Box = { x: number; y: number; w: number; h: number };
+    type Box = { x: number; y: number; w: number; h: number; what?: string; el?: Element | null };
     // An annotation, never UI (owner review 2026-11-16): a dashed outline in annotation red with a
     // white halo, offset from the control, and its number attached to the outline. A fixed red, not a
     // theme token: in Fawanees the 'live' colour is gold, which reads as the site's own focus ring
@@ -365,7 +365,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           const r = ov.getBoundingClientRect();
           return cx > r.left && cx < r.right && cy > r.top && cy < r.bottom && !ov.contains(node.parentElement);
         });
-        if (!behind) allText.push(glyphBox(b, node.parentElement));
+        if (!behind) allText.push({ ...glyphBox(b, node.parentElement), what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el: node.parentElement });
       }
     }
     // Pictures, icons and checkboxes anywhere on screen: a number never sits on one (audit r2: ① on
@@ -381,7 +381,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
         return b.width >= 12 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && rr >= b.width / 2 - 0.5;
       })
-      .map((el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
+      .map((el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}${typeof el.className === 'string' && el.className ? ` .${el.className.split(' ')[0]}` : ''}>` }; });
     const placed: Box[] = [];
     // Outline bands already drawn (the dashed line and its halo): a later number never sits on one
     const bands: Box[] = [];
@@ -423,15 +423,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const outline = (g: number) => rect(Math.min(r.x - g, textL), Math.min(r.y - g, textT), Math.max(r.x + r.width + g, textR), Math.max(r.y + r.height + g, textB));
       const within = (t: Box, o: Box) => t.x >= o.x + IN && t.y >= o.y + IN && t.x + t.w <= o.x + o.w - IN && t.y + t.h <= o.y + o.h - IN;
       const centreIn = (t: Box) => { const cx = t.x + t.w / 2; const cy = t.y + t.h / 2; return cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height; };
-      const foreign = allText.filter((t) => !centreIn(t));
+      const mine = (t: Box) => (t.el ? target.contains(t.el) : centreIn(t));
+      const foreign = allText.filter((t) => !mine(t));
       // Anything meaningful outside the target: other text, and pictures, icons, avatars and badges
-      const foreignPics = pictures.filter((p) => !centreIn(p));
+      const foreignPics = pictures.filter((p) => !mine(p));
       const near4 = (o: Box) => [...foreign, ...foreignPics].filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o));
       // Loose first (the usual gap), else as tight as the target's own letters allow
       let o = outline(gap);
       if (near4(o).length) o = outline(-1);
       const crowd = near4(o);
-      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of other text or a picture`);
+      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of ${crowd.slice(0, 2).map((c) => c.what ?? '?').join(', ')}`);
       if (ownText.some((t) => !within(t, o))) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of its own text`);
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
@@ -467,9 +468,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const inside: Array<[number, number]> = round ? [] : [
         [rtl ? o.x + o.w - S - 4 : o.x + 4, midY], [rtl ? o.x + 4 : o.x + o.w - S - 4, midY],
       ];
+      // Then anywhere along the outline, on it or just outside it, every 8 px from the inline start
+      const along: Array<[number, number]> = [];
+      for (let d = 0; d <= o.w - S; d += 8) {
+        const ax = rtl ? o.x + o.w - S - d : o.x + d;
+        along.push([ax, topY], [ax, bottomY], [ax, o.y - S], [ax, o.y + o.h]);
+      }
+      for (let d = 0; d <= o.h - S; d += 8) along.push([startX, o.y + d], [endX, o.y + d], [rtl ? o.x + o.w : o.x - S, o.y + d], [rtl ? o.x - S : o.x + o.w, o.y + d]);
       const candidates: Array<[number, number]> = above
-        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...inside, ...beyond]
-        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...inside, ...beyond];
+        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...inside, ...beyond, ...along]
+        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...inside, ...beyond, ...along];
       // The target's own avatar or logo stays clear too: a number on it hides who the row is
       // (design audit 2026-11-19: '١' over «أ» in the phone picker)
       const ownPictures = [...target.querySelectorAll<HTMLElement>('img, svg, span, div')]
@@ -517,8 +525,10 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       // Checked, not hoped: a number on text or on another number fails the picture (checked before
       // this number joins the placed ones, so it is never compared with itself)
       const box = { x, y, w: S, h: S };
-      if (texts.some((t) => hit(reach(box), t))) faults.push(`number ${target.dataset.helpTarget} is within 4 px of text`);
-      if (pictures.some((p) => hit(box, { x: p.x + 1, y: p.y + 1, w: Math.max(0, p.w - 2), h: Math.max(0, p.h - 2) }))) faults.push(`number ${target.dataset.helpTarget} covers a picture, icon or checkbox`);
+      const nearText = texts.find((t) => hit(reach(box), t));
+      if (nearText) faults.push(`number ${target.dataset.helpTarget} is within 4 px of text ${nearText.what ?? ''}`);
+      const onPic = pictures.find((p) => hit(box, { x: p.x + 1, y: p.y + 1, w: Math.max(0, p.w - 2), h: Math.max(0, p.h - 2) }));
+      if (onPic) faults.push(`number ${target.dataset.helpTarget} covers ${onPic.what ?? 'a picture'}`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       placed.push({ x, y, w: S, h: S });
       // This outline's band (the four edges, 4 px either side of the dashed line) for the next numbers
