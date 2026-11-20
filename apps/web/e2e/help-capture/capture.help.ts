@@ -359,9 +359,10 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const outside: Array<[number, number]> = round && o.w <= 64 ? [[centreX, o.y - S + 2], [centreX, o.y + o.h - 2]] : [];
       // Last resorts, still touching the outline: just outside its start or end edge, or above/below
       // its start corner
+      // (touching the outline from outside, so a text-only target keeps the outline's gap as clear space)
       const beyond: Array<[number, number]> = [
-        [rtl ? o.x + o.w - 2 : o.x - S + 2, midY], [rtl ? o.x - S + 2 : o.x + o.w - 2, midY],
-        [rtl ? o.x + o.w - S : o.x, o.y - S + 2], [rtl ? o.x + o.w - S : o.x, o.y + o.h - 2],
+        [rtl ? o.x - S : o.x + o.w, midY], [rtl ? o.x + o.w : o.x - S, midY],
+        [rtl ? o.x + o.w - S : o.x, o.y - S], [rtl ? o.x + o.w - S : o.x, o.y + o.h],
       ];
       // Inside the outline, at its inline-start or inline-end side: full-width rows of a phone menu
       // have no free edge (the start edge is off screen, the corners touch the next row), but their
@@ -648,7 +649,9 @@ const SCENES: Scene[] = [
     id: 'appearance-rail',
     markers: 'above',
     run: async (page, lang) => {
-      await settle(page, `/channels/${channelId}`, lang);
+      // The home page: its featured picture sits under the header, so the numbers below the toggles have
+      // clear space (a channel page put its name right under them, within 4 px)
+      await settle(page, '', lang);
       // Language and light/dark are in the top bar at every width (docs/design/NAV.md "Header")
       const theme = header(page).getByTestId('theme-toggle');
       const language = header(page).getByTestId('language-toggle');
