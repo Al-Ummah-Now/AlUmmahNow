@@ -146,6 +146,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/79-page-builder-cross-app.spec.ts': { placement: 'local', reason: 'CMS page builder → publish → www and the videos About page, en and ar; CMS and www from their local-stack bundles or a branch build (sibling-build.ts; skips without the page builder)' },
   'apps/web/e2e/75-save-to-playlist-menu.spec.ts': { placement: 'local', reason: 'save menu stays in viewport; hard-coded video id' },
   'apps/web/e2e/75-site-theme.spec.ts': { placement: 'local', reason: 'served theme matches hydrated theme' },
+  'apps/web/e2e/82-identity-switch-no-email.spec.ts': { placement: 'local', reason: 'account + identity switches never show an email in the header (#1673); two-account session from the run accounts' },
   'apps/web/e2e/76-help-tour.spec.ts': { placement: 'local', reason: 'Help pages and the identity tour: own accounts, onboarding flag on the account, keyboard, RTL, axe' },
   'apps/web/e2e/a11y/axe-all-pages.spec.ts': { placement: 'local', reason: 'axe scan of route catalog; catalog fetched from API_URL' },
   'apps/web/e2e/player/alignment.spec.ts': { placement: 'local', reason: 'already local: /en/dev/player harness with fixture video' },
