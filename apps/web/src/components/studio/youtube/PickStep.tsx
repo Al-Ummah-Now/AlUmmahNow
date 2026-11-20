@@ -86,7 +86,7 @@ export const PickStep = forwardRef<HTMLHeadingElement, Props>(function PickStep(
             <div className="relative flex-1">
               <label htmlFor={`${ids}-search`} className="sr-only">{text.search}</label>
               <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input id={`${ids}-search`} type="search" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder={text.search} className="min-h-11 ps-9" dir="auto" data-testid="yt-search" />
+              <Input id={`${ids}-search`} type="search" value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }} placeholder={text.search} className="min-h-11 ps-9" dir={query ? 'auto' : undefined} data-testid="yt-search" />
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" className="min-h-11" onClick={toggleAll} disabled={pickableShown.length === 0} data-testid="yt-select-all">

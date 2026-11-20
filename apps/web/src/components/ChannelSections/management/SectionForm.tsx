@@ -179,7 +179,7 @@ export function SectionForm({
             onChange={(e) => setTitle(e.target.value)}
             placeholder={needsTitle ? '' : defaultTitle}
             maxLength={LIMITS.MAX_TITLE_LENGTH}
-            dir="auto"
+            dir={title ? 'auto' : undefined}
             aria-invalid={!!errors.title}
             data-testid="section-title-input"
           />

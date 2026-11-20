@@ -352,7 +352,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          dir="auto"
+          // auto only once there is text: an empty box follows the page, so the Arabic placeholder
+          // sits at the start (right), not on the left (auto resolves an empty value to left to right)
+          dir={search ? 'auto' : undefined}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder={text.searchPlaceholder}
