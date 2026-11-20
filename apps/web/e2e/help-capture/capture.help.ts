@@ -267,6 +267,47 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     .filter((el) => el.matches('h1,h2,h3,h4,h5,h6,[role="heading"],legend,label,.aun-menu-label') || (el.tagName === 'P' && !el.querySelector('a,button,input,select,textarea')))
     .map((el) => `${el.dataset.helpTarget}: <${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 40)}"`));
   if (bare.length) throw new Error(`a marker targets a heading, not a control (${bare.join('; ')})`);
+  // The targets clear of the sticky header and phone tab bar, and no text left half under either bar
+  // (audit r2: privacy-settings' outline ran through the tab bar and covered "Type DELETE to confirm";
+  // a page title showed half under the header)
+  await page.evaluate(() => {
+    const bars = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
+      const pos = getComputedStyle(el).position;
+      if (pos !== 'fixed' && pos !== 'sticky') return false;
+      const b = el.getBoundingClientRect();
+      return b.width >= window.innerWidth * 0.6 && b.height > 20 && b.height < window.innerHeight * 0.3;
+    }).map((el) => el.getBoundingClientRect());
+    const top = Math.max(0, ...bars.filter((b) => b.top <= 1).map((b) => b.bottom));
+    const bottom = Math.min(window.innerHeight, ...bars.filter((b) => b.bottom >= window.innerHeight - 1).map((b) => b.top));
+    const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
+    if (!targets.length) return;
+    const uTop = Math.min(...targets.map((b) => b.top)) - 40;
+    const uBottom = Math.max(...targets.map((b) => b.bottom)) + 40;
+    if (uBottom > bottom) window.scrollBy(0, Math.min(uBottom - bottom, uTop - top));
+    else if (uTop < top) window.scrollBy(0, uTop - top);
+    // A line of text cut by a bar's edge: move it fully clear when the targets stay in view
+    const t2 = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
+    const vTop = Math.min(...t2.map((b) => b.top)) - 12;
+    const vBottom = Math.max(...t2.map((b) => b.bottom)) + 12;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent?.trim()) continue;
+      const el = node.parentElement;
+      if (!el || bars.length === 0 || el.closest('[style*="position: fixed"]')) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const b = range.getBoundingClientRect();
+      if (b.height <= 0) continue;
+      if (b.top < top && b.bottom > top) {
+        const down = b.bottom - top + 4; // hide it under the header
+        const up = top - b.top + 4; // or show it whole below the header
+        if (vBottom + up <= bottom) window.scrollBy(0, -up);
+        else if (vTop - down >= top) window.scrollBy(0, down);
+        break;
+      }
+    }
+  });
+  await page.waitForTimeout(150);
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     type Box = { x: number; y: number; w: number; h: number };
@@ -319,6 +360,20 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         if (!behind) allText.push(glyphBox(b, node.parentElement));
       }
     }
+    // Pictures, icons and checkboxes anywhere on screen: a number never sits on one (audit r2: ① on
+    // the «أ» avatar, ③ on the TV icon, ① on a row checkbox)
+    const pictures: Box[] = [...document.querySelectorAll<HTMLElement>('img, svg, input[type="checkbox"], input[type="radio"], [role="img"], span, div')]
+      .filter((el) => {
+        if (!visible(el) || el.closest('[data-help-marker]')) return false;
+        const tag = el.tagName.toLowerCase();
+        const b = el.getBoundingClientRect();
+        if (b.bottom < 0 || b.top > window.innerHeight) return false;
+        if (tag === 'img' || tag === 'svg' || tag === 'input' || el.getAttribute('role') === 'img') return b.width <= 160 && b.height <= 160;
+        // An avatar or badge drawn as a round box (a letter on a filled circle)
+        const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+        return b.width >= 12 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && rr >= b.width / 2 - 0.5;
+      })
+      .map((el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
     const placed: Box[] = [];
     let missed = 0;
     const faults: string[] = [];
@@ -335,7 +390,37 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         return Math.min(min, Math.max(dx, dy));
       }, Infinity);
       const gap = Math.max(1, Math.min(GAP, Math.floor(near / 2) - 1));
-      const o = { x: r.x - gap, y: r.y - gap, w: r.width + gap * 2, h: r.height + gap * 2 };
+      // The target's own letters (also used for the number below)
+      const ownText: Box[] = [];
+      const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+      for (let node = words.nextNode(); node; node = words.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0).map((b) => glyphBox(b, node.parentElement)));
+      }
+      // The outline keeps 4 px of clear space from every letter (audit r2: it cut through "Site tour",
+      // which is wider than its link box, and hugged "English"). Its visible band is 4 px deep inside
+      // (2 px dash + 2 px halo) and 2 px outside (halo), so own letters stay 8 px inside its edge and
+      // any other text 6 px outside it.
+      const IN = 8;
+      const OUT = 6;
+      const rect = (l: number, t: number, rr: number, b: number) => ({ x: l, y: t, w: rr - l, h: b - t });
+      const textL = Math.min(...ownText.map((b) => b.x)) - IN;
+      const textT = Math.min(...ownText.map((b) => b.y)) - IN;
+      const textR = Math.max(...ownText.map((b) => b.x + b.w)) + IN;
+      const textB = Math.max(...ownText.map((b) => b.y + b.h)) + IN;
+      const outline = (g: number) => rect(Math.min(r.x - g, textL), Math.min(r.y - g, textT), Math.max(r.x + r.width + g, textR), Math.max(r.y + r.height + g, textB));
+      const within = (t: Box, o: Box) => t.x >= o.x + IN && t.y >= o.y + IN && t.x + t.w <= o.x + o.w - IN && t.y + t.h <= o.y + o.h - IN;
+      const centreIn = (t: Box) => { const cx = t.x + t.w / 2; const cy = t.y + t.h / 2; return cx > r.x && cx < r.x + r.width && cy > r.y && cy < r.y + r.height; };
+      const foreign = allText.filter((t) => !centreIn(t));
+      const near4 = (o: Box) => foreign.filter((t) => hit(t, { x: o.x - OUT, y: o.y - OUT, w: o.w + OUT * 2, h: o.h + OUT * 2 }) && !within(t, o));
+      // Loose first (the usual gap), else as tight as the target's own letters allow
+      let o = outline(gap);
+      if (near4(o).length) o = outline(-1);
+      const crowd = near4(o);
+      if (crowd.length) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of other text`);
+      if (ownText.some((t) => !within(t, o))) faults.push(`outline ${target.dataset.helpTarget} is within 4 px of its own text`);
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
       Object.assign(ring.style, {
@@ -385,16 +470,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           return b.width >= 16 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && (el.tagName === 'IMG' || rr >= b.width / 2 - 0.5);
         })
         .map((el) => el.getBoundingClientRect());
-      // ...and so does the target's own text: a number never covers a letter (the Studio title read
-      // "②te tour", 2026-11-19)
-      const ownText: Box[] = [];
-      const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
-      for (let node = words.nextNode(); node; node = words.nextNode()) {
-        if (!node.textContent?.trim()) continue;
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0).map((b) => glyphBox(b, node.parentElement)));
-      }
+      // (the target's own text is an obstacle too: ownText, above)
       const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
       // Text boxes are the letters (glyphBox), so a number in the line spacing above a heading is clear
       // Clear space (owner audit rule 2026-11-19: touching counts as overlap): at least 4 px between a
@@ -405,6 +481,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const others = [
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
         ...ownPictures.map(shrink),
+        ...pictures.map((b) => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 })),
         ...texts,
       ];
       const fits = ([x, y]: [number, number]) => {
@@ -428,6 +505,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       // this number joins the placed ones, so it is never compared with itself)
       const box = { x, y, w: S, h: S };
       if (texts.some((t) => hit(reach(box), t))) faults.push(`number ${target.dataset.helpTarget} is within 4 px of text`);
+      if (pictures.some((p) => hit(box, { x: p.x + 1, y: p.y + 1, w: Math.max(0, p.w - 2), h: Math.max(0, p.h - 2) }))) faults.push(`number ${target.dataset.helpTarget} covers a picture, icon or checkbox`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
@@ -455,12 +533,12 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
-        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina.yusuf').replace(/@?e2e\.alummahnow\.net/g, '@alummahnow.net');
       }
       // Run-tagged handles (@E2Ehelp<run>…) read as noise too
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
-    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina.yusuf@alummahnow.net'; });
     // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
     // the per-node pass: rewrite the smallest element whose whole text is a run handle
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
@@ -469,7 +547,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     });
     // Field values are not text nodes: the profile's (read-only) email field showed the run address
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
-      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@example.com';
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina.yusuf@alummahnow.net';
       else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
     });
   });
@@ -500,6 +578,50 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     const right = Math.min(viewport.width, Math.max(...boxes.map((b) => b.x + b.width)) + pad);
     const bottom = Math.min(viewport.height, Math.max(...boxes.map((b) => b.y + b.height)) + pad);
     clip = { x, y, width: right - x, height: bottom - y };
+    // No edge cuts through anything (audit r2: a title cut in half, tab-bar labels cut off, the logo
+    // clipped at the right): each edge moves out past every text line, picture, control or marker it
+    // crosses, and a sticky bar it crosses is taken whole, with the full width
+    clip = await page.evaluate((c) => {
+      type R = { l: number; t: number; r: number; b: number };
+      const items: R[] = [];
+      const add = (b: DOMRect) => { if (b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < innerHeight) items.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); };
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const b of range.getClientRects()) add(b);
+      }
+      document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => add(el.getBoundingClientRect()));
+      const bars: R[] = [];
+      document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
+        const pos = getComputedStyle(el).position;
+        if (pos !== 'fixed' && pos !== 'sticky') return;
+        const b = el.getBoundingClientRect();
+        if (b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3) bars.push({ l: 0, t: b.top, r: innerWidth, b: b.bottom });
+      });
+      let l = c.x; let t = c.y; let r = c.x + c.width; let b = c.y + c.height;
+      for (let pass = 0; pass < 12; pass++) {
+        let moved = false;
+        for (const bar of bars) {
+          if (bar.b > t && bar.t < b && (bar.t < t || bar.b > b || l > 0 || r < innerWidth)) {
+            if (bar.t < t) { t = Math.max(0, bar.t); moved = true; }
+            if (bar.b > b) { b = Math.min(innerHeight, bar.b); moved = true; }
+            if (l > 0 || r < innerWidth) { l = 0; r = innerWidth; moved = true; }
+          }
+        }
+        for (const it of items) {
+          const xOver = it.r > l && it.l < r;
+          const yOver = it.b > t && it.t < b;
+          if (xOver && it.t < t && it.b > t) { t = Math.max(0, it.t - 4); moved = true; }
+          if (xOver && it.t < b && it.b > b) { b = Math.min(innerHeight, it.b + 4); moved = true; }
+          if (yOver && it.l < l && it.r > l) { l = Math.max(0, it.l - 4); moved = true; }
+          if (yOver && it.l < r && it.r > r) { r = Math.min(innerWidth, it.r + 4); moved = true; }
+        }
+        if (!moved) break;
+      }
+      return { x: l, y: t, width: r - l, height: b - t };
+    }, clip);
   }
   const png = join(OUT, `${file}.png`);
   await page.screenshot({ path: png, clip, animations: 'disabled' });
@@ -651,6 +773,8 @@ const SCENES: Scene[] = [
     run: async (page, lang) => {
       // The home page: its featured picture sits under the header, so the numbers below the toggles have
       // clear space (a channel page put its name right under them, within 4 px)
+      // No unread badge beside the language pill: it can't be 4 px clear of that outline (audit r2)
+      await apiFetch(creator.user, '/api/notifications/read-all', { method: 'POST' });
       await settle(page, '', lang);
       // Language and light/dark are in the top bar at every width (docs/design/NAV.md "Header")
       const theme = header(page).getByTestId('theme-toggle');
