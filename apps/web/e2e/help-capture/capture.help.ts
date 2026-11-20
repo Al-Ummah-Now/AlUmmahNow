@@ -385,9 +385,13 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     };
     // Open menus and dialogs: what lies behind them (and is not in them) is not seen
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
+    // Hidden: at least 60% of it behind an open menu or dialog that does not contain it
     const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
-      return !ov.contains(el) && contains({ x: r.x, y: r.y, w: r.width, h: r.height }, b);
+      if (ov.contains(el)) return false;
+      const ix = Math.max(0, Math.min(b.x + b.w, r.right) - Math.max(b.x, r.left));
+      const iy = Math.max(0, Math.min(b.y + b.h, r.bottom) - Math.max(b.y, r.top));
+      return b.w * b.h > 0 && (ix * iy) / (b.w * b.h) >= 0.6;
     });
     // Every line of visible text, as its line box (ascenders and descenders included, measured, not guessed)
     const texts: Box[] = [];
@@ -442,7 +446,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const mine = (b: Box) => (b.el ? target.contains(b.el) : false);
       const ownText = texts.filter(mine);
       const otherText = texts.filter((t) => !mine(t));
-      const otherPics = pictures.filter((p) => !mine(p) && !(p.el && p.el.contains(target)));
+      const otherPics = pictures.filter((p) => !mine(p) && !(p.el && p.el.contains(target)) && !contains({ x: r.x, y: r.y, w: r.width, h: r.height }, p));
       // Own text stays inside the band plus CLEAR: 4 + 4 = 8 px from the outline's edge
       const IN = 4 + CLEAR;
       const OUT = 2 + CLEAR;
@@ -592,9 +596,13 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       return false;
     };
     const overlays = [...document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')].filter(visible);
+    // Hidden: at least 60% of it behind an open menu or dialog that does not contain it
     const hidden = (b: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
-      return !ov.contains(el) && contains({ x: r.x, y: r.y, w: r.width, h: r.height }, b);
+      if (ov.contains(el)) return false;
+      const ix = Math.max(0, Math.min(b.x + b.w, r.right) - Math.max(b.x, r.left));
+      const iy = Math.max(0, Math.min(b.y + b.h, r.bottom) - Math.max(b.y, r.top));
+      return b.w * b.h > 0 && (ix * iy) / (b.w * b.h) >= 0.6;
     });
     const bars: Box[] = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
       const pos = getComputedStyle(el).position;
@@ -640,11 +648,12 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         const xs = [box.x + 2, box.x + box.w / 2, box.x + box.w - 2];
         let seen = 0;
         let covered = 0;
+        let by = '';
         for (const y of ys) for (const x of xs) {
           if (!contains(frame, { x, y, w: 0, h: 0 })) continue;
-          if (coveredAt(el, x, y)) covered++; else seen++;
+          if (coveredAt(el, x, y)) { covered++; const top = document.elementFromPoint(x, y); by = by || (top ? `<${top.tagName.toLowerCase()}${typeof top.className === 'string' && top.className ? ` .${top.className.split(' ')[0]}` : ''}>` : ''); } else seen++;
         }
-        if (covered && seen) out.push(`text ${box.what} is half covered`);
+        if (covered && seen) out.push(`text ${box.what} is half covered by ${by}`);
       }
     }
     const pictures: Box[] = [...document.querySelectorAll<HTMLElement>('img, svg, input[type="checkbox"], input[type="radio"], [role="img"], span, div')]
@@ -660,7 +669,12 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       .map((el) => fromRect(el.getBoundingClientRect(), { el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}>` }))
       .filter((b) => hit(b, frame) && !hidden(b, b.el ?? null));
     const rings = [...document.querySelectorAll<HTMLElement>('[data-help-ring]')].map((el) => fromRect(el.getBoundingClientRect(), { what: el.dataset.helpRing, el: document.querySelector(`[data-help-target="${el.dataset.helpRing}"]`) }));
-    const ownOf = (o: Box, p: Box) => !!(o.el && p.el && (o.el === p.el || o.el.contains(p.el) || p.el.contains(o.el)));
+    const ownOf = (o: Box, p: Box) => {
+      if (!o.el || !p.el) return false;
+      if (o.el === p.el || o.el.contains(p.el) || p.el.contains(o.el)) return true;
+      const tr = o.el.getBoundingClientRect();
+      return contains({ x: tr.x, y: tr.y, w: tr.width, h: tr.height }, p);
+    };
     const ringOf = (n?: string) => rings.find((o) => o.what === n);
     const nums = [...document.querySelectorAll<HTMLElement>('[data-help-num]')].map((el) => grow(fromRect(el.getBoundingClientRect()), 2)).map((b, i) => ({ ...b, what: [...document.querySelectorAll<HTMLElement>('[data-help-num]')][i].dataset.helpNum }));
     const band = (o: Box): Box[] => [
@@ -763,12 +777,15 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     const coreBoxes = region.length ? all : (markers.length ? (await Promise.all(markers.map((m) => m.boundingBox()))).filter(Boolean) as typeof all : all);
     const core = { l: Math.min(...coreBoxes.map((b) => b.x)), t: Math.min(...coreBoxes.map((b) => b.y)), r: Math.max(...coreBoxes.map((b) => b.x + b.width)), b: Math.max(...coreBoxes.map((b) => b.y + b.height)) };
     clip = await page.evaluate(({ c, core }) => {
+      // Each edge goes to the nearest clean line: one that crosses no line of text, control, picture or
+      // marker, with no half-covered line between it and the core. Searched directly, so an edge never
+      // ends up mid-line (audit r3: an expand/shrink loop that could stop on a line)
       type R = { l: number; t: number; r: number; b: number };
       const items: R[] = [];
-      // Lines partly covered by something on top (a page button half under the open menu): the crop
-      // leaves them out rather than taking them in (audit r3: «إدارة المرئيات» half under the menu)
       const avoid: R[] = [];
-      const add = (b: DOMRect) => { if (b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < innerHeight) items.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); };
+      const W = innerWidth;
+      const H = innerHeight;
+      const add = (b: DOMRect) => { if (b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < H && b.right > 0 && b.left < W) items.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); };
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const el = node.parentElement;
@@ -776,11 +793,11 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         const range = document.createRange();
         range.selectNodeContents(node);
         for (const b of range.getClientRects()) {
-          if (b.width <= 0 || b.height <= 0 || b.bottom < 0 || b.top > innerHeight) continue;
+          if (b.width <= 0 || b.height <= 0 || b.bottom < 0 || b.top > H || b.right < 0 || b.left > W) continue;
           let seen = 0;
           let covered = 0;
           for (const y of [b.top + 2, b.top + b.height / 2, b.bottom - 2]) for (const x of [b.left + 2, b.left + b.width / 2, b.right - 2]) {
-            if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+            if (x < 0 || y < 0 || x >= W || y >= H) continue;
             const top = document.elementFromPoint(x, y);
             if (top && top !== el && !el.contains(top) && !top.contains(el)) covered++; else seen++;
           }
@@ -789,46 +806,44 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           else add(b);
         }
       }
-      document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => add(el.getBoundingClientRect()));
+      document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => {
+        if (el.closest('svg') && el.tagName.toLowerCase() !== 'svg') return;
+        add(el.getBoundingClientRect());
+      });
       const bars: R[] = [];
       document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
         const pos = getComputedStyle(el).position;
         if (pos !== 'fixed' && pos !== 'sticky') return;
         const b = el.getBoundingClientRect();
-        if (b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1)) bars.push({ l: 0, t: b.top, r: innerWidth, b: b.bottom });
+        if (b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1)) bars.push({ l: 0, t: b.top, r: W, b: b.bottom });
       });
       let l = c.x; let t = c.y; let r = c.x + c.width; let b = c.y + c.height;
-      for (let pass = 0; pass < 12; pass++) {
-        let moved = false;
-        for (const bar of bars) {
-          if (!(bar.b > t && bar.t < b)) continue;
-          const coreIn = core.b > bar.t && core.t < bar.b;
-          if (coreIn) {
-            // The core is in it (a header control): the bar whole, full width
-            if (bar.t < t) { t = Math.max(0, bar.t); moved = true; }
-            if (bar.b > b) { b = Math.min(innerHeight, bar.b); moved = true; }
-            if (l > 0 || r < innerWidth) { l = 0; r = innerWidth; moved = true; }
-          } else if (bar.t >= core.b && b > bar.t) { b = bar.t; moved = true; }
-          else if (bar.b <= core.t && t < bar.b) { t = bar.b; moved = true; }
+      // A bar the core is in is taken whole, full width; a bar the core is not in is left out
+      for (const bar of bars) {
+        if (core.b > bar.t && core.t < bar.b) { t = Math.min(t, bar.t); b = Math.max(b, bar.b); l = 0; r = W; }
+        else if (bar.t >= core.b) b = Math.min(b, bar.t);
+        else if (bar.b <= core.t) t = Math.max(t, bar.b);
+      }
+      const topLimit = Math.max(0, ...bars.filter((bar) => bar.b <= core.t && !(core.b > bar.t && core.t < bar.b)).map((bar) => bar.b));
+      const bottomLimit = Math.min(H, ...bars.filter((bar) => bar.t >= core.b && !(core.b > bar.t && core.t < bar.b)).map((bar) => bar.t));
+      const crossesH = (y: number) => items.some((it) => it.r > l && it.l < r && it.t < y - 0.5 && it.b > y + 0.5);
+      const crossesV = (x: number) => items.some((it) => it.b > t && it.t < b && it.l < x - 0.5 && it.r > x + 0.5);
+      const avoidIn = (lo: number, hi: number, axis: 'y' | 'x') => avoid.some((a) => axis === 'y'
+        ? a.r > l && a.l < r && a.b > lo && a.t < hi
+        : a.b > t && a.t < b && a.r > lo && a.l < hi);
+      const pick = (want: number, min: number, max: number, ok: (v: number) => boolean, outward: number) => {
+        // Outward from `want` first (more room), then inward toward the core
+        for (let v = want; v >= min && v <= max; v += outward) if (ok(v)) return v;
+        for (let v = want - outward; v >= min && v <= max; v -= outward) if (ok(v)) return v;
+        return want;
+      };
+      for (let pass = 0; pass < 2; pass++) {
+        t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, core.t, (y) => !crossesH(y) && !avoidIn(y, core.t, 'y'), -1);
+        b = pick(Math.min(bottomLimit, Math.max(b, core.b)), core.b, bottomLimit, (y) => !crossesH(y) && !avoidIn(core.b, y, 'y'), 1);
+        if (l > 0 || r < W) {
+          l = pick(Math.max(0, Math.min(l, core.l)), 0, core.l, (x) => !crossesV(x) && !avoidIn(x, core.l, 'x'), -1);
+          r = pick(Math.min(W, Math.max(r, core.r)), core.r, W, (x) => !crossesV(x) && !avoidIn(core.r, x, 'x'), 1);
         }
-        for (const it of items) {
-          const xOver = it.r > l && it.l < r;
-          const yOver = it.b > t && it.t < b;
-          // Out past it, or (at the window's edge, where it can't be taken whole) in past it
-          if (xOver && it.t < t && it.b > t) { if (it.t >= 4) t = it.t - 4; else t = Math.min(core.t, it.b + 4); moved = true; }
-          if (xOver && it.t < b && it.b > b) { if (it.b <= innerHeight - 4) b = it.b + 4; else b = Math.max(core.b, it.t - 4); moved = true; }
-          if (yOver && it.l < l && it.r > l) { if (it.l >= 4) l = it.l - 4; else l = Math.min(core.l, it.r + 4); moved = true; }
-          if (yOver && it.l < r && it.r > r) { if (it.r <= innerWidth - 4) r = it.r + 4; else r = Math.max(core.r, it.l - 4); moved = true; }
-        }
-        // Partly covered lines outside the core: the edge moves in past them
-        for (const it of avoid) {
-          if (!(it.r > l && it.l < r && it.b > t && it.t < b)) continue;
-          if (it.t >= core.b) { b = Math.max(core.b + 4, it.t - 4); moved = true; }
-          else if (it.b <= core.t) { t = Math.min(core.t - 4, it.b + 4); moved = true; }
-          else if (it.l >= core.r) { r = Math.max(core.r + 4, it.l - 4); moved = true; }
-          else if (it.r <= core.l) { l = Math.min(core.l - 4, it.r + 4); moved = true; }
-        }
-        if (!moved) break;
       }
       return { x: l, y: t, width: r - l, height: b - t };
     }, { c: clip, core });
