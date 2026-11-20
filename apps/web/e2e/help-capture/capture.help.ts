@@ -985,8 +985,10 @@ const SCENES: Scene[] = [
   },
   {
     id: 'identity-menu',
-    run: async (page, lang) => {
-      await settle(page, `/channels/${channelId}`, lang);
+    run: async (page, lang, device) => {
+      // Phones: the menu fills the screen but an 8 px edge, and the channel page's tab strip showed a
+      // tab half cut there (the site bug is #1669); the home page has nothing at that edge
+      await settle(page, device === 'phone' ? '' : `/channels/${channelId}`, lang);
       const menu = await openMenu(page);
       return [[menu.getByTestId('nav-profile-link'), menu.getByTestId('nav-active-channel'), menu.getByTestId('nav-switch-channel')], [header(page), menu]];
     },
