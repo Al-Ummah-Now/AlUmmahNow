@@ -16,7 +16,7 @@
 
 'use client';
 
-import { formatNumber, numberFormat } from '@al-ummah/shared-types';
+import { formatCompact, formatNumber } from '@al-ummah/shared-types';
 import { useEffect, useState } from 'react';
 
 export interface ViewerCountProps {
@@ -36,11 +36,7 @@ function formatViewerCount(count: number, lang: 'en' | 'ar'): string {
 
   // For large numbers, use compact notation
   if (count >= 1000) {
-    return numberFormat(locale, {
-      notation: 'compact',
-      compactDisplay: 'short',
-      maximumFractionDigits: 1
-    }).format(count);
+    return formatCompact(locale, count);
   }
 
   // For smaller numbers, use standard formatting

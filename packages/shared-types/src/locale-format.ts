@@ -123,8 +123,42 @@ export function formatFixed(locale: FormatLocale, value: number, digits: number,
   return formatNumber(locale, value, { minimumFractionDigits: digits, maximumFractionDigits: digits, ...options });
 }
 
-/** 4200 -> "4.2K" / «٤٫٢ ألف». */
+/**
+ * Arabic scale words with their agreement (owner rule, 2026-11-20, same as Android, Apple and
+ * Desktop): the word agrees with the number shown. Whole 1 → «ألف», whole 2 → «ألفان», whole
+ * 3–10 → «آلاف», 11+ or any decimal («١٫٣») → «ألف». ICU gets this wrong («٢ ألف», «١٠ ألف»,
+ * «٣ مليون») and differs between runtimes, so Arabic compact numbers are built here.
+ */
+const AR_SCALES = [
+  { size: 1e9, one: 'مليار', two: 'ملياران', few: 'مليارات' },
+  { size: 1e6, one: 'مليون', two: 'مليونان', few: 'ملايين' },
+  { size: 1e3, one: 'ألف', two: 'ألفان', few: 'آلاف' },
+] as const;
+
+/** `value` cut (not rounded) to `digits` decimals: 1.39 -> 1.3, 2.999 -> 2.9. */
+function truncate(value: number, digits: number): number {
+  const factor = 10 ** Math.max(0, Math.floor(digits));
+  return Math.floor(value * factor + 1e-9) / factor;
+}
+
+function formatCompactArabic(value: number, maximumFractionDigits: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const sign = safe < 0 ? -1 : 1;
+  const abs = Math.abs(safe);
+  const scale = AR_SCALES.find((s) => abs >= s.size);
+  if (!scale) return formatNumber('ar', sign * truncate(abs, maximumFractionDigits), { maximumFractionDigits });
+  const shown = truncate(abs / scale.size, maximumFractionDigits);
+  const word = !Number.isInteger(shown) ? scale.one : shown === 2 ? scale.two : shown >= 3 && shown <= 10 ? scale.few : scale.one;
+  // U+00A0 between the number and its scale word, as Intl writes it: they never break apart.
+  return `${formatNumber('ar', sign * shown, { maximumFractionDigits })}\u00a0${word}`;
+}
+
+/**
+ * 4200 -> "4.2K" / «٤٫٢ ألف». Arabic cuts to `maximumFractionDigits` decimals and makes the
+ * scale word agree with the number shown: «١٫٣ ألف», «٢ ألفان», «٨ آلاف», «١٢ ألف», «٣ ملايين».
+ */
 export function formatCompact(locale: FormatLocale, value: number, maximumFractionDigits = 1): string {
+  if (isArabicLocale(locale)) return formatCompactArabic(value, maximumFractionDigits);
   return formatNumber(locale, value, { notation: 'compact', maximumFractionDigits });
 }
 

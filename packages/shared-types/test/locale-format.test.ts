@@ -116,3 +116,29 @@ test('dates and times use a plain space on every runtime (WebKit writes U+00A0 b
   assert.equal(f.dateTimeFormat('ar', { timeZone: 'UTC' }).resolvedOptions().numberingSystem, 'arab');
 });
 
+
+// Owner rule 2026-11-20 (same text as Android, Apple and Desktop): Arabic compact numbers cut to
+// one decimal and the scale word agrees with the number shown.
+const sp = (s: string) => s.replace(/ /g, ' ');
+const COUNTS = [1, 2, 3, 8, 10, 11, 1310, 2000, 8020, 12000, 1_200_000, 3_000_000, 15_000_000];
+
+test('formatCompact: Arabic scale words agree with the number shown', () => {
+  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), [
+    '١', '٢', '٣', '٨', '١٠', '١١', '١٫٣ ألف', '٢ ألفان', '٨ آلاف', '١٢ ألف', '١٫٢ مليون', '٣ ملايين', '١٥ مليون',
+  ]);
+  assert.equal(sp(f.formatCompact('ar', 1000)), '١ ألف');
+  assert.equal(sp(f.formatCompact('ar', 10_000)), '١٠ آلاف');
+  assert.equal(sp(f.formatCompact('ar', 10_999)), '١٠٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 2999)), '٢٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 999_999)), '٩٩٩٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000)), '٢ مليونان');
+  assert.equal(sp(f.formatCompact('ar', 1_000_000_000)), '١ مليار');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000_000)), '٢ ملياران');
+  assert.equal(sp(f.formatCompact('ar', 7_000_000_000)), '٧ مليارات');
+  assert.equal(sp(f.formatCompact('ar', 4_500_000_000)), '٤٫٥ مليار');
+  assert.equal(f.formatCompact('ar', 0), '٠');
+});
+
+test('formatCompact: English is unchanged', () => {
+  assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '8', '10', '11', '1.3K', '2K', '8K', '12K', '1.2M', '3M', '15M']);
+});

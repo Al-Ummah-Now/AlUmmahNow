@@ -59,4 +59,20 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('ar', 'x', 'video')).toBe('لا توجد مرئيات');
     expect(formatCountNoun('en', -4, 'comment')).toBe('No comments');
   });
+  // Owner rule 2026-11-20 (same text as Android, Apple and Desktop): under 1,000 the CLDR plural of
+  // the count; from 1K the noun is singular and the scale word agrees with the number shown.
+  const counts = [1, 2, 3, 8, 10, 11, 1310, 2000, 8020, 12000, 1_200_000, 3_000_000, 15_000_000];
+
+  it('compact views, Arabic', () => {
+    expect(counts.map((n) => sp(formatCountNoun('ar', n, 'view', { compact: true })))).toEqual([
+      'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '٨ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة',
+      '١٫٣ ألف مشاهدة', '٢ ألفان مشاهدة', '٨ آلاف مشاهدة', '١٢ ألف مشاهدة', '١٫٢ مليون مشاهدة', '٣ ملايين مشاهدة', '١٥ مليون مشاهدة',
+    ]);
+  });
+
+  it('compact views, English', () => {
+    expect(counts.map((n) => formatCountNoun('en', n, 'view', { compact: true }))).toEqual([
+      '1 view', '2 views', '3 views', '8 views', '10 views', '11 views', '1.3K views', '2K views', '8K views', '12K views', '1.2M views', '3M views', '15M views',
+    ]);
+  });
 });

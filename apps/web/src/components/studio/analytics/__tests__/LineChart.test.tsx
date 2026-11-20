@@ -97,7 +97,7 @@ describe('LineChart', () => {
   it('puts the value axis on the right, Arabic digits on the ticks, and runs time from the right in Arabic', () => {
     render(<LineChart {...base} locale="ar" points={days([1200, 3400])} />);
     expect(screen.getByTestId('chart-y-axis').parentElement).toHaveAttribute('dir', 'rtl');
-    expect(ticks()).toContain('٢ ألف');
+    expect(ticks()).toContain('٢ ألفان');
     const [first, last] = screen.getAllByTestId('chart-x-tick');
     expect(first.style.left).toBe('100%');
     expect(last.style.left).toBe('0%');

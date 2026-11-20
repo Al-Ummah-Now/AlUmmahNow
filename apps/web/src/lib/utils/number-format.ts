@@ -6,7 +6,7 @@
  * with support for compact notation (1.2K) and full display (1,234).
  */
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { formatCompact, formatNumber } from '@al-ummah/shared-types';
 import type { NumberFormat } from '@/components/live-streaming/ViewerCount/types';
 
 /**
@@ -31,12 +31,10 @@ export function formatViewerCount(
   // Validate and sanitize the count
   const safeCount = Math.max(0, Number(count) || 0);
 
-  // Create formatter with appropriate options
-  return formatNumber(locale, safeCount, {
-    notation: format === 'compact' ? 'compact' : 'standard',
-    maximumFractionDigits: format === 'compact' ? 1 : 0,
-    compactDisplay: 'short',
-  });
+  // Compact goes through the shared formatter so Arabic scale words agree (owner rule 2026-11-20):
+  // «١٫٣ ألف», «٢ ألفان», «٨ آلاف», «٣ ملايين».
+  if (format === 'compact') return formatCompact(locale, safeCount);
+  return formatNumber(locale, safeCount, { maximumFractionDigits: 0 });
 }
 
 /**

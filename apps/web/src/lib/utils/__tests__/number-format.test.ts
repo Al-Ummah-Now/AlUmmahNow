@@ -94,3 +94,20 @@ describe('getViewerCountLabel', () => {
     });
   });
 });
+
+// Owner rule 2026-11-20: Arabic compact counts cut to one decimal; the scale word agrees with the
+// number shown («٢ ألفان», «٨ آلاف», «٣ ملايين»). English is unchanged.
+describe('compact counts: Arabic scale-word agreement', () => {
+  const sp = (s: string) => s.replace(/ /g, ' ');
+  const counts = [1, 2, 3, 8, 10, 11, 1310, 2000, 8020, 12000, 1_200_000, 3_000_000, 15_000_000];
+
+  it('ar', () => {
+    expect(counts.map((n) => sp(formatViewerCountArabic(n, 'compact')))).toEqual([
+      '١', '٢', '٣', '٨', '١٠', '١١', '١٫٣ ألف', '٢ ألفان', '٨ آلاف', '١٢ ألف', '١٫٢ مليون', '٣ ملايين', '١٥ مليون',
+    ]);
+  });
+
+  it('en', () => {
+    expect(counts.map((n) => formatViewerCountEnglish(n, 'compact'))).toEqual(['1', '2', '3', '8', '10', '11', '1.3K', '2K', '8K', '12K', '1.2M', '3M', '15M']);
+  });
+});
