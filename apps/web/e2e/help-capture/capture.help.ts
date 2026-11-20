@@ -533,12 +533,12 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
-        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina.yusuf').replace(/@?e2e\.alummahnow\.net/g, '@alummahnow.net');
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
       }
       // Run-tagged handles (@E2Ehelp<run>…) read as noise too
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
-    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina.yusuf@alummahnow.net'; });
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
     // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
     // the per-node pass: rewrite the smallest element whose whole text is a run handle
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
@@ -547,7 +547,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     });
     // Field values are not text nodes: the profile's (read-only) email field showed the run address
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
-      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina.yusuf@alummahnow.net';
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@example.com';
       else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
     });
   });
