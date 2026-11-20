@@ -1,0 +1,226 @@
+/**
+ * Owner review shots for #1659 (Arabic timezone offsets, playlist card on phones). Throwaway review
+ * branches only (REVIEW_SHOTS=1 in help-pictures.yml), run once on main (before) and once on the PR
+ * (after): CI local stack, production build, NEXTJS_ENV=production, real sign-in, data made here and
+ * deleted at the end. Viewport frames only; light/dark through Playwright colorScheme.
+ * Studio's tab strip on phones too. Output: test-results/review-shots/{playlists,timezone,studio}/<screen>-<lang>-<device>-<mode>.png + digits.json
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { devices, expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { useOwnData, type Creator } from '../release/builders';
+import { apiFetch } from '../release/web-session';
+import { target } from '../release/targets';
+
+type Lang = 'en' | 'ar';
+type Device = 'desktop' | 'phone';
+type Mode = 'light' | 'dark';
+const LANGS: Lang[] = ['en', 'ar'];
+const DEVICES: Device[] = ['desktop', 'phone'];
+const MODES: Mode[] = ['light', 'dark'];
+const PIXEL7 = devices['Pixel 7'];
+const OUT = join(__dirname, '../../test-results/review-shots');
+const NAMES = {
+  user: { en: 'Amina Yusuf', ar: 'أمينة يوسف' },
+  playlist: { en: 'Weekend projects', ar: 'مشاريع نهاية الأسبوع' },
+};
+const data = useOwnData(test as never);
+let creator: Creator;
+const digits: Record<string, string[]> = {};
+const problems: string[] = [];
+
+test.describe.configure({ mode: 'serial' });
+const json = (body: unknown, method = 'PUT') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+test.beforeAll(async ({ browser }) => {
+  test.setTimeout(10 * 60_000);
+  creator = await data.createCreator(browser, 'tz', { channels: 1 });
+  const user = creator.user;
+  expect((await apiFetch(user, '/api/profile', json({ displayName: NAMES.user.en, displayNameLocalized: NAMES.user, firstName: 'Amina', lastName: 'Yusuf', timezone: 'UTC' }))).status).toBeLessThan(300);
+  // A realistic channel (the run's channel is named "E2E tz …")
+  const channel = creator.channelIds[0];
+  const named = await apiFetch(user, `/api/channels/${channel}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', channelId: channel }, body: JSON.stringify({ name: 'Community Corner', nameLocalized: { en: 'Community Corner', ar: 'ركن المجتمع' } }) });
+  expect(named.status, await named.clone().text()).toBeLessThan(300);
+  const res = await apiFetch(user, '/api/playlists', json({ title: NAMES.playlist.en, titleLocalized: NAMES.playlist, description: '', videos: [], isPublic: false }, 'POST'));
+  expect(res.status, await res.clone().text()).toBeLessThan(300);
+  const body = (await res.json()) as { result?: { id?: string }; id?: string; playlist?: { id?: string } };
+  const id = body.result?.id ?? body.id ?? body.playlist?.id;
+  if (id) data.onCleanup(`playlist ${id}`, () => apiFetch(user, `/api/playlists/${id}`, { method: 'DELETE' }));
+});
+
+async function open(browser: Browser, lang: Lang, device: Device, mode: Mode): Promise<{ context: BrowserContext; page: Page }> {
+  const phone = device === 'phone';
+  const context = await browser.newContext({
+    storageState: creator.state,
+    ...(phone
+      ? { viewport: PIXEL7.viewport, deviceScaleFactor: PIXEL7.deviceScaleFactor, isMobile: true, hasTouch: true, userAgent: PIXEL7.userAgent }
+      : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 }),
+    colorScheme: mode,
+    reducedMotion: 'reduce',
+    locale: lang === 'ar' ? 'ar' : 'en-US',
+  });
+  await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
+  const page = await context.newPage();
+  page.setDefaultTimeout(30_000);
+  return { context, page };
+}
+
+async function settle(page: Page, path: string, lang: Lang): Promise<void> {
+  await page.goto(`/${lang}${path}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
+  await expect(page.locator('[data-testid="nav-menu-trigger"]:visible').first()).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => document.fonts.ready);
+}
+
+async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise<void> {
+  await page.evaluate(() => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
+    }
+    document.querySelectorAll<HTMLInputElement>('input').forEach((el) => { if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@example.com'; });
+    document.querySelectorAll<HTMLElement>('body *').forEach((el) => { if (el.childElementCount === 0 && /@\s*E2E[\w-]+/i.test(el.textContent ?? '')) el.textContent = (el.textContent ?? '').replace(/@\s*E2E[\w-]+/gi, '@communitycorner'); });
+  });
+  await page.mouse.move(1, 1);
+  await page.waitForTimeout(300);
+  if (lang === 'ar') {
+    const found = await page.evaluate(() => {
+      const out: string[] = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? '';
+        if (!/[0-9]/.test(text)) continue;
+        const el = node.parentElement;
+        if (!el || el.closest('script,style,code')) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1 || r.bottom < 0 || r.top > innerHeight) continue;
+        out.push(`${el.tagName.toLowerCase()}: ${text.trim().slice(0, 80)}`);
+      }
+      document.querySelectorAll('select').forEach((s) => { const o = s.selectedOptions[0]; if (o && /[0-9]/.test(o.text)) out.push(`select: ${o.text}`); });
+      return out;
+    });
+    if (found.length) digits[`${dir}/${file}`] = found;
+  }
+  mkdirSync(join(OUT, dir), { recursive: true });
+  await page.screenshot({ path: join(OUT, dir, `${file}.png`), animations: 'disabled', caret: 'hide' });
+}
+
+function each(name: string, body: (page: Page, lang: Lang, tag: string) => Promise<void>) {
+  for (const lang of LANGS) test(`${name} ${lang}`, async ({ browser }) => {
+    test.setTimeout(20 * 60_000);
+    for (const device of DEVICES) for (const mode of MODES) {
+      const tag = `${lang}-${device}-${mode}`;
+      const { context, page } = await open(browser, lang, device, mode);
+      try {
+        await body(page, lang, tag);
+      } catch (error) {
+        problems.push(`${name} ${tag}: ${(error as Error).message.split('\n').slice(0, 3).join(' ')}`);
+      } finally {
+        await context.close();
+      }
+    }
+  });
+}
+
+each('playlists', async (page, lang, tag) => {
+  await settle(page, '/library/playlists', lang);
+  await expect(page.getByTestId('playlist-manager-item').first()).toBeVisible();
+  await shoot(page, 'playlists', `manage-playlists-${tag}`, lang);
+});
+
+// Scroll so `el` sits mid-viewport, then nudge (up to 60 px) until no line of text is half cut by the
+// window's edge or half under the header or tab bar (audit r1: the title under the header, the email
+// cut at the bottom)
+async function centre(page: Page, selector: string): Promise<void> {
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    window.scrollBy(0, r.top + r.height / 2 - innerHeight / 2);
+    const bars = [...document.querySelectorAll<HTMLElement>('body *')].filter((e) => {
+      const pos = getComputedStyle(e).position;
+      if (pos !== 'fixed' && pos !== 'sticky') return false;
+      const b = e.getBoundingClientRect();
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1);
+    }).map((e) => e.getBoundingClientRect());
+    const top = Math.max(0, ...bars.filter((b) => b.top <= 1).map((b) => b.bottom));
+    const bottom = Math.min(innerHeight, ...bars.filter((b) => b.bottom >= innerHeight - 1).map((b) => b.top));
+    const cut = () => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const p = node.parentElement;
+        if (!node.textContent?.trim() || !p) continue;
+        const pos = getComputedStyle(p).position;
+        if (pos === 'fixed' || pos === 'sticky' || p.closest('[style*="position: fixed"]')) continue;
+        if (bars.some((b) => { const r2 = p.getBoundingClientRect(); return r2.top >= b.top && r2.bottom <= b.bottom && b.height < innerHeight * 0.3 && (p.closest('header, nav') !== null); })) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const b of range.getClientRects()) {
+          if (b.height <= 0 || b.width <= 0) continue;
+          if ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom)) return true;
+        }
+        // Form fields too (their value is not a text node)
+      }
+      for (const f of document.querySelectorAll('input, select, textarea')) {
+        const b = f.getBoundingClientRect();
+        if (b.height > 0 && ((b.top < top && b.bottom > top) || (b.top < bottom && b.bottom > bottom))) return true;
+      }
+      return false;
+    };
+    const y0 = window.scrollY;
+    for (const d of [0, ...Array.from({ length: 30 }, (_, k) => [(k + 1) * 2, -(k + 1) * 2]).flat()]) {
+      window.scrollTo(0, y0 + d);
+      if (!cut()) break;
+    }
+  }, selector);
+  await page.waitForTimeout(200);
+}
+
+each('timezone', async (page, lang, tag) => {
+  await settle(page, '/profile/edit', lang);
+  const tz = page.locator('select').filter({ has: page.locator('option[value="UTC"], option[value="Asia/Riyadh"]') }).first();
+  await tz.evaluate((el) => el.setAttribute('data-review-centre', ''));
+  await centre(page, '[data-review-centre]');
+  await shoot(page, 'timezone', `profile-timezone-${tag}`, lang);
+  // The open list, as text (a native dropdown can't be screenshotted): the first few options
+  const options = await tz.evaluate((s: HTMLSelectElement) => [...s.options].slice(0, 12).map((o) => o.text));
+  mkdirSync(join(OUT, 'timezone'), { recursive: true });
+  writeFileSync(join(OUT, 'timezone', `options-${tag}.txt`), options.join('\n'));
+});
+
+// The side rail's last item at 1280x900 (#1624's scroll hint): desktop only, both languages and modes
+for (const lang of LANGS) test(`rail ${lang}`, async ({ browser }) => {
+  for (const mode of MODES) {
+    const context = await browser.newContext({ storageState: creator.state, viewport: { width: 1280, height: 900 }, colorScheme: mode, reducedMotion: 'reduce', locale: lang === 'ar' ? 'ar' : 'en-US' });
+    await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
+    const page = await context.newPage();
+    try {
+      await settle(page, '/library/playlists', lang);
+      await shoot(page, 'rail', `rail-${lang}-desktop900-${mode}`, lang);
+      const facts = await page.evaluate(() => {
+        const list = document.querySelector<HTMLElement>('.nv-scroll');
+        if (!list) return 'no rail list';
+        const lr = list.getBoundingClientRect();
+        const items = [...list.querySelectorAll<HTMLElement>('a, button')].map((a) => ({ t: a.textContent?.trim(), top: a.getBoundingClientRect().top, bottom: a.getBoundingClientRect().bottom }));
+        const cut = items.filter((i) => i.top < lr.bottom && i.bottom > lr.bottom);
+        return JSON.stringify({ listBottom: lr.bottom, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight, moreBelow: list.hasAttribute('data-more-below'), cut, last: items[items.length - 1] });
+      });
+      mkdirSync(join(OUT, 'rail'), { recursive: true });
+      writeFileSync(join(OUT, 'rail', `rail-${lang}-${mode}.json`), facts);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+each('studio', async (page, lang, tag) => {
+  await settle(page, `/studio/${creator.channelIds[0]}/content/videos`, lang);
+  await expect(page.getByTestId('studio-tab-videos')).toBeVisible();
+  await shoot(page, 'studio', `studio-tabs-${tag}`, lang);
+});
+
+test('every shot was made', () => {
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(join(OUT, 'digits.json'), JSON.stringify(digits, null, 2));
+  expect(problems, problems.join('\n')).toEqual([]);
+});
