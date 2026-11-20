@@ -25,6 +25,10 @@ on:
         description: 'Open a PR with the new pictures when anything changed'
         type: boolean
         default: true
+      review_shots:
+        description: 'Owner review shots instead of the Help pictures (no PR)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -109,6 +113,7 @@ jobs:
         run: |
           export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt" E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt"
           export GITHUB_EVENT_NAME=local-stack
+          if [ "${{ inputs.review_shots }}" = "true" ]; then export REVIEW_SHOTS=1; fi
           pnpm exec playwright test -c playwright.help.config.ts
         env:
           CI: 'true'
@@ -117,8 +122,17 @@ jobs:
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret
 
+      - name: Upload review shots
+        if: always() && inputs.review_shots
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-shots
+          path: apps/web/test-results/review-shots
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Upload pictures
-        if: always()
+        if: always() && !inputs.review_shots
         uses: actions/upload-artifact@v4
         with:
           name: help-pictures
@@ -139,7 +153,7 @@ jobs:
   pull-request:
     name: Open a PR with the new pictures
     needs: capture
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.open_pr)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.open_pr && !inputs.review_shots)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
