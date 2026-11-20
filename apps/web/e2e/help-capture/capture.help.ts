@@ -987,9 +987,40 @@ const PAGE_HELPERS = `(() => {
 })()`;
 
 /** Fails when a run account, run handle or run address is anywhere a reader can see (pictures and clips) */
+/**
+ * Clips: the same check every 200 ms in the page while it records, so a frame between the first and
+ * the last can't show test data either (owner: every frame of a clip is checked). Survives navigation
+ * through an init script; the hits are read back with readClipLeaks.
+ */
+const CLIP_LEAK_WATCH = `(() => {
+  const bad = /e2e\\+|e2e\\.alummahnow\\.net|@\\s*E2E[\\w-]|\\bE2E[a-z]+\\d{6,}|[\\w-]+-\\d{10,}\\.(mp4|mov|webm)/i;
+  // Kept in sessionStorage too, so a hit on a page the clip then leaves isn't lost
+  let kept = [];
+  try { kept = JSON.parse(sessionStorage.getItem('__clipLeaks') || '[]'); } catch (e) { kept = []; }
+  const seen = (window.__clipLeaks = window.__clipLeaks || kept);
+  const save = () => { try { sessionStorage.setItem('__clipLeaks', JSON.stringify(seen.slice(-50))); } catch (e) { /* storage off */ } };
+  const scan = () => {
+    if (!document.body) return;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (!el || !bad.test(node.textContent || '') || el.closest('script,style')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) { seen.push(location.pathname + ': ' + (node.textContent || '').trim().slice(0, 60)); save(); }
+    }
+    document.querySelectorAll('input, textarea').forEach((el) => { if (bad.test(el.value)) { seen.push(location.pathname + ' field: ' + el.value.slice(0, 60)); save(); } });
+  };
+  setInterval(scan, 200);
+})()`;
+
+async function readClipLeaks(page: Page): Promise<string[]> {
+  const all = await page.evaluate(() => (window as unknown as { __clipLeaks?: string[] }).__clipLeaks ?? []).catch(() => [] as string[]);
+  return [...new Set(all)];
+}
+
 async function expectNoLeaks(page: Page): Promise<void> {
   const leaks = await page.evaluate(() => {
-    const bad = /e2e\+|e2e\.alummahnow\.net|@\s*E2E[\w-]|\bE2E[a-z]+\d{6,}/i;
+    const bad = /e2e\+|e2e\.alummahnow\.net|@\s*E2E[\w-]|\bE2E[a-z]+\d{6,}|[\w-]+-\d{10,}\.(mp4|mov|webm)/i;
     const out: string[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -1397,11 +1428,15 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
       await prepare(page);
       // Clips get no text pass: the data itself must be clean (audit r4: @E2Ehelp<run> in a clip)
       await expectNoLeaks(page);
+      await page.context().addInitScript(CLIP_LEAK_WATCH);
+      await page.evaluate(CLIP_LEAK_WATCH);
       await page.screenshot({ path: join(CLIPS, `${id}.${lang}.${mode}.png`) });
       offset = (Date.now() - started) / 1000;
       await act(page);
       await page.waitForTimeout(1200);
       await expectNoLeaks(page);
+      const during = await readClipLeaks(page);
+      if (during.length) throw new Error(`test data showed during the clip: ${during.join(' | ')}`);
     } finally {
       await context.close();
     }
@@ -1454,11 +1489,14 @@ test('clip creating-upload', async ({ browser }) => {
       });
       // A fresh copy each time: the same file twice is "Already uploaded"
       const clipPath = join(__dirname, '../test-fixtures/e2e-sample-40s.mp4');
-      const copy = join(tmpdir(), `help-upload-${lang}-${mode}-${Date.now()}.mp4`);
-      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', clipPath, '-c', 'copy', '-metadata', `comment=${copy}`, copy]);
+      // A file name a person would have (the run's timestamped name showed in the clip, audit r4); a
+      // timestamp in the metadata keeps each copy's content unique
+      const dir = mkdtempSync(join(tmpdir(), 'help-upload-'));
+      const copy = join(dir, lang === 'ar' ? 'شارع-الفوانيس.mp4' : 'lantern-street.mp4');
+      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', clipPath, '-c', 'copy', '-metadata', `comment=help ${lang} ${mode} ${Date.now()}`, copy]);
       await page.locator('[data-testid="batch-file-input"], input[type="file"]').first().setInputFiles(copy);
       await page.waitForTimeout(5000);
-      rmSync(copy, { force: true });
+      rmSync(dir, { recursive: true, force: true });
     }, 9);
   }
 });
