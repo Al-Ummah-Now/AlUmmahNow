@@ -42,8 +42,9 @@ export async function PaymentsHeader({ overview, tab }: { overview: BillingOverv
         </dl>
       )}
 
-      {/* One row on every width: on a phone it scrolls sideways rather than wrapping under itself */}
-      <nav aria-label={t('payments.tabsLabel')} className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none]">
+      {/* Phones: the tabs wrap onto a second row, never a tab half shown at the edge (owner rule,
+          #1669); wider screens keep one row */}
+      <nav aria-label={t('payments.tabsLabel')} className="mb-6 flex flex-wrap gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none] sm:flex-nowrap" data-testid="payments-tabs">
         {PAYMENTS_TABS.map((x) => {
           const active = x === tab;
           return (

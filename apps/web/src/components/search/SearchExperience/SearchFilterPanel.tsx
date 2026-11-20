@@ -48,7 +48,7 @@ function Chip({ selected, onClick, children, testId }: ChipProps) {
 export function SearchTypeChips({ state, onChange }: { state: SearchUrlState; onChange: (type?: SearchEntityType) => void }) {
   const { t } = useLanguage();
   return (
-    <div role="group" aria-label={t.search.resultType} className="flex overflow-x-auto [scrollbar-width:none] border-b border-gray-200 dark:border-gray-700">
+    <div role="group" aria-label={t.search.resultType} className="tab-strip flex flex-wrap overflow-x-auto [scrollbar-width:none] border-b border-gray-200 dark:border-gray-700 sm:flex-nowrap" data-testid="search-type-chips">
       <button type="button" className="tab-item" aria-pressed={!state.type} data-active={!state.type} onClick={() => onChange(undefined)} data-testid="search-type-all">{typeLabel(t.search, undefined)}</button>
       {SEARCH_TYPES.map(type => (
         <button type="button" key={type} className="tab-item" aria-pressed={state.type === type} data-active={state.type === type} onClick={() => onChange(type)} data-testid={`search-type-${type}`}>

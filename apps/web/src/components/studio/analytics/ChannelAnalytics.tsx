@@ -154,7 +154,8 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               </div>
 
               <section>
-                <div role="group" aria-label={text.metricLabel} className="mb-3 flex gap-2 overflow-x-auto">
+                {/* Phones: the metric chips wrap, never a chip half shown at the edge (owner rule, #1669) */}
+                <div role="group" aria-label={text.metricLabel} className="mb-3 flex flex-wrap gap-2 overflow-x-auto sm:flex-nowrap" data-testid="studio-analytics-metrics">
                   {METRICS.map((item) => (
                     <Button key={item} variant={metric === item ? 'default' : 'outline'} aria-pressed={metric === item} onClick={() => setMetric(item)} className="min-h-11 whitespace-nowrap">
                       {text.metrics[item]}
