@@ -283,7 +283,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= window.innerWidth * 0.6 && b.height > 20 && b.height < window.innerHeight * 0.3;
+      return b.width >= window.innerWidth * 0.6 && b.height > 20 && b.height < window.innerHeight * 0.3 && (b.top <= 1 || b.bottom >= window.innerHeight - 1);
     }).map((el) => el.getBoundingClientRect());
     const top = Math.max(0, ...bars.filter((b) => b.top <= 1).map((b) => b.bottom));
     const bottom = Math.min(window.innerHeight, ...bars.filter((b) => b.bottom >= window.innerHeight - 1).map((b) => b.top));
@@ -422,7 +422,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3;
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1);
     }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
     const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
     const onScreen = (b: Box) => b.x >= 2 && b.y >= 2 && b.x + b.w <= innerWidth - 2 && b.y + b.h <= innerHeight - 2;
@@ -466,8 +466,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         return Math.min(min, Math.max(dx, dy));
       }, Infinity);
       const gMax = Math.min(GAP, Math.floor((near - 4 - CLEAR) / 2));
+      const barClash = (b: Box) => straddlesBar(grow(b, 2));
       let o = outline(gMax);
-      for (let g = gMax; g >= gMax - 16 && crowded(o).length; g--) o = outline(g);
+      for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
       const crowd = crowded(o);
       if (crowd.length) faults.push(`outline ${n} is within ${CLEAR} px of ${crowd.slice(0, 2).map((c) => c.what ?? '?').join(', ')}`);
       if (straddlesBar(grow(o, 2))) faults.push(`outline ${n} runs under the header or tab bar`);
@@ -492,9 +493,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const r = rects[i];
       const round = radii[i] >= Math.min(r.width, r.height) / 2 - 0.5;
       const otherBands = rings.flatMap((ring, j) => (j === i ? [] : band(ring)));
+      // A control in the header: its number may hang from the header's edge, under it
+      const homeBar = bars.find((bar) => contains(bar, grow(o, 2)));
       const ok = ([x, y]: [number, number]) => {
         const v = grow({ x, y, w: S, h: S }, 2);
-        return onScreen(v) && !straddlesBar(v)
+        return onScreen(v) && (!straddlesBar(v) || (!!homeBar && hit(v, homeBar) && bars.every((bar) => bar === homeBar || !hit(v, bar))))
           && !texts.some((t) => hit(grow(v, CLEAR), t))
           && !pictures.some((p) => hit(v, p))
           && !numbers.some((q) => hit(grow(v, CLEAR), q))
@@ -597,7 +600,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3;
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1);
     }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
     // Is (x, y) covered by something that isn't `el` or part of it? Markers ignore the pointer, so
     // they never count; a bar does
@@ -620,7 +623,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         if (!hit(box, frame) || hidden(box, el)) continue;
         texts.push(box);
         // Cut by the frame's edge
-        if (!contains(frame, box)) out.push(`text ${box.what} is cut by the picture's edge`);
+        if (!contains(frame, box)) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
         // Half under a bar (not in it)
         const bar = bars.find((br) => hit(box, br) && !contains(br, box) && !(br.el && br.el.contains(el)));
         if (bar) out.push(`text ${box.what} is half under the header or tab bar`);
@@ -656,7 +659,9 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       })
       .map((el) => fromRect(el.getBoundingClientRect(), { el, what: `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}>` }))
       .filter((b) => hit(b, frame) && !hidden(b, b.el ?? null));
-    const rings = [...document.querySelectorAll<HTMLElement>('[data-help-ring]')].map((el) => fromRect(el.getBoundingClientRect(), { what: el.dataset.helpRing }));
+    const rings = [...document.querySelectorAll<HTMLElement>('[data-help-ring]')].map((el) => fromRect(el.getBoundingClientRect(), { what: el.dataset.helpRing, el: document.querySelector(`[data-help-target="${el.dataset.helpRing}"]`) }));
+    const ownOf = (o: Box, p: Box) => !!(o.el && p.el && (o.el === p.el || o.el.contains(p.el) || p.el.contains(o.el)));
+    const ringOf = (n?: string) => rings.find((o) => o.what === n);
     const nums = [...document.querySelectorAll<HTMLElement>('[data-help-num]')].map((el) => grow(fromRect(el.getBoundingClientRect()), 2)).map((b, i) => ({ ...b, what: [...document.querySelectorAll<HTMLElement>('[data-help-num]')][i].dataset.helpNum }));
     const band = (o: Box): Box[] => [
       { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: 6 }, { x: o.x - 2, y: o.y + o.h - 4, w: o.w + 4, h: 6 },
@@ -665,7 +670,9 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
     for (const v of nums) {
       if (!contains(frame, v)) out.push(`number ${v.what} is cut by the picture's edge`);
-      if (straddlesBar(v)) out.push(`number ${v.what} sits on the header or tab bar's edge`);
+      const own = ringOf(v.what);
+      const home = own && bars.find((bar) => contains(bar, grow(own, 2)));
+      if (straddlesBar(v) && !(home && bars.every((bar) => bar === home || !hit(v, bar)))) out.push(`number ${v.what} sits on the header or tab bar's edge`);
       const t = texts.find((x) => hit(grow(v, CLEAR), x));
       if (t) out.push(`number ${v.what} is within ${CLEAR} px of ${t.what}`);
       const p = pictures.find((x) => hit(v, x));
@@ -681,7 +688,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       if (straddlesBar(outer)) out.push(`outline ${o.what} runs under the header or tab bar`);
       const t = texts.find((x) => hit(x, grow(outer, CLEAR)) && !contains(grow(o, -(4 + CLEAR)), x));
       if (t) out.push(`outline ${o.what} is within ${CLEAR} px of ${t.what}`);
-      const p = pictures.find((x) => hit(x, outer) && !contains(grow(o, -4), x));
+      const p = pictures.find((x) => hit(x, outer) && !contains(grow(o, -4), x) && !ownOf(o, x));
       if (p) out.push(`outline ${o.what} touches ${p.what}`);
       for (const o2 of rings) {
         if (o2 === o || Number(o2.what) < Number(o.what)) continue;
@@ -788,17 +795,21 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         const pos = getComputedStyle(el).position;
         if (pos !== 'fixed' && pos !== 'sticky') return;
         const b = el.getBoundingClientRect();
-        if (b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3) bars.push({ l: 0, t: b.top, r: innerWidth, b: b.bottom });
+        if (b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1)) bars.push({ l: 0, t: b.top, r: innerWidth, b: b.bottom });
       });
       let l = c.x; let t = c.y; let r = c.x + c.width; let b = c.y + c.height;
       for (let pass = 0; pass < 12; pass++) {
         let moved = false;
         for (const bar of bars) {
-          if (bar.b > t && bar.t < b && (bar.t < t || bar.b > b || l > 0 || r < innerWidth)) {
+          if (!(bar.b > t && bar.t < b)) continue;
+          const coreIn = core.b > bar.t && core.t < bar.b;
+          if (coreIn) {
+            // The core is in it (a header control): the bar whole, full width
             if (bar.t < t) { t = Math.max(0, bar.t); moved = true; }
             if (bar.b > b) { b = Math.min(innerHeight, bar.b); moved = true; }
             if (l > 0 || r < innerWidth) { l = 0; r = innerWidth; moved = true; }
-          }
+          } else if (bar.t >= core.b && b > bar.t) { b = bar.t; moved = true; }
+          else if (bar.b <= core.t && t < bar.b) { t = bar.b; moved = true; }
         }
         for (const it of items) {
           const xOver = it.r > l && it.l < r;
