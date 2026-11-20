@@ -548,6 +548,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     ];
     // Pass 2: the numbers. A number's visible box is its circle plus the 2 px halo
     const numbers: Box[] = [];
+    const placed: string[] = [];
     for (const [i, target] of targets.entries()) {
       const o = rings[i];
       const n = target.dataset.helpTarget;
@@ -565,7 +566,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const menuBox = homeMenu ? fromRect(homeMenu.getBoundingClientRect()) : null;
       // ...and never shares the line of another row's text beside it (audit r4: 1 on 'Acting as')
       const otherRow = (v: Box) => texts.some((tx) => !isMine(tx) && tx.y < v.y + v.h - 1 && tx.y + tx.h > v.y + 1 && !(tx.y < r.bottom && tx.y + tx.h > r.top)
-        && Math.max(tx.x - (v.x + v.w), v.x - (tx.x + tx.w)) < 24);
+        && Math.max(tx.x - (v.x + v.w), v.x - (tx.x + tx.w)) < (above ? 24 : 72));
       // Why a spot is refused ('' = fine): listed in the run when a number finds no spot
       const why = ([x, y]: [number, number]): string => {
         const v = grow({ x, y, w: S, h: S }, 2);
@@ -613,7 +614,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       for (let d = 4; d <= o.w / 2; d += 4) bareCands.push([rtl ? o.x + o.w - S - d : o.x + d, midY]);
       bareCands.push([rtl ? o.x - S - 4 : o.x + o.w + 4, midY], [rtl ? o.x + o.w + 4 : o.x - S - 4, midY]);
       // A header control: under it, centred, hanging from the header (no room beside it)
-      bareCands.push([o.x + o.w / 2 - S / 2, o.y + o.h + 2]);
+      if (homeBar) bareCands.push([o.x + o.w / 2 - S / 2, o.y + o.h + 2]);
       const spot = bare[i] ? bareCands.find(ok) : cands.filter(touches).find(ok);
       if (!spot) {
         missed++;
@@ -621,6 +622,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         faults.push(`number ${n} has no spot clear of text, pictures, other numbers and outlines (target ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}; ${tried.join('; ')})`);
       }
       const [x, y] = spot ?? [startX, midY];
+      if (spot) placed.push(`${n}${bare[i] ? ' (number only)' : ''} at ${Math.round(x)},${Math.round(y)} for target ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`);
       numbers.push(grow({ x, y, w: S, h: S }, 2));
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
@@ -641,14 +643,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         boxShadow: `0 0 0 2px ${HALO}, 0 2px 6px rgb(0 0 0 / 0.35)`, pointerEvents: 'none',
       });
       if (bare[i]) m.dataset.helpBare = '';
+      if (above) m.dataset.helpPlace = 'above';
       document.body.append(...(bare[i] ? [m] : [ring, m]));
     }
     const bareList = targets.filter((_, i) => bare[i]).map((t) => t.dataset.helpTarget);
-    return { missed, faults, bareList };
+    return { missed, faults, bareList, placed };
   }, { rtl: lang === 'ar', above: place === 'above' });
   // Not silent: the run lists every picture whose number had to sit on another control
   if (unplaced.missed) note(`${unplaced.missed} marker(s) found no spot clear of other controls`);
   if (unplaced.bareList.length) note(`number-only markers: ${unplaced.bareList.join(', ')}`);
+  console.log(`help marks: ${unplaced.placed.join('; ')}`);
   if (unplaced.faults.length) throw new Error(`markers: ${unplaced.faults.join('; ')}`);
 }
 
@@ -765,9 +769,14 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         texts.push(box);
         // Cut by the frame's edge
         // Its visible part: a line half behind the open menu shows only below the menu
-        if (!contains(frame, { x: seenPart.l, y: seenPart.t, w: seenPart.r - seenPart.l, h: seenPart.b - seenPart.t })) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
+        // Half under an open menu (not in it): AUDIT r4/r5, a row half under the menu's edge
+        if (overlays.some((ov) => !ov.contains(el) && hit(box, fromRect(ov.getBoundingClientRect())) && !contains(fromRect(ov.getBoundingClientRect()), box))) out.push(`text ${box.what} is half under the open menu`);
+        // Within 2 px of the edge counts as cut: the letters' ink runs past the line box (Arabic)
+        if (!contains(grow(frame, -2), { x: seenPart.l, y: seenPart.t, w: seenPart.r - seenPart.l, h: seenPart.b - seenPart.t })) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
         // Half under a bar (not in it)
-        const bar = bars.find((br) => hit(box, br) && !contains(br, box) && !(br.el && br.el.contains(el)));
+        // In a bar = inside the bar's strip, by geometry: the side rail is a DOM child of <header> but
+        // lies outside its strip (r5: rail icons and labels were never checked)
+        const bar = bars.find((br) => hit(box, br) && !contains(br, box) && !(br.el && br.el.contains(el) && hit(fromRect(el.getBoundingClientRect()), br)));
         if (bar) out.push(`text ${box.what} is half under the header or tab bar`);
         // Cut by a scrolling list or clipping box around it
         for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
@@ -857,7 +866,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       if (own && target) {
         const tr = target.getBoundingClientRect();
         const row = texts.find((x) => !mine(x) && x.y < v.y + v.h - 1 && x.y + x.h > v.y + 1 && !(x.y < tr.bottom && x.y + x.h > tr.top)
-          && Math.max(x.x - (v.x + v.w), v.x - (x.x + x.w)) < 24);
+          && Math.max(x.x - (v.x + v.w), v.x - (x.x + x.w)) < (document.querySelector('[data-help-place="above"]') ? 24 : 72));
         if (row) out.push(`number ${v.what} sits on the line of ${row.what}, not its own row`);
       }
       const q = nums.find((x) => x !== v && hit(grow(v, CLEAR), x));
@@ -894,13 +903,13 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     document.querySelectorAll(help.pictureSel).forEach((el) => {
       if (el.closest('[data-help-marker]') || (el.closest('svg') && el.tagName.toLowerCase() !== 'svg')) return;
       const vb = help.visible(el);
-      if (!vb || bars.some((br) => br.el && br.el.contains(el))) return;
+      if (!vb || bars.some((br) => contains(grow(br, 0.5), { x: vb.l, y: vb.t, w: vb.r - vb.l, h: vb.b - vb.t }))) return;
       const b = cutBy(vb);
       if (b) out.push(`${whatOf(el)} at ${Math.round(b.x)},${Math.round(b.y)} is cut by the picture's edge`);
     });
     const keyEls = [...document.querySelectorAll('[data-help-target]')];
     for (const el of [...help.cards(), ...help.overlays()]) {
-      if (bars.some((br) => br.el && (br.el.contains(el) || el.contains(br.el)))) continue;
+      { const r0 = el.getBoundingClientRect(); if (bars.some((br) => contains(grow(br, 0.5), fromRect(r0)) || (el as Element).contains(br.el ?? null))) continue; }
       // The container a control sits in (a long post, the comments card) may run past the room: the
       // control is what must be whole
       if (keyEls.some((k) => el.contains(k))) continue;
@@ -1152,6 +1161,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           if (b.width <= 0 || b.height <= 0) continue;
           const v = help.visible(el, { l: b.left, t: b.top, r: b.right, b: b.bottom });
           if (!v || !onScreen(v)) continue;
+          // Half under an open menu (its other part shows): an edge never goes past it, so the picture
+          // ends at the menu (AUDIT r4/r5: a row half under the menu's edge)
+          if (help.overlays().some((ov) => { if (ov.contains(el)) return false; const o = ov.getBoundingClientRect(); return o.left < b.right && o.right > b.left && o.top < b.bottom && o.bottom > b.top; })) { avoid.push(v); continue; }
           // Under a bar or a fade (fixed/sticky): an edge never crosses it, nor goes past it
           let covered = 0;
           let seen = 0;
@@ -1162,12 +1174,13 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
             // that bar (r5: the open menu's backdrop sits inside the header element, so walking up from
             // it made every line on the page 'under the header')
             const bar = barRects.find((br) => x >= br.left && x <= br.right && y >= br.top && y <= br.bottom);
-            const cov = !!bar && !barEls.some((be) => be.contains(el));
+            const cov = !!bar && !(v.t >= bar.top - 0.5 && v.b <= bar.bottom + 0.5);
             if (cov) by = by || 'a bar';
             if (cov) covered++; else seen++;
           }
           if (covered) { avoid.push(v); if (avoidWhat.length < 3) avoidWhat.push(`"${(node.textContent ?? '').trim().slice(0, 16)}" ${Math.round(v.t)}..${Math.round(v.b)} under ${by}`); }
-          if (seen && !covered) { items.push(v); words.push(v); }
+          // Text keeps 4 px from an edge: the letters' ink runs past the line box (Arabic descenders)
+          if (seen && !covered) { const g = { l: v.l - 4, t: v.t - 4, r: v.r + 4, b: v.b + 4 }; items.push(g); words.push(g); }
         }
       }
       document.querySelectorAll(`${help.pictureSel}, [data-help-marker]`).forEach((el) => {
