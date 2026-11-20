@@ -226,6 +226,9 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
     });
     new MutationObserver(hide).observe(document, { subtree: true, childList: true });
   }, demoIds);
+  // The example address and handle from the first paint, for pictures and clips alike: markers are
+  // placed on the page as shown (r5: the long run address filled the profile row, so 1 found no spot)
+  await context.addInitScript(CLIP_SCRUB);
   const page = await context.newPage();
   return { context, page };
 }
@@ -905,6 +908,10 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       const vb = help.visible(el);
       if (!vb || bars.some((br) => contains(grow(br, 0.5), { x: vb.l, y: vb.t, w: vb.r - vb.l, h: vb.b - vb.t }))) return;
       const b = cutBy(vb);
+      // Its part beyond the picture's edge lies in the header strip (a menu's top row tucked 3 px under
+      // the header): the bar hides it, not the crop
+      const outside = b && (b.y < frame.y ? { t: b.y, b: frame.y } : b.y + b.h > frame.y + frame.h ? { t: frame.y + frame.h, b: b.y + b.h } : null);
+      if (b && outside && b.x >= frame.x - 0.5 && b.x + b.w <= frame.x + frame.w + 0.5 && bars.some((br) => outside.t >= br.y - 0.5 && outside.b <= br.y + br.h + 0.5)) return;
       if (b) out.push(`${whatOf(el)} at ${Math.round(b.x)},${Math.round(b.y)} is cut by the picture's edge`);
     });
     const keyEls = [...document.querySelectorAll('[data-help-target]')];
@@ -1499,7 +1506,6 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
   try {
     const started = Date.now();
     const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir });
-    await context.addInitScript(CLIP_SCRUB);
     // Recorded clips move: only they keep motion on
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     let offset = 0;
