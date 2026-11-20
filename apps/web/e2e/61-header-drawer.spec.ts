@@ -20,22 +20,39 @@ const HOME_LINK = { en: /Al Ummah Now/, ar: /الأمة الآن/ } as const;
  */
 async function expectUploadAfterSearch(page: Page, rtl: boolean): Promise<void> {
   const banner = page.getByRole('banner');
-  const logo = await banner.locator('.aun-brand').boundingBox();
-  const upload = await banner.getByTestId('header-upload').boundingBox();
-  const searchInput = banner.getByTestId('header-search-input');
-  const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
-  if (!logo || !upload || !search) throw new Error('header controls not laid out');
   await expect(banner.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
-  // Signed-out visitors have no bell: never wait for it
+  // The page direction first: after a language switch the header can still be laying out
+  // (#1667: one reading put the bell on Upload's far side; a rerun passed)
+  await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
+  // Order in the DOM: Upload is the first tool, the bell after it (signed-out visitors have no bell)
   const bellLoc = banner.getByTestId('notification-bell');
-  const bell = (await bellLoc.count()) > 0 ? await bellLoc.first().boundingBox() : null;
-  if (rtl) {
-    expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
-    if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
-  } else {
-    expect(upload.x, 'Upload follows the search').toBeGreaterThanOrEqual(search.x + search.width - 1);
-    if (bell) expect(bell.x, 'the bell follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
+  const hasBell = (await bellLoc.count()) > 0;
+  if (hasBell) {
+    const uploadFirst = await banner.getByTestId('header-upload').evaluate((upload, bell) => !!bell && !!(upload.compareDocumentPosition(bell) & Node.DOCUMENT_POSITION_FOLLOWING), await bellLoc.first().elementHandle());
+    expect(uploadFirst, 'the bell comes after Upload in the header').toBe(true);
   }
+  // Positions on screen, measured again until the layout has settled
+  type Box = { x: number; y: number; width: number; height: number };
+  const at: { upload?: Box; logo?: Box } = {};
+  await expect(async () => {
+    const logo = await banner.locator('.aun-brand').boundingBox();
+    const upload = await banner.getByTestId('header-upload').boundingBox();
+    const searchInput = banner.getByTestId('header-search-input');
+    const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
+    if (!logo || !upload || !search) throw new Error('header controls not laid out');
+    at.logo = logo;
+    at.upload = upload;
+    const bell = hasBell ? await bellLoc.first().boundingBox() : null;
+    if (rtl) {
+      expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
+      if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
+    } else {
+      expect(upload.x, 'Upload follows the search').toBeGreaterThanOrEqual(search.x + search.width - 1);
+      if (bell) expect(bell.x, 'the bell follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
+    }
+  }).toPass({ timeout: 10_000 });
+  const { logo, upload } = at;
+  if (!logo || !upload) throw new Error('header controls not laid out');
   expect(Math.round(upload.height), 'Upload is a 40px header control').toBe(40);
   expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo share a line').toBeLessThanOrEqual(2);
 }
