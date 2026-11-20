@@ -402,6 +402,14 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const hidden = (b0: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
       if (ov.contains(el)) return false;
+      // A part of the same open menu never hides the menu's own text (its channel list is a listbox
+      // inside the menu; the menu's 'Your channels' label is not in that listbox)
+      if (overlays.some((home) => home.contains(el) && (home.contains(ov) || ov.contains(home)))) return false;
+      // And the overlay is really painted over it, at its centre
+      const cx = Math.min(innerWidth - 1, Math.max(0, b0.x + b0.w / 2));
+      const cy = Math.min(innerHeight - 1, Math.max(0, b0.y + b0.h / 2));
+      const onTop = document.elementFromPoint(cx, cy);
+      if (!onTop || !ov.contains(onTop)) return false;
       // The on-screen part only
       const bx = Math.max(0, b0.x); const by = Math.max(0, b0.y);
       const b = { x: bx, y: by, w: Math.min(innerWidth, b0.x + b0.w) - bx, h: Math.min(innerHeight, b0.y + b0.h) - by };
@@ -617,6 +625,14 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     const hidden = (b0: Box, el: Element | null) => overlays.some((ov) => {
       const r = ov.getBoundingClientRect();
       if (ov.contains(el)) return false;
+      // A part of the same open menu never hides the menu's own text (its channel list is a listbox
+      // inside the menu; the menu's 'Your channels' label is not in that listbox)
+      if (overlays.some((home) => home.contains(el) && (home.contains(ov) || ov.contains(home)))) return false;
+      // And the overlay is really painted over it, at its centre
+      const cx = Math.min(innerWidth - 1, Math.max(0, b0.x + b0.w / 2));
+      const cy = Math.min(innerHeight - 1, Math.max(0, b0.y + b0.h / 2));
+      const onTop = document.elementFromPoint(cx, cy);
+      if (!onTop || !ov.contains(onTop)) return false;
       // The on-screen part only
       const bx = Math.max(0, b0.x); const by = Math.max(0, b0.y);
       const b = { x: bx, y: by, w: Math.min(innerWidth, b0.x + b0.w) - bx, h: Math.min(innerHeight, b0.y + b0.h) - by };
