@@ -757,11 +757,13 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         if (inW < 1 || inH < 1) continue;
         // Out of sight inside its list or clipping box (the rail's item below the list's edge): not shown
         const helpV = (window as unknown as { __help: { visible: (e: Element, r: { l: number; t: number; r: number; b: number }) => unknown } }).__help;
-        if (!helpV.visible(el, { l: b.left, t: b.top, r: b.right, b: b.bottom })) continue;
+        const seenPart = helpV.visible(el, { l: b.left, t: b.top, r: b.right, b: b.bottom }) as { l: number; t: number; r: number; b: number } | null;
+        if (!seenPart) continue;
         if (hidden(box, el)) { skippedNodes.push({ el, node, why: 'hidden' }); continue; }
         texts.push(box);
         // Cut by the frame's edge
-        if (!contains(frame, box)) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
+        // Its visible part: a line half behind the open menu shows only below the menu
+        if (!contains(frame, { x: seenPart.l, y: seenPart.t, w: seenPart.r - seenPart.l, h: seenPart.b - seenPart.t })) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
         // Half under a bar (not in it)
         const bar = bars.find((br) => hit(box, br) && !contains(br, box) && !(br.el && br.el.contains(el)));
         if (bar) out.push(`text ${box.what} is half under the header or tab bar`);
@@ -1013,9 +1015,34 @@ const CLIP_LEAK_WATCH = `(() => {
   setInterval(scan, 200);
 })()`;
 
+/**
+ * Clips: the example address and handle in place of the run's, as the pictures have them (AUDIT:
+ * amina@example.com is fine), kept up while the clip records: a MutationObserver rewrites any run
+ * address or handle the moment it renders, before the next frame is painted
+ */
+const CLIP_SCRUB = `(() => {
+  const fix = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const t = node.textContent || '';
+      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina').replace(/@?e2e\\.alummahnow\\.net/g, '@example.com');
+      const u = node.textContent || '';
+      if (/@\\s*E2E[\\w-]+/i.test(u)) node.textContent = u.replace(/@\\s*E2E[\\w-]+/gi, '@communitycorner');
+    }
+    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@example.com'; });
+  };
+  const start = () => {
+    if (!document.body) return void setTimeout(start, 10);
+    fix(document.body);
+    new MutationObserver((list) => { for (const m of list) { if (m.type === 'characterData') fix(m.target.parentNode || document.body); else m.addedNodes.forEach((n) => fix(n.nodeType === 3 ? (n.parentNode || document.body) : n)); } })
+      .observe(document.body, { subtree: true, childList: true, characterData: true });
+  };
+  start();
+})()`;
+
 async function readClipLeaks(page: Page): Promise<string[]> {
   const all = await page.evaluate(() => (window as unknown as { __clipLeaks?: string[] }).__clipLeaks ?? []).catch(() => [] as string[]);
-  return [...new Set(all)];
+  return [...new Set(all as string[])];
 }
 
 async function expectNoLeaks(page: Page): Promise<void> {
@@ -1096,6 +1123,15 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const words: R[] = [];
       const avoid: R[] = [];
       const onScreen = (v: R) => v.r > 0 && v.l < W && v.b > 0 && v.t < H;
+      // The header and tab bar (fixed/sticky strips at the window's top or bottom). Only these cover:
+      // the open menu's transparent full-screen backdrop is fixed too, and counted as covering it made
+      // every line of the page 'covered' (r5: the crop then fell back through the rail and rows)
+      const barEls = [...document.querySelectorAll<HTMLElement>('body *')].filter((el) => {
+        const pos = getComputedStyle(el).position;
+        if (pos !== 'fixed' && pos !== 'sticky') return false;
+        const b = el.getBoundingClientRect();
+        return b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1);
+      });
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const el = node.parentElement;
@@ -1116,11 +1152,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
             if (top && top !== el && !el.contains(top) && !top.contains(el)) {
               for (let e: Element | null = top; e && e !== document.body; e = e.parentElement) {
                 if (e.contains(el)) break;
-                // Under a bar or the rail's fade; behind an open menu is not 'covered' (the menu is the
-                // picture; the page under it is background) (r5: page rows behind the menu blocked every edge)
+                // Under a bar only; behind an open menu is not 'covered' (the menu is the picture)
                 if (e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) break;
-                const pos = getComputedStyle(e).position;
-                if (pos === 'fixed' || pos === 'sticky') { cov = true; break; }
+                if (barEls.includes(e as HTMLElement)) { cov = true; break; }
               }
             }
             if (cov) covered++; else seen++;
@@ -1134,13 +1168,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         const v = help.visible(el);
         if (v && onScreen(v)) items.push(v);
       });
-      const bars: R[] = [];
-      document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
-        const pos = getComputedStyle(el).position;
-        if (pos !== 'fixed' && pos !== 'sticky') return;
-        const b = el.getBoundingClientRect();
-        if (b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1)) bars.push({ l: 0, t: b.top, r: W, b: b.bottom });
-      });
+      const bars: R[] = barEls.map((el) => { const b = el.getBoundingClientRect(); return { l: 0, t: b.top, r: W, b: b.bottom }; });
       // What must stay whole whatever happens: the controls and their markers. The region (core) is
       // what the picture would like to show
       const must = [...document.querySelectorAll('[data-help-marker], [data-help-target]')].map((m) => m.getBoundingClientRect())
@@ -1179,11 +1207,25 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         ? a.r > l && a.l < r && a.b > lo && a.t < hi
         : a.b > t && a.t < b && a.r > lo && a.l < hi);
       // Outward from `want` first (more room), then inward, down to what must stay whole; tier by tier
-      const pick = (want: number, min: number, max: number, outward: number, tiers: Array<(v: number) => boolean>) => {
-        for (const ok of tiers) {
-          for (let v = want; v >= min && v <= max; v += outward) if (ok(v)) return v;
-          for (let v = want - outward; v >= min && v <= max; v -= outward) if (ok(v)) return v;
+      // Which edge had to fall back, and what blocked it there (listed in the run)
+      const notes: string[] = [];
+      const pick = (want: number, min: number, max: number, outward: number, tiers: Array<(v: number) => boolean>, edge = '') => {
+        for (const [k, ok] of tiers.entries()) {
+          let found: number | null = null;
+          for (let v = want; v >= min && v <= max && found === null; v += outward) if (ok(v)) found = v;
+          for (let v = want - outward; v >= min && v <= max && found === null; v -= outward) if (ok(v)) found = v;
+          if (found !== null) {
+            if (k > 0 && edge) {
+              const axis = edge === 'top' || edge === 'bottom' ? 'y' : 'x';
+              const at = Math.round((min + max) / 2);
+              const blockers = [...cards, ...items].filter((it) => (axis === 'y' ? it.r > l && it.l < r && it.t < at && it.b > at : it.b > t && it.t < b && it.l < at && it.r > at)).slice(0, 3)
+                .map((it) => `${Math.round(it.l)},${Math.round(it.t)} ${Math.round(it.r - it.l)}x${Math.round(it.b - it.t)}`);
+              notes.push(`${edge} edge fell back to tier ${k + 1} at ${found} (range ${Math.round(min)}..${Math.round(max)}; at ${at}: ${blockers.join(' | ')})`);
+            }
+            return found;
+          }
         }
+        notes.push(`${edge} edge found no line in ${Math.round(min)}..${Math.round(max)}`);
         return want;
       };
       const tiersFor = (axis: 'y' | 'x', between: (v: number) => boolean) => [
@@ -1197,15 +1239,21 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const mustL = has ? must.l : core.l;
       const mustR = has ? must.r : core.r;
       for (let pass = 0; pass < 2; pass++) {
-        t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, mustT, -1, tiersFor('y', (y) => !avoidIn(y, mustT, 'y')));
-        b = pick(Math.min(bottomLimit, Math.max(b, core.b)), mustB, bottomLimit, 1, tiersFor('y', (y) => !avoidIn(mustB, y, 'y')));
+        const last = pass === 1;
+        t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, mustT, -1, tiersFor('y', (y) => !avoidIn(y, mustT, 'y')), last ? 'top' : '');
+        b = pick(Math.min(bottomLimit, Math.max(b, core.b)), mustB, bottomLimit, 1, tiersFor('y', (y) => !avoidIn(mustB, y, 'y')), last ? 'bottom' : '');
         if (l > 0 || r < W) {
-          l = pick(Math.max(0, Math.min(l, core.l)), 0, mustL, -1, tiersFor('x', (x) => !avoidIn(x, mustL, 'x')));
-          r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')));
+          l = pick(Math.max(0, Math.min(l, core.l)), 0, mustL, -1, tiersFor('x', (x) => !avoidIn(x, mustL, 'x')), last ? 'left' : '');
+          r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')), last ? 'right' : '');
         }
       }
-      return { x: l, y: t, width: r - l, height: b - t };
+      return { x: l, y: t, width: r - l, height: b - t, notes, avoid: avoid.length };
     }, { c: clip, core });
+    if (clip && 'notes' in clip) {
+      const { notes: cropNotes, avoid: avoidN, ...box } = clip as typeof clip & { notes: string[]; avoid: number };
+      if (cropNotes.length) console.log(`help crop ${file}: ${cropNotes.join('; ')} (avoid ${avoidN})`);
+      clip = box;
+    }
   }
   await verifyFrame(page, clip, file);
   const png = join(OUT, `${file}.png`);
@@ -1421,6 +1469,7 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
   try {
     const started = Date.now();
     const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir });
+    await context.addInitScript(CLIP_SCRUB);
     // Recorded clips move: only they keep motion on
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     let offset = 0;
