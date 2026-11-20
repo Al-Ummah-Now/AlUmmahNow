@@ -35,12 +35,105 @@ const ALL_TABS = ['home', 'videos', 'shorts', 'live', 'playlists', 'community', 
  */
 const ART = join(__dirname, '../../../../packages/app-icons/assets/crops');
 const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
+// Four different renders of the owner's art (audit r2: crops of one lantern read as repeats), each
+// uploaded some days ago, with views spread over the days since (audit r2: one spike on today)
 const DEMOS = [
-  { key: 'street', art: 'tools.webp', title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34 },
-  { key: 'evening', art: 'auth.webp', title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21 },
-  { key: 'writing', art: 'cms.webp', title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12 },
-  { key: 'tour', art: 'videos-admin.webp', title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8 },
+  { key: 'street', art: 'auth.webp', title: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' }, views: 34, age: 24 },
+  { key: 'evening', art: 'profile.webp', title: { en: 'Evening lights in the old town', ar: 'أضواء المساء في البلدة القديمة' }, views: 21, age: 17 },
+  { key: 'writing', art: 'cms.webp', title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' }, views: 12, age: 9 },
+  { key: 'tour', art: 'videos.webp', title: { en: 'A walk through the market', ar: 'جولة في السوق' }, views: 8, age: 3 },
 ] as const;
+const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
+const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+async function sql(db: string, text: string): Promise<Array<Record<string, unknown>>> {
+  const res = await fetch(`${CONTROL}/__stack/d1/${db}`, { method: 'POST', body: text });
+  const body = (await res.json().catch(() => ({}))) as { results?: Array<Record<string, unknown>>; error?: string };
+  if (!res.ok) throw new Error(`stack sql ${db}: ${res.status} ${JSON.stringify(body).slice(0, 300)}`);
+  return body.results ?? [];
+}
+const DAY = 86_400_000;
+const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+/** Rewrites the date fields a stored video or index payload has (string ISO or epoch ms) */
+function backdate(obj: Record<string, unknown>, ms: number, views?: number): Record<string, unknown> {
+  for (const k of ['dateCreated', 'createdAt', 'publishedAt', 'datePublished', 'uploadDate', 'dateModified', 'updatedAt']) {
+    if (typeof obj[k] === 'string') obj[k] = new Date(ms).toISOString();
+    else if (typeof obj[k] === 'number') obj[k] = (obj[k] as number) > 1e11 ? ms : Math.floor(ms / 1000);
+  }
+  if (views !== undefined) for (const k of ['views', 'viewCount', 'viewsCount']) if (k in obj) obj[k] = views;
+  return obj;
+}
+/** Daily weights from upload day to today: most views in the first days, a long tail after */
+function curve(days: number, seed: number): number[] {
+  return Array.from({ length: days + 1 }, (_, i) => Math.exp(-i / 5) * (0.75 + 0.5 * Math.abs(Math.sin((i + 1) * (seed + 1.7)))));
+}
+function split(total: number, weights: number[], integer: boolean): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const raw = weights.map((w) => (total * w) / sum);
+  if (!integer) return raw;
+  const out = raw.map(Math.floor);
+  let left = Math.round(total) - out.reduce((a, b) => a + b, 0);
+  const order = raw.map((r, i) => [r - Math.floor(r), i] as const).sort((a, b) => b[0] - a[0]);
+  for (let k = 0; left > 0; k = (k + 1) % order.length, left--) out[order[k][1]]++;
+  return out;
+}
+/**
+ * Moves today's analytics rows of each video (and its channel's sums) onto the days since its
+ * upload date, and the uploads themselves back to that date (R2 video, ownership and search index),
+ * with the search index's view counts matching the videos'.
+ */
+async function backdateDemos(channelId: string, videos: Array<{ id: string; age: number; views: number }>): Promise<void> {
+  const now = Date.now();
+  const today = dayOf(now);
+  const ids = videos.map((v) => q(v.id)).join(',');
+  const rows = await sql('al-ummah-now-notifications', `SELECT entity_type, entity_id, day, metric, dim, value FROM analytics_daily WHERE entity_type = 'video' AND entity_id IN (${ids})`);
+  const inserts: string[] = [];
+  const channelSums = new Map<string, number>();
+  for (const [n, v] of videos.entries()) {
+    for (const row of rows.filter((r) => r.entity_id === v.id)) {
+      const metric = String(row.metric);
+      const dim = String(row.dim ?? '');
+      const parts = split(Number(row.value), curve(v.age, n), metric !== 'watch_time');
+      parts.forEach((value, i) => {
+        if (!value) return;
+        const day = dayOf(now - (v.age - i) * DAY);
+        inserts.push(`('video', ${q(v.id)}, ${q(day)}, ${q(metric)}, ${q(dim)}, ${value})`);
+        const key = `${day}|${metric}|${dim}`;
+        channelSums.set(key, (channelSums.get(key) ?? 0) + value);
+      });
+    }
+  }
+  const metrics = [...new Set(rows.map((r) => String(r.metric)))].map(q).join(',');
+  if (rows.length) {
+    await sql('al-ummah-now-notifications', `DELETE FROM analytics_daily WHERE entity_type = 'video' AND entity_id IN (${ids})`);
+    await sql('al-ummah-now-notifications', `DELETE FROM analytics_daily WHERE entity_type = 'channel' AND entity_id = ${q(channelId)} AND metric IN (${metrics})`);
+    for (const [key, value] of channelSums) {
+      const [day, metric, dim] = key.split('|');
+      inserts.push(`('channel', ${q(channelId)}, ${q(day)}, ${q(metric)}, ${q(dim)}, ${value})`);
+    }
+    for (let i = 0; i < inserts.length; i += 100) await sql('al-ummah-now-notifications', `INSERT INTO analytics_daily (entity_type, entity_id, day, metric, dim, value) VALUES ${inserts.slice(i, i + 100).join(',')}`);
+  } else problems.push(`no analytics rows for the demo videos on ${today}`);
+  for (const v of videos) {
+    const ms = now - v.age * DAY - 5 * 3_600_000;
+    // The stored video (R2): its key is found by listing
+    let key = '';
+    for (const prefix of [v.id, `videos/${v.id}`]) {
+      const list = (await (await fetch(`${CONTROL}/__stack/r2/videos?prefix=${encodeURIComponent(prefix)}`)).json().catch(() => ({}))) as { keys?: string[] };
+      key = (list.keys ?? []).find((k) => k.endsWith('.json') && k.includes(v.id)) ?? '';
+      if (key) break;
+    }
+    if (key) {
+      const obj = (await (await fetch(`${CONTROL}/__stack/r2/videos/${key}`)).json()) as Record<string, unknown>;
+      const put = await fetch(`${CONTROL}/__stack/r2/videos/${key}`, { method: 'PUT', body: JSON.stringify(backdate(obj, ms)) });
+      if (!put.ok) problems.push(`R2 back-date ${v.id}: ${put.status}`);
+    } else problems.push(`no R2 object found for video ${v.id}`);
+    await sql('al-ummah-now-search', `UPDATE content_ownership SET created_at = ${ms}, views = ${v.views} WHERE kind = 'video' AND id = ${q(v.id)}`);
+    for (const row of await sql('al-ummah-now-search', `SELECT created_at, payload FROM search_videos WHERE id = ${q(v.id)}`)) {
+      const created = Number(row.created_at) > 1e11 ? ms : Math.floor(ms / 1000);
+      const payload = JSON.stringify(backdate(JSON.parse(String(row.payload)) as Record<string, unknown>, ms, v.views));
+      await sql('al-ummah-now-search', `UPDATE search_videos SET created_at = ${created}, views = ${v.views}, payload = ${q(payload)} WHERE id = ${q(v.id)}`);
+    }
+  }
+}
 const MEDIA = mkdtempSync(join(tmpdir(), 'tabs-media-'));
 const demoByGuid = new Map<string, string>();
 const demoById = new Map<string, string>();
@@ -106,11 +199,19 @@ test.beforeAll(async ({ browser }) => {
     demoById.set(video.id, demo.key);
     demoIds.push(video.id);
     for (let i = 0; i < demo.views; i++) {
-      await apiFetch(user, `/api/videos/${video.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json', channelId: channel }, body: JSON.stringify({ watchTime: 25 }) });
+      await apiFetch(user, `/api/videos/${video.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json', channelId: channel }, body: JSON.stringify({ watchTime: 25 + ((i * 37) % 90) }) });
     }
   }
-  // Let the processor count the views (analytics) and the search index take the videos
-  await new Promise((r) => setTimeout(r, 20_000));
+  // The views reach the stored videos (counter flush) and the processor's analytics rows
+  for (const demo of DEMOS) {
+    const id = demoIds[DEMOS.length - 1 - DEMOS.indexOf(demo)];
+    await expect.poll(async () => {
+      const body = (await (await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' })).json().catch(() => ({}))) as { result?: { views?: number }; views?: number };
+      return (body.result ?? body).views ?? 0;
+    }, { timeout: 120_000, message: `views of ${demo.key}` }).toBeGreaterThanOrEqual(demo.views);
+  }
+  await expect.poll(async () => Number((await sql('al-ummah-now-notifications', `SELECT COALESCE(SUM(value), 0) AS n FROM analytics_daily WHERE entity_type = 'video' AND metric = 'views' AND entity_id IN (${demoIds.map(q).join(',')})`))[0]?.n ?? 0), { timeout: 120_000, message: 'analytics views' }).toBeGreaterThanOrEqual(DEMOS.reduce((a, d) => a + d.views, 0));
+  await backdateDemos(channel, DEMOS.map((d, i) => ({ id: demoIds[DEMOS.length - 1 - i], age: d.age, views: d.views })));
 });
 
 async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, signedIn: boolean): Promise<{ context: BrowserContext; page: Page }> {
