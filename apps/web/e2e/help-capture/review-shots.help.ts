@@ -66,7 +66,8 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, si
 async function settle(page: Page, path: string, lang: Lang): Promise<void> {
   await page.goto(`/${lang}${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
-  await expect(page.locator('[data-testid="nav-menu-trigger"]:visible').first()).toBeVisible({ timeout: 30_000 });
+  // Signed in: the account menu; signed out: the header's Sign in
+  await expect(page.locator('[data-testid="nav-menu-trigger"]:visible, header a[href*="sign"]:visible, header button:visible').first()).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
 }
 
