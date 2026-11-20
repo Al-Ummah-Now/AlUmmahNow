@@ -396,8 +396,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       }
       const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
       // Text boxes are the letters (glyphBox), so a number in the line spacing above a heading is clear
-      // A number reaches past its circle (its 2 px white halo): text is kept that far away
-      const HALO_PX = 2;
+      // Clear space (owner audit rule 2026-11-19: touching counts as overlap): at least 4 px between a
+      // number's visible edge, its 2 px white halo included, and any letter
+      const HALO_PX = 2 + 4;
       const reach = (b: Box) => ({ x: b.x - HALO_PX, y: b.y - HALO_PX, w: b.w + HALO_PX * 2, h: b.h + HALO_PX * 2 });
       const texts = [...ownText, ...allText];
       const others = [
@@ -425,7 +426,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       // Checked, not hoped: a number on text or on another number fails the picture (checked before
       // this number joins the placed ones, so it is never compared with itself)
       const box = { x, y, w: S, h: S };
-      if (texts.some((t) => hit(reach(box), t))) faults.push(`number ${target.dataset.helpTarget} covers text`);
+      if (texts.some((t) => hit(reach(box), t))) faults.push(`number ${target.dataset.helpTarget} is within 4 px of text`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
