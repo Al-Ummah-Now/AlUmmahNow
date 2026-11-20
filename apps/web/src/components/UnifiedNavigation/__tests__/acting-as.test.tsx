@@ -90,12 +90,13 @@ describe('account menu: Acting as', () => {
     expect(within(trigger).getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'personal');
   });
 
-  it('names you by your email only when there is no name (never an @handle)', async () => {
-    user = { id: 'u1', email: 'amina@test.local', displayName: '', userName: 'amina_handle', channel: null, channels: [] };
+  it('names you by the name already known for the account, never the email or an @handle (#1673)', async () => {
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'amina@test.local', userName: 'amina_handle', channel: null, channels: [] };
     render(<UnifiedNavigation />);
     act(() => requestAccountMenu({ open: true }));
     const current = await screen.findByTestId('nav-no-active-channel');
-    expect(current).toHaveTextContent('amina@test.local');
+    expect(current).toHaveTextContent('Amina');
+    expect(current).not.toHaveTextContent('amina@test.local');
     expect(current).not.toHaveTextContent('amina_handle');
   });
 

@@ -46,6 +46,7 @@ import { buildChannelMenu } from '@/lib/channels/menu';
 import { useChannelInviteCount } from '@/lib/channels/invites-count';
 import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
+import { identityInitial, identityName, lastIdentityName, rememberIdentityName } from '@/lib/navigation/identity-name';
 import { HeaderSignIn } from '@/components/Header/HeaderParts';
 
 type MenuView = 'main' | 'channels';
@@ -135,7 +136,22 @@ export function UnifiedNavigation() {
 
   // Get localized display name
   // The user's name (display name, else first + last); the email only as the last resort. The active channel is shown separately
-  const getDisplayName = () => userDisplayName(profile, lang) || userDisplayName({ displayName: user?.displayName }, lang, user?.email);
+  // (#1673) Never the email: the session carries it as a stand-in name until the profile loads, so
+  // while a switch loads the name comes from what is already known (this account's menu row, the
+  // last name shown in this tab); with none yet the pill shows an avatar without a letter.
+  const ownProfile = profile && (!profile.id || profile.id === user?.id) ? profile : null;
+  const activeAccount = accounts.find((a) => a.userId === user?.id);
+  const getDisplayName = () => (user ? identityName([
+    userDisplayName(ownProfile, lang),
+    userDisplayName(accountProfiles.get(user.id), lang),
+    user.displayName,
+    activeAccount?.displayName,
+    lastIdentityName(user.id),
+  ], user.email) : '');
+  const knownName = getDisplayName();
+  useEffect(() => {
+    if (user?.id && knownName) rememberIdentityName(user.id, knownName);
+  }, [user?.id, knownName]);
 
   // Get user avatar (always from profile, never from channel)
   const getUserAvatar = () => {
@@ -214,7 +230,10 @@ export function UnifiedNavigation() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen]);
 
-  if (loading) {
+  // A switch in progress keeps the current identity in the pill (never a gap that falls back to
+  // the email); only the first load, with no one shown yet, is the bare placeholder
+  const switching = loading && !!user;
+  if (loading && !user) {
     // Same footprint as the button: the header must not shift when it arrives
     return <span className="aun-acct-btn" aria-hidden="true"><span className="aun-avatar" /></span>;
   }
@@ -284,9 +303,9 @@ export function UnifiedNavigation() {
       {t.channelRoles.roles[role]}
     </span>
   );
-  const displayName = getDisplayName();
+  const displayName = knownName;
   const otherAccounts = accounts.filter((a) => !a.isActive);
-  const initial = (displayName[0] || user.email[0] || '?').toUpperCase();
+  const initial = identityInitial(displayName);
   const channelInitial = channel ? (getChannelName(channel.name, channel.nameLocalized)[0]?.toUpperCase() ?? '?') : initial;
   const avatar = (src: string | undefined | null, letter: string, size = '') =>
     src ? (
@@ -320,6 +339,8 @@ export function UnifiedNavigation() {
         aria-expanded={isOpen}
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
+        disabled={switching}
+        aria-busy={switching || undefined}
       >
         {/* The identity you act as (owner rule 8): the active channel's logo (or its letter) and its
             name, never your picture or name under a channel; your own picture and name when Personal */}
@@ -330,7 +351,7 @@ export function UnifiedNavigation() {
         <span className="sr-only">{t.navigation.navigationMenu}</span>
         <ChevronDown className="aun-caret" aria-hidden="true" />
       </button>
-      {isOpen && (
+      {isOpen && !switching && (
         <>
           <MenuBackdrop
             onClose={() => {
@@ -355,7 +376,7 @@ export function UnifiedNavigation() {
                 {avatar(getUserAvatar(), initial, 'aun-avatar--lg')}
                 <span className="aun-menu-who-text">
                   <span className="aun-menu-who-name" dir="auto" data-testid="nav-user-name">{displayName}</span>
-                  {displayName !== user.email && <EmailText email={user.email} className="aun-menu-who-sub" />}
+                  <EmailText email={user.email} className="aun-menu-who-sub" />
                 </span>
               </Link>
               </div>
@@ -420,20 +441,21 @@ export function UnifiedNavigation() {
                 <span className="aun-menu-label" id="nav-more-accounts-label">{t.navigation.moreAccounts}</span>
                 {otherAccounts.map((account) => {
                   const accountAvatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
-                  const name = account.displayName?.trim() || account.email;
+                  // The name only (#1673); the email is the line under it, never the label
+                  const name = identityName([userDisplayName(accountProfiles.get(account.userId), lang), account.displayName], account.email);
                   return (
                     <div key={account.userId} className="aun-acct-row" data-testid="nav-account" data-active="false" data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
                       <button
                         type="button"
                         onClick={() => { switchAccount(account.userId); setIsOpen(false); }}
-                        aria-label={t.navigation.switchToAccount.replace('{name}', name)}
+                        aria-label={t.navigation.switchToAccount.replace('{name}', name || account.email)}
                         className="aun-menu-item"
                         role="menuitem"
                       >
-                        {avatar(accountAvatar, name[0]?.toUpperCase() ?? '?')}
+                        {avatar(accountAvatar, identityInitial(name))}
                         <span className="aun-acct-text">
-                          <span className="aun-acct-label" dir="auto">{name}</span>
-                          {name !== account.email && <EmailText email={account.email} className="aun-acct-email" />}
+                          {name && <span className="aun-acct-label" dir="auto">{name}</span>}
+                          <EmailText email={account.email} className="aun-acct-email" />
                         </span>
                       </button>
                       <button
@@ -441,8 +463,8 @@ export function UnifiedNavigation() {
                         onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }}
                         className="aun-acct-signout"
                         data-testid="nav-account-sign-out"
-                        aria-label={`${t.navigation.signOutOf} ${name}`}
-                        title={`${t.navigation.signOutOf} ${name}`}
+                        aria-label={`${t.navigation.signOutOf} ${name || account.email}`}
+                        title={`${t.navigation.signOutOf} ${name || account.email}`}
                       >
                         <LogOut className="aun-flip" aria-hidden="true" />
                       </button>

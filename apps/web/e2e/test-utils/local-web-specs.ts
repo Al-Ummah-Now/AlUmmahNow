@@ -27,6 +27,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '72-real-sign-in.spec.ts',
   '75-site-theme.spec.ts',
   '76-help-tour.spec.ts',
+  '82-identity-switch-no-email.spec.ts',
   // Sub-batch 2: watch page, player, library, comments, history, home grid
   '02-video-player.spec.ts',
   '14-video-upload-playback.spec.ts',
