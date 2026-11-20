@@ -885,7 +885,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     const barBottom = Math.min(innerHeight, ...bars.filter((br) => br.y + br.h >= innerHeight - 1).map((br) => br.y));
     const cutBy = (vb: { l: number; t: number; r: number; b: number }) => {
       const b = { x: vb.l, y: vb.t, w: vb.r - vb.l, h: vb.b - vb.t };
-      return b.w > 0.5 && b.h > 0.5 && hit(b, frame) && !contains(grow(frame, 0.5), b) ? b : null;
+      // More than a pixel of it inside the frame: a card starting at the edge's own sub-pixel isn't cut
+      return b.w > 0.5 && b.h > 0.5 && hit(b, grow(frame, -1)) && !contains(grow(frame, 0.5), b) ? b : null;
     };
     const whatOf = (el: Element) => `<${el.tagName.toLowerCase()}${el.getAttribute('data-testid') ? ` ${el.getAttribute('data-testid')}` : ''}${el.getAttribute('aria-label') ? ` "${el.getAttribute('aria-label')!.slice(0, 20)}"` : ''}>`;
     document.querySelectorAll(help.pictureSel).forEach((el) => {
@@ -1122,6 +1123,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const items: R[] = [];
       const words: R[] = [];
       const avoid: R[] = [];
+      const avoidWhat: string[] = [];
       const onScreen = (v: R) => v.r > 0 && v.l < W && v.b > 0 && v.t < H;
       // The header and tab bar (fixed/sticky strips at the window's top or bottom). Only these cover:
       // the open menu's transparent full-screen backdrop is fixed too, and counted as covering it made
@@ -1145,6 +1147,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
           // Under a bar or a fade (fixed/sticky): an edge never crosses it, nor goes past it
           let covered = 0;
           let seen = 0;
+          let by = '';
           for (const y of [v.t + 2, (v.t + v.b) / 2, v.b - 2]) for (const x of [v.l + 2, (v.l + v.r) / 2, v.r - 2]) {
             if (x < 0 || y < 0 || x >= W || y >= H) continue;
             const top = document.elementFromPoint(x, y);
@@ -1154,12 +1157,12 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
                 if (e.contains(el)) break;
                 // Under a bar only; behind an open menu is not 'covered' (the menu is the picture)
                 if (e.matches('[role="menu"], [role="dialog"], [role="listbox"], [data-popover], [data-testid="nav-menu"]')) break;
-                if (barEls.includes(e as HTMLElement)) { cov = true; break; }
+                if (barEls.includes(e as HTMLElement)) { cov = true; by = by || `${e.tagName.toLowerCase()}.${String(e.className).split(' ')[0]}`; break; }
               }
             }
             if (cov) covered++; else seen++;
           }
-          if (covered) avoid.push(v);
+          if (covered) { avoid.push(v); if (avoidWhat.length < 3) avoidWhat.push(`"${(node.textContent ?? '').trim().slice(0, 16)}" ${Math.round(v.t)}..${Math.round(v.b)} under ${by}`); }
           if (seen && !covered) { items.push(v); words.push(v); }
         }
       }
@@ -1196,7 +1199,8 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       for (const el of [...help.cards(), ...help.overlays()]) {
         const v = help.visible(el);
         if (!v || !onScreen(v) || bars.some((bar) => v.t >= bar.t - 0.5 && v.b <= bar.b + 0.5)) continue;
-        if (v.b - v.t > bottomLimit - topLimit) continue;
+        // A card that can't fit, or a layout column (the side rail, as tall as the window), never counts
+        if (v.b - v.t > bottomLimit - topLimit || v.b - v.t >= H * 0.9) continue;
         cards.push(v);
       }
       const crosses = (set: R[], axis: 'y' | 'x', at: number) => set.some((it) => axis === 'y'
@@ -1209,9 +1213,14 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       // Outward from `want` first (more room), then inward, down to what must stay whole; tier by tier
       // Which edge had to fall back, and what blocked it there (listed in the run)
       const notes: string[] = [];
-      const pick = (want: number, min: number, max: number, outward: number, tiers: Array<(v: number) => boolean>, edge = '') => {
+      // Top and bottom: outward first (more room), then inward. Sides: the nearest line either way, so
+      // a picture of one column doesn't widen to take in the rail (r5: privacy ar took the rail's icons)
+      const pick = (want: number, min: number, max: number, outward: number, tiers: Array<(v: number) => boolean>, edge = '', nearest = false) => {
         for (const [k, ok] of tiers.entries()) {
           let found: number | null = null;
+          if (nearest) {
+            for (let d = 0; found === null && d <= max - min; d++) for (const v of d ? [want - d * outward, want + d * outward] : [want]) if (found === null && v >= min && v <= max && ok(v)) found = v;
+          }
           for (let v = want; v >= min && v <= max && found === null; v += outward) if (ok(v)) found = v;
           for (let v = want - outward; v >= min && v <= max && found === null; v -= outward) if (ok(v)) found = v;
           if (found !== null) {
@@ -1243,10 +1252,11 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
         t = pick(Math.max(topLimit, Math.min(t, core.t)), topLimit, mustT, -1, tiersFor('y', (y) => !avoidIn(y, mustT, 'y')), last ? 'top' : '');
         b = pick(Math.min(bottomLimit, Math.max(b, core.b)), mustB, bottomLimit, 1, tiersFor('y', (y) => !avoidIn(mustB, y, 'y')), last ? 'bottom' : '');
         if (l > 0 || r < W) {
-          l = pick(Math.max(0, Math.min(l, core.l)), 0, mustL, -1, tiersFor('x', (x) => !avoidIn(x, mustL, 'x')), last ? 'left' : '');
-          r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')), last ? 'right' : '');
+          l = pick(Math.max(0, Math.min(l, core.l)), 0, mustL, -1, tiersFor('x', (x) => !avoidIn(x, mustL, 'x')), last ? 'left' : '', true);
+          r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')), last ? 'right' : '', true);
         }
       }
+      if (notes.length) notes.push(`covered: ${avoidWhat.join(', ')}`);
       return { x: l, y: t, width: r - l, height: b - t, notes, avoid: avoid.length };
     }, { c: clip, core });
     if (clip && 'notes' in clip) {
