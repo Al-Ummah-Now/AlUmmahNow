@@ -725,7 +725,17 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
           // it), not when the font's box (ascent and descent, taller in Arabic) pokes past
           const scrolls = /auto|scroll/.test(cs.overflowY);
           const over = Math.max(abox.y - box.y, box.y + box.h - (abox.y + abox.h));
-          const clips = scrolls ? over > 0 : over > 0 && a.scrollHeight > a.clientHeight + 3;
+          // For a clipping box, the letters' ink (canvas metrics for this font), not the font's box
+          const ink = (() => {
+            const ctx = document.createElement('canvas').getContext('2d');
+            if (!ctx) return box;
+            const ecs = getComputedStyle(el);
+            ctx.font = `${ecs.fontStyle} ${ecs.fontWeight} ${ecs.fontSize} ${ecs.fontFamily}`;
+            const m = ctx.measureText((node.textContent ?? '').trim());
+            const top = box.y + (m.fontBoundingBoxAscent - m.actualBoundingBoxAscent) + (box.h - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
+            return { ...box, y: top, h: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent };
+          })();
+          const clips = scrolls ? over > 0 : ink.y < abox.y - 0.5 || ink.y + ink.h > abox.y + abox.h + 0.5;
           if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && clips) { out.push(`text ${box.what} is cut by its list's edge`); break; }
         }
         // Half covered by another element (sampled across the line, inside the frame)
@@ -906,9 +916,10 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
             }
             if (cov) covered++; else seen++;
           }
-          if (!seen) continue;
+          // Fully covered (under a list's 'more below' fade) still shows through: an edge never crosses it
           if (covered) avoid.push({ l: b.left, t: b.top, r: b.right, b: b.bottom });
-          else { add(b); words.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); }
+          if (!seen) continue;
+          if (!covered) { add(b); words.push({ l: b.left, t: b.top, r: b.right, b: b.bottom }); }
         }
       }
       document.querySelectorAll('img, svg, input, select, textarea, button, [role="img"], [data-help-marker]').forEach((el) => {
