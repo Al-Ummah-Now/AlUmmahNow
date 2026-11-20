@@ -9,14 +9,13 @@
 
 'use client';
 
-import { numberFormat } from '@al-ummah/shared-types';
+import { formatCountNoun, numberFormat } from '@al-ummah/shared-types';
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { StreamStatusBadge } from '../../StreamStatusBadge';
 import { ViewerCountRTL } from '../../ViewerCount/rtl';
-import { formatViewerCountArabic } from '@/lib/utils/number-format';
 import type { LiveStreamCardProps } from '../types';
 
 /**
@@ -139,7 +138,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
     const ariaLabel = useMemo(() => {
       const viewerText =
         stream.status === 'live' && stream.viewerCount
-          ? `، ${formatViewerCountArabic(stream.viewerCount, 'full')} مشاهد`
+          ? `، ${formatCountNoun('ar', stream.viewerCount, 'viewer')}`
           : '';
       return `بث مباشر: ${stream.title} بواسطة ${stream.channel.name}${viewerText}`;
     }, [stream.title, stream.channel.name, stream.status, stream.viewerCount]);

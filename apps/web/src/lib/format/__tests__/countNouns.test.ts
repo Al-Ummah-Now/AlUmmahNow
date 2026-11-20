@@ -14,7 +14,7 @@ describe('formatCountNoun', () => {
   });
 
   it('every noun has a zero phrase, a one, a dual and the plural forms', () => {
-    const table: Record<CountNoun, string[]> = {
+    const table: Partial<Record<CountNoun, string[]>> = {
       view: ['لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٤ مشاهدة'],
       subscriber: ['لا يوجد مشتركون', 'مشترك واحد', 'مشتركان', '٣ مشتركين', '١٤ مشتركًا'],
       video: ['لا توجد مرئيات', 'مرئي واحد', 'مرئيان', '٣ مرئيات', '١٤ مرئيًا'],

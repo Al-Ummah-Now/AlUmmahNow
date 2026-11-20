@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, useRef } from 'react';
-import { COMMUNITY_UPLOAD_LIMITS, formatNumber } from '@al-ummah/shared-types';
+import { COMMUNITY_UPLOAD_LIMITS, formatCountNoun } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,7 +44,7 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
 
     if (images.length + files.length > MAX_IMAGES) {
       setUploadError(isRTL
-        ? `الحد الأقصى ${formatNumber('ar', MAX_IMAGES)} صور`
+        ? `الحد الأقصى ${formatCountNoun('ar', MAX_IMAGES, 'image')}`
         : `Maximum ${MAX_IMAGES} images allowed`
       );
       return;

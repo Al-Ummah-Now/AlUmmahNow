@@ -6,7 +6,7 @@
  * create one inline (name, visibility, optional description); a new playlist
  * is selected at once. Colours come from Fanous tokens only (light, dark, RTL).
  */
-import { formatNumber } from '@al-ummah/shared-types';
+import { formatNumber, fillTemplate } from '@al-ummah/shared-types';
 import { Highlight } from '@/components/ui/Autocomplete';
 import React, { useId, useMemo, useState } from 'react';
 import { ChevronDown, ListVideo, Lock, Plus, X } from 'lucide-react';
@@ -184,7 +184,7 @@ export function PlaylistPicker({
 
           {/* A filtered checklist (several can be ticked), so not a combobox: the count is announced instead */}
           <p className="sr-only" role="status" aria-live="polite" data-testid={`${testId}-count`}>
-            {query.trim() && !loading && !failed ? (matches.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', formatNumber(lang, matches.length))) : ''}
+            {query.trim() && !loading && !failed ? (matches.length === 1 ? t.search.foundOneResult : fillTemplate(lang, t.search.foundResults, { count: matches.length })) : ''}
           </p>
           <fieldset className="max-h-56 overflow-y-auto" aria-labelledby={`${base}-label`}>
             {loading ? (

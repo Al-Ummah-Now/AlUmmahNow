@@ -360,14 +360,78 @@ function inlineNumber(locale: FormatLocale, kind: string, literal: string, perce
   return formatNumber(locale, value, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+const PLURAL_HEAD = /\{(\w+),\s*plural,/g;
+
+/** The plural form's text from `one {…} two {…} other {…}` (nested braces allowed). */
+function pluralOptions(body: string): Record<string, string> {
+  const options: Record<string, string> = {};
+  let i = 0;
+  while (i < body.length) {
+    const key = /^\s*([\w=]+)\s*\{/.exec(body.slice(i));
+    if (!key) break;
+    let j = i + key[0].length;
+    let depth = 1;
+    const start = j;
+    while (j < body.length && depth > 0) {
+      if (body[j] === '{') depth += 1;
+      else if (body[j] === '}') depth -= 1;
+      j += 1;
+    }
+    options[key[1]] = body.slice(start, j - 1);
+    i = j;
+  }
+  return options;
+}
+
+/** A plural param as a number: numbers as they are, formatted text («١٬٢٣٤», "1,234") parsed, anything else NaN. */
+function pluralValue(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return Number.NaN;
+  return parseLocaleNumber(String(value).replace(/[\u200e\u200f\u061c]/g, ''));
+}
+
+/**
+ * ICU plural selects: `{count, plural, zero {…} one {…} two {…} few {…} many {…} other {…}}`.
+ * The form is the CLDR category of the count (Arabic has all six, English one/other); a missing
+ * form falls back to `other`. `#` in the form is the count in the locale's digits. Text that
+ * is not a plain number (a compact «١٫٣ ألف») takes `other`.
+ */
+function fillPlurals(locale: FormatLocale, template: string, params: TemplateParams, missing?: string): string {
+  let out = '';
+  let last = 0;
+  PLURAL_HEAD.lastIndex = 0;
+  for (let m = PLURAL_HEAD.exec(template); m; m = PLURAL_HEAD.exec(template)) {
+    let j = m.index + m[0].length;
+    let depth = 1;
+    while (j < template.length && depth > 0) {
+      if (template[j] === '{') depth += 1;
+      else if (template[j] === '}') depth -= 1;
+      j += 1;
+    }
+    const options = pluralOptions(template.slice(m.index + m[0].length, j - 1));
+    const raw = params[m[1]];
+    const n = pluralValue(raw);
+    const form = Number.isFinite(n) ? options[pluralCategory(locale, n)] ?? options.other : options.other;
+    const shown = raw === undefined || raw === null ? missing ?? `{${m[1]}}` : typeof raw === 'number' ? formatNumber(locale, raw) : raw;
+    out += template.slice(last, m.index) + (form ?? '').replace(/(^|[^{])#/g, (_, before: string) => `${before}${shown}`);
+    last = j;
+    PLURAL_HEAD.lastIndex = j;
+  }
+  return out + template.slice(last);
+}
+
 /**
  * Fills `{name}` placeholders. Numbers go through `formatNumber`, so «آخر {days} أيام» with
  * days 7 reads «آخر ٧ أيام» in Arabic and "Last 7 days" in English. Strings are inserted as
  * they are. An unknown placeholder stays as written unless `missing` is given. Numbers written
  * in the message are placeholders too (`{#7}`, `{#50%}`, `{$0.011}`, see inlineNumber).
+ *
+ * A number before a noun uses a plural select so the noun agrees with it (owner 2026-11-20,
+ * #1666): `{count, plural, one {مشاهدة واحدة} two {مشاهدتان} few {# مشاهدات} other {# مشاهدة}}`
+ * and `{count, plural, one {# view} other {# views}}`; see fillPlurals.
  */
 export function fillTemplate(locale: FormatLocale, template: string, params: TemplateParams = {}, missing?: string): string {
-  return template
+  return fillPlurals(locale, template, params, missing)
     .replace(/\{([#$])(-?\d+(?:\.\d+)?)(%?)\}/g, (_, kind: string, literal: string, percent: string) => inlineNumber(locale, kind, literal, percent))
     .replace(/\{(\w+)\}/g, (match, name: string) => {
       const value = params[name];

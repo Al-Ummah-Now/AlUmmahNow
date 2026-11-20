@@ -1,5 +1,5 @@
 'use client';
-import { formatNumber } from '@al-ummah/shared-types';
+import { formatCountNoun } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef, useEffect } from "react";
@@ -81,7 +81,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {channel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {formatNumber('ar', channel.subscribersCount)} مشترك
+              {formatCountNoun('ar', channel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
             </span>
           )}
         </div>
@@ -118,7 +118,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {currentChannel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {formatNumber('ar', currentChannel.subscribersCount)} مشترك
+              {formatCountNoun('ar', currentChannel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
             </span>
           )}
         </div>
@@ -178,7 +178,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     </span>
                     {channel.subscribersCount !== undefined && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatNumber('ar', channel.subscribersCount)} مشترك
+                        {formatCountNoun('ar', channel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
                       </span>
                     )}
                   </div>

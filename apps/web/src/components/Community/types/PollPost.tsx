@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { CommunityPost, PollOption, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { CommunityPost, PollOption, formatDate, formatPercent, fillTemplate } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import { voteOnPoll } from '@/lib/api/community-posts';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -89,7 +89,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
 
   const voteCountLabel = totalVotes === 1
     ? t.community.voteCountOne
-    : t.community.voteCountMany.replace('{count}', formatNumber(locale, totalVotes));
+    : fillTemplate(locale, t.community.voteCountMany, { count: totalVotes });
 
   return (
     <div className="space-y-4">

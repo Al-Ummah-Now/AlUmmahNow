@@ -12,7 +12,7 @@
  */
 import { formatCompact, formatInteger, formatNumber, pluralCategory, type FormatLocale } from './locale-format';
 
-export type CountNoun = 'view' | 'subscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack' | 'user' | 'viewer';
+export type CountNoun = 'view' | 'subscriber' | 'video' | 'like' | 'comment' | 'message' | 'audioTrack' | 'user' | 'viewer' | 'character' | 'image' | 'day' | 'hour' | 'minute' | 'reply';
 
 type ArabicForms = { zero: string; one: string; two: string; few: string; many: string; other: string };
 
@@ -26,6 +26,12 @@ const AR: Record<CountNoun, ArabicForms> = {
   audioTrack: { zero: 'لا توجد مسارات صوتية', one: 'مسار صوتي واحد', two: 'مساران صوتيان', few: 'مسارات صوتية', many: 'مسارًا صوتيًا', other: 'مسار صوتي' },
   user: { zero: 'لا مستخدمين', one: 'مستخدم واحد', two: 'مستخدمان', few: 'مستخدمين', many: 'مستخدمًا', other: 'مستخدم' },
   viewer: { zero: 'لا يوجد مشاهدون', one: 'مشاهد واحد', two: 'مشاهدان', few: 'مشاهدين', many: 'مشاهدًا', other: 'مشاهد' },
+  character: { zero: 'لا أحرف', one: 'حرف واحد', two: 'حرفان', few: 'أحرف', many: 'حرفًا', other: 'حرف' },
+  image: { zero: 'لا توجد صور', one: 'صورة واحدة', two: 'صورتان', few: 'صور', many: 'صورة', other: 'صورة' },
+  day: { zero: 'لا أيام', one: 'يوم واحد', two: 'يومان', few: 'أيام', many: 'يومًا', other: 'يوم' },
+  hour: { zero: 'لا ساعات', one: 'ساعة واحدة', two: 'ساعتان', few: 'ساعات', many: 'ساعة', other: 'ساعة' },
+  minute: { zero: 'لا دقائق', one: 'دقيقة واحدة', two: 'دقيقتان', few: 'دقائق', many: 'دقيقة', other: 'دقيقة' },
+  reply: { zero: 'لا توجد ردود', one: 'رد واحد', two: 'ردّان', few: 'ردود', many: 'ردًا', other: 'رد' },
 };
 
 const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
@@ -38,6 +44,12 @@ const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
   audioTrack: { zero: 'No audio tracks', one: 'audio track', other: 'audio tracks' },
   user: { zero: 'No users', one: 'user', other: 'users' },
   viewer: { zero: 'No viewers', one: 'viewer', other: 'viewers' },
+  character: { zero: 'No characters', one: 'character', other: 'characters' },
+  image: { zero: 'No images', one: 'image', other: 'images' },
+  day: { zero: 'No days', one: 'day', other: 'days' },
+  hour: { zero: 'No hours', one: 'hour', other: 'hours' },
+  minute: { zero: 'No minutes', one: 'minute', other: 'minutes' },
+  reply: { zero: 'No replies', one: 'reply', other: 'replies' },
 };
 
 /** True when a compact number carries a scale word («٤٨٫٢ ألف», «١٫٢ مليون»): any character that is not a digit, a separator or a direction mark. */
@@ -50,6 +62,8 @@ export interface CountNounOptions {
   compact?: boolean;
   /** Between the number and the noun; a no-break space keeps them on one line. Default a space. */
   joiner?: string;
+  /** Zero as a number with the noun («٠ ساعة», "0 hours") instead of the zero phrase. */
+  zeroAsNumber?: boolean;
 }
 
 /** A count with its noun in the locale's language and digits; see the module note. */
@@ -59,7 +73,7 @@ export function formatCountNoun(locale: FormatLocale, count: number | string | n
   const shown = options.compact ? formatCompact(locale, n) : formatInteger(locale, n);
   if (String(locale).toLowerCase().startsWith('ar')) {
     const forms = AR[noun];
-    if (n === 0) return forms.zero;
+    if (n === 0) return options.zeroAsNumber ? `${shown}${join}${forms.other}` : forms.zero;
     // 1,000+: the scale word (construct form for two) then the singular noun.
     if (options.compact && n >= 1000) return `${formatCompact(locale, n, 1, { beforeNoun: true })}${join}${forms.other}`;
     const category = pluralCategory(locale, n);
@@ -68,6 +82,6 @@ export function formatCountNoun(locale: FormatLocale, count: number | string | n
     return `${shown}${join}${category === 'few' ? forms.few : category === 'many' ? forms.many : forms.other}`;
   }
   const forms = EN[noun];
-  if (n === 0) return forms.zero;
+  if (n === 0) return options.zeroAsNumber ? `${shown}${join}${forms.other}` : forms.zero;
   return n === 1 ? `${formatNumber(locale, 1)}${join}${forms.one}` : `${shown}${join}${forms.other}`;
 }

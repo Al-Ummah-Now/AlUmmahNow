@@ -154,3 +154,28 @@ test('tick labels (no noun) use the same scale words', () => {
 test('formatCompact: English is unchanged', () => {
   assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '10', '11', '100', '1K', '1.3K', '2K', '2.5K', '3K', '8K', '11K', '1M', '2M', '3M', '15M']);
 });
+
+// #1666: a number before a noun agrees with it through an ICU plural select.
+const VIEWS_AR = '{count, plural, zero {لا توجد مشاهدات} one {مشاهدة واحدة} two {مشاهدتان} few {# مشاهدات} many {# مشاهدة} other {# مشاهدة}}';
+const VIEWS_EN = '{count, plural, one {# view} other {# views}}';
+
+test('fillTemplate plural selects follow the CLDR category of the count', () => {
+  assert.deepEqual([0, 1, 2, 3, 10, 11, 100, 1520].map((count) => f.fillTemplate('ar', VIEWS_AR, { count })), [
+    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١٬٥٢٠ مشاهدة',
+  ]);
+  assert.deepEqual([0, 1, 2, 3, 10, 11, 100].map((count) => f.fillTemplate('en', VIEWS_EN, { count })), [
+    '0 views', '1 view', '2 views', '3 views', '10 views', '11 views', '100 views',
+  ]);
+});
+
+test('fillTemplate plural: text around it, other placeholders inside, formatted and compact text', () => {
+  const t = 'Found {count, plural, one {# result} other {# results}} for "{query}"';
+  assert.equal(f.fillTemplate('en', t, { count: 1, query: 'q' }), 'Found 1 result for "q"');
+  assert.equal(f.fillTemplate('ar', '{n, plural, few {# أيام في {place}} other {# يومًا في {place}}}', { n: 3, place: 'X' }), '٣ أيام في X');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '٣' }), '٣ مشاهدات');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '١٬٢٣٤' }), '١٬٢٣٤ مشاهدة');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '١٫٣ ألف' }), '١٫٣ ألف مشاهدة');
+  assert.equal(f.fillTemplate('en', '{a, plural, one {# like} other {# likes}} · {b, plural, one {# comment} other {# comments}}', { a: 1, b: 2 }), '1 like · 2 comments');
+  assert.equal(f.fillTemplate('en', 'last {#14} days, {count, plural, one {# time} other {# times}}', { count: 1 }), 'last 14 days, 1 time');
+  assert.equal(f.fillTemplate('en', VIEWS_EN), '{count} views');
+});

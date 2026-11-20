@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { naturalCompare, UploadQueueItem, VideoUploadMetadata, formatNumber } from '@al-ummah/shared-types';
+import { naturalCompare, UploadQueueItem, VideoUploadMetadata, formatNumber, fillTemplate } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
@@ -217,9 +217,7 @@ export function useBatchUpload({
       if (!canHandle) {
         const recommendedBatchSize = optimizerRef.current.getRecommendedBatchSize();
         onError?.(
-          t.batch.errors.deviceLimit
-            .replace('{count}', formatNumber(lang, toAdd.length))
-            .replace('{recommended}', formatNumber(lang, recommendedBatchSize))
+          fillTemplate(lang, t.batch.errors.deviceLimit, { count: toAdd.length, recommended: recommendedBatchSize })
         );
         return;
       }
@@ -329,11 +327,7 @@ export function useBatchUpload({
           const waitSeconds = Math.max(1, deferred.retryAfter);
           logger.warn('[useBatchUpload] Batch partly deferred by the upload limit', { started: startedFiles.length, deferred: waiting.length, retryAfter: waitSeconds });
           onError?.(
-            t.creator.batchPartial
-              .replace('{started}', formatNumber(lang, startedFiles.length))
-              .replace('{total}', formatNumber(lang, freshFiles.length))
-              .replace('{left}', formatNumber(lang, waiting.length))
-              .replace('{time}', formatWait(t, waitSeconds, lang)),
+            fillTemplate(lang, t.creator.batchPartial, { started: startedFiles.length, total: freshFiles.length, left: waiting.length, time: formatWait(t, waitSeconds, lang) }),
           );
           if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
           deferredTimerRef.current = setTimeout(() => {

@@ -6,7 +6,7 @@
  * markup mirrors correctly under dir="rtl".
  */
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate } from '@al-ummah/shared-types';
 import React, { useState } from 'react';
 import { AlertCircle, Search as SearchIcon } from 'lucide-react';
 import type { SearchPageModel } from '@/hooks/useSearchPage';
@@ -61,7 +61,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
       <ActiveFilterChips state={state} channelName={model.channelName} onRemove={model.removeFilter} />
 
       <div aria-live="polite" className="sr-only">
-        {status === 'loading' ? t.search.searching : status === 'done' ? (results.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', formatNumber(lang, results.length))) : ''}
+        {status === 'loading' ? t.search.searching : status === 'done' ? (results.length === 1 ? t.search.foundOneResult : fillTemplate(lang, t.search.foundResults, { count: results.length })) : ''}
       </div>
 
       {status === 'idle' && (

@@ -90,7 +90,7 @@ describe('getViewerCountLabel', () => {
 
     it('returns correct label for multiple viewers', () => {
       const label = getViewerCountLabel(1234, 'ar-SA');
-      expect(label).toContain('مشاهدون يشاهدون الآن');
+      expect(label).toBe('١٬٢٣٤ مشاهدًا يشاهدون الآن');
     });
   });
 });

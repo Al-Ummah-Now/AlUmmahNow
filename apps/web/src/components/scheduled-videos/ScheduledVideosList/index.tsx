@@ -6,7 +6,7 @@
  */
 
 'use client';
-import { formatDateTime } from '@al-ummah/shared-types';
+import { formatCountNoun, formatDateTime } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
@@ -41,7 +41,7 @@ export function ScheduledVideosList({
 }: ScheduledVideosListProps) {
   const pathname = usePathname();
   const locale = pathname?.startsWith('/ar') ? 'ar' : 'en';
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const auth = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
@@ -148,9 +148,11 @@ export function ScheduledVideosList({
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-    if (days > 0) return `${days} ${t.schedule?.days ?? 'days'}, ${hours} ${t.schedule?.hours ?? 'hours'}`;
-    if (hours > 0) return `${hours} ${t.schedule?.hours ?? 'hours'}, ${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
-    return `${minutes} ${t.schedule?.minutes ?? 'minutes'}`;
+    // The noun agrees with each count in both languages (#1666): «يومان، ٣ ساعات», "1 day, 2 hours"
+    const c = (count: number, noun: 'day' | 'hour' | 'minute') => formatCountNoun(lang, count, noun, { zeroAsNumber: true });
+    if (days > 0) return `${c(days, 'day')}${lang === 'ar' ? '، ' : ', '}${c(hours, 'hour')}`;
+    if (hours > 0) return `${c(hours, 'hour')}${lang === 'ar' ? '، ' : ', '}${c(minutes, 'minute')}`;
+    return c(minutes, 'minute');
   };
 
   // Get status badge color

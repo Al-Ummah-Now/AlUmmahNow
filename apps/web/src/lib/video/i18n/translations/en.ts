@@ -138,7 +138,7 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     playNow: 'Play now',
     watchAgain: 'Watch again',
     cancel: 'Cancel',
-    autoAdvance: 'Next video in {seconds} seconds',
+    autoAdvance: 'Next video in {seconds, plural, one {# second} other {# seconds}}',
     playTitle: 'Play {title}',
     closeMiniPlayer: 'Close mini player',
     backToVideo: 'Back to video',

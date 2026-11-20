@@ -6,7 +6,7 @@
  * with support for compact notation (1.2K) and full display (1,234).
  */
 
-import { formatCompact, formatNumber } from '@al-ummah/shared-types';
+import { formatCompact, formatCountNoun, formatNumber } from '@al-ummah/shared-types';
 import type { NumberFormat } from '@/components/live-streaming/ViewerCount/types';
 
 /**
@@ -93,7 +93,8 @@ export function getViewerCountLabel(count: number, locale: string = 'en-US'): st
     if (safeCount === 0) return 'لا يوجد مشاهدون الآن';
     if (safeCount === 1) return 'مشاهد واحد يشاهد الآن';
     if (safeCount === 2) return 'مشاهدان يشاهدان الآن';
-    return `${formatViewerCount(safeCount, 'full', locale)} مشاهدون يشاهدون الآن`;
+    // The noun agrees with the count (#1666): «٣ مشاهدين», «١١ مشاهدًا», «١٠٠ مشاهد»
+    return `${formatCountNoun(locale, safeCount, 'viewer')} يشاهدون الآن`;
   }
 
   // English

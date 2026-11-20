@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { formatDate, formatNumber, formatPercent, fillTemplate } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -118,15 +118,15 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="analytics-growth-cards">
         <CardComponent
           title={d.watchTimeHours}
-          value={d.hoursValue.replace('{hours}', formatNumber(lang === 'ar' ? 'ar' : 'en-US', toHours(seriesTotal(metrics, 'watchTime'))))}
-          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          value={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.hoursValue, { hours: toHours(seriesTotal(metrics, 'watchTime')) })}
+          subtitle={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.inLastDays, { days: metrics?.length ?? 0 })}
           icon="clock"
           {...change('watchTime')}
         />
         <CardComponent
           title={d.newSubscribers}
           value={fmt(seriesTotal(metrics, 'subscribers'))}
-          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          subtitle={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.inLastDays, { days: metrics?.length ?? 0 })}
           icon="users"
           {...change('subscribers')}
         />
@@ -149,7 +149,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               <p className="text-sm font-medium text-gray-800 dark:text-white">{d.topPerformingVideo}</p>
               <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{summary.topVideo.title}</p>
               <p className="text-sm text-blue-600 dark:text-blue-400">
-                {d.viewsCount.replace('{count}', fmt(summary.topVideo.views))}
+                {fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.viewsCount, { count: summary.topVideo.views })}
               </p>
             </div>
           )}
@@ -179,10 +179,10 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 </div>
                 <div className="text-end">
                   <p className="font-semibold text-gray-800 dark:text-white">
-                    {d.viewsCount.replace('{count}', fmt(video.views))}
+                    {fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.viewsCount, { count: video.views })}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {d.likesAndComments.replace('{likes}', fmt(video.likes)).replace('{comments}', fmt(video.comments))}
+                    {fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.likesAndComments, { likes: video.likes, comments: video.comments })}
                   </p>
                 </div>
               </div>
