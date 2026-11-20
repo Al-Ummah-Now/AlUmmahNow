@@ -12,7 +12,7 @@ import { expectTabsAndChipsInView } from './test-utils/tabs-in-viewport';
  * nothing wrapped (components/ui/PriorityStrip). At 360 and 390 px, English and Arabic:
  * - the channel page as its owner (all eight tabs: More is used) and as a visitor (the empty
  *   Shorts, Live, Playlists, Community and Channels tabs are hidden, so no More);
- * - search's type chips and Studio analytics' metric chips;
+ * - search's type chips, Studio's content tabs and Studio analytics' metric chips;
  * - and the other strips on Explore, notifications, the library and Studio videos stay in view.
  * Choosing an entry under More makes it current and puts it in the row.
  *
@@ -197,14 +197,22 @@ for (const vp of VIEWPORTS) {
       }
     });
 
-    test(`TABS-VP-004 ${vp.width}px ${locale}: Studio tabs and analytics metric chips`, async ({ browser, creators }) => {
+    test(`TABS-VP-004 ${vp.width}px ${locale}: Studio content tabs and analytics metric chips`, async ({ browser, creators }) => {
       void creators;
       const { context, page } = await open(browser, vp, true);
       const channelId = creator.channelIds[0];
       try {
         await visit(page, `/${locale}/studio/${channelId}/content/videos`);
         await expect(page.getByTestId('studio-tabs')).toBeVisible();
-        await expectTabsAndChipsInView(page, `studio videos ${vp.width}px ${locale}`);
+        // Studio's content tabs: one row too, the current one in the row
+        const studioTabs = page.getByTestId('studio-tabs').locator('[data-testid^="studio-tab-"]');
+        const studioWhat = `studio tabs ${vp.width}px ${locale}`;
+        const studio = await expectOneRow(page, 'studio-tabs-strip', studioTabs, (id) => id.replace(/^studio-tab-/, ''), studioWhat);
+        await expect(page.getByTestId('studio-tab-videos')).toHaveAttribute('aria-current', 'page');
+        if (studio.menu.length) {
+          await chooseFromMore(page, 'studio-tabs-strip', studio.menu, (id) => page.getByTestId(`studio-tab-${id}`), (item) => expect(item).toHaveAttribute('aria-current', 'page'), studioWhat);
+          await expectOneRow(page, 'studio-tabs-strip', studioTabs, (id) => id.replace(/^studio-tab-/, ''), `${studioWhat}, chosen from More`);
+        }
 
         await visit(page, `/${locale}/studio/${channelId}/analytics`);
         await expect(page.getByTestId('studio-analytics')).toBeVisible();
