@@ -4,12 +4,13 @@ import { ChannelTabConfig as BusinessChannelTabConfig, Channel as BusinessChanne
 import R2Repository from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { channelTabCounts } from "../../lib/channelTabCounts";
 
 export class ChannelTabsFetch extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Get channel tabs configuration",
-		description: "Retrieves the tabs configuration for a channel including visibility, order, and default tab. Returns ephemeral default if none exists (not persisted).",
+		description: "Retrieves the tabs configuration for a channel including visibility, order, and default tab, plus `counts`: public items per content tab (indexed reads), so the page can hide empty tabs from visitors. Returns ephemeral default if none exists (not persisted).",
 		request: {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
@@ -59,7 +60,12 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 			type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
 			const channelRepository = new R2Repository<ChannelType>(c.env.channels);
 			const tabsRepository = new R2Repository<ChannelTabConfigType>(c.env.channel_tabs);
-			const [channel, stored] = await Promise.all([channelRepository.getObject(id), tabsRepository.getObject(`channel-tabs/${id}`)]);
+			// Counts (indexed reads) alongside the two objects: the page hides empty tabs from visitors (#1669)
+			const [channel, stored, counts] = await Promise.all([
+				channelRepository.getObject(id),
+				tabsRepository.getObject(`channel-tabs/${id}`),
+				channelTabCounts(c.env as never, id),
+			]);
 			let config = stored;
 
 			if (!channel) {
@@ -86,7 +92,8 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 				};
 			}
 
-			return config;
+			// Counts are never stored with the config (PUT keeps its own fields)
+			return counts ? { ...config, counts } : config;
 		} catch (error) {
 			// Add context to error before re-throwing
 			const enrichedError = error instanceof Error ? error : new Error(String(error));

@@ -318,11 +318,12 @@
   outline: 2px solid var(--fanous-color-focus-ring, currentColor);
   outline-offset: -2px;
 }
-/* Tab rows that wrap on phones (#1669: never a tab half shown at the edge): narrower sides, so
-   fewer rows; tablet and desktop keep the full width */
+/* One-row tab strips with a "More" menu (components/ui/PriorityStrip, #1669): narrower sides on
+   phones, so more tabs fit before "More"; tablet and desktop keep the full width */
 @media (max-width: 639.98px) {
-  .tab-strip > .tab-item {
-    padding: 0 1rem;
+  .tab-strip > .tab-item,
+  .tab-item.tab-more {
+    padding: 0 0.875rem;
   }
 }
 

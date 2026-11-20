@@ -11,6 +11,9 @@ const en = {
     legend: 'Email language',
   },
   common: {
+    /** The overflow menu at the end of a tab row that does not fit (#1669) */
+    moreTabs: 'More',
+    moreTabsMenu: 'More tabs',
     appName: 'Al Ummah Now',
     adminPanel: 'Admin Panel',
     admin: 'Admin',

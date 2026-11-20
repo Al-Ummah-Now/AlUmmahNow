@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { PriorityStrip } from '@/components/ui/PriorityStrip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
@@ -154,14 +155,22 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               </div>
 
               <section>
-                {/* Phones: the metric chips wrap, never a chip half shown at the edge (owner rule, #1669) */}
-                <div role="group" aria-label={text.metricLabel} className="mb-3 flex flex-wrap gap-2 overflow-x-auto sm:flex-nowrap" data-testid="studio-analytics-metrics">
-                  {METRICS.map((item) => (
-                    <Button key={item} variant={metric === item ? 'default' : 'outline'} aria-pressed={metric === item} onClick={() => setMetric(item)} className="min-h-11 whitespace-nowrap">
-                      {text.metrics[item]}
+                {/* One row: the metrics that fit, the rest under "More" (#1669: never a chip cut at the edge or wrapped) */}
+                <PriorityStrip
+                  items={METRICS.map((item) => ({ id: item, label: text.metrics[item], current: metric === item }))}
+                  testId="studio-analytics-metrics-strip"
+                  className="mb-3"
+                  moreLabel={t.common.moreTabs}
+                  menuLabel={t.common.moreTabsMenu}
+                  moreClassName={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+                  onSelect={(item) => setMetric(item.id as Metric)}
+                  rowProps={{ role: 'group', 'aria-label': text.metricLabel, 'data-testid': 'studio-analytics-metrics', className: 'gap-2' }}
+                  renderItem={(item) => (
+                    <Button key={item.id} variant={item.current ? 'default' : 'outline'} aria-pressed={item.current} onClick={() => setMetric(item.id as Metric)} className="min-h-11 whitespace-nowrap" data-testid={`studio-analytics-metric-${item.id}`}>
+                      {item.label}
                     </Button>
-                  ))}
-                </div>
+                  )}
+                />
                 <LineChart
                   key={metric}
                   title={text.metrics[metric]}

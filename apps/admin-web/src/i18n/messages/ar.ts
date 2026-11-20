@@ -10,6 +10,9 @@ const ar: Messages = {
     legend: 'لغة الرسالة',
   },
   common: {
+    /** The overflow menu at the end of a tab row that does not fit (#1669) */
+    moreTabs: 'المزيد',
+    moreTabsMenu: 'مزيد من التبويبات',
     appName: 'الأمة الآن',
     adminPanel: 'لوحة الإدارة',
     admin: 'الإدارة',

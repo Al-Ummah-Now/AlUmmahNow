@@ -7,6 +7,7 @@
  */
 
 import { BodyPortal } from '@/components/ui/BodyPortal';
+import { PriorityStrip } from '@/components/ui/PriorityStrip';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useRef } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
@@ -47,15 +48,25 @@ function Chip({ selected, onClick, children, testId }: ChipProps) {
 
 export function SearchTypeChips({ state, onChange }: { state: SearchUrlState; onChange: (type?: SearchEntityType) => void }) {
   const { t } = useLanguage();
+  const types: Array<SearchEntityType | undefined> = [undefined, ...SEARCH_TYPES];
+  const items = types.map(type => ({ id: type ?? 'all', type, label: typeLabel(t.search, type), current: state.type === type || (!type && !state.type) }));
+  // One row: the types that fit, the rest under "More" (#1669: never a chip cut at the edge or wrapped)
   return (
-    <div role="group" aria-label={t.search.resultType} className="tab-strip flex flex-wrap overflow-x-auto [scrollbar-width:none] border-b border-gray-200 dark:border-gray-700 sm:flex-nowrap" data-testid="search-type-chips">
-      <button type="button" className="tab-item" aria-pressed={!state.type} data-active={!state.type} onClick={() => onChange(undefined)} data-testid="search-type-all">{typeLabel(t.search, undefined)}</button>
-      {SEARCH_TYPES.map(type => (
-        <button type="button" key={type} className="tab-item" aria-pressed={state.type === type} data-active={state.type === type} onClick={() => onChange(type)} data-testid={`search-type-${type}`}>
-          {typeLabel(t.search, type)}
+    <PriorityStrip
+      items={items}
+      testId="search-type-chips"
+      className="border-b border-gray-200 dark:border-gray-700"
+      moreLabel={t.common.moreTabs}
+      menuLabel={t.common.moreTabsMenu}
+      moreClassName="tab-item tab-more"
+      onSelect={item => onChange(item.type)}
+      rowProps={{ role: 'group', 'aria-label': t.search.resultType, className: 'tab-strip' }}
+      renderItem={item => (
+        <button type="button" key={item.id} className="tab-item" aria-pressed={item.current} data-active={item.current} onClick={() => onChange(item.type)} data-testid={`search-type-${item.id}`}>
+          {item.label}
         </button>
-      ))}
-    </div>
+      )}
+    />
   );
 }
 

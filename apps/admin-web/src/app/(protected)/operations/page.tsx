@@ -1,4 +1,5 @@
 import Link from '@/components/AppLink';
+import { PriorityTabs } from '@/components/PriorityTabs';
 import { getOpsCosts, getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
 import { OPS_KINDS, OPS_RANGES, type OpsCosts, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';
@@ -190,15 +191,18 @@ export default async function OperationsPage({ searchParams }: PageProps) {
       )}
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <nav aria-label={t('operations.tabsLabel')} data-testid="ops-tabs">
-          <ul className="flex flex-wrap gap-1">
-            {TABS.map((k) => (
-              <li key={k}>
-                <Link href={href({ tab: k })} aria-current={k === tab ? 'page' : undefined} className={pillClass(k === tab)} data-testid={`ops-tab-${k}`}>{t(`operations.tabs.${k}`)}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        {/* One row: the tabs that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
+        <PriorityTabs
+          label={t('operations.tabsLabel')}
+          testId="ops-tabs"
+          className="w-full sm:w-auto sm:flex-1"
+          rowClassName="gap-1"
+          tabClassName="block rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          currentClassName="bg-accent text-on-accent font-medium"
+          idleClassName="border border-border text-fg hover:bg-surface-hover"
+          tabTestIdPrefix="ops-tab-"
+          tabs={TABS.map((k) => ({ id: k, label: t(`operations.tabs.${k}`), href: href({ tab: k }), current: k === tab }))}
+        />
         <nav aria-label={t('operations.rangeLabel')} data-testid="ops-range">
           <ul className="flex flex-wrap gap-1">
             {OPS_RANGES.map((r) => (

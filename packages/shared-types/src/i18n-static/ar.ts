@@ -152,6 +152,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
   channelSections: CHANNEL_SECTIONS_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
+    /** The overflow menu at the end of a tab or chip row that does not fit (#1669) */
+    moreTabs: 'المزيد',
+    moreTabsMenu: 'مزيد من التبويبات',
     appName: 'الأمة الآن',
     loading: 'جاري التحميل...',
     error: 'خطأ',
