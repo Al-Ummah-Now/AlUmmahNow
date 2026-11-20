@@ -59,20 +59,32 @@ describe('formatCountNoun', () => {
     expect(formatCountNoun('ar', 'x', 'video')).toBe('لا توجد مرئيات');
     expect(formatCountNoun('en', -4, 'comment')).toBe('No comments');
   });
-  // Owner rule 2026-11-20 (same text as Android, Apple and Desktop): under 1,000 the CLDR plural of
-  // the count; from 1K the noun is singular and the scale word agrees with the number shown.
-  const counts = [1, 2, 3, 8, 10, 11, 1310, 2000, 8020, 12000, 1_200_000, 3_000_000, 15_000_000];
+  // Owner's final rule 2026-11-20 (identical on Android, Apple, Desktop and web): under 1,000 the
+  // CLDR plural; from 1K the singular noun, no digit for exactly 1 or 2 («ألف», «ألفا» + noun).
+  const counts = [1, 2, 3, 10, 11, 100, 1000, 1300, 2000, 2500, 3000, 8000, 11000, 1_000_000, 2_000_000, 3_000_000, 15_000_000];
 
   it('compact views, Arabic', () => {
     expect(counts.map((n) => sp(formatCountNoun('ar', n, 'view', { compact: true })))).toEqual([
-      'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '٨ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة',
-      '١٫٣ ألف مشاهدة', '٢ ألفان مشاهدة', '٨ آلاف مشاهدة', '١٢ ألف مشاهدة', '١٫٢ مليون مشاهدة', '٣ ملايين مشاهدة', '١٥ مليون مشاهدة',
+      'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة',
+      'ألف مشاهدة', '١٫٣ ألف مشاهدة', 'ألفا مشاهدة', '٢٫٥ ألف مشاهدة', '٣ آلاف مشاهدة', '٨ آلاف مشاهدة', '١١ ألف مشاهدة',
+      'مليون مشاهدة', 'مليونا مشاهدة', '٣ ملايين مشاهدة', '١٥ مليون مشاهدة',
     ]);
+  });
+
+  it('compact: construct dual for billions and other nouns, plural for viewers 3–10K', () => {
+    expect(formatCountNoun('ar', 2_000_000_000, 'view', { compact: true })).toBe('مليارا مشاهدة');
+    expect(formatCountNoun('ar', 1_000_000_000, 'view', { compact: true })).toBe('مليار مشاهدة');
+    expect(sp(formatCountNoun('ar', 3_000_000_000, 'view', { compact: true }))).toBe('٣ مليارات مشاهدة');
+    expect(formatCountNoun('ar', 2000, 'subscriber', { compact: true })).toBe('ألفا مشترك');
+    expect(sp(formatCountNoun('ar', 3000, 'viewer', { compact: true }))).toBe('٣ آلاف مشاهد');
+    expect(formatCountNoun('ar', 3, 'viewer', { compact: true })).toBe('٣ مشاهدين');
   });
 
   it('compact views, English', () => {
     expect(counts.map((n) => formatCountNoun('en', n, 'view', { compact: true }))).toEqual([
-      '1 view', '2 views', '3 views', '8 views', '10 views', '11 views', '1.3K views', '2K views', '8K views', '12K views', '1.2M views', '3M views', '15M views',
+      '1 view', '2 views', '3 views', '10 views', '11 views', '100 views', '1K views', '1.3K views', '2K views', '2.5K views',
+      '3K views', '8K views', '11K views', '1M views', '2M views', '3M views', '15M views',
     ]);
   });
+
 });

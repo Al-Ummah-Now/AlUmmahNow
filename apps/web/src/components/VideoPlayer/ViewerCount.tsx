@@ -16,7 +16,7 @@
 
 'use client';
 
-import { formatCompact, formatNumber } from '@al-ummah/shared-types';
+import { formatCompact, formatCountNoun, formatNumber } from '@al-ummah/shared-types';
 import { useEffect, useState } from 'react';
 
 export interface ViewerCountProps {
@@ -86,9 +86,14 @@ export function ViewerCount({
   const liveText = lang === 'ar' ? 'مباشر' : 'LIVE';
   const watchingText = lang === 'ar' ? 'يشاهدون الآن' : 'watching now';
 
+  // The noun agrees with the count through the shared formatter («ألف مشاهد», «ألفا مشاهد»,
+  // «٣ آلاف مشاهد», «٣ مشاهدين»); English keeps "N viewers".
+  const viewersPhrase = formatCountNoun(lang, displayCount, 'viewer', { compact: true });
   const ariaLabel = lang === 'ar'
-    ? `${formattedCount} ${isLive ? 'مشاهد مباشر' : 'مشاهد'}`
+    ? `${viewersPhrase}${isLive ? ' مباشر' : ''}`
     : `${formattedCount} ${isLive ? 'live viewers' : 'viewers'}`;
+  // Arabic without the live label shows the counted noun whole; otherwise number + label.
+  const arabicPhrase = lang === 'ar' && !isLive;
 
   return (
     <div
@@ -111,10 +116,12 @@ export function ViewerCount({
         className={`vjs-viewer-count-text ${isAnimating ? 'vjs-viewer-count-animating' : ''}`}
         aria-label={ariaLabel}
       >
-        <span className="vjs-viewer-count-number">{formattedCount}</span>
-        <span className="vjs-viewer-count-label">
-          {isLive ? watchingText : viewersText}
-        </span>
+        <span className="vjs-viewer-count-number">{arabicPhrase ? viewersPhrase : formattedCount}</span>
+        {!arabicPhrase && (
+          <span className="vjs-viewer-count-label">
+            {isLive ? watchingText : viewersText}
+          </span>
+        )}
       </span>
 
       {/* Connection status indicator (subtle, only shown when disconnected) */}

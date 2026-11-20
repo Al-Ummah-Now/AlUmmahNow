@@ -7,10 +7,9 @@ import { BadgeCheck } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
-import { formatViewerCount } from '@/lib/utils/number-format';
 import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
 import { channelPath } from '@/lib/channel-url';
-import { formatVideoCount } from '@/lib/format/videoMeta';
+import { formatSubscribers, formatVideoCount } from '@/lib/format/videoMeta';
 
 interface ChannelTileProps {
   channel: ChannelSummary;
@@ -28,11 +27,8 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
   const name = getLocalizedValue(channel.nameLocalized, channel.name, lang) || channel.name;
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);
-  const numberLocale = isRTL ? 'ar' : 'en-US';
-  const subscribers = t.discovery.subscribersCount.replace(
-    '{count}',
-    formatViewerCount(channel.subscribersCount || 0, 'compact', numberLocale)
-  );
+  // The shared count formatter: «ألف مشترك», «ألفا مشترك», «٣ آلاف مشترك», «٣ مشتركين».
+  const subscribers = formatSubscribers(channel.subscribersCount || 0, isRTL ? 'ar' : 'en');
   const videos = formatVideoCount(channel.videosCount, lang, { compact: true });
   const avatarSize = variant === 'compact' ? 'w-20 h-20' : 'w-24 h-24';
 

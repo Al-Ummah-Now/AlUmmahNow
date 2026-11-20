@@ -199,8 +199,9 @@ describe('ViewerCount RTL Component', () => {
     it('handles very large numbers', () => {
       renderWithRTL(<ViewerCountRTL count={1000000} />);
       const status = screen.getByRole('status');
-      // Should contain Arabic numerals
-      expect(status.textContent).toMatch(/[٠-٩]/);
+      // Exactly one million is the word alone, no digit (owner rule 2026-11-20)
+      expect(status.textContent).toContain('مليون');
+      expect(status.textContent).not.toMatch(/[0-9]/);
     });
   });
 

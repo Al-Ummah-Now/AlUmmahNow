@@ -10,14 +10,13 @@ import React from 'react';
 import Link from '@/components/common/AppLink';
 import Image from 'next/image';
 import { BadgeCheck, Heart, MessageSquare } from 'lucide-react';
-import type { Playlist, SearchPostPayload, SearchResultItem } from '@al-ummah/shared-types';
+import { formatCountNoun, type Playlist, type SearchPostPayload, type SearchResultItem } from '@al-ummah/shared-types';
 import { searchVideoToVideoObject } from '@/lib/search/mappers';
 import VideoCard from '@/components/videoCard/index';
 import { ChannelTile } from '@/components/ChannelTile';
 import { PlaylistCard } from '@/components/PlaylistCard';
 import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
-import { formatCount } from './labels';
 import { RelativeDate } from '@/components/RelativeDate';
 import { channelLabel } from '@/lib/channel-name';
 
@@ -52,8 +51,8 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
         </div>
       )}
       <div className="mt-auto flex gap-4 text-xs text-gray-500 dark:text-gray-400">
-        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" aria-hidden="true" />{t.search.likesCount.replace('{count}', formatCount(post.likes, lang))}</span>
-        <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />{t.search.commentsCount.replace('{count}', formatCount(post.comments, lang))}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" aria-hidden="true" />{formatCountNoun(lang, post.likes, 'like', { compact: true })}</span>
+        <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />{formatCountNoun(lang, post.comments, 'comment', { compact: true })}</span>
       </div>
     </Link>
   );

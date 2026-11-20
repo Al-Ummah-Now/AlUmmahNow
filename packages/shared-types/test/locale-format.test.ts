@@ -116,29 +116,41 @@ test('dates and times use a plain space on every runtime (WebKit writes U+00A0 b
   assert.equal(f.dateTimeFormat('ar', { timeZone: 'UTC' }).resolvedOptions().numberingSystem, 'arab');
 });
 
-
-// Owner rule 2026-11-20 (same text as Android, Apple and Desktop): Arabic compact numbers cut to
-// one decimal and the scale word agrees with the number shown.
-const sp = (s: string) => s.replace(/ /g, ' ');
-const COUNTS = [1, 2, 3, 8, 10, 11, 1310, 2000, 8020, 12000, 1_200_000, 3_000_000, 15_000_000];
+// Owner's final rule 2026-11-20 (identical on Android, Apple, Desktop and web): exactly 1 or 2 has
+// no digit («ألف», «ألفان»; «ألفا» before a noun), whole 3–10 the plural («٣ آلاف»), 11+ and
+// every decimal the singular («١١ ألف», «١٫٣ ألف»); the noun after a scale word is singular.
+const sp = (s: string) => s.replace(/\u00a0/g, ' ');
+const COUNTS = [1, 2, 3, 10, 11, 100, 1000, 1300, 2000, 2500, 3000, 8000, 11000, 1_000_000, 2_000_000, 3_000_000, 15_000_000];
 
 test('formatCompact: Arabic scale words agree with the number shown', () => {
-  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), [
-    '١', '٢', '٣', '٨', '١٠', '١١', '١٫٣ ألف', '٢ ألفان', '٨ آلاف', '١٢ ألف', '١٫٢ مليون', '٣ ملايين', '١٥ مليون',
-  ]);
-  assert.equal(sp(f.formatCompact('ar', 1000)), '١ ألف');
+  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), ['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', 'مليون', 'مليونان', '٣ ملايين', '١٥ مليون']);
+  assert.equal(sp(f.formatCompact('ar', 1050)), 'ألف');
+  assert.equal(sp(f.formatCompact('ar', 2999)), '٢٫٩ ألف');
   assert.equal(sp(f.formatCompact('ar', 10_000)), '١٠ آلاف');
   assert.equal(sp(f.formatCompact('ar', 10_999)), '١٠٫٩ ألف');
-  assert.equal(sp(f.formatCompact('ar', 2999)), '٢٫٩ ألف');
   assert.equal(sp(f.formatCompact('ar', 999_999)), '٩٩٩٫٩ ألف');
-  assert.equal(sp(f.formatCompact('ar', 2_000_000)), '٢ مليونان');
-  assert.equal(sp(f.formatCompact('ar', 1_000_000_000)), '١ مليار');
-  assert.equal(sp(f.formatCompact('ar', 2_000_000_000)), '٢ ملياران');
-  assert.equal(sp(f.formatCompact('ar', 7_000_000_000)), '٧ مليارات');
+  assert.equal(sp(f.formatCompact('ar', 1_000_000_000)), 'مليار');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000_000)), 'ملياران');
+  assert.equal(sp(f.formatCompact('ar', 3_000_000_000)), '٣ مليارات');
   assert.equal(sp(f.formatCompact('ar', 4_500_000_000)), '٤٫٥ مليار');
   assert.equal(f.formatCompact('ar', 0), '٠');
 });
 
+test('formatCompact beforeNoun: the dual is the construct form, never after a digit', () => {
+  assert.equal(f.formatCompact('ar', 2000, 1, { beforeNoun: true }), 'ألفا');
+  assert.equal(f.formatCompact('ar', 2_000_000, 1, { beforeNoun: true }), 'مليونا');
+  assert.equal(f.formatCompact('ar', 2_000_000_000, 1, { beforeNoun: true }), 'مليارا');
+  assert.equal(f.formatCompact('ar', 1000, 1, { beforeNoun: true }), 'ألف');
+  assert.equal(sp(f.formatCompact('ar', 2500, 1, { beforeNoun: true })), '٢٫٥ ألف');
+  assert.equal(f.formatCompact('en', 2000, 1, { beforeNoun: true }), '2K');
+});
+
+test('tick labels (no noun) use the same scale words', () => {
+  const ticks = [500, 1000, 1500, 2000, 3000, 2_000_000];
+  assert.deepEqual(ticks.map((n) => sp(f.formatCompact('ar', n))), ['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', 'مليونان']);
+  assert.deepEqual(ticks.map((n) => f.formatCompact('en', n)), ['500', '1K', '1.5K', '2K', '3K', '2M']);
+});
+
 test('formatCompact: English is unchanged', () => {
-  assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '8', '10', '11', '1.3K', '2K', '8K', '12K', '1.2M', '3M', '15M']);
+  assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '10', '11', '100', '1K', '1.3K', '2K', '2.5K', '3K', '8K', '11K', '1M', '2M', '3M', '15M']);
 });
