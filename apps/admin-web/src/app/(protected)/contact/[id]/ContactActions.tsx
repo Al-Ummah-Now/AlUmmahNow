@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, useTransition } from 'react';
+import { useEffect, useId, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { addContactNote, bulkContactMessages, replyToContactMessage, restoreContactMessages, updateContactMessage } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
-import type { ContactStatus } from '@/lib/api/types';
+import type { ContactMessage, ContactStatus } from '@/lib/api/types';
+import { useContactLive, type ContactLive } from './ContactLiveState';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { translateDynamic } from '@/i18n/translate';
@@ -19,9 +20,6 @@ import { Select } from '@/components/select/Select';
 interface Props {
   id: string;
   name: string;
-  status: ContactStatus;
-  /** An admin has read it (opening it reads it) */
-  read: boolean;
   locale: 'en' | 'ar';
   assignedToMe: boolean;
   hasAssignee: boolean;
@@ -35,70 +33,70 @@ const textareaClass = `${fieldClass} w-full resize-y`;
  * Read/unread, status, assignee, spam (with Undo), delete (with Undo), internal note and email reply
  * for one contact message.
  *
- * Only the control that was used shows it is working, and it keeps doing so until the refreshed page
- * shows the change (a transition around the change and router.refresh). Before (owner bug
- * 2026-11-19), one shared busy flag disabled every button and was cleared as soon as admin-api
- * answered, so all buttons flickered, the old label came back while the page was still refreshing,
- * and a second click undid the first.
+ * Owner bug 2026-11-19 ("clicking mark as spam … causes a flickr in all buttons and nothing", then
+ * "its marked as spam now but button stil normal"): one shared busy flag disabled every button,
+ * and the page only showed a change once router.refresh() brought it, which in production did not
+ * happen. Now only the clicked control shows it is working, and a change shows at once: the status
+ * and read state come from admin-api's answer (ContactLiveState); the refresh that follows only
+ * brings the rest of the page up to date.
  */
-export function ContactActions({ id, name, status, read, locale, assignedToMe, hasAssignee }: Props) {
+export function ContactActions({ id, name, locale, assignedToMe, hasAssignee }: Props) {
   const router = useRouter();
   const undoable = useUndoableAction();
+  const { live, update } = useContactLive();
+  const { status, read } = live;
   const [pickerKey, setPickerKey] = useState(0);
   const { t } = useLanguage();
   const ids = useId();
-  // The control whose change is saving; `refreshing` covers the change and the page's refresh
+  // The control whose change is being saved (only it shows "Working…")
   const [pending, setPending] = useState<string | null>(null);
-  const [refreshing, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
-  const working = (control: string) => (control === 'delete' ? deleting : refreshing && pending === control);
-  // What to do once the page shows the change (the Undo toast appears with the new status, not before it)
-  const whenShown = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (refreshing || !whenShown.current) return;
-    const next = whenShown.current;
-    whenShown.current = null;
-    next();
-  }, [refreshing]);
+  const working = (control: string) => (control === 'delete' ? deleting : pending === control);
   const [error, setError] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState<ContactStatus>(status);
-  // The status changes under the panel (queue delivery, refresh): follow it
+  // The status changes under the panel (a change here, another admin's, a refresh): follow it
   useEffect(() => setNextStatus(status), [status]);
   const [note, setNote] = useState('');
   const [reply, setReply] = useState('');
   // The reply email's one language: the sender's (the language they wrote in) until changed
   const [replyLocale, setReplyLocale] = useState<EmailLanguage>(locale);
 
-  /** One change; resolves true once admin-api took it (the page then refreshes), false after showing the error. */
-  function run<T>(name: string, action: () => Promise<ActionResult<T>>, after?: (data: T) => void): Promise<boolean> {
+  /** The page catches up in the background; what changed is already shown. */
+  const refresh = () => startTransition(() => router.refresh());
+
+  /** Shows the saved message's status and read state at once. */
+  const showSaved = (data: { message?: ContactMessage } | undefined, fallback: Partial<ContactLive>) => {
+    const saved = data?.message;
+    update(saved ? { status: saved.status, read: !!saved.read_at } : fallback);
+  };
+
+  /** One change; true once admin-api took it, false after showing the error. */
+  async function run<T>(name: string, action: () => Promise<ActionResult<T>>, after?: (data: T) => void): Promise<boolean> {
     setPending(name);
     setError(null);
-    return new Promise<boolean>((resolve) => {
-      startTransition(async () => {
-        let result: ActionResult<T>;
-        try {
-          result = await action();
-        } catch (e) {
-          logger.error('[contact] Action request failed', { id, name, error: e instanceof Error ? e.message : String(e) });
-          result = { ok: false, status: 0, error: 'request failed' };
-        }
-        if (!result.ok) {
-          logger.warn('[contact] Action failed', { id, name, status: result.status });
-          if (result.status === 0 || result.status >= 500) reportError(new Error(`contact ${name} failed (${result.status})`), { shown: true, status: result.status, extra: { where: 'contact-actions', action: name } });
-          setError(result.status === 401 ? t('errors.notAuthenticated') : result.status === 400 && name === 'assign' ? t('contact.notStaff') : t('contact.failed'));
-          resolve(false);
-          return;
-        }
-        const data = result.data;
-        // Part of the same transition: this control stays "working" until the page shows the change
-        startTransition(() => {
-          after?.(data);
-          router.refresh();
-        });
-        resolve(true);
-      });
-    });
+    let result: ActionResult<T>;
+    try {
+      result = await action();
+    } catch (e) {
+      logger.error('[contact] Action request failed', { id, name, error: e instanceof Error ? e.message : String(e) });
+      result = { ok: false, status: 0, error: 'request failed' };
+    }
+    setPending((current) => (current === name ? null : current));
+    if (!result.ok) {
+      logger.warn('[contact] Action failed', { id, name, status: result.status });
+      if (result.status === 0 || result.status >= 500) reportError(new Error(`contact ${name} failed (${result.status})`), { shown: true, status: result.status, extra: { where: 'contact-actions', action: name } });
+      setError(result.status === 401 ? t('errors.notAuthenticated') : result.status === 400 && name === 'assign' ? t('contact.notStaff') : t('contact.failed'));
+      return false;
+    }
+    after?.(result.data);
+    refresh();
+    return true;
   }
+
+  /** A status or read change: shown from admin-api's answer as soon as it is saved. */
+  const patch = (name: string, change: { status?: ContactStatus; read?: boolean }) =>
+    run(name, () => updateContactMessage(id, change), (data) => showSaved(data, change));
 
   const isSpam = status === 'spam';
 
@@ -106,19 +104,17 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
   async function toggleSpam() {
     const from = status;
     const to: ContactStatus = isSpam ? 'open' : 'spam';
-    const offerUndo = () =>
-      void undoable.run({
-        action: async () => to,
-        undo: async () => {
-          const result = await updateContactMessage(id, { status: from });
-          if (!result.ok) throw new Error(`undo spam ${result.status}`);
-          setNextStatus(from);
-          startTransition(() => router.refresh());
-        },
-        message: t(to === 'spam' ? 'contact.markedSpam' : 'contact.markedNotSpam'),
-      });
-    whenShown.current = null;
-    if (await run('spam', () => updateContactMessage(id, { status: to }), () => setNextStatus(to))) whenShown.current = offerUndo;
+    if (!(await patch('spam', { status: to }))) return;
+    await undoable.run({
+      action: async () => to,
+      undo: async () => {
+        const result = await updateContactMessage(id, { status: from });
+        if (!result.ok) throw new Error(`undo spam ${result.status}`);
+        showSaved(result.data, { status: from });
+        refresh();
+      },
+      message: t(to === 'spam' ? 'contact.markedSpam' : 'contact.markedNotSpam'),
+    });
   }
 
   return (
@@ -153,7 +149,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             className={smallButton}
             disabled={working('status') || nextStatus === status}
             aria-busy={working('status') || undefined}
-            onClick={() => run('status', () => updateContactMessage(id, { status: nextStatus }))}
+            onClick={() => patch('status', { status: nextStatus })}
             data-testid="contact-save-status"
           >
             {working('status') ? t('contact.working') : t('contact.saveStatus')}
@@ -166,7 +162,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             className={smallButton}
             disabled={working('read')}
             aria-busy={working('read') || undefined}
-            onClick={() => run('read', () => updateContactMessage(id, { read: !read }))}
+            onClick={() => patch('read', { read: !read })}
             data-testid={read ? 'contact-mark-unread' : 'contact-mark-read'}
           >
             {working('read') ? t('contact.working') : read ? t('contact.markUnread') : t('contact.markRead')}

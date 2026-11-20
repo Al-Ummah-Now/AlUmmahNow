@@ -2,9 +2,12 @@
  * Contact message "Mark as spam" (owner bug 2026-11-19: clicking it made every
  * button on the page flicker and the message stayed as it was).
  *
- * The spam button alone shows it is working (the other buttons stay usable),
- * the message moves to the Spam view at once with an Undo toast, Undo puts it
- * back, and a failed change says so on the page instead of doing nothing.
+ * Then (owner): "its marked as spam now but button stil normal": the change was
+ * saved but the page never showed it. The spam button alone shows it is
+ * working (the other buttons stay usable); once saved the button, status chip
+ * and card show spam at once (asserted with the page's refreshes dropped), with
+ * an Undo toast; Undo puts it back; the list row and the Spam view follow; and
+ * a failed change says so on the page instead of doing nothing.
  *
  * Data: one open message of this run in the reports DB, written through the
  * stack's control API and removed afterwards, pass or fail.
@@ -14,7 +17,7 @@ import type { Page, Route } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { E2E_ENTITY_PREFIX, LOCAL_STACK } from './support/env';
 import { stackSql } from './support/local-stack';
-import { setPreferences } from './support/ui';
+import { pickOption, setPreferences } from './support/ui';
 
 const REPORTS = 'al-ummah-now-reports';
 const hex = crypto.randomBytes(6).toString('hex');
@@ -32,14 +35,32 @@ const isServerAction = (route: Route) => route.request().method() === 'POST' && 
 async function slowNextAction(page: Page, ms: number) {
   let held = false;
   await page.route(`**${detail}`, async (route) => {
-    if (held || !isServerAction(route)) return route.continue();
+    if (held || !isServerAction(route)) return route.fallback();
     held = true;
     await new Promise((resolve) => setTimeout(resolve, ms));
-    return route.continue();
+    return route.continue().catch(() => undefined);
   });
 }
 
-const status = (page: Page) => page.getByTestId('contact-message');
+/**
+ * Production saved the change but the page never showed it (owner 2026-11-19: "its marked as spam
+ * now but button stil normal"): the page must show a saved change without the refresh that
+ * follows. This holds the page's RSC refreshes for longer than the "at once" checks wait
+ * (aborting one makes Next reload the whole page, which would hide the bug).
+ */
+const REFRESH_HOLD_MS = 8_000;
+const AT_ONCE = { timeout: 4_000 };
+async function holdRefreshes(page: Page) {
+  await page.route('**/*', async (route) => {
+    const r = route.request();
+    if (r.method() !== 'GET' || r.headers()['rsc'] !== '1' || !new URL(r.url()).searchParams.has('_rsc')) return route.fallback();
+    await new Promise((resolve) => setTimeout(resolve, REFRESH_HOLD_MS));
+    return route.continue().catch(() => undefined);
+  });
+}
+
+const card = (page: Page) => page.getByTestId('contact-message');
+const chip = (page: Page) => card(page).getByTestId('contact-status-chip');
 const listRow = (page: Page) => page.locator(`[data-testid="contact-row"][data-message-id="${messageId}"]`);
 
 test.describe('contact message spam', () => {
@@ -61,12 +82,15 @@ test.describe('contact message spam', () => {
     await stackSql(REPORTS, `DELETE FROM contact_messages WHERE id = '${messageId}'`);
   });
 
-  test('SPAM-01 only the spam button shows it is working; the message is spam at once, with Undo', async ({ page }) => {
+  test('SPAM-01 only the spam button shows it is working; the message shows spam at once with Not spam and Undo, without a page refresh', async ({ page }) => {
     await page.goto(detail);
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
+    await expect(card(page)).toHaveAttribute('data-status', 'open');
+    await expect(chip(page)).toHaveAttribute('data-status', 'open');
     await slowNextAction(page, 1500);
+    await holdRefreshes(page);
 
     const spam = page.getByTestId('contact-spam');
+    await expect(spam).toHaveText('Mark as spam');
     await spam.click();
     // While it saves: this button says so, the others stay as they were (no flicker of every button)
     await expect(spam).toHaveAttribute('aria-busy', 'true');
@@ -75,43 +99,65 @@ test.describe('contact message spam', () => {
     await expect(page.getByTestId('contact-assign-me')).toBeEnabled();
     await expect(page.getByTestId('contact-delete')).toBeEnabled();
 
-    await expect(status(page)).toHaveAttribute('data-status', 'spam');
-    await expect(spam).toHaveText('Not spam');
+    // Saved: the page shows it at once, long before the held refresh could
+    await expect(spam).toHaveText('Not spam', AT_ONCE);
+    await expect(spam).not.toHaveAttribute('aria-busy', 'true', AT_ONCE);
+    await expect(chip(page)).toHaveAttribute('data-status', 'spam', AT_ONCE);
+    await expect(chip(page)).toHaveText('Spam', AT_ONCE);
+    await expect(card(page)).toHaveAttribute('data-status', 'spam', AT_ONCE);
+    await expect(page.getByTestId('contact-reply-body')).toBeDisabled(AT_ONCE);
     await expect(page.getByTestId('contact-action-error')).toHaveCount(0);
-    await expect(page.getByTestId('undo-toast')).toContainText('Marked as spam');
-    await page.unrouteAll({ behavior: 'wait' });
+    await expect(page.getByTestId('undo-toast')).toContainText('Marked as spam', AT_ONCE);
+    // Stored, too
+    expect((await stackSql<{ status: string }>(REPORTS, `SELECT status FROM contact_messages WHERE id = '${messageId}'`))[0]?.status).toBe('spam');
 
-    // Undo puts the status back
+    // Undo puts the status back on the page as soon as it is saved
     await page.getByTestId('undo-toast-undo').click();
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
-    await expect(spam).toHaveText('Mark as spam');
+    await expect(spam).toHaveText('Mark as spam', { timeout: REFRESH_HOLD_MS * 2 });
+    await expect(chip(page)).toHaveAttribute('data-status', 'open');
+    await expect(card(page)).toHaveAttribute('data-status', 'open');
+    await expect.poll(async () => (await stackSql<{ status: string }>(REPORTS, `SELECT status FROM contact_messages WHERE id = '${messageId}'`))[0]?.status).toBe('open');
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 
-  test('SPAM-02 a message marked as spam moves to the Spam view, and Not spam brings it back', async ({ page }) => {
+  test('SPAM-02 the list follows: spam shows on the row and in the Spam view; a bulk change moves the row at once', async ({ page }) => {
     await page.goto(detail);
     await page.getByTestId('contact-spam').click();
-    await expect(status(page)).toHaveAttribute('data-status', 'spam');
+    await expect(page.getByTestId('contact-spam')).toHaveText('Not spam');
 
+    // Back to the inbox in the app (client navigation): the row shows spam
+    await page.getByRole('link', { name: 'Back to contact messages' }).click();
+    await expect(page).toHaveURL(/\/contact$/);
+    await expect(listRow(page)).toHaveAttribute('data-status', 'spam');
+    await expect(listRow(page).getByTestId('contact-status-chip')).toHaveText('Spam');
+
+    // In the Spam view, not in Open
     await page.goto(`/contact?status=spam&q=${hex}`);
     await expect(listRow(page)).toHaveAttribute('data-status', 'spam');
     await page.goto(`/contact?status=open&q=${hex}`);
     await expect(listRow(page)).toHaveCount(0);
 
-    await page.goto(detail);
-    await page.getByTestId('contact-spam').click();
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
+    // From the Spam view, a bulk "Open" leaves the view at once, before the held refresh
+    await page.goto(`/contact?status=spam&q=${hex}`);
+    await holdRefreshes(page);
+    await listRow(page).getByTestId('contact-row-select').check();
+    await pickOption(page.getByTestId('contact-bulk-status'), 'open');
+    await page.getByTestId('contact-bulk-status-apply').click();
+    await expect(listRow(page)).toHaveCount(0, AT_ONCE);
+    await expect(page.getByTestId('contact-bulk-error')).toHaveCount(0);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await page.goto(`/contact?status=open&q=${hex}`);
     await expect(listRow(page)).toHaveAttribute('data-status', 'open');
   });
 
   test('SPAM-03 a change that fails says so on the page, in English and Arabic, and changes nothing', async ({ page }) => {
     await page.goto(detail);
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
+    await expect(card(page)).toHaveAttribute('data-status', 'open');
     await page.route(`**${detail}`, (route) => (isServerAction(route) ? route.fulfill({ status: 500, body: 'down' }) : route.continue()));
 
     await page.getByTestId('contact-spam').click();
     await expect(page.getByTestId('contact-action-error')).toHaveText('That did not work. Try again.');
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
+    await expect(card(page)).toHaveAttribute('data-status', 'open');
     await expect(page.getByTestId('contact-spam')).toHaveText('Mark as spam');
     await expect(page.getByTestId('contact-spam')).toBeEnabled();
     await expect(page.getByTestId('undo-toast')).toHaveCount(0);
@@ -122,8 +168,8 @@ test.describe('contact message spam', () => {
     await page.getByTestId('contact-spam').click();
     await expect(page.getByTestId('contact-action-error')).toHaveText(/\S/);
     await expect(page.getByTestId('contact-action-error')).not.toHaveText('That did not work. Try again.');
-    await expect(status(page)).toHaveAttribute('data-status', 'open');
-    await page.unrouteAll({ behavior: 'wait' });
+    await expect(card(page)).toHaveAttribute('data-status', 'open');
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await setPreferences(page, { locale: 'en' });
   });
 });
