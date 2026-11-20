@@ -392,7 +392,10 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       for (let e = el; e && e !== document.body; e = e.parentElement) {
         const b = e.getBoundingClientRect();
         const cs = getComputedStyle(e);
-        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
+        // A tiny box only hides what it clips (the sr-only pattern: 1 px, overflow hidden); a 0x0 menu
+        // anchor or a display: contents wrapper measures 0x0 but shows its children
+        const tiny = (b.width <= 2 || b.height <= 2) && cs.display !== 'contents' && (cs.overflow !== 'visible' || cs.overflowX !== 'visible' || cs.overflowY !== 'visible');
+        if (tiny || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
       }
       return false;
     };
@@ -598,8 +601,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
  * - a line of text cut by the crop edge, half under a bar, half covered by another element, or cut by a
  *   scrolling list's edge.
  */
-async function verifyFrame(page: Page, clip: { x: number; y: number; width: number; height: number } | undefined): Promise<void> {
-  const problems = await page.evaluate((c) => {
+async function verifyFrame(page: Page, clip: { x: number; y: number; width: number; height: number } | undefined, name = ''): Promise<void> {
+  const { problems, skipped } = await page.evaluate((c) => {
     type Box = { x: number; y: number; w: number; h: number; what?: string; el?: Element | null };
     const CLEAR = 4;
     const frame: Box = c ? { x: c.x, y: c.y, w: c.width, h: c.height } : { x: 0, y: 0, w: innerWidth, h: innerHeight };
@@ -616,7 +619,10 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       for (let e = el; e && e !== document.body; e = e.parentElement) {
         const b = e.getBoundingClientRect();
         const cs = getComputedStyle(e);
-        if (b.width <= 2 || b.height <= 2 || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
+        // A tiny box only hides what it clips (the sr-only pattern: 1 px, overflow hidden); a 0x0 menu
+        // anchor or a display: contents wrapper measures 0x0 but shows its children
+        const tiny = (b.width <= 2 || b.height <= 2) && cs.display !== 'contents' && (cs.overflow !== 'visible' || cs.overflowX !== 'visible' || cs.overflowY !== 'visible');
+        if (tiny || (cs.clip && cs.clip !== 'auto') || (cs.clipPath && /inset\(50%/.test(cs.clipPath))) return true;
       }
       return false;
     };
@@ -666,10 +672,13 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     };
     const out: string[] = [];
     const texts: Box[] = [];
+    // Text the check leaves out, listed in the log when it sits near a marker (so a wrong skip shows)
+    const skippedNodes: { el: Element; node: Node; why: string }[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const el = node.parentElement;
-      if (!node.textContent?.trim() || !el || el.closest('[data-help-marker],script,style') || srOnly(el)) continue;
+      if (!node.textContent?.trim() || !el || el.closest('[data-help-marker],script,style')) continue;
+      if (srOnly(el)) { skippedNodes.push({ el, node, why: 'screen-reader-only' }); continue; }
       const range = document.createRange();
       range.selectNodeContents(node);
       for (const b of range.getClientRects()) {
@@ -679,7 +688,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         // screen's edge): not a line in the picture
         const inW = Math.min(box.x + box.w, frame.x + frame.w) - Math.max(box.x, frame.x);
         const inH = Math.min(box.y + box.h, frame.y + frame.h) - Math.max(box.y, frame.y);
-        if (inW < 1 || inH < 1 || hidden(box, el)) continue;
+        if (inW < 1 || inH < 1) continue;
+        if (hidden(box, el)) { skippedNodes.push({ el, node, why: 'hidden' }); continue; }
         texts.push(box);
         // Cut by the frame's edge
         if (!contains(frame, box)) out.push(`text ${box.what} at ${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.w)}x${Math.round(box.h)} is cut by the picture's edge (frame ${Math.round(frame.x)},${Math.round(frame.y)} ${Math.round(frame.w)}x${Math.round(frame.h)})`);
@@ -762,8 +772,16 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
         if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) out.push(`outlines ${o.what} and ${o2.what} are within ${CLEAR} px`);
       }
     }
-    return [...new Set(out)];
+    const markerBoxes = [...rings, ...nums].map((m) => grow(m, 24));
+    const skipped = skippedNodes.flatMap(({ node, why }) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return [...range.getClientRects()].map((b) => fromRect(b)).filter((b) => b.w > 0 && markerBoxes.some((m) => hit(m, b)))
+        .map((b) => `${why} "${(node.textContent ?? '').trim().slice(0, 24)}" at ${Math.round(b.x)},${Math.round(b.y)}`);
+    });
+    return { problems: [...new Set(out)], skipped: [...new Set(skipped)] };
   }, clip ?? null);
+  if (skipped.length) console.log(`help check ${name} skipped near markers: ${skipped.join('; ')}`);
   if (problems.length) throw new Error(`picture check: ${problems.slice(0, 8).join('; ')}${problems.length > 8 ? ` (+${problems.length - 8} more)` : ''}`);
 }
 
@@ -915,7 +933,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       return { x: l, y: t, width: r - l, height: b - t };
     }, { c: clip, core });
   }
-  await verifyFrame(page, clip);
+  await verifyFrame(page, clip, file);
   const png = join(OUT, `${file}.png`);
   await page.screenshot({ path: png, clip, animations: 'disabled' });
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-c:v', 'libwebp', '-quality', '82', '-compression_level', '6', join(OUT, `${file}.webp`)]);
