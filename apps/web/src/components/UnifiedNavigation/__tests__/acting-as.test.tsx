@@ -126,6 +126,19 @@ describe('account menu: Acting as', () => {
     expect(current).not.toHaveTextContent('amina_handle');
   });
 
+  it('loads the other apps\' icons with the menu, never lazily (an empty icon slot flashed as it opened)', async () => {
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', channel: null, channels: [channel] };
+    render(<UnifiedNavigation />);
+    act(() => requestAccountMenu({ open: true }));
+    const apps = await screen.findByTestId('nav-apps');
+    const icons = [...apps.querySelectorAll('img.aun-app-icon')];
+    expect(icons.length).toBeGreaterThan(0);
+    for (const icon of icons) {
+      expect(icon).not.toHaveAttribute('loading', 'lazy');
+      expect(icon).not.toHaveAttribute('decoding', 'async');
+    }
+  });
+
   it('opens on the channel list when asked, and closes when asked', async () => {
     user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', channel, channels: [channel] };
     render(<UnifiedNavigation />);
