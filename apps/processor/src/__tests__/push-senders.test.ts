@@ -297,7 +297,7 @@ describe('WNS', () => {
     const en = reviewToastXml({ ...alert, ...reviewAlertText('nsfw', 9, 'en') });
     const ar = reviewToastXml({ ...alert, ...reviewAlertText('nsfw', 9, 'ar') });
     expect(en).toMatch(/^<toast [^>]*><header id="admin-review-queue" title="Admin · Review queue" arguments="review-queue" activationType="foreground"\/><visual>/);
-    expect(ar).toContain('<header id="admin-review-queue" title="الإدارة · طابور المراجعة"');
+    expect(ar).toContain('<header id="admin-review-queue" title="الإدارة، طابور المراجعة"');
     // The header id is fixed: every review alert joins the one group
     expect(reviewToastXml({ ...alert, reviewId: 'rev-2' })).toContain('<header id="admin-review-queue" title="Admin · Review queue"');
   });
@@ -329,7 +329,7 @@ describe('end to end: a held item reaches an Admin iPhone through the APNs sende
     const out = await handleReviewAlert({ NOTIFICATIONS_DB: db, REPORTS_DB: reports }, providers, { event: 'held', reviewId: 'rev-9', reason: 'nsfw', deadlineAt: at + 5 * 60000, at }, createLogger('t', { logLevel: 'error' }), at);
     expect(out.summary).toMatchObject({ sent: 1, reached: ['rev'] });
     const body = JSON.parse(server.on('api.push.apple.com')[0]!.body);
-    expect(body.aps.alert).toEqual({ title: 'طابور المراجعة', body: 'مرئي محجوز للمراجعة · محتوى غير لائق · بقي ٥ د' });
+    expect(body.aps.alert).toEqual({ title: 'طابور المراجعة', body: 'مرئي محجوز للمراجعة، محتوى غير لائق، بقي ٥ د' });
     expect((db.raw.prepare("SELECT alerted_at FROM review_alerts WHERE review_id = 'rev-9'").get() as { alerted_at: number }).alerted_at).toBe(at);
   });
 });

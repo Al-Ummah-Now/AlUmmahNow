@@ -96,7 +96,7 @@ describe('rota rules (shared-types)', () => {
 
   it('push text is the reason and time left only, in en and ar', () => {
     expect(reviewAlertText('nsfw', 4, 'en')).toEqual({ title: 'Review queue', body: 'Video held for review · NSFW · 4 min left', openLabel: 'Open', claimLabel: 'Claim', groupTitle: 'Admin · Review queue' });
-    expect(reviewAlertText('minor', 2, 'ar-SA').body).toBe('مرئي محجوز للمراجعة · وجود قاصر · بقي ٢ د');
+    expect(reviewAlertText('minor', 2, 'ar-SA').body).toBe('مرئي محجوز للمراجعة، وجود قاصر، بقي ٢ د');
   });
 });
 
