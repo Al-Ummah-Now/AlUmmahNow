@@ -35,6 +35,26 @@ export const CHANNEL_SETTINGS_PAGES = {
 
 export type ChannelSettingsPage = keyof typeof CHANNEL_SETTINGS_PAGES;
 
+/**
+ * Where each of these pages lives now: they all moved into Studio
+ * (docs/specs/CREATOR-STUDIO.md §6.2), and the old URLs redirect there.
+ */
+export const STUDIO_PATH_FOR_PAGE: Record<ChannelSettingsPage, string> = {
+  overview: 'dashboard',
+  edit: 'customisation/profile',
+  videos: 'content/videos',
+  playlists: 'playlists',
+  tabs: 'customisation/layout?view=tabs',
+  sections: 'customisation/layout?view=sections',
+  community: 'content/posts',
+  team: 'settings/permissions',
+};
+
+/** The Studio URL of a channel page. */
+export function channelPageHref(locale: string, channelId: string, page: ChannelSettingsPage): string {
+  return `/${locale}/studio/${encodeURIComponent(channelId)}/${STUDIO_PATH_FOR_PAGE[page]}`;
+}
+
 export function canOpenSettingsPage(role: ChannelRole | null | undefined, page: ChannelSettingsPage): boolean {
   return roleMeets(role, CHANNEL_SETTINGS_PAGES[page]);
 }

@@ -27,7 +27,7 @@ import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Channel sections (docs/specs/CHANNEL-SECTIONS.md): the owner's section
- * manager (/[locale]/settings/channel/[id]/sections: add, edit, reorder,
+ * manager (Studio Customisation → Layout, /[locale]/studio/[id]/customisation/layout?view=sections: add, edit, reorder,
  * delete), every section type added through the grouped dialog and drawn on
  * the channel Home tab, for the owner and for a signed-out visitor; plus the
  * /[locale]/sections video-sections page.
@@ -80,7 +80,7 @@ const UI = {
 } as const;
 
 async function openManager(page: Page, locale: Locale = 'en') {
-  await page.goto(`/${locale}/settings/channel/${channelId()}/sections`);
+  await page.goto(`/${locale}/studio/${channelId()}/customisation/layout?view=sections`);
   await expect(page.getByTestId('sections-count')).toBeVisible();
 }
 
@@ -108,22 +108,20 @@ async function deleteRow(page: Page, row: Locator, locale: Locale) {
 test.describe('Section manager', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('SECT-001 shows the localized header, usage count and breadcrumb (en)', async ({ page }) => {
+  test('SECT-001 shows the localized header, usage count and the Studio layout views (en)', async ({ page }) => {
     const existing = await listSections(owner, channelId());
     await openManager(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'Channel sections' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Channel sections' })).toBeVisible();
     await expect(page.getByText(`Customize your channel layout (max ${MAX_SECTIONS} sections)`)).toBeVisible();
     await expect(page.getByTestId('sections-count')).toHaveText(`${existing.length} of ${MAX_SECTIONS} sections used`);
     await expect(page.getByTestId('publish-sections')).toBeDisabled();
 
-    const crumbs = page.getByTestId('channel-settings-breadcrumb');
-    await expect(crumbs).toHaveAttribute('aria-label', 'Breadcrumb');
-    // <channel> › Settings › Manage Sections: the name opens the channel, Settings its settings; the arrow goes back there
-    await expect(crumbs.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
-    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name, exact: true })).toHaveAttribute('href', /^\/en\/(@|channels\/)/);
-    await expect(crumbs.locator('a[href="/en/settings"]')).toHaveCount(0);
-    await expect(crumbs.getByTestId('settings-back')).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Manage Sections');
+    // In Studio: Customisation → Layout, Sections view; the Studio rail is the way around
+    await expect(page.getByTestId('studio-frame')).toBeVisible();
+    await expect(page.getByTestId('studio-nav-customisation')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('studio-layout-view-sections')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('studio-layout-view-tabs')).toHaveAttribute('href', `/en/studio/${channelId()}/customisation/layout?view=tabs`);
+    await expect(page.getByTestId('studio-layout-preview')).toHaveAttribute('href', /^\/en\/(@|channels\/)/);
   });
 
   test('SECT-002 adds a titled automatic section that then renders on the channel Home tab', async ({ page }) => {
@@ -402,10 +400,10 @@ test.describe('Section manager', () => {
   test('SECT-007 Arabic section manager is RTL and fully translated', async ({ page }) => {
     await openManager(page, 'ar');
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'أقسام القناة' })).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toContainText(`من ${new Intl.NumberFormat('ar-u-nu-arab').format(MAX_SECTIONS)} أقسام`);
+    await expect(page.getByRole('heading', { level: 2, name: 'أقسام القناة' })).toBeVisible();
+    await expect(page.getByTestId('sections-count')).toContainText(`من ${new Intl.NumberFormat('ar-u-nu-arab').format(MAX_SECTIONS)} قسمًا`);
     await expect(page.getByTestId('publish-sections')).toHaveText('نشر');
-    await expect(page.getByTestId('channel-settings-breadcrumb')).toHaveAttribute('aria-label', 'مسار التنقل');
+    await expect(page.getByRole('navigation', { name: 'عروض التخطيط' })).toBeVisible();
 
     const dialog = await openAddDialog(page, 'ar');
     await expect(dialog).toHaveAttribute('dir', 'rtl');
@@ -419,24 +417,18 @@ test.describe('Section manager', () => {
     await expect(dialog.getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeVisible();
   });
 
-  test('SECT-008 breadcrumb runs right-to-left in Arabic', async ({ page }) => {
+  test('SECT-008 layout views run right-to-left in Arabic', async ({ page }) => {
     await openManager(page, 'ar');
-    // <channel> › Settings › Manage Sections (channel settings belong to the channel, not the user's Settings)
-    const items = page.getByTestId('channel-settings-breadcrumb').getByRole('listitem');
-    await expect(items).toHaveCount(3);
-    const boxes = await items.evaluateAll((els) =>
-      els.map((e) => {
-        const r = e.getBoundingClientRect();
-        return { left: r.left, right: r.right, top: Math.round(r.top) };
-      })
-    );
-    const listRight = await page.getByTestId('channel-settings-breadcrumb').getByRole('list').evaluate((e) => e.getBoundingClientRect().right);
-    // The first crumb (the channel) starts at the inline start, i.e. the right edge
-    expect(Math.abs(listRight - boxes[0].right)).toBeLessThan(2);
-    // Crumbs on the same line run right to left (the list may wrap on phones)
-    for (let i = 1; i < boxes.length; i++) {
-      if (boxes[i].top === boxes[i - 1].top) expect(boxes[i].right).toBeLessThanOrEqual(boxes[i - 1].left + 1);
-    }
+    const sections = page.getByTestId('studio-layout-view-sections');
+    const tabs = page.getByTestId('studio-layout-view-tabs');
+    await expect(sections).toHaveAccessibleName('الأقسام');
+    await expect(sections).toHaveAttribute('aria-current', 'page');
+    // The first view (Sections) sits at the inline start, i.e. to the right of Tabs
+    const [s1, t1] = await Promise.all([sections.boundingBox(), tabs.boundingBox()]);
+    expect(s1!.x).toBeGreaterThan(t1!.x);
+    await tabs.click();
+    await expect(page).toHaveURL(new RegExp(`/ar/studio/${channelId()}/customisation/layout\\?view=tabs$`));
+    await expect(page.getByTestId('studio-layout-tabs')).toBeVisible({ timeout: 30000 });
   });
 });
 

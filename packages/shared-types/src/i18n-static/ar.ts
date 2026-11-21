@@ -349,7 +349,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       changes_saved: 'تم حفظ إعدادات التبويبات بنجاح',
       save_failed: 'فشل في حفظ إعدادات التبويبات',
       drag_to_reorder: 'اسحب لإعادة الترتيب',
-      at_least_one_visible: 'يجب أن يكون تبويب واحد على الأقل مرئياً',
+      at_least_one_visible: 'يبقى التبويب الافتراضي ظاهرًا دائمًا، فتعرض القناة تبويبًا واحدًا على الأقل.',
       default_must_be_visible: 'يجب أن يكون التبويب الافتراضي مرئياً',
     },
     // Channel Sections
@@ -2007,10 +2007,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     postActions: 'إجراءات المنشور',
     sections: {
       title: 'أقسام القناة',
-      description: 'خصّص تخطيط قناتك (بحد أقصى {max} أقسام)',
+      description: 'خصّص تخطيط قناتك (بحد أقصى {max})',
       publish: 'نشر',
       publishing: 'جارٍ النشر...',
-      sectionsUsed: 'تم استخدام {count} من {max} أقسام',
+      sectionsUsed: 'تم استخدام {count} من {max}',
       unpublishedChanges: '(تغييرات غير منشورة)',
       empty: 'لا توجد أقسام بعد. أضف قسمك الأول لتخصيص قناتك.',
       maxReached: 'تم الوصول إلى الحد الأقصى لعدد الأقسام. احذف قسماً لإضافة قسم جديد.',

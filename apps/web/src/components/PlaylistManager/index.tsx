@@ -33,7 +33,7 @@ interface PlaylistManagerProps {
 
 /** Manage Playlists of a channel, or (channelId '') the user's personal playlists under You. */
 export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
-  const base = channelId ? `/${lang}/settings/channel/${channelId}/playlists` : `/${lang}/library/playlists`;
+  const base = channelId ? `/${lang}/studio/${encodeURIComponent(channelId)}/playlists` : `/${lang}/library/playlists`;
   return playlistId ? `${base}/${encodeURIComponent(playlistId)}` : base;
 }
 
@@ -155,8 +155,10 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                 <Link href={editHref} className="w-28 flex-none overflow-hidden rounded-[var(--r-sm)]" tabIndex={-1} aria-hidden="true">
                   <PlaylistCover playlist={playlist} alt="" sizes="112px" />
                 </Link>
+                {/* Phone: the cover and the text share the first row and the actions get their own row
+                    at the end, so the title wraps instead of being cut beside three buttons */}
                 <div className="min-w-0 flex-1">
-                  <h3 className={`truncate font-semibold ${TEXT}`}>
+                  <h3 className={`break-words font-semibold ${TEXT}`} dir="auto">
                     <Link href={editHref} className="hover:underline">{title}</Link>
                   </h3>
                   {/* A separator never ends a line: each item after the first carries its own leading

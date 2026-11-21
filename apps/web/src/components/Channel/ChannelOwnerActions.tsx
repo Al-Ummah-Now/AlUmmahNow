@@ -43,7 +43,6 @@ const buttonClass =
 export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header', className, onDeleted, redirectAfterDelete }: ChannelOwnerActionsProps) {
   const { t, lang, isRTL, dir } = useLanguage();
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const base = `/${lang}/settings/channel/${channel.id}`;
   // Studio is the channel's creator home (manage = Studio)
   const studio = `/${lang}/studio/${encodeURIComponent(channel.id)}`;
   const channelName = channel.nameLocalized?.[lang] || channel.name;
@@ -62,7 +61,7 @@ export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header
       {variant === 'header' ? (
         <>
           {canCustomize && (
-            <Link href={`${base}/edit`} className={buttonClass} data-testid="channel-customize">
+            <Link href={`${studio}/customisation/profile`} className={buttonClass} data-testid="channel-customize">
               <Pencil className="w-4 h-4" aria-hidden="true" />
               {t.channel.customizeChannel}
             </Link>
@@ -99,7 +98,7 @@ export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header
         </DropdownMenuTrigger>
         <DropdownMenuContent align={isRTL ? 'start' : 'end'} className="min-w-48">
           <DropdownMenuItem asChild>
-            <Link href={base} className="flex items-center gap-2 cursor-pointer" data-testid="channel-settings-link">
+            <Link href={`${studio}/dashboard`} className="flex items-center gap-2 cursor-pointer" data-testid="channel-settings-link">
               <Settings className="w-4 h-4" aria-hidden="true" />
               {t.channel.channelSettings}
             </Link>

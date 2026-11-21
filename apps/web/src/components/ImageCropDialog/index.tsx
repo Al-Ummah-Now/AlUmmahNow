@@ -41,7 +41,9 @@ const ZOOM_STEP = 0.1;
 export default function ImageCropDialog({ file, kind, onCancel, onApply }: ImageCropDialogProps) {
   const { t, isRTL } = useLanguage();
   const spec = CROP_SPECS[kind];
-  const [src, setSrc] = useState<string | null>(null);
+  // Decoded pixels of the picked file. Decoding with createImageBitmap (not an
+  // object URL in an <img src>) keeps file-derived strings out of the DOM.
+  const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [natural, setNatural] = useState<Size | null>(null);
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
@@ -51,23 +53,48 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
   // Callback-ref state: the frame mounts inside the dialog portal after this
   // component's effects first run, so measure when the element itself appears.
   const [frameEl, setFrameEl] = useState<HTMLDivElement | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ id: number; start: Point; from: Point } | null>(null);
 
-  // Object URL for the picked file
+  // Decode the picked file
   useEffect(() => {
     setNatural(null);
     setFailed(false);
     setZoom(1);
     setOffset({ x: 0, y: 0 });
-    if (!file) {
-      setSrc(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setSrc(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    setBitmap(null);
+    if (!file) return;
+    let cancelled = false;
+    let decoded: ImageBitmap | null = null;
+    createImageBitmap(file)
+      .then((bmp) => {
+        if (cancelled) {
+          bmp.close();
+          return;
+        }
+        decoded = bmp;
+        setBitmap(bmp);
+        setNatural({ width: bmp.width, height: bmp.height });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        logger.warn('[ImageCropDialog] Could not decode the picked image', { error, kind });
+        setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      decoded?.close();
+    };
+  }, [file, kind]);
+
+  // Paint the preview canvas at the image's natural size; CSS scales it
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !bitmap) return;
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
+  }, [bitmap]);
 
   // Track the frame size (it is responsive)
   useLayoutEffect(() => {
@@ -162,7 +189,7 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
   };
 
   const apply = async () => {
-    const img = imgRef.current;
+    const img = bitmap;
     if (!img || !natural || !file || !measured) return;
     setBusy(true);
     try {
@@ -226,15 +253,10 @@ export default function ImageCropDialog({ file, kind, onCancel, onApply }: Image
             className={`relative mx-auto w-full overflow-hidden rounded-md bg-gray-900 touch-none select-none cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${kind === 'avatar' ? 'max-w-xs' : ''}`}
             style={{ aspectRatio: String(spec.aspect) }}
           >
-            {src && (
-              // eslint-disable-next-line @next/next/no-img-element -- local object URL, drawn to a canvas
-              <img
-                ref={imgRef}
-                src={src}
-                alt=""
-                draggable={false}
-                onLoad={(e) => setNatural({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-                onError={() => setFailed(true)}
+            {bitmap && (
+              <canvas
+                ref={canvasRef}
+                aria-hidden="true"
                 className="absolute left-1/2 top-1/2 max-w-none pointer-events-none"
                 style={
                   ready

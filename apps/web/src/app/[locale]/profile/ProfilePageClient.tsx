@@ -28,9 +28,9 @@ const ProfilePageClient = ({ initialProfile, initialChannels }: ProfilePageClien
   const router = useRouter();
   const { profile, isLoading, error } = useProfile(auth?.user || null, initialProfile);
   const currentChannel = useCurrentChannel();
-  // Playlists belong to channels and are managed in channel settings
+  // Playlists belong to channels and are managed in Studio
   const playlistsHref = currentChannel
-    ? `/${locale}/settings/channel/${currentChannel.id}/playlists`
+    ? `/${locale}/studio/${encodeURIComponent(currentChannel.id)}/playlists`
     : `/${locale}/settings`;
 
   // Display name, else first + last; the email only as the last resort

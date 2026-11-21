@@ -4,7 +4,7 @@
  * The "manage" link at the top of a channel tab, for people who run the
  * channel: Home and Channels open Sections, Videos/Shorts/Live open the video
  * manager, Playlists and Community open theirs, About opens the channel
- * details. Shown only when the viewer's channel role may open that settings
+ * details, all in Studio. Shown only when the viewer's channel role may open that settings
  * page (the same rule the settings pages enforce); visitors see nothing.
  */
 import Link from '@/components/common/AppLink';
@@ -12,7 +12,7 @@ import { Pencil } from 'lucide-react';
 import type { ChannelTab } from './index';
 import { useChannelViewer } from '@/components/Channel/ChannelViewerContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import type { ChannelSettingsPage } from '@/lib/channels/permissions';
+import { channelPageHref, type ChannelSettingsPage } from '@/lib/channels/permissions';
 
 const TAB_SETTINGS_PAGE: Record<ChannelTab, ChannelSettingsPage> = {
   home: 'sections',
@@ -45,7 +45,7 @@ export function TabManageLink({ channelId, tab }: { channelId: string; tab: Chan
   return (
     <div className="mb-4 flex justify-end">
       <Link
-        href={`/${lang}/settings/channel/${channelId}/${page}`}
+        href={channelPageHref(lang, channelId, page)}
         data-testid="tab-manage-link"
         className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold text-[var(--fanous-color-text-primary)] hover:bg-[color-mix(in_srgb,var(--fanous-color-primary)_12%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-primary)]"
       >

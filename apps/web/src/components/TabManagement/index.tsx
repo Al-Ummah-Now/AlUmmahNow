@@ -258,10 +258,8 @@ export default function TabManagement({
         </SortableContext>
       </DndContext>
 
-      {/* Footer info */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-300">
-        <p>{t.channel.tabs.at_least_one_visible}</p>
-      </div>
+      {/* How hiding works (a hint, not a warning: nothing is wrong) */}
+      <p className="text-sm text-muted-foreground" data-testid="tabs-visibility-hint">{t.channel.tabs.at_least_one_visible}</p>
     </div>
   );
 }

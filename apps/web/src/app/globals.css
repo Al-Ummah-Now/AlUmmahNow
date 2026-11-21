@@ -52,6 +52,29 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Chrome, Safari, and Opera */
   }
+
+  /*
+   * Two lines at most, the second fading out toward its end edge (RTL-aware) instead of an
+   * ellipsis. The mask's first layer keeps line 1 whole; the second covers line 2 only, so text
+   * that fits on one line is never faded. Used for comment, post and notification previews.
+   */
+  .clamp-2 {
+    max-height: 2lh;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    --clamp-fade: linear-gradient(to right, currentColor calc(100% - 3em), transparent);
+    -webkit-mask-image: linear-gradient(currentColor, currentColor), var(--clamp-fade);
+    mask-image: linear-gradient(currentColor, currentColor), var(--clamp-fade);
+    -webkit-mask-size: 100% 1lh, 100% 1lh;
+    mask-size: 100% 1lh, 100% 1lh;
+    -webkit-mask-position: 0 0, 0 1lh;
+    mask-position: 0 0, 0 1lh;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+  .clamp-2:dir(rtl) {
+    --clamp-fade: linear-gradient(to left, currentColor calc(100% - 3em), transparent);
+  }
 }
 
 @layer utilities {

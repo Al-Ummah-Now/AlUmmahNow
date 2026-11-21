@@ -89,7 +89,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const handleEditChannel = (channel: Channel) => {
     logger.debug('ChannelManagementSection: Edit channel:', channel);
     // Navigate to channel edit page
-    router.push(`/${locale}/settings/channel/${channel.id}/edit`);
+    router.push(`/${locale}/studio/${encodeURIComponent(channel.id)}/customisation/profile`);
   };
 
   // Called after DeleteChannelDialog deleted the channel: refresh the list
