@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, translateDynamic, type MessageKey } from '@/i18n/translate';
+import { translateDynamic, type MessageKey } from '@/i18n/translate';
 import { answerAuthRequest, getAuthRequestEvidence, loadUserAuthRequests, retryAuthRequest, submitAuthRequest } from '@/lib/api/auth-requests';
 import {
   AUTH_REQUEST_ACTIONS,
@@ -24,6 +24,8 @@ import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secon
 import { AuthRequestStatusChip, DeliveryChip } from './AuthRequestStatusChip';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 /** While a request is being sent or is open in auth, refresh this often (admin-api queues the status reads). */
 const POLL_MS = 10_000;
 
@@ -36,7 +38,7 @@ export function UserAuthRequestsPanel({
   canRequest: boolean;
   initialRequests?: AuthRequestView[];
 }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const [requests, setRequests] = useState<AuthRequestView[] | null>(initialRequests ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -118,7 +120,7 @@ export function UserAuthRequestsPanel({
                 )}
                 <span className="text-sm text-fg-muted">{translateDynamic(t, 'authRequests.reasons', r.reasonCategory)}</span>
               </div>
-              <p className="text-sm text-fg-muted mt-1">{t('authRequests.requestedBy', { name: r.requestedBy.name, date: formatDate(r.createdAt, locale, true) })}</p>
+              <p className="text-sm text-fg-muted mt-1">{fillNodes(t('authRequests.requestedBy', { name: r.requestedBy.name }), { date: <LocalTime value={r.createdAt} withTime /> })}</p>
               <p className="text-sm text-fg mt-1 whitespace-pre-wrap">{r.reason}</p>
               {r.delivery.status === 'sending' && r.delivery.attempts > 0 && (
                 <p className="text-sm text-fg-muted mt-2" data-testid="auth-request-retrying">{t('authRequests.retrying', { attempts: r.delivery.attempts, error: r.delivery.error ?? '' })}</p>

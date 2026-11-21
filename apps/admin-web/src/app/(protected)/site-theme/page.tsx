@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { SiteThemePicker, type ThemePreview } from './SiteThemePicker';
 import { ThemeLibrary } from './builder/ThemeLibrary';
 import { UserName } from '@/components/audit/UserName';
+import { Sep } from '@/components/Sep';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export default async function SiteThemePage() {
             {history.map((entry) => (
               <li key={entry.id} className="text-sm text-fg" data-testid="site-theme-history-row" data-id={entry.id} data-old={entry.oldValue ?? ''} data-new={entry.newValue} data-actor={entry.actorId}>
                 <span className="capitalize">{entry.oldValue ?? t('siteTheme.historyDefault')}</span> → <span className="capitalize font-medium">{entry.newValue}</span>
-                <span className="text-fg-muted"> · <time dateTime={entry.createdAt}>{new Date(entry.createdAt).toISOString().replace('T', ' ').slice(0, 16)} UTC</time> · <UserName id={entry.actorId} showEmail={false} testId="site-theme-history-actor" /></span>
+                <span className="text-fg-muted"><Sep /><time dateTime={entry.createdAt}>{new Date(entry.createdAt).toISOString().replace('T', ' ').slice(0, 16)} UTC</time><Sep /><UserName id={entry.actorId} showEmail={false} testId="site-theme-history-actor" /></span>
               </li>
             ))}
           </ol>

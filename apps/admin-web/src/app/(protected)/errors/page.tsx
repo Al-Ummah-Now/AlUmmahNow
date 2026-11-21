@@ -15,6 +15,8 @@ import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseE
 import { ErrorStatusChip, Sparkline, TestChip, appName, environmentName, errorTitle } from './ui';
 import { LiveRefresh } from '@/components/LiveRefresh';
 
+import { LocalTime } from '@/components/LocalTime';
+import { Sep } from '@/components/Sep';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -91,7 +93,7 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
           {t('errorsPage.subtitle')}
           {data && (
             <span data-testid="errors-total" data-total={data.total}>
-              {' · '}
+              <Sep />
               {t('errorsPage.totalCount', { count: data.total })}
             </span>
           )}
@@ -195,8 +197,8 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
                       <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.occurrences, locale)}</td>
                       <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.users, locale)}</td>
                       <td className="px-4 py-4 align-top text-sm text-fg-muted whitespace-nowrap">
-                        <LocalTime value={g.first_seen} className="block" />
-                        <LocalTime value={g.last_seen} className="block text-fg" />
+                        <LocalTime value={g.first_seen} withTime className="block" />
+                        <LocalTime value={g.last_seen} withTime className="block text-fg" />
                       </td>
                       <td className="px-4 py-4 align-top text-sm font-mono text-fg-muted" dir="ltr">
                         {g.last_release ?? '—'}

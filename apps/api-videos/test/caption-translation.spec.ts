@@ -192,7 +192,7 @@ describe('Quran translation editions (O7)', () => {
 		const vtt = renderCaptionVtt(draft);
 		const env = { QURAN_PROVIDER: 'fixture' };
 		const served = await fillServedTrack(vtt, 'en', undefined, { env: env as never, edition: { id: 20, name: 'Saheeh International', language: 'en' } });
-		assert.match(served, /“\[fixture translation 20 of 112:1\] \[fixture translation 20 of 112:2\]” \(Saheeh International · Surah 112 112:1–2\)/);
+		assert.match(served, /“\[fixture translation 20 of 112:1\] \[fixture translation 20 of 112:2\]” \(Saheeh International • Surah 112 112:1–2\)/);
 		assert.doesNotMatch(served, //);
 		assert.match(served, /\(Saheeh International · Surah 112 112:1–2\)\nSource: Quran Foundation\n*$/, 'the edition by name, then QF’s short credit (QF 2026-11-23)');
 

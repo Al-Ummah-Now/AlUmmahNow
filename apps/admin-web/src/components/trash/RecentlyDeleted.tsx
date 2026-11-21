@@ -7,12 +7,12 @@
  */
 import type { TrashItem, TrashKind } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { trashRemaining, trashTitle } from '@/lib/trash';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { purgeTrashItem, restoreTrashItem } from '@/lib/api/trash';
 import { UserName } from '@/components/audit/UserName';
 
+import { LocalTime } from '@/components/LocalTime';
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-4 py-3 align-top';
 
@@ -59,7 +59,7 @@ export function RecentlyDeleted({ kind, items }: { kind: TrashKind; items: Trash
                     <div className="text-xs text-fg-subtle" dir="ltr">{item.id}</div>
                   </td>
                   <td className={tdClass}>{item.deletedBy ? <UserName id={item.deletedBy} showEmail={false} /> : '—'}</td>
-                  <td className={`${tdClass} whitespace-nowrap`}>{formatDate(item.deletedAt, locale, true)}</td>
+                  <td className={`${tdClass} whitespace-nowrap`}><LocalTime value={item.deletedAt} withTime /></td>
                   <td className={tdClass} dir="auto">{item.reason ?? <span className="text-fg-subtle">{t('trash.noReason')}</span>}</td>
                   <td className={`${tdClass} whitespace-nowrap`} data-testid="trash-remaining">
                     {trashRemaining(item, now, t)}

@@ -1,11 +1,13 @@
 import type { CsamAccessLogEntry } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { type MessageKey, type Translator } from '@/i18n/translate';
 import { logDetailText } from './model';
 import { UserName } from '@/components/audit/UserName';
 
+import { LocalTime } from '@/components/LocalTime';
+import { Sep } from '@/components/Sep';
 /** A CSAM access log (append-only in admin-api): who did what, when, with the details logged. */
-export function AccessLog({ entries, t, locale }: { entries: CsamAccessLogEntry[]; t: Translator; locale: Locale }) {
+export function AccessLog({ entries, t }: { entries: CsamAccessLogEntry[]; t: Translator; locale: Locale }) {
   if (!entries.length) return <p className="text-fg-muted">{t('csamPage.log.empty')}</p>;
   const action = (e: CsamAccessLogEntry) => t(`csamPage.log.actions.${e.action.replace(/\./g, '_')}` as MessageKey);
   return (
@@ -16,7 +18,7 @@ export function AccessLog({ entries, t, locale }: { entries: CsamAccessLogEntry[
           <li key={e.id} className="py-2 text-sm">
             <p className="text-fg font-medium">{action(e)}</p>
             <p className="text-xs text-fg-muted">
-              {formatDate(e.createdAt, locale, true)} · <UserName id={e.actorId} showEmail={false} />
+              <LocalTime value={e.createdAt} withTime /><Sep /><UserName id={e.actorId} showEmail={false} />
             </p>
             {logDetailText(e.detail) && (
               <p className="text-xs text-fg-muted break-words"><bdi dir="ltr">{logDetailText(e.detail)}</bdi></p>
@@ -46,7 +48,7 @@ export function AccessLog({ entries, t, locale }: { entries: CsamAccessLogEntry[
           <tbody>
             {entries.map((e) => (
               <tr key={e.id} className="border-t border-border align-top" data-testid="csam-log-row" data-action={e.action}>
-                <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(e.createdAt, locale, true)}</td>
+                <td className="p-2 whitespace-nowrap text-fg-muted"><LocalTime value={e.createdAt} withTime /></td>
                 <td className="p-2"><UserName id={e.actorId} /></td>
                 <td className="p-2">{action(e)}</td>
                 <td className="p-2 text-fg-muted break-words">{logDetailText(e.detail) ? <bdi dir="ltr">{logDetailText(e.detail)}</bdi> : '—'}</td>

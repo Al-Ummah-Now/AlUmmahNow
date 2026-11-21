@@ -72,6 +72,14 @@ pnpm type-check
 pnpm lint
 ```
 
+## Dates and times
+
+Every time in the admin is shown in the viewer's own time zone with the zone named ("Nov 21, 2026, 9:41 AM EST", «٢١ نوفمبر ٢٠٢٦، ٩:٤١ ص غرينتش-٥»), and the UTC time is the hover title, for comparing with logs (owner, 2026-11-21). Use the shared formatter, never `Intl`/`toLocaleString` or a `timeZone` of your own:
+
+- `<LocalTime value={iso} withTime />` (`src/components/LocalTime.tsx`) on the page; inside a translated sentence, `fillNodes(t('key'), { date: <LocalTime … /> })`.
+- `formatDate(value, locale, withTime)`, `formatClock` (seconds, for log lines), `formatHour` / `formatMinute` (chart axes) and `formatUtc` in `src/i18n/translate.ts` where only text fits (aria-labels, confirm dialogs).
+- A calendar day (`"2026-11-21"`) or month stays that day; only instants move to local time. `test/admin-times.test.ts` pins the zone and fails on a new UTC time format outside `translate.ts`.
+
 ## Deployment
 
 ### QA

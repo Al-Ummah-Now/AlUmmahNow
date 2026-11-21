@@ -7,7 +7,7 @@
  * Arabic). A day without data is a gap, never a zero. Each point has a title
  * for hover, and a <details> table is the text alternative.
  */
-import { labelIndices, niceScale } from '@al-ummah/shared-types';
+import { labelIndices, niceScale, metaSeparator } from '@al-ummah/shared-types';
 import type { ChartSeries } from '@/lib/live-streaming';
 
 const STYLE: Record<ChartSeries['provider'], { stroke: string; dash?: string; dot: string }> = {
@@ -97,7 +97,7 @@ export function ProviderLineChart({ days, series, label, format, dayLabel, provi
                       key={`${s.provider}-${days[i]}`}
                       className={`absolute h-2 w-2 -translate-y-1/2 rounded-full rtl:translate-x-1/2 ltr:-translate-x-1/2 ${s.provider === 'bunny' ? 'bg-accent' : 'bg-info-fg'}`}
                       style={{ insetInlineStart: `${x(i)}%`, top: `${y(v)}%` }}
-                      title={`${providerLabel(s.provider)} · ${dayLabel(days[i])}: ${format(v)}`}
+                      title={`${providerLabel(s.provider)}${metaSeparator(rtl ? 'ar' : 'en')}${dayLabel(days[i])}: ${format(v)}`}
                       data-testid={`${testId}-point`}
                     />
                   ),

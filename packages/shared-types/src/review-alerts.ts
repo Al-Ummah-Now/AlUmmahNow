@@ -288,10 +288,10 @@ export function reviewAlertText(
   if (minutes !== null) parts.push(ar ? `بقي ${formatNumber('ar', minutes)} د` : `${formatNumber('en', minutes)} min left`);
   return {
     title: ar ? 'طابور المراجعة' : 'Review queue',
-    body: parts.join(' · '),
+    body: parts.join(ar ? '، ' : ' · '),
     openLabel: ar ? 'فتح' : 'Open',
     claimLabel: ar ? 'استلام' : 'Claim',
     // The Windows Action Center group (wiki AUN-ADMIN-NATIVE Alerts, #1307)
-    groupTitle: ar ? 'الإدارة · طابور المراجعة' : 'Admin · Review queue',
+    groupTitle: ar ? 'الإدارة، طابور المراجعة' : 'Admin · Review queue',
   };
 }

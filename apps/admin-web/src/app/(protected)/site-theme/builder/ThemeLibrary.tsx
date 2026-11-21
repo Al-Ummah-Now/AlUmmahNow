@@ -9,6 +9,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { ConfirmButton } from '@/components/content/actions';
 import { trashHref } from '@/lib/trash';
 import { ThemeApiError, duplicate, exportUrl, importZip, removeTheme } from './api';
+import { Sep } from '@/components/Sep';
 
 const action = 'text-sm font-medium underline text-fg disabled:opacity-50';
 
@@ -72,9 +73,9 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
               <p className="font-medium text-fg">{theme.name[locale]} <span className="text-xs text-fg-muted" dir="ltr">{theme.id}</span></p>
               <p className="text-xs text-fg-muted">
                 {theme.builtIn ? t('themeBuilder.builtIn') : t('themeBuilder.custom')}
-                {' · '}{theme.latestVersion ? t('themeBuilder.published', { version: theme.latestVersion }) : t('themeBuilder.notPublished')}
-                {theme.active && <> · <strong>{t('themeBuilder.active')}{theme.activeVersion ? ` (${theme.activeVersion})` : ''}</strong></>}
-                {theme.basedOn && <> · {t('themeBuilder.basedOn', { base: theme.basedOn })}</>}
+                <Sep />{theme.latestVersion ? t('themeBuilder.published', { version: theme.latestVersion }) : t('themeBuilder.notPublished')}
+                {theme.active && <><Sep /><strong>{t('themeBuilder.active')}{theme.activeVersion ? ` (${theme.activeVersion})` : ''}</strong></>}
+                {theme.basedOn && <><Sep />{t('themeBuilder.basedOn', { base: theme.basedOn })}</>}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

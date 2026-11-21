@@ -73,7 +73,7 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
                 <span className="font-medium text-fg [text-wrap:balance]">{t(JOB_KIND_LABEL[job.kind])}</span>
                 <JobStatusChip job={job} />
               </div>
-              <LocalTime value={job.updatedAt} className="block mt-1 text-xs text-fg-muted" />
+              <LocalTime value={job.updatedAt} withTime className="block mt-1 text-xs text-fg-muted" />
               <JobTiming job={job} />
               {job.lastError && job.status !== 'succeeded' && (
                 <div className="mt-2">
@@ -131,7 +131,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
             </div>
           )}
           <span className="md:hidden block mt-1 text-xs text-fg-muted" data-testid="job-updated-narrow">
-            {fillNodes(t('jobs.updatedAt'), { when: <LocalTime value={job.updatedAt} /> })}
+            {fillNodes(t('jobs.updatedAt'), { when: <LocalTime value={job.updatedAt} withTime /> })}
           </span>
           <div className="mt-2" data-testid="job-log">
             {log.toggle}
@@ -143,7 +143,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
         </td>
         <td className={`${TD} ${WIDE} max-w-md`}>{job.lastError && job.status !== 'succeeded' ? <JobErrorText error={job.lastError} /> : null}</td>
         <td className={`${TD} ${WIDE} text-fg-muted whitespace-nowrap`}>
-          <LocalTime value={job.updatedAt} />
+          <LocalTime value={job.updatedAt} withTime />
         </td>
         <td className={`${TD} max-md:pt-0 empty:hidden`}>
           <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={onCancelAsk} />

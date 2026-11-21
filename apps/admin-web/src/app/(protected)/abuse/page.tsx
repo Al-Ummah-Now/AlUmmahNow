@@ -3,12 +3,14 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { numberFormat } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -114,7 +116,7 @@ export default async function AbusePage({ searchParams }: PageProps) {
                 </table>
               </div>
             )}
-            <p className="text-xs text-fg-muted mt-3">{t('abusePage.generatedAt', { time: formatDate(summary.generatedAt, locale, true) })}</p>
+            <p className="text-xs text-fg-muted mt-3">{fillNodes(t('abusePage.generatedAt'), { time: <LocalTime value={summary.generatedAt} withTime /> })}</p>
           </section>
         </>
       )}

@@ -10,14 +10,13 @@ import React from 'react';
 import Link from '@/components/common/AppLink';
 import Image from 'next/image';
 import { BadgeCheck, Heart, MessageSquare } from 'lucide-react';
-import type { Playlist, SearchPostPayload, SearchResultItem } from '@al-ummah/shared-types';
+import { formatCountNoun, type Playlist, type SearchPostPayload, type SearchResultItem } from '@al-ummah/shared-types';
 import { searchVideoToVideoObject } from '@/lib/search/mappers';
 import VideoCard from '@/components/videoCard/index';
 import { ChannelTile } from '@/components/ChannelTile';
 import { PlaylistCard } from '@/components/PlaylistCard';
 import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
-import { formatCount } from './labels';
 import { RelativeDate } from '@/components/RelativeDate';
 import { channelLabel } from '@/lib/channel-name';
 
@@ -32,8 +31,14 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
       className="flex h-full flex-col gap-3 rounded-lg bg-white dark:bg-gray-900 p-4 shadow-md hover:shadow-lg transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >
       <div className="flex items-center gap-2 min-w-0">
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          {post.channelAvatar && <Image src={resolveUrl(post.channelAvatar)} alt="" fill sizes="36px" className="object-cover" />}
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+          {post.channelAvatar ? (
+            <Image src={resolveUrl(post.channelAvatar)} alt="" fill sizes="36px" className="object-cover" />
+          ) : (
+            <span className="text-sm font-semibold text-[var(--fanous-color-text-secondary)]" aria-hidden="true" data-testid="post-avatar-letter">
+              {Array.from(channelLabel(post, lang).trim())[0]?.toUpperCase() ?? ''}
+            </span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-white">
@@ -53,8 +58,8 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
         </div>
       )}
       <div className="mt-auto flex gap-4 text-xs text-gray-500 dark:text-gray-400">
-        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" aria-hidden="true" />{t.search.likesCount.replace('{count}', formatCount(post.likes, lang))}</span>
-        <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />{t.search.commentsCount.replace('{count}', formatCount(post.comments, lang))}</span>
+        <span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" aria-hidden="true" />{formatCountNoun(lang, post.likes, 'like', { compact: true })}</span>
+        <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />{formatCountNoun(lang, post.comments, 'comment', { compact: true })}</span>
       </div>
     </Link>
   );

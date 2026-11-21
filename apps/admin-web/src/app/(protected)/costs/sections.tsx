@@ -13,6 +13,7 @@ import type { CostEnvKey, CostMover, CostsDashboard } from '@/lib/api/costs-type
 import { budgetMeter, dailyBudget, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
 import { moneyFormat } from '@al-ummah/shared-types';
+import { Sep } from '@/components/Sep';
 
 export const ENV_KEYS: CostEnvKey[] = ['production', 'stage', 'qa', 'account'];
 export const ENV_COLOR: Record<CostEnvKey, string> = {
@@ -43,8 +44,8 @@ export function signedUsd(locale: string): (v: number) => string {
   return (v) => nf.format(v);
 }
 
-function percentList(levels: readonly number[], f: OpsFormats): string {
-  return levels.map((l) => f.percent(l)).join(' · ');
+function percentList(levels: readonly number[], f: OpsFormats, sep: string): string {
+  return levels.map((l) => f.percent(l)).join(sep);
 }
 
 export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | null; now: Date }) {
@@ -198,7 +199,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
             <span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full border border-border" style={{ background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 55%, transparent) 0 3px, transparent 3px 6px)` }} />
             {t('costs.budget.legendForecast')}
           </span>
-          <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f) })}</span>
+          <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f, t('common.sep')) })}</span>
         </div>
       </div>
 
@@ -423,7 +424,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
                       <bdi className="block break-words font-medium text-fg">{label}</bdi>
-                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi> · {envLabel(t, m.env)}</span>
+                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep />{envLabel(t, m.env)}</span>
                     </th>
                     <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}

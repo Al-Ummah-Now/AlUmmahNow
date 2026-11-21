@@ -9,6 +9,7 @@ import type { BackfillCost, BackfillOverview } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { cardClass } from '@/components/ui';
 import { useFormats } from './useFormats';
+import { Sep } from '@/components/Sep';
 
 export function Overview({ overview, environment }: { overview: BackfillOverview; environment: string }) {
   const { t } = useLanguage();
@@ -42,10 +43,10 @@ export function Overview({ overview, environment }: { overview: BackfillOverview
             {rows.map(({ key, label, cost }) => (
               <tr key={key} className="border-t border-border" data-testid={`backfill-overview-${key}`}>
                 <th scope="row" className="py-2 pe-4 text-start font-medium text-fg">{label}</th>
-                <td className="py-2 pe-4 text-fg">{f.integer(cost.transcodeSeconds / 60)} · {f.usd(cost.transcodeUsd)}</td>
-                <td className="py-2 pe-4 text-fg">{f.gb(cost.egressBytes / 1e9)} · {f.usd(cost.egressUsd)}</td>
-                <td className="py-2 pe-4 text-fg">{f.integer(cost.classAOps)} · {f.usd(cost.opsUsd)}</td>
-                <td className="py-2 pe-4 text-fg">{f.gb(cost.storageBytes / 1e9)} · {f.usd(cost.storageUsdMonth)}</td>
+                <td className="py-2 pe-4 text-fg">{f.integer(cost.transcodeSeconds / 60)}<Sep />{f.usd(cost.transcodeUsd)}</td>
+                <td className="py-2 pe-4 text-fg">{f.gb(cost.egressBytes / 1e9)}<Sep />{f.usd(cost.egressUsd)}</td>
+                <td className="py-2 pe-4 text-fg">{f.integer(cost.classAOps)}<Sep />{f.usd(cost.opsUsd)}</td>
+                <td className="py-2 pe-4 text-fg">{f.gb(cost.storageBytes / 1e9)}<Sep />{f.usd(cost.storageUsdMonth)}</td>
                 <td className="py-2 font-bold text-fg" data-testid={`backfill-overview-${key}-total`}>{f.usd(cost.totalUsd)}</td>
               </tr>
             ))}

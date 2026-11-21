@@ -4,7 +4,6 @@ import type { ProcessingVideosResponse, ThumbnailRun } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
@@ -13,6 +12,9 @@ import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
+import { Sep } from '@/components/Sep';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -55,8 +57,8 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
         <h2 id="reconciler-title" className="text-lg font-semibold text-fg mb-1">{t('processing.reconcilerTitle')}</h2>
         {r ? (
           <p className="text-fg-muted text-sm" data-last-run={r.lastRunAt}>
-            {t('processing.reconcilerLast', { date: formatDate(r.lastRunAt, locale, true), scanned: r.scanned, notReady: r.notReady, started: r.loopsStarted })}
-            {' · '}
+            {fillNodes(t('processing.reconcilerLast', { scanned: r.scanned, notReady: r.notReady, started: r.loopsStarted }), { date: <LocalTime value={r.lastRunAt} withTime /> })}
+            <Sep />
             {t('processing.reconcilerFlagged', { reupload: r.flagged.needsReupload, stalled: r.flagged.stalled, failed: r.flagged.failed })}
           </p>
         ) : (

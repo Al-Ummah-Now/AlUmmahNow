@@ -8,5 +8,5 @@ import { fillNodes } from '@/components/audit/fill';
 export function BatchName({ name, createdAt }: { name: string | null; createdAt: string }) {
   const { t } = useLanguage();
   if (name) return <bdi>{name}</bdi>;
-  return <>{fillNodes(t('imports.unnamed'), { date: <LocalTime value={createdAt} /> })}</>;
+  return <>{fillNodes(t('imports.unnamed'), { date: <LocalTime value={createdAt} withTime /> })}</>;
 }

@@ -3,7 +3,7 @@
  * package written like apps/media writes one (video-only rung, the original's audio, an English dub;
  * master from container/audio.mjs packageMaster), with the API's track list.
  * - The first track follows the site's language: the dub on /en, the original on /ar.
- * - The menu lists "label · kind" radio items, each with its language, the current one checked.
+ * - The menu lists "label • kind" radio items, each with its language, the current one checked.
  * - Picking a track loads its audio rendition while playback goes on, and the choice is kept for
  *   the next video (a reload here).
  * - Keyboard: arrows move, Enter picks, Escape closes.
@@ -73,12 +73,12 @@ test.describe('Audio menu', () => {
     const menu = await openAudioMenu(page, player);
     const options = menu.getByRole('menuitemradio');
     await expect(options).toHaveCount(2);
-    await expect(options.nth(0)).toHaveText(/العربية · Original/);
+    await expect(options.nth(0)).toHaveText(/العربية • Original/);
     await expect(options.nth(0).locator('.vjs-fanous-mi-label bdi')).toHaveAttribute('lang', 'ar');
-    await expect(options.nth(1)).toHaveText(/English · Dubbed/);
+    await expect(options.nth(1)).toHaveText(/English • Dubbed/);
     await expect(options.nth(1).locator('.vjs-fanous-mi-label bdi')).toHaveAttribute('lang', 'en');
     // Only the track's name takes its own direction: the row keeps the page's (an Arabic name
-    // must not flip "العربية · Original" into a right-aligned "Original · العربية")
+    // must not flip "العربية • Original" into a right-aligned "Original • العربية")
     expect(await labelDirections(options)).toEqual(['ltr', 'ltr']);
     await expect(options.nth(1)).toHaveAttribute('aria-checked', 'true');
     await shot(page, player, `${info.project.name}-audio-menu-en`);

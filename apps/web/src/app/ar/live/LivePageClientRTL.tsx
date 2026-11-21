@@ -14,7 +14,7 @@
 
 'use client';
 
-import { numberFormat } from '@al-ummah/shared-types';
+import { numberFormat, pluralCategory } from '@al-ummah/shared-types';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLiveStreams } from '@/hooks/useLiveStreams';
@@ -139,14 +139,17 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
  * Note: Arabic pluralization is hardcoded here because it requires
  * grammatical case changes that can't be handled by simple interpolation.
  */
-function formatStreamCount(count: number): string {
+export function formatStreamCount(count: number): string {
   const formattedCount = numberFormat('ar').format(count);
 
   if (count === 0) return 'لا توجد بثوث';
-  if (count === 1) return 'بث واحد مباشر';
+  if (count === 1) return 'بث مباشر واحد';
   if (count === 2) return 'بثان مباشران';
-  if (count <= 10) return `${formattedCount} بثوث مباشرة`;
-  return `${formattedCount} بثًا مباشرًا`;
+  // CLDR: 3–10 plural, 11–99 accusative singular, 100+ genitive singular (#1666)
+  const form = pluralCategory('ar', count);
+  if (form === 'few') return `${formattedCount} بثوث مباشرة`;
+  if (form === 'many') return `${formattedCount} بثًا مباشرًا`;
+  return `${formattedCount} بث مباشر`;
 }
 
 /**

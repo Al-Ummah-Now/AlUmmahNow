@@ -118,15 +118,15 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="analytics-growth-cards">
         <CardComponent
           title={d.watchTimeHours}
-          value={d.hoursValue.replace('{hours}', formatNumber(lang === 'ar' ? 'ar' : 'en-US', toHours(seriesTotal(metrics, 'watchTime'))))}
-          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          value={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.hoursValue, { hours: toHours(seriesTotal(metrics, 'watchTime')) })}
+          subtitle={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.inLastDays, { days: metrics?.length ?? 0 })}
           icon="clock"
           {...change('watchTime')}
         />
         <CardComponent
           title={d.newSubscribers}
           value={fmt(seriesTotal(metrics, 'subscribers'))}
-          subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
+          subtitle={fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.inLastDays, { days: metrics?.length ?? 0 })}
           icon="users"
           {...change('subscribers')}
         />
@@ -182,7 +182,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     {formatCountNoun(lang, video.views, 'view')}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {d.likesAndComments.replace('{likes}', fmt(video.likes)).replace('{comments}', fmt(video.comments))}
+                    {fillTemplate(lang === 'ar' ? 'ar' : 'en-US', d.likesAndComments, { likes: video.likes, comments: video.comments })}
                   </p>
                 </div>
               </div>

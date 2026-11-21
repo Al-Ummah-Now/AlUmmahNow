@@ -9,7 +9,6 @@
 import { useId, useState } from 'react';
 import { BILLING_TEXT_LIMITS, type BillingTaxSettings } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { ActionFeedback } from '@/components/content/actions';
 import { primarySmallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass } from '@/components/ui';
@@ -19,8 +18,10 @@ import { taxBody, taxDraft, type TaxDraft } from '@/lib/payments';
 import { hintClass, labelClass, useBillingAction } from './shared';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSettings; canManage: boolean; onRefresh: () => Promise<void> }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const { busy, error, notice, run } = useBillingAction('payments-tax');
   const { run: withUndo } = useUndoableAction();
@@ -33,7 +34,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
     <section className={cardClass} aria-label={t('payments.tabs.tax')} data-testid="payments-tax">
       <p className="text-sm text-fg-muted mb-1 max-w-prose">{t('payments.tax.hint')}</p>
       {!canManage && <p className="text-sm text-fg-muted mb-1">{t('payments.tax.readOnly')}</p>}
-      {tax.updatedAt && <p className="text-xs text-fg-muted mb-4">{t('payments.tax.changed', { date: formatDate(tax.updatedAt, locale, true) })}</p>}
+      {tax.updatedAt && <p className="text-xs text-fg-muted mb-4">{fillNodes(t('payments.tax.changed'), { date: <LocalTime value={tax.updatedAt} withTime /> })}</p>}
       <ActionFeedback error={error} message={notice} testId="payments-tax-feedback" />
       <form
         className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0"

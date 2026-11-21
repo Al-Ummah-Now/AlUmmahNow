@@ -1,12 +1,13 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { studioVideoTitle } from '@/lib/studio/videos';
 import { VideoAnalytics } from './VideoAnalytics';
 
 interface Props {
   locale: string;
   channelId: string;
-  video: { id: string; title: string; duration?: number; dateCreated?: string };
+  video: { id: string; title: string; titleLocalized?: Partial<Record<string, string>> | null; duration?: number; dateCreated?: string };
 }
 
 export function StudioVideoAnalyticsPage({ locale, channelId, video }: Props) {
@@ -16,7 +17,7 @@ export function StudioVideoAnalyticsPage({ locale, channelId, video }: Props) {
       locale={locale}
       channelId={channelId}
       videoId={video.id}
-      title={video.title}
+      title={studioVideoTitle(video, locale)}
       duration={video.duration}
       created={video.dateCreated}
       backHref={`/${locale}/studio/${encodeURIComponent(channelId)}/content/videos`}

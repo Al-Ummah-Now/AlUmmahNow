@@ -19,6 +19,7 @@ import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
 import { Preview } from './Preview';
 import { formatUnit } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
+import { Sep } from '@/components/Sep';
 
 type Section = 'general' | 'colours' | 'components' | 'materials' | 'typography' | 'imagery' | 'assets';
 const SECTIONS: [Section, MessageKey][] = [
@@ -189,8 +190,8 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
           <h1 className="text-2xl font-bold text-fg">{theme.name?.[locale] || theme.id} <span className="text-sm font-normal text-fg-muted" dir="ltr">{theme.id}</span></h1>
           <p className="text-sm text-fg-muted" data-testid="theme-editor-status">
             {latest ? t('themeBuilder.published', { version: latest }) : t('themeBuilder.notPublished')}
-            {active && <> · <strong data-testid="theme-editor-active">{t('themeBuilder.active')} ({active})</strong></>}
-            {dirty && <> · <span data-testid="theme-editor-dirty">{t('themeBuilder.unsaved')}</span></>}
+            {active && <><Sep /><strong data-testid="theme-editor-active">{t('themeBuilder.active')} ({active})</strong></>}
+            {dirty && <><Sep /><span data-testid="theme-editor-dirty">{t('themeBuilder.unsaved')}</span></>}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -205,7 +206,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
       {canEdit && issues.length > 0 && <p className="mb-3 text-sm text-danger-fg" data-testid="theme-publish-blocked">{t('themeBuilder.publishBlocked')}</p>}
       {notice && <p role="status" className="mb-3 text-sm font-medium text-fg" data-testid="theme-editor-notice">{notice}</p>}
       <details className={`${cardClass} !p-3 mb-4`} open={issues.length > 0 && issues.length < 12} data-testid="theme-issues" data-count={issues.length}>
-        <summary className={`text-sm font-medium ${issues.length ? 'text-danger-fg' : 'text-fg'}`}>{issues.length ? t('themeBuilder.errors', { count: issues.length }) : t('themeBuilder.noErrors')}{live.warnings.length ? ` · ${t('themeBuilder.warnings', { count: live.warnings.length })}` : ''}</summary>
+        <summary className={`text-sm font-medium ${issues.length ? 'text-danger-fg' : 'text-fg'}`}>{issues.length ? t('themeBuilder.errors', { count: issues.length }) : t('themeBuilder.noErrors')}{live.warnings.length ? `${t('common.sep')}${t('themeBuilder.warnings', { count: live.warnings.length })}` : ''}</summary>
         <ul className="mt-2 space-y-1 text-xs" dir="ltr">
           {issues.slice(0, 60).map((i, n) => <li key={n} className="text-danger-fg"><code>{i.path}</code>: {i.message}</li>)}
         </ul>

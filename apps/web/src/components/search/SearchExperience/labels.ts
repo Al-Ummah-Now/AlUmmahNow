@@ -2,7 +2,6 @@
  * Localised labels for search types and filters (Story 29.8).
  */
 
-import { numberFormat } from '@al-ummah/shared-types';
 import type { SearchDateFilter, SearchDurationFilter, SearchEntityType, SearchSort } from '@al-ummah/shared-types';
 import { FALLBACK_CATEGORIES, type WebVideoCategory } from '@/lib/api/categories';
 import type { AppTranslations } from '@/lib/i18n/types';
@@ -81,13 +80,5 @@ export function filterChipLabel(
     case 'category': return categoryLabel(state.category, lang, t.allCategories, categories);
     case 'verified': return t.verified;
     case 'channelId': return t.inChannel.replace('{name}', channelName || t.thisChannel);
-  }
-}
-
-export function formatCount(value: number, lang: string): string {
-  try {
-    return numberFormat(lang === 'ar' ? 'ar' : 'en', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-  } catch {
-    return String(value);
   }
 }

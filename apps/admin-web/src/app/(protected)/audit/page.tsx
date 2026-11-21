@@ -3,7 +3,7 @@ import { getAuditActions, getAuditFeed } from '@/lib/api/audit';
 import { getAdminSession } from '@/lib/auth';
 import { canReadAudit } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert } from '@/components/ui';
 import { CursorPager, EmptyState, tableWrapClass, tdClass, thClass } from '@/components/content/parts';
 import { AuditWhat } from '@/components/audit/AuditEntryList';
@@ -14,6 +14,7 @@ import { auditHref, itemView, personView } from '@/components/audit/audit-model'
 import { logger } from '@/lib/logger';
 import { AuditFilters, type AuditFilterValues } from './AuditFilters';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -107,7 +108,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
                 {page.items.map((e) => (
                   <tr key={e.id} data-testid="audit-row" data-action={e.action} data-area={e.area} className="max-md:flex max-md:flex-col max-md:gap-1 max-md:p-4">
                     <td className={`${tdClass} whitespace-nowrap text-fg-muted max-md:order-4 max-md:p-0 max-md:text-xs`}>
-                      <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time>
+                      <LocalTime value={e.createdAt} withTime />
                     </td>
                     <td className={`${tdClass} md:min-w-[10rem] max-md:order-2 max-md:p-0`}>
                       <span className="md:hidden text-fg-subtle text-xs">{t('auditLog.by')} </span>

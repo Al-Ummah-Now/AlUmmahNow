@@ -3,7 +3,7 @@
  * analytics, admin-web). Pure: no DOM, no React. Numbers go through
  * locale-format, like every other number on the page.
  */
-import { formatClock, intlLocale, numberFormat } from './locale-format';
+import { formatClock, formatCompact, intlLocale, numberFormat } from './locale-format';
 
 /**
  * @deprecated Use `intlLocale` (or the formatters) from locale-format: charts and the text
@@ -50,8 +50,7 @@ function round(value: number): number {
 
 /** 1234 -> "1.2K" (en), "١٫٢ ألف" (ar). */
 export function compactNumber(locale: string): (value: number) => string {
-  const format = numberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
-  return (value) => format.format(value);
+  return (value) => formatCompact(locale, value);
 }
 
 export type WatchTimeUnit = 'minute' | 'hour';

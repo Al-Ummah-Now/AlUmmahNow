@@ -177,8 +177,8 @@ interface LiveStreamCardProps {
 ```tsx
 import { formatViewerCountArabic } from '@/lib/utils/number-format';
 
-// English: "1,234" → Arabic: "١٬٢٣٤"
-formatViewerCountArabic(1234, 'full');   // "١٬٢٣٤"
+// English: "1,234" → Arabic: "١٢٣٤"
+formatViewerCountArabic(1234, 'full');   // "١٢٣٤"
 formatViewerCountArabic(1234, 'compact'); // "١٫٢ ألف"
 ```
 
@@ -199,7 +199,7 @@ formatRelativeTimeArabic(scheduledTime);
 ### ARIA Labels (Arabic)
 
 ```tsx
-aria-label="بث مباشر: {title} بواسطة {channel.name}، ١٬٢٣٤ مشاهد"
+aria-label="بث مباشر: {title} بواسطة {channel.name}، ١٢٣٤ مشاهد"
 ```
 
 ### Direction and Language

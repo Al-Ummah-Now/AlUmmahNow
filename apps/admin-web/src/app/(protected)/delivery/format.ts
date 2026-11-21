@@ -4,6 +4,8 @@
  */
 import { dateTimeFormat, formatDuration, moneyFormat, numberFormat } from '@al-ummah/shared-types';
 
+import { formatMinute } from '@/i18n/translate';
+import type { Locale } from '@/i18n/config';
 export interface DeliveryFormats {
   integer: (v: number) => string;
   decimal: (v: number) => string;
@@ -33,7 +35,6 @@ export function deliveryFormats(locale: string): DeliveryFormats {
   const usdCents = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const usdFine = moneyFormat(loc, 'USD', { maximumSignificantDigits: 2 });
   const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const time = dateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
   return {
     integer: (v) => integer.format(v),
     decimal: (v) => decimal.format(v),
@@ -47,7 +48,7 @@ export function deliveryFormats(locale: string): DeliveryFormats {
     usd: (v) => (v >= 10 ? usdWhole : v >= 0.01 || v === 0 ? usdCents : usdFine).format(v),
     time: (m) => {
       const date = new Date(`${m}:00Z`);
-      return Number.isNaN(date.getTime()) ? m : time.format(date);
+      return Number.isNaN(date.getTime()) ? m : formatMinute(date, loc as Locale);
     },
     day: (d) => {
       const date = new Date(`${d}T00:00:00Z`);

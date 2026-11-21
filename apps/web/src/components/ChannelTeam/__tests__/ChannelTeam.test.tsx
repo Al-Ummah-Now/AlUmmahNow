@@ -60,7 +60,7 @@ describe('ChannelTeam', () => {
     render(<ChannelTeam channelId="team" role="owner" locale="en" />);
     const invite = await screen.findByTestId('team-invite');
     expect(invite).toHaveTextContent('new@example.com');
-    expect(invite).toHaveTextContent('Channel moderator · expires in 12 days');
+    expect(invite).toHaveTextContent('Channel moderator • expires in 12 days');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel the invitation for new@example.com' }));
     await waitFor(() => expect(api.cancelTeamInvite).toHaveBeenCalledWith('team', 'i1'));
     expect(await screen.findByTestId('team-message')).toHaveTextContent('Invitation cancelled.');

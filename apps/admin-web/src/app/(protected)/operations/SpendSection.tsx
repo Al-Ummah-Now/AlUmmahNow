@@ -186,7 +186,7 @@ export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; 
   const idleByEnv = envs
     .filter((e) => (c.idle.byEnv[e] ?? 0) > 0)
     .map((e) => `${t(`operations.envs.${e}`)} ${f.usd(c.idle.byEnv[e] ?? 0)}`)
-    .join(' · ');
+    .join(t('common.sep'));
   const series = OPS_TREND_KEYS.map((key) => ({
     key,
     label: t(`operations.spend.trendKeys.${key}`),

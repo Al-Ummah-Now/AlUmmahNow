@@ -56,7 +56,7 @@ export function JobTiming({ job }: { job: Pick<AdminJob, 'attempts' | 'maxAttemp
       )}
       {waiting && (
         <span className="block text-xs text-fg-muted mt-0.5" data-testid="job-next-run">
-          {fillNodes(t(job.status === 'retrying' ? 'jobs.nextRun' : 'jobs.nextStep'), { time: <LocalTime value={job.nextRunAt!} date={false} /> })}
+          {fillNodes(t(job.status === 'retrying' ? 'jobs.nextRun' : 'jobs.nextStep'), { time: <LocalTime value={job.nextRunAt!} timeOnly /> })}
         </span>
       )}
     </>
@@ -117,7 +117,7 @@ function LogLine({ entry, max }: { entry: AdminJobLogEntry; max: number }) {
   });
   return (
     <li className="grid grid-cols-1 sm:grid-cols-[minmax(11rem,auto)_1fr] gap-x-4 gap-y-0.5 py-2 border-b border-border last:border-0" data-testid="job-log-line" data-event={entry.event}>
-      <LocalTime value={entry.at} seconds className="text-xs text-fg-muted tabular-nums" />
+      <LocalTime value={entry.at} clock withTime className="text-xs text-fg-muted tabular-nums" />
       <div className="min-w-0">
         <p className="text-sm text-fg [text-wrap:balance]">{text}</p>
         {entry.error && <JobErrorText error={entry.error} testId="job-log-error" />}

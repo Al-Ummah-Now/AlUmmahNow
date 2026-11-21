@@ -11,7 +11,6 @@ import { ADMIN_BILLING_FILTERS, formatBillingAmount, type AdminBillingFilter, ty
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { secondaryButtonClass, linkClass, cardClass } from '@/components/ui';
 import { primarySmallButtonClass, smallButtonClass } from '@/components/content/parts';
 import { billingRequest } from '@/lib/list/api-client';
@@ -20,6 +19,8 @@ import { ToneChip, providerName, useBillingAction } from './shared';
 import { CompForm } from './CompForm';
 import type { TierOption } from './PricesPanel';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const PAGE_SIZE = 25;
 
 export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }: { initial: AdminBillingSubscriptionsPage | null; initialFilter: AdminBillingFilter; tiers: TierOption[]; canManage: boolean }) {
@@ -136,7 +137,7 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
                   <div>
                     <dt className="sr-only">{t('payments.subs.periodEnd')}</dt>
                     <dd className="text-fg-muted">
-                      {end ? (s.accessUntil ? t('payments.subs.accessUntil', { date: formatDate(end, locale) }) : formatDate(end, locale)) : '—'}
+                      {end ? (s.accessUntil ? fillNodes(t('payments.subs.accessUntil'), { date: <LocalTime value={end} /> }) : <LocalTime value={end} />) : '—'}
                       {s.amount !== null && s.currency && (
                         <span className="block sm:ms-2 sm:inline" data-testid="payments-sub-amount">
                           <bdi>{formatBillingAmount(s.amount, s.currency, locale)}</bdi> {s.period ? t(`payments.perPeriod.${s.period}`) : ''}

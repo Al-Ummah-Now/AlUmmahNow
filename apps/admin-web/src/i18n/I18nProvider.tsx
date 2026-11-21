@@ -43,3 +43,8 @@ export function useLanguage(): I18nContextValue {
   }
   return value;
 }
+
+/** The active locale, or null outside <I18nProvider> (components that also take the locale as a prop). */
+export function useOptionalLocale(): Locale | null {
+  return useContext(I18nContext)?.locale ?? null;
+}

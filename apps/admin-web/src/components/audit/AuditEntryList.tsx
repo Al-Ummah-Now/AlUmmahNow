@@ -5,11 +5,13 @@
  */
 import type { AdminNames } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { type MessageKey, type Translator } from '@/i18n/translate';
 import { MonoId } from '@/components/content/parts';
 import { actionLabel, detailKeyLabel, detailText, detailViews, itemView, paymentsLine, personView, settingLabel, splitTemplate, type AuditTierNames } from './audit-model';
 import { ItemName, PersonName } from './Named';
 
+import { LocalTime } from '@/components/LocalTime';
+import { Sep } from '@/components/Sep';
 export interface AuditEntryLike {
   id: string;
   action: string;
@@ -52,7 +54,7 @@ function Details({ entry, names, t }: { entry: AuditEntryLike; names: AdminNames
       )}
       {entry.previous && Object.keys(entry.previous).length > 0 && (
         <p className="mt-1 text-xs text-fg-subtle break-words" dir="auto">
-          {t('auditLog.previous', { value: Object.entries(entry.previous).map(([k, v]) => (k === 'value' ? detailText(v) : `${k}: ${detailText(v)}`)).join(' · ') })}
+          {t('auditLog.previous', { value: Object.entries(entry.previous).map(([k, v]) => (k === 'value' ? detailText(v) : `${k}: ${detailText(v)}`)).join(t('common.sep')) })}
         </p>
       )}
     </>
@@ -80,10 +82,10 @@ export function AuditWhat({ entry, names, t, showTarget, locale, tiers }: { entr
         <span className="font-medium" data-testid="audit-action-label">
           {actionLabel(entry.action, t)}
         </span>
-        {entry.setting && <span className="text-fg-muted"> · {t('auditLog.setting', { name: settingLabel(entry.setting, t) })}</span>}
+        {entry.setting && <span className="text-fg-muted"><Sep />{t('auditLog.setting', { name: settingLabel(entry.setting, t) })}</span>}
         {showTarget && entry.target && (
           <>
-            <span className="text-fg-muted"> · {kindLabel(entry.target.kind, t)} </span>
+            <span className="text-fg-muted"><Sep />{kindLabel(entry.target.kind, t)} </span>
             <ItemName item={itemView(entry.target.kind, entry.target.id, names, t)} testId="audit-target" />
           </>
         )}
@@ -119,8 +121,8 @@ export function AuditEntryList({ entries, names, t, locale, showTarget = false, 
           <p className="text-fg-subtle text-xs mt-0.5 flex flex-wrap gap-x-1 items-baseline">
             <span>{t('auditLog.by')}</span>
             <PersonName person={personView(e.actorId, names, t, e.actorEmail ?? null)} testId="audit-actor" />
-            <span aria-hidden="true">·</span>
-            <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time>
+            <Sep gap="0.25rem" />
+            <LocalTime value={e.createdAt} withTime />
           </p>
         </li>
       ))}

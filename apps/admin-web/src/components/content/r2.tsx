@@ -8,8 +8,10 @@ import type { MessageKey, Translator } from '@/i18n/translate';
 import { deliveryFormats } from '@/app/(protected)/delivery/format';
 import { Chip, type ChipTone } from './parts';
 import { R2Extras } from './processing';
-import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
+import { numberFormat } from '@al-ummah/shared-types';
 
+import { formatDate } from '@/i18n/translate';
+import type { Locale } from '@/i18n/config';
 export type R2BadgeState = AdminVideoR2Badge['status'] | 'none';
 
 const STATUS_LABEL: Record<AdminVideoR2Badge['status'], MessageKey> = {
@@ -86,7 +88,7 @@ export function R2FailureDetails({ failure, t, locale, last = false }: { failure
   ];
   const at = new Date(failure.at);
   if (!Number.isNaN(at.getTime())) {
-    rows.push({ key: 'at', label: t('mediaDelivery.failureAt'), value: dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'medium' }).format(at) });
+    rows.push({ key: 'at', label: t('mediaDelivery.failureAt'), value: formatDate(at, locale as Locale, true) });
   }
   if (failure.source?.file || typeof failure.source?.bytes === 'number') {
     const file = failure.source.file ?? '';
@@ -138,11 +140,10 @@ export function R2Status({ r2, t, locale }: { r2: AdminVideoR2 | null | undefine
     );
   }
   const f = deliveryFormats(locale);
-  const when = dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
   const date = (v: string | undefined) => {
     if (!v) return null;
     const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? null : when.format(d);
+    return Number.isNaN(d.getTime()) ? null : formatDate(d, locale as Locale, true);
   };
   const progress = r2.status === 'transcoding' && typeof r2.progress === 'number' ? Math.round(Math.min(1, Math.max(0, r2.progress)) * 100) : null;
   const times: { key: string; label: string; value: string | null }[] = [

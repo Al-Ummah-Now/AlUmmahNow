@@ -11,7 +11,7 @@ import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VideoObject } from '@/interfaces';
-import type { VideoCommentSettings as CommentSettings, VideoCategory } from '@al-ummah/shared-types';
+import { fillTemplate, type VideoCommentSettings as CommentSettings, type VideoCategory } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
 import { getChapters, updateChapters, type Chapter } from '@/lib/api/chapters';
 import { CategorySelector } from '@/components/videoUpload/CategorySelector';
@@ -614,7 +614,7 @@ export default function VideoEdit({
                     const result = await updateChapters(video.id, parsedChapters, 'imported');
                     if (result?.success) {
                       setChapters(parsedChapters);
-                      setSuccess(`${parsedChapters.length} ${t.video.chaptersDetected}`);
+                      setSuccess(fillTemplate(isRTL ? 'ar' : 'en', t.video.chaptersDetected ?? '', { count: parsedChapters.length }));
                       setChapterMode('none');
                     } else {
                       setError(result?.error || t.errors.genericError);
@@ -635,7 +635,7 @@ export default function VideoEdit({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                    {chapters.length} {t.video.chaptersDetected}
+                    {fillTemplate(isRTL ? 'ar' : 'en', t.video.chaptersDetected ?? '', { count: chapters.length })}
                   </p>
                   <p className="text-xs text-green-600 dark:text-green-500 mt-1">
                     {t.video.clickToEditChapters}

@@ -2,13 +2,14 @@ import Link from '@/components/AppLink';
 import { listReports } from '@/lib/api/admin';
 import type { ListReportsResponse } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, StatusChip, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { FilterBar } from './FilterBar';
 import { PAGE_SIZE, moderationHref, parseModerationFilters } from './filters';
 import { LiveRefresh } from '@/components/LiveRefresh';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -21,7 +22,7 @@ const pagerClass =
 
 export default async function ModerationPage({ searchParams }: PageProps) {
   const filters = parseModerationFilters(await searchParams);
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const { page } = filters;
 
   let data: ListReportsResponse | null = null;
@@ -99,7 +100,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
                       <StatusChip status={report.status} label={translateDynamic(t, 'status', report.status)} />
                     </td>
                     <td className="px-4 sm:px-6 py-4 text-fg-muted text-sm whitespace-nowrap">
-                      <time dateTime={report.created_at}>{formatDate(report.created_at, locale)}</time>
+                      <LocalTime value={report.created_at} />
                     </td>
                     <td className="px-4 sm:px-6 py-4">
                       <Link

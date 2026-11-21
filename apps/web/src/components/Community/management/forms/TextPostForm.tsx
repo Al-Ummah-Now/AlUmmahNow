@@ -1,6 +1,6 @@
 'use client';
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { charactersLeft, charactersOver } from '@/lib/format/characters';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
@@ -58,14 +58,7 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
             : 'text-muted-foreground'
           }
         `}>
-          {remaining >= 0
-            ? (isRTL
-              ? `${formatNumber('ar', remaining)} حرف متبقي`
-              : `${formatNumber('en', remaining)} characters remaining`)
-            : (isRTL
-              ? `${formatNumber('ar', Math.abs(remaining))} حرف زائد`
-              : `${formatNumber('en', Math.abs(remaining))} characters over limit`)
-          }
+          {remaining >= 0 ? charactersLeft(isRTL, remaining) : charactersOver(isRTL, Math.abs(remaining), { limit: true })}
         </span>
 
         {error && (

@@ -5,12 +5,13 @@ import { AccessLog } from './AccessLog';
 import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { type MessageKey, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, needsReport, retentionLabelKey, sortCases } from './model';
 import { IntakeForm, SettingsCard } from './CsamAdmin';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -62,13 +63,13 @@ export default async function CsamCasesPage() {
   );
 }
 
-function CaseTable({ cases, locale, t }: { cases: CsamCaseSummary[]; locale: Locale; t: Translator }) {
+function CaseTable({ cases, t }: { cases: CsamCaseSummary[]; locale: Locale; t: Translator }) {
   const sorted = sortCases(cases);
   const retention = (c: CsamCaseSummary) =>
     ({
       deleted: t('csamPage.list.evidenceDeleted'),
       hold: t('csamPage.list.retainHold'),
-      date: c.retainUntil ? formatDate(c.retainUntil, locale) : '',
+      date: c.retainUntil ? <LocalTime value={c.retainUntil} /> : '',
       untilReported: t('csamPage.list.retainUntilReported'),
     })[retentionLabelKey(c)];
   const status = (c: CsamCaseSummary) => (
@@ -92,7 +93,7 @@ function CaseTable({ cases, locale, t }: { cases: CsamCaseSummary[]; locale: Loc
               <dt className="text-fg-muted">{t('csamPage.list.colKind')}</dt>
               <dd className="text-fg">{c.itemKind ? t(`csamPage.kinds.${c.itemKind}` as MessageKey) : '—'}</dd>
               <dt className="text-fg-muted">{t('csamPage.list.colDetected')}</dt>
-              <dd className="text-fg">{formatDate(c.detectedAt, locale, true)}</dd>
+              <dd className="text-fg"><LocalTime value={c.detectedAt} withTime /></dd>
               <dt className="text-fg-muted">{t('csamPage.list.colRetain')}</dt>
               <dd className="text-fg">{retention(c)}</dd>
             </dl>
@@ -139,7 +140,7 @@ function CaseTable({ cases, locale, t }: { cases: CsamCaseSummary[]; locale: Loc
                   {c.legalHold && <span className="block text-xs text-fg-muted mt-1">{t('csamPage.list.hold')}</span>}
                 </td>
                 <td className="p-2 text-fg-muted">{c.itemKind ? t(`csamPage.kinds.${c.itemKind}` as MessageKey) : '—'}</td>
-                <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(c.detectedAt, locale, true)}</td>
+                <td className="p-2 whitespace-nowrap text-fg-muted"><LocalTime value={c.detectedAt} withTime /></td>
                 <td className="p-2 whitespace-nowrap text-fg-muted">{retention(c)}</td>
               </tr>
             ))}

@@ -3,11 +3,13 @@ import { getLatestVideoFormatRun, listFlaggedVideoFormats } from '@/lib/api/admi
 import type { FlaggedVideoList, VideoFormatRunView } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { RunBackfill, SetFormatButtons } from './VideoFormatActions';
 
+import { LocalTime } from '@/components/LocalTime';
+import { Sep } from '@/components/Sep';
 export const dynamic = 'force-dynamic';
 
 const PAGE = 25;
@@ -56,11 +58,11 @@ export default async function VideoFormatsPage({ searchParams }: { searchParams:
           <div className="mt-6" data-testid="video-formats-latest" data-status={run.status} data-dry-run={run.dryRun}>
             <p className="text-sm text-fg mb-4">
               {t('videoFormats.status')}: <strong>{run.status === 'done' ? t('videoFormats.statusDone') : t('videoFormats.statusRunning')}</strong>
-              {' · '}
+              <Sep />
               {run.dryRun ? t('videoFormats.kindDry') : t('videoFormats.kindApply')}
-              {' · '}
-              {t('videoFormats.startedAt')} <time dateTime={run.startedAt}>{formatDate(run.startedAt, locale, true)}</time>
-              {' · '}
+              <Sep />
+              {t('videoFormats.startedAt')} <LocalTime value={run.startedAt} withTime />
+              <Sep />
               {t('videoFormats.pages')} {formatNumber(run.pagesDone, locale)}
             </p>
             {run.lastError && <ErrorAlert testId="video-formats-run-error">{`${t('videoFormats.lastError')}: ${run.lastError}`}</ErrorAlert>}
