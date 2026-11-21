@@ -52,6 +52,9 @@ const KNOWN_ERRORS = ['forbidden', 'invalid_target', 'target_not_found', 'alread
 
 type Fail = Extract<DiscoveryResult<unknown>, { ok: false }>;
 
+/** 'discovery.pin-edit' → 'pin_edit' (message keys can't hold dots). */
+const historyKey = (action: string) => action.replace(/^discovery\./, '').replace(/-/g, '_');
+
 const clampPosition = (value: string) => Math.max(1, Math.min(DISCOVERY_MAX_PIN_POSITION, Math.trunc(Number(value)) || 1));
 
 /** Local "YYYY-MM-DDTHH:mm" (DateTimeField) ↔ ISO instant. */
@@ -305,11 +308,11 @@ function HomeRails({ initial, canManage, onError, onNotice }: SectionProps & { i
   );
 }
 
-function KindChoice({ value, onChange, name }: { value: DiscoveryPinKind; onChange: (kind: DiscoveryPinKind) => void; name: string }) {
+function KindChoice({ value, onChange, name, legend }: { value: DiscoveryPinKind; onChange: (kind: DiscoveryPinKind) => void; name: string; legend: string }) {
   const { t } = useLanguage();
   return (
     <fieldset className="flex flex-col gap-1">
-      <legend className="text-sm text-fg mb-1">{t('discovery.pins.kind')}</legend>
+      <legend className="text-sm text-fg mb-1">{legend}</legend>
       <div className="flex gap-2">
         {(['video', 'channel'] as const).map((k) => (
           <label key={k} className={`${smallButton} cursor-pointer has-[:checked]:border-accent has-[:checked]:bg-accent has-[:checked]:text-on-accent`}>
@@ -515,7 +518,7 @@ function AddPin({ categories, onAdded, onError }: { categories: DiscoveryAdminSt
           ))}
         </Select>
       </div>
-      <KindChoice value={kind} onChange={(k) => { setKind(k); setTarget(''); setPicker((n) => n + 1); }} name={`${id}-kind`} />
+      <KindChoice value={kind} onChange={(k) => { setKind(k); setTarget(''); setPicker((n) => n + 1); }} name={`${id}-kind`} legend={t('discovery.pins.kind')} />
       <div className="md:col-span-2 flex flex-col gap-1">
         <Autocomplete
           key={`${kind}-${picker}`}
@@ -523,6 +526,7 @@ function AddPin({ categories, onAdded, onError }: { categories: DiscoveryAdminSt
           mode="pick"
           label={t(kind === 'video' ? 'discovery.pins.targetVideo' : 'discovery.pins.targetChannel')}
           hint={t('discovery.pins.targetHelp')}
+          placeholder={t(kind === 'video' ? 'discovery.pins.videoPlaceholder' : 'discovery.pins.channelPlaceholder')}
           showIds={false}
           initialResults
           onChange={(value) => setTarget(value)}
@@ -714,7 +718,7 @@ function Exclusions({
       {canManage && (
         <form onSubmit={add} noValidate className="mt-4 rounded-lg border border-border bg-surface-2 p-4 grid gap-4 md:grid-cols-2" data-testid="exclusion-add-form" aria-labelledby={`${id}-title`}>
           <h3 id={`${id}-title`} className="md:col-span-2 text-base font-semibold text-fg">{t('discovery.exclusions.addTitle')}</h3>
-          <KindChoice value={kind} onChange={(k) => { setKind(k); setTarget(''); setPicker((n) => n + 1); }} name={`${id}-kind`} />
+          <KindChoice value={kind} onChange={(k) => { setKind(k); setTarget(''); setPicker((n) => n + 1); }} name={`${id}-kind`} legend={t('discovery.exclusions.kind')} />
           <label className="flex flex-col gap-1 text-sm text-fg">
             {t('discovery.exclusions.reason')}
             <input className={fieldClass} value={reason} maxLength={DISCOVERY_NOTE_MAX} onChange={(e) => setReason(e.target.value)} data-testid="exclusion-add-reason" />
@@ -726,6 +730,7 @@ function Exclusions({
               mode="pick"
               label={t(kind === 'video' ? 'discovery.pins.targetVideo' : 'discovery.pins.targetChannel')}
               hint={t('discovery.pins.targetHelp')}
+              placeholder={t(kind === 'video' ? 'discovery.pins.videoPlaceholder' : 'discovery.pins.channelPlaceholder')}
               showIds={false}
               initialResults
               onChange={(value) => setTarget(value)}
@@ -875,7 +880,7 @@ function History({ entries, categories }: { entries: DiscoveryHistoryEntry[]; ca
             const rail = typeof e.details?.rail === 'string' ? e.details.rail : typeof e.previous?.rail === 'string' ? (e.previous.rail as string) : null;
             return (
               <li key={e.id} className="flex flex-wrap gap-x-2 text-fg" data-testid="discovery-history-row" data-action={e.action}>
-                <span className="font-medium">{t(`discovery.history.actions.${e.action}` as MessageKey)}</span>
+                <span className="font-medium">{t(`discovery.history.actions.${historyKey(e.action)}` as MessageKey)}</span>
                 {e.kind !== 'home' && <span>{e.title ?? t('discovery.pins.missing')}</span>}
                 {rail && <span className="text-fg-muted">· {railName(rail, categories, locale)}</span>}
                 <span className="text-fg-muted">· {e.actorName || <UserName id={e.actorId} showEmail={false} />} · <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time></span>
