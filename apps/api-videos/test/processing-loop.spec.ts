@@ -500,7 +500,10 @@ describe('ready at the first encoded resolution', () => {
 		thumbnailStatus[ID] = 404;
 		const result = await syncVideoFromBunny(env, ID, { now: NOW, bunny: FINISHED as never });
 		assert.equal(result.plan?.outcome, 'playable');
-		assert.match(thumbnailChecks[0], new RegExp(`^https://${HOST.replace(/\./g, '\\.')}/${ID}/thumbnail\\.jpg\\?token=[\\w-]+&expires=\\d+$`));
+		// Exact prefix, then the signed query: no regex built from the host
+		const prefix = `https://${HOST}/${ID}/thumbnail.jpg?`;
+		assert.ok(thumbnailChecks[0].startsWith(prefix), thumbnailChecks[0]);
+		assert.match(thumbnailChecks[0].slice(prefix.length), /^token=[\w-]+&expires=\d+$/);
 		const view = JSON.parse(await (await env.videos.get(ID)).text());
 		assert.equal(view.thumbnailPending, true);
 	});
