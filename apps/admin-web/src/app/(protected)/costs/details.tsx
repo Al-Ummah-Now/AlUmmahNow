@@ -12,6 +12,7 @@ import Link from '@/components/AppLink';
 import { BreakAtHyphens } from '@/components/BreakAtHyphens';
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
+import { CF_METERS } from '@al-ummah/shared-types';
 import type { CostCloudflareLine, CostsDashboard } from '@/lib/api/costs-types';
 import type { OpsFormats } from '../operations/model';
 import { sectionNote, sectionTitle, TREND_COLOR } from './sections';
@@ -34,11 +35,22 @@ function usage(line: CostCloudflareLine, value: number, t: Translator, f: OpsFor
 }
 
 /** Why a line is $0 or carries a caveat: no source of ours, not billed, or estimated. */
-function lineNote(line: CostCloudflareLine, t: Translator): string | null {
+function lineNote(line: CostCloudflareLine, t: Translator, f: OpsFormats): string | null {
   if (!line.billed) return t('costs.cloudflare.notBilled');
   if (line.source === 'none') return t(`costs.cloudflare.none.${line.key}` as never);
-  if (line.source === 'estimated') return t('costs.cloudflare.estimated');
-  return null;
+  const notes = [line.source === 'estimated' ? t('costs.cloudflare.estimated') : null, wholeUnits(line, t, f)].filter(Boolean);
+  return notes.length ? notes.join(' ') : null;
+}
+
+/**
+ * Billed above list price: Cloudflare bills each started unit past the allowance (the invoice
+ * charged 0.62M KV writes as 1M), so a small overage reads high. Say so with the line's numbers.
+ */
+export function wholeUnits(line: CostCloudflareLine, t: Translator, f: OpsFormats): string | null {
+  const meter = CF_METERS[line.key];
+  if (!meter || line.billable <= 0 || line.cost <= line.listCost) return null;
+  const units = Math.ceil(line.billable / meter.unit - 1e-9);
+  return t('costs.cloudflare.wholeUnits', { billable: usage(line, line.billable, t, f), charged: usage(line, units * meter.unit, t, f) });
 }
 
 export function CloudflarePanel({ d, t, f }: Common & { d: CostsDashboard }) {
@@ -72,7 +84,7 @@ export function CloudflarePanel({ d, t, f }: Common & { d: CostsDashboard }) {
       {/* Phones: one card per line */}
       <ul className="mt-4 space-y-2 sm:hidden" data-testid="costs-cf-cards">
         {lines.map((l) => {
-          const note = lineNote(l, t);
+          const note = lineNote(l, t, f);
           return (
             <li key={l.key} className="cost-tile p-3" data-meter={l.key}>
               <div className="flex items-baseline justify-between gap-3">
@@ -106,7 +118,7 @@ export function CloudflarePanel({ d, t, f }: Common & { d: CostsDashboard }) {
           </thead>
           <tbody>
             {lines.map((l) => {
-              const note = lineNote(l, t);
+              const note = lineNote(l, t, f);
               const past = l.included > 0 ? Math.min(1, l.used / l.included) : 1;
               return (
                 <tr key={l.key} className="border-t border-border" data-testid="costs-cf-line" data-meter={l.key} data-source={l.source}>
@@ -181,7 +193,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                 </div>
                 <div className="col-span-2">
                   <dt className="text-xs text-fg-muted">{t('costs.drivers.last14')}</dt>
-                  <dd><Spark r={r} f={f} sep={t('costs.listSep')} /></dd>
+                  <dd><Spark r={r} f={f} sep={t('common.sep')} /></dd>
                 </div>
               </dl>
             </li>
@@ -222,7 +234,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                     <td className="px-3 py-2.5 text-end tabular-nums text-fg">{f.usd(r.mtdUsd)}</td>
                     <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg-muted">{r.idleMonthlyUsd > 0 ? t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) }) : '—'}</td>
                     <td className="px-3 py-2.5 text-end">
-                      <Spark r={r} f={f} sep={t('costs.listSep')} />
+                      <Spark r={r} f={f} sep={t('common.sep')} />
                     </td>
                   </tr>
                 );

@@ -63,6 +63,19 @@ export function credentialState(view: Pick<CostCredentialView, 'set' | 'unreadab
   return view.unreadable ? 'unreadable' : 'set';
 }
 
+/**
+ * What a connection card says about its key: no key here but the collector reading Cloudflare
+ * with the shared release token says so (a bare "Not set" beside live figures reads as broken).
+ */
+export function connectionStatus(provider: CostProvider, state: CredentialState, last4: string | null, releaseInUse: boolean): 'release' | 'unset' | 'unreadable' | 'set' | 'setPlain' {
+  if (state === 'unset') return provider === 'cloudflare' && releaseInUse ? 'release' : 'unset';
+  if (state === 'unreadable') return 'unreadable';
+  return last4 ? 'set' : 'setPlain';
+}
+
+/** Test and Remove only once there is a key: a greyed-out button reads as clickable. */
+export const connectionActions = (state: CredentialState): boolean => state !== 'unset';
+
 /** Connection test codes admin-api stores (lib/costs.ts); each has a translated line. */
 export const TEST_CODES = [
   'cf_ok',

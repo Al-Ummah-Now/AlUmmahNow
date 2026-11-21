@@ -32,8 +32,10 @@ import {
   weekDelta,
   weekdayNames,
   hourName,
+  connectionActions,
+  connectionStatus,
 } from '../src/app/(protected)/costs/model';
-import { opsFormats } from '../src/app/(protected)/operations/model';
+import { opsFormats, worstBacklog } from '../src/app/(protected)/operations/model';
 import type { CostsDashboard } from '../src/lib/api/costs-types';
 
 (globalThis as { React?: unknown }).React = React;
@@ -355,7 +357,7 @@ describe('costs sections render', () => {
     assert.ok(cf.includes('110.4M') && cf.includes('50M'), 'usage (110.46M) and allowance as compact counts, cut not rounded');
     const budget = render(h(sections.BudgetSection, { d, t, f }));
     assert.match(budget, /data-testid="costs-idle-status"[^>]*>\$162\.25 over the \$50\.00 target/);
-    assert.ok(budget.includes('Production $62.25 • QA $150.00'));
+    assert.ok(budget.includes('Production\u00a0$62.25 • QA\u00a0$150.00'), 'each env name stays with its amount');
     const budgetAr = render(h(sections.BudgetSection, { d, t: createTranslator('ar'), f: opsFormats('ar') }));
     assert.ok(budgetAr.includes('، '), 'Arabic joins the env list with «،»');
     assert.ok(!budgetAr.includes(' · '));
@@ -470,5 +472,82 @@ describe('costs audit fixes (AUDIT-2 2026-11-21)', () => {
     assert.ok(!html.includes('break-all'));
     assert.ok(!html.includes('أمريكي, '), 'the spoken list joins days with the Arabic separator');
     for (const key of ['mtd', 'idle', 'last14'] as const) assert.ok(html.includes(t(`costs.drivers.${key}`)), `card labels ${key}`);
+  });
+});
+
+describe('costs audit fixes, round 3 (AUDIT-2 2026-11-21)', () => {
+  const render = (el: React.ReactElement) => renderToStaticMarkup(el as never);
+  const h = (c: unknown, props: object) => React.createElement(c as React.FC, props as never);
+  const doLine = { key: 'do_requests' as const, used: 1_116_900, included: 1_000_000, billable: 116_900, cost: 0.15, listCost: 0.17, projectedCost: 0.15, source: 'measured' as const, billed: true };
+
+  it('explains a line billed above list price: whole units past the allowance', () => {
+    const t = createTranslator('en');
+    const f = opsFormats('en');
+    // 116.9K past the allowance bills as one whole million
+    const line = { ...doLine, cost: 0.15, listCost: 0.0167 };
+    assert.equal(details.wholeUnits(line, t, f), 'Billed in whole units: 116.9K past the allowance is charged as 1M.');
+    assert.equal(details.wholeUnits({ ...line, cost: 0.01, listCost: 0.0167 }, t, f), null, 'not when billed is under list');
+    assert.equal(details.wholeUnits({ ...line, billable: 0 }, t, f), null, 'not inside the allowance');
+    const d = freshDashboard({ cloudflare: { billedMtd: 0.15, billedProjected: 0.15, listMtd: 0.02, lines: [line] } });
+    const html = render(h(details.CloudflarePanel, { d, t, f }));
+    assert.equal(html.split('Billed in whole units').length - 1, 2, 'on the phone card and the table row');
+    const ar = render(h(details.CloudflarePanel, { d, t: createTranslator('ar'), f: opsFormats('ar') }));
+    assert.ok(ar.includes('تُفوتَر بوحدات كاملة'));
+  });
+
+  it('keeps Arabic compound units on one line', () => {
+    for (const key of ['gbMonths', 'gbSeconds'] as const) {
+      const v = createTranslator('ar')(`costs.cloudflare.${key}`, { value: '١' });
+      assert.ok(!v.includes('-') && v.includes('\u2011'), `${key} joins with a non-breaking hyphen: ${v}`);
+    }
+  });
+
+  it('a refused collection turns the data pill amber and says the Cloudflare figures stopped', () => {
+    const at = '2026-11-14T09:05:00Z';
+    for (const locale of ['en', 'ar'] as const) {
+      const t = createTranslator(locale);
+      const analytics = { state: 'refused' as const, at, via: 'run' as const };
+      const d = freshDashboard({ collector: { tokenSource: 'release', at, lastJobFailures: [], analytics }, dataAsOf: at });
+      const html = render(h(sections.CostsHeader, { d, t, f: opsFormats(locale), now: new Date('2026-11-14T10:00:00Z') }));
+      assert.match(html, /data-tone="warn"/);
+      assert.ok(html.includes(locale === 'ar' ? 'رُفضت عمليات الجمع اللاحقة' : 'later collections were refused'));
+      assert.ok(html.includes('whitespace-nowrap'), 'the time keeps its zone on its line');
+    }
+    const ok = freshDashboard({ collector: { tokenSource: 'release', at, lastJobFailures: [] }, dataAsOf: at });
+    assert.match(render(h(sections.CostsHeader, { d: ok, t: createTranslator('en'), f: opsFormats('en'), now: new Date('2026-11-14T10:00:00Z') })), /data-tone="good"/);
+  });
+
+  it('separates the Arabic Top movers product and environment with «،»', () => {
+    const mover = { id: 'd1:qa', label: 'al-ummah-now-reports-qa', product: 'd1' as const, env: 'qa', last7: 30, prev7: 10, change: 20, monthlyImpact: 85.71 };
+    const d = freshDashboard({ movers: { up: [mover], down: [] } });
+    const ar = render(h(sections.MoversSection, { d, t: createTranslator('ar'), locale: 'ar' }));
+    assert.match(ar, /data-testid="costs-mover-row"/);
+    assert.ok(ar.includes('D1</bdi>، '), 'product then «،» then the environment');
+    assert.ok(!ar.includes('•'));
+  });
+
+  it('Connections: no key, no Test or Remove; the release token is named as the source', () => {
+    assert.equal(connectionStatus('cloudflare', 'unset', null, true), 'release');
+    assert.equal(connectionStatus('cloudflare', 'unset', null, false), 'unset');
+    assert.equal(connectionStatus('bunny', 'unset', null, true), 'unset', 'the release token is Cloudflare only');
+    assert.equal(connectionStatus('bunny', 'set', '3mQe', true), 'set');
+    assert.equal(connectionStatus('resend', 'set', null, false), 'setPlain');
+    assert.equal(connectionStatus('resend', 'unreadable', '1234', false), 'unreadable');
+    assert.equal(connectionActions('unset'), false);
+    assert.equal(connectionActions('set'), true);
+    assert.equal(connectionActions('unreadable'), true, 'an unreadable key can still be removed');
+    for (const locale of ['en', 'ar'] as const) assert.ok(createTranslator(locale)('costs.connections.status.release') !== 'costs.connections.status.release');
+    // The Arabic token note isolates each Latin permission name, so RTL keeps «Account Analytics: Read» whole
+    assert.ok(createTranslator('ar')('costs.connections.about.cloudflare').includes('\u2066Account Analytics: Read\u2069'));
+  });
+
+  it('Operations: one precision for the error rate now and before; an empty backlog is nothing', () => {
+    const f = opsFormats('en');
+    assert.equal(f.rate(0.006), '0.60%');
+    assert.equal(f.rate(0.0063), '0.63%');
+    assert.equal(opsFormats('ar').rate(0.006).replace(/[\u200e\u200f\u061c]/g, ''), '٠٫٦٠٪');
+    assert.equal(worstBacklog({ name: 'transcode-stage', backlog: 0 }), null);
+    assert.deepEqual(worstBacklog({ name: 'transcode-qa', backlog: 4 }), { name: 'transcode-qa', backlog: 4 });
+    assert.equal(worstBacklog(null), null);
   });
 });

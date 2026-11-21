@@ -100,6 +100,8 @@ export interface OpsFormats {
   /** A small amount with up to two decimals (GB-months, hours). */
   gb: (v: number) => string;
   percent: (v: number) => string;
+  /** A rate to compare with another (error rate now and before): always two decimals. */
+  rate: (v: number) => string;
   usd: (v: number) => string;
   hour: (t: string) => string;
   day: (t: string) => string;
@@ -115,6 +117,7 @@ export function opsFormats(locale: string): OpsFormats {
   const compact = compactNumber(locale);
   const ms = numberFormat(loc, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
   const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
+  const rate = numberFormat(loc, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const micro = numberFormat(loc, { style: 'unit', unit: 'microsecond', unitDisplay: loc.startsWith('ar') ? 'long' : 'short', maximumFractionDigits: 0 });
   const small = numberFormat(loc, { maximumFractionDigits: 2 });
   const usd = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -140,6 +143,7 @@ export function opsFormats(locale: string): OpsFormats {
     gbs: (v) => `${compact(Math.round(v))} GB-s`,
     gb: (v) => (Math.abs(v) >= 1000 ? compact(v) : small.format(v)),
     percent: (v) => percent.format(v),
+    rate: (v) => rate.format(v),
     // One line always: the Arabic currency name has a space («دولار أمريكي»)
     usd: (v) => usd.format(v).replace(/ /g, '\u00a0'),
     hour: (t) => {
@@ -202,4 +206,9 @@ export function dailyBudget(capUsd: number, month: string): number {
   const [y, m] = month.split('-').map(Number);
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return Math.round((capUsd / days) * 100) / 100;
+}
+
+/** The queue to show on the backlog tile: the deepest one, or none when every backlog is empty. */
+export function worstBacklog<Q extends { backlog: number }>(worst: Q | null | undefined): Q | null {
+  return worst && worst.backlog > 0 ? worst : null;
 }

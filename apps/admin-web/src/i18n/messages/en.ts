@@ -4365,8 +4365,8 @@ const en = {
     notConfigured: 'Costs are not set up in this environment.',
     notReady: 'The cost tables are not ready yet: the next deploy migrates them.',
     estimated: 'Estimates. The budget counts Cloudflare as billed, after the account’s included usage; the breakdowns, trend and drivers show Cloudflare at list price.',
-    listSep: ' • ',
     dataAsOf: 'Data as of {time}',
+    dataRefused: 'Cloudflare figures as of {time}: later collections were refused',
     dataStale: 'Data as of {time}: more than two hours old',
     dataNever: 'No data collected yet',
     token: {
@@ -4517,6 +4517,7 @@ const en = {
       billed: 'Billed',
       projected: 'Month end',
       estimated: 'Estimated: logged requests × events per request.',
+      wholeUnits: 'Billed in whole units: {billable} past the allowance is charged as {charged}.',
       notBilled: 'Cloudflare does not bill this yet.',
       gbMonths: '{value} GB-month',
       hours: '{count, plural, other {# h}}',
@@ -4711,6 +4712,7 @@ const en = {
         resend: 'A full-access API key: a sending-only key cannot count the emails sent.',
       },
       status: {
+        release: 'Not set here: the collector uses the shared release token',
         unset: 'Not set',
         set: 'Set ••••{last4}',
         setPlain: 'Set',

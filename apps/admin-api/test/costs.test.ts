@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { openCostCredential, type CostCredentialRow } from '@al-ummah/shared-types';
 import costsRouter from '../src/routers/costs.router';
-import { envLines, productLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
+import { balanceTo, envLines, productLines, withCloudflareLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
@@ -532,13 +532,20 @@ describe('every Costs tile equals the sum of its rows', () => {
 
     const product = (k: string) => d.products.find((p) => p.product === k)?.mtd ?? 0;
     const lineList = (keys: string[]) => sum(L.filter((l) => keys.includes(l.key)).map((l) => l.listCost));
-    near(product('d1'), lineList(['d1_rows_read', 'd1_rows_written', 'd1_storage_gb']), 0.03, 'By product D1 = its Cloudflare lines');
-    near(product('workers'), lineList(['workers_requests', 'workers_cpu_ms', 'logs_events', 'logpush_requests']), 0.03, 'By product Workers = its lines');
+    near(product('d1'), lineList(['d1_rows_read', 'd1_rows_written', 'd1_storage_gb']), 0.001, 'By product D1 = its Cloudflare lines, to the cent');
+    near(product('workers'), lineList(['workers_requests', 'workers_cpu_ms', 'logs_events', 'logpush_requests']), 0.001, 'By product Workers = its lines, to the cent');
+    for (const l of L) assert.equal(Math.round(l.listCost * 100) / 100, l.listCost, `${l.key} list price is in whole cents, so lines add up to what is shown`);
     const cfProducts = sum(['d1', 'workers', 'r2', 'kv', 'durable_objects', 'queues'].map(product));
-    near(cfProducts, d.cloudflare.listMtd, 0.06, 'Cloudflare products = At list price');
+    near(cfProducts, d.cloudflare.listMtd, 0.001, 'Cloudflare products = At list price, to the cent');
+    near(sum(L.map((l) => l.listCost)), d.cloudflare.listMtd, 0.001, 'At list price = its lines, to the cent');
     const productsTotal = sum(d.products.map((p) => p.mtd));
     near(productsTotal, d.budget.mtd + (d.cloudflare.listMtd - d.cloudflare.billedMtd), 0.06, 'products at list − included usage = billed month to date');
-    near(sum(Object.values(d.envs)), productsTotal, 0.03, 'By environment = By product');
+    near(sum(Object.values(d.envs)), productsTotal, 0.001, 'By environment = By product, to the cent');
+    // The sparkline is the two weeks Top movers compares: the 14 full days before today
+    const spark = d.drivers[0]!.daily.days;
+    assert.equal(spark.length, 14);
+    assert.equal(spark[0], '2026-11-07');
+    assert.equal(spark.at(-1), '2026-11-20');
     near(d.envs.qa, sum(d.trend.series.find((s) => s.key === 'qa')!.values.filter((_, i) => d.trend.days[i]!.startsWith('2026-11'))), 0.03, 'QA tile = QA bars this month');
     const trendMonth = sum(d.trend.series.flatMap((s) => s.values.filter((_, i) => d.trend.days[i]!.startsWith('2026-11'))));
     near(trendMonth, productsTotal, 0.2, 'daily chart this month = By product (per-day cents)');
@@ -550,5 +557,42 @@ describe('every Costs tile equals the sum of its rows', () => {
     near(sum(Object.values(d.idle.parts)), d.idle.monthlyUsd, 0.015, 'idle parts = idle');
     near(sum(Object.values(d.idle.byEnv)), d.idle.parts.cloudflare, 0.03, 'idle per env = idle Cloudflare');
     assert.ok(d.idle.monthlyUsd <= d.budget.projected, 'idle never exceeds the month-end forecast');
+  });
+});
+
+describe('rounding: lines are the source, totals are built from the parts shown', () => {
+  it('a product is the sum of its Cloudflare lines in cents, and products re-sort by it', () => {
+    const products = [
+      { product: 'workers', mtd: 1, projected: 2, last7: 0, prev7: 0 },
+      { product: 'd1', mtd: 48.4523, projected: 90, last7: 0, prev7: 0 },
+      { product: 'bunny', mtd: 5, projected: 9, last7: 0, prev7: 0 },
+    ] as never;
+    const out = withCloudflareLines(products, [
+      { key: 'd1_rows_read', listCost: 40.11 },
+      { key: 'd1_rows_written', listCost: 8.33 },
+      { key: 'workers_requests', listCost: 60.2 },
+      { key: 'workers_cpu_ms', listCost: 0.81 },
+    ]);
+    assert.deepEqual(out.map((p: { product: string; mtd: number }) => [p.product, p.mtd]), [['workers', 61.01], ['d1', 48.44], ['bunny', 5]]);
+  });
+
+  it('balances rounded parts to their rounded total, only for a cent or two of drift', () => {
+    const parts = balanceTo({ production: 100.004, stage: 12.004, qa: 100.314 }, 212.33);
+    assert.deepEqual(parts, { production: 100, stage: 12, qa: 100.33 }, 'the 2¢ drift goes to the largest part');
+    assert.equal(Math.round(Object.values(parts).reduce((a, b) => a + b, 0) * 100) / 100, 212.33);
+    // A real gap is not hidden: past 5¢ the parts stay as they are
+    assert.deepEqual(balanceTo({ a: 10, b: 5 }, 16), { a: 10, b: 5 });
+  });
+
+  it('"Data as of" is the last collection that read Cloudflare, not a later refused one', async () => {
+    const db = costsD1();
+    const run = (id: string, at: string, status: string, detail: object) =>
+      db.prepare("INSERT INTO collector_runs (id, kind, started_at, finished_at, status, detail) VALUES (?, 'hourly', ?, ?, ?, ?)").bind(id, at, at, status, JSON.stringify(detail)).run();
+    await run('ok1', '2026-11-21T06:05:00Z', 'ok', {});
+    await run('ref1', '2026-11-21T09:05:00Z', 'partial', { errors: ['Authentication error (10000)'] });
+    await run('ref2', '2026-11-21T10:05:00Z', 'failed', { error: 'Cloudflare GraphQL returned no data: not authorized for that account' });
+    const d = await costsDashboard({ COSTS_DB: db, REPORTS_DB: sqliteD1() } as never, new Date('2026-11-21T11:00:00Z'));
+    assert.equal(d.dataAsOf, '2026-11-21T06:05:00Z');
+    assert.equal(d.collector.analytics?.state, 'refused');
   });
 });

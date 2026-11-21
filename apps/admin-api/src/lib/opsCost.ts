@@ -337,7 +337,8 @@ export interface CostDriver {
 /** Each resource's month-to-date list cost, its 14-day daily cost, its idle floor and any open jump. */
 export function costDrivers(resourceDays: ResourceDay[], idle: IdleProjection, spikes: Spike[], now: Date): CostDriver[] {
   const monthStart = `${now.toISOString().slice(0, 7)}-01`;
-  const sparkDays = [...fullDays(now, 13), now.toISOString().slice(0, 10)];
+  // The last 14 full days: exactly the two weeks Top movers compares (fullDays(now, 7) and the 7 before)
+  const sparkDays = fullDays(now, 14);
   const drivers = new Map<string, { id: string; env: string; kind: string; name: string; mtd: number; byDay: Map<string, number> }>();
   for (const r of resourceDays) {
     const d = drivers.get(r.resource_id) ?? { id: r.resource_id, env: r.env, kind: r.kind, name: r.name, mtd: 0, byDay: new Map<string, number>() };

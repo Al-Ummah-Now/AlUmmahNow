@@ -125,7 +125,7 @@ export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedC
                 </div>
                 <p className="text-xs text-fg-muted tabular-nums">
                   {c.endDate ? t('costs.fixed.range', { start: f.day(c.startDate), end: f.day(c.endDate) }) : t('costs.fixed.since', { start: f.day(c.startDate) })}
-                  {t('costs.listSep')}
+                  {t('common.sep')}
                   <span data-testid="costs-fixed-share">{share > 0 ? t('costs.fixed.thisMonth', { value: f.usd(share) }) : t('costs.fixed.notThisMonth')}</span>
                 </p>
                 {c.note && <p className="text-xs text-fg-muted"><bdi>{c.note}</bdi></p>}
