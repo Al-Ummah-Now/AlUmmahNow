@@ -17,12 +17,13 @@ describe('ChannelTile', () => {
     expect(name).not.toHaveClass('truncate');
   });
 
-  it('keeps each count with its noun: the line may break between the counts, never inside one', () => {
+  it('puts each count on its own line, kept with its noun, with no separator to leave dangling', () => {
     render(<ChannelTile channel={channel as never} variant="compact" />);
     const counts = screen.getByTestId('channel-tile-counts');
-    expect(counts).toHaveClass('flex-wrap');
+    expect(counts).toHaveClass('flex-col');
+    expect(counts.textContent).not.toContain('•');
     const parts = [...counts.children] as HTMLElement[];
-    expect(parts.map((p) => p.textContent)).toEqual(['2K subscribers', '• 8 videos']);
+    expect(parts.map((p) => p.textContent)).toEqual(['2K subscribers', '8 videos']);
     for (const part of parts) expect(part).toHaveClass('whitespace-nowrap');
   });
 });

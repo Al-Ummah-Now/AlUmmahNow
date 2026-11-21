@@ -62,10 +62,11 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
         </h3>
-        {/* Each count stays with its noun; the line breaks between the two counts, never inside one */}
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex flex-wrap justify-center gap-x-1" data-testid="channel-tile-counts">
+        {/* One count per line, each kept with its noun: the same layout in English and Arabic at every
+            width, so a narrow tile never splits a count or leaves a separator dangling */}
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex flex-col items-center" data-testid="channel-tile-counts">
           <span className="whitespace-nowrap">{subscribers}</span>
-          <span className="whitespace-nowrap"><span aria-hidden="true">•</span> {videos}</span>
+          <span className="whitespace-nowrap">{videos}</span>
         </p>
         {variant === 'card' && description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">{description}</p>
