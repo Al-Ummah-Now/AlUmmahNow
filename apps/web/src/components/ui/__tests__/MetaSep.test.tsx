@@ -1,6 +1,6 @@
 /**
- * MetaSep: the meta-line separator as an element. Arabic shows «،» hugging the word before it in a
- * gapped row; English keeps its dot with no offset; screen readers never hear it.
+ * MetaSep: the meta-line separator as an element. Arabic shows «، » hugging the word before it in a
+ * gapped row, one space after; English keeps its dot with no offset; screen readers never hear it.
  */
 import React from 'react';
 import { render } from '@testing-library/react';
@@ -9,11 +9,13 @@ import { MetaSep } from '../MetaSep';
 const sep = (container: HTMLElement) => container.querySelector('[data-meta-sep]') as HTMLElement;
 
 describe('MetaSep', () => {
-  it('Arabic in a gapped row: «،» pulled back by the gap so it hugs the word before it', () => {
+  it('Arabic in a gapped row: cancels the gap both sides and carries «، », like a text-joined line', () => {
     const { container } = render(<MetaSep lang="ar" gap="0.5rem" />);
     const el = sep(container);
-    expect(el.textContent).toBe('،');
-    expect(el.style.marginInlineStart).toBe('calc(-1 * 0.5rem)');
+    expect(el.textContent).toBe('، ');
+    expect(el.style.marginInline).toBe('calc(-1 * 0.5rem)');
+    // The trailing space survives at the end of the flex item
+    expect(el.style.whiteSpace).toBe('pre');
   });
 
   it('Arabic without a gap: no offset', () => {
