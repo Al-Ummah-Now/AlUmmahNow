@@ -16,7 +16,7 @@ const QUERY = 'dateFrom=2026-11-01&dateTo=2026-11-09';
 async function env() {
 	const db = new SqliteD1();
 	const videos: Record<string, any> = {
-		big: videoFixture({ id: 'big', title: 'Big', channelId: 'c1', userId: 'owner', views: 100 }),
+		big: videoFixture({ id: 'big', title: 'كبير', titleLocalized: { ar: 'كبير', en: 'Big' }, channelId: 'c1', userId: 'owner', views: 100 }),
 		small: videoFixture({ id: 'small', title: 'Small', channelId: 'c1', userId: 'owner', views: 5, isPublic: false }),
 	};
 	for (const v of Object.values(videos)) await syncOwnership(db as never, 'video', v.id, v);
@@ -55,6 +55,13 @@ describe('GET /api/channels/:id/analytics/top-content', () => {
 		const { items } = ((await (await get()).json()) as any).result;
 		assert.equal(items[1].isPublic, false);
 		assert.equal(items[1].title, 'Small');
+	});
+
+	it('returns the per-language titles, so Studio can show the page language like the watch page', async () => {
+		const { items } = ((await (await get()).json()) as any).result;
+		assert.equal(items[0].title, 'كبير');
+		assert.deepEqual(items[0].titleLocalized, { ar: 'كبير', en: 'Big' });
+		assert.equal(items[1].titleLocalized, undefined);
 	});
 
 	it('pages', async () => {

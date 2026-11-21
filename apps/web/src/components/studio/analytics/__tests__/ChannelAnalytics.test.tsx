@@ -64,6 +64,18 @@ describe('ChannelAnalytics', () => {
     expect((await screen.findAllByTestId('studio-top-row'))[0]).toHaveTextContent('V a');
   });
 
+  it('Top content shows the title in the page language, like the watch page, and falls back to the stored title', async () => {
+    top.mockResolvedValue({ items: [
+      { ...item('fajr', 9, 10), title: 'أذكار بعد الفجر', titleLocalized: { ar: 'أذكار بعد الفجر', en: 'Adhkar after Fajr' } },
+      { ...item('kahf', 3, 10), title: 'تلاوة سورة الكهف' },
+    ], cursor: null });
+    renderOverview();
+    const titles = await screen.findAllByTestId('studio-top-title');
+    expect(titles[0]).toHaveTextContent('Adhkar after Fajr');
+    expect(titles[0]).toHaveAttribute('title', 'Adhkar after Fajr');
+    expect(titles[1]).toHaveTextContent('تلاوة سورة الكهف');
+  });
+
   it('Top content titles wrap to two lines inside the width the numbers leave, so the table fits a phone and similar titles keep their distinguishing end', async () => {
     renderOverview();
     const rows = await screen.findAllByTestId('studio-top-row');
