@@ -64,6 +64,16 @@ describe('ChannelAnalytics', () => {
     expect((await screen.findAllByTestId('studio-top-row'))[0]).toHaveTextContent('V a');
   });
 
+  it('Top content titles truncate inside the width the numbers leave, so the table fits a phone', async () => {
+    renderOverview();
+    const rows = await screen.findAllByTestId('studio-top-row');
+    const title = within(rows[0]).getByTestId('studio-top-title');
+    expect(title).toHaveClass('block', 'truncate');
+    expect(title).toHaveAttribute('title', 'V b');
+    expect(title.closest('td')).toHaveClass('w-full', 'max-w-0');
+    for (const cell of [...rows[0].querySelectorAll('td')].slice(1)) expect(cell).toHaveClass('whitespace-nowrap');
+  });
+
   it('keeps Top content when the overview fails', async () => {
     channel.mockResolvedValue(null);
     renderOverview();
