@@ -117,7 +117,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
   const retry = <Button variant="outline" onClick={() => void load()}>{text.retry}</Button>;
   const retryTop = <Button variant="outline" onClick={() => void loadTop()}>{text.retry}</Button>;
   const sortHeader = (key: SortKey, label: string) => (
-    <th className="p-2 text-end font-medium" aria-sort={sort === key ? 'descending' : 'none'}>
+    <th className="p-2 text-end font-medium sm:whitespace-nowrap" aria-sort={sort === key ? 'descending' : 'none'}>
       <button type="button" className="min-h-11 hover:text-foreground" onClick={() => setSort(key)}>{label}</button>
     </th>
   );

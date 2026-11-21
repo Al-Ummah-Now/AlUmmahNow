@@ -72,6 +72,10 @@ describe('ChannelAnalytics', () => {
     expect(title).toHaveAttribute('title', 'V b');
     expect(title.closest('td')).toHaveClass('w-full', 'max-w-0');
     for (const cell of [...rows[0].querySelectorAll('td')].slice(1)) expect(cell).toHaveClass('whitespace-nowrap');
+    // The number headings may wrap on a phone, but keep one line from sm up where there is room
+    const headings = [...(rows[0].closest('table') as HTMLTableElement).querySelectorAll('thead th')].slice(1);
+    expect(headings.length).toBeGreaterThan(0);
+    for (const th of headings) expect(th).toHaveClass('sm:whitespace-nowrap');
   });
 
   it('keeps Top content when the overview fails', async () => {
