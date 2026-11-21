@@ -348,6 +348,26 @@ export function channelsVideoIds(env: OwnershipEnv, channelIds: string[], newest
 }
 
 /**
+ * Public, published long-form videos, Shorts and live streams of a channel (the
+ * channel page's Videos, Shorts and Live tabs as a visitor sees them; same rules
+ * as channelVideoIds for a visitor). One indexed range read of the channel's rows
+ * (idx_content_ownership_channel); null while the index is incomplete.
+ */
+export function channelFormatCountsFromIndex(env: OwnershipEnv, channelId: string): Promise<{ videos: number; shorts: number; live: number } | null> {
+  return whenComplete(env, 'video', async db => {
+    const row = await db.prepare(
+      `SELECT COALESCE(SUM(CASE WHEN is_live = 0 AND is_short = 0 THEN 1 ELSE 0 END), 0) AS videos,
+              COALESCE(SUM(CASE WHEN is_live = 0 AND is_short = 1 THEN 1 ELSE 0 END), 0) AS shorts,
+              COALESCE(SUM(CASE WHEN is_live = 1 THEN 1 ELSE 0 END), 0) AS live
+       FROM ${OWNERSHIP_TABLE}
+       WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND ${READY_SQL}
+         AND (schedule_status IS NULL OR schedule_status = 'published')`,
+    ).bind(channelId).first<{ videos: number; shorts: number; live: number }>();
+    return { videos: Number(row?.videos) || 0, shorts: Number(row?.shorts) || 0, live: Number(row?.live) || 0 };
+  });
+}
+
+/**
  * Public published video count and view sum of a channel (same rules as
  * computeChannelTotals). Views are those stored on the video objects as of
  * their last write (every view increment is such a write).

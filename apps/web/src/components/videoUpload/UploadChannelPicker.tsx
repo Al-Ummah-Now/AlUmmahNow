@@ -60,7 +60,7 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
     const name = channelDisplayName(channel, lang);
     const role = roleOn(channel, userId);
     const roleLabel = role && role !== 'owner' ? t.channelRoles.roles[role] : '';
-    const subtitle = [channel.handle ? `@${channel.handle}` : '', roleLabel].filter(Boolean).join(' · ');
+    const subtitle = [channel.handle ? `@${channel.handle}` : '', roleLabel].filter(Boolean).join(' • ');
     return {
       id: channel.id,
       label: name,

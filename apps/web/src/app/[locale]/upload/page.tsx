@@ -1,6 +1,6 @@
 'use client';
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate, formatNumber } from '@al-ummah/shared-types';
 import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
@@ -400,8 +400,7 @@ const UploadPage: React.FC = () => {
 
     if (selectedFiles.length > MAX_FILES) {
       setUploadError(
-        t.batch.errors.tooManyFiles
-          .replace('{count}', formatNumber(lang, selectedFiles.length))
+        fillTemplate(lang, t.batch.errors.tooManyFiles, { count: selectedFiles.length })
       );
       return;
     }

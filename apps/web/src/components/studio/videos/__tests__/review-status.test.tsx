@@ -12,11 +12,11 @@ const ar = STUDIO_AR.videos.review;
 describe('review line', () => {
   it('checking: "usually within N minutes" from the review ETA (VR6, admin-editable)', () => {
     expect(etaMinutes({ since: '2026-11-13T12:00:00.000Z', etaAt: '2026-11-13T12:05:00.000Z' })).toBe(5);
-    expect(reviewLine({ status: 'checking', since: '2026-11-13T12:00:00.000Z', etaAt: '2026-11-13T12:07:00.000Z' }, null, en)).toBe('In review · usually within 7 minutes');
+    expect(reviewLine({ status: 'checking', since: '2026-11-13T12:00:00.000Z', etaAt: '2026-11-13T12:07:00.000Z' }, null, en)).toBe('In review • usually within 7 minutes');
     expect(reviewLine({ status: 'checking', since: '2026-11-13T12:00:00.000Z', etaAt: '2026-11-13T12:05:00.000Z' }, null, ar)).toContain('5');
   });
   it('held: "a reviewer will check it" with the live queue time when known', () => {
-    expect(reviewLine({ status: 'in_review', since: 'x' }, 12, en)).toBe('A reviewer will check it · about 12 min');
+    expect(reviewLine({ status: 'in_review', since: 'x' }, 12, en)).toBe('A reviewer will check it • about 12 min');
     expect(reviewLine({ status: 'in_review', since: 'x' }, null, en)).toBe('A reviewer will check it');
   });
   it('rejected: the reason in the viewer language; appealed: a different reviewer', () => {

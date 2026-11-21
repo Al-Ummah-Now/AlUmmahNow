@@ -159,7 +159,7 @@ export function DeletedVideos({ locale, channelId, onChanged }: Props) {
               <div className="min-w-0 flex-1">
                 <span dir="auto" className="block truncate font-medium text-foreground">{video.title}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {text.deletedOn.replace('{date}', dateFormat.format(new Date(video.deletedAt)))} · <span data-testid="studio-deleted-status">{statusText(video)}</span>
+                  {text.deletedOn.replace('{date}', dateFormat.format(new Date(video.deletedAt)))} • <span data-testid="studio-deleted-status">{statusText(video)}</span>
                 </span>
               </div>
               {restorable(video) && (

@@ -113,11 +113,11 @@ describe('live transcoder figures', () => {
     renderToStaticMarkup(h(livem.LiveFigures, { live: l, t: extra.t ?? en, locale: extra.locale ?? 'en', stale: extra.stale }));
   const figure = (html: string, id: string) => text(new RegExp(`data-testid="${id}">([^<]*)<`).exec(html)?.[1] ?? '');
 
-  it('shows "N running · M waiting · range min–max", the range and ceiling, the queue and the oldest wait', () => {
+  it('shows "N running • M waiting • range min–max", the range and ceiling, the queue and the oldest wait', () => {
     const html = render(live);
-    assert.equal(figure(html, 'delivery-live-summary'), '1 running · 3 waiting · range 2–4');
+    assert.equal(figure(html, 'delivery-live-summary'), '1 running • 3 waiting • range 2–4');
     assert.equal(figure(html, 'delivery-live-transcoding'), '1');
-    assert.equal(figure(html, 'delivery-live-ceiling'), 'Range 2–4 · Cloudflare limit: 10');
+    assert.equal(figure(html, 'delivery-live-ceiling'), 'Range 2–4 • Cloudflare limit: 10');
     assert.equal(figure(html, 'delivery-live-queued'), '3');
     assert.equal(figure(html, 'delivery-live-oldest'), '15:00');
     assert.match(html, /aria-labelledby="delivery-live-title"/);
@@ -132,7 +132,7 @@ describe('live transcoder figures', () => {
 
   it('shows the recent start time: p50/p95, then new-container and reused medians', () => {
     const startTimes = { days: 7, samples: 12, p50Ms: 6200, p95Ms: 14800, cold: { samples: 10, p50Ms: 7100, p95Ms: 14800 }, warm: { samples: 2, p50Ms: 900, p95Ms: 1200 }, coldReadyP50Ms: 1100, dispatchP50Ms: 2400 };
-    assert.equal(figure(render({ ...live, startTimes }), 'delivery-live-start'), 'Start time (7 days): p50 6.2 sec, p95 14.8 sec (12 transcodes) · new container p50 7.1 sec · reused p50 0.9 sec');
+    assert.equal(figure(render({ ...live, startTimes }), 'delivery-live-start'), 'Start time (7 days): p50 6.2 sec, p95 14.8 sec (12 transcodes) • new container p50 7.1 sec • reused p50 0.9 sec');
     assert.equal(figure(render({ ...live, startTimes: { ...startTimes, samples: 0, p50Ms: null, p95Ms: null } }), 'delivery-live-start'), 'Start time: no transcodes timed yet.');
     // An older API without start times: nothing shown
     assert.doesNotMatch(render(live), /delivery-live-start/);
@@ -147,7 +147,7 @@ describe('live transcoder figures', () => {
   it('renders in Arabic with Eastern Arabic (Hindi) numerals', () => {
     const html = render(live, { t: ar, locale: 'ar' });
     assert.equal(figure(html, 'delivery-live-transcoding'), '١');
-    assert.equal(figure(html, 'delivery-live-summary'), '١ قيد التحويل · ٣ في الانتظار · المدى من ٢ إلى ٤');
+    assert.equal(figure(html, 'delivery-live-summary'), '١ قيد التحويل • ٣ في الانتظار • المدى من ٢ إلى ٤');
     assert.match(text(html), ARABIC);
   });
 });

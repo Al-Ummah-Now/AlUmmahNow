@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AdminVideoMedia, MediaProviderId, ProviderMediaStatus } from '@al-ummah/shared-types';
 import { setVideoPlaybackOverride } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
 import { Chip, type ChipTone } from '@/components/content/parts';
 import { ErrorAlert, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -14,6 +14,7 @@ import { OVERRIDE_PROBLEM_LABEL, PROVIDER_LABEL, draftOf, overrideOf, type Overr
 import { logger } from '@/lib/logger-client';
 import { formatPercent } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 const STATUS_LABEL: Record<ProviderMediaStatus, MessageKey> = {
   pending: 'mediaProviders.video.status.pending',
   processing: 'mediaProviders.video.status.processing',
@@ -95,8 +96,8 @@ export function VideoProvidersPanel({ videoId, media, canManage }: { videoId: st
                 <Chip tone={STATUS_TONE[c.status]}>{t(STATUS_LABEL[c.status])}</Chip>
               </div>
               <div className="mt-1 space-y-0.5 text-sm text-fg-muted">
-                {c.renditions.length > 0 && <p dir="ltr" className="text-start">{c.renditions.join(' · ')}</p>}
-                {c.readyAt && <p>{formatDate(c.readyAt, locale, true)}</p>}
+                {c.renditions.length > 0 && <p dir="ltr" className="text-start">{c.renditions.join(' • ')}</p>}
+                {c.readyAt && <p><LocalTime value={c.readyAt} withTime /></p>}
                 {c.legacy && <p>{t('mediaProviders.video.legacy')}</p>}
                 {c.error && <p className="text-danger-fg break-words">{c.error}</p>}
               </div>
@@ -111,8 +112,8 @@ export function VideoProvidersPanel({ videoId, media, canManage }: { videoId: st
         {view.override ? (
           <>
             {t('mediaProviders.video.pinned')}
-            {view.override.note ? ` · ${view.override.note}` : ''}
-            {view.override.updatedAt ? ` · ${formatDate(view.override.updatedAt, locale, true)}` : ''}
+            {view.override.note ? ` • ${view.override.note}` : ''}
+            {view.override.updatedAt ? <> • <LocalTime value={view.override.updatedAt} withTime /></> : null}
           </>
         ) : view.channelOverride ? (
           t('mediaProviders.video.followsChannel')

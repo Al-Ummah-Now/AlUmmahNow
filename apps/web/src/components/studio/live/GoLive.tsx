@@ -198,7 +198,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
         {phase === 'live' && (
           <p className="mt-1 text-sm text-muted-foreground" data-testid="studio-golive-details">
             {state?.startedAt ? text.startedAt.replace('{time}', timeFormat.format(new Date(state.startedAt))) : ''}
-            {state?.startedAt && state?.bitrateKbps ? ' · ' : ''}
+            {state?.startedAt && state?.bitrateKbps ? ' • ' : ''}
             {state?.bitrateKbps ? text.bitrate.replace('{kbps}', formatNumber(lang, Math.round(state.bitrateKbps), { useGrouping: false })) : ''}
           </p>
         )}

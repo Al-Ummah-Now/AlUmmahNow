@@ -4,7 +4,7 @@ import { getContentPermissions, getVideo, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob, VideoDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatStat, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { AuditCard } from '@/components/audit/AuditCard';
 import { BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid, statusTone } from '@/components/content/parts';
@@ -19,6 +19,7 @@ import { VideoProvidersPanel } from './VideoProvidersPanel';
 import { LIST_RETURN_PARAM, videosBackHref } from '../list-spec';
 import { numberFormat } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const HOLD_LABEL: Record<string, MessageKey> = { channel: 'videos.holdChannel', user: 'videos.holdUser', admin: 'videos.holdUnpublished' };
@@ -116,7 +117,7 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
       )}
       {v.isHidden && (holds.length > 0 || v.moderationAction) && (
         <Notice tone="warn" testId="video-holds">
-          {t('videos.holds')}: {[...holds.map((k) => t(k)), ...(v.moderationAction ? [t('videos.moderationHidden')] : [])].join(' · ')}
+          {t('videos.holds')}: {[...holds.map((k) => t(k)), ...(v.moderationAction ? [t('videos.moderationHidden')] : [])].join(' • ')}
         </Notice>
       )}
 
@@ -151,10 +152,10 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
           <SectionCard title={t('videos.detailsTitle')} id="video-details">
             <StatGrid
               stats={[
-                { label: t('videos.views'), value: formatNumber(v.views, locale) },
-                { label: t('videos.likes'), value: formatNumber(v.likeCount, locale) },
-                { label: t('videos.comments'), value: formatNumber(v.commentCount, locale) },
-                { label: t('content.reports'), value: formatNumber(v.openReports, locale) },
+                { label: t('videos.views'), value: formatStat(v.views, locale) },
+                { label: t('videos.likes'), value: formatStat(v.likeCount, locale) },
+                { label: t('videos.comments'), value: formatStat(v.commentCount, locale) },
+                { label: t('content.reports'), value: formatStat(v.openReports, locale) },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -174,8 +175,8 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
                   {v.ownerId ? <Link href={`/users/${encodeURIComponent(v.ownerId)}`} className={`${linkClass} break-all`} dir="ltr">{v.ownerId}</Link> : t('content.none')}
                 </dd>
               </div>
-              <div><dt className="text-fg-muted">{t('content.created')}</dt><dd className="text-fg">{v.createdAt ? formatDate(v.createdAt, locale, true) : t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{v.updatedAt ? formatDate(v.updatedAt, locale, true) : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('content.created')}</dt><dd className="text-fg">{v.createdAt ? <LocalTime value={v.createdAt} withTime /> : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{v.updatedAt ? <LocalTime value={v.updatedAt} withTime /> : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.dimensions')}</dt><dd className="text-fg" dir="ltr">{v.width && v.height ? `${v.width}×${v.height}` : t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.size')}</dt><dd className="text-fg">{bytes(v.fileSize, locale) ?? t('content.none')}</dd></div>
               <div><dt className="text-fg-muted">{t('videos.category')}</dt><dd className="text-fg">{v.category ?? t('content.none')}</dd></div>

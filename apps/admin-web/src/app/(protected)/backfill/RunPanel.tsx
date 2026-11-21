@@ -16,7 +16,6 @@ import {
   saveBackfillSettings,
 } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
 import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -28,10 +27,11 @@ import { useNames } from '@/components/audit/useNames';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 const POLL_MS = 5000;
 
 export function RunPanel({ initial }: { initial: BackfillRun }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const f = useFormats();
   const { confirm, dialog } = useConfirm();
   const [run, setRun] = useState(initial);
@@ -178,7 +178,7 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
               {t('mediaBackfill.runTitle')} <span className="font-mono text-base text-fg-muted" dir="ltr">{run.id}</span>
             </h2>
             <p className="text-sm text-fg-muted mt-1">
-              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t, names) })} · {formatDate(run.createdAt, locale, true)}
+              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t, names) })} • <LocalTime value={run.createdAt} withTime />
             </p>
           </div>
           <Chip tone={RUN_TONE[run.status]} large testId="backfill-run-status">{t(RUN_STATUS_LABEL[run.status])}</Chip>
@@ -191,10 +191,10 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
             <h3 className="font-semibold text-fg mb-3">{t('mediaBackfill.estimateTitle')}</h3>
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
               <Stat label={t('mediaBackfill.estVideos')} value={f.integer(est.videos)} />
-              <Stat label={t('mediaBackfill.estTranscode')} value={`${f.integer(est.transcodeSeconds / 60)} · ${f.usd(est.transcodeUsd)}`} />
-              <Stat label={t('mediaBackfill.estEgress')} value={`${f.gb(est.egressBytes / 1e9)} · ${f.usd(est.egressUsd)}`} />
-              <Stat label={t('mediaBackfill.estStorage')} value={`${f.gb(est.storageBytes / 1e9)} · ${f.usd(est.storageUsdMonth)}`} />
-              <Stat label={t('mediaBackfill.estOps')} value={`${f.integer(est.classAOps)} · ${f.usd(est.opsUsd)}`} />
+              <Stat label={t('mediaBackfill.estTranscode')} value={`${f.integer(est.transcodeSeconds / 60)} • ${f.usd(est.transcodeUsd)}`} />
+              <Stat label={t('mediaBackfill.estEgress')} value={`${f.gb(est.egressBytes / 1e9)} • ${f.usd(est.egressUsd)}`} />
+              <Stat label={t('mediaBackfill.estStorage')} value={`${f.gb(est.storageBytes / 1e9)} • ${f.usd(est.storageUsdMonth)}`} />
+              <Stat label={t('mediaBackfill.estOps')} value={`${f.integer(est.classAOps)} • ${f.usd(est.opsUsd)}`} />
               <Stat label={t('mediaBackfill.estTotal')} value={f.usd(est.totalUsd)} strong testId="backfill-estimate-total" />
             </dl>
             {est.ceiling && (
@@ -208,7 +208,7 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
             </p>
             {Object.keys(est.skipped).length > 0 && (
               <p className="mt-1 text-sm text-fg-muted" data-testid="backfill-skipped">
-                {t('mediaBackfill.skippedLine', { list: Object.entries(est.skipped).map(([k, n]) => `${t(SKIP_LABEL[k as keyof typeof SKIP_LABEL])}: ${f.integer(n ?? 0)}`).join(' · ') })}
+                {t('mediaBackfill.skippedLine', { list: Object.entries(est.skipped).map(([k, n]) => `${t(SKIP_LABEL[k as keyof typeof SKIP_LABEL])}: ${f.integer(n ?? 0)}`).join(' • ') })}
               </p>
             )}
           </div>
@@ -330,7 +330,7 @@ function ItemRow({ item, f, selected, onSelect, onRetry }: { item: BackfillItem;
       <td className={tdClass}>
         <div className="font-medium text-fg break-words" title={item.videoId}>{label}</div>
         {!item.title && <div className="font-mono text-xs text-fg-muted truncate max-w-[8rem] md:max-w-none" dir="ltr" title={item.videoId}>{item.videoId}</div>}
-        <div className="md:hidden text-xs text-fg-muted mt-1">{item.sourceBytes ? f.gb(item.sourceBytes / 1e9) : ''} {item.spentUsd > 0 ? `· ${f.usd(item.spentUsd)}` : ''}</div>
+        <div className="md:hidden text-xs text-fg-muted mt-1">{item.sourceBytes ? f.gb(item.sourceBytes / 1e9) : ''} {item.spentUsd > 0 ? `• ${f.usd(item.spentUsd)}` : ''}</div>
       </td>
       <td className={`${tdClass} min-w-[9rem]`}>
         <Chip tone={ITEM_TONE[item.state]}>{t(ITEM_STATE_LABEL[item.state])}</Chip>

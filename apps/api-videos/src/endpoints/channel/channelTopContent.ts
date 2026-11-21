@@ -78,6 +78,8 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			return {
 				videoId: video.id,
 				title: video.title,
+				// The per-language titles, so Studio shows the title in the page's language like the watch page
+				titleLocalized: (video as { titleLocalized?: Record<string, string> }).titleLocalized,
 				thumbnailUrl: (video as AnalyticsVideo).thumbnailUrl,
 				isPublic: video.isPublic !== false,
 				...rangeStats(rollups, days),

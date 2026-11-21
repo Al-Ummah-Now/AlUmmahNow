@@ -10,7 +10,7 @@
  * upload flows can use it too.
  */
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate } from '@al-ummah/shared-types';
 import { Autocomplete, Highlight, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X, Film, Check } from 'lucide-react';
@@ -142,7 +142,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
     return (result.data || []).map((video) => ({
       id: video.id,
       label: localTitle(video, lang),
-      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' • ') || undefined,
       thumbnailUrl: video.thumbnailUrl,
       thumbnailShape: 'wide' as const,
       value: video,
@@ -239,7 +239,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
         </label>
         {/* The grid's match count is announced (the autocomplete announces its own suggestions) */}
         <span className="sr-only" role="status" aria-live="polite" data-testid="picker-match-count">
-          {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', formatNumber(lang, selectable.length))) : ''}
+          {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : fillTemplate(lang, t.search.foundResults, { count: selectable.length })) : ''}
         </span>
         <span className={`text-sm ${MUTED}`} aria-live="polite" data-testid="picker-selected-count">
           {counted(selected.length, p.selectedOne, p.selectedOther, {}, lang)}

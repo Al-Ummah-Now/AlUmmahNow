@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { PriorityStrip } from '@/components/ui/PriorityStrip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
-import { formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
+import { formatCompact, formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
+import { studioVideoTitle } from '@/lib/studio/videos';
 import { LineChart } from './LineChart';
 import { StatCard, TrafficSources, ViewerOrigins } from './parts';
 
@@ -116,7 +118,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
   const retry = <Button variant="outline" onClick={() => void load()}>{text.retry}</Button>;
   const retryTop = <Button variant="outline" onClick={() => void loadTop()}>{text.retry}</Button>;
   const sortHeader = (key: SortKey, label: string) => (
-    <th className="p-2 text-end font-medium" aria-sort={sort === key ? 'descending' : 'none'}>
+    <th className="p-2 text-end font-medium sm:whitespace-nowrap" aria-sort={sort === key ? 'descending' : 'none'}>
       <button type="button" className="min-h-11 hover:text-foreground" onClick={() => setSort(key)}>{label}</button>
     </th>
   );
@@ -144,23 +146,34 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
             </div>
           ) : (
             <>
+              {/* Tiles are compact from 1,000 on, cut not rounded (owner 2026-11-21); watch time and the table stay exact */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-                <StatCard locale={locale} label={text.metrics.views} value={number.format(totals.views)} change={changePercent(totals.views, before?.views)} />
+                <StatCard locale={locale} label={text.metrics.views} value={formatCompact(locale, totals.views)} change={changePercent(totals.views, before?.views)} />
                 <StatCard locale={locale} label={text.metrics.watchTime} value={formatWatchTime(locale, watchTimeUnit(totals.watchTime))(totals.watchTime)} change={changePercent(totals.watchTime, before?.watchTime)} />
                 <StatCard locale={locale} label={text.metrics.avgViewDuration} value={duration(totals.avgViewDuration)} change={changePercent(totals.avgViewDuration, before?.avgViewDuration)} />
-                <StatCard locale={locale} label={text.metrics.likes} value={number.format(totals.likes)} change={changePercent(totals.likes, before?.likes)} />
-                <StatCard locale={locale} label={text.metrics.comments} value={number.format(totals.comments)} change={changePercent(totals.comments, before?.comments)} />
-                <StatCard locale={locale} label={text.metrics.subscribers} value={number.format(totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
+                <StatCard locale={locale} label={text.metrics.likes} value={formatCompact(locale, totals.likes)} change={changePercent(totals.likes, before?.likes)} />
+                <StatCard locale={locale} label={text.metrics.comments} value={formatCompact(locale, totals.comments)} change={changePercent(totals.comments, before?.comments)} />
+                <StatCard locale={locale} label={text.metrics.subscribers} value={formatCompact(locale, totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
               </div>
 
               <section>
-                <div role="group" aria-label={text.metricLabel} className="mb-3 flex gap-2 overflow-x-auto">
-                  {METRICS.map((item) => (
-                    <Button key={item} variant={metric === item ? 'default' : 'outline'} aria-pressed={metric === item} onClick={() => setMetric(item)} className="min-h-11 whitespace-nowrap">
-                      {text.metrics[item]}
+                {/* One row: the metrics that fit, the rest under "More" (#1669: never a chip cut at the edge or wrapped) */}
+                <PriorityStrip
+                  items={METRICS.map((item) => ({ id: item, label: text.metrics[item], current: metric === item }))}
+                  testId="studio-analytics-metrics-strip"
+                  className="mb-3"
+                  moreLabel={t.common.moreTabs}
+                  menuLabel={t.common.moreTabsMenu}
+                  moreClassName={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+                  moreIsButton
+                  onSelect={(item) => setMetric(item.id as Metric)}
+                  rowProps={{ role: 'group', 'aria-label': text.metricLabel, 'data-testid': 'studio-analytics-metrics', className: 'gap-2' }}
+                  renderItem={(item) => (
+                    <Button key={item.id} variant={item.current ? 'default' : 'outline'} aria-pressed={item.current} onClick={() => setMetric(item.id as Metric)} className="min-h-11 whitespace-nowrap" data-testid={`studio-analytics-metric-${item.id}`}>
+                      {item.label}
                     </Button>
-                  ))}
-                </div>
+                  )}
+                />
                 <LineChart
                   key={metric}
                   title={text.metrics[metric]}
@@ -208,12 +221,14 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                   <tbody>
                     {sorted.map((item) => (
                       <tr key={item.videoId} className="border-b border-border" data-testid="studio-top-row">
-                        <td className="max-w-40 truncate p-2">
-                          <Link href={videoHref(item.videoId)} dir="auto" className="text-foreground hover:underline">{item.title}</Link>
+                        {/* The title takes only the width the one-line numbers leave (w-full + max-w-0), and
+                            truncates: the table never grows past a phone's width */}
+                        <td className="w-full max-w-0 p-2">
+                          <Link href={videoHref(item.videoId)} dir="auto" title={studioVideoTitle(item, locale)} className="line-clamp-2 break-words text-foreground hover:underline" data-testid="studio-top-title">{studioVideoTitle(item, locale)}</Link>
                         </td>
-                        <td className="p-2 text-end tabular-nums">{number.format(item.views)}</td>
-                        <td className="p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
-                        <td className="p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{number.format(item.views)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
                       </tr>
                     ))}
                   </tbody>

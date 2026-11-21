@@ -20,6 +20,8 @@ import { REMOVAL_LABEL, REMOVAL_TONE, dangerLargeButtonClass } from './labels';
 import { useFormats } from './useFormats';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const DEFAULT_GRACE_DAYS = 30;
 
 export function RetireSection({ libraries }: { libraries: BunnyLibraryView[] | null }) {
@@ -125,7 +127,7 @@ function Library({ lib }: { lib: BunnyLibraryView }) {
         <div><dt className="text-fg-muted text-xs">{t('mediaBackfill.libRemoved')}</dt><dd className="font-medium text-fg">{f.integer(lib.removed)}</dd></div>
         <div><dt className="text-fg-muted text-xs">{t('mediaBackfill.libFailed')}</dt><dd className="font-medium text-fg">{f.integer(lib.failed)}</dd></div>
       </dl>
-      {lib.nextDeleteAfter && <p className="mt-2 text-sm text-fg">{t('mediaBackfill.nextDelete', { date: formatDate(lib.nextDeleteAfter, locale, true) })}</p>}
+      {lib.nextDeleteAfter && <p className="mt-2 text-sm text-fg">{fillNodes(t('mediaBackfill.nextDelete'), { date: <LocalTime value={lib.nextDeleteAfter} withTime /> })}</p>}
       {error && <div className="mt-3"><ErrorAlert>{error}</ErrorAlert></div>}
       {notice && <p role="status" className="mt-3 text-sm text-fg">{notice}</p>}
 
@@ -166,7 +168,7 @@ function Library({ lib }: { lib: BunnyLibraryView }) {
                       {r.error && <div className="text-danger-fg text-xs mt-1 break-words">{r.error}</div>}
                       {r.status === 'failed' && <button type="button" onClick={() => retry(r.videoId)} className={`${smallButtonClass} mt-2`}>{t('mediaBackfill.retry')}</button>}
                     </td>
-                    <td className={`${tdClass} whitespace-nowrap`}>{formatDate(r.removedAt ?? r.deleteAfter, locale, true)}</td>
+                    <td className={`${tdClass} whitespace-nowrap`}><LocalTime value={r.removedAt ?? r.deleteAfter} withTime /></td>
                   </tr>
                 ))}
               </tbody>

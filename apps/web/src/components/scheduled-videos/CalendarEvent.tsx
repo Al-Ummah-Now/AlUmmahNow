@@ -5,7 +5,7 @@
 
 'use client';
 
-import { formatNumber, formatTime as formatTimeOfDay } from '@al-ummah/shared-types';
+import { formatCountNoun, formatNumber, formatTime as formatTimeOfDay } from '@al-ummah/shared-types';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { formatScheduledTime } from '@/utils/dateFormatters';
@@ -81,7 +81,7 @@ const statusConfig: Record<ScheduledPublishStatus, {
 };
 
 // Format countdown display
-function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
+export function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
   if (ms <= 0) return locale === 'ar' ? 'قريباً' : 'Soon';
 
   const n = (v: number) => formatNumber(locale, v);
@@ -93,17 +93,17 @@ function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
   if (days > 0) {
     const h = hours % 24;
     return locale === 'ar'
-      ? `${n(days)} يوم ${h > 0 ? `و ${n(h)} ساعة` : ''}`
+      ? `${formatCountNoun('ar', days, 'day')}${h > 0 ? ` و${formatCountNoun('ar', h, 'hour')}` : ''}`
       : `${n(days)}d ${h > 0 ? `${n(h)}h` : ''}`;
   }
   if (hours > 0) {
     const m = minutes % 60;
     return locale === 'ar'
-      ? `${n(hours)} ساعة ${m > 0 ? `و ${n(m)} دقيقة` : ''}`
+      ? `${formatCountNoun('ar', hours, 'hour')}${m > 0 ? ` و${formatCountNoun('ar', m, 'minute')}` : ''}`
       : `${n(hours)}h ${m > 0 ? `${n(m)}m` : ''}`;
   }
   if (minutes > 0) {
-    return locale === 'ar' ? `${n(minutes)} دقيقة` : `${n(minutes)}m`;
+    return locale === 'ar' ? formatCountNoun('ar', minutes, 'minute') : `${n(minutes)}m`;
   }
   return locale === 'ar' ? 'أقل من دقيقة' : '<1m';
 }

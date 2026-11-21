@@ -55,9 +55,18 @@ function cached<T>(kind: string, locale: FormatLocale, options: object | undefin
   return value;
 }
 
-/** A cached Intl.NumberFormat with the locale's digits pinned. */
+/**
+ * Owner decision (2026-11-21, replaces 2026-11-15's «٬»): Arabic numbers are never grouped, so
+ * the decimal mark «٫» is the only mark inside one: «٤٨٨٧», «١٢٣٤٫٥», «٥٠٦٢٫٦ س». ICU's Arabic
+ * thousands mark U+066C «٬» is drawn in the same comma shape as «٫» by most Arabic UI fonts
+ * (Plex, Noto Kufi, Amiri), so «١٥٬٤١٩٫٩» read as 15,419,9; a space group was tried and dropped
+ * too. English keeps its grouping: "4,887". Counts from 1,000 on are shown compact («٤٫٨ ألف», «١٫٢ م»).
+ */
+const ARABIC_NO_GROUPING = { useGrouping: false } as const;
+
+/** A cached Intl.NumberFormat with the locale's digits pinned (Arabic never grouped). */
 export function numberFormat(locale: FormatLocale, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
-  return cached('n', locale, options, (tag) => new Intl.NumberFormat(tag, options));
+  return cached('n', locale, options, (tag) => new Intl.NumberFormat(tag, isArabicLocale(tag) ? { ...options, ...ARABIC_NO_GROUPING } : options));
 }
 
 /**
@@ -101,7 +110,6 @@ export function pluralCategory(locale: FormatLocale, count: number): Intl.LDMLPl
   return pluralRules(locale).select(count);
 }
 
-/** 1234.5 -> "1,234.5" / «١٬٢٣٤٫٥». Non-finite values become 0. */
 /** "A, B and C" / «A وB وC»: names joined in the locale's words (twin of AlUmmahNowAuth packages/ui formatList). */
 export function formatList(locale: FormatLocale, items: readonly string[], type: 'conjunction' | 'disjunction' = 'conjunction'): string {
   // Intl.ListFormat is ES2021; this package's lib is older, so it is typed here. `disjunction`: "A, B or C" / «A أو B أو C»
@@ -109,11 +117,12 @@ export function formatList(locale: FormatLocale, items: readonly string[], type:
   return new ListFormat(isArabicLocale(locale) ? 'ar' : 'en', { style: 'long', type }).format(items);
 }
 
+/** 1234.5 -> "1,234.5" / «١٢٣٤٫٥» (Arabic never grouped). Non-finite values become 0. */
 export function formatNumber(locale: FormatLocale, value: number, options?: Intl.NumberFormatOptions): string {
   return numberFormat(locale, options).format(Number.isFinite(value) ? value : 0);
 }
 
-/** A whole number with grouping: 5400 -> "5,400" / «٥٬٤٠٠». */
+/** A whole number: 5400 -> "5,400" / «٥٤٠٠» (Arabic never grouped). */
 export function formatInteger(locale: FormatLocale, value: number): string {
   return formatNumber(locale, Math.round(Number.isFinite(value) ? value : 0), { maximumFractionDigits: 0 });
 }
@@ -123,9 +132,73 @@ export function formatFixed(locale: FormatLocale, value: number, digits: number,
   return formatNumber(locale, value, { minimumFractionDigits: digits, maximumFractionDigits: digits, ...options });
 }
 
-/** 4200 -> "4.2K" / «٤٫٢ ألف». */
-export function formatCompact(locale: FormatLocale, value: number, maximumFractionDigits = 1): string {
-  return formatNumber(locale, value, { notation: 'compact', maximumFractionDigits });
+/**
+ * Arabic scale words (owner's rule 2026-11-20, millions changed 2026-11-21; the same on Android,
+ * Apple, Desktop and web). The number shown is cut (not rounded) to one decimal, then for
+ * thousands and billions:
+ * - exactly 1: the word alone, no digit: «ألف», «مليار»;
+ * - exactly 2: the dual alone, no digit: «ألفان» on its own, the construct form «ألفا» before a
+ *   noun («ألفا مشاهدة»); a digit is never followed by the dual;
+ * - whole 3–10: the plural: «٣ آلاف», «٣ مليارات»;
+ * - 11+ and every decimal: the singular: «١١ ألف», «١٫٣ ألف», «٢٫٥ ألف».
+ * Millions are always the digit and «م»: «١ م», «٢ م», «١٫٢ م», «١٥ م» (the words «مليون /
+ * مليونا / ملايين» are gone). ICU gets the words wrong («٢ ألف», «١٠ ألف», «٣ مليون») and differs
+ * between runtimes, so Arabic compact numbers are built here.
+ */
+type ArabicScale = { size: number; abbreviation?: string; one: string; dual: string; construct: string; few: string };
+const AR_SCALES: readonly ArabicScale[] = [
+  { size: 1e9, one: 'مليار', dual: 'ملياران', construct: 'مليارا', few: 'مليارات' },
+  { size: 1e6, abbreviation: 'م', one: 'م', dual: 'م', construct: 'م', few: 'م' },
+  { size: 1e3, one: 'ألف', dual: 'ألفان', construct: 'ألفا', few: 'آلاف' },
+];
+
+/** `value` cut (not rounded) to `digits` decimals: 1.39 -> 1.3, 2.999 -> 2.9. */
+function truncate(value: number, digits: number): number {
+  const factor = 10 ** Math.max(0, Math.floor(digits));
+  return Math.floor(value * factor + 1e-9) / factor;
+}
+
+function formatCompactArabic(value: number, maximumFractionDigits: number, beforeNoun: boolean): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  const sign = safe < 0 ? -1 : 1;
+  const abs = Math.abs(safe);
+  const scale = AR_SCALES.find((s) => abs >= s.size);
+  if (!scale) return formatNumber('ar', sign * truncate(abs, maximumFractionDigits), { maximumFractionDigits });
+  const shown = truncate(abs / scale.size, maximumFractionDigits);
+  const whole = Number.isInteger(shown);
+  // U+00A0 between the number and its scale word, as Intl writes it: they never break apart.
+  if (scale.abbreviation) return `${formatNumber('ar', sign * shown, { maximumFractionDigits })}\u00a0${scale.abbreviation}`;
+  if (sign > 0 && whole && shown === 1) return scale.one;
+  if (sign > 0 && whole && shown === 2) return beforeNoun ? scale.construct : scale.dual;
+  const word = whole && shown >= 3 && shown <= 10 ? scale.few : scale.one;
+  return `${formatNumber('ar', sign * shown, { maximumFractionDigits })}\u00a0${word}`;
+}
+
+export interface CompactOptions {
+  /** A noun follows («ألفا مشاهدة»): Arabic uses the construct form of the dual. */
+  beforeNoun?: boolean;
+}
+
+/**
+ * `value` cut (not rounded) at the scale the compact form shows it in, so every language shows
+ * the same number: 33,600 → 33.6K, 2,999 → 2.9K (Intl would say "3K"), 999,999 → 999.9K.
+ */
+function truncateCompact(value: number, maximumFractionDigits: number): number {
+  const safe = Number.isFinite(value) ? value : 0;
+  const abs = Math.abs(safe);
+  const size = abs >= 1e12 ? 1e12 : abs >= 1e9 ? 1e9 : abs >= 1e6 ? 1e6 : abs >= 1e3 ? 1e3 : 1;
+  return Math.sign(safe) * truncate(abs / size, maximumFractionDigits) * size;
+}
+
+/**
+ * 4200 -> "4.2K" / «٤٫٢ ألف». Every language cuts to `maximumFractionDigits` decimals (owner
+ * 2026-11-20, as Android and Apple do): 1,299 is "1.2K" and «١٫٢ ألف», never "1.3K". Arabic also
+ * makes the scale word agree with the number shown: «ألف», «ألفان», «٣ آلاف», «١٫٣ ألف»; with
+ * `beforeNoun`, exactly two is «ألفا»/«مليارا»; millions are «١ م», «١٫٢ م». English keeps K/M/B.
+ */
+export function formatCompact(locale: FormatLocale, value: number, maximumFractionDigits = 1, options: CompactOptions = {}): string {
+  if (isArabicLocale(locale)) return formatCompactArabic(value, maximumFractionDigits, options.beforeNoun === true);
+  return formatNumber(locale, truncateCompact(value, maximumFractionDigits), { notation: 'compact', maximumFractionDigits });
 }
 
 /** A ratio (0.42) as a percentage: "42%" / «٤٢٪». */
@@ -279,14 +352,15 @@ export function localizeDigits(locale: FormatLocale, text: string | number): str
 
 /**
  * Typed text with ٠–٩ (and Persian ۰–۹) turned into 0–9, the Arabic decimal mark «٫» into "."
- * and the Arabic thousands mark «٬» dropped. Use on every typed number before parsing.
+ * and any thousands marks dropped (Arabic «٬», or a narrow no-break space, pasted from elsewhere).
+ * Use on every typed number before parsing.
  */
 export function parseDigits(text: string): string {
   return String(text ?? '')
     .replace(/[٠-٩]/g, (d) => String(EASTERN.indexOf(d)))
     .replace(/[۰-۹]/g, (d) => String(PERSIAN.indexOf(d)))
     .replace(/٫/g, '.')
-    .replace(/٬/g, '');
+    .replace(/[٬\u202f]/g, '');
 }
 
 /** A typed number in either digit system; NaN when it isn't one. */
@@ -312,14 +386,78 @@ function inlineNumber(locale: FormatLocale, kind: string, literal: string, perce
   return formatNumber(locale, value, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+const PLURAL_HEAD = /\{(\w+),\s*plural,/g;
+
+/** The plural form's text from `one {…} two {…} other {…}` (nested braces allowed). */
+function pluralOptions(body: string): Record<string, string> {
+  const options: Record<string, string> = {};
+  let i = 0;
+  while (i < body.length) {
+    const key = /^\s*([\w=]+)\s*\{/.exec(body.slice(i));
+    if (!key) break;
+    let j = i + key[0].length;
+    let depth = 1;
+    const start = j;
+    while (j < body.length && depth > 0) {
+      if (body[j] === '{') depth += 1;
+      else if (body[j] === '}') depth -= 1;
+      j += 1;
+    }
+    options[key[1]] = body.slice(start, j - 1);
+    i = j;
+  }
+  return options;
+}
+
+/** A plural param as a number: numbers as they are, formatted text («١٢٣٤», or older «١٬٢٣٤» / «١ ٢٣٤», "1,234") parsed, anything else NaN. */
+function pluralValue(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return Number.NaN;
+  return parseLocaleNumber(String(value).replace(/[\u200e\u200f\u061c]/g, ''));
+}
+
+/**
+ * ICU plural selects: `{count, plural, zero {…} one {…} two {…} few {…} many {…} other {…}}`.
+ * The form is the CLDR category of the count (Arabic has all six, English one/other); a missing
+ * form falls back to `other`. `#` in the form is the count in the locale's digits. Text that
+ * is not a plain number (a compact «١٫٣ ألف») takes `other`.
+ */
+function fillPlurals(locale: FormatLocale, template: string, params: TemplateParams, missing?: string): string {
+  let out = '';
+  let last = 0;
+  PLURAL_HEAD.lastIndex = 0;
+  for (let m = PLURAL_HEAD.exec(template); m; m = PLURAL_HEAD.exec(template)) {
+    let j = m.index + m[0].length;
+    let depth = 1;
+    while (j < template.length && depth > 0) {
+      if (template[j] === '{') depth += 1;
+      else if (template[j] === '}') depth -= 1;
+      j += 1;
+    }
+    const options = pluralOptions(template.slice(m.index + m[0].length, j - 1));
+    const raw = params[m[1]];
+    const n = pluralValue(raw);
+    const form = Number.isFinite(n) ? options[pluralCategory(locale, n)] ?? options.other : options.other;
+    const shown = raw === undefined || raw === null ? missing ?? `{${m[1]}}` : typeof raw === 'number' ? formatNumber(locale, raw) : raw;
+    out += template.slice(last, m.index) + (form ?? '').replace(/(^|[^{])#/g, (_, before: string) => `${before}${shown}`);
+    last = j;
+    PLURAL_HEAD.lastIndex = j;
+  }
+  return out + template.slice(last);
+}
+
 /**
  * Fills `{name}` placeholders. Numbers go through `formatNumber`, so «آخر {days} أيام» with
  * days 7 reads «آخر ٧ أيام» in Arabic and "Last 7 days" in English. Strings are inserted as
  * they are. An unknown placeholder stays as written unless `missing` is given. Numbers written
  * in the message are placeholders too (`{#7}`, `{#50%}`, `{$0.011}`, see inlineNumber).
+ *
+ * A number before a noun uses a plural select so the noun agrees with it (owner 2026-11-20,
+ * #1666): `{count, plural, one {مشاهدة واحدة} two {مشاهدتان} few {# مشاهدات} other {# مشاهدة}}`
+ * and `{count, plural, one {# view} other {# views}}`; see fillPlurals.
  */
 export function fillTemplate(locale: FormatLocale, template: string, params: TemplateParams = {}, missing?: string): string {
-  return template
+  return fillPlurals(locale, template, params, missing)
     .replace(/\{([#$])(-?\d+(?:\.\d+)?)(%?)\}/g, (_, kind: string, literal: string, percent: string) => inlineNumber(locale, kind, literal, percent))
     .replace(/\{(\w+)\}/g, (match, name: string) => {
       const value = params[name];

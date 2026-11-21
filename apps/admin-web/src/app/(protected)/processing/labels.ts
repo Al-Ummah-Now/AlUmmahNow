@@ -85,5 +85,5 @@ export function thumbCounts(t: T, counts: Partial<Record<ThumbnailOutcome, numbe
   return order
     .filter((o) => (counts?.[o] ?? 0) > 0)
     .map((o) => `${t(THUMB_OUTCOME_LABEL[o])} ${counts?.[o]}`)
-    .join(' · ');
+    .join(' • ');
 }

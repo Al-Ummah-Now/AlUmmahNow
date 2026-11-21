@@ -32,7 +32,8 @@ function localizeParams(params, lang) {
 }
 
 // Numbers like locale-format: Arabic ٠–٩ (ar-u-nu-arab), English 0–9, pinned in every browser
-const NUMBER = { ar: new Intl.NumberFormat('ar-u-nu-arab'), en: new Intl.NumberFormat('en-u-nu-latn') }; // locale-format: machine (worker script, no imports)
+// Arabic is never grouped, as in locale-format (owner 2026-11-21): ICU's «٬» looks like the decimal «٫»
+const NUMBER = { ar: new Intl.NumberFormat('ar-u-nu-arab', { useGrouping: false }), en: new Intl.NumberFormat('en-u-nu-latn') }; // locale-format: machine (worker script, no imports)
 const fill = (template, params, lang) =>
   String(template || '').replace(/\{(\w+)\}/g, (_, name) => {
     const value = params[name];

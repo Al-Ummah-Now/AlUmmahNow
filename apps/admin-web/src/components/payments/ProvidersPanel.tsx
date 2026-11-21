@@ -12,7 +12,7 @@ import { useId, useState } from 'react';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { PAYMENT_CREDENTIAL_FIELDS, PAYMENT_MODES, PAYMENT_PROVIDERS, type PaymentCredentialField, type PaymentMode, type PaymentProviderConfig } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, useConfirm } from '@/components/content/actions';
 import { primarySmallButtonClass, smallButtonClass, dangerButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass } from '@/components/ui';
@@ -21,6 +21,8 @@ import { hasCredentials, hasLiveMode, parseMissing, providerSettings, settingVal
 import { CopyButton, ToneChip, hintClass, labelClass, providerName, sectionTitle, useBillingAction } from './shared';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 interface Props {
   providers: PaymentProviderConfig[];
   credentialStorage: boolean;
@@ -46,7 +48,7 @@ export function ProvidersPanel({ providers, credentialStorage, canManage, onRefr
 }
 
 function ProviderCard({ provider, credentialStorage, canManage, onRefresh }: { provider: PaymentProviderConfig; credentialStorage: boolean; canManage: boolean; onRefresh: () => Promise<void> }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const { confirm, dialog } = useConfirm();
   const { busy, error, notice, run } = useBillingAction(`payments-provider-${provider.id}`);
@@ -109,7 +111,7 @@ function ProviderCard({ provider, credentialStorage, canManage, onRefresh }: { p
         <a href={spec.docsUrl} target="_blank" rel="noreferrer noopener" className={linkClass}>
           {t('payments.provider.docs')}
         </a>
-        {provider.updatedAt && <span>{t('payments.provider.changed', { date: formatDate(provider.updatedAt, locale, true) })}</span>}
+        {provider.updatedAt && <span>{fillNodes(t('payments.provider.changed'), { date: <LocalTime value={provider.updatedAt} withTime /> })}</span>}
       </p>
 
       <ActionFeedback error={error} message={notice} testId={`payments-provider-feedback-${provider.id}`} />
@@ -326,7 +328,7 @@ function Credentials({ provider, mode, credentialStorage, canManage, locked, con
 }
 
 function CredentialRow({ provider, field, mode, writable, locked, confirm, run, onRefresh }: { provider: PaymentProviderConfig; field: PaymentCredentialField; mode: PaymentMode; writable: boolean; locked: boolean; confirm: Confirm; run: Run; onRefresh: () => Promise<void> }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const id = useId();
   const [value, setValue] = useState('');
   const [invalid, setInvalid] = useState(false);
@@ -348,10 +350,10 @@ function CredentialRow({ provider, field, mode, writable, locked, confirm, run, 
         <span className="text-sm font-medium text-fg">{fieldName}</span>
         {/* Present (with the last 4 to tell keys apart) or Missing: never the value */}
         <ToneChip tone={status ? 'good' : 'neutral'} testId={`payments-credential-state-${provider.id}-${field}`}>
-          {status ? (status.last4 ? <>{t('payments.provider.present')} · <bdi dir="ltr">•••• {status.last4}</bdi></> : t('payments.provider.present')) : t('payments.provider.credentialMissing')}
+          {status ? (status.last4 ? <>{t('payments.provider.present')} • <bdi dir="ltr">•••• {status.last4}</bdi></> : t('payments.provider.present')) : t('payments.provider.credentialMissing')}
         </ToneChip>
       </div>
-      {status && <p className="text-xs text-fg-muted mb-2">{t('payments.provider.savedOn', { date: formatDate(status.setAt, locale, true) })}</p>}
+      {status && <p className="text-xs text-fg-muted mb-2">{fillNodes(t('payments.provider.savedOn'), { date: <LocalTime value={status.setAt} withTime /> })}</p>}
       {writable && (
         <form
           className="flex flex-wrap items-end gap-2"

@@ -7,7 +7,7 @@ import type { AdminUserRow, CreatorTier, CreatorTierBulkResult } from '@al-ummah
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type Translator } from '@/i18n/translate';
+import { formatNumber, type Translator } from '@/i18n/translate';
 import { ErrorAlert, fieldClass, linkClass } from '@/components/ui';
 import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
@@ -19,6 +19,7 @@ import { adminUserName } from '@/lib/user-name';
 import { Select } from '@/components/select/Select';
 
 
+import { LocalTime } from '@/components/LocalTime';
 /** Banned / active, profile deleted, and the invite's status when not signed in yet. */
 function StatusChips({ user, t }: { user: AdminUserRow; t: Translator }) {
   return (
@@ -228,7 +229,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         <span className="font-semibold text-warning-fg" data-testid="user-limit-hits">{t('creators.hitsWeek', { count: n(creator.limitHits7d) })}</span>
                         {limited && (
                           <>
-                            {' · '}
+                            {' • '}
                             <Link href={tiersHref(limited.id)} className={`${linkClass} underline`} data-testid="user-raise-limit">
                               {t('creators.raiseLimit', { tier: limited.name })}
                             </Link>
@@ -237,7 +238,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                       </div>
                     )}
                   </td>
-                  <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{u.createdAt ? <time dateTime={u.createdAt}>{formatDate(u.createdAt, locale)}</time> : t('content.none')}</td>
+                  <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{u.createdAt ? <LocalTime value={u.createdAt} /> : t('content.none')}</td>
                 </tr>
               );
             })}

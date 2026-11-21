@@ -318,6 +318,14 @@
   outline: 2px solid var(--fanous-color-focus-ring, currentColor);
   outline-offset: -2px;
 }
+/* One-row tab strips with a "More" menu (components/ui/PriorityStrip, #1669): narrower sides on
+   phones, so more tabs fit before "More"; tablet and desktop keep the full width */
+@media (max-width: 639.98px) {
+  .tab-strip > .tab-item,
+  .tab-item.tab-more {
+    padding: 0 0.875rem;
+  }
+}
 
 /* Upload page mode tabs (single video / batch). Page-level underline tabs on the tabs.* parts:
    no fill or outline, so they read as views of the page, not as actions. */

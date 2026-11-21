@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDate, formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate, formatDate, formatNumber } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -54,7 +54,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
               <div
                 className="bg-blue-500 dark:bg-blue-400 rounded-t w-full min-h-[2px] transition-all duration-300 hover:bg-blue-600 dark:hover:bg-blue-300"
                 style={{ height: scale(metric.views, maxViews, 100) }}
-                title={`${dayLabel(metric.date)}: ${d.viewsCount.replace('{count}', fmt(metric.views))}`}
+                title={`${dayLabel(metric.date)}: ${fillTemplate(locale, d.viewsCount, { count: metric.views })}`}
               />
               {index % labelEvery === 0 && (
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">{dayLabel(metric.date)}</span>
@@ -103,7 +103,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
               <div
                 className="bg-purple-500 dark:bg-purple-400 rounded-t w-full min-h-[2px]"
                 style={{ height: scale(metric.watchTime || 0, maxWatchTime, 100) }}
-                title={`${dayLabel(metric.date)}: ${d.minutesCount.replace('{count}', fmt(minutes(metric.watchTime)))}`}
+                title={`${dayLabel(metric.date)}: ${fillTemplate(locale, d.minutesCount, { count: minutes(metric.watchTime) })}`}
               />
             </div>
           ))}
@@ -118,7 +118,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
               <div
                 className="bg-red-500 dark:bg-red-400 rounded-t w-full min-h-[2px]"
                 style={{ height: scale(metric.subscribers || 0, maxSubscribers, 100) }}
-                title={`${dayLabel(metric.date)}: ${d.subscribersCount.replace('{count}', fmt(metric.subscribers || 0))}`}
+                title={`${dayLabel(metric.date)}: ${fillTemplate(locale, d.subscribersCount, { count: metric.subscribers || 0 })}`}
               />
             </div>
           ))}

@@ -95,7 +95,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
           <div className="flex-1 min-w-0 text-right">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div className="flex items-center gap-2 min-w-0">
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">
+                {/* Up to two lines on phones, then an ellipsis: a short name never cut mid-word beside Subscribe (#1669 audit) */}
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white line-clamp-2 break-words">
                   {displayName}
                 </h1>
                 {channel.isVerified && <VerifiedBadge size="md" />}

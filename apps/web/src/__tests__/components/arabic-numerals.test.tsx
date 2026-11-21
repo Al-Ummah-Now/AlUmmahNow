@@ -125,6 +125,7 @@ describe('Arabic numbers use ٠–٩', () => {
     for (const el of [latest, totals, tasks, next]) {
       expect(visibleText(el)).not.toMatch(ASCII_DIGIT);
     }
-    expect(visibleText(latest)).toMatch(/٥٬٤٠٠/);
+    // Compact from 1,000 on, cut not rounded (owner 2026-11-21)
+    expect(visibleText(latest)).toMatch(/٥٫٤\sألف\sمشاهدة/);
   });
 });

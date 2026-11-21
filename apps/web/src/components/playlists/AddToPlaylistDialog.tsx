@@ -169,7 +169,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
 
   const countOf = (playlist: PlaylistWithVideos) => counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
   const subtitleOf = (playlist: PlaylistWithVideos) =>
-    `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${formatVideoCount(countOf(playlist), lang)}`;
+    `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} • ${formatVideoCount(countOf(playlist), lang)}`;
   const toOption = useCallback((playlist: PlaylistWithVideos): AutocompleteOption => ({
     id: playlist.id,
     label: playlistName(playlist, lang),

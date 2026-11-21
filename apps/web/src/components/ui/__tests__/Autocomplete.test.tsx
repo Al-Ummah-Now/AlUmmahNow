@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { EN_TRANSLATIONS as en } from '@/lib/i18n/translations/en';
 import { AR_TRANSLATIONS as ar } from '@/lib/i18n/translations/ar';
+import { fillTemplate } from '@al-ummah/shared-types';
 import { Autocomplete, Highlight, type AutocompleteOption, type AutocompletePage, type AutocompleteProps } from '../Autocomplete';
 
 const mockLanguage = { t: en, lang: 'en', locale: 'en', isRTL: false, dir: 'ltr' };
@@ -111,7 +112,7 @@ describe('Autocomplete', () => {
   it('announces how many suggestions there are, in Arabic too', () => {
     const { rerender } = render(<Harness />);
     fireEvent.change(input(), { target: { value: 'seerah' } });
-    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(en.autocomplete.resultsCount.replace('{count}', '2'));
+    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(fillTemplate('en', en.autocomplete.resultsCount, { count: 2 }));
     fireEvent.change(input(), { target: { value: 'zzzz' } });
     expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(en.autocomplete.noResults);
     expect(screen.getByTestId('autocomplete-no-matches')).toHaveTextContent('zzzz');
@@ -271,7 +272,7 @@ describe('Autocomplete initial results (pickers open with content)', () => {
     const added = options().find((o) => o.getAttribute('data-option-id') === 'p1')!;
     expect(added).toHaveAttribute('aria-checked', 'true');
     expect(added).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(ar.autocomplete.resultsCount.replace('{count}', '٢'));
+    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(fillTemplate('ar', ar.autocomplete.resultsCount, { count: 2 }));
   });
 
   it('starts again from the first page when loadKey changes (another channel)', async () => {

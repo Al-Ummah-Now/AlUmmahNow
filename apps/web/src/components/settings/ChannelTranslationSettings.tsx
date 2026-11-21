@@ -92,7 +92,7 @@ function EditionRow({ channelId, row, onChange }: { channelId: string; row: Chan
       </label>
       {unavailable ? (
         <p className={MUTED}>
-          <span dir="auto">{row.name}</span> · {cs.unavailable}
+          <span dir="auto">{row.name}</span> • {cs.unavailable}
         </p>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row">

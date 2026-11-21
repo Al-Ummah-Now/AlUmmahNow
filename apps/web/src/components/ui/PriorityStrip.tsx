@@ -1,0 +1,208 @@
+'use client';
+
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import Link from '@/components/common/AppLink';
+import { ChevronDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
+/**
+ * One row of tabs or chips that never cuts an item at the edge and never wraps (owner rule,
+ * #1669): as many items as fit, measured at run time, and the rest in a "More ▾" menu at the
+ * row's end (the priority+ pattern). The current item is always in the row: when it would be
+ * in the menu it takes the row's last slot.
+ *
+ * The caller renders the row's items (tabs, chips, links: its own markup and roles). The menu is
+ * the site's menu (components/ui/dropdown-menu: Radix, so keyboard, focus, screen readers, page
+ * direction and staying on screen are handled); its entries call `onSelect` or follow `href`.
+ */
+export interface PriorityItem {
+  id: string;
+  /** Text of the menu entry */
+  label: string;
+  current: boolean;
+  /** A link: the menu entry follows it (client navigation is the caller's `onSelect`) */
+  href?: string;
+}
+
+interface PriorityStripProps<T extends PriorityItem> {
+  items: T[];
+  /** One item of the row (a direct child of the row element: its own key, role and test id) */
+  renderItem: (item: T) => React.ReactElement;
+  onSelect?: (item: T) => void;
+  moreLabel: string;
+  menuLabel: string;
+  /** Props of the row element itself (role="tablist", aria-label, data-testid, dir, classes) */
+  rowProps?: React.HTMLAttributes<HTMLDivElement> & { 'data-testid'?: string };
+  /** Classes of the element that holds the row and the More button */
+  className?: string;
+  /** Classes of the More button (match the row's items) */
+  moreClassName?: string;
+  /** The row's items are the site's Button: More is themed as one too (the theme styles Button by its data-slot) */
+  moreIsButton?: boolean;
+  testId?: string;
+}
+
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** How many leading items fit, and where the current one goes (exported for tests) */
+export function fitItems(widths: number[], gap: number, available: number, moreWidth: number, current: number): number[] {
+  const n = widths.length;
+  const span = (ids: number[]) => ids.reduce((sum, i) => sum + widths[i], 0) + Math.max(0, ids.length - 1) * gap;
+  const all = widths.map((_, i) => i);
+  if (span(all) <= available + 0.5) return all;
+  const room = available - moreWidth - gap;
+  for (let k = n - 1; k >= 1; k--) {
+    const lead = all.slice(0, k);
+    const ids = current >= k ? [...lead.slice(0, k - 1), current] : lead;
+    if (span(ids) <= room + 0.5) return ids;
+  }
+  // Not even one item beside More: the current one alone (or nothing)
+  return current >= 0 && widths[current] + gap + moreWidth <= available + 0.5 ? [current] : [];
+}
+
+export function PriorityStrip<T extends PriorityItem>({
+  items,
+  renderItem,
+  onSelect,
+  moreLabel,
+  menuLabel,
+  rowProps,
+  className = '',
+  moreClassName = '',
+  moreIsButton = false,
+  testId,
+}: PriorityStripProps<T>) {
+  const holderRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  /** Natural widths of every item and of More, measured with all items in the row */
+  const [widths, setWidths] = useState<{ items: number[]; more: number; gap: number } | null>(null);
+  /** The holder's inner width (the observer updates it; it does not depend on which item is current) */
+  const [available, setAvailable] = useState<number | null>(null);
+  const signature = items.map((i) => `${i.id}\u0000${i.label}`).join('\u0001');
+  const current = items.findIndex((i) => i.current);
+
+  // A new set of items (or labels): show them all, hidden, and measure again
+  useIsomorphicLayoutEffect(() => {
+    setWidths(null);
+  }, [signature]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (widths || !rowRef.current || !moreRef.current) return;
+    const children = Array.from(rowRef.current.children) as HTMLElement[];
+    if (children.length !== items.length) return;
+    const gap = parseFloat(getComputedStyle(rowRef.current).columnGap) || 0;
+    setWidths({ items: children.map((c) => c.getBoundingClientRect().width), more: moreRef.current.getBoundingClientRect().width, gap });
+    // Again whenever the widths are reset (new labels, fonts in)
+  }, [widths, signature]);
+
+  // While the menu is open the row stays as it is: the menu locks the page scroll, so the scrollbar
+  // goes, the strip widens and a refit would fit every item and unmount More with its open menu
+  const openRef = useRef(false);
+  useIsomorphicLayoutEffect(() => {
+    openRef.current = open;
+  }, [open]);
+  const measureAvailable = useCallback(() => {
+    const holder = holderRef.current;
+    if (!holder || openRef.current) return;
+    const style = getComputedStyle(holder);
+    setAvailable(holder.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
+  }, []);
+
+  useIsomorphicLayoutEffect(measureAvailable, [measureAvailable, widths, open]);
+
+  useEffect(() => {
+    const holder = holderRef.current;
+    if (!holder || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureAvailable());
+    observer.observe(holder);
+    return () => observer.disconnect();
+  }, [measureAvailable]);
+
+  // Web fonts change the widths: measure again once they are in
+  useEffect(() => {
+    let live = true;
+    document.fonts?.ready.then(() => {
+      if (live) setWidths(null);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Which items are in the row, worked out on every render from the current item, so a change of
+  // current item (a click, or a navigation in a transition) is always reflected; nothing kept in
+  // state can hold an older choice
+  const visible = useMemo(
+    () => (widths && available !== null ? fitItems(widths.items, widths.gap, available, widths.more, current) : null),
+    [widths, available, current],
+  );
+
+  const measuring = visible === null;
+  const shown = useMemo(() => (visible ? new Set(visible) : null), [visible]);
+  const rowItems = measuring ? items : items.filter((_, i) => shown!.has(i));
+  const menuItems = measuring ? [] : items.filter((_, i) => !shown!.has(i));
+  const hasMenu = measuring || menuItems.length > 0;
+
+  // Radix closes the menu after a select; the strip reports the choice once that is done. Applied
+  // at once, a choice made in state (analytics) moved the entry out of the menu inside Radix's own
+  // select, and the next press on More did nothing
+  const choose = (item: T) => {
+    window.setTimeout(() => onSelect?.(item), 0);
+  };
+
+  return (
+    <div ref={holderRef} className={`relative flex min-w-0 flex-1 items-center ${className}`} data-testid={testId} data-measuring={measuring || undefined}>
+      <div
+        {...rowProps}
+        ref={rowRef}
+        className={`flex min-w-0 flex-nowrap [&>*]:shrink-0 ${measuring ? 'invisible overflow-hidden' : ''} ${rowProps?.className ?? ''}`}
+      >
+        {rowItems.map((item) => renderItem(item))}
+      </div>
+      {hasMenu && (
+        // The row's own gap before More (fitItems counts it)
+        <div className={`shrink-0 ${measuring ? 'invisible' : ''}`} style={widths?.gap ? { marginInlineStart: widths.gap } : undefined}>
+          {/* Radix owns the open state (the strip only follows it): closing it here as well, inside
+              Radix's own select, left the next press on More doing nothing */}
+          <DropdownMenu onOpenChange={setOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                ref={moreRef}
+                type="button"
+                data-slot={moreIsButton ? 'button' : undefined}
+                tabIndex={measuring ? -1 : undefined}
+                data-testid={testId ? `${testId}-more` : undefined}
+                className={`inline-flex items-center gap-1 whitespace-nowrap ${moreClassName}`}
+              >
+                {moreLabel}
+                <ChevronDown aria-hidden="true" className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+              </button>
+            </DropdownMenuTrigger>
+            {/* No exit animation: while a closing menu fades out Radix keeps it mounted, and when it
+                goes it hands focus back to More, which closed a menu opened again in that time */}
+            <DropdownMenuContent align="end" aria-label={menuLabel} data-testid={testId ? `${testId}-menu` : undefined} className="min-w-44 data-[state=closed]:animate-none!">
+              {menuItems.map((item) => {
+                const shared = {
+                  'aria-current': item.current ? ('true' as const) : undefined,
+                  'data-testid': testId ? `${testId}-menu-${item.id}` : undefined,
+                  className: item.current ? 'font-semibold' : undefined,
+                };
+                return item.href && !onSelect ? (
+                  <DropdownMenuItem key={item.id} asChild {...shared}>
+                    <Link href={item.href}>{item.label}</Link>
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem key={item.id} {...shared} onSelect={() => choose(item)}>
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
+}

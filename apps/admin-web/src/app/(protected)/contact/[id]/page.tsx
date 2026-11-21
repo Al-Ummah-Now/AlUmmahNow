@@ -6,7 +6,7 @@ import type { ContactMessage, ContactNote } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseContactInbox } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ContactStatusChip, ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ContactActions } from './ContactActions';
@@ -17,6 +17,7 @@ import { LiveRefresh } from '@/components/LiveRefresh';
 import { MarkReadOnOpen } from './MarkReadOnOpen';
 import { ContactLiveProvider, ContactLiveStatusChip, ContactMessageArticle } from './ContactLiveState';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -27,7 +28,7 @@ const dt = 'text-fg-muted text-sm';
 
 export default async function ContactMessagePage({ params }: PageProps) {
   const { id } = await params;
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const session = await getAdminSession();
   if (!canUseContactInbox(session?.user.role)) {
     return <ErrorAlert testId="contact-no-access">{t('contact.noAccess')}</ErrorAlert>;
@@ -99,10 +100,10 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   <a href={`mailto:${m.email}`} className={`${linkClass} underline`} dir="ltr" data-testid="contact-sender-email">
                     <EmailText email={m.email} />
                   </a>
-                  {' · '}
+                  {' • '}
                   {translateDynamic(t, 'contactTopic', m.topic)}
-                  {' · '}
-                  <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>
+                  {' • '}
+                  <LocalTime value={m.created_at} withTime />
                 </p>
               </div>
               <span className="flex flex-wrap gap-2">
@@ -144,7 +145,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                         )}
                       </span>
                       <span className="text-fg-subtle">
-                        <UserName id={n.author_id} email={n.author_email} showEmail={false} /> · <time dateTime={n.created_at}>{formatDate(n.created_at, locale, true)}</time>
+                        <UserName id={n.author_id} email={n.author_email} showEmail={false} /> • <LocalTime value={n.created_at} withTime />
                       </span>
                     </div>
                     <p className="text-fg whitespace-pre-wrap break-words" dir="auto">
@@ -240,7 +241,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
               <div>
                 <dt className={dt}>{t('contact.received')}</dt>
                 <dd className="text-fg">
-                  <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>
+                  <LocalTime value={m.created_at} withTime />
                 </dd>
               </div>
               <div>

@@ -27,7 +27,7 @@ import {
   type EmailTemplateVersion,
 } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { useUndoableAction } from '@/components/undo/UndoToast';
@@ -46,6 +46,8 @@ import {
 import { getNames } from '@/lib/api/audit';
 import { insertAt, issueText, previewDocument, type Mode } from '@/lib/email-template-model';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const PREVIEW_DEBOUNCE_MS = 400;
 /** Fields with a line of help under them (emailTemplates.fieldHelp) */
 const FIELD_HELP = new Set(['preheader', 'account', 'noteLabel', 'videoIntro']);
@@ -202,8 +204,8 @@ export function EmailTemplateEditor({ initial, initialUpdatedByName, adminEmail 
             <p className="text-sm text-fg-muted">{t('emailTemplates.editorIntro')}</p>
             <p className="text-sm text-fg-muted" data-testid="email-template-version">
               {t('emailTemplates.version', { version: formatNumber(locale, saved.version) })}
-              {' · '}
-              {saved.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : t('emailTemplates.savedBy', { date: formatDate(saved.updatedAt, locale, true), name: savedByName || t('emailTemplates.unknownPerson') })}
+              {' • '}
+              {saved.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : fillNodes(t('emailTemplates.savedBy', { name: savedByName || t('emailTemplates.unknownPerson') }), { date: <LocalTime value={saved.updatedAt} withTime /> })}
             </p>
           </div>
           {groups.map((group) => (
@@ -570,12 +572,12 @@ function History({ templateKey, current, refresh, dirty, onRestore }: { template
             <div className="flex-1 min-w-0 text-sm">
               <p className="text-fg font-medium">
                 {t('emailTemplates.version', { version: formatNumber(locale, v.version) })}
-                {' · '}
+                {' • '}
                 {actionText(v)}
                 {v.version === current ? <span className="ms-2 inline-block rounded-full border border-border px-2 text-xs text-fg-muted">{t('emailTemplates.historyCurrent')}</span> : null}
               </p>
               {v.createdBy === 'system' ? null : (
-                <p className="text-fg-muted">{t('emailTemplates.savedBy', { date: formatDate(v.createdAt, locale, true), name: names[v.createdBy] || t('emailTemplates.unknownPerson') })}</p>
+                <p className="text-fg-muted">{fillNodes(t('emailTemplates.savedBy', { name: names[v.createdBy] || t('emailTemplates.unknownPerson') }), { date: <LocalTime value={v.createdAt} withTime /> })}</p>
               )}
             </div>
             {v.version !== current ? (

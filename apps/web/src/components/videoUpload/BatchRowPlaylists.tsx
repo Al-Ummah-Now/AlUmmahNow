@@ -37,7 +37,7 @@ export function BatchRowPlaylists({ rowId, playlists, loading, failed, batch, ov
         id={`batch-playlists-${rowId}`}
         testId="batch-row-playlist-picker"
         compact
-        label={own || committed ? s.rowLabel : `${s.rowLabel} · ${s.sameAsBatch}`}
+        label={own || committed ? s.rowLabel : `${s.rowLabel} • ${s.sameAsBatch}`}
         playlists={playlists}
         loading={loading}
         failed={failed}

@@ -141,7 +141,7 @@ export function logDetailText(detail: Record<string, unknown> | null): string | 
     if (value && typeof value === 'object' && 'from' in value && 'to' in value) return `${key}: ${String((value as { from: unknown }).from)} → ${String((value as { to: unknown }).to)}`;
     return `${key}: ${value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value)}`;
   });
-  return parts.length ? parts.join(' · ') : null;
+  return parts.length ? parts.join(' • ') : null;
 }
 
 /** "Label: value" lines for "Copy all" (empty fields are left out). */

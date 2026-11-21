@@ -168,7 +168,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
             : over > 0
               ? fill(t.meterOver, { used: usage.monthUsed + over, limit: usage.monthLimit ?? 0, over })
               : fill(t.meter, { used: usage.monthUsed, limit: usage.monthLimit ?? 0, date: resets })}
-          {!usage.unlimited && usage.packsRemaining > 0 && <span className="text-muted-foreground"> · {fill(t.meterPacks, { count: usage.packsRemaining })}</span>}
+          {!usage.unlimited && usage.packsRemaining > 0 && <span className="text-muted-foreground"> • {fill(t.meterPacks, { count: usage.packsRemaining })}</span>}
         </p>
         {!usage.unlimited && usage.monthLimit ? (
           <div

@@ -139,7 +139,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     playNow: 'شغّل الآن',
     watchAgain: 'شاهد مرة أخرى',
     cancel: 'إلغاء',
-    autoAdvance: 'المرئي التالي بعد {seconds} ثوانٍ',
+    autoAdvance: 'المرئي التالي بعد {seconds, plural, one {ثانية واحدة} two {ثانيتين} few {# ثوانٍ} many {# ثانية} other {# ثانية}}',
     playTitle: 'شغّل {title}',
     closeMiniPlayer: 'إغلاق المشغّل المصغّر',
     backToVideo: 'العودة إلى المرئي',

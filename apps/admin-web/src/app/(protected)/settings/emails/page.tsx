@@ -2,7 +2,7 @@ import Link from '@/components/AppLink';
 import { getAdminSession } from '@/lib/auth';
 import { canManageEmails } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { listEmailTemplates, type TemplateSummary } from '@/lib/api/email-templates';
@@ -10,6 +10,8 @@ import { getNames } from '@/lib/api/audit';
 import { formatNumber } from '@al-ummah/shared-types';
 import { slugOfTemplate } from './templates';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -50,8 +52,8 @@ export default async function EmailsPage() {
               <p className="text-sm text-fg-muted">{t(`emailTemplates.keyHelp.${item.key}` as MessageKey)}</p>
               <p className="text-sm text-fg-muted">
                 {t('emailTemplates.version', { version: formatNumber(locale, item.version) })}
-                {' · '}
-                {item.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : t('emailTemplates.savedBy', { date: formatDate(item.updatedAt, locale, true), name: who(item.updatedBy) })}
+                {' • '}
+                {item.updatedBy === 'system' ? t('emailTemplates.savedBySystem') : fillNodes(t('emailTemplates.savedBy', { name: who(item.updatedBy) }), { date: <LocalTime value={item.updatedAt} withTime /> })}
               </p>
             </div>
             <div className="flex justify-end">

@@ -303,7 +303,7 @@ export function registerFanousComponents(): void {
         const behind = tracking && lt!.behindLiveEdge() && behindBy > 10;
         this.toggleClass('vjs-fanous-behind', behind);
         const c = copy(this);
-        const text = behind ? `${c.live} · ${c.behind.replace('{time}', formatPlayerTime(c.lang, behindBy))}` : c.live;
+        const text = behind ? `${c.live} • ${c.behind.replace('{time}', formatPlayerTime(c.lang, behindBy))}` : c.live;
         label.textContent = text;
         // The label reads in the page's direction («مباشر · متأخر ١:٠٥»); the bar itself is LTR
         label.dir = c.lang === 'ar' ? 'rtl' : 'ltr';

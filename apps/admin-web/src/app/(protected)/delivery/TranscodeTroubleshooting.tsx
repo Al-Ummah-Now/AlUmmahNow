@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/AppLink';
-import { dateTimeFormat, TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView } from '@al-ummah/shared-types';
+import { TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView } from '@al-ummah/shared-types';
 import {
   getTranscodeLogs,
   getTranscodeTroubleshoot,
@@ -24,6 +24,9 @@ import { deliveryFormats } from './format';
 import { API_ERROR_LABEL, REASON_LABEL, STATE_CHIP, STATE_LABEL, TROUBLESHOOT_REFRESH_MS, filterProblem, jobActions, orderJobs, statusNote } from './troubleshoot-view';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { formatDate } from '@/i18n/translate';
+import type { Locale } from '@/i18n/config';
 const subTitle = 'text-base font-semibold text-fg';
 
 export interface TranscodeTroubleshootingProps {
@@ -91,7 +94,7 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo }: T
             {refreshing ? t('transcodeTroubleshoot.refreshing') : t('transcodeTroubleshoot.refresh')}
           </button>
           <p className="text-xs text-fg-muted" data-testid="troubleshoot-updated">
-            {updated && !Number.isNaN(updated.getTime()) ? t('transcodeTroubleshoot.updated', { time: dateTimeFormat(locale, { timeStyle: 'medium' }).format(updated) }) : null}
+            {updated && !Number.isNaN(updated.getTime()) ? fillNodes(t('transcodeTroubleshoot.updated'), { time: <LocalTime value={updated} clock /> }) : null}
           </p>
         </div>
       </div>
@@ -149,7 +152,7 @@ function StatusStrip({ status, t, locale }: { status: TroubleshootStatus; t: Tra
   const inUse = c && c.ok ? (c.maxInstances === null ? f.integer(c.inUse) : t('transcodeTroubleshoot.of', { n: f.integer(c.inUse), m: f.integer(c.maxInstances) })) : unknown;
   const health = c && c.ok
     ? c.health && Object.keys(c.health).length
-      ? Object.entries(c.health).map(([name, n]) => t('transcodeTroubleshoot.healthItem', { name: healthName(name, t), n: f.integer(n) })).join(' · ')
+      ? Object.entries(c.health).map(([name, n]) => t('transcodeTroubleshoot.healthItem', { name: healthName(name, t), n: f.integer(n) })).join(' • ')
       : t('transcodeTroubleshoot.noHealth')
     : unknown;
   const backlog = (n: number | null | undefined) => (typeof n === 'number' ? t('transcodeTroubleshoot.messages', { n: f.integer(n) }) : unknown);
@@ -177,7 +180,7 @@ function StatusStrip({ status, t, locale }: { status: TroubleshootStatus; t: Tra
 function when(iso: string | null, locale: string): string | null {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+  return Number.isNaN(d.getTime()) ? null : formatDate(d, locale as Locale, true);
 }
 
 function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
@@ -328,7 +331,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
 
 type Source = 'all' | 'worker' | 'container';
 
-function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { formRef: React.RefObject<HTMLFormElement>; filter: string; setFilter: (v: string) => void; tokenState: TroubleshootStatus['token']; t: Translator; locale: string }) {
+function LogsViewer({ formRef, filter, setFilter, tokenState, t }: { formRef: React.RefObject<HTMLFormElement>; filter: string; setFilter: (v: string) => void; tokenState: TroubleshootStatus['token']; t: Translator; locale: string }) {
   const [hours, setHours] = useState<number>(6);
   const [source, setSource] = useState<Source>('all');
   const [logs, setLogs] = useState<TroubleshootLogs | null>(null);
@@ -336,7 +339,6 @@ function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { for
   const [error, setError] = useState<string | null>(null);
   const invalid = filterProblem(filter);
   const noToken = tokenState !== 'ok';
-  const time = dateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' });
 
   async function load(e: React.FormEvent) {
     e.preventDefault();
@@ -428,7 +430,7 @@ function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { for
               {logs.lines.map((line, i) => (
                 <li key={`${line.at}-${i}`} className="p-3 text-xs" data-source={line.source} data-level={line.level ?? ''}>
                   <div className="flex flex-wrap items-center gap-2 text-fg-muted">
-                    <time dateTime={line.at} className="tabular-nums">{time.format(new Date(line.at))}</time>
+                    <LocalTime value={line.at} withTime clock className="tabular-nums" />
                     <span className="rounded border border-border px-1.5 py-0.5 text-fg">{t(line.source === 'worker' ? 'transcodeTroubleshoot.sourceWorker' : 'transcodeTroubleshoot.sourceContainer')}</span>
                     {line.level && <span className={`rounded px-1.5 py-0.5 font-medium ${/error/i.test(line.level) ? 'bg-danger-bg text-danger-fg' : 'bg-chip-pending-bg text-chip-pending-fg'}`} data-level-raw={line.level}>{translateDynamic(t, 'transcodeTroubleshoot.logLevels', line.level.toLowerCase())}</span>}
                   </div>

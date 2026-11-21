@@ -68,6 +68,7 @@ describe('AnalyticsDashboard growth (#241)', () => {
     const cards = within(screen.getByTestId('analytics-growth-cards'));
     expect(cards.getByText('وقت المشاهدة')).toBeInTheDocument();
     expect(cards.getByText('المشتركون الجدد')).toBeInTheDocument();
-    expect(cards.getByText(/ساعة$/)).toBeInTheDocument();
+    // 7,200 s of watch time: two hours, the dual (#1666)
+    expect(cards.getByText('ساعتان')).toBeInTheDocument();
   });
 });

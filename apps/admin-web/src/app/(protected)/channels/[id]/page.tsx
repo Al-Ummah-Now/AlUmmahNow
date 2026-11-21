@@ -4,7 +4,7 @@ import { getChannel, getContentPermissions } from '@/lib/api/content';
 import type { AdminContentPermission, ChannelDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatStat } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { AuditCard } from '@/components/audit/AuditCard';
 import { BackLink, Chip, MonoId, Notice, ReportsCard, StatGrid, smallButtonClass } from '@/components/content/parts';
@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { ChannelActions } from './ChannelActions';
 import { adminUserName } from '@/lib/user-name';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 export default async function ChannelPage({ params }: { params: Promise<{ id: string }> }) {
@@ -85,7 +87,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
       )}
       {ch.isSuspended && ch.suspension && (
         <Notice tone="bad" testId="channel-suspended-banner">
-          <p>{t('channels.suspendedBanner', { date: formatDate(ch.suspension.at, locale, true) })}</p>
+          <p>{fillNodes(t('channels.suspendedBanner'), { date: <LocalTime value={ch.suspension.at} withTime /> })}</p>
           {ch.suspension.reason && <p className="text-sm mt-1" dir="auto">{t('channels.suspendedReason', { reason: ch.suspension.reason })}</p>}
         </Notice>
       )}
@@ -95,10 +97,10 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <section className={cardClass} aria-label={t('channels.statVideos')}>
             <StatGrid
               stats={[
-                { label: t('channels.statVideos'), value: formatNumber(ch.stats.videos, locale), testId: 'stat-videos', href: videosHref, linkTestId: 'stat-videos-link' },
-                { label: t('channels.statSubscribers'), value: formatNumber(ch.stats.subscribers, locale) },
-                { label: t('channels.statViews'), value: formatNumber(ch.stats.views, locale) },
-                { label: t('channels.statPlaylists'), value: formatNumber(ch.stats.playlists, locale), href: playlistsHref, linkTestId: 'stat-playlists-link' },
+                { label: t('channels.statVideos'), value: formatStat(ch.stats.videos, locale), testId: 'stat-videos', href: videosHref, linkTestId: 'stat-videos-link' },
+                { label: t('channels.statSubscribers'), value: formatStat(ch.stats.subscribers, locale) },
+                { label: t('channels.statViews'), value: formatStat(ch.stats.views, locale) },
+                { label: t('channels.statPlaylists'), value: formatStat(ch.stats.playlists, locale), href: playlistsHref, linkTestId: 'stat-playlists-link' },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -118,7 +120,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
               </div>
               <div>
                 <dt className="text-fg-muted">{t('content.created')}</dt>
-                <dd className="text-fg">{ch.createdAt ? formatDate(ch.createdAt, locale, true) : t('content.none')}</dd>
+                <dd className="text-fg">{ch.createdAt ? <LocalTime value={ch.createdAt} withTime /> : t('content.none')}</dd>
               </div>
             </dl>
             <nav aria-label={t('channels.contentNav')} className="mt-4 flex flex-wrap gap-2">

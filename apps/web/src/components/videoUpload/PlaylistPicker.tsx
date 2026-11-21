@@ -6,7 +6,7 @@
  * create one inline (name, visibility, optional description); a new playlist
  * is selected at once. Colours come from Fanous tokens only (light, dark, RTL).
  */
-import { formatNumber } from '@al-ummah/shared-types';
+import { formatNumber, fillTemplate } from '@al-ummah/shared-types';
 import { Highlight } from '@/components/ui/Autocomplete';
 import React, { useId, useMemo, useState } from 'react';
 import { ChevronDown, ListVideo, Lock, Plus, X } from 'lucide-react';
@@ -158,7 +158,7 @@ export function PlaylistPicker({
           data-testid={`${testId}-toggle`}
         >
           {s.choose}
-          {selected.length > 0 && <span className="text-[var(--fanous-color-text-secondary)]">· {s.selectedCount.replace('{count}', formatNumber(lang, selected.length))}</span>}
+          {selected.length > 0 && <span className="text-[var(--fanous-color-text-secondary)]">• {s.selectedCount.replace('{count}', formatNumber(lang, selected.length))}</span>}
           <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
       )}
@@ -184,7 +184,7 @@ export function PlaylistPicker({
 
           {/* A filtered checklist (several can be ticked), so not a combobox: the count is announced instead */}
           <p className="sr-only" role="status" aria-live="polite" data-testid={`${testId}-count`}>
-            {query.trim() && !loading && !failed ? (matches.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', formatNumber(lang, matches.length))) : ''}
+            {query.trim() && !loading && !failed ? (matches.length === 1 ? t.search.foundOneResult : fillTemplate(lang, t.search.foundResults, { count: matches.length })) : ''}
           </p>
           <fieldset className="max-h-56 overflow-y-auto" aria-labelledby={`${base}-label`}>
             {loading ? (

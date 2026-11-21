@@ -94,8 +94,8 @@ describe('audio track model', () => {
   });
 
   it('names a detected stream by number, language and title', () => {
-    expect(streamText({ index: 1, language: 'eng', title: 'Dub', channels: 2 }, AUDIO_TRACKS_EN, 'en')).toBe('Track 2 · English · Dub · 2ch');
-    expect(streamText({ index: 2 }, AUDIO_TRACKS_EN, 'en')).toBe('Track 3 · —');
+    expect(streamText({ index: 1, language: 'eng', title: 'Dub', channels: 2 }, AUDIO_TRACKS_EN, 'en')).toBe('Track 2 • English • Dub • 2ch');
+    expect(streamText({ index: 2 }, AUDIO_TRACKS_EN, 'en')).toBe('Track 3 • —');
   });
 });
 

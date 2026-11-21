@@ -8,11 +8,12 @@ import type { ThumbnailRun } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { useConfirm } from '@/components/content/actions';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { RUN_STATUS_LABEL, THUMB_OUTCOME_LABEL, thumbCounts } from './labels';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const thClass = 'text-start px-3 py-2 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-3 py-2 align-top text-sm';
 
@@ -23,7 +24,7 @@ const tdClass = 'px-3 py-2 align-top text-sm';
  * The job runs in the admin-jobs queue with retries; a failed run shows
  * Retry here and is listed on the Errors page.
  */
-export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | null; locale: Locale }) {
+export function ThumbnailRepairPanel({ runs }: { runs: ThumbnailRun[] | null; locale: Locale }) {
   const router = useRouter();
   const { t } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -100,12 +101,8 @@ export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | 
       {latest && (
         <div className="mt-4 space-y-2" data-testid="thumbnail-latest" data-run-id={latest.id} data-status={latest.status}>
           <p className="text-sm text-fg">
-            {t('processing.thumbsRun', {
-              mode: t(latest.params.dryRun === false ? 'processing.thumbsModeFix' : 'processing.thumbsModeCheck'),
-              date: formatDate(latest.createdAt, locale, true),
-              status: t(RUN_STATUS_LABEL[latest.status]),
-            })}
-            {result?.checked !== undefined && <> · {t('processing.thumbsChecked', { count: result.checked })}</>}
+            {fillNodes(t('processing.thumbsRun', { mode: t(latest.params.dryRun === false ? 'processing.thumbsModeFix' : 'processing.thumbsModeCheck'), status: t(RUN_STATUS_LABEL[latest.status]) }), { date: <LocalTime value={latest.createdAt} withTime /> })}
+            {result?.checked !== undefined && <> • {t('processing.thumbsChecked', { count: result.checked })}</>}
           </p>
           {thumbCounts(t, result?.counts) && <p className="text-sm text-fg-muted">{thumbCounts(t, result?.counts)}</p>}
           {latest.status === 'failed' && (

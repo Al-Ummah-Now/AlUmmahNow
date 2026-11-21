@@ -2,7 +2,7 @@ import Link from '@/components/AppLink';
 import { deletePost, getContentPermissions, listPosts } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPostRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatCount, formatDate, translateDynamic } from '@/i18n/translate';
+import { formatCount, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
@@ -11,6 +11,7 @@ import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components
 import { logger } from '@/lib/logger';
 import { getNames } from '@/lib/api/audit';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -77,7 +78,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                           <Link key="c" href={channelHref} className={linkClass}>{channelName}</Link>,
                           formatCount(p.likes, 'like', locale),
                           formatCount(p.comments, 'comment', locale),
-                          p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
+                          p.createdAt ? <LocalTime value={p.createdAt} key="d" /> : null,
                         ]}
                       />
                     </td>
@@ -85,7 +86,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       <Link href={channelHref} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="post-channel-link">{channelName}</Link>
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm whitespace-nowrap`}>{engagement}</td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale, true)}</time> : t('content.none')}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <LocalTime value={p.createdAt} withTime /> : t('content.none')}</td>
                     {canDelete && (
                       <td role="cell" className={cardTable.actions}>
                         <DeleteRowButton title={t('community.deleteTitle')} body={t('community.deleteBody')} testId="post-delete" onDelete={deletePost.bind(null, p.channelId, p.id)} />

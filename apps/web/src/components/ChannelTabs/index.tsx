@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { ChannelSearch } from './ChannelSearch';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import { getChannelTabConfig } from '@/lib/api/channel-tabs';
 import type { ChannelTabConfig } from '@al-ummah/shared-types';
+import { emptyTabs } from './emptyTabs';
+import { PriorityStrip } from '@/components/ui/PriorityStrip';
 
 export type ChannelTab =
   | 'home'
@@ -38,6 +40,7 @@ const DEFAULT_TABS: ChannelTab[] = [
 
 export function ChannelTabBar({
   channelId,
+  isOwner = false,
   defaultTab = 'home',
   hiddenTabs = [],
 }: ChannelTabBarProps) {
@@ -45,9 +48,6 @@ export function ChannelTabBar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const tabBarRef = useRef<HTMLDivElement>(null);
-  const [showLeftScroll, setShowLeftScroll] = useState(false);
-  const [showRightScroll, setShowRightScroll] = useState(false);
   const [tabConfig, setTabConfig] = useState<ChannelTabConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
@@ -88,16 +88,17 @@ export function ChannelTabBar({
     }
 
     if (tabConfig) {
-      // Use API configuration
+      // Use API configuration, without the tabs that are empty for a visitor
+      const empty = emptyTabs(tabConfig.counts, isOwner);
       return tabConfig.tabs
-        .filter(tab => tab.visible)
+        .filter(tab => tab.visible && !(empty as string[]).includes(tab.id))
         .sort((a, b) => a.position - b.position)
         .map(tab => tab.id as ChannelTab);
     } else {
       // Fall back to prop-based configuration
       return DEFAULT_TABS.filter(tab => !hiddenTabs.includes(tab));
     }
-  }, [tabConfig, hiddenTabs, isLoadingConfig]);
+  }, [tabConfig, hiddenTabs, isLoadingConfig, isOwner]);
 
   // Determine default tab from API config or fall back to props
   const effectiveDefaultTab: ChannelTab = React.useMemo(() => {
@@ -130,31 +131,6 @@ export function ChannelTabBar({
     }
   }, [isLoadingConfig, requestedTab, activeTab, visibleTabs, effectiveDefaultTab, pathname, searchParams, router]);
 
-  // Check if scroll buttons should be shown
-  useEffect(() => {
-    const checkScroll = () => {
-      const el = tabBarRef.current;
-      if (!el) return;
-
-      const hasOverflow = el.scrollWidth > el.clientWidth;
-      const scrollLeft = isRTL ? Math.abs(el.scrollLeft) : el.scrollLeft;
-      const maxScroll = el.scrollWidth - el.clientWidth;
-
-      setShowLeftScroll(hasOverflow && scrollLeft > 5);
-      setShowRightScroll(hasOverflow && scrollLeft < maxScroll - 5);
-    };
-
-    checkScroll();
-    const el = tabBarRef.current;
-    el?.addEventListener('scroll', checkScroll);
-    window.addEventListener('resize', checkScroll);
-
-    return () => {
-      el?.removeEventListener('scroll', checkScroll);
-      window.removeEventListener('resize', checkScroll);
-    };
-  }, [isRTL]);
-
   const handleTabClick = (tab: ChannelTab) => {
     logger.debug('[ChannelTabBar] Tab clicked', { tab, channelId, activeTab });
 
@@ -170,21 +146,6 @@ export function ChannelTabBar({
     const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
 
     router.push(newUrl);
-  };
-
-  const scroll = (direction: 'left' | 'right') => {
-    const el = tabBarRef.current;
-    if (!el) return;
-
-    const scrollAmount = 200;
-    const targetScroll = direction === 'left'
-      ? el.scrollLeft - scrollAmount
-      : el.scrollLeft + scrollAmount;
-
-    el.scrollTo({
-      left: targetScroll,
-      behavior: 'smooth',
-    });
   };
 
   const getTabLabel = (tab: ChannelTab): string => {
@@ -218,8 +179,8 @@ export function ChannelTabBar({
     return (
       <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-6xl mx-auto px-5">
-          <div className="flex items-center gap-2 py-3">
-            {/* Loading skeletons for tabs */}
+          <div className="flex items-center gap-2 overflow-hidden py-3">
+            {/* Loading skeletons for tabs: one row, as the tabs */}
             {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
@@ -232,86 +193,42 @@ export function ChannelTabBar({
     );
   }
 
+  const items = visibleTabs.map((tab) => ({ id: tab, label: getTabLabel(tab), current: activeTab === tab }));
+
   return (
     <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-6xl mx-auto px-5">
         <div className="relative flex items-center">
-          {/* The strip and its scroll arrows end before the search button, so an arrow never sits under it */}
-          <div className="relative flex min-w-0 flex-1">
-          {/* Left scroll button */}
-          {showLeftScroll && (
-            <button
-              type="button"
-              onClick={() => scroll('left')}
-              className="absolute left-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-r from-white dark:from-gray-800 to-transparent cursor-pointer hover:opacity-75 transition-opacity"
-              aria-label={isRTL ? 'Scroll right' : 'Scroll left'}
-            >
-              <svg
-                className="w-5 h-5 text-gray-600 dark:text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={isRTL ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                />
-              </svg>
-            </button>
-          )}
-
-          {/* Tab bar */}
-          <div
-            ref={tabBarRef}
-            role="tablist"
-            data-testid="channel-tabs"
-            dir={isRTL ? 'rtl' : 'ltr'}
-            className="flex min-w-0 overflow-x-auto scrollbar-hide scroll-smooth"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {visibleTabs.map((tab) => (
+          {/* One row on every width: the tabs that fit, the rest under "More" at the row's end, the
+              current tab always in the row (#1669: never a tab cut at the edge, never wrapped) */}
+          <PriorityStrip
+            items={items}
+            testId="channel-tabs-strip"
+            moreLabel={t.common.moreTabs}
+            menuLabel={t.common.moreTabsMenu}
+            moreClassName="tab-item tab-more"
+            onSelect={(item) => handleTabClick(item.id as ChannelTab)}
+            rowProps={{
+              role: 'tablist',
+              'data-testid': 'channel-tabs',
+              dir: isRTL ? 'rtl' : 'ltr',
+              className: 'tab-strip',
+            }}
+            renderItem={(item) => (
               <button
-                key={tab}
+                key={item.id}
                 type="button"
                 role="tab"
-                id={`tab-${tab}`}
-                data-testid={`tab-${tab}`}
-                aria-selected={activeTab === tab}
-                aria-controls={`tabpanel-${tab}`}
-                onClick={() => handleTabClick(tab)}
+                id={`tab-${item.id}`}
+                data-testid={`tab-${item.id}`}
+                aria-selected={item.current}
+                aria-controls={`tabpanel-${item.id}`}
+                onClick={() => handleTabClick(item.id as ChannelTab)}
                 className="tab-item">
-                {getTabLabel(tab)}
+                {item.label}
               </button>
-            ))}
-          </div>
-
-          {/* Right scroll button */}
-          {showRightScroll && (
-            <button
-              type="button"
-              onClick={() => scroll('right')}
-              className="absolute right-0 z-10 h-12 w-8 flex items-center justify-center bg-gradient-to-l from-white dark:from-gray-800 to-transparent cursor-pointer hover:opacity-75 transition-opacity"
-              aria-label={isRTL ? 'Scroll left' : 'Scroll right'}
-            >
-              <svg
-                className="w-5 h-5 text-gray-600 dark:text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={isRTL ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"}
-                />
-              </svg>
-            </button>
-          )}
-
-          </div>
+            )}
+          />
 
           <div className="flex shrink-0 justify-end">
             <ChannelSearch channelId={channelId} />

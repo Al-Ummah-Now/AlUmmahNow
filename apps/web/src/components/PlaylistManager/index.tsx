@@ -170,7 +170,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                       <span aria-hidden="true" className="me-1">•</span>
                       <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
                       {sort.sortMode === 'auto'
-                        ? `${fieldLabel(sort.sortField, t)} · ${directionLabels(sort.sortField, t)[sort.sortDirection]}`
+                        ? `${fieldLabel(sort.sortField, t)} • ${directionLabels(sort.sortField, t)[sort.sortDirection]}`
                         : p.sortManual}
                     </span>
                   </p>

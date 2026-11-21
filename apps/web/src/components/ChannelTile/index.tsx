@@ -7,10 +7,9 @@ import { BadgeCheck } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
-import { formatViewerCount } from '@/lib/utils/number-format';
 import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
 import { channelPath } from '@/lib/channel-url';
-import { formatVideoCount } from '@/lib/format/videoMeta';
+import { formatSubscribers, formatVideoCount } from '@/lib/format/videoMeta';
 
 interface ChannelTileProps {
   channel: ChannelSummary;
@@ -28,11 +27,8 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
   const name = getLocalizedValue(channel.nameLocalized, channel.name, lang) || channel.name;
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);
-  const numberLocale = isRTL ? 'ar' : 'en-US';
-  const subscribers = t.discovery.subscribersCount.replace(
-    '{count}',
-    formatViewerCount(channel.subscribersCount || 0, 'compact', numberLocale)
-  );
+  // The shared count formatter: «ألف مشترك», «ألفا مشترك», «٣ آلاف مشترك», «٣ مشتركين».
+  const subscribers = formatSubscribers(channel.subscribersCount || 0, isRTL ? 'ar' : 'en');
   const videos = formatVideoCount(channel.videosCount, lang, { compact: true });
   const avatarSize = variant === 'compact' ? 'w-20 h-20' : 'w-24 h-24';
 
@@ -61,15 +57,16 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
       <div className="min-w-0 w-full">
         <h3 className="flex items-center justify-center gap-1 font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-          <span className="truncate">{name}</span>
+          <span className="min-w-0 line-clamp-2 break-words" data-testid="channel-tile-name">{name}</span>
           {channel.isVerified && (
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
         </h3>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-          <span>{subscribers}</span>
-          <span aria-hidden="true" className="mx-1">•</span>
-          <span>{videos}</span>
+        {/* One count per line, each kept with its noun: the same layout in English and Arabic at every
+            width, so a narrow tile never splits a count or leaves a separator dangling */}
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex flex-col items-center" data-testid="channel-tile-counts">
+          <span className="whitespace-nowrap">{subscribers}</span>
+          <span className="whitespace-nowrap">{videos}</span>
         </p>
         {variant === 'card' && description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">{description}</p>

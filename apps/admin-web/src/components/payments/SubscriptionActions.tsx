@@ -20,8 +20,10 @@ import { canCancelAtPeriodEnd, canCancelSubscription, partialRefundAllowed, refu
 import { hintClass, labelClass, providerName, useBillingAction } from './shared';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export function CancelSubscription({ subscription: s }: { subscription: AdminBillingSubscriptionRow }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
@@ -61,7 +63,7 @@ export function CancelSubscription({ subscription: s }: { subscription: AdminBil
               <label className="flex items-start gap-2 text-sm">
                 <input type="radio" name={`${ids}-when`} className="mt-0.5" checked={atPeriodEnd} onChange={() => setAtPeriodEnd(true)} aria-describedby={`${ids}-end-hint`} data-testid="payments-cancel-at-end" />
                 <span>
-                  <span className="block text-fg">{t('payments.cancel.atEnd', { date: s.currentPeriodEnd ? formatDate(s.currentPeriodEnd, locale) : '' })}</span>
+                  <span className="block text-fg">{fillNodes(t('payments.cancel.atEnd'), { date: s.currentPeriodEnd ? <LocalTime value={s.currentPeriodEnd} /> : '' })}</span>
                   <span id={`${ids}-end-hint`} className="block text-fg-muted">
                     {t('payments.cancel.atEndHint')}
                   </span>

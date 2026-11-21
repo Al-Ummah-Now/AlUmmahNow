@@ -340,6 +340,9 @@ export interface AppTranslations {
    * Common UI elements
    */
   common: {
+    /** The overflow menu of a one-row tab or chip strip (#1669) */
+    moreTabs: string;
+    moreTabsMenu: string;
     appName: string;
     loading: string;
     error: string;

@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { createPostComment } from '@/lib/api/post-comments';
-import { PostComment, formatNumber } from '@al-ummah/shared-types';
+import { PostComment } from '@al-ummah/shared-types';
+import { charactersLeft, charactersMax, charactersOver } from '@/lib/format/characters';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
 
@@ -66,7 +67,7 @@ export default function CommentForm({
     if (content.length > MAX_COMMENT_LENGTH) {
       setError(
         isRTL
-          ? `التعليق طويل جداً (${formatNumber('ar', MAX_COMMENT_LENGTH)} حرف كحد أقصى)`
+          ? `التعليق طويل جداً (${charactersMax(true, MAX_COMMENT_LENGTH)})`
           : `Comment is too long (${MAX_COMMENT_LENGTH} characters max)`
       );
       return;
@@ -179,10 +180,10 @@ export default function CommentForm({
             >
               {remainingChars < 0 ? (
                 <span className="font-semibold">
-                  {isRTL ? `${formatNumber('ar', Math.abs(remainingChars))} حرف زيادة` : `${Math.abs(remainingChars)} characters over`}
+                  {charactersOver(isRTL, Math.abs(remainingChars))}
                 </span>
               ) : (
-                `${formatNumber(isRTL ? 'ar' : 'en', remainingChars)} ${isRTL ? 'حرف متبقي' : 'characters remaining'}`
+                charactersLeft(isRTL, remainingChars)
               )}
             </div>
           )}

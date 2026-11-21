@@ -63,6 +63,14 @@ describe('VideoDetails channel row', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  it('a channel without a logo shows its first letter, never the stock silhouette', async () => {
+    fetchMock.mockResolvedValue(status(false, 3));
+    const { container } = renderRow({ channelAvatar: '' });
+    expect(screen.getByTestId('watch-avatar-letter')).toHaveTextContent('C');
+    expect(container.querySelector('img[src*="avatar.png"]')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('watch-subscriber-count')).toBeInTheDocument());
+  });
+
   it('signed out: shows the real count and a Subscribe link that starts sign-in and returns to the video', async () => {
     fetchMock.mockResolvedValue(status(false, 3));
     renderRow();

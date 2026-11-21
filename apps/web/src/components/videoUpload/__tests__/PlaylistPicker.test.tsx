@@ -125,7 +125,7 @@ describe('BatchRowPlaylists', () => {
       <BatchRowPlaylists rowId="r1" playlists={LIST} loading={false} failed={false} batch={['p1']} override={undefined} onOverride={onOverride} onCreate={jest.fn()} />,
     );
     expect(screen.getByTestId('batch-row-playlists')).toHaveAttribute('data-mode', 'batch');
-    expect(screen.getByText('Playlists · Same as the batch')).toBeInTheDocument();
+    expect(screen.getByText('Playlists • Same as the batch')).toBeInTheDocument();
     expect(screen.queryByTestId('batch-row-playlist-picker-toggle')).toBeNull();
     fireEvent.click(screen.getByTestId('batch-row-playlists-mode'));
     expect(onOverride).toHaveBeenCalledWith(['p1']);

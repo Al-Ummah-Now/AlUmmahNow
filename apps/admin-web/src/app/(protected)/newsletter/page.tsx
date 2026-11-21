@@ -2,7 +2,7 @@ import Link from '@/components/AppLink';
 import { getAdminSession } from '@/lib/auth';
 import { canManageNewsletter } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { AdminApiError } from '@/lib/api/errors';
@@ -12,6 +12,7 @@ import { EraseSubscriberButton, IssueEditor } from './NewsletterAdmin';
 import { numberFormat } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 25;
@@ -132,7 +133,7 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
                         </th>
                         <td className={`p-2 font-medium ${ISSUE_TONE[i.status]}`}>{t(`newsletter.issueStatuses.${i.status}` as MessageKey)}</td>
                         <td className="p-2 text-end tabular-nums text-fg-muted">{i.status === 'draft' ? '—' : number(i.counts.sent + i.counts.sunk)}</td>
-                        <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(i.finished_at ?? i.send_started_at ?? i.updated_at, locale, true)}</td>
+                        <td className="p-2 whitespace-nowrap text-fg-muted"><LocalTime value={i.finished_at ?? i.send_started_at ?? i.updated_at} withTime /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -154,7 +155,7 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
               <h2 id="newsletter-issue-title" className="text-lg font-semibold text-fg mb-1">{subjectOf(issue)}</h2>
               <p className={`text-sm font-medium mb-4 ${ISSUE_TONE[issue.status]}`} data-testid="newsletter-issue-status">
                 {t(`newsletter.issueStatuses.${issue.status}` as MessageKey)}
-                {issue.send_started_at ? ` · ${formatDate(issue.send_started_at, locale, true)}` : ''}
+                {issue.send_started_at ? <> • <LocalTime value={issue.send_started_at} withTime /></> : null}
               </p>
               <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5 mb-4" data-testid="newsletter-delivery">
                 {(['sent', 'queued', 'failed', 'skipped', 'sunk'] as const).map((k) => (
@@ -225,7 +226,7 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
                       <td className={`p-2 ${s.confirm_status === 'failed' ? 'text-danger-fg' : 'text-fg-muted'}`} title={s.confirm_error ?? undefined}>
                         {s.confirm_status ? t(`newsletter.confirmStatuses.${s.confirm_status}` as MessageKey) : '—'}
                       </td>
-                      <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(s.created_at, locale)}</td>
+                      <td className="p-2 whitespace-nowrap text-fg-muted"><LocalTime value={s.created_at} /></td>
                       <td className="p-2 text-end"><EraseSubscriberButton id={s.id} email={s.email} /></td>
                     </tr>
                   ))}

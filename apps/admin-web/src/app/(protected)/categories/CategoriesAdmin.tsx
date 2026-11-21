@@ -10,7 +10,7 @@ import { useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { slugFromLabel } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { createVideoCategory, reorderVideoCategories, updateVideoCategory } from '@/lib/api/categories';
@@ -18,6 +18,7 @@ import type { VideoCategoryAdminList, VideoCategoryAdminView, VideoCategoryHisto
 import { reportError } from '@/lib/errors/reporter';
 import { UserName } from '@/components/audit/UserName';
 
+import { LocalTime } from '@/components/LocalTime';
 type Fields = Partial<Record<'value' | 'labelEn' | 'labelAr' | 'hint', string>>;
 type Result = { ok: true } | { ok: false; status: number; error: string; code?: string; fields?: Record<string, string> };
 
@@ -141,16 +142,16 @@ export function CategoriesAdmin({ initial, history }: { initial: VideoCategoryAd
                   <div className="flex-1 min-w-48">
                     <p className="font-medium text-fg">
                       <span lang="en" dir="ltr">{c.label.en}</span>
-                      <span className="text-fg-muted" aria-hidden="true"> · </span>
+                      <span className="text-fg-muted" aria-hidden="true"> • </span>
                       <span lang="ar" dir="rtl">{c.label.ar}</span>
                     </p>
                     <p className="text-xs text-fg-muted mt-0.5">
                       <code dir="ltr" className="font-mono">{c.value}</code>
-                      {' · '}
+                      {' • '}
                       {t('videoCategories.videoCount', { count: formatNumber(c.videoCount, locale) })}
                       {c.retired && (
                         <>
-                          {' · '}
+                          {' • '}
                           <span className="font-medium text-warning-fg" data-testid="category-retired-chip">{t('videoCategories.retiredTag')}</span>
                         </>
                       )}
@@ -373,7 +374,7 @@ function History({ entries, categories }: { entries: VideoCategoryHistoryEntry[]
             <li key={e.id} className="flex flex-wrap gap-x-2 text-fg" data-testid="categories-history-row" data-action={e.change.action}>
               <span className="font-medium">{t(`videoCategories.actions.${e.change.action}` as MessageKey)}</span>
               {e.value !== '*order' && <span>{names.get(e.value) ?? e.value}</span>}
-              <span className="text-fg-muted">· {e.actorName || <UserName id={e.actorId} showEmail={false} />} · <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time></span>
+              <span className="text-fg-muted">• {e.actorName || <UserName id={e.actorId} showEmail={false} />} • <LocalTime value={e.createdAt} withTime /></span>
             </li>
           ))}
         </ul>

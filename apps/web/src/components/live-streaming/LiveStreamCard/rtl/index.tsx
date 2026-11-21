@@ -9,14 +9,13 @@
 
 'use client';
 
-import { numberFormat } from '@al-ummah/shared-types';
+import { formatCountNoun, numberFormat } from '@al-ummah/shared-types';
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { StreamStatusBadge } from '../../StreamStatusBadge';
+import { StreamStatusBadgeRTL } from '../../StreamStatusBadge/rtl';
 import { ViewerCountRTL } from '../../ViewerCount/rtl';
-import { formatViewerCountArabic } from '@/lib/utils/number-format';
 import type { LiveStreamCardProps } from '../types';
 
 /**
@@ -139,7 +138,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
     const ariaLabel = useMemo(() => {
       const viewerText =
         stream.status === 'live' && stream.viewerCount
-          ? `، ${formatViewerCountArabic(stream.viewerCount, 'full')} مشاهد`
+          ? `، ${formatCountNoun('ar', stream.viewerCount, 'viewer')}`
           : '';
       return `بث مباشر: ${stream.title} بواسطة ${stream.channel.name}${viewerText}`;
     }, [stream.title, stream.channel.name, stream.status, stream.viewerCount]);
@@ -206,7 +205,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
 
           {/* RTL: Status Badge (top-RIGHT, opposite of LTR top-left) */}
           <div className="absolute top-2 right-2 z-10">
-            <StreamStatusBadge
+            <StreamStatusBadgeRTL
               status={stream.status}
               scheduledTime={stream.scheduledStartTime}
               endedTime={stream.endedAt}
@@ -216,7 +215,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
           {/* RTL: Viewer Count (top-LEFT, opposite of LTR top-right) */}
           {stream.status === 'live' && showViewers && stream.viewerCount !== undefined && (
             <div className="absolute top-2 left-2 z-10">
-              <ViewerCountRTL count={stream.viewerCount} isLive />
+              <ViewerCountRTL count={stream.viewerCount} isLive className="rounded bg-[var(--fanous-c-badge-duration-bg)] px-2 py-0.5 text-[var(--fanous-c-badge-duration-text)] dark:text-[var(--fanous-c-badge-duration-text)]" />
             </div>
           )}
 

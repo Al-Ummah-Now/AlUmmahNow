@@ -16,7 +16,7 @@ export function formatViews(count: number | string | null | undefined, lang: Met
 }
 
 /**
- * The exact count, for tooltips and the expanded description: "1,234 views", «١٬٢٣٤ مشاهدة»
+ * The exact count, for tooltips and the expanded description: "1,234 views", «١٢٣٤ مشاهدة»
  * (cards show the compact "1.2K views").
  */
 export function formatViewsExact(count: number | string | null | undefined, lang: MetaLang): string {

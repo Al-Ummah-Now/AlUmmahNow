@@ -228,9 +228,9 @@ export function ResolutionChip({ chip, t, locale, idPrefix }: { chip: Resolution
       {chip.state === 'done' ? (
         <span className="sr-only">{state}</span>
       ) : (
-        <span>· {state}</span>
+        <span>• {state}</span>
       )}
-      {extras.length > 0 && <span className="opacity-90">· {extras.join(' · ')}</span>}
+      {extras.length > 0 && <span className="opacity-90">• {extras.join(' • ')}</span>}
     </>
   );
   const data = { 'data-resolution': chip.name, 'data-state': chip.state, 'data-testid': 'resolution-chip' };

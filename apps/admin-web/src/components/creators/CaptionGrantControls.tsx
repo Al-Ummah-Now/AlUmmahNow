@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CAPTION_MINUTES_WARNING_RATIO, CAPTION_GRANT_BOUNDS, formatPercent, parseDigits, type CaptionGrantScope, type CaptionLedgerEntry, type CaptionMinuteGrant, type CaptionMinutesUsage } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { Chip, dangerButtonClass, smallButtonClass } from '@/components/content/parts';
 import { reportError } from '@/lib/errors/reporter';
@@ -14,6 +14,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
 export interface CaptionGrantControlsProps {
   userId: string;
   usage: CaptionMinutesUsage;
@@ -94,7 +95,7 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
           <>
             <p className="text-fg">{t('captionMinutes.tierLine', { minutes: n(usage.tierMinutes) })}</p>
             <p className="text-fg">
-              {t('captionMinutes.monthLine', { used: n(usage.monthUsed), limit: n(usage.monthLimit ?? 0), date: formatDate(usage.resetsAt, locale) })}{' '}
+              {fillNodes(t('captionMinutes.monthLine', { used: n(usage.monthUsed), limit: n(usage.monthLimit ?? 0) }), { date: <LocalTime value={usage.resetsAt} /> })}{' '}
               {usage.warning && <Chip tone="warn">{formatPercent(locale, CAPTION_MINUTES_WARNING_RATIO)}</Chip>}
             </p>
             {usage.packsRemaining > 0 && <p className="text-fg">{t('captionMinutes.packsLine', { count: n(usage.packsRemaining) })}</p>}
@@ -178,10 +179,10 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
             {ledger.map((e) => (
               <li key={e.id} className="flex flex-col gap-0.5 border-b border-border pb-2 last:border-b-0" data-testid="caption-ledger-entry" data-kind={e.kind}>
                 <span className="text-fg">
-                  {formatDate(e.createdAt, locale, true)} · {t(`captionMinutes.ledgerKind.${e.kind}` as MessageKey)} · <bdi dir="ltr">{signed(e.minutes)}</bdi>
+                  <LocalTime value={e.createdAt} withTime /> • {t(`captionMinutes.ledgerKind.${e.kind}` as MessageKey)} • <bdi dir="ltr">{signed(e.minutes)}</bdi>
                   {e.balanceAfter !== null && (
                     <>
-                      {' · '}
+                      {' • '}
                       <span className={e.balanceAfter < 0 ? 'font-medium text-danger-fg' : undefined}>
                         {t('captionMinutes.ledgerBalance')} <bdi dir="ltr">{signed(e.balanceAfter)}</bdi>
                       </span>
@@ -213,10 +214,10 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
                     : t('captionMinutes.grantUntilUsed', { minutes: n(g.minutes), used: n(g.used) })}
                 </span>
                 <span className="text-fg-muted">
-                  {fillNodes(t('captionMinutes.grantBy', { reason: g.reason, date: formatDate(g.createdAt, locale, true) }), { actor: <UserName id={g.createdBy} showEmail={false} /> })}
+                  {fillNodes(t('captionMinutes.grantBy', { reason: g.reason }), { date: <LocalTime value={g.createdAt} withTime />, actor: <UserName id={g.createdBy} showEmail={false} /> })}
                 </span>
                 {g.revokedAt && (
-                  <span className="text-fg-muted">{fillNodes(t('captionMinutes.revokedLine', { date: formatDate(g.revokedAt, locale, true), reason: g.revokeReason ?? '' }), { actor: g.revokedBy ? <UserName id={g.revokedBy} showEmail={false} /> : '' })}</span>
+                  <span className="text-fg-muted">{fillNodes(t('captionMinutes.revokedLine', { reason: g.revokeReason ?? '' }), { date: <LocalTime value={g.revokedAt} withTime />, actor: g.revokedBy ? <UserName id={g.revokedBy} showEmail={false} /> : '' })}</span>
                 )}
                 {canManage && !g.revokedAt && revoking !== g.id && (
                   <div>

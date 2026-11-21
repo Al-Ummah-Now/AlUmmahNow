@@ -155,7 +155,7 @@ describe('readable values', () => {
 
   it('writes log details and report times for people, not as JSON', () => {
     assert.equal(logDetailText({ retentionDays: { from: 365, to: 730 } }), 'retentionDays: 365 → 730');
-    assert.equal(logDetailText({ name: '01-matched-image.jpg', ban: 'banned' }), 'name: 01-matched-image.jpg · ban: banned');
+    assert.equal(logDetailText({ name: '01-matched-image.jpg', ban: 'banned' }), 'name: 01-matched-image.jpg • ban: banned');
     assert.equal(logDetailText(null), null);
     assert.equal(logDetailText({}), null);
     assert.equal(utcTime('2026-11-14T04:05:06.789Z'), '2026-11-14 04:05:06');

@@ -1,12 +1,13 @@
 import Link from '@/components/AppLink';
 import { getReviewAlerts, getReviewStats, listReviewQueue, type ReviewRowView, type ReviewStatsView, type ReviewTab } from '@/lib/api/review';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { AlertsToggle } from './AlertsToggle';
 import { formatMoney } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const TABS: ReviewTab[] = ['action_needed', 'checking', 'history', 'shadow'];
@@ -99,7 +100,7 @@ export default async function VideoReviewQueuePage({ searchParams }: PageProps) 
                   </td>
                   <td className="px-4 py-3 text-fg">{row.hold_cause ? translateDynamic(t, 'review.holdCause', row.hold_cause) : (row.top_category ?? '—')}</td>
                   <td className="px-4 py-3 text-fg">{translateDynamic(t, 'review.status', row.status)}</td>
-                  <td className="px-4 py-3 text-fg-muted whitespace-nowrap">{formatDate(row.decided_at ?? row.sla_due_at ?? row.created_at, locale, true)}</td>
+                  <td className="px-4 py-3 text-fg-muted whitespace-nowrap"><LocalTime value={row.decided_at ?? row.sla_due_at ?? row.created_at} withTime /></td>
                 </tr>
               ))}
             </tbody>

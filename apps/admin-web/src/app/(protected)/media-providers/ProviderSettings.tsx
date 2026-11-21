@@ -6,7 +6,7 @@ import { MEDIA_PROVIDER_IDS, normaliseMediaSettings, settingsProblems, type Medi
 import { checkMediaProviderHealth, saveMediaProviders } from '@/lib/api/admin';
 import type { MediaProvidersView } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
 import { Chip } from '@/components/content/parts';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -32,6 +32,7 @@ import { fillNodes } from '@/components/audit/fill';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 type HealthKey = Exclude<keyof ProviderHealthSettings, 'enabled'>;
 const HEALTH_FIELDS: { key: HealthKey; label: MessageKey; hint?: MessageKey; min: number; max: number }[] = [
   { key: 'failureThreshold', label: 'mediaProviders.failureThreshold', hint: 'mediaProviders.failureThresholdHint', min: 1, max: 10_000 },
@@ -112,7 +113,7 @@ function enabledOf(f: FormState): MediaProviderId[] {
  */
 /** The page's heading names the form (media-providers/page.tsx), so the card carries no title of its own. */
 export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersView; labelledBy: string }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const { confirm, dialog } = useConfirm();
@@ -286,13 +287,10 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                             : t('mediaProviders.healthReasonFallbacks', { count: h.recentFailures, minutes: saved.health.windowMinutes })}
                         </p>
                       )}
-                      {h.state === 'unhealthy' && h.until && <p>{t('mediaProviders.healthUntil', { time: formatDate(h.until, locale, true) })}</p>}
+                      {h.state === 'unhealthy' && h.until && <p>{fillNodes(t('mediaProviders.healthUntil'), { time: <LocalTime value={h.until} withTime /> })}</p>}
                       {h.lastProbeAt && (
                         <p>
-                          {t('mediaProviders.healthProbe', {
-                            time: formatDate(h.lastProbeAt, locale, true),
-                            result: h.lastProbeOk ? t('mediaProviders.healthProbeOk', { ms: h.lastProbeMs ?? 0 }) : t('mediaProviders.healthProbeFailed'),
-                          })}
+                          {fillNodes(t('mediaProviders.healthProbe', { result: h.lastProbeOk ? t('mediaProviders.healthProbeOk', { ms: h.lastProbeMs ?? 0 }) : t('mediaProviders.healthProbeFailed') }), { time: <LocalTime value={h.lastProbeAt} withTime /> })}
                         </p>
                       )}
                     </div>
@@ -519,7 +517,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
           <p role="status" className="text-sm text-fg" data-testid="providers-saved">{notice ?? (dirty ? t('mediaProviders.unsaved') : '')}</p>
         </div>
         <p className="text-sm text-fg-muted" data-testid="providers-updated">
-          {saved.updatedAt ? fillNodes(t('mediaProviders.updated', { date: formatDate(saved.updatedAt, locale, true) }), { user: saved.updatedBy ? <UserName id={saved.updatedBy} showEmail={false} /> : '—' }) : t('mediaProviders.neverChanged')}
+          {saved.updatedAt ? fillNodes(t('mediaProviders.updated'), { date: <LocalTime value={saved.updatedAt} withTime />, user: saved.updatedBy ? <UserName id={saved.updatedBy} showEmail={false} /> : '—' }) : t('mediaProviders.neverChanged')}
         </p>
       </form>
     </section>

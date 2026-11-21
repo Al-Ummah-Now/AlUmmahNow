@@ -21,7 +21,7 @@ import {
   type YoutubeImportReadiness,
 } from '@/lib/youtube-import';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { Chip, type ChipTone } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
@@ -29,6 +29,7 @@ import { reportError } from '@/lib/errors/reporter';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
+import { LocalTime } from '@/components/LocalTime';
 const BADGE: Record<YoutubeImportReadiness, { tone: ChipTone; label: MessageKey }> = {
   ready: { tone: 'good', label: 'youtubeImport.badgeReady' },
   off: { tone: 'neutral', label: 'youtubeImport.badgeOff' },
@@ -239,7 +240,7 @@ export function YoutubeImportSetting({
               {view.secretSource === 'admin' ? (
                 view.secretUpdatedAt ? (
                   // People by name, never their id (owner rule)
-                  fillNodes(t('youtubeImport.secretSetHere', { date: formatDate(view.secretUpdatedAt, locale, true) }), {
+                  fillNodes(t('youtubeImport.secretSetHere'), { date: <LocalTime value={view.secretUpdatedAt} withTime />,
                     actor: view.secretUpdatedBy ? <UserName id={view.secretUpdatedBy} showEmail={false} /> : '—',
                   })
                 ) : (
@@ -346,7 +347,7 @@ export function YoutubeImportSetting({
 
         <p className="text-sm text-fg-muted" data-testid="youtube-import-last-changed">
           {view.updatedAt
-            ? fillNodes(t('platformSettings.lastChanged', { date: formatDate(view.updatedAt, locale, true) }), {
+            ? fillNodes(t('platformSettings.lastChanged'), { date: <LocalTime value={view.updatedAt} withTime />,
                 actor: view.updatedBy ? <UserName id={view.updatedBy} showEmail={false} /> : '—',
               })
             : t('youtubeImport.neverChanged')}

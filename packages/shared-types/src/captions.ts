@@ -422,7 +422,7 @@ export function quranReferenceText(range: string, language: string): string {
   if (!r) return '';
   const url = quranComUrl(r).replace(/^https:\/\//, '');
   const label = quranAyahLabel(r);
-  return language.startsWith('ar') ? `[القرآن ${toArabicDigits(label)} · ${url}]` : `[Quran ${label} · ${url}]`;
+  return language.startsWith('ar') ? `[القرآن ${toArabicDigits(label)} • ${url}]` : `[Quran ${label} • ${url}]`;
 }
 
 const toArabicDigits = (s: string) => s.replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!);
@@ -441,7 +441,7 @@ export function quranCueText(text: string, surahName: string, range: string, lan
 export function quranTranslationCueText(text: string, edition: string, surahName: string, range: string): string {
   const r = parseQuranRange(range);
   const label = r ? quranAyahLabel(r) : range;
-  return `“${escapeVtt(text)}” (${escapeVtt(edition)} · ${escapeVtt(surahName)} ${label})`;
+  return `“${escapeVtt(text)}” (${escapeVtt(edition)} • ${escapeVtt(surahName)} ${label})`;
 }
 
 /**

@@ -326,6 +326,14 @@ export const ChannelTabConfig = z.object({
     lastModifiedBy: Str().optional(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
+    counts: z.object({
+        videos: z.number().int(),
+        shorts: z.number().int(),
+        live: z.number().int(),
+        playlists: z.number().int(),
+        community: z.number().int(),
+        channels: z.number().int(),
+    }).optional().describe("Read only: public items per tab (GET). The page hides empty Shorts, Live, Playlists, Community and Channels tabs from visitors; absent when the counts could not be read"),
 });
 
 export const ChannelTabConfigUpdateInput = z.object({

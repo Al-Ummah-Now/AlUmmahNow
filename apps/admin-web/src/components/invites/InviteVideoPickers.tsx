@@ -41,7 +41,7 @@ export function InviteVideoPickers({
       const clock = formatDuration(locale);
       // Channel and length under the title
       return {
-        items: result.data.items.map((v): AutocompleteItem => ({ ...v, secondary: [v.secondary, v.duration ? clock(v.duration) : null].filter(Boolean).join(' · ') || null })),
+        items: result.data.items.map((v): AutocompleteItem => ({ ...v, secondary: [v.secondary, v.duration ? clock(v.duration) : null].filter(Boolean).join(' • ') || null })),
         next: result.data.next,
       };
     },

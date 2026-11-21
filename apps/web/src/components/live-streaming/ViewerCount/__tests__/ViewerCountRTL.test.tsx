@@ -199,8 +199,9 @@ describe('ViewerCount RTL Component', () => {
     it('handles very large numbers', () => {
       renderWithRTL(<ViewerCountRTL count={1000000} />);
       const status = screen.getByRole('status');
-      // Should contain Arabic numerals
-      expect(status.textContent).toMatch(/[٠-٩]/);
+      // Millions are always the digit and «م» (owner rule 2026-11-21)
+      expect(status.textContent?.replace(/\u00a0/g, ' ')).toContain('١ م');
+      expect(status.textContent).not.toMatch(/[0-9]|مليون/);
     });
   });
 
@@ -230,7 +231,7 @@ describe('ViewerCount RTL Component', () => {
     it('renders in full format when specified', () => {
       renderWithRTL(<ViewerCountRTL count={1234} format="full" />);
       const status = screen.getByRole('status');
-      // Full format should show: ١٬٢٣٤
+      // Full format should show: ١٢٣٤ (never grouped)
       expect(status.textContent).toMatch(/[٠-٩]/);
     });
   });

@@ -151,7 +151,7 @@ export function DailyChart({ title, days, bunny, r2, unit, xKind = 'day', locale
                   {runs(values).map((points, k) => (
                     <polyline key={k} points={points} fill="none" style={{ stroke: SERIES[kind].color }} strokeWidth="2" strokeDasharray={SERIES[kind].dash} strokeLinejoin="round" />
                   ))}
-                  {values.map((v, i) => (v === null ? null : <Marker key={days[i]} kind={kind} x={x(i)} y={y(v)} title={`${name} · ${xText(days[i])}: ${valueText(v)}`} />))}
+                  {values.map((v, i) => (v === null ? null : <Marker key={days[i]} kind={kind} x={x(i)} y={y(v)} title={`${name} • ${xText(days[i])}: ${valueText(v)}`} />))}
                 </g>
               );
             })}

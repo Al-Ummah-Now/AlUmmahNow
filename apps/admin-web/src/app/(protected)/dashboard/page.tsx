@@ -2,7 +2,7 @@ import Link from '@/components/AppLink';
 import type { ReportStats } from '@al-ummah/shared-types';
 import { getStats } from '@/lib/api/admin';
 import { getI18n } from '@/i18n/server';
-import { formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatStat, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 
@@ -46,7 +46,7 @@ export default async function AdminDashboard() {
               <div key={card.key} className={cardClass} data-testid={`stat-${card.key}`}>
                 <dt className="text-fg-muted text-sm font-medium">{t(card.label)}</dt>
                 <dd className={`text-3xl font-bold mt-2 ${card.tone}`} data-value={card.value}>
-                  {formatNumber(card.value, locale)}
+                  {formatStat(card.value, locale)}
                 </dd>
               </div>
             ))}

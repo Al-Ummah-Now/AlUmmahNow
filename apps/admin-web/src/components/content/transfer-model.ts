@@ -22,7 +22,7 @@ export function userMeta(user: AdminUserSearchItem, t: Translator): string {
     parts.push(t('channels.pickerRole', { role: role === key ? user.channelRole : role }));
   }
   if (user.isBanned) parts.push(t('channels.pickerBanned'));
-  return parts.join(' · ');
+  return parts.join(' • ');
 }
 
 /** A transfer search result as the Autocomplete shows it: name, email, facts, banned users not choosable. No @handle: handles belong to channels, never users. */

@@ -1,4 +1,4 @@
-import { formatNumber, formatClock, parseDigits, formatBytes } from '@al-ummah/shared-types';
+import { fillTemplate, formatNumber, formatClock, parseDigits, formatBytes } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef } from 'react';
@@ -308,7 +308,7 @@ export default function ChapterUpload({
             <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <Check size={20} className="text-green-600 dark:text-green-400" />
               <p className="text-sm text-green-700 dark:text-green-400">
-                {formatNumber(lang, parsedChapters.length)} {t.video.chaptersDetected}
+                {fillTemplate(lang, t.video.chaptersDetected ?? '', { count: parsedChapters.length })}
               </p>
             </div>
 

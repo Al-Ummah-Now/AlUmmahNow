@@ -37,6 +37,8 @@ export interface RetentionCurve {
 export interface TopContentItem {
   videoId: string;
   title: string;
+  /** Per-language titles; Studio shows the one for the page's language (studioVideoTitle) */
+  titleLocalized?: Partial<Record<string, string>> | null;
   thumbnailUrl?: string;
   isPublic: boolean;
   views: number;

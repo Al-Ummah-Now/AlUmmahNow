@@ -3,13 +3,14 @@
  * does, the request form's checks and the API error copy. Pure, so the page
  * and its tests share it. Never prices: a card offers "Request".
  */
-import { formatInteger, TIER_REQUEST_ERRORS, TIER_REQUEST_LIMITS, type PublicTier, type UpgradeOverview } from '@al-ummah/shared-types';
+import { fillTemplate, formatInteger, TIER_REQUEST_ERRORS, TIER_REQUEST_LIMITS, type PublicTier, type UpgradeOverview } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
 type UpgradeCopy = AppTranslations['upgrade'];
 export type Lang = 'en' | 'ar';
 
 const fill = (text: string, params: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m));
+
 
 export const formatCount = (n: number, lang: Lang) => formatInteger(lang, n);
 
@@ -26,20 +27,21 @@ export interface TierFeature {
 
 /** What a tier includes, from its capability flags (the same rows on every card, so cards compare line by line). */
 export function tierFeatures(tier: PublicTier, t: UpgradeCopy, lang: Lang): TierFeature[] {
-  const n = (count: number) => formatCount(count, lang);
+  // The catalogue's plural selects make the noun agree with the count (#1666).
+  const counted = (text: string, params: Record<string, number>) => fillTemplate(lang, text, params);
   const uploads = !tier.uploads
     ? t.noUploads
     : tier.uploadsPerDay === null
       ? t.uploadsUnlimited
-      : fill(t.uploadsPerDay, { count: n(tier.uploadsPerDay) });
+      : counted(t.uploadsPerDay, { count: tier.uploadsPerDay });
   const channels = !tier.channels
     ? t.noChannels
     : tier.maxChannels === null
       ? t.channelsUnlimited
       : tier.maxChannels === 1
         ? t.channelsOne
-        : fill(t.channelsUpTo, { count: n(tier.maxChannels) });
-  const captions = tier.unlimited ? t.captionsUnlimited : tier.captionMinutesMonth > 0 ? fill(t.captionMinutes, { count: n(tier.captionMinutesMonth) }) : t.noCaptionMinutes;
+        : counted(t.channelsUpTo, { count: tier.maxChannels });
+  const captions = tier.unlimited ? t.captionsUnlimited : tier.captionMinutesMonth > 0 ? counted(t.captionMinutes, { count: tier.captionMinutesMonth }) : t.noCaptionMinutes;
   return [
     { key: 'watch', included: true, text: t.watch },
     { key: 'uploads', included: tier.uploads, text: uploads },

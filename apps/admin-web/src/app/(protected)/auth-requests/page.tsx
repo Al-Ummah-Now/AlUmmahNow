@@ -1,6 +1,6 @@
 import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { listAuthRequests } from '@/lib/api/auth-requests';
 import { AUTH_REQUEST_STATUSES, authRequestNeedsAttention, type AuthRequestList, type AuthRequestStatus } from '@/lib/api/auth-request-types';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
@@ -8,11 +8,12 @@ import { AuthRequestStatusChip, DeliveryChip } from '@/components/auth-requests/
 import { logger } from '@/lib/logger';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 /** Every moderation request sent to auth, newest first, with live status. */
 export default async function AuthRequestsPage({ searchParams }: { searchParams: Promise<{ status?: string; delivery?: string }> }) {
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const { status: rawStatus, delivery: rawDelivery } = await searchParams;
   const status = (AUTH_REQUEST_STATUSES as readonly string[]).includes(rawStatus ?? '') ? (rawStatus as AuthRequestStatus) : undefined;
   const delivery = rawDelivery === 'failed' ? 'failed' : undefined;
@@ -70,7 +71,7 @@ export default async function AuthRequestsPage({ searchParams }: { searchParams:
             <tbody>
               {list.requests.map((r) => (
                 <tr key={r.id} className="border-t border-border" data-testid="auth-requests-row" data-request-id={r.id} data-auth-request-id={r.authRequestId ?? ''} data-delivery={r.delivery.status} data-status={r.status ?? ''}>
-                  <td className="p-3 whitespace-nowrap">{formatDate(r.createdAt, locale, true)}</td>
+                  <td className="p-3 whitespace-nowrap"><LocalTime value={r.createdAt} withTime /></td>
                   <td className="p-3">
                     <Link href={`/auth-requests/users/${encodeURIComponent(r.subjectUserId)}`} className={linkClass} dir="ltr">{r.subjectUserId}</Link>
                   </td>

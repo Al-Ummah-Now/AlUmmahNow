@@ -7,12 +7,12 @@ import type { ReaperMode, ReaperSweep } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { useConfirm } from '@/components/content/actions';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
+import { LocalTime } from '@/components/LocalTime';
 /**
  * The reaper's mode (dry run until an admin turns deletion on), its last
  * scan, and Scan now. Changes go through admin-api (audited).
@@ -20,7 +20,6 @@ import { fillNodes } from '@/components/audit/fill';
 export function ReaperPanel({
   config,
   sweep,
-  locale,
 }: {
   config: { mode: ReaperMode; updatedAt?: string; updatedBy?: string };
   sweep: ReaperSweep | null;
@@ -94,14 +93,14 @@ export function ReaperPanel({
         </div>
         <p className="text-fg-muted max-w-2xl">{live ? t('staleUploads.modeLiveHelp') : t('staleUploads.modeDryRunHelp')}</p>
         {config.updatedAt && config.updatedBy && (
-          <p className="text-fg-subtle text-sm">{fillNodes(t('staleUploads.modeBy', { date: formatDate(config.updatedAt, locale, true) }), { actor: <UserName id={config.updatedBy} showEmail={false} /> })}</p>
+          <p className="text-fg-subtle text-sm">{fillNodes(t('staleUploads.modeBy'), { date: <LocalTime value={config.updatedAt} withTime />, actor: <UserName id={config.updatedBy} showEmail={false} /> })}</p>
         )}
         <div className="border-t border-border pt-3 text-sm">
           <div className="font-medium text-fg">{t('staleUploads.lastSweep')}</div>
           {sweep ? (
             <div className="text-fg-muted" data-testid="reaper-sweep">
-              <span>{formatDate(sweep.lastRunAt, locale, true)}</span>
-              {' · '}
+              <span><LocalTime value={sweep.lastRunAt} withTime /></span>
+              {' • '}
               <span>
                 {t('staleUploads.sweepSummary', {
                   records: sweep.recordsScanned,
