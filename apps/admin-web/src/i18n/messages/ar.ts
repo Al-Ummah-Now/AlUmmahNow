@@ -2467,7 +2467,7 @@ const ar: Messages = {
     tabNeedsAction: 'تحتاج إلى إجراء',
     filtersLabel: 'تصفية الأخطاء',
     search: 'بحث',
-    searchPlaceholder: 'الرسالة أو المسار أو الرقم المرجعي ERR- أو معرّف الطلب',
+    searchPlaceholder: 'الرسالة أو رمز ERR-',
     appFilter: 'التطبيق',
     allApps: 'كل التطبيقات',
     environmentFilter: 'البيئة',

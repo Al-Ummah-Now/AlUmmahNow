@@ -2468,7 +2468,7 @@ const en = {
     tabNeedsAction: 'Needs action',
     filtersLabel: 'Filter errors',
     search: 'Search',
-    searchPlaceholder: 'Message, route, ERR- reference or request id',
+    searchPlaceholder: 'Message or ERR- code',
     appFilter: 'App',
     allApps: 'All apps',
     environmentFilter: 'Environment',
