@@ -2270,7 +2270,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     clearing: 'جاري المسح...',
     confirmClear: 'هل تريد مسح سجل المشاهدة بالكامل؟ لا يمكن التراجع عن ذلك.',
     remove: 'إزالة من السجل',
-    lastWatched: 'تمت المشاهدة {date}',
+    lastWatched: '{date}',
     percentWatched: 'تمت مشاهدة {percent}٪',
     completed: 'تمت المشاهدة',
     loadMore: 'تحميل المزيد',
