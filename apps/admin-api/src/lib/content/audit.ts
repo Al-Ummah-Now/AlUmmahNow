@@ -45,7 +45,9 @@ export type ContentKind =
   /** Payments: a refund (id = payment id). */
   | 'billing-payment'
   /** Payments: a billing job retried from the Jobs page (id = the job's target). */
-  | 'billing';
+  | 'billing'
+  /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
+  | 'import';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

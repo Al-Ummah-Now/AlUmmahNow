@@ -62,7 +62,7 @@ describe('authMiddleware audience check', () => {
 
 	it('an allowed client passes without a log, in every mode', async () => {
 		for (const mode of [undefined, 'enforce']) {
-			for (const aud of [QA.adminWeb, QA.web, QA.adminAndroid]) assert.equal((await call(await sign(aud), { AUD_MODE: mode })).status, 200, `${aud} ${mode}`);
+			for (const aud of [QA.adminWeb, QA.web, QA.adminAndroid, QA.adminTools]) assert.equal((await call(await sign(aud), { AUD_MODE: mode })).status, 200, `${aud} ${mode}`);
 		}
 		assert.equal(mismatches().length, 0);
 	});
