@@ -33,6 +33,7 @@ import {
   mySubscription,
   removeCredential,
   retestCredential,
+  checkCollectorAgain,
   saveCredential,
   saveD1Limits,
   saveSettings,
@@ -126,6 +127,14 @@ app.post('/credentials/:provider/test', async (c) => {
   if (!isCostProvider(provider)) return bad(c, 'provider must be cloudflare, bunny or resend');
   const out = await retestCredential(c.env as never, provider, actorOf(c.get('auth')));
   if (!out) return c.json({ success: false, code: 'not_set', error: 'No key is set for this provider' }, 404);
+  return c.json({ success: true, result: out });
+});
+
+// "Check again" after a refused token: queues an hourly collection and re-tests the admin token
+app.post('/collector/check', async (c) => {
+  if (!canManage(c)) return forbidden(c);
+  const out = await checkCollectorAgain(c.env as never, actorOf(c.get('auth')));
+  if (!out.queued && !out.tested) return c.json({ success: false, code: 'unavailable', error: 'Nothing to run: no job queue here and no token set' }, 503);
   return c.json({ success: true, result: out });
 });
 

@@ -18,15 +18,18 @@ export function dataAge(dataAsOf: string | null, now: Date): { never: boolean; s
   return { never: false, stale: now.getTime() - at > STALE_AFTER_MS };
 }
 
-export type TokenNotice = 'missing' | 'release' | null;
+export type TokenNotice = 'missing' | 'refused' | 'release' | null;
 
 /**
  * The header's token notice: 'missing' when the collector has no token (or never reported one) and
- * no Cloudflare connection is set; 'release' while it borrows the release token.
+ * no Cloudflare connection is set; 'refused' when Cloudflare refuses the token it has (no Account
+ * Analytics Read), so the Cloudflare figures are missing, not zero; 'release' while it borrows
+ * the release token.
  */
-export function tokenNotice(collector: Pick<CostCollectorState, 'tokenSource'>, connections: Pick<CostCredentialView, 'provider' | 'set'>[]): TokenNotice {
+export function tokenNotice(collector: Pick<CostCollectorState, 'tokenSource' | 'analytics'>, connections: Pick<CostCredentialView, 'provider' | 'set'>[]): TokenNotice {
   const cloudflareSet = connections.some((c) => c.provider === 'cloudflare' && c.set);
   if ((collector.tokenSource === 'none' || collector.tokenSource === 'unknown') && !cloudflareSet) return 'missing';
+  if (collector.analytics?.state === 'refused') return 'refused';
   if (collector.tokenSource === 'release' && !cloudflareSet) return 'release';
   return null;
 }

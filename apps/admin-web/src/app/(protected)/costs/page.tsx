@@ -15,6 +15,7 @@ import { DatabasesSection } from './DatabasesSection';
 import { DatabaseSettings } from './DatabaseSettings';
 import { CloudflarePanel, DriversSection } from './details';
 import { FixedCosts } from './FixedCosts';
+import { CheckCollector } from './CheckCollector';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +63,7 @@ export default async function CostsPage() {
       {error && <ErrorAlert testId="costs-load-error">{error}</ErrorAlert>}
       {d && (
         <>
-          <TokenNotice d={d} t={t} />
+          <TokenNotice d={d} t={t} f={f} check={<CheckCollector />} />
           <BudgetNotice d={d} t={t} />
           <CollectorFailures d={d} t={t} f={f} />
           <BudgetSection d={d} t={t} f={f} />

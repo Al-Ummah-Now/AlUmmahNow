@@ -79,9 +79,9 @@ export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | nul
           <p className="mt-1 text-fg-muted">{t('costs.subtitle')}</p>
         </div>
         {age && (
-          <p className="cost-pill shrink-0" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
+          <p className="cost-pill min-w-0 max-w-full" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
             <span aria-hidden="true" className={`cost-dot ${age.stale ? 'text-warning-fg' : 'text-success-fg'}`} />
-            <span className="tabular-nums">{age.never ? t('costs.dataNever') : age.stale ? t('costs.dataStale', { time: f.time(d!.dataAsOf!) }) : t('costs.dataAsOf', { time: f.time(d!.dataAsOf!) })}</span>
+            <span className="min-w-0 break-words tabular-nums">{age.never ? t('costs.dataNever') : age.stale ? t('costs.dataStale', { time: f.time(d!.dataAsOf!) }) : t('costs.dataAsOf', { time: f.time(d!.dataAsOf!) })}</span>
           </p>
         )}
       </div>
@@ -91,7 +91,8 @@ export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | nul
 }
 
 /** The no-token banner (prominent) or the release-token note (quiet). */
-export function TokenNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
+/** `check`: the "Check again" button (a client component, passed in by the page). */
+export function TokenNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f?: OpsFormats; check?: React.ReactNode }) {
   const notice = tokenNotice(d.collector, d.connections);
   if (notice === 'release') {
     return (
@@ -100,6 +101,7 @@ export function TokenNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
       </p>
     );
   }
+  if (notice === 'refused') return <RefusedNotice d={d} t={t} f={f} check={check} />;
   if (notice !== 'missing') return null;
   return (
     <section className="cost-banner p-5" role="status" aria-labelledby="costs-token-title" data-testid="costs-token-banner" data-kind="missing">
@@ -150,6 +152,45 @@ export function BudgetNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
           >
             {t('costs.budget.unsetBannerAction')}
           </a>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const KEY_ICON = (
+  <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 shrink-0 text-warning-fg" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 8a4 4 0 1 1-3.5 6L4 21H3v-3l7-7A4 4 0 0 1 15 8zM16 7h.01" />
+  </svg>
+);
+
+/**
+ * Cloudflare refuses the collector's token (no Account Analytics Read): the Cloudflare figures
+ * are missing, not zero. Names the permission, where to fix it, and "Check again" for super admins.
+ */
+function RefusedNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f?: OpsFormats; check?: React.ReactNode }) {
+  const via = d.collector.analytics?.via === 'test' ? 'test' : 'run';
+  const lastGood = d.dataAsOf;
+  return (
+    <section className="cost-banner p-5" role="alert" aria-labelledby="costs-token-title" data-testid="costs-token-banner" data-kind="refused" data-via={via}>
+      <h2 id="costs-token-title" className="flex items-start gap-2 text-lg font-semibold text-fg">
+        {KEY_ICON}
+        <span>{t('costs.token.refusedTitle')}</span>
+      </h2>
+      <p className="mt-1 max-w-3xl text-sm text-fg" data-testid="costs-token-permission">
+        {t(d.collector.tokenSource === 'admin' ? 'costs.token.refusedAdminToken' : 'costs.token.refusedSharedToken', { permission: t('costs.token.permission') })}
+      </p>
+      <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood && f ? t('costs.token.refusedSince', { time: f.time(lastGood) }) : t('costs.token.refusedNever')}</p>
+      <div className="mt-3 flex flex-wrap items-start gap-3">
+        {d.canManage ? (
+          <>
+            {check}
+            <a href="#connections" className={`${linkClass} inline-flex min-h-11 items-center`} data-testid="costs-token-action">
+              {t('costs.token.refusedAction')}
+            </a>
+          </>
+        ) : (
+          <p className="text-sm text-fg-muted">{t('costs.token.refusedAdmin')}</p>
         )}
       </div>
     </section>
