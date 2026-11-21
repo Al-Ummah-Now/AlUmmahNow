@@ -48,7 +48,7 @@ jobs:
       production: ${{ steps.kind.outputs.production }}
       label: ${{ steps.kind.outputs.label }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # all tags and origin/main, for the ancestry check and the changelog
 
@@ -161,7 +161,7 @@ jobs:
       matrix:
         part: [workers, web, admin-web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
@@ -237,7 +237,7 @@ jobs:
       name: staging
       url: https://videos.stage.alummahnow.net
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
@@ -630,7 +630,7 @@ jobs:
       name: production
       url: https://videos.alummahnow.net
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The release deploys exactly the tagged commit, so later merges to main don't
       # matter. A tag that was deleted or moved while stage ran is not promoted.
@@ -965,7 +965,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
