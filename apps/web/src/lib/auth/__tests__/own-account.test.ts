@@ -28,4 +28,11 @@ describe('ownAccount', () => {
     expect(isSafeAccountKey('user-123')).toBe(true);
     for (const key of ['__proto__', 'constructor', 'prototype', '']) expect(isSafeAccountKey(key)).toBe(false);
   });
+
+  it('never resolves through the prototype, even when a cookie carries a __proto__ key', () => {
+    const parsed = JSON.parse('{"__proto__":{"userId":"evil"},"u1":{"userId":"u1"}}') as Record<string, { userId: string }>;
+    expect(ownAccount(parsed, '__proto__')).toBeNull();
+    expect(ownAccount(parsed, 'u1')).toEqual({ userId: 'u1' });
+    expect(ownAccount({} as Record<string, unknown>, 'toString')).toBeNull();
+  });
 });
