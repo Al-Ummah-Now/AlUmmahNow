@@ -1,9 +1,8 @@
 /**
  * Admin tab rows are one row (owner, #1669; components/PriorityTabs): as many tabs as fit, the rest
  * under "More ▾" / «المزيد ▾» at the row's end, the current tab always in the row, nothing cut at
- * an edge and nothing wrapped. At 360 and 390 px, English and Arabic: Payments, Operations and Tier
- * requests (and App config, whose three tabs fit). Choosing a tab under More opens it, and it is in
- * the row. Read-only: it opens the pages as a super admin and changes nothing.
+ * an edge and nothing wrapped. At 360 and 390 px, English and Arabic: Payments, Operations, Tier
+ * requests and App config. Choosing a tab under More opens it, and it is in the row. Read-only: it opens the pages as a super admin and changes nothing.
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
@@ -21,6 +20,8 @@ const STRIPS = [
   { path: '/payments', nav: 'payments-tabs', prefix: 'payments-tab-', ids: ['providers', 'prices', 'tax', 'subscriptions'] },
   { path: '/operations', nav: 'ops-tabs', prefix: 'ops-tab-', ids: ['worker', 'd1', 'r2', 'queue', 'kv', 'do'] },
   { path: '/tier-requests', nav: 'tier-requests-tabs', prefix: 'tier-requests-tab-', ids: ['pending', 'approved', 'declined', 'all'] },
+  // Buttons, not links: the current document's tab is pressed
+  { path: '/app-config', nav: 'app-config-tabs', prefix: 'app-config-tab-', ids: ['flags', 'config', 'versions'] },
 ] as const;
 
 /** The row's tabs (id + box), the More button's box and the menu's ids; the menu is closed again */
@@ -30,7 +31,7 @@ async function readStrip(page: Page, nav: string, prefix: string) {
   await expect(strip).not.toHaveAttribute('data-measuring', /.*/);
   const row = await strip.locator(`[data-testid^="${prefix}"]`).evaluateAll((els, p) => els.map((e) => {
     const r = e.getBoundingClientRect();
-    return { id: (e.getAttribute('data-testid') ?? '').slice(p.length), top: Math.round(r.top), left: r.left, right: r.right, current: e.getAttribute('aria-current') === 'page' };
+    return { id: (e.getAttribute('data-testid') ?? '').slice(p.length), top: Math.round(r.top), left: r.left, right: r.right, current: e.getAttribute('aria-current') === 'page' || e.getAttribute('aria-pressed') === 'true' };
   }), prefix);
   const more = page.getByTestId(`${nav}-more`);
   let menu: string[] = [];
@@ -77,17 +78,10 @@ test.describe('tab rows on phones', () => {
             const id = first.menu[first.menu.length - 1];
             await page.getByTestId(`${nav}-more`).click();
             await page.getByTestId(`${nav}-menu-${id}`).click();
-            await expect(page.getByTestId(`${prefix}${id}`)).toHaveAttribute('aria-current', 'page');
+            await expect(page.getByTestId(`${prefix}${id}`)).toHaveAttribute(nav === 'app-config-tabs' ? 'aria-pressed' : 'aria-current', nav === 'app-config-tabs' ? 'true' : 'page');
             expectStrip(`${what}, ${id} chosen`, vp.width, await readStrip(page, nav, prefix), ids);
           }
         }
-        // App config: three short tabs, one row as they are
-        await page.goto('/app-config');
-        const tabs = page.locator('[data-testid^="app-config-tab-"]');
-        await expect(tabs.first()).toBeVisible();
-        const boxes = await tabs.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.top), r.left, r.right]; }));
-        expect(new Set(boxes.map((b) => b[0])).size, `/app-config ${vp.width}px ${locale}: one row`).toBe(1);
-        for (const b of boxes) expect(b[1] >= -1 && b[2] <= vp.width + 1, `/app-config ${vp.width}px ${locale}: tab inside the window`).toBe(true);
       });
     }
   }
