@@ -951,6 +951,7 @@ const en = {
       videosRepairThumbnails: 'Fix thumbnail shapes',
       searchRebuildOwnership: 'Rebuild the admin lists index',
       playlistAddVideos: 'Add videos to a playlist',
+      importAttach: 'Add an imported file\'s captions, chapters and thumbnail',
       csamContain: 'CSAM takedown',
       imagesIndexOwners: 'Index image uploaders',
       mediaTranscodeRetry: 'Retry an R2 transcode now',

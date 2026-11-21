@@ -63,6 +63,7 @@ import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/re
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
 import { runDiscoveryRankJob, type DiscoveryEnv } from '../ranking/job';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
+import { runImportAttach, type AttachEnv } from './importAttach';
 import {
 	channelVideoStats,
 	contentIds,
@@ -1704,6 +1705,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'search.rebuild-ownership': (env, job) => runOwnershipRebuildStep(env as OwnershipRebuildEnv, job),
 	// Bulk adds to a channel playlist above the inline cap, or after an inline write failed (lib/playlistBulk.ts)
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
+	// Admin Tools import: a file's sidecars onto its video (lib/admin/importAttach.ts, wiki TOOLS-ADMIN TA-6)
+	'import.attach': (env, job) => runImportAttach(env as AttachEnv, job),
 	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
 	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
 	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),

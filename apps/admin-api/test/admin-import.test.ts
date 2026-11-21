@@ -243,3 +243,51 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     assert.equal(parseNewItem(FILE).ok, true);
   });
 });
+
+describe('/api/admin/import/items/:id/sidecars (TA-6)', () => {
+  it('queues the attach job for the item\'s video, audits what arrived (never the contents) and records the job', async () => {
+    const db = sqliteD1();
+    const calls: { path: string; body: any }[] = [];
+    let refuse = false;
+    const env = {
+      REPORTS_DB: db,
+      INTERNAL_API_KEY: 'k',
+      VIDEOS: {
+        async fetch(input: string, init?: RequestInit) {
+          const url = new URL(input);
+          calls.push({ path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
+          if (refuse) return new Response(JSON.stringify({ success: false, code: 'invalid_request', error: 'Nothing to attach' }), { status: 400 });
+          return new Response(JSON.stringify({ success: true, result: { jobId: 'job-9', status: 'queued' } }), { status: 200 });
+        },
+      },
+    };
+    const t = new Date().toISOString();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, video_id, state, created_by, created_at, updated_at) VALUES ('it1','b1','ch1',?, 'a.mp4', 1, 'vid-1', 'uploaded', ?, ?, ?)").bind('e'.repeat(64), ADMIN, t, t).run();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, state, created_by, created_at, updated_at) VALUES ('it2','b1','ch1',?, 'b.mp4', 1, 'failed', ?, ?, ?)").bind('d'.repeat(64), ADMIN, t, t).run();
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, roles: ['Admin'] } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const send = async (id: string, body: unknown) => {
+      const res = await app.request(`/api/admin/import/items/${id}/sidecars`, post(body), env as never);
+      return { status: res.status, body: (await res.json()) as any };
+    };
+    const sidecars = { captions: [{ language: 'ar', content: 'WEBVTT\n\nسر' }], chapters: '0:00 Intro', thumbnail: { data: 'AAAA', mimeType: 'image/png' } };
+    const res = await send('it1', sidecars);
+    assert.equal(res.status, 202);
+    assert.equal(res.body.result.jobId, 'job-9');
+    assert.equal(res.body.result.item.attachJobId, 'job-9');
+    assert.deepEqual(calls[0], { path: '/internal/admin/import/videos/vid-1/sidecars', body: sidecars });
+    const [row] = (await db.prepare("SELECT key, new_value FROM site_settings_log").all<any>()).results ?? [];
+    assert.equal(row.key, 'content:import:vid-1');
+    assert.deepEqual(JSON.parse(row.new_value).details, { itemId: 'it1', captions: ['ar'], chapters: true, thumbnail: true });
+    assert.ok(!row.new_value.includes('WEBVTT') && !row.new_value.includes('AAAA'), 'no file contents in the audit log');
+    assert.equal((await send('it2', sidecars)).body.code, 'no_video');
+    assert.equal((await send('none', sidecars)).status, 404);
+    refuse = true;
+    assert.equal((await send('it1', {})).status, 400);
+    assert.equal(((await db.prepare("SELECT COUNT(*) AS n FROM site_settings_log").first<any>())).n, 1, 'the refused call left no audit row');
+  });
+});

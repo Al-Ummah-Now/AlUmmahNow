@@ -30,6 +30,10 @@
  *                                 file again resumes its unfinished video; a file already uploaded
  *                                 answers 409 already_imported with its item. Audited per video.
  *   POST /items/:id/uploaded      the app sent the whole file → { item }
+ *   POST /items/:id/sidecars      { captions?, chapters?, thumbnail?, playlistId?, publishAt? } (TA-6) → 202
+ *                                 { item, jobId } — attached by api-videos' queued job 'import.attach'
+ *                                 (retried, on the Jobs page; a failure goes to the Errors page with Retry).
+ *                                 Audited per video.
  *   POST /items/:id/failed        { error } the app gave up on the file → { item }
  */
 import { Hono, type Context } from 'hono';
@@ -158,6 +162,7 @@ export interface ImportItemRow {
   video_id: string | null;
   state: 'initiated' | 'uploaded' | 'failed';
   error: string | null;
+  attach_job_id?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -182,6 +187,7 @@ const itemView = (r: ImportItemRow) => ({
   videoId: r.video_id,
   state: r.state,
   error: r.error,
+  attachJobId: r.attach_job_id ?? null,
   createdBy: r.created_by,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -317,6 +323,34 @@ async function setItemState(c: C, state: 'uploaded' | 'failed', error: string | 
 }
 
 app.post('/items/:id/uploaded', (c) => setItemState(c, 'uploaded', null));
+
+app.post('/items/:id/sidecars', async (c) => {
+  const item = await readItem(c, c.req.param('id'));
+  if (!item) return fail(c, 404, 'item_not_found', 'No such import item');
+  if (!item.video_id) return c.json({ success: false, code: 'no_video', error: 'This file has no video yet: open its upload first' }, 409);
+  const sidecars = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!sidecars || typeof sidecars !== 'object' || Array.isArray(sidecars)) return fail(c, 400, 'invalid_request', 'A JSON object is required');
+  const db = c.env.REPORTS_DB;
+  // What arrived, never the file contents (captions and images stay out of the audit log)
+  const summary = {
+    itemId: item.id,
+    captions: Array.isArray(sidecars.captions) ? (sidecars.captions as Array<{ language?: unknown }>).map((t) => String(t?.language ?? '')) : [],
+    chapters: typeof sidecars.chapters === 'string',
+    thumbnail: !!sidecars.thumbnail,
+    ...(typeof sidecars.playlistId === 'string' ? { playlistId: sidecars.playlistId } : {}),
+    ...(typeof sidecars.publishAt === 'string' ? { publishAt: sidecars.publishAt } : {}),
+  };
+  const auditId = await writeAudit(db, { kind: 'import', id: item.video_id, action: 'sidecars:attach', actorId: actorOf(c), details: summary });
+  let queued: { jobId: string; status: string };
+  try {
+    queued = await videos<{ jobId: string; status: string }>(c, `/import/videos/${encodeURIComponent(item.video_id)}/sidecars`, { method: 'POST', json: sidecars });
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
+  await db.prepare('UPDATE import_items SET attach_job_id = ?, updated_at = ? WHERE id = ?').bind(queued.jobId, now(), item.id).run();
+  return c.json({ success: true, result: { item: itemView({ ...item, attach_job_id: queued.jobId }), jobId: queued.jobId } }, 202);
+});
 app.post('/items/:id/failed', async (c) => {
   const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
   const error = typeof b.error === 'string' && b.error.trim() ? b.error.trim().slice(0, 1000) : 'The app could not upload this file';

@@ -571,6 +571,8 @@ export const ADMIN_JOB_KINDS = [
    * Idempotent: a video already in the playlist is skipped.
    */
   'playlist.add-videos',
+  // Admin Tools import (wiki TOOLS-ADMIN TA-6): a file's sidecars (captions, chapters, thumbnail, playlist, publish date) onto its video
+  'import.attach',
   /**
    * Take a CSAM match down (api-videos lib/csam/contain.ts, docs/specs/CSAM-RESPONSE.md):
    * encrypted evidence copy, then every copy purged (R2, originals, Bunny, images, CDN), then the
@@ -643,6 +645,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'videos.repair-thumbnails': ['videos:manage'],
   'search.rebuild-ownership': ['videos:manage'],
   'playlist.add-videos': ['videos:manage'],
+  'import.attach': ['videos:manage'],
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
   'images.index-owners': ['users:manage'],

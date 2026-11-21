@@ -35,8 +35,9 @@ export function jobQueueFor(env: JobEnv, kind: string): JobQueue | undefined {
 	return RUN_ERASE_KINDS.has(kind) && env.RUN_ERASE_QUEUE ? env.RUN_ERASE_QUEUE : env.ADMIN_JOBS_QUEUE;
 }
 
-/** What a job handler returns: done, or another step to queue (resumable work). */
-export type JobOutcome = { done: true; result?: Record<string, unknown> } | { done: false; params: Record<string, unknown>; result?: Record<string, unknown> };
+/** What a job handler returns: done, or another step to queue (resumable work); `delaySeconds` waits before
+ *  that step runs (e.g. until a video finished processing). */
+export type JobOutcome = { done: true; result?: Record<string, unknown> } | { done: false; params: Record<string, unknown>; result?: Record<string, unknown>; delaySeconds?: number };
 export type JobHandler = (env: unknown, job: AdminJob) => Promise<JobOutcome>;
 
 interface JobRow {
@@ -272,7 +273,8 @@ export async function handleAdminJobBatch(
 			} else {
 				// Resumable work: store the next step and queue it as a fresh delivery
 				await setStatus(env, job, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
-				await jobQueueFor(env, job.kind)!.send(message(job.id));
+				const delay = Math.min(43200, Math.max(0, Math.round(outcome.delaySeconds ?? 0)));
+				await jobQueueFor(env, job.kind)!.send(message(job.id), delay ? { delaySeconds: delay } : undefined);
 			}
 			msg.ack();
 		} catch (error) {

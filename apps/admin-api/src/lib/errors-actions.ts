@@ -55,8 +55,10 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // gave up runs again (api-videos lib/billing/service.ts; Retry also needs the job's own billing
   // permission, endpoints/errors/ErrorsAdmin.ts). A discovery ranking run that gave up runs now
   // (api-videos lib/ranking/job.ts, wiki E07 Discovery ranking).
+  // An Admin Tools import's sidecars (captions, chapters, thumbnail) that could not be attached are
+  // tried again (api-videos lib/admin/importAttach.ts, wiki TOOLS-ADMIN TA-6).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/discovery/rank'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry'] },
 };
 
 /**

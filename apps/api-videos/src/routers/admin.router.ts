@@ -52,6 +52,8 @@ import { decideTierRequest, decisionNotificationPayload, listTierRequests, readR
 import { enqueueNotification, type NotificationsEnv } from '../lib/notifications';
 import { InitiateBodySchema, initiateUpload, type InitiateBody } from '../endpoints/video/uploadInitiate';
 import { loadChannelRecord } from '../lib/channelAccess';
+import { IMPORT_ATTACH_JOB_KIND, stageImportSidecars, validateSidecars, type AttachEnv } from '../lib/admin/importAttach';
+import { getJob as getAdminJob, retryJob as retryAdminJob } from '../lib/admin/jobs';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -307,6 +309,24 @@ app.post('/import/initiate', async (c) => {
 		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true },
 		input as InitiateBody,
 	);
+});
+// Admin Tools sidecars (wiki TOOLS-ADMIN TA-6): captions, chapters, thumbnail, playlist and publish date
+// for an imported video, attached by the queued job 'import.attach' (lib/admin/importAttach.ts)
+app.post('/import/videos/:videoId/sidecars', async (c) => {
+	const videoId = c.req.param('videoId');
+	const video = await new R2Repository<{ isDeleted?: boolean }>(c.env.videos as R2Bucket).getObject(videoId);
+	if (!video || video.isDeleted) throw new admin.AdminError(404, 'video_not_found', 'No such video');
+	const checked = validateSidecars(await body(c));
+	if (checked.ok === false) throw new admin.AdminError(400, 'invalid_request', checked.error);
+	return ok(c, await stageImportSidecars(c.env as unknown as AttachEnv, videoId, checked.value, actor(c)));
+});
+// The Errors page's Retry on an attach job that gave up (admin-api lib/errors-actions.ts)
+app.post('/import/attach/retry', async (c) => {
+	const { jobId } = parse(z.object({ jobId: z.string().min(1).max(64) }), await body(c));
+	const job = await getAdminJob(c.env as never, jobId);
+	if (!job || job.kind !== IMPORT_ATTACH_JOB_KIND) throw new admin.AdminError(404, 'job_not_found', 'No such attach job');
+	const retried = await retryAdminJob(c.env as never, jobId);
+	return ok(c, { status: retried?.status ?? job.status });
 });
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
