@@ -886,9 +886,10 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
           // measured by __help.ink) for a clipping box. Measuring the ink again here moved the box a
           // second time: the Arabic phone menu's address read as cut though it fits
           const over = Math.max(abox.y - b.top, b.bottom - (abox.y + abox.h));
+          // (__help.ink pads the letters by 1 px each side, so 1.5 px here is the old 0.5 px allowance)
           const ink = box;
-          const clips = scrolls ? over > 0 : ink.y < abox.y - 0.5 || ink.y + ink.h > abox.y + abox.h + 0.5;
-          if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && clips) { out.push(`text ${box.what} is cut by its list's edge`); break; }
+          const clips = scrolls ? over > 0 : ink.y < abox.y - 1.5 || ink.y + ink.h > abox.y + abox.h + 1.5;
+          if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && clips) { out.push(`text ${box.what} is cut by its list's edge (ink ${ink.y.toFixed(1)}+${ink.h.toFixed(1)}, line ${b.top.toFixed(1)}+${b.height.toFixed(1)}, box ${abox.y.toFixed(1)}+${abox.h.toFixed(1)}${scrolls ? ', scrolls' : ''})`); break; }
         }
         // Half covered by another element (sampled across the line, inside the frame)
         const ys = [box.y + 2, box.y + box.h / 2, box.y + box.h - 2];
