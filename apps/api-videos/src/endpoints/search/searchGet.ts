@@ -5,6 +5,7 @@ import { OptionalAuthRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { SEARCH_MAX_LIMIT, searchIndex } from "../../lib/search/query";
 import { attachSearchPlaylistCovers } from "../../lib/search/playlistCovers";
+import { attachLiveChannelVideoCounts, channelCards } from "../../lib/search/channelCounts";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string(), message: z.string().optional() });
 
@@ -115,6 +116,7 @@ export class SearchGet extends OptionalAuthRoute {
     try {
       const result = await searchIndex(db, search);
       await attachSearchPlaylistCovers(c.env, result.results);
+      await attachLiveChannelVideoCounts(c.env as never, channelCards(result.results));
       const searchTime = Date.now() - started;
       logger.debug("[Search] Served search", {
         q: search.q,

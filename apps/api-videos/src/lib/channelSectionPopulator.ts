@@ -34,6 +34,7 @@ import { transformChannelSectionToView, transformVideoToView } from './transform
 import { hasValidSectionConsent } from './channelSectionAccess';
 import { clampItemCount, isListableChannel, isListablePlaylist, isListableVideo } from './channelSectionRules';
 import { channelNameFields } from './channelName';
+import { toPublicChannels } from './public-views';
 
 /**
  * Public-safe channel summary returned in populated section content.
@@ -346,7 +347,27 @@ async function getChannelsByIds(channelIds: string[], selfId: string, env: any):
   const repo = new R2Repository<StoredChannel>(env.channels);
   const unique = [...new Set(channelIds)].filter((id) => id && id !== selfId);
   const channels = await Promise.all(unique.map((id) => repo.getObject(id)));
-  return channels.filter((c): c is StoredChannel => isListableChannel(c as never)).map(toPublicChannelSummary);
+  return withLiveCounts(channels.filter((c): c is StoredChannel => isListableChannel(c as never)), env);
+}
+
+/**
+ * Channel cards with the counts the channel page shows: subscribers from D1 and videos from the
+ * ownership index (uploads never append to the stored `channel.videos`, so the stored count read
+ * "No videos" on a channel with videos, #1669 audit). The stored counts stay when those fail.
+ */
+async function withLiveCounts(channels: StoredChannel[], env: any): Promise<PublicChannelSummary[]> {
+  const summaries = channels.map(toPublicChannelSummary);
+  if (!channels.length) return summaries;
+  try {
+    const views = await toPublicChannels(env.NOTIFICATIONS_DB, channels as never, env);
+    views.forEach((view, i) => {
+      if (typeof view?.subscribersCount === 'number') summaries[i].subscribersCount = view.subscribersCount;
+      if (typeof view?.videosCount === 'number') summaries[i].videosCount = view.videosCount;
+    });
+  } catch (error) {
+    logger.warn('[ChannelSections] Live channel counts failed; stored counts kept', { error: error instanceof Error ? error.message : String(error) });
+  }
+  return summaries;
 }
 
 /**
@@ -359,13 +380,13 @@ async function getSubscribedChannels(channelId: string, limit: number, env: any,
   // D1 subscriptions plus legacy entries of channels not imported yet (AV-4/AV-6)
   const subscribedTo = (await subscribedChannelIds(env.NOTIFICATIONS_DB, channel.userId, profile?.subscribedTo)).filter((id) => id !== channelId);
   const repo = new R2Repository<StoredChannel>(env.channels);
-  const summaries: PublicChannelSummary[] = [];
+  const listed: StoredChannel[] = [];
   for (const id of subscribedTo) {
-    if (summaries.length >= limit) break;
+    if (listed.length >= limit) break;
     const subscribed = await repo.getObject(id);
-    if (isListableChannel(subscribed as never)) summaries.push(toPublicChannelSummary(subscribed!));
+    if (isListableChannel(subscribed as never)) listed.push(subscribed!);
   }
-  return summaries;
+  return withLiveCounts(listed, env);
 }
 
 type StoredPlaylist = { id: string; channelId?: string; userId?: string; title?: string; videos?: string[]; isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean; dateCreated?: string; dateModified?: string; thumbnailUrl?: string };

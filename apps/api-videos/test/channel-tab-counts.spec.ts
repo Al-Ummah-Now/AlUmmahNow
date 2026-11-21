@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { channelTabCounts } from '../src/lib/channelTabCounts';
 import { ChannelTabsFetch } from '../src/endpoints/channel/channelTabsFetch';
+import { attachLiveChannelVideoCounts } from '../src/lib/search/channelCounts';
+import { populateSectionContent } from '../src/lib/channelSectionPopulator';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -72,5 +74,31 @@ describe('channel tab counts', () => {
 		assert.ok(body.tabs.length >= 7);
 		assert.equal(body.counts?.shorts, 1);
 		assert.equal(body.counts?.channels, 2);
+	});
+
+	it('channel cards (search, Explore) take the video count from the index, not the stale indexed payload', async () => {
+		const { raw } = env();
+		await runOwnershipPass(raw as never, 'channel');
+		await runOwnershipPass(raw as never, 'video');
+		const cards = [{ id: 'c1', videosCount: 0 }, { id: 'c2', videosCount: 0 }];
+		await attachLiveChannelVideoCounts(raw as never, cards);
+		// c1: the two long videos, the Short and the live stream; c2: one video
+		assert.deepEqual(cards.map((c) => c.videosCount), [4, 1]);
+	});
+
+	it('channel cards keep the indexed count while the ownership index is incomplete', async () => {
+		const { raw } = env();
+		const cards = [{ id: 'c1', videosCount: 7 }];
+		await attachLiveChannelVideoCounts(raw as never, cards);
+		assert.equal(cards[0].videosCount, 7);
+	});
+
+	it('a featured channels section shows each channel with its indexed video count (the stored channel says 0)', async () => {
+		const { raw } = env();
+		await runOwnershipPass(raw as never, 'channel');
+		await runOwnershipPass(raw as never, 'video');
+		const content = await populateSectionContent({ id: 's1', channelId: 'c1', type: 'featured_channels', channelIds: ['c2'] } as never, raw as never);
+		const channels = (content as { channels?: Array<{ id: string; videosCount: number }> }).channels ?? [];
+		assert.deepEqual(channels.map((c) => [c.id, c.videosCount]), [['c2', 1]]);
 	});
 });

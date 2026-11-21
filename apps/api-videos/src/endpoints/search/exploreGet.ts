@@ -4,6 +4,7 @@ import type { SearchDb } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { buildExplore } from "../../lib/search/explore";
+import { attachLiveChannelVideoCounts } from "../../lib/search/channelCounts";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string(), message: z.string().optional() });
 
@@ -49,6 +50,7 @@ export class ExploreGet extends OptionalAuthRoute {
     }
     try {
       const data = await buildExplore(db, c.env.global_settings, { language: query.language });
+      await attachLiveChannelVideoCounts(c.env as never, data.newChannels);
       logger.debug("[Explore] Served explore data", {
         language: query.language,
         categories: data.categories.length,

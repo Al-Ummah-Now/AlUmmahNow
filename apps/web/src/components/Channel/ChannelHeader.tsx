@@ -93,10 +93,12 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
 
           {/* Channel Details */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-3 mb-2">
+            {/* Subscribe moves under the name when both don't fit on one line, so the name has the
+                whole width: it wraps between words, up to two lines and then an ellipsis; only a single
+                word longer than the line breaks inside (#1669 audit) */}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
-                {/* Up to two lines on phones, then an ellipsis: a short name never cut mid-word beside Subscribe (#1669 audit) */}
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white line-clamp-2 break-words">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white line-clamp-2 break-normal [overflow-wrap:break-word]">
                   {displayName}
                 </h1>
                 {channel.isVerified && <VerifiedBadge size="md" />}

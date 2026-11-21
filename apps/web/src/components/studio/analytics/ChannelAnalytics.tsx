@@ -207,6 +207,10 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               <p className="text-sm text-muted-foreground">{text.empty}</p>
             ) : (
               <>
+                {/* The title column takes what the numbers leave and truncates (max-w-0 + w-full: an
+                    auto-layout table ignores max-width on a cell); the wrapper keeps any excess inside the
+                    table, never a sideways page (#1695: Arabic at 360 px) */}
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
@@ -219,8 +223,8 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                   <tbody>
                     {sorted.map((item) => (
                       <tr key={item.videoId} className="border-b border-border" data-testid="studio-top-row">
-                        <td className="max-w-40 truncate p-2">
-                          <Link href={videoHref(item.videoId)} dir="auto" className="text-foreground hover:underline">{item.title}</Link>
+                        <td className="w-full max-w-0 p-2">
+                          <Link href={videoHref(item.videoId)} dir="auto" className="block truncate text-foreground hover:underline">{item.title}</Link>
                         </td>
                         <td className="p-2 text-end tabular-nums">{number.format(item.views)}</td>
                         <td className="p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
@@ -229,6 +233,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 {topCursor && <Button variant="outline" className="mt-3" onClick={() => void loadMore()}>{text.loadMore}</Button>}
               </>
             )}

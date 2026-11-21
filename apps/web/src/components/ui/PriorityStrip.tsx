@@ -152,6 +152,20 @@ export function PriorityStrip<T extends PriorityItem>({
     window.setTimeout(() => onSelect?.(item), 0);
   };
 
+  // After a pick from the menu, focus goes to the chosen item in the row (not back to More, whose
+  // ring then sat beside the new current item): Radix's return to the trigger is skipped, and the
+  // item is focused once it is current and in the row (a state change or a navigation later)
+  const focusChosen = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusChosen.current;
+    if (!id || measuring || items[current]?.id !== id) return;
+    const index = rowItems.findIndex((item) => item.id === id);
+    const el = index >= 0 ? (rowRef.current?.children[index] as HTMLElement | undefined) : undefined;
+    if (!el) return;
+    focusChosen.current = null;
+    el.focus({ preventScroll: true });
+  });
+
   return (
     <div ref={holderRef} className={`relative flex min-w-0 flex-1 items-center ${className}`} data-testid={testId} data-measuring={measuring || undefined}>
       <div
@@ -166,7 +180,13 @@ export function PriorityStrip<T extends PriorityItem>({
         <div className={`shrink-0 ${measuring ? 'invisible' : ''}`} style={widths?.gap ? { marginInlineStart: widths.gap } : undefined}>
           {/* Radix owns the open state (the strip only follows it): closing it here as well, inside
               Radix's own select, left the next press on More doing nothing */}
-          <DropdownMenu onOpenChange={setOpen}>
+          <DropdownMenu
+            onOpenChange={(next) => {
+              // A pick that never became current (it left the page) is forgotten on the next open
+              if (next) focusChosen.current = null;
+              setOpen(next);
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <button
                 ref={moreRef}
@@ -182,7 +202,15 @@ export function PriorityStrip<T extends PriorityItem>({
             </DropdownMenuTrigger>
             {/* No exit animation: while a closing menu fades out Radix keeps it mounted, and when it
                 goes it hands focus back to More, which closed a menu opened again in that time */}
-            <DropdownMenuContent align="end" aria-label={menuLabel} data-testid={testId ? `${testId}-menu` : undefined} className="min-w-44 data-[state=closed]:animate-none!">
+            <DropdownMenuContent
+              align="end"
+              aria-label={menuLabel}
+              data-testid={testId ? `${testId}-menu` : undefined}
+              className="aun-strip-menu min-w-44 data-[state=closed]:animate-none!"
+              onCloseAutoFocus={(event) => {
+                if (focusChosen.current) event.preventDefault();
+              }}
+            >
               {menuItems.map((item) => {
                 const shared = {
                   'aria-current': item.current ? ('true' as const) : undefined,
@@ -190,11 +218,11 @@ export function PriorityStrip<T extends PriorityItem>({
                   className: item.current ? 'font-semibold' : undefined,
                 };
                 return item.href && !onSelect ? (
-                  <DropdownMenuItem key={item.id} asChild {...shared}>
+                  <DropdownMenuItem key={item.id} asChild {...shared} onSelect={() => { focusChosen.current = item.id; }}>
                     <Link href={item.href}>{item.label}</Link>
                   </DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem key={item.id} {...shared} onSelect={() => choose(item)}>
+                  <DropdownMenuItem key={item.id} {...shared} onSelect={() => { focusChosen.current = item.id; choose(item); }}>
                     {item.label}
                   </DropdownMenuItem>
                 );

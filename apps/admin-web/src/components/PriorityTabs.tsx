@@ -128,6 +128,19 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
     if (focusButton) moreRef.current?.focus();
   }, []);
 
+  // A tab picked from the menu gets the focus once it is current and in the row (after the state
+  // change or the navigation), not More beside it
+  const focusChosen = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusChosen.current;
+    if (!id || measuring || tabs[current]?.id !== id) return;
+    const index = rowTabs.findIndex((tab) => tab.id === id);
+    const el = index >= 0 ? (rowRef.current?.children[index]?.firstElementChild as HTMLElement | null | undefined) : undefined;
+    if (!el) return;
+    focusChosen.current = null;
+    el.focus({ preventScroll: true });
+  });
+
   useEffect(() => {
     if (!open) return;
     const onDown = (event: PointerEvent) => {
@@ -194,7 +207,11 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
             aria-expanded={open}
             aria-controls={open ? menuId : undefined}
             tabIndex={measuring ? -1 : undefined}
-            onClick={() => setOpen((o) => !o)}
+            onClick={() => {
+              // A pick that never became current is forgotten on the next open
+              focusChosen.current = null;
+              setOpen((o) => !o);
+            }}
             onKeyDown={onMoreKey}
             className={`inline-flex items-center gap-1 whitespace-nowrap ${tabClassName} ${idleClassName}`}
             data-testid={testId ? `${testId}-more` : undefined}
@@ -212,7 +229,10 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                       role="menuitem"
                       tabIndex={-1}
                       aria-current={tab.current ? 'page' : undefined}
-                      onClick={() => close(false)}
+                      onClick={() => {
+                        focusChosen.current = tab.id;
+                        close(false);
+                      }}
                       className={`aun-menu-item ${tab.current ? 'font-semibold' : ''}`}
                       data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
                     >
@@ -225,8 +245,9 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                       role="menuitem"
                       tabIndex={-1}
                       onClick={() => {
-                        // The chosen tab takes a slot in the row; focus goes back to More
-                        close(true);
+                        // The chosen tab takes a slot in the row and the focus
+                        focusChosen.current = tab.id;
+                        close(false);
                         onSelect?.(tab.id);
                       }}
                       className={`aun-menu-item w-full text-start ${tab.current ? 'font-semibold' : ''}`}
