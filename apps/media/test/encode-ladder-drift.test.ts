@@ -42,7 +42,7 @@ describe('ENCODE_LADDER matches the container', () => {
 		const at31 = ffmpegArgs({ input: 'i', out: 'o', rungs: ladderFor({ width: 640, height: 360 }), hasAudio: false, fps: ENCODE_LADDER.video.fpsCap.aboveFps }).join(' ');
 		assert.doesNotMatch(at31, /-r:v:0/);
 		const tol = ENCODE_LADDER.shortSideTolerance;
-		assert.equal(ladderFor({ width: 1920 - tol * 2, height: 1080 - tol }).at(-1).name, '1080p');
-		assert.equal(ladderFor({ width: 1920, height: 1080 - tol - 2 }).at(-1).name, '720p');
+		assert.equal(ladderFor({ width: 1920 - tol * 2, height: 1080 - tol }).at(-1)?.name, '1080p');
+		assert.equal(ladderFor({ width: 1920, height: 1080 - tol - 2 }).at(-1)?.name, '720p');
 	});
 });
