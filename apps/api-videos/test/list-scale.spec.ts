@@ -14,28 +14,31 @@ import { PlaylistsList } from '../src/endpoints/playlist/playlistsList';
 import { ChannelPlaylistsList } from '../src/endpoints/channel/channelPlaylistsList';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { runOwnershipPass } from '../src/lib/search/ownership';
-import { sectionFromIndex, TRENDING_CANDIDATES } from '../src/lib/sections/sectionIndex';
 import { withSearchSync } from '../src/lib/search/sync';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { SqliteD1, type TracedQuery } from './search-sqlite-d1';
 
 /**
- * Public lists on a large synthetic catalogue (30k videos): each request is
- * one keyset seek in the ownership index plus one R2 get per item shown,
- * whatever the catalogue size or the page depth; paging never repeats or
- * skips an item while videos are added and removed; playlists, live streams
- * and trending come from the indexes too.
+ * Public lists on a large synthetic catalogue (one channel with 30k videos):
+ * each request is one keyset seek in the ownership index plus one R2 get per
+ * item shown, whatever the catalogue size or the page depth; paging never
+ * repeats or skips an item while videos are added and removed; playlists and
+ * live streams come from the index too. (The home feed and trending are
+ * discovery's, lib/ranking, and tested there.)
  */
 
 const N = 30_000;
+/** Distinct uploaders (channel members) of the big channel */
 const CHANNELS = 300;
 const START = Date.parse('2024-01-01T00:00:00.000Z');
+/** The channel that holds the whole catalogue */
+const BIG = 'ch-big';
 
 function video(i: number, overrides: Record<string, unknown> = {}) {
 	return videoFixture({
 		id: `v${String(i).padStart(6, '0')}`,
 		title: `Video ${i}`,
-		channelId: `ch${i % CHANNELS}`,
+		channelId: BIG,
 		userId: `u${i % CHANNELS}`,
 		// One per minute; every 50th shares its minute with the previous video (ties on the sort key)
 		dateCreated: new Date(START + (i - (i % 50 === 0 && i ? 1 : 0)) * 60_000).toISOString(),
@@ -107,7 +110,7 @@ function assertSeeks(db: SqliteD1, traced: TracedQuery[], options: { continued?:
 	if (options.continued) assert.ok(continuedReads > 0, 'a continued page read the index from its position');
 }
 
-describe('home feed on a 30k-video catalogue', () => {
+describe('a channel with 30k videos', () => {
 	it('every page, however deep, is one index seek and one R2 get per video shown', async () => {
 		const { db, videos, objects, env } = await seed();
 		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
@@ -118,7 +121,7 @@ describe('home feed on a 30k-video catalogue', () => {
 			db.trace = [];
 			const callsBefore = videos.calls;
 			const queriesBefore = db.queries;
-			const result = await page(app, `/api/videos?limit=24${cursor ? `&cursor=${cursor}` : ''}`, env);
+			const result = await page(app, `/api/videos?channelId=${BIG}&limit=24${cursor ? `&cursor=${cursor}` : ''}`, env);
 			assert.equal(videos.calls - callsBefore, 24, `page ${p}: one get per video shown`);
 			assert.ok(db.queries - queriesBefore <= 3, `page ${p}: ${db.queries - queriesBefore} D1 queries`);
 			if (p === 0 || p === 39) assertSeeks(db, db.trace, { continued: p > 0 });
@@ -134,19 +137,19 @@ describe('home feed on a 30k-video catalogue', () => {
 		const expected = publicIds(objects);
 		// Walk to the middle of the catalogue with big pages, then measure one small page there
 		let cursor = '';
-		for (let p = 0; p < 130; p++) cursor = (await page(app, `/api/videos?limit=100${cursor ? `&cursor=${cursor}` : ''}`, env)).cursor;
+		for (let p = 0; p < 130; p++) cursor = (await page(app, `/api/videos?channelId=${BIG}&limit=100${cursor ? `&cursor=${cursor}` : ''}`, env)).cursor;
 		db.trace = [];
 		const before = videos.calls;
-		const deep = await page(app, `/api/videos?limit=24&cursor=${cursor}`, env);
+		const deep = await page(app, `/api/videos?channelId=${BIG}&limit=24&cursor=${cursor}`, env);
 		assert.equal(videos.calls - before, 24);
 		assert.deepEqual(deep.ids, expected.slice(13_000, 13_024));
 		assertSeeks(db, db.trace, { continued: true });
 	});
 
-	it('deep pages of the popular order and of a channel seek to the cursor too', async () => {
+	it('deep pages of the popular and date orders seek to the cursor too', async () => {
 		const { db, env } = await seed();
 		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
-		for (const url of ['/api/videos?sort=views&limit=50', '/api/videos?channelId=ch7&limit=10']) {
+		for (const url of [`/api/videos?channelId=${BIG}&sort=views&limit=50`, `/api/videos?channelId=${BIG}&sort=date&limit=10`]) {
 			let cursor = '';
 			for (let p = 0; p < 6; p++) {
 				db.trace = [];
@@ -168,7 +171,7 @@ describe('home feed on a 30k-video catalogue', () => {
 		const seen: string[] = [];
 		let cursor = '';
 		for (let p = 0; p < 200 && (p === 0 || cursor); p++) {
-			const result = await page(app, `/api/videos?limit=25${cursor ? `&cursor=${cursor}` : ''}`, env);
+			const result = await page(app, `/api/videos?channelId=${BIG}&limit=25${cursor ? `&cursor=${cursor}` : ''}`, env);
 			seen.push(...result.ids);
 			cursor = result.cursor;
 			if (!cursor) break;
@@ -205,7 +208,7 @@ describe('home feed on a 30k-video catalogue', () => {
 		for (const [app, seen] of [[owner, ownerSeen], [visitor, visitorSeen]] as const) {
 			let cursor = '';
 			for (let p = 0; p < 100 && (p === 0 || cursor); p++) {
-				const result = await page(app, `/api/videos?limit=100${cursor ? `&cursor=${cursor}` : ''}`, env);
+				const result = await page(app, `/api/videos?channelId=${BIG}&limit=100${cursor ? `&cursor=${cursor}` : ''}`, env);
 				seen.push(...result.ids);
 				cursor = result.cursor;
 			}
@@ -215,25 +218,6 @@ describe('home feed on a 30k-video catalogue', () => {
 			assert.ok(!visitorSeen.includes(id), `visitor does not see ${id}`);
 		}
 		assert.deepEqual(visitorSeen, publicIds(objects));
-	});
-
-	it('the category filter waits for rows written with the category column, then seeks its index', async () => {
-		const { db, objects, env } = await seed(3000);
-		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
-		// A row from before migration 0013 (columns version 1): the index cannot filter by category yet.
-		// Its stored version is ahead of R2's `uploaded` (a write path with a later clock), so the
-		// pass's upsert keeps it; the pass must still fill the columns it lacks.
-		db.db.prepare(`UPDATE content_ownership SET admin_cols = 1, video_category = NULL, source_version = ? WHERE kind = 'video' AND id = 'v000003'`).run(Date.now() + 86_400_000);
-		db.db.prepare(`UPDATE content_ownership SET admin_cols = 1, video_category = NULL WHERE kind = 'video' AND id = 'v000000'`).run();
-		const fallback = await page(app, '/api/videos?limit=10&category=fiqh', env);
-		assert.match(fallback.cursor, /^scan:/, 'bucket fallback until the pass rewrites the rows');
-		await runOwnershipPass(env as never, 'video', { maxPages: 100, pageSize: 1000 });
-		db.trace = [];
-		const indexed = await page(app, '/api/videos?limit=10&category=fiqh', env);
-		assert.deepEqual(indexed.ids, publicIds(objects).filter((id) => (objects[id] as any).category === 'fiqh').slice(0, 10));
-		assertSeeks(db, db.trace);
-		const upgraded = db.db.prepare(`SELECT admin_cols, video_category, is_public FROM content_ownership WHERE kind = 'video' AND id = 'v000003'`).get() as any;
-		assert.deepEqual({ ...upgraded }, { admin_cols: 2, video_category: 'fiqh', is_public: 0 }, 'columns filled, visibility kept');
 	});
 });
 
@@ -354,7 +338,7 @@ describe('playlists and live streams from the ownership index', () => {
 	});
 });
 
-describe('trending and view counts from the indexes', () => {
+describe('view counts in the indexes', () => {
 	async function searchEnv(n: number) {
 		const db = new SqliteD1();
 		const objects: Record<string, unknown> = {};
@@ -366,65 +350,21 @@ describe('trending and view counts from the indexes', () => {
 		return { db, objects, env: { SEARCH_DB: db, videos: new MemoryBucket(objects) } };
 	}
 
-	it('an old video being watched now becomes a trending candidate, and candidates come from index seeks', async () => {
-		const { db, objects, env } = await searchEnv(1500);
-		const old = 'v000010';
-		// Not among the newest 200 nor the 200 most viewed
-		(objects[old] as any).views = 3;
-		db.db.prepare('UPDATE search_videos SET views = 3 WHERE id = ?').run(old);
-		// Every scored candidate fits on this page (3 × 200 at most)
-		const all = { sort: 'trending' as const, limit: 50, offset: 0 };
-		const scored = async () => {
-			const ids = new Set<string>();
-			for (let offset = 0; offset < 600; offset += 50) {
-				const p = await sectionFromIndex(env as never, { ...all, offset });
-				for (const id of p!.trending!.keys()) ids.add(id);
-				if (p!.nextOffset === undefined) break;
-			}
-			return ids;
-		};
-		assert.ok(!(await scored()).has(old), 'neither new nor among the most viewed: not a candidate');
-		// Views well below the 200 most viewed (those have ~87k+), raised by the view counter now
-		await syncVideoViews(db as never, old, 50_000);
-		(objects[old] as any).views = 50_000;
-		db.trace = [];
-		assert.ok((await scored()).has(old), 'a candidate now: among the recently active videos');
-		const candidates = db.trace.find((q) => /UNION/.test(q.sql))!;
-		const plan = db.plan(candidates).join(' | ');
-		assert.doesNotMatch(plan, /SCAN search_videos(?! USING)/, plan);
-		assert.ok(TRENDING_CANDIDATES * 3 >= 600);
-	});
-
-	it('recent and popular pages count matches on the first page only, capped', async () => {
-		const { db, env } = await searchEnv(300);
-		db.trace = [];
-		const first = await sectionFromIndex(env as never, { sort: 'recent', limit: 20, offset: 0 });
-		assert.equal(first!.total, 300);
-		assert.equal(first!.nextOffset, 20);
-		db.trace = [];
-		const second = await sectionFromIndex(env as never, { sort: 'popular', limit: 20, offset: 20 });
-		assert.equal(second!.total, undefined);
-		assert.ok(!db.trace.some((q) => /COUNT\(\*\)/.test(q.sql)), 'no count on later pages');
-		const last = await sectionFromIndex(env as never, { sort: 'recent', limit: 20, offset: 280 });
-		assert.equal(last!.nextOffset, undefined);
-	});
-
-	it('view counts rise in both indexes (popularity, activity) and never go down', async () => {
+	it('view counts rise in both indexes (with popularity) and never go down', async () => {
 		const { db } = await searchEnv(3);
 		const v = video(1, { isPublic: true, views: 10 });
 		db.db.prepare('UPDATE search_videos SET views = 10 WHERE id = ?').run(v.id);
 		await syncOwnership(db as never, 'video', v.id, v, Date.now(), Date.now());
-		const row = () => db.db.prepare('SELECT views, popularity, activity_at, json_extract(payload, \'$.views\') AS pv FROM search_videos WHERE id = ?').get(v.id) as any;
+		const row = () => db.db.prepare('SELECT views, popularity, json_extract(payload, \'$.views\') AS pv FROM search_videos WHERE id = ?').get(v.id) as any;
 		const own = () => Number((db.db.prepare(`SELECT views FROM content_ownership WHERE kind = 'video' AND id = ?`).get(v.id) as any).views);
 		const before = row();
-		await syncVideoViews(db as never, v.id, 5000, 123);
+		await syncVideoViews(db as never, v.id, 5000);
 		const raised = row();
 		assert.equal(raised.views, 5000);
 		assert.equal(raised.pv, 5000);
-		assert.equal(raised.activity_at, 123);
 		assert.ok(raised.popularity > before.popularity);
 		assert.equal(own(), 5000);
-		await syncVideoViews(db as never, v.id, 40, 456);
+		await syncVideoViews(db as never, v.id, 40);
 		assert.equal(row().views, 5000, 'a late sync never lowers it');
 		assert.equal(own(), 5000);
 		// An edit of the video read before the flush landed (views 10): the index keeps the higher count
