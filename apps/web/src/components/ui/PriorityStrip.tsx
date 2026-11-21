@@ -94,14 +94,20 @@ export function PriorityStrip<T extends PriorityItem>({
     // Again whenever the widths are reset (new labels, fonts in)
   }, [widths, signature]);
 
+  // While the menu is open the row stays as it is: a page scrollbar coming or going (the open menu,
+  // content below changing height) would otherwise refit the row and unmount More with its menu
+  const openRef = useRef(false);
+  useIsomorphicLayoutEffect(() => {
+    openRef.current = open;
+  }, [open]);
   const measureAvailable = useCallback(() => {
     const holder = holderRef.current;
-    if (!holder) return;
+    if (!holder || openRef.current) return;
     const style = getComputedStyle(holder);
     setAvailable(holder.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
   }, []);
 
-  useIsomorphicLayoutEffect(measureAvailable, [measureAvailable, widths]);
+  useIsomorphicLayoutEffect(measureAvailable, [measureAvailable, widths, open]);
 
   useEffect(() => {
     const holder = holderRef.current;
