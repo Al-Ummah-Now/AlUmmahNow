@@ -18,6 +18,7 @@ import { HUMAN_CHECK_EN } from '../i18n-human-check';
 import { HELP_EN } from '../i18n-help';
 import { UPLOAD_STATUS_EN } from '../i18n-upload-status';
 import { SIGN_IN_BANNER_EN } from '../i18n-signin-banner';
+import { RAILS_EN } from '../i18n-rails';
 import { CAPTIONS_EN } from '../i18n-captions';
 import { AUDIO_TRACKS_EN } from '../i18n-audio-tracks';
 import { BILLING_EN } from '../i18n-billing';
@@ -145,6 +146,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
   uploadStatus: UPLOAD_STATUS_EN,
   signInBanner: SIGN_IN_BANNER_EN,
+  rails: RAILS_EN,
   captions: CAPTIONS_EN,
   audioTracks: AUDIO_TRACKS_EN,
   billing: BILLING_EN,
