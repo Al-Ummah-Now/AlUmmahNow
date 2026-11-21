@@ -142,8 +142,12 @@ export function PriorityStrip<T extends PriorityItem>({
   const menuItems = measuring ? [] : items.filter((_, i) => !shown!.has(i));
   const hasMenu = measuring || menuItems.length > 0;
 
-  // Radix closes the menu after a select; the strip only reports the choice
-  const choose = (item: T) => onSelect?.(item);
+  // Radix closes the menu after a select; the strip reports the choice once that is done. Applied
+  // at once, a choice made in state (analytics) moved the entry out of the menu inside Radix's own
+  // select, and the next press on More did nothing
+  const choose = (item: T) => {
+    window.setTimeout(() => onSelect?.(item), 0);
+  };
 
   return (
     <div ref={holderRef} className={`relative flex min-w-0 flex-1 items-center ${className}`} data-testid={testId} data-measuring={measuring || undefined}>
