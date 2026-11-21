@@ -14,9 +14,14 @@
  *   PUT    /subscriptions/me         { kinds: ['budget'|'spike'|'digest'|'capacity'], locale }
  *   GET    /databases                D1 capacity: every database's size, trend, days to 70%, activity, open alerts; the account total; the capacity rules
  *   PUT    /d1-limits                { maxDbGb, accountGb } the limits the capacity alerts judge against (ops:manage)
+ *   GET    /fixed                    fixed and other costs (COST-GAPS)
+ *   POST   /fixed                    { name, amountUsd, period: monthly|yearly, startDate, endDate?, note? } (ops:manage)
+ *   PUT    /fixed/:id                same body (ops:manage)
+ *   DELETE /fixed/:id                (ops:manage)
  */
 import { Hono, type Context } from 'hono';
-import { isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
+import { isCostProvider, parseFixedCostInput, validateCostCredential } from '@al-ummah/shared-types';
+import { createFixedCost, deleteFixedCost, listFixedCosts, updateFixedCost } from '../lib/fixedCosts';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { loadCostSettings } from '../lib/opsCost';
 import { logger } from '../lib/logger';
@@ -163,6 +168,39 @@ app.put('/subscriptions/me', async (c) => {
   const out = await setMySubscription(c.env as never, { ...actorOf(auth), email }, await c.req.json().catch(() => null));
   if (typeof out === 'string') return bad(c, out);
   return c.json({ success: true, result: out });
+});
+
+const FIXED_ID = /^[0-9a-f-]{36}$/;
+
+app.get('/fixed', async (c) => c.json({ success: true, result: await listFixedCosts(c.env.COSTS_DB as never) }));
+
+app.post('/fixed', async (c) => {
+  if (!canManage(c)) return forbidden(c);
+  const input = parseFixedCostInput(await c.req.json().catch(() => null));
+  if ('error' in input) return c.json({ success: false, code: 'invalid_fixed_cost', field: input.field, error: input.error }, 400);
+  const out = await createFixedCost(c.env as never, input, actorOf(c.get('auth')).id);
+  if (out === 'too_many') return c.json({ success: false, code: 'too_many', error: 'Too many fixed costs; remove one first' }, 409);
+  return c.json({ success: true, result: out }, 201);
+});
+
+app.put('/fixed/:id', async (c) => {
+  if (!canManage(c)) return forbidden(c);
+  const id = c.req.param('id');
+  if (!FIXED_ID.test(id)) return bad(c, 'id must be a fixed cost id');
+  const input = parseFixedCostInput(await c.req.json().catch(() => null));
+  if ('error' in input) return c.json({ success: false, code: 'invalid_fixed_cost', field: input.field, error: input.error }, 400);
+  const out = await updateFixedCost(c.env as never, id, input, actorOf(c.get('auth')).id);
+  if (!out) return c.json({ success: false, code: 'not_found', error: 'No such fixed cost' }, 404);
+  return c.json({ success: true, result: out });
+});
+
+app.delete('/fixed/:id', async (c) => {
+  if (!canManage(c)) return forbidden(c);
+  const id = c.req.param('id');
+  if (!FIXED_ID.test(id)) return bad(c, 'id must be a fixed cost id');
+  const removed = await deleteFixedCost(c.env as never, id, actorOf(c.get('auth')).id);
+  if (!removed) return c.json({ success: false, code: 'not_found', error: 'No such fixed cost' }, 404);
+  return c.json({ success: true, result: { id, removed: true } });
 });
 
 export default app;

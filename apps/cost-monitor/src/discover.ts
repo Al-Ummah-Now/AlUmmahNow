@@ -31,6 +31,24 @@ async function list(token: string, path: string, fetchImpl: typeof fetch): Promi
   return out;
 }
 
+/**
+ * What the Workers listing says about a Worker's logging: `logpush` (Workers Trace Events Logpush)
+ * and `observability` (Workers Logs on, and its head sampling rate). Fields it leaves out stay
+ * unknown, so the static manifest's values (or the default rate of 1) apply.
+ */
+export function workerLogging(w: Json): Pick<Resource, 'logpush' | 'logsRate'> {
+  const out: Pick<Resource, 'logpush' | 'logsRate'> = {};
+  if (typeof w.logpush === 'boolean') out.logpush = w.logpush;
+  const o = w.observability as { enabled?: unknown; head_sampling_rate?: unknown; logs?: { enabled?: unknown; head_sampling_rate?: unknown } } | undefined;
+  if (o && typeof o === 'object') {
+    const rate = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined);
+    const logsOn = o.logs?.enabled ?? o.enabled;
+    if (logsOn === false) out.logsRate = 0;
+    else if (logsOn === true) out.logsRate = rate(o.logs?.head_sampling_rate) ?? rate(o.head_sampling_rate) ?? 1;
+  }
+  return out;
+}
+
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const isDlq = (name: string) => /-dlq(-qa|-stage)?$/.test(name);
 
@@ -46,13 +64,13 @@ export async function discoverResources(token: string, accountId: string, envs: 
     list(token, `${a}/workers/durable_objects/namespaces`, fetchImpl),
   ]);
   const out: Resource[] = [];
-  const add = (kind: Resource['kind'], name: string, cfId?: string, envName = name) => {
+  const add = (kind: Resource['kind'], name: string, cfId?: string, envName = name, extra: Partial<Resource> = {}) => {
     if (!name || !isAlUmmahName(envName)) return;
     const env = envOfName(envName);
     if (!env || !envs.includes(env)) return;
-    out.push({ id: `${kind}:${name}`, kind, env, name, ...(cfId ? { cfId } : {}), ...(kind === 'queue' ? { dlq: isDlq(name) } : {}) });
+    out.push({ id: `${kind}:${name}`, kind, env, name, ...(cfId ? { cfId } : {}), ...(kind === 'queue' ? { dlq: isDlq(name) } : {}), ...extra });
   };
-  for (const w of workers) add('worker', str(w.id));
+  for (const w of workers) add('worker', str(w.id), undefined, str(w.id), workerLogging(w));
   for (const d of d1s) add('d1', str(d.name), str(d.uuid));
   for (const k of kvs) add('kv', str(k.title), str(k.id));
   for (const b of buckets) add('r2', str(b.name));
@@ -102,14 +120,19 @@ export interface StoredResource {
   name: string;
   cf_id: string | null;
   seen_at: string;
+  logpush?: number | null;
+  logs_rate?: number | null;
 }
 
 /** Upserts what discovery found and drops what it has not seen for DISCOVERY_TTL_DAYS. */
 export async function storeDiscovered(db: D1Database, resources: Resource[], now: Date): Promise<number> {
   const stamp = now.toISOString();
-  const sql = `INSERT INTO ops_resources (id, kind, env, name, cf_id, seen_at) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, env = excluded.env, name = excluded.name, cf_id = excluded.cf_id, seen_at = excluded.seen_at`;
-  const statements = resources.map((r) => db.prepare(sql).bind(r.id, r.kind, r.env, r.name, r.cfId ?? null, stamp));
+  const sql = `INSERT INTO ops_resources (id, kind, env, name, cf_id, seen_at, logpush, logs_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, env = excluded.env, name = excluded.name, cf_id = excluded.cf_id, seen_at = excluded.seen_at,
+      logpush = excluded.logpush, logs_rate = excluded.logs_rate`;
+  const statements = resources.map((r) =>
+    db.prepare(sql).bind(r.id, r.kind, r.env, r.name, r.cfId ?? null, stamp, r.logpush === undefined ? null : r.logpush ? 1 : 0, r.logsRate ?? null),
+  );
   for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
   await db.prepare('DELETE FROM ops_resources WHERE seen_at < ?').bind(new Date(now.getTime() - DISCOVERY_TTL_DAYS * 86_400_000).toISOString()).run();
   return resources.length;
@@ -117,11 +140,20 @@ export async function storeDiscovered(db: D1Database, resources: Resource[], now
 
 /** The stored set for `envs`, and when it was last refreshed (null when empty). */
 export async function loadDiscovered(db: D1Database, envs: readonly OpsEnv[]): Promise<{ resources: Resource[]; refreshedAt: string | null }> {
-  const { results } = await db.prepare('SELECT id, kind, env, name, cf_id, seen_at FROM ops_resources').all<StoredResource>();
+  const { results } = await db.prepare('SELECT id, kind, env, name, cf_id, seen_at, logpush, logs_rate FROM ops_resources').all<StoredResource>();
   const rows = (results ?? []).filter((r) => envs.includes(r.env) && isAlUmmahName(r.kind === 'do' ? r.name.split('/')[0] : r.name));
   const refreshedAt = rows.reduce<string | null>((max, r) => (max === null || r.seen_at > max ? r.seen_at : max), null);
   return {
-    resources: rows.map((r) => ({ id: r.id, kind: r.kind, env: r.env, name: r.name, ...(r.cf_id ? { cfId: r.cf_id } : {}), ...(r.kind === 'queue' ? { dlq: isDlq(r.name) } : {}) })),
+    resources: rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      env: r.env,
+      name: r.name,
+      ...(r.cf_id ? { cfId: r.cf_id } : {}),
+      ...(r.kind === 'queue' ? { dlq: isDlq(r.name) } : {}),
+      ...(r.logpush === 0 || r.logpush === 1 ? { logpush: r.logpush === 1 } : {}),
+      ...(typeof r.logs_rate === 'number' ? { logsRate: r.logs_rate } : {}),
+    })),
     refreshedAt,
   };
 }

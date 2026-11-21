@@ -251,7 +251,7 @@ export type CostAlertKind = (typeof COST_ALERT_KINDS)[number];
 // cost_product_daily (collector) or the older per-app sources.
 // ---------------------------------------------------------------------------------------------
 
-export const COST_PRODUCTS = ['workers', 'd1', 'kv', 'r2', 'queues', 'durable_objects', 'containers', 'workers_ai', 'bunny', 'resend', 'plan'] as const;
+export const COST_PRODUCTS = ['workers', 'd1', 'kv', 'r2', 'queues', 'durable_objects', 'containers', 'workers_ai', 'bunny', 'resend', 'plan', 'fixed'] as const;
 export type CostProduct = (typeof COST_PRODUCTS)[number];
 
 /** Envs a cost can belong to; 'account' is account-wide (Bunny, Resend, Workers AI, the plan). */

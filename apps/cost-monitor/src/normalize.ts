@@ -5,6 +5,7 @@
  */
 import type { ManifestIndex, Resource } from './manifest';
 import { MP4_OBJECTS, type OpsResponse } from './graphql';
+import { LOG_EVENTS_PER_REQUEST } from '@al-ummah/shared-types';
 
 export const METRICS = [
   'requests',
@@ -21,6 +22,15 @@ export const METRICS = [
   'backlog_avg',
   'backlog_max',
   'gb_seconds',
+  /** Workers CPU time as billed (sum, ms). */
+  'cpu_ms',
+  /** KV list and delete operations (also counted in writes; billed with their own allowances). */
+  'kv_lists',
+  'kv_deletes',
+  /** Workers Logs events, estimated: requests x logs sampling rate x LOG_EVENTS_PER_REQUEST. */
+  'log_events',
+  /** Requests of Workers with Logpush on. */
+  'logpush_requests',
 ] as const;
 export type Metric = (typeof METRICS)[number];
 
@@ -83,6 +93,9 @@ export function normalize(data: OpsResponse, index: ManifestIndex): NormalizeRes
     if (!r) continue;
     add(r, 'requests', g.sum.requests);
     add(r, 'errors', g.sum.errors);
+    if (typeof g.sum.cpuTimeUs === 'number') add(r, 'cpu_ms', g.sum.cpuTimeUs / 1000);
+    add(r, 'log_events', g.sum.requests * (r.resource.logsRate ?? 1) * LOG_EVENTS_PER_REQUEST);
+    if (r.resource.logpush) add(r, 'logpush_requests', g.sum.requests);
     max(r, 'cpu_p99', g.quantiles?.cpuTimeP99);
     if (g.sum.requests > 0 && typeof g.quantiles?.cpuTimeP50 === 'number') {
       const acc = cpuWeight.get(r) ?? { w: 0, sum: 0 };
@@ -164,7 +177,10 @@ export function normalize(data: OpsResponse, index: ManifestIndex): NormalizeRes
     const r = row(index.find('kv', g.dimensions.namespaceId), g.dimensions.datetimeHour);
     if (!r) continue;
     add(r, 'requests', g.sum.requests);
-    add(r, /read/i.test(g.dimensions.actionType) ? 'reads' : 'writes', g.sum.requests);
+    const action = g.dimensions.actionType;
+    add(r, /read/i.test(action) ? 'reads' : 'writes', g.sum.requests);
+    if (/list/i.test(action)) add(r, 'kv_lists', g.sum.requests);
+    else if (/delete/i.test(action)) add(r, 'kv_deletes', g.sum.requests);
   }
   for (const g of data.kvStorage ?? []) {
     const r = row(index.find('kv', g.dimensions.namespaceId), g.dimensions.datetimeHour);

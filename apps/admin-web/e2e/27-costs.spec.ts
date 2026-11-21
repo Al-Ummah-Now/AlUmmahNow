@@ -6,22 +6,26 @@
  * shows the "Set a Cloudflare token" banner over all-zero figures. The super admin opts into the
  * weekly digest and back out, changes the budget and puts it back (both checked after a reload),
  * and sees every connection "Not set". No key is ever saved: the client-side check refuses a
- * malformed one, and Remove stays disabled while nothing is set. An admin without ops:manage sees
- * neither the connections nor the settings.
+ * malformed one, and Remove stays disabled while nothing is set. The super admin adds a fixed cost
+ * (COST-GAPS), changes it and removes it, each checked in the budget and the audit log. An admin
+ * without ops:manage sees neither the connections nor the settings, and reads the fixed costs only.
  *
- * The alert settings are global, so the spec runs in the shared-state project and leaves them
- * exactly as it found them, including the row's author on the local stack; the subscription is
+ * The alert settings and the fixed costs are global, so the spec runs in the shared-state project
+ * and leaves them exactly as it found them (its fixed cost and that cost's audit rows are deleted), including the row's author on the local stack; the subscription is
  * the run's own super admin's and goes back to what it was.
  */
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, storageStatePath } from './support/env';
-import { expectDirection, expectNoAxeViolations, horizontalOverflow, setPreferences } from './support/ui';
+import { expectDirection, expectNoAxeViolations, horizontalOverflow, pickOption, setPreferences } from './support/ui';
 import { stackSql } from './support/local-stack';
 
 interface Settings { budgetUsd: number | null; budgetLevels: number[]; [k: string]: unknown }
+interface FixedItem { id: string; name: string; amountUsd: number; period: string }
 interface Dashboard {
   canManage: boolean;
+  fixed: { items: FixedItem[]; mtd: number; projected: number };
+  budget: { parts: { fixed: { projected: number } } };
   settings: Settings;
   collector: { tokenSource: string };
   connections: { provider: string; set: boolean }[];
@@ -29,6 +33,9 @@ interface Dashboard {
 }
 
 const COSTS_DB = 'al-ummah-now-costs';
+const REPORTS_DB = 'al-ummah-now-reports';
+/** The fixed cost this run adds: its name carries the run, so a failed run's item is found and removed. */
+const FIXED_NAME = `E2E Apple Developer ${process.env.E2E_RUN_ID ?? Date.now()}`;
 const superToken = () => readTokens().superadmin;
 
 async function dashboard(token = superToken()): Promise<{ status: number; result?: Dashboard; code?: unknown }> {
@@ -53,6 +60,7 @@ test.describe('costs (super admin)', () => {
 
   let original: Dashboard | null = null;
   let settingsRow: { updated_by: string; updated_at: string }[] | null = null;
+  const fixedIds: string[] = [];
 
   test.beforeAll(async () => {
     const probe = await dashboard();
@@ -63,6 +71,10 @@ test.describe('costs (super admin)', () => {
 
   test.afterAll(async () => {
     if (!original) return;
+    // This run's fixed cost, if a test failed before removing it, and every audit row it left
+    const mineLeft = ((await dashboard()).result?.fixed.items ?? []).filter((i) => i.name === FIXED_NAME);
+    for (const item of mineLeft) expect((await adminApi(`/api/costs/fixed/${item.id}`, { method: 'DELETE', token: superToken() })).status, 'fixed cost removed').toBe(200);
+    if (LOCAL_STACK && fixedIds.length) await stackSql(REPORTS_DB, `DELETE FROM site_settings_log WHERE key IN (${fixedIds.map((id) => `'costs:fixed:${id}'`).join(', ')})`);
     const settings = await adminApi('/api/costs/settings', { method: 'PUT', token: superToken(), body: JSON.stringify(original.settings) });
     expect(settings.status, 'alert settings restored').toBe(200);
     const mine = await adminApi('/api/costs/subscriptions/me', { method: 'PUT', token: superToken(), body: JSON.stringify({ kinds: original.me.kinds, locale: original.me.locale }) });
@@ -204,6 +216,79 @@ test.describe('costs (super admin)', () => {
     expect((await dashboard()).result!.settings.budgetUsd).toBe(before);
   });
 
+  test('COSTS-09 a super admin adds a fixed cost, changes it and removes it; the budget and the audit log follow', async ({ page }) => {
+    const d = await skipUnlessReady();
+    const baseProjected = d.fixed.projected;
+    await page.goto('/costs#fixed-costs');
+    const section = page.getByTestId('costs-fixed');
+    await expect(section.getByRole('heading', { level: 2, name: 'Fixed and other costs' })).toBeVisible();
+    const form = page.getByTestId('costs-fixed-form');
+    await expect(form).toHaveAttribute('data-mode', 'add');
+
+    // Refused before anything is sent: no name, then no amount
+    await page.getByTestId('costs-fixed-save').click();
+    await expect(page.getByTestId('costs-fixed-name-error')).toHaveText('Enter a name of up to 80 characters.');
+    await page.getByTestId('costs-fixed-name').fill(FIXED_NAME);
+    await page.getByTestId('costs-fixed-amount-input').fill('0');
+    await page.getByTestId('costs-fixed-save').click();
+    await expect(page.getByTestId('costs-fixed-amountUsd-error')).toHaveText('Enter an amount above zero, up to $100,000.00.');
+    expect((await dashboard()).result!.fixed.items.some((i) => i.name === FIXED_NAME)).toBe(false);
+
+    // $99 a year from January: a twelfth, $8.25, in every whole month
+    await page.getByTestId('costs-fixed-amount-input').fill('99');
+    await pickOption(page.getByTestId('costs-fixed-period'), 'yearly');
+    const start = page.getByTestId('costs-fixed-start-input');
+    await start.fill('2026-01-10');
+    await start.press('Tab');
+    await page.getByTestId('costs-fixed-note').fill('App Store and TestFlight');
+    await page.getByTestId('costs-fixed-save').click();
+    await expect(page.getByTestId('costs-fixed-feedback-ok')).toHaveText(`${FIXED_NAME} added.`);
+    const row = page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME });
+    await expect(row.getByTestId('costs-fixed-amount')).toHaveText('$99.00 a year');
+    await expect(row.getByTestId('costs-fixed-share')).toHaveText('$8.25 this month');
+    const added = (await dashboard()).result!;
+    const item = added.fixed.items.find((i) => i.name === FIXED_NAME)!;
+    expect(item).toMatchObject({ amountUsd: 99, period: 'yearly' });
+    fixedIds.push(item.id);
+    expect(added.fixed.projected).toBeCloseTo(baseProjected + 8.25, 2);
+    expect(added.budget.parts.fixed.projected).toBeCloseTo(added.fixed.projected, 2);
+
+    // Edit: the form takes the item, $120 a year is $10 a month
+    await row.getByTestId('costs-fixed-edit').click();
+    await expect(form).toHaveAttribute('data-mode', 'edit');
+    await expect(page.getByTestId('costs-fixed-name')).toHaveValue(FIXED_NAME);
+    await page.getByTestId('costs-fixed-amount-input').fill('120');
+    await page.getByTestId('costs-fixed-save').click();
+    await expect(page.getByTestId('costs-fixed-feedback-ok')).toHaveText(`${FIXED_NAME} saved.`);
+    await expect(row.getByTestId('costs-fixed-share')).toHaveText('$10.00 this month');
+    await page.reload();
+    await expect(page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME }).getByTestId('costs-fixed-amount')).toHaveText('$120.00 a year');
+
+    // Remove asks first (Cancel keeps it), then it is gone and out of the budget
+    await page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME }).getByTestId('costs-fixed-remove').click();
+    const dialog = page.getByTestId('costs-fixed-remove-dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME })).toHaveCount(1);
+    await page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME }).getByTestId('costs-fixed-remove').click();
+    await dialog.getByRole('button', { name: 'Remove' }).click();
+    await expect(page.getByTestId('costs-fixed-feedback-ok')).toHaveText(`${FIXED_NAME} removed.`);
+    await expect(page.getByTestId('costs-fixed-row').filter({ hasText: FIXED_NAME })).toHaveCount(0);
+    const after = (await dashboard()).result!;
+    expect(after.fixed.items.some((i) => i.id === item.id)).toBe(false);
+    expect(after.fixed.projected).toBeCloseTo(baseProjected, 2);
+
+    if (LOCAL_STACK) {
+      // Every change audited: added (no before), changed (before and after), removed
+      const audit = await stackSql<{ old_value: string | null; new_value: string }>(REPORTS_DB, `SELECT old_value, new_value FROM site_settings_log WHERE key = 'costs:fixed:${item.id}' ORDER BY created_at, rowid`);
+      expect(audit.map((a) => [a.old_value === null, JSON.parse(a.new_value).amountUsd ?? JSON.parse(a.new_value).removed])).toEqual([
+        [true, 99],
+        [false, 120],
+        [false, true],
+      ]);
+    }
+  });
+
   test('COSTS-06 Arabic is right to left, and the page fits a phone without sideways scrolling', async ({ page }) => {
     await skipUnlessReady();
     await page.setViewportSize({ width: 375, height: 812 });
@@ -295,6 +380,14 @@ test.describe('costs (admin without ops:manage)', () => {
     await expect(page.getByTestId('costs-my-alerts')).toBeVisible();
     await expect(page.getByTestId('costs-connections')).toHaveCount(0);
     await expect(page.getByTestId('costs-thresholds')).toHaveCount(0);
+    // Fixed costs: read only, and the API refuses a change
+    await expect(page.getByTestId('costs-fixed')).toBeVisible();
+    await expect(page.getByTestId('costs-fixed-form')).toHaveCount(0);
+    await expect(page.getByTestId('costs-fixed-edit')).toHaveCount(0);
+    expect((await adminApi('/api/costs/fixed', { method: 'POST', token: readTokens().admin, body: JSON.stringify({ name: 'Not allowed', amountUsd: 1, period: 'monthly', startDate: '2026-11-01' }) })).status).toBe(403);
+    // Cloudflare at list price against billed, with the shared-account note
+    await expect(page.getByTestId('costs-cloudflare')).toBeVisible();
+    await expect(page.getByTestId('costs-cf-shared')).toContainText('shared with other projects');
     const d = probe.result!;
     const cloudflare = d.connections.find((c) => c.provider === 'cloudflare');
     if (['none', 'unknown'].includes(d.collector.tokenSource) && !cloudflare?.set) {

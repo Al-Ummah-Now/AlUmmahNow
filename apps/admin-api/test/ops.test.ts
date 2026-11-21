@@ -10,7 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import opsRouter, { parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
-import { budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
+import { alertEvent, budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -283,7 +283,9 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     const db = costsD1();
     const ins = (row: Record<string, unknown>) =>
       db.prepare(`INSERT INTO ops_daily (${Object.keys(row).join(', ')}) VALUES (${Object.keys(row).map(() => '?').join(', ')})`).bind(...Object.values(row)).run();
-    for (let i = 1; i <= 15; i++) await ins({ day: day(i), resource_id: 'worker:videos', kind: 'worker', env: 'production', name: 'videos', cost_usd: 20, updated_at: 'x' });
+    // Billed after the included usage (COST-GAPS): 22M D1 rows written a day is $258 by the 15th
+    // (308M − 50M included) and $599 projected
+    for (let i = 1; i <= 15; i++) await ins({ day: day(i), resource_id: 'd1:al-ummah-now-d1', kind: 'd1', env: 'production', name: 'al-ummah-now-d1', writes: 22e6, cost_usd: 22, updated_at: 'x' });
     const reported: string[] = [];
     const resolved: string[] = [];
     const sink: AlertSink = {
@@ -306,22 +308,20 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
 });
 
 describe('/api/ops/costs', () => {
-  it('budget across sources, idle projection, 30-day trend per env and the top drivers', async () => {
+  it('is gone: spend lives on the Costs page (owner 2026-11-21); the overview keeps a one-line total', async () => {
     const { req, env } = setup(['Admin']);
     await seed(env.COSTS_DB!);
-    const r = await req('/api/ops/costs');
-    assert.equal(r.status, 200);
-    const { result } = (await r.json()) as { result: any };
-    assert.equal(result.budget.capUsd, null);
-    assert.deepEqual(result.budget.levels, [0.5, 0.8, 1]);
-    assert.equal(result.trend.days.length, 30);
-    assert.deepEqual(result.trend.series.map((s: any) => s.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai']);
-    assert.deepEqual(result.drivers.map((d: any) => d.id).sort(), ['worker:videos', 'worker:videos-qa']);
-    assert.equal(result.drivers[0].daily.days.length, 14);
-    assert.equal(typeof result.idle.monthlyUsd, 'number');
-    assert.equal(result.idle.targetUsd, 50);
-    const qa = (await (await req('/api/ops/costs?env=production')).json()) as { result: any };
-    assert.deepEqual(qa.result.drivers.map((d: any) => d.id), ['worker:videos']);
-    assert.equal((await req('/api/ops/costs?env=dev')).status, 400);
+    assert.equal((await req('/api/ops/costs')).status, 404);
+    const o = (await (await req('/api/ops/overview?env=production')).json()) as { result: { cost: { spendMtd: number | null } } };
+    assert.equal(typeof o.result.cost.spendMtd, 'number');
+  });
+});
+
+describe('cost alert links (spend lives on Costs, owner 2026-11-21)', () => {
+  it('opens Costs from the Errors page: a jump the drivers table, a budget alert the page', () => {
+    const at = new Date('2026-11-21T12:00:00Z');
+    const event = (key: string) => alertEvent({ key, title: 't', message: 'm', value: 1, kind: key.includes('spike') ? 'spike' : 'budget', data: {} as never }, 'production', at);
+    assert.equal(event('ops-cost:spike:qa:d1:auth-qa')?.action?.itemUrl, '/costs#drivers');
+    assert.equal(event('ops-cost:budget:2026-11:80')?.action?.itemUrl, '/costs');
   });
 });

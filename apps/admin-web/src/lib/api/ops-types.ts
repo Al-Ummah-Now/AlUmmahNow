@@ -23,7 +23,8 @@ export interface OpsOverview {
   workers: { requests: number; requestsBefore: number; errorRate: number | null; errorRateBefore: number | null; cpuP99: number | null };
   d1: { latencyP99: number | null; latencyP99Before: number | null };
   queues: { worst: { name: string; backlog: number } | null; dlqMessages: number; at: string | null };
-  cost: { env: OpsProjection; all: OpsProjection; capUsd: number | null; estimated: boolean };
+  /** The month's spend (every source, as on Costs; null when it could not be read) for the one-line pointer to Costs. */
+  cost: { env: OpsProjection; all: OpsProjection; capUsd: number | null; spendMtd: number | null; estimated: boolean };
   dataAsOf: string | null;
   stale: boolean;
   alerts: { key: string; rule_id: string; resource_id: string; value: number | null; opened_at: string }[];
@@ -49,57 +50,3 @@ export interface OpsResource {
   monthCostUsd: number;
 }
 
-export type OpsBudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
-export type OpsCostPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'plan';
-/** Series of the daily spend chart: the three envs' Cloudflare spend and the other sources. */
-export const OPS_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai'] as const;
-export type OpsTrendKey = (typeof OPS_TREND_KEYS)[number];
-
-export interface OpsSpike {
-  key: string;
-  env: string;
-  resourceId: string | null;
-  name: string;
-  day: string;
-  cost: number;
-  baseline: number;
-}
-
-/** admin-api GET /api/ops/costs: spend across every source against the configured monthly budget. */
-export interface OpsCosts {
-  env: 'all' | OpsEnv;
-  budget: {
-    capUsd: number | null;
-    month: string;
-    mtd: number;
-    projected: number;
-    share: number | null;
-    projectedShare: number | null;
-    level: OpsBudgetLevel;
-    projectedLevel: OpsBudgetLevel;
-    parts: Record<OpsCostPart, { mtd: number; projected: number }>;
-    levels: number[];
-  };
-  idle: {
-    monthlyUsd: number;
-    targetUsd: number;
-    byEnv: Partial<Record<OpsEnv, number>>;
-    parts: Record<OpsCostPart, number>;
-    top: { id: string; env: string; name: string; kind: OpsKind; monthlyUsd: number }[];
-    days: string[];
-  };
-  trend: { days: string[]; series: { key: OpsTrendKey; values: number[] }[] };
-  drivers: {
-    id: string;
-    env: OpsEnv;
-    kind: OpsKind;
-    name: string;
-    mtdUsd: number;
-    idleMonthlyUsd: number;
-    spike: OpsSpike | null;
-    daily: { days: string[]; values: number[] };
-  }[];
-  spikes: OpsSpike[];
-  estimated: boolean;
-  sources: { bunny: boolean; ai: boolean };
-}

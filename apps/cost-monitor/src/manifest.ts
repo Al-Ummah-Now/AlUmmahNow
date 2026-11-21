@@ -30,6 +30,10 @@ export interface Resource {
    * and costs never count them twice.
    */
   slice?: { bucket: string; objectLike: string };
+  /** Workers: Logpush is on (Workers Trace Events Logpush bills its requests). */
+  logpush?: boolean;
+  /** Workers: the Workers Logs head sampling rate (0-1); unknown = 1, as every config here sets. */
+  logsRate?: number;
 }
 
 const SUFFIX: Record<OpsEnv, string> = { production: '', stage: '-stage', qa: '-qa' };
@@ -133,6 +137,9 @@ const QUEUES: Record<OpsEnv, Record<string, string>> = {
   },
 };
 
+/** Workers with `logpush: true` in their wrangler config (web and admin-web production/stage). Discovery's listing wins when it says otherwise. */
+export const LOGPUSH_WORKERS = new Set(['al-ummah-now-production', 'al-ummah-now-stage', 'al-ummah-admin-web']);
+
 const isDlqName = (name: string) => /-dlq(-qa|-stage)?$/.test(name);
 
 /** Every manifest resource of the given envs. */
@@ -140,7 +147,7 @@ export function manifestFor(envs: readonly OpsEnv[]): Resource[] {
   const out: Resource[] = [];
   for (const env of envs) {
     const s = SUFFIX[env];
-    for (const name of [...WORKERS[env], ...WORKER_BASES.map((b) => b + s)]) out.push({ id: `worker:${name}`, kind: 'worker', env, name });
+    for (const name of [...WORKERS[env], ...WORKER_BASES.map((b) => b + s)]) out.push({ id: `worker:${name}`, kind: 'worker', env, name, ...(LOGPUSH_WORKERS.has(name) ? { logpush: true } : {}) });
     for (const name of BUCKET_BASES.map((b) => b + s)) out.push({ id: `r2:${name}`, kind: 'r2', env, name });
     for (const slice of SLICES) {
       const bucket = slice.bucket + s;
@@ -190,8 +197,14 @@ export function mergeResources(base: Resource[], discovered: Resource[]): Resour
   const seen = new Set(base.map(key));
   const ids = new Set(base.map((r) => r.id));
   const out = [...base];
+  const byKey = new Map(out.map((r, i) => [key(r), i]));
   for (const r of discovered) {
-    if (seen.has(key(r)) || ids.has(r.id)) continue;
+    if (seen.has(key(r)) || ids.has(r.id)) {
+      // The listing knows a Worker's logging better than the static list: carry its flags over
+      const i = byKey.get(key(r)) ?? out.findIndex((x) => x.id === r.id);
+      if (i >= 0 && r.kind === 'worker') out[i] = { ...out[i]!, ...(r.logpush !== undefined ? { logpush: r.logpush } : {}), ...(r.logsRate !== undefined ? { logsRate: r.logsRate } : {}) };
+      continue;
+    }
     seen.add(key(r));
     ids.add(r.id);
     out.push(r);

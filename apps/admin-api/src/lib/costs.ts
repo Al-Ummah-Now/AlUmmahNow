@@ -24,20 +24,23 @@ import { logger } from './logger';
 import {
   BASELINE_DAYS,
   PLAN_BASE_USD,
-  budgetStatus,
+  costDrivers,
   costWindowStart,
   findSpikes,
   fullDays,
+  idleProjection,
+  loadBudget,
   loadCostSettings,
-  loadExtraDays,
   loadProductDays,
   loadResourceDays,
   projectMonth,
   spikeRuleOf,
   sumByDay,
+  trendBySource,
   type DayCost,
   type ResourceDay,
 } from './opsCost';
+import { CF_METERS, fixedCostMonthShare } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
 import { loadD1Limits, parseD1LimitsInput } from './d1Capacity';
 import type { D1Limits } from '@al-ummah/shared-types';
@@ -345,7 +348,7 @@ export interface Mover {
 const sumDays = (list: DayCost[], days: string[]) => list.filter((d) => days.includes(d.day)).reduce((s, d) => s + num(d.cost), 0);
 
 /** Per-product month to date, projection and the last 7 full days against the 7 before. */
-export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[]; resend: DayCost[] }, now: Date): ProductLine[] {
+export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[]; resend: DayCost[] }, now: Date, fixed: { mtd: number; projected: number } = { mtd: 0, projected: 0 }): ProductLine[] {
   const last = fullDays(now, BASELINE_DAYS);
   const prev = fullDays(new Date(Date.parse(`${last[0]}T12:00:00Z`)), BASELINE_DAYS);
   const series = new Map<CostProduct, DayCost[]>();
@@ -365,11 +368,13 @@ export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCo
   }
   const plan = projectMonth([], now);
   out.push({ product: 'plan', mtd: round2((PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth), projected: PLAN_BASE_USD, last7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth), prev7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth) });
+  // Fixed and other costs: flat over the month, like the plan
+  if (fixed.projected > 0) out.push({ product: 'fixed', mtd: round2(fixed.mtd), projected: round2(fixed.projected), last7: round2((fixed.projected * 7) / plan.daysInMonth), prev7: round2((fixed.projected * 7) / plan.daysInMonth) });
   return out.filter((l) => l.mtd > 0 || l.projected > 0 || l.last7 > 0 || l.prev7 > 0 || l.product === 'plan').sort((a, b) => b.mtd - a.mtd);
 }
 
 /** Month to date per environment; account-wide costs (Bunny, Workers AI, Resend, the plan) under 'account'. */
-export function envLines(resourceDays: ResourceDay[], productDays: { day: string; env: string; product: string; cost: number }[], extras: { bunny: DayCost[]; ai: DayCost[]; resend: DayCost[]; containers: DayCost[]; sources: { containers: string } }, now: Date): Record<string, number> {
+export function envLines(resourceDays: ResourceDay[], productDays: { day: string; env: string; product: string; cost: number }[], extras: { bunny: DayCost[]; ai: DayCost[]; resend: DayCost[]; containers: DayCost[]; sources: { containers: string } }, now: Date, fixedMtd = 0): Record<string, number> {
   const monthStart = `${now.toISOString().slice(0, 7)}-01`;
   const out: Record<string, number> = { production: 0, stage: 0, qa: 0, account: 0 };
   for (const r of resourceDays) if (r.day >= monthStart && r.env in out) out[r.env]! += num(r.cost);
@@ -380,7 +385,7 @@ export function envLines(resourceDays: ResourceDay[], productDays: { day: string
   }
   for (const list of [extras.bunny, extras.ai, extras.resend]) out.account! += list.filter((d) => d.day >= monthStart).reduce((s, d) => s + d.cost, 0);
   const plan = projectMonth([], now);
-  out.account! += (PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth;
+  out.account! += (PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth + fixedMtd;
   for (const k of Object.keys(out)) out[k] = round2(out[k]!);
   return out;
 }
@@ -446,27 +451,51 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
   const back14 = new Date(now.getTime() - 15 * 86_400_000).toISOString().slice(0, 10);
   const from = back14 < since ? back14 : since;
   const [resourceDays, productDays] = await Promise.all([loadResourceDays(env, from), loadProductDays(env, from)]);
-  const extras = await loadExtraDays(env, from, productDays);
-  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels);
-  const products = productLines(resourceDays, extras, now);
+  const { budget, billed, fixed, extras } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
+  const products = productLines(resourceDays, extras, now, fixed);
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
-  const trendDays = [...fullDays(now, 29), now.toISOString().slice(0, 10)];
-  const totalByDay = new Map<string, number>();
-  for (const list of [sumByDay(resourceDays), extras.bunny, extras.containers, extras.ai, extras.resend]) for (const d of list) totalByDay.set(d.day, (totalByDay.get(d.day) ?? 0) + num(d.cost));
+  const idle = idleProjection(resourceDays, extras, now, fixed.projected);
+  // A fixed cost's day: its month's share for that one day, when it is active then
+  const fixedDaily = (day: string) => fixed.items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
+  const trend = trendBySource(resourceDays, extras, fixedDaily, now);
   const openAlerts = (await env.COSTS_DB!.prepare('SELECT key, value, opened_at FROM ops_cost_alerts ORDER BY opened_at DESC').all<{ key: string; value: number; opened_at: string }>().catch(() => ({ results: [] }))).results ?? [];
   const lastRun = await env.COSTS_DB!
     .prepare("SELECT finished_at FROM collector_runs WHERE kind = 'hourly' AND status IN ('ok', 'partial') ORDER BY started_at DESC LIMIT 1")
     .first<{ finished_at: string | null }>()
     .catch(() => null);
+  const nonCloudflareLinear = projectMonth(sumByDay([...extras.bunny, ...extras.containers, ...extras.ai, ...extras.resend]), now).linear;
   return {
     budget,
     // Linear: the month so far scaled to the whole month; trailing: the last 7 full days carried forward (drives alerts)
-    forecast: { linear: round2(projectMonth(sumByDay([...sumByDay(resourceDays), ...extras.bunny, ...extras.containers, ...extras.ai, ...extras.resend]), now).linear + PLAN_BASE_USD), trailing: budget.projected },
+    forecast: { linear: round2(nonCloudflareLinear + billed.linear.total + PLAN_BASE_USD + fixed.projected), trailing: budget.projected },
     products,
-    envs: envLines(resourceDays, productDays, extras, now),
+    envs: envLines(resourceDays, productDays, extras, now, fixed.mtd),
     movers: topMovers(resourceDays, products, now),
     spikes: spikes.slice(0, 10),
-    trend: { days: trendDays, values: trendDays.map((d) => round2(totalByDay.get(d) ?? 0)) },
+    // The daily total (every source), and the same days per env and source for the stacked chart
+    trend: { days: trend.days, values: trend.days.map((_, i) => round2(trend.series.reduce((s, x) => s + x.values[i]!, 0))), series: trend.series },
+    // Cloudflare at list price against what it bills after the account's included usage
+    cloudflare: {
+      billedMtd: billed.mtd.total,
+      billedProjected: billed.projected.total,
+      listMtd: billed.mtd.listTotal,
+      lines: billed.mtd.lines
+        .map((l) => ({
+          key: l.key,
+          used: l.used,
+          included: l.included,
+          billable: l.billable,
+          cost: l.cost,
+          listCost: Math.round(l.listCost * 100) / 100,
+          projectedCost: billed.projected.lines.find((p) => p.key === l.key)?.cost ?? 0,
+          source: CF_METERS[l.key].source,
+          billed: (CF_METERS[l.key] as { billed?: boolean }).billed !== false,
+        }))
+        .filter((l) => l.used > 0 || l.source === 'none'),
+    },
+    fixed: { items: fixed.items, mtd: fixed.mtd, projected: fixed.projected },
+    idle,
+    drivers: costDrivers(resourceDays, idle, spikes, now),
     sources: extras.sources,
     alerts: openAlerts,
     settings,

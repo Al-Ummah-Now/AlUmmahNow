@@ -5,10 +5,10 @@
  * (src/index.ts); reads need `ops:read` (admins), threshold changes `ops:manage`
  * (super admins, audited in site_settings_log).
  *
- *   GET /overview?env=            tiles: 24h vs previous 24h, worst latency/backlog, MTD cost vs budget, data age, open alerts
+ *   GET /overview?env=            tiles: 24h vs previous 24h, worst latency/backlog, data age, open alerts, and the month's
+ *                                 total spend for the one-line link to Costs (spend lives on the Costs page, owner 2026-11-21)
  *   GET /series?env&kind&metric&resource&range=24h|7d|30d|13m   points for the shared chart (hourly ≤ 7d, daily beyond)
  *   GET /resources?env&kind       one row per resource: today's numbers, a 7-day sparkline, month-to-date cost
- *   GET /costs?env=all|<env>      spend: monthly budget meter (all sources), projected idle cost, daily trend per env, top drivers
  *   GET /thresholds               rules and open alerts
  *   PUT /thresholds/:id           { value?, enabled?, windowHours? }
  */
@@ -16,19 +16,7 @@ import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
-import {
-  budgetStatus,
-  costWindowStart,
-  findSpikes,
-  fullDays,
-  idleProjection,
-  loadCostSettings,
-  loadExtraDays,
-  loadResourceDays,
-  projectMonth,
-  spikeRuleOf,
-  sumByDay,
-} from '../lib/opsCost';
+import { loadBudget, loadCostSettings, projectMonth } from '../lib/opsCost';
 import { auditOriginJson } from '../lib/request-origin';
 
 export { projectMonth, type Projection } from '../lib/opsCost';
@@ -132,6 +120,9 @@ app.get('/overview', async (c) => {
     .first<{ finished_at: string | null; status: string }>();
   const alerts = (await db.prepare('SELECT key, rule_id, resource_id, value, opened_at FROM ops_alerts WHERE env = ? ORDER BY opened_at DESC').bind(env).all()).results ?? [];
   const envs = ((await db.prepare('SELECT DISTINCT env FROM ops_daily').all<{ env: string }>()).results ?? []).map((r) => r.env);
+  const settings = await loadCostSettings(c.env.COSTS_DB);
+  // Best effort: the spend line is a pointer to Costs, never a reason for the page to fail
+  const spend = await loadBudget(c.env, now, settings).then((b) => b.budget).catch(() => ({ mtd: null as number | null }));
 
   return c.json({
     success: true,
@@ -150,8 +141,9 @@ app.get('/overview', async (c) => {
       cost: {
         env: projectMonth(byDay((e) => e === env), now),
         all: projectMonth(byDay(() => true), now),
-        // The one admin-set budget (Costs → Alert settings, #1427)
-        capUsd: (await loadCostSettings(c.env.COSTS_DB)).budgetUsd,
+        // The one admin-set budget (Costs → Alert settings, #1427) and the month's spend, every source
+        capUsd: settings.budgetUsd,
+        spendMtd: spend.mtd,
         estimated: true,
       },
       dataAsOf: lastRun?.finished_at ?? null,
@@ -229,72 +221,6 @@ app.get('/resources', async (c) => {
   });
   resources.sort((a, b) => num(b.metrics[spark]) - num(a.metrics[spark]) || a.name.localeCompare(b.name));
   return c.json({ success: true, result: { env, kind, resources } });
-});
-
-/** Top drivers listed on the cost tab (by month-to-date cost). */
-export const COST_DRIVERS = 25;
-
-app.get('/costs', async (c) => {
-  const envFilter = c.req.query('env') ?? 'all';
-  if (envFilter !== 'all' && !(OPS_ENVS as readonly string[]).includes(envFilter)) return bad(c, 'env must be all, production, stage or qa');
-  const now = new Date();
-  const since = costWindowStart(now);
-  const [resourceDays, extras, settings] = await Promise.all([loadResourceDays(c.env, since), loadExtraDays(c.env, since), loadCostSettings(c.env.COSTS_DB)]);
-  // The budget and its levels are the ones set in Costs → Alert settings, same as the Costs page
-  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels);
-  const idle = idleProjection(resourceDays, extras, now);
-  const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
-
-  // Daily trend: 30 days, one value per env plus the non-Cloudflare sources
-  const trendDays = [...fullDays(now, 29), now.toISOString().slice(0, 10)];
-  const perEnv = new Map<string, Map<string, number>>();
-  for (const r of resourceDays) {
-    const m = perEnv.get(r.env) ?? new Map<string, number>();
-    m.set(r.day, (m.get(r.day) ?? 0) + num(r.cost));
-    perEnv.set(r.env, m);
-  }
-  const series = (m: Map<string, number> | undefined) => trendDays.map((d) => Math.round((m?.get(d) ?? 0) * 100) / 100);
-  const fromList = (list: { day: string; cost: number }[]) => new Map(list.map((x) => [x.day, x.cost]));
-  const trend = {
-    days: trendDays,
-    series: [
-      ...OPS_ENVS.map((e) => ({ key: e, values: series(perEnv.get(e)) })),
-      { key: 'bunny', values: series(fromList(extras.bunny)) },
-      { key: 'containers', values: series(fromList(extras.containers)) },
-      { key: 'ai', values: series(fromList(extras.ai)) },
-    ],
-  };
-
-  // Drivers: each resource's month-to-date cost, its 14-day daily cost and the idle floor
-  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
-  const sparkDays = trendDays.slice(-14);
-  const drivers = new Map<string, { id: string; env: string; kind: string; name: string; mtd: number; byDay: Map<string, number> }>();
-  for (const r of resourceDays) {
-    if (envFilter !== 'all' && r.env !== envFilter) continue;
-    const d = drivers.get(r.resource_id) ?? { id: r.resource_id, env: r.env, kind: r.kind, name: r.name, mtd: 0, byDay: new Map<string, number>() };
-    if (r.day >= monthStart) d.mtd += num(r.cost);
-    d.byDay.set(r.day, (d.byDay.get(r.day) ?? 0) + num(r.cost));
-    drivers.set(r.resource_id, d);
-  }
-  const idleById = new Map(idle.top.map((t) => [t.id, t.monthlyUsd]));
-  const top = [...drivers.values()]
-    .sort((a, b) => b.mtd - a.mtd)
-    .slice(0, COST_DRIVERS)
-    .map((d) => ({
-      id: d.id,
-      env: d.env,
-      kind: d.kind,
-      name: d.name,
-      mtdUsd: Math.round(d.mtd * 100) / 100,
-      idleMonthlyUsd: idleById.get(d.id) ?? 0,
-      spike: spikes.find((s) => s.resourceId === d.id) ?? null,
-      daily: { days: sparkDays, values: sparkDays.map((day) => Math.round((d.byDay.get(day) ?? 0) * 1000) / 1000) },
-    }));
-
-  return c.json({
-    success: true,
-    result: { env: envFilter, budget, idle, trend, drivers: top, spikes, estimated: true, sources: { bunny: extras.bunny.length > 0, ai: extras.ai.length > 0 } },
-  });
 });
 
 app.get('/thresholds', async (c) => {

@@ -59,7 +59,7 @@ export function projectMonth(daily: DayCost[], now: Date): Projection {
   };
 }
 
-export type BudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan';
+export type BudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan' | 'fixed';
 export type BudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
 
 export interface BudgetStatus {
@@ -86,18 +86,25 @@ export function levelOf(share: number): BudgetLevel {
 
 /** The month's spend against the budget, per source and in total. */
 export function budgetStatus(
-  sources: Omit<Record<BudgetPart, DayCost[]>, 'plan' | 'resend'> & { resend?: DayCost[] },
+  sources: Omit<Record<BudgetPart, DayCost[]>, 'plan' | 'resend' | 'fixed'> & { resend?: DayCost[] },
   now: Date,
   /** The admin-set budget (loadCostSettings); null until a super admin sets one (#1427). */
   capUsd: number | null = COST_ALERT_DEFAULTS.budgetUsd,
   /** The alert levels set in Costs → Alert settings; the meter draws its marks at these shares. */
   levels: readonly number[] = COST_ALERT_DEFAULTS.budgetLevels,
+  /**
+   * COST-GAPS: Cloudflare as billed (after the account's included usage, lib/cfBilling.ts) in place
+   * of the list-price days, and the fixed and other costs from the Costs page.
+   */
+  overrides: { cloudflare?: { mtd: number; projected: number }; fixed?: { mtd: number; projected: number } } = {},
 ): BudgetStatus {
   const parts = {} as BudgetStatus['parts'];
   for (const key of ['cloudflare', 'bunny', 'containers', 'ai', 'resend'] as const) {
     const p = projectMonth(sources[key] ?? [], now);
     parts[key] = { mtd: p.mtd, projected: p.trailing };
   }
+  if (overrides.cloudflare) parts.cloudflare = { mtd: round2(overrides.cloudflare.mtd), projected: round2(overrides.cloudflare.projected) };
+  parts.fixed = { mtd: round2(overrides.fixed?.mtd ?? 0), projected: round2(overrides.fixed?.projected ?? 0) };
   const p = projectMonth([], now);
   parts.plan = { mtd: round2((PLAN_BASE_USD * p.daysElapsed) / p.daysInMonth), projected: PLAN_BASE_USD };
   const mtd = round2(Object.values(parts).reduce((s, x) => s + x.mtd, 0));
@@ -139,7 +146,7 @@ export interface IdleProjection {
   monthlyUsd: number;
   targetUsd: number;
   byEnv: Record<string, number>;
-  parts: { cloudflare: number; bunny: number; containers: number; ai: number; plan: number };
+  parts: { cloudflare: number; bunny: number; containers: number; ai: number; plan: number; fixed: number };
   /** The biggest idle drivers, for the page's "what keeps costing" list. */
   top: { id: string; env: string; name: string; kind: string; monthlyUsd: number }[];
   days: string[];
@@ -154,6 +161,8 @@ export function idleProjection(
   rows: ResourceDay[],
   extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[] },
   now: Date,
+  /** Fixed and other costs a month: paid whether anyone uses the platform or not. */
+  fixedMonthly = 0,
 ): IdleProjection {
   const days = fullDays(now);
   const byResource = new Map<string, { env: string; name: string; kind: string; costs: Map<string, number> }>();
@@ -181,6 +190,7 @@ export function idleProjection(
     containers: round2(extra(extras.containers)),
     ai: round2(extra(extras.ai)),
     plan: PLAN_BASE_USD,
+    fixed: round2(fixedMonthly),
   };
   for (const k of Object.keys(byEnv)) byEnv[k] = round2(byEnv[k]);
   top.sort((a, b) => b.monthlyUsd - a.monthlyUsd);
@@ -248,6 +258,86 @@ export function findSpikes(rows: ResourceDay[], now: Date, rule: SpikeRule = DEF
     if (worst) out.push(worst);
   }
   return out.sort((a, b) => b.cost - b.baseline - (a.cost - a.baseline));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Spend views (moved from the Operations page to the Costs page, owner 2026-11-21)
+// ---------------------------------------------------------------------------------------------
+
+export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed'] as const;
+export type CostTrendKey = (typeof COST_TREND_KEYS)[number];
+
+/**
+ * Daily spend for the last 30 days, one series per env (Cloudflare at list price) and per other
+ * source. Fixed costs are their month's share spread over the month's days.
+ */
+export function trendBySource(
+  resourceDays: ResourceDay[],
+  extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[]; resend: DayCost[] },
+  fixedDaily: (day: string) => number,
+  now: Date,
+): { days: string[]; series: { key: CostTrendKey; values: number[] }[] } {
+  const days = [...fullDays(now, 29), now.toISOString().slice(0, 10)];
+  const perEnv = new Map<string, Map<string, number>>();
+  for (const r of resourceDays) {
+    const m = perEnv.get(r.env) ?? new Map<string, number>();
+    m.set(r.day, (m.get(r.day) ?? 0) + num(r.cost));
+    perEnv.set(r.env, m);
+  }
+  const series = (m: Map<string, number> | undefined) => days.map((d) => round2(m?.get(d) ?? 0));
+  const fromList = (list: DayCost[]) => new Map(list.map((x) => [x.day, num(x.cost)]));
+  return {
+    days,
+    series: [
+      ...(['production', 'stage', 'qa'] as const).map((e) => ({ key: e, values: series(perEnv.get(e)) })),
+      { key: 'bunny' as const, values: series(fromList(extras.bunny)) },
+      { key: 'containers' as const, values: series(fromList(extras.containers)) },
+      { key: 'ai' as const, values: series(fromList(extras.ai)) },
+      { key: 'resend' as const, values: series(fromList(extras.resend)) },
+      { key: 'fixed' as const, values: days.map((d) => round2(fixedDaily(d))) },
+    ],
+  };
+}
+
+/** Top drivers listed on the Costs page (by month-to-date cost). */
+export const COST_DRIVERS = 25;
+
+export interface CostDriver {
+  id: string;
+  env: string;
+  kind: string;
+  name: string;
+  mtdUsd: number;
+  idleMonthlyUsd: number;
+  spike: Spike | null;
+  daily: { days: string[]; values: number[] };
+}
+
+/** Each resource's month-to-date list cost, its 14-day daily cost, its idle floor and any open jump. */
+export function costDrivers(resourceDays: ResourceDay[], idle: IdleProjection, spikes: Spike[], now: Date): CostDriver[] {
+  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
+  const sparkDays = [...fullDays(now, 13), now.toISOString().slice(0, 10)];
+  const drivers = new Map<string, { id: string; env: string; kind: string; name: string; mtd: number; byDay: Map<string, number> }>();
+  for (const r of resourceDays) {
+    const d = drivers.get(r.resource_id) ?? { id: r.resource_id, env: r.env, kind: r.kind, name: r.name, mtd: 0, byDay: new Map<string, number>() };
+    if (r.day >= monthStart) d.mtd += num(r.cost);
+    d.byDay.set(r.day, (d.byDay.get(r.day) ?? 0) + num(r.cost));
+    drivers.set(r.resource_id, d);
+  }
+  const idleById = new Map(idle.top.map((t) => [t.id, t.monthlyUsd]));
+  return [...drivers.values()]
+    .sort((a, b) => b.mtd - a.mtd)
+    .slice(0, COST_DRIVERS)
+    .map((d) => ({
+      id: d.id,
+      env: d.env,
+      kind: d.kind,
+      name: d.name,
+      mtdUsd: round2(d.mtd),
+      idleMonthlyUsd: idleById.get(d.id) ?? 0,
+      spike: spikes.find((s) => s.resourceId === d.id) ?? null,
+      daily: { days: sparkDays, values: sparkDays.map((day) => Math.round((d.byDay.get(day) ?? 0) * 1000) / 1000) },
+    }));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -412,6 +502,29 @@ export function wantedAlerts(
   return out;
 }
 
+/**
+ * Everything the one budget counts (COST-GAPS), loaded once: Cloudflare as billed after the
+ * included usage, Bunny, Containers, Workers AI, Resend, the plan and the fixed and other costs.
+ * The Costs page, the alert tick and the Operations page's spend line all use it.
+ */
+export async function loadBudget(env: CostDbs, now: Date, settings: CostAlertSettings, since = costWindowStart(now), pre?: { resourceDays?: ResourceDay[]; productDays?: ProductDay[] }) {
+  const { loadMeterDays, billedCloudflare } = await import('./cfBilling');
+  const { fixedCostsBudget } = await import('./fixedCosts');
+  const [resourceDays, productDays, meterDays, fixed] = await Promise.all([
+    pre?.resourceDays ?? loadResourceDays(env, since),
+    pre?.productDays ?? loadProductDays(env, since),
+    loadMeterDays(env.COSTS_DB, since),
+    fixedCostsBudget(env.COSTS_DB, now),
+  ]);
+  const extras = await loadExtraDays(env, since, productDays);
+  const billed = billedCloudflare(meterDays, now);
+  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels, {
+    cloudflare: { mtd: billed.mtd.total, projected: billed.projected.total },
+    fixed: { mtd: fixed.mtd, projected: fixed.projected },
+  });
+  return { budget, billed, fixed, resourceDays, productDays, extras };
+}
+
 /** The alert settings (COSTS_DB cost_settings 'alerts'), defaults when unset or not migrated. */
 export async function loadCostSettings(db: D1Database | undefined): Promise<CostAlertSettings> {
   if (!db) return parseCostAlertSettings(null);
@@ -451,7 +564,8 @@ export function alertEvent(a: CostAlert, environment: string | undefined, now: D
     message: a.message,
     environment,
     occurredAt: now.toISOString(),
-    action: { key: a.key, source: 'ops', title: a.title, itemType: 'ops-cost', itemId: a.key, itemUrl: '/operations#spend' },
+    // Spend lives on Costs (owner 2026-11-21): a jump opens the drivers table, the budget alerts the page
+    action: { key: a.key, source: 'ops', title: a.title, itemType: 'ops-cost', itemId: a.key, itemUrl: a.key.startsWith('ops-cost:spike:') ? '/costs#drivers' : '/costs' },
   });
 }
 
@@ -471,7 +585,7 @@ export async function syncCostAlerts(
   const settings = await loadCostSettings(db);
   const since = costWindowStart(now);
   const resourceDays = await loadResourceDays(env, since);
-  const budget = env.ENVIRONMENT === 'production' ? budgetStatus({ cloudflare: sumByDay(resourceDays), ...(await loadExtraDays(env, since)) }, now, settings.budgetUsd, settings.budgetLevels) : null;
+  const budget = env.ENVIRONMENT === 'production' ? (await loadBudget(env, now, settings, since, { resourceDays })).budget : null;
   const wanted = wantedAlerts(budget, findSpikes(resourceDays, now, spikeRuleOf(settings)), settings);
   const openKeys = new Set(((await db.prepare('SELECT key FROM ops_cost_alerts').all<{ key: string }>()).results ?? []).map((o) => o.key));
   const fresh = wanted.filter((a) => !openKeys.has(a.key));

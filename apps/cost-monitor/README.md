@@ -1,6 +1,6 @@
 # cost-monitor (`al-ummah-cost-monitor`)
 
-Scheduled collector of platform analytics for the videos admin's Operations page
+Scheduled collector of platform analytics for the videos admin's Operations and Costs pages
 (`docs/admin/LIVE_OPS.md` Part A; it is the collector of `docs/cost-monitoring/README.md`).
 
 - **Crons → queue (COST-1):** the crons only plan jobs on `COST_JOBS_QUEUE`
@@ -37,6 +37,18 @@ Scheduled collector of platform analytics for the videos admin's Operations page
 - **Cost:** `src/pricing.ts` list prices per resource-day (`ops_daily.cost_usd`), KV reads/writes/
   storage and DO requests, duration (`gb_seconds`, 128 MB per active object) and storage units
   included. admin-api adds Bunny, transcoding and Workers AI for the configured monthly budget (`lib/opsCost.ts`).
+- **Billed meters (COST-GAPS, migration 0006):** the same one GraphQL query also stores what the
+  invoice bills on: Workers CPU as billed (`cpu_ms`, sum of CPU time), KV lists and deletes apart
+  (`kv_lists`, `kv_deletes`; `writes` still includes them), Workers Logs events (`log_events`,
+  estimated: requests × the Worker's Logs sampling rate × 1.7 events per request, calibrated on the
+  2026-10-23 → 11-21 invoice) and requests of Workers with Logpush on (`logpush_requests`).
+  Discovery reads each Worker's `logpush` and `observability` settings from the scripts listing
+  (`ops_resources.logpush`, `logs_rate`); `LOGPUSH_WORKERS` in `src/manifest.ts` covers the base set.
+  No extra API call. admin-api turns the month's totals into the **billed estimate** (allowances
+  once per account and month, whole units: `packages/shared-types/src/cost-billing.ts`, reconciled
+  to the cent against the invoice) for the budget, projection and alerts; `cost_usd` stays list price.
+- **Fixed and other costs:** `cost_fixed_items` (migration 0006) is written only by admin-api
+  (super admins on the Costs page, audited); the collector never reads it.
 - **Deployments:** production collects production, stage and QA (`COLLECT_ENVS`), so the
   production admin can switch env; stage and QA collect only themselves. No route, no workers.dev.
 - **Storage:** D1 `al-ummah-now-costs[-qa|-stage]` (`migrations/`), read by admin-api `/api/ops/*`

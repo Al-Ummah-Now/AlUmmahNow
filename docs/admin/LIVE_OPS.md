@@ -85,22 +85,21 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /api/ops/overview?env=prod` | Tiles: requests and error rate for 24h vs the previous 24h, CPU p99, D1 p99 latency, worst queue backlog, cache-hit ratio, MTD cost estimate + linear and trailing projection against the **configured monthly budget**, data age |
+| `GET /api/ops/overview?env=prod` | Tiles of that env: requests and error rate for 24h vs the previous 24h, CPU p99, D1 p99 latency, worst queue backlog, data age, the envs that have data, open alerts; plus `cost.spendMtd`, the month's spend across every source (the Costs page's budget figure, best effort) for the one-line pointer to Costs |
 | `GET /api/ops/series?env&kind&resource&metric&range=24h\|7d\|30d\|13m` | Hourly points for ≤7 days, daily points beyond, ready for the shared chart (§A.4) |
 | `GET /api/ops/resources?env&kind` | One row per resource with latest-day numbers and a 7-day sparkline (`kind` also `kv`, `do`) |
-| `GET /api/ops/costs?env=all\|<env>` | Spend (owner, 2026-11-14): the **configured monthly budget** across every source (Cloudflare in every env from `ops_daily`, Bunny and transcoding from `delivery_cost_daily`, Workers AI from `ai_usage_daily`, the $5 plan) with month to date, projected month end and the 50/80/100% level; the **projected idle cost** (each driver at its quietest of the last 7 full days × 30, a missing day $0, plus the plan) against the $50 target; 30 days of daily spend per env and source; the top 25 drivers with month to date, idle per month, 14 days of daily cost and any jump (`lib/opsCost.ts`) |
 | `GET/PUT /api/ops/thresholds` | Threshold rules (PUT needs `ops:manage`, super admin; audited) |
 
 ### A.4 Pages
 
 - **Operations** (`/operations`, nav group "Platform", next to Delivery and Errors). It needs `ops:read`.
-  - An env switcher (prod / stage / QA).
+  - **Usage and health of one environment, nothing else** (owner, 2026-11-21). The env switcher (Production / Stage / QA, links with `aria-current`) changes everything on the page: tiles, alerts, charts and the resources table. The pills list the envs that have collected data, plus the one open.
+  - **No spend here.** Spend, the budget, the projection, the idle cost, the daily spend chart and the drivers are on **Costs** (`/costs`). Operations keeps one line: "Spend this month: $X — See Costs" (`ops-spend-link`). Before 2026-11-21 a spend block for every env filled the first screen, so switching env changed nothing visible above the fold ("the env buttons don't work"); `e2e/31-operations-env.spec.ts` now switches env and checks the tiles, the table and `aria-current`.
   - Tiles from `/overview`.
   - Tabs: Workers · Databases · Storage · Queues · CDN · Media (containers + Bunny).
   - Each tab has a chart per metric and a resource table.
   - Charts use the shared value-axis rules (`niceScale`, `compactNumber`, `chartLocale` from `packages/shared-types/src/chart-scale.ts`). The existing server-rendered SVG style of the Errors and Delivery charts is lifted into one shared admin chart component (`components/charts/TimeSeriesChart.tsx`), with the value axis on the reading side, time running from it, and a `<details>` table alternative.
-  - **Spend** (`SpendSection.tsx`, `/api/ops/costs`): the budget meter (spent, hatched projection, ticks at 50% and 80%), spent / projected month end / projected idle cost (vs $50, per env) / budget left, where it goes per source, a stacked daily chart per env and source with the daily budget line, and the drivers table. Alerts link to `/operations#spend`.
-  - **Cost next to usage:** each tab shows estimated $ for the month next to usage. Prices come from the vendored pricing (cost spec §1.1). Until that lands, the same list prices as `media/costs.ts` `PRICES` are used.
+  - **Costs** (`/costs`, `GET /api/costs`) holds every spend figure that used to be here: the budget meter with the forecast, the projected idle cost (vs $50, per env), where it goes per source (Cloudflare as billed, Bunny, transcoding, Workers AI, Resend, the plan, fixed and other costs), the stacked daily chart per env and source, the drivers table with jumps (`#drivers`), Cloudflare list price against billed per invoice line, and the fixed and other costs list. Cost alerts on the Errors page link to `/costs` (a jump to `/costs#drivers`). `GET /api/ops/costs` was removed.
   - **Product analytics:** a "Product" tab links to the existing views, watch time, uploads and sign-ups numbers (Studio analytics and the Delivery QoE), and shows cost per 1K views. They aren't duplicated.
 - **Delivery page** (the R2 agent's): reads the live `admin:media` and `admin:queues` topics (Part B) for the per-video R2 status badge, "N running · M waiting · range min–max" (the admin's autoscaling range, with the `max_instances` ceiling beside it) and the transcode backlog. This doc supplies the data and the live layer. The page and its badges stay that agent's work.
 - **Alerts** when a metric crosses a threshold. Defaults:

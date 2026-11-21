@@ -13,7 +13,7 @@ import type { ActionResult } from '@/lib/api/errors';
 import { reportError } from '@/lib/errors/reporter';
 import { logger } from '@/lib/logger-client';
 
-const KNOWN_CODES = ['forbidden', 'not_set', 'invalid_key', 'no_email', 'not_configured', 'not_ready', 'bad_request'] as const;
+const KNOWN_CODES = ['forbidden', 'not_set', 'invalid_key', 'no_email', 'not_configured', 'not_ready', 'bad_request', 'too_many', 'not_found'] as const;
 
 export type Feedback = { kind: 'ok' | 'error'; text: string } | null;
 

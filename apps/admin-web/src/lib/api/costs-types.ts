@@ -3,12 +3,16 @@
  * src/lib/costs.ts). The credential and settings shapes come from @al-ummah/shared-types
  * (cost-credentials.ts), the same module admin-api validates with.
  */
-import type { CostAlertKind, CostAlertSettings, CostCredentialView, CostProduct, CostProvider } from '@al-ummah/shared-types';
+import type { CfMeterKey, CostAlertKind, CostAlertSettings, CostCredentialView, CostProduct, CostProvider, FixedCost, FixedCostInput, FixedCostPeriod } from '@al-ummah/shared-types';
 
-export type { CostAlertKind, CostAlertSettings, CostCredentialView, CostProduct, CostProvider };
+export type { CfMeterKey, CostAlertKind, CostAlertSettings, CostCredentialView, CostProduct, CostProvider, FixedCost, FixedCostInput, FixedCostPeriod };
 
 export type CostBudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
-export type CostBudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan';
+export type CostBudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan' | 'fixed';
+/** Series of the daily spend chart: the three envs' Cloudflare spend (list price) and every other source. */
+export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed'] as const;
+export type CostTrendKey = (typeof COST_TREND_KEYS)[number];
+export type CostResourceKind = 'worker' | 'd1' | 'r2' | 'queue' | 'kv' | 'do';
 
 export interface CostBudget {
   capUsd: number | null;
@@ -78,6 +82,50 @@ export interface CostSubscription {
 
 export type CostEnvKey = 'production' | 'stage' | 'qa' | 'account';
 
+/** Monthly cost with nobody on the platform, against its target (opsCost.ts idleProjection). */
+export interface CostIdle {
+  monthlyUsd: number;
+  targetUsd: number;
+  byEnv: Partial<Record<'production' | 'stage' | 'qa', number>>;
+  parts: Record<'cloudflare' | 'bunny' | 'containers' | 'ai' | 'plan' | 'fixed', number>;
+  top: { id: string; env: string; name: string; kind: string; monthlyUsd: number }[];
+  days: string[];
+}
+
+/** One resource's month so far at list price, its idle floor, its open jump and 14 days (opsCost.ts costDrivers). */
+export interface CostDriver {
+  id: string;
+  env: 'production' | 'stage' | 'qa';
+  kind: CostResourceKind;
+  name: string;
+  mtdUsd: number;
+  idleMonthlyUsd: number;
+  spike: CostSpike | null;
+  daily: { days: string[]; values: number[] };
+}
+
+/** One Cloudflare invoice line for this month: usage, the account's allowance, billed and list cost. */
+export interface CostCloudflareLine {
+  key: CfMeterKey;
+  used: number;
+  included: number;
+  billable: number;
+  cost: number;
+  listCost: number;
+  projectedCost: number;
+  /** measured: from the collector; estimated: derived (log events); none: no Al Ummah Now source. */
+  source: 'measured' | 'estimated' | 'none';
+  /** false: Cloudflare does not bill this meter yet. */
+  billed: boolean;
+}
+
+export interface CostCloudflare {
+  billedMtd: number;
+  billedProjected: number;
+  listMtd: number;
+  lines: CostCloudflareLine[];
+}
+
 export interface CostsDashboard {
   budget: CostBudget;
   forecast: { linear: number; trailing: number };
@@ -85,7 +133,11 @@ export interface CostsDashboard {
   envs: Partial<Record<CostEnvKey, number>>;
   movers: { up: CostMover[]; down: CostMover[] };
   spikes: CostSpike[];
-  trend: { days: string[]; values: number[] };
+  trend: { days: string[]; values: number[]; series: { key: CostTrendKey; values: number[] }[] };
+  cloudflare: CostCloudflare;
+  fixed: { items: FixedCost[]; mtd: number; projected: number };
+  idle: CostIdle;
+  drivers: CostDriver[];
   sources: { bunny: 'billing' | 'estimate' | 'none'; containers: 'billing' | 'estimate' | 'none'; resend: 'emails' | 'none' };
   alerts: CostAlertRow[];
   settings: CostAlertSettings;

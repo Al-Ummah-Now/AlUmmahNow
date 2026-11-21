@@ -1,19 +1,19 @@
 /**
  * The Costs page's read-only sections (server components): header with the data age and the
  * token notice, budget with forecast and open alerts, breakdown by product and environment with
- * the 30-day trend, and the top movers. They take translated strings and formats, like
- * operations/SpendSection.tsx.
+ * the 30-day trend per env and source, and the top movers. They take translated strings and formats.
+ * Spend moved here from Operations (owner, 2026-11-21): the idle cost, the parts and the per-source
+ * trend; the drivers and the Cloudflare invoice lines are in details.tsx.
  */
 import Link from '@/components/AppLink';
 
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { StackedBarChart } from '@/components/charts/StackedBarChart';
-import type { CostEnvKey, CostMover, CostsDashboard } from '@/lib/api/costs-types';
-import { budgetMeter, dailyBudget, type MeterTone, type OpsFormats } from '../operations/model';
+import { COST_TREND_KEYS, type CostBudgetPart, type CostEnvKey, type CostMover, type CostsDashboard, type CostTrendKey } from '@/lib/api/costs-types';
+import { budgetMeter, dailyBudget, idleStatus, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
 import { moneyFormat } from '@al-ummah/shared-types';
-import { Sep } from '@/components/Sep';
 
 export const ENV_KEYS: CostEnvKey[] = ['production', 'stage', 'qa', 'account'];
 export const ENV_COLOR: Record<CostEnvKey, string> = {
@@ -21,6 +21,27 @@ export const ENV_COLOR: Record<CostEnvKey, string> = {
   stage: 'var(--spend-stage)',
   qa: 'var(--spend-qa)',
   account: 'var(--spend-bunny)',
+};
+/** The stacked daily chart and the drivers: each env's Cloudflare spend, then the other sources. */
+export const TREND_COLOR: Record<CostTrendKey, string> = {
+  production: 'var(--spend-production)',
+  stage: 'var(--spend-stage)',
+  qa: 'var(--spend-qa)',
+  bunny: 'var(--spend-bunny)',
+  containers: 'var(--spend-containers)',
+  ai: 'var(--spend-ai)',
+  resend: 'var(--spend-resend)',
+  fixed: 'var(--spend-fixed)',
+};
+const PARTS: CostBudgetPart[] = ['cloudflare', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed'];
+const PART_COLOR: Record<CostBudgetPart, string> = {
+  cloudflare: 'var(--spend-qa)',
+  bunny: 'var(--spend-bunny)',
+  containers: 'var(--spend-containers)',
+  ai: 'var(--spend-ai)',
+  resend: 'var(--spend-resend)',
+  plan: 'var(--spend-stage)',
+  fixed: 'var(--spend-fixed)',
 };
 const TONE_FILL: Record<MeterTone, string> = { ok: 'var(--accent)', warn: 'var(--warning-fg)', danger: 'var(--danger-fg)' };
 const TONE_TEXT: Record<MeterTone, string> = { ok: 'text-fg', warn: 'text-warning-fg', danger: 'text-danger-fg' };
@@ -44,8 +65,8 @@ export function signedUsd(locale: string): (v: number) => string {
   return (v) => nf.format(v);
 }
 
-function percentList(levels: readonly number[], f: OpsFormats, sep: string): string {
-  return levels.map((l) => f.percent(l)).join(sep);
+function percentList(levels: readonly number[], f: OpsFormats, t: Translator): string {
+  return levels.map((l) => f.percent(l)).join(t('costs.listSep'));
 }
 
 export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | null; now: Date }) {
@@ -178,6 +199,11 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
   const cap = d.settings.budgetUsd ?? b.capUsd;
   const m = budgetMeter({ ...b, levels: d.settings.budgetLevels });
   const left = cap !== null ? Math.max(0, cap - b.mtd) : null;
+  const idle = idleStatus(d.idle);
+  const idleByEnv = (['production', 'stage', 'qa'] as const)
+    .filter((e) => (d.idle.byEnv[e] ?? 0) > 0)
+    .map((e) => `${t(`costs.envs.${e}`)} ${f.usd(d.idle.byEnv[e] ?? 0)}`)
+    .join(t('costs.listSep'));
   return (
     <section className="cost-panel p-5 sm:p-6" aria-labelledby="costs-budget-title" data-testid="costs-budget">
       <h2 id="costs-budget-title" className={sectionTitle}>{t('costs.budget.title')}</h2>
@@ -234,7 +260,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                 <span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full border border-border" style={{ background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 55%, transparent) 0 3px, transparent 3px 6px)` }} />
                 {t('costs.budget.legendForecast')}
               </span>
-              <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f, t('common.sep')) })}</span>
+              <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f, t) })}</span>
             </div>
           </>
         ) : (
@@ -245,7 +271,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
         )}
       </div>
 
-      <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.percent(b.share) }) : t('costs.budget.spentSub')} tone={m.tone} testId="costs-spent" />
         <Stat
           label={t('costs.budget.forecast')}
@@ -259,6 +285,20 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
           tone={m.projectedTone}
           testId="costs-forecast"
         />
+        <Stat
+          label={t('costs.budget.idleTitle')}
+          value={f.usd(d.idle.monthlyUsd)}
+          sub={
+            <>
+              <span className={`block ${idle.under ? 'text-success-fg' : 'text-danger-fg'}`} data-testid="costs-idle-status">
+                {idle.under ? t('costs.budget.idleUnder', { target: f.usd(d.idle.targetUsd) }) : t('costs.budget.idleOver', { target: f.usd(d.idle.targetUsd), over: f.usd(idle.overBy) })}
+              </span>
+              {idleByEnv && <span className="block">{idleByEnv}</span>}
+            </>
+          }
+          tone={idle.under ? 'ok' : 'danger'}
+          testId="costs-idle"
+        />
         {left !== null ? (
           <Stat label={t('costs.budget.left')} value={f.usd(left)} sub={t('costs.budget.leftSub', { month: f.month(b.month) })} testId="costs-left" />
         ) : (
@@ -271,6 +311,8 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
           />
         )}
       </dl>
+
+      <PartsBar d={d} t={t} f={f} />
 
       <div className="mt-6" data-testid="costs-alerts-open">
         <h3 className="mb-2 text-sm font-semibold text-fg">{t('costs.budget.alertsTitle')}</h3>
@@ -297,6 +339,35 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
         )}
       </div>
     </section>
+  );
+}
+
+/** Where the month's spend goes: Cloudflare at billed rates, the other sources, the plan and the fixed costs. */
+function PartsBar({ d, t, f }: Common & { d: CostsDashboard }) {
+  const parts = d.budget.parts;
+  const total = PARTS.reduce((s, p) => s + (parts[p]?.mtd ?? 0), 0);
+  return (
+    <div className="mt-6" data-testid="costs-parts">
+      <h3 className="mb-2 text-sm font-semibold text-fg">{t('costs.budget.partsTitle')}</h3>
+      {total > 0 && (
+        <div className="cost-bar-track mb-3 flex h-2.5 w-full overflow-hidden" aria-hidden="true">
+          {PARTS.map((p) => <span key={p} style={{ width: `${shareOf(parts[p]?.mtd ?? 0, total) * 100}%`, background: PART_COLOR[p] }} />)}
+        </div>
+      )}
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 xl:grid-cols-7">
+        {PARTS.map((p) => (
+          <div key={p} data-testid={`costs-part-${p}`}>
+            <dt className="flex items-center gap-1.5 text-xs text-fg-muted">
+              <span aria-hidden="true" className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: PART_COLOR[p] }} />
+              {t(`costs.budget.parts.${p}`)}
+            </dt>
+            <dd className="text-sm font-medium text-fg tabular-nums">{f.usd(parts[p]?.mtd ?? 0)}</dd>
+            <dd className="text-xs text-fg-muted tabular-nums">{t('costs.budget.partProjected', { value: f.usd(parts[p]?.projected ?? 0) })}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-xs text-fg-muted">{t('costs.budget.partsNote')}</p>
+    </div>
   );
 }
 
@@ -433,12 +504,18 @@ export function EnvsPanel({ d, t, f }: Common & { d: CostsDashboard }) {
 export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; locale: string }) {
   const cap = d.settings.budgetUsd ?? d.budget.capUsd;
   const daily = cap !== null ? dailyBudget(cap, d.budget.month) : null;
+  const series = COST_TREND_KEYS.map((key) => ({
+    key,
+    label: t(`costs.breakdown.trendKeys.${key}`),
+    color: TREND_COLOR[key],
+    values: d.trend.series?.find((x) => x.key === key)?.values ?? d.trend.days.map(() => 0),
+  })).filter((x) => x.values.some((v) => v > 0));
   return (
     <section className="cost-panel p-5 sm:p-6" aria-label={t('costs.breakdown.trendTitle')} data-testid="costs-trend-panel">
       <StackedBarChart
         title={t('costs.breakdown.trendTitle')}
         days={d.trend.days}
-        series={[{ key: 'total', label: t('costs.breakdown.total'), color: 'var(--accent)', values: d.trend.values }]}
+        series={series.length ? series : [{ key: 'total', label: t('costs.breakdown.total'), color: 'var(--accent)', values: d.trend.values }]}
         locale={locale}
         format={f.usd}
         dayLabel={f.day}
@@ -446,6 +523,7 @@ export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; lo
         labels={{ chart: t('costs.breakdown.trendTitle'), table: t('costs.breakdown.table'), day: t('costs.breakdown.day'), total: t('costs.breakdown.total'), empty: t('costs.breakdown.empty30') }}
         testId="costs-trend"
       />
+      <p className="mt-2 text-xs text-fg-muted">{t('costs.breakdown.trendNote')}</p>
     </section>
   );
 }
@@ -476,7 +554,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
                       <bdi className="block break-words font-medium text-fg">{label}</bdi>
-                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep />{envLabel(t, m.env)}</span>
+                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi> • {envLabel(t, m.env)}</span>
                     </th>
                     <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}
