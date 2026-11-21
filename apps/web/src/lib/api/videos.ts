@@ -731,6 +731,32 @@ export async function getTrendingVideos(
 }
 
 /**
+ * Trending with what the list is right now (wiki E07 "Discovery ranking"): `label` is the ranking's
+ * heading key (with no viewer signal yet it reads new_this_week), null from an API without it.
+ * `language` filters to videos in that language (Explore's content language).
+ */
+export async function getTrendingRail(
+  period: 'day' | 'week' | 'month',
+  language?: string,
+  limit = 12,
+): Promise<{ videos: VideoObject[]; label: string | null }> {
+  try {
+    const query = new URLSearchParams({ period, limit: String(limit) });
+    if (language) query.append('language', language);
+    const response = await fetch(buildApiUrl(`/api/trending?${query.toString()}`), { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+    if (!response.ok) {
+      logger.warn('[getTrendingRail] API error', { status: response.status });
+      return { videos: [], label: null };
+    }
+    const data = (await response.json()) as { data?: VideoObject[]; rail?: { label?: unknown } };
+    return { videos: data.data ?? [], label: typeof data.rail?.label === 'string' ? data.rail.label : null };
+  } catch (error) {
+    logger.error('[getTrendingRail] Request failed', { error });
+    return { videos: [], label: null };
+  }
+}
+
+/**
  * Get Recommended Videos
  * GET /api/recommendations
  * Sends the session token (when signed in) so the API can use watch history.

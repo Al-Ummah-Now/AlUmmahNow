@@ -6,6 +6,7 @@ import type { HumanCheckTranslations } from './i18n-human-check';
 import type { HelpTranslations } from './i18n-help';
 import type { UploadStatusTranslations } from './i18n-upload-status';
 import type { SignInBannerTranslations } from './i18n-signin-banner';
+import type { RailTranslations } from './i18n-rails';
 import type { CaptionsTranslations } from './i18n-captions';
 import type { AudioTracksTranslations } from './i18n-audio-tracks';
 import type { BillingTranslations } from './i18n-billing';
@@ -325,6 +326,8 @@ export interface AppTranslations {
   uploadStatus: UploadStatusTranslations;
   /** Sign-in banner on the videos home page, signed-out visitors only */
   signInBanner: SignInBannerTranslations;
+  /** Ranked rail headings: home, Explore, sections (wiki E07 Discovery ranking) */
+  rails: RailTranslations;
   /** Caption drafts in Studio: list, editor, Quran review (AUN-CAPTIONS) */
   captions: CaptionsTranslations;
   /** Studio's Audio tracks panel (AUN-MULTI-AUDIO) */
