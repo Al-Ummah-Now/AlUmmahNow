@@ -1,8 +1,8 @@
 import Link from '@/components/AppLink';
 import { PriorityTabs } from '@/components/PriorityTabs';
-import { getOpsCosts, getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
+import { getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
-import { OPS_KINDS, OPS_RANGES, type OpsCosts, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';
+import { OPS_KINDS, OPS_RANGES, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -11,11 +11,9 @@ import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 import { logger } from '@/lib/logger';
 import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
-import { SpendSection } from './SpendSection';
 import { getCostDatabases } from '@/lib/api/costs';
 import type { CostDatabases } from '@/lib/api/costs-types';
 import { DatabaseCapacityGauge } from '@/components/capacity/DatabaseCapacityGauge';
-import { Sep } from '@/components/Sep';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,9 +65,8 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         <thead>
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t(`operations.charts.${spec.label}`)}<Sep />{t('operations.resources.today')}</th>
+            <th scope="col" className="p-2 text-end font-medium">{t(`operations.charts.${spec.label}`)} • {t('operations.resources.today')}</th>
             <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.last7')}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.monthCost')}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,7 +83,6 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
                     ))}
                   </span>
                 </td>
-                <td className="p-2 text-end tabular-nums">{f.usd(r.monthCostUsd)}</td>
               </tr>
             );
           })}
@@ -104,9 +100,10 @@ function loadError(error: unknown, t: Translator): string {
 }
 
 /**
- * Operations (docs/admin/LIVE_OPS.md Part A): platform health and usage per
- * environment from the hourly collector's rollups (admin-api /api/ops, ops:read),
- * with spend against the configured monthly budget (every source), the projected idle cost and open alerts.
+ * Operations (docs/admin/LIVE_OPS.md Part A): platform health and usage of one
+ * environment from the hourly collector's rollups (admin-api /api/ops, ops:read).
+ * Everything on the page follows the env switch. Spend lives on Costs (owner,
+ * 2026-11-21): here only a one-line pointer with the month's spend.
  */
 export default async function OperationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -120,9 +117,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   }
   const f = opsFormats(locale);
   const specs = TAB_CHARTS[tab];
-  const [databasesResult, costsResult, overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
+  const [databasesResult, overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
     getCostDatabases(),
-    getOpsCosts('all'),
     getOpsOverview(env),
     listOpsResources(env, tab),
     ...specs.map((s) => getOpsSeries(env, tab, s.metric, range)),
@@ -130,11 +126,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   if (overviewResult.status === 'rejected') {
     logger.error('[operations] Failed to load the overview', { env, error: overviewResult.reason instanceof Error ? overviewResult.reason.message : String(overviewResult.reason) });
   }
-  if (costsResult.status === 'rejected') {
-    logger.error('[operations] Failed to load spend', { error: costsResult.reason instanceof Error ? costsResult.reason.message : String(costsResult.reason) });
-  }
   const overview = overviewResult.status === 'fulfilled' ? (overviewResult.value as OpsOverview) : null;
-  const costs = costsResult.status === 'fulfilled' ? (costsResult.value as OpsCosts) : null;
   // The capacity row is optional: its failure (say, before cost-monitor migration 0004) hides it
   const databases = databasesResult.status === 'fulfilled' ? (databasesResult.value as CostDatabases) : null;
   const resources = resourcesResult.status === 'fulfilled' ? (resourcesResult.value as OpsResource[]) : null;
@@ -167,16 +159,16 @@ export default async function OperationsPage({ searchParams }: PageProps) {
 
       <DatabaseCapacityGauge data={databases} t={t} f={f} testId="ops-capacity" />
 
-      {costs ? (
-        <SpendSection c={costs} t={t} f={f} locale={locale} />
-      ) : (
-        <div className="mb-6"><ErrorAlert testId="ops-spend-error">{loadError(costsResult.status === 'rejected' ? costsResult.reason : null, t)}</ErrorAlert></div>
-      )}
-
       {!overview ? (
         <div className="mb-6"><ErrorAlert testId="ops-overview-error">{loadError(overviewResult.status === 'rejected' ? overviewResult.reason : null, t)}</ErrorAlert></div>
       ) : (
         <>
+          {overview.cost.spendMtd !== null && overview.cost.spendMtd !== undefined && (
+            <p className="mb-4 text-sm text-fg-muted" data-testid="ops-spend-link">
+              {t('operations.spendLine', { value: f.usd(overview.cost.spendMtd) })}{' '}
+              <Link href="/costs" className={linkClass}>{t('operations.spendLink')}</Link>
+            </p>
+          )}
           <Tiles o={overview} t={t} f={f} />
           <section className={`${cardClass} mb-6`} aria-labelledby="ops-alerts-title" data-testid="ops-alerts">
             <h2 id="ops-alerts-title" className="text-lg font-semibold text-fg mb-2">{t('operations.alerts.title')}</h2>
@@ -187,7 +179,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                 <ul className="mb-2 space-y-1">
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
-                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span><Sep />{a.rule_id}<Sep />
+                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span> • {a.rule_id} •{' '}
                       <span className="text-fg-muted">{t('operations.alerts.opened', { time: f.time(a.opened_at) })}</span>
                     </li>
                   ))}

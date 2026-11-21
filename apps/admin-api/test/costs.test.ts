@@ -14,6 +14,8 @@ import costsRouter from '../src/routers/costs.router';
 import { envLines, productLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
+import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
+import { costsDashboard } from '../src/lib/costs';
 import { sqliteD1 } from './d1-sqlite';
 
 const INTERNAL = 'qa-internal-api-key-0123456789';
@@ -240,6 +242,8 @@ describe('settings and alerts', () => {
     const now = new Date('2026-11-14T15:00:00Z');
     await db.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, 'x')").bind(JSON.stringify({ budgetUsd: 50, budgetLevels: [0.5], projectedAlert: false })).run();
     await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, cost_usd, updated_at) VALUES ('2026-11-10', 'worker:videos', 'worker', 'production', 'videos', 30, 'x')").run();
+    // The budget counts Cloudflare as billed: 80M D1 rows written is $30 past the 50M included
+    await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, writes, cost_usd, updated_at) VALUES ('2026-11-10', 'd1:al-ummah-now-d1', 'd1', 'production', 'al-ummah-now-d1', 80000000, 80, 'x')").run();
     for (const kind of ['budget', 'spike']) await db.prepare("INSERT INTO cost_alert_subscriptions (user_id, kind, email, locale, created_at) VALUES ('u1', ?, 'owner@example.com', 'ar', 'x')").bind(kind).run();
     const sent: unknown[] = [];
     const queueEnv = { COSTS_DB: db, CONTACT_MAIL_QUEUE: { sendBatch: async (m: unknown[]) => void sent.push(...m), send: async () => undefined } as never };
@@ -354,5 +358,83 @@ describe('dashboard maths', () => {
     const e = envLines(rows, [], { ...extras, sources: { containers: 'none' } }, now);
     assert.ok(e.qa! > e.production!);
     assert.ok(e.account! >= 2.25);
+  });
+});
+
+describe('Cloudflare billed estimate (COST-GAPS)', () => {
+  it('maps each kind to its billed meters, KV writes without the lists and deletes', () => {
+    assert.deepEqual(meterUsageOf({ kind: 'kv', requests: 0, cpu_ms: null, reads: 10, writes: 9, kv_lists: 3, kv_deletes: 2, log_events: null, logpush_requests: null, gb_seconds: null, stored_bytes: 1024 ** 3 }), {
+      kv_reads: 10, kv_writes: 4, kv_lists: 3, kv_deletes: 2, kv_storage_gb: 1,
+    });
+    assert.deepEqual(meterUsageOf({ kind: 'queue', requests: 5, cpu_ms: null, reads: 5, writes: 5, kv_lists: null, kv_deletes: null, log_events: null, logpush_requests: null, gb_seconds: null, stored_bytes: null }), { queues_operations: 15 });
+  });
+
+  it('applies the allowances once to the month, projects the days left and averages storage over the month', () => {
+    const now = new Date('2026-11-21T00:00:00Z'); // 20 days elapsed, 10 left
+    const days = new Map<string, MeterUsage>();
+    for (let d = 1; d <= 20; d++) days.set(`2026-11-${String(d).padStart(2, '0')}`, { d1_rows_written: 5e6, r2_storage_gb: 30 });
+    days.set('2026-10-31', { d1_rows_written: 100e6 }); // last month: not in the month so far
+    const b = billedCloudflare(days, now);
+    // 100M written − 50M included = $50; projected 150M − 50M = $100
+    assert.equal(b.mtd.lines.find((l) => l.key === 'd1_rows_written')!.cost, 50);
+    assert.equal(b.projected.lines.find((l) => l.key === 'd1_rows_written')!.cost, 100);
+    // 30 GB for 20 of 30 days = 20 GB-months so far, 30 projected; first 10 included
+    assert.equal(b.usage.mtd.r2_storage_gb, 20);
+    assert.equal(b.usage.projected.r2_storage_gb, 30);
+    assert.equal(b.mtd.total, 50 + 0.15);
+    assert.ok(b.mtd.listTotal > b.mtd.total, 'list price ignores the included usage');
+  });
+
+  it('the dashboard counts Cloudflare as billed, lists the meters, the fixed costs, idle cost, drivers and the stacked trend', async () => {
+    const db = costsD1();
+    const now = new Date('2026-11-21T12:00:00Z');
+    for (let d = 1; d <= 20; d++) {
+      const day = `2026-11-${String(d).padStart(2, '0')}`;
+      await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, requests, cpu_ms, log_events, logpush_requests, cost_usd, updated_at) VALUES (?, 'worker:al-ummah-now-production', 'worker', 'production', 'al-ummah-now-production', 2000000, 60000000, 3400000, 2000000, 1.5, 'x')").bind(day).run();
+    }
+    await db.prepare("INSERT INTO cost_fixed_items (id, name, amount_usd, period, start_date, end_date, note, created_at, updated_at) VALUES ('00000000-0000-4000-8000-000000000001', 'Apple Developer', 99, 'yearly', '2026-01-01', NULL, NULL, 'x', 'x')").run();
+    const d = await costsDashboard({ COSTS_DB: db, REPORTS_DB: sqliteD1() } as never, now);
+    // 40M requests (−10M) $9, 1.2B CPU ms (−30M) $23.40, 68M log events (−20M) $28.80, 40M Logpush (−10M) $1.50
+    assert.equal(d.cloudflare.billedMtd, 62.7);
+    assert.equal(d.budget.parts.cloudflare.mtd, 62.7);
+    assert.ok(d.cloudflare.listMtd > d.cloudflare.billedMtd);
+    assert.deepEqual(d.cloudflare.lines.filter((l) => l.cost > 0).map((l) => l.key).sort(), ['logpush_requests', 'logs_events', 'workers_cpu_ms', 'workers_requests']);
+    // Meters with no al-ummah source are listed so the page can say why they are $0
+    assert.ok(d.cloudflare.lines.some((l) => l.key === 'browser_hours' && l.source === 'none'));
+    assert.equal(d.fixed.projected, 8.25);
+    assert.equal(d.budget.parts.fixed.projected, 8.25);
+    assert.ok(d.products.some((p) => p.product === 'fixed'));
+    assert.equal(d.idle.parts.fixed, 8.25);
+    assert.equal(d.drivers[0]!.id, 'worker:al-ummah-now-production');
+    assert.deepEqual(d.trend.series.map((x) => x.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed']);
+    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-1), 0.28);
+  });
+});
+
+describe('fixed and other costs (COST-GAPS)', () => {
+  it('super admins add, change and remove them, each audited; admins only read; bad input refused', async () => {
+    const admin = setup(['Admin']);
+    assert.equal((await admin.req('/api/costs/fixed', send('POST', { name: 'Linear', amountUsd: 10, period: 'monthly', startDate: '2026-11-01' }))).status, 403);
+    const { req, env } = setup(['Super Admin']);
+    const bad = await req('/api/costs/fixed', send('POST', { name: 'Linear', amountUsd: -1, period: 'monthly', startDate: '2026-11-01' }));
+    assert.equal(bad.status, 400);
+    assert.equal(((await bad.json()) as { field: string }).field, 'amountUsd');
+    const made = await req('/api/costs/fixed', send('POST', { name: 'Apple Developer', amountUsd: 99, period: 'yearly', startDate: '2026-01-10', note: 'App Store' }));
+    assert.equal(made.status, 201);
+    const item = ((await made.json()) as { result: { id: string; amountUsd: number } }).result;
+    assert.equal(item.amountUsd, 99);
+    const changed = await req(`/api/costs/fixed/${item.id}`, send('PUT', { name: 'Apple Developer Program', amountUsd: 99, period: 'yearly', startDate: '2026-01-10', endDate: '2027-01-09' }));
+    assert.equal(changed.status, 200);
+    assert.equal((await admin.req('/api/costs/fixed')).status, 200, 'admins may read the list');
+    const list = ((await (await req('/api/costs/fixed')).json()) as { result: { name: string; endDate: string | null }[] }).result;
+    assert.deepEqual(list.map((x) => [x.name, x.endDate]), [['Apple Developer Program', '2027-01-09']]);
+    assert.equal((await req(`/api/costs/fixed/${item.id}`, send('DELETE'))).status, 200);
+    assert.equal((await req(`/api/costs/fixed/${item.id}`, send('DELETE'))).status, 404);
+    const audits = (await env.REPORTS_DB.prepare('SELECT key, old_value, new_value FROM site_settings_log ORDER BY rowid').all<{ key: string; old_value: string | null; new_value: string | null }>()).results ?? [];
+    assert.deepEqual(audits.map((a) => [a.key, a.old_value === null, a.new_value]).map(([k, o, n], i) => [k, o, i === 2 ? n : typeof n]), [
+      [`costs:fixed:${item.id}`, true, 'string'],
+      [`costs:fixed:${item.id}`, false, 'string'],
+      [`costs:fixed:${item.id}`, false, '{"removed":true}'],
+    ]);
   });
 });

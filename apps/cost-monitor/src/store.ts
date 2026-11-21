@@ -42,6 +42,11 @@ interface DailyAgg {
   backlog_avg: number | null;
   backlog_max: number | null;
   gb_seconds: number | null;
+  cpu_ms: number | null;
+  kv_lists: number | null;
+  kv_deletes: number | null;
+  log_events: number | null;
+  logpush_requests: number | null;
 }
 
 /** Recomputes one UTC day of ops_daily from ops_hourly (idempotent). Returns the rows written. */
@@ -54,7 +59,8 @@ export async function rollupDay(db: D1Database, day: string, now: Date): Promise
         MAX(cpu_p99) AS cpu_p99, AVG(latency_p50) AS latency_p50, MAX(latency_p99) AS latency_p99,
         SUM(reads) AS reads, SUM(writes) AS writes, SUM(bytes) AS bytes,
         MAX(stored_bytes) AS stored_bytes, MAX(objects) AS objects,
-        AVG(backlog_avg) AS backlog_avg, MAX(backlog_max) AS backlog_max, SUM(gb_seconds) AS gb_seconds
+        AVG(backlog_avg) AS backlog_avg, MAX(backlog_max) AS backlog_max, SUM(gb_seconds) AS gb_seconds,
+        SUM(cpu_ms) AS cpu_ms, SUM(kv_lists) AS kv_lists, SUM(kv_deletes) AS kv_deletes, SUM(log_events) AS log_events, SUM(logpush_requests) AS logpush_requests
        FROM ops_hourly WHERE hour >= ? AND hour < ? GROUP BY resource_id, kind, env, name`,
     )
     .bind(`${day}T00:00:00Z`, new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().replace('.000Z', 'Z'))
@@ -62,19 +68,22 @@ export async function rollupDay(db: D1Database, day: string, now: Date): Promise
   const stamp = now.toISOString();
   const statements = (results ?? []).map((a) => {
     const cpuP50 = a.cpu_weighted === null ? null : Math.round(a.cpu_weighted);
-    const cost = dayCost(a.kind, { requests: a.requests, cpu_p50: cpuP50, reads: a.reads, writes: a.writes, stored_bytes: a.stored_bytes, gb_seconds: a.gb_seconds });
+    const cost = dayCost(a.kind, { requests: a.requests, cpu_p50: cpuP50, reads: a.reads, writes: a.writes, stored_bytes: a.stored_bytes, gb_seconds: a.gb_seconds, cpu_ms: a.cpu_ms, log_events: a.log_events, logpush_requests: a.logpush_requests });
     return db
       .prepare(
         `INSERT INTO ops_daily (day, resource_id, kind, env, name, requests, errors, cpu_p50, cpu_p99, latency_p50, latency_p99,
-           reads, writes, bytes, stored_bytes, objects, backlog_avg, backlog_max, gb_seconds, cost_usd, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           reads, writes, bytes, stored_bytes, objects, backlog_avg, backlog_max, gb_seconds, cost_usd, updated_at,
+           cpu_ms, kv_lists, kv_deletes, log_events, logpush_requests)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (day, resource_id) DO UPDATE SET requests = excluded.requests, errors = excluded.errors, cpu_p50 = excluded.cpu_p50,
            cpu_p99 = excluded.cpu_p99, latency_p50 = excluded.latency_p50, latency_p99 = excluded.latency_p99, reads = excluded.reads,
            writes = excluded.writes, bytes = excluded.bytes, stored_bytes = excluded.stored_bytes, objects = excluded.objects,
-           backlog_avg = excluded.backlog_avg, backlog_max = excluded.backlog_max, gb_seconds = excluded.gb_seconds, cost_usd = excluded.cost_usd, updated_at = excluded.updated_at`,
+           backlog_avg = excluded.backlog_avg, backlog_max = excluded.backlog_max, gb_seconds = excluded.gb_seconds, cost_usd = excluded.cost_usd, updated_at = excluded.updated_at,
+           cpu_ms = excluded.cpu_ms, kv_lists = excluded.kv_lists, kv_deletes = excluded.kv_deletes, log_events = excluded.log_events, logpush_requests = excluded.logpush_requests`,
       )
       .bind(day, a.resource_id, a.kind, a.env, a.name, a.requests, a.errors, cpuP50, a.cpu_p99, a.latency_p50, a.latency_p99,
-        a.reads, a.writes, a.bytes, a.stored_bytes, a.objects, a.backlog_avg, a.backlog_max, a.gb_seconds, cost, stamp);
+        a.reads, a.writes, a.bytes, a.stored_bytes, a.objects, a.backlog_avg, a.backlog_max, a.gb_seconds, cost, stamp,
+        a.cpu_ms, a.kv_lists, a.kv_deletes, a.log_events, a.logpush_requests);
   });
   for (let i = 0; i < statements.length; i += BATCH) await db.batch(statements.slice(i, i + BATCH));
   return statements.length;

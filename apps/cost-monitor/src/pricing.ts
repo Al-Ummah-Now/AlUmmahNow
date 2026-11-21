@@ -25,6 +25,10 @@ export const PRICES = {
   doGbSecondsPerMillion: 12.5,
   doStorageReadUnitsPerMillion: 0.2,
   doStorageWriteUnitsPerMillion: 1,
+  /** Workers Logs events (an invocation log plus each console line). */
+  logEventsPerMillion: 0.6,
+  /** Requests of Workers with Logpush on (Workers Trace Events Logpush). */
+  logpushRequestsPerMillion: 0.05,
 } as const;
 
 /** Workers Paid: the monthly subscription every account pays, whatever the usage. */
@@ -42,6 +46,10 @@ export interface DayUsage {
   stored_bytes?: number | null;
   /** Durable Object duration. */
   gb_seconds?: number | null;
+  /** Worker CPU as billed (sum, ms); preferred over requests × p50 when collected. */
+  cpu_ms?: number | null;
+  log_events?: number | null;
+  logpush_requests?: number | null;
 }
 
 /** Estimated cost of one resource for one day. */
@@ -51,8 +59,9 @@ export function dayCost(kind: ResourceKind, u: DayUsage): number {
   switch (kind) {
     case 'worker': {
       usd += (n(u.requests) / 1e6) * PRICES.workerRequestPerMillion;
-      const cpuMs = (n(u.requests) * n(u.cpu_p50)) / 1000;
+      const cpuMs = typeof u.cpu_ms === 'number' && Number.isFinite(u.cpu_ms) ? u.cpu_ms : (n(u.requests) * n(u.cpu_p50)) / 1000;
       usd += (cpuMs / 1e6) * PRICES.workerCpuMsPerMillion;
+      usd += (n(u.log_events) / 1e6) * PRICES.logEventsPerMillion + (n(u.logpush_requests) / 1e6) * PRICES.logpushRequestsPerMillion;
       break;
     }
     case 'd1':

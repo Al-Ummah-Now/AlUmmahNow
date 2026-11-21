@@ -11,7 +11,7 @@ import { adminApi, readTokens } from './support/api';
 interface Overview {
   workers: { requests: number };
   queues: { dlqMessages: number };
-  cost: { capUsd: number | null };
+  cost: { capUsd: number | null; spendMtd: number | null };
 }
 
 test.describe('operations', () => {
@@ -44,16 +44,12 @@ test.describe('operations', () => {
     expect(overview.status).toBe(200);
     await expect(page.getByTestId('ops-tiles')).toBeVisible();
     await expect(page.getByTestId('ops-tile-dlq')).toHaveText(String(overview.body.result!.queues.dlqMessages));
-    // One budget (Costs → Alert settings, #1427): the overview cap and the spend meter agree
-    const costs = await adminApi<{ budget: { capUsd: number | null } }>('/api/ops/costs?env=all');
-    if (costs.status === 200) {
-      expect(costs.body.result!.budget.capUsd).toBe(overview.body.result!.cost.capUsd);
-      if (overview.body.result!.cost.capUsd !== null) {
-        await expect(page.getByTestId('ops-budget-meter')).toHaveAttribute('aria-valuemax', String(overview.body.result!.cost.capUsd));
-      } else {
-        await expect(page.getByTestId('ops-budget-unset')).toBeVisible();
-      }
-    }
+    // Spend lives on Costs (owner 2026-11-21): no spend section here, only the one-line pointer,
+    // and the old /api/ops/costs is gone
+    await expect(page.getByTestId('ops-spend')).toHaveCount(0);
+    await expect(page.getByTestId('ops-budget-meter')).toHaveCount(0);
+    expect((await adminApi('/api/ops/costs?env=all')).status).toBe(404);
+    if (overview.body.result!.cost.spendMtd !== null) await expect(page.getByTestId('ops-spend-link').getByRole('link', { name: 'See Costs' })).toHaveAttribute('href', '/costs');
     await expect(page.getByTestId('ops-chart-requests')).toBeVisible();
   });
 

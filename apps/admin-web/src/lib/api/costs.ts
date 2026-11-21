@@ -8,7 +8,7 @@
  */
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
-import type { CostAlertKind, CostAlertSettings, CostCredentialResult, CostDatabases, CostProvider, CostSubscription, CostsDashboard } from './costs-types';
+import type { CostAlertKind, CostAlertSettings, CostCredentialResult, CostDatabases, CostProvider, CostSubscription, CostsDashboard, FixedCost, FixedCostInput } from './costs-types';
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
 const credentialPath = (provider: CostProvider, test = false) => `/api/costs/credentials/${encodeURIComponent(provider)}${test ? '/test' : ''}`;
@@ -56,4 +56,13 @@ export async function saveD1Limits(maxDbGb: number, accountGb: number): Promise<
 /** One capacity rule's value and switch (admin-api PUT /api/ops/thresholds/:id, ops:manage, audited). */
 export async function saveCapacityRule(id: string, value: number, enabled: boolean): Promise<ActionResult<{ id: string }>> {
   return toResult(() => fetchAdmin<{ id: string }>(`/api/ops/thresholds/${encodeURIComponent(id)}`, json('PUT', { value, enabled })));
+}
+
+/** Adds a fixed or other cost (id null) or changes one (ops:manage; audited by admin-api). */
+export async function saveFixedCost(id: string | null, input: FixedCostInput): Promise<ActionResult<FixedCost>> {
+  return toResult(() => (id ? fetchAdmin<FixedCost>(`/api/costs/fixed/${encodeURIComponent(id)}`, json('PUT', input)) : fetchAdmin<FixedCost>('/api/costs/fixed', json('POST', input))));
+}
+
+export async function removeFixedCost(id: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin<unknown>(`/api/costs/fixed/${encodeURIComponent(id)}`, { method: 'DELETE' }));
 }

@@ -1,10 +1,11 @@
 /**
  * Operations page model (docs/admin/LIVE_OPS.md §A.4): query params, which
  * charts each tab shows, gap filling of sparse series, number formats with
- * the locale's digits, and the cap bar. Pure: server and client safe.
+ * the locale's digits, and the Costs page's budget meter helpers. Pure: server and client safe.
  */
 import { compactNumber, dateTimeFormat, moneyFormat, numberFormat } from '@al-ummah/shared-types';
-import { OPS_ENVS, OPS_KINDS, OPS_RANGES, type OpsBudgetLevel, type OpsCosts, type OpsEnv, type OpsKind, type OpsMetric, type OpsRange, type OpsSeries } from '@/lib/api/ops-types';
+import type { CostBudget, CostBudgetLevel, CostIdle } from '@/lib/api/costs-types';
+import { OPS_ENVS, OPS_KINDS, OPS_RANGES, type OpsEnv, type OpsKind, type OpsMetric, type OpsRange, type OpsSeries } from '@/lib/api/ops-types';
 
 import { formatDate, formatHour } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
@@ -96,6 +97,8 @@ export interface OpsFormats {
   us: (v: number) => string;
   /** Durable Object duration, GB-seconds. */
   gbs: (v: number) => string;
+  /** A small amount with up to two decimals (GB-months, hours). */
+  gb: (v: number) => string;
   percent: (v: number) => string;
   usd: (v: number) => string;
   hour: (t: string) => string;
@@ -112,6 +115,7 @@ export function opsFormats(locale: string): OpsFormats {
   const compact = compactNumber(locale);
   const ms = numberFormat(loc, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
   const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
+  const small = numberFormat(loc, { maximumFractionDigits: 2 });
   const usd = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const month = dateTimeFormat(loc, { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -131,6 +135,7 @@ export function opsFormats(locale: string): OpsFormats {
     // CPU comes in microseconds: shown in ms from 1,000 µs
     us: (v) => (v >= 1000 ? ms.format(v / 1000) : `${compact(v)} µs`),
     gbs: (v) => `${compact(Math.round(v))} GB-s`,
+    gb: (v) => (Math.abs(v) >= 1000 ? compact(v) : small.format(v)),
     percent: (v) => percent.format(v),
     usd: (v) => usd.format(v),
     hour: (t) => {
@@ -165,11 +170,11 @@ export interface BudgetMeter {
 }
 
 /** Under 50%: ok; from 50%: warn; from 80% (and over): danger. */
-const toneOf = (level: OpsBudgetLevel): MeterTone => (level === 'over' || level === 'warn80' ? 'danger' : level === 'warn50' ? 'warn' : 'ok');
+const toneOf = (level: CostBudgetLevel): MeterTone => (level === 'over' || level === 'warn80' ? 'danger' : level === 'warn50' ? 'warn' : 'ok');
 const pct = (share: number) => Math.round(Math.max(0, Math.min(1, share)) * 1000) / 10;
 
 /** The budget meter: spent and projected against the budget, ticks at the warning levels. */
-export function budgetMeter(budget: OpsCosts['budget']): BudgetMeter {
+export function budgetMeter(budget: Pick<CostBudget, 'share' | 'projectedShare' | 'level' | 'projectedLevel' | 'levels'>): BudgetMeter {
   const share = budget.share ?? 0;
   const projectedShare = budget.projectedShare ?? 0;
   return {
@@ -184,7 +189,7 @@ export function budgetMeter(budget: OpsCosts['budget']): BudgetMeter {
 }
 
 /** Whether the projected idle cost is under its target, and by how much it is over. */
-export function idleStatus(idle: Pick<OpsCosts['idle'], 'monthlyUsd' | 'targetUsd'>): { under: boolean; overBy: number } {
+export function idleStatus(idle: Pick<CostIdle, 'monthlyUsd' | 'targetUsd'>): { under: boolean; overBy: number } {
   return { under: idle.monthlyUsd <= idle.targetUsd, overBy: Math.max(0, Math.round((idle.monthlyUsd - idle.targetUsd) * 100) / 100) };
 }
 

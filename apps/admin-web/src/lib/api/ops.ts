@@ -3,7 +3,7 @@
  * only: not a 'use server' module, so nothing here is a client-callable action.
  */
 import { fetchAdmin } from './request';
-import type { OpsCosts, OpsEnv, OpsKind, OpsMetric, OpsOverview, OpsRange, OpsResource, OpsSeries } from './ops-types';
+import type { OpsEnv, OpsKind, OpsMetric, OpsOverview, OpsRange, OpsResource, OpsSeries } from './ops-types';
 
 export async function getOpsOverview(env: OpsEnv): Promise<OpsOverview> {
   return fetchAdmin<OpsOverview>(`/api/ops/overview?env=${env}`);
@@ -18,7 +18,3 @@ export async function listOpsResources(env: OpsEnv, kind: OpsKind): Promise<OpsR
   return (await fetchAdmin<{ resources: OpsResource[] }>(`/api/ops/resources?env=${env}&kind=${kind}`)).resources;
 }
 
-/** Spend against the configured monthly budget (every env and source), the idle projection and the top drivers. */
-export async function getOpsCosts(env: 'all' | OpsEnv = 'all'): Promise<OpsCosts> {
-  return fetchAdmin<OpsCosts>(`/api/ops/costs?env=${env}`);
-}

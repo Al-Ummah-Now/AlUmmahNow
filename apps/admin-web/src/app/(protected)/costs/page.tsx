@@ -13,6 +13,8 @@ import { CostThresholds, MyCostAlerts } from './CostAlertForms';
 import { CostConnections } from './CostConnections';
 import { DatabasesSection } from './DatabasesSection';
 import { DatabaseSettings } from './DatabaseSettings';
+import { CloudflarePanel, DriversSection } from './details';
+import { FixedCosts } from './FixedCosts';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,9 +25,12 @@ function loadError(error: unknown, t: Translator): string {
 
 /**
  * Costs (COST-1, owner: "build infra, set a place in admin to set token"): month to date against
- * the budget with the forecast and open cost alerts, the breakdown by product and environment,
- * the 30-day trend, top movers, the admin's own alert emails and, for super admins (ops:manage),
- * the alert settings and the collector's connections. Data: admin-api GET /api/costs (ops:read).
+ * the budget with the forecast, the idle cost and open cost alerts, the breakdown by product and
+ * environment, Cloudflare at list price against billed (COST-GAPS), the fixed and other costs,
+ * the 30-day trend per env and source, the biggest drivers, top movers, the admin's own alert
+ * emails and, for super admins (ops:manage), the fixed costs, alert settings and the collector's
+ * connections. All spend lives here, none on Operations (owner, 2026-11-21).
+ * Data: admin-api GET /api/costs (ops:read).
  */
 export default async function CostsPage() {
   const { t, locale } = await getI18n();
@@ -66,7 +71,10 @@ export default async function CostsPage() {
             <div className="min-w-0 min-[1800px]:col-span-3"><ProductsPanel d={d} t={t} f={f} locale={locale} /></div>
             <div className="min-w-0 min-[1800px]:col-span-2"><EnvsPanel d={d} t={t} f={f} /></div>
           </div>
+          <CloudflarePanel d={d} t={t} f={f} />
+          <FixedCosts items={d.fixed.items} mtd={d.fixed.mtd} projected={d.fixed.projected} canManage={d.canManage} />
           <TrendPanel d={d} t={t} f={f} locale={locale} />
+          <DriversSection d={d} t={t} f={f} />
           <MoversSection d={d} t={t} locale={locale} />
           {databases && <DatabasesSection data={databases} t={t} f={f} settings={databases.canManage ? <DatabaseSettings data={databases} /> : null} />}
           <div className={`grid grid-cols-1 gap-6 ${d.canManage ? 'xl:grid-cols-5' : ''}`}>

@@ -38,9 +38,12 @@ import type { CostsDashboard } from '../src/lib/api/costs-types';
 
 (globalThis as { React?: unknown }).React = React;
 type Sections = typeof import('../src/app/(protected)/costs/sections');
+type Details = typeof import('../src/app/(protected)/costs/details');
 let sections: Sections;
+let details: Details;
 before(async () => {
   sections = await import('../src/app/(protected)/costs/sections');
+  details = await import('../src/app/(protected)/costs/details');
 });
 
 const NOW = new Date('2026-11-14T15:00:00Z');
@@ -240,14 +243,18 @@ function freshDashboard(overrides: Partial<CostsDashboard> = {}): CostsDashboard
   return {
     budget: {
       capUsd: null, month: '2026-11', mtd: 2.17, projected: 5, share: null, projectedShare: null, level: 'ok', projectedLevel: 'ok',
-      parts: { cloudflare: zeros, bunny: zeros, containers: zeros, ai: zeros, resend: zeros, plan: { mtd: 2.17, projected: 5 } }, levels: [0.5, 0.8, 1],
+      parts: { cloudflare: zeros, bunny: zeros, containers: zeros, ai: zeros, resend: zeros, plan: { mtd: 2.17, projected: 5 }, fixed: zeros }, levels: [0.5, 0.8, 1],
     },
     forecast: { linear: 5, trailing: 5 },
     products: [{ product: 'plan', mtd: 2.17, projected: 5, last7: 1.17, prev7: 1.17 }],
     envs: { production: 0, stage: 0, qa: 0, account: 2.17 },
     movers: { up: [], down: [] },
     spikes: [],
-    trend: { days: Array.from({ length: 30 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`), values: Array(30).fill(0) },
+    trend: { days: Array.from({ length: 30 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`), values: Array(30).fill(0), series: [] },
+    cloudflare: { billedMtd: 0, billedProjected: 0, listMtd: 0, lines: [{ key: 'browser_hours', used: 0, included: 10, billable: 0, cost: 0, listCost: 0, projectedCost: 0, source: 'none', billed: true }] },
+    fixed: { items: [], mtd: 0, projected: 0 },
+    idle: { monthlyUsd: 5, targetUsd: 50, byEnv: {}, parts: { cloudflare: 0, bunny: 0, containers: 0, ai: 0, plan: 5, fixed: 0 }, top: [], days: [] },
+    drivers: [],
     sources: { bunny: 'none', containers: 'none', resend: 'none' },
     alerts: [],
     settings,
@@ -277,7 +284,15 @@ describe('costs sections render', () => {
         render(h(sections.EnvsPanel, { d, t, f })),
         render(h(sections.TrendPanel, { d, t, f, locale })),
         render(h(sections.MoversSection, { d, t, locale })),
+        render(h(details.CloudflarePanel, { d, t, f })),
+        render(h(details.DriversSection, { d, t, f })),
       ].join('');
+      assert.match(html, /data-testid="costs-idle-status"/);
+      assert.match(html, /data-testid="costs-part-fixed"/);
+      assert.match(html, /data-testid="costs-cf-shared"/);
+      assert.match(html, /data-testid="costs-drivers-empty"/);
+      // Browser Run has no source of ours: the line says so instead of a figure
+      assert.ok(html.includes(locale === 'ar' ? 'لمشروع آخر' : 'belong to another project'));
       assert.match(html, /data-testid="costs-token-banner"[^>]*data-kind="missing"/);
       assert.match(html, /data-testid="costs-token-action"/);
       assert.match(html, /data-testid="costs-budget-banner"[^>]*data-kind="unset"/);
@@ -305,6 +320,36 @@ describe('costs sections render', () => {
     assert.equal(render(React.createElement(sections.BudgetNotice as React.FC, { d, t } as never)), '');
     const html = render(React.createElement(sections.BudgetSection as React.FC, { d, t, f } as never));
     assert.match(html, /aria-valuemax="600"[^>]*data-testid="costs-budget-meter"/);
+  });
+
+  it('reads Cloudflare like the invoice: list against billed per line, the allowance and the idle target', () => {
+    const t = createTranslator('en');
+    const f = opsFormats('en');
+    const d = freshDashboard({
+      cloudflare: {
+        billedMtd: 61,
+        billedProjected: 70,
+        listMtd: 110.46,
+        lines: [
+          { key: 'd1_rows_written', used: 110.46e6, included: 50e6, billable: 60.46e6, cost: 61, listCost: 110.46, projectedCost: 70, source: 'measured', billed: true },
+          { key: 'analytics_engine_writes', used: 0, included: 10e6, billable: 0, cost: 0, listCost: 0, projectedCost: 0, source: 'none', billed: false },
+        ],
+      },
+      idle: { monthlyUsd: 212.25, targetUsd: 50, byEnv: { qa: 150, production: 62.25 }, parts: { cloudflare: 200, bunny: 0, containers: 0, ai: 0, plan: 5, fixed: 7.25 }, top: [], days: [] },
+    });
+    const h = (c: unknown, props: object) => React.createElement(c as React.FC, props as never);
+    const cf = render(h(details.CloudflarePanel, { d, t, f }));
+    assert.match(cf, /data-testid="costs-cf-billed"[^>]*>\$61\.00</);
+    assert.match(cf, /data-testid="costs-cf-list"[^>]*>\$110\.46</);
+    assert.ok(cf.indexOf('D1 rows written') < cf.indexOf('Analytics Engine writes'), 'billed lines first');
+    assert.ok(cf.includes('Cloudflare does not bill this yet.'));
+    assert.ok(cf.includes('110.5M') && cf.includes('50M'), 'usage and allowance as compact counts');
+    const budget = render(h(sections.BudgetSection, { d, t, f }));
+    assert.match(budget, /data-testid="costs-idle-status"[^>]*>\$162\.25 over the \$50\.00 target/);
+    assert.ok(budget.includes('Production $62.25 · QA $150.00'));
+    const budgetAr = render(h(sections.BudgetSection, { d, t: createTranslator('ar'), f: opsFormats('ar') }));
+    assert.ok(budgetAr.includes('، '), 'Arabic joins the env list with «،»');
+    assert.ok(!budgetAr.includes(' · '));
   });
 
   it('tells an admin who cannot manage that a super admin sets the token, without a button', () => {
