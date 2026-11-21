@@ -260,6 +260,14 @@ async function settle(page: Page, path: string, lang: Lang): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+async function closeMenu(page: Page): Promise<void> {
+  const menu = page.getByTestId('nav-menu');
+  await expect(async () => {
+    if (await menu.isVisible()) await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
+}
+
 async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise<Locator> {
   const menu = page.getByTestId('nav-menu');
   // The page at its top first: an open menu locks the page's scroll, so a page left part-scrolled (a
@@ -511,6 +519,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     // Number-only markers: where no outline can keep the clear space (a menu row right under its label,
     // two header buttons 4 px apart), the control gets its number alone (owner, 2026-11-20)
     const bare: boolean[] = [];
+    const bareWhy: string[] = [];
     for (const [i, target] of targets.entries()) {
       const r = rects[i];
       const mine = (b: Box) => (b.el ? target.contains(b.el) : false);
@@ -551,6 +560,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       let o = outline(gMax);
       for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
       bare.push(crowded(o).length > 0 || straddlesBar(grow(o, 2)));
+      // Why it went number-only, in the run's notes (AUDIT-2: an outline in English, none in Arabic)
+      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...(straddlesBar(grow(o, 2)) ? ['a bar'] : [])].slice(0, 3).join(' | ') : '');
       rings.push(o);
       radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
     }
@@ -559,7 +570,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       if (bare[i] || bare[j]) continue;
       const a = grow(rings[i], 2);
       const b = grow(rings[j], 2);
-      if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) bare[j] = true;
+      if (hit(grow(a, CLEAR), b) && !contains(a, b) && !contains(b, a)) { bare[j] = true; bareWhy[j] = `outline ${i + 1}`; }
     }
     // A number-only marker is placed against the control itself
     for (const [i, isBare] of bare.entries()) if (isBare) rings[i] = fromRect(rects[i]);
@@ -668,7 +679,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       if (above) m.dataset.helpPlace = 'above';
       document.body.append(...(bare[i] ? [m] : [ring, m]));
     }
-    const bareList = targets.filter((_, i) => bare[i]).map((t) => t.dataset.helpTarget);
+    const bareList = targets.map((t, i) => (bare[i] ? `${t.dataset.helpTarget} (crowded by ${bareWhy[i] || '?'})` : '')).filter(Boolean);
     return { missed, faults, bareList, placed };
   }, { rtl: lang === 'ar', above: place === 'above' });
   // Not silent: the run lists every picture whose number had to sit on another control
@@ -1055,7 +1066,7 @@ const CLIP_LEAK_WATCH = `(() => {
 
 /**
  * Clips: the example address and handle in place of the run's, as the pictures have them (AUDIT:
- * amina@example.com is fine), kept up while the clip records: a MutationObserver rewrites any run
+ * a real-looking fixture address, amina.yusuf@mail.alummahnow.net, AUDIT-2 2026-11-21), kept up while the clip records: a MutationObserver rewrites any run
  * address or handle the moment it renders, before the next frame is painted
  */
 const CLIP_SCRUB = `(() => {
@@ -1063,13 +1074,13 @@ const CLIP_SCRUB = `(() => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const t = node.textContent || '';
-      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina').replace(/@?e2e\\.alummahnow\\.net/g, '@example.com');
+      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina.yusuf').replace(/@?e2e\\.alummahnow\\.net/g, '@mail.alummahnow.net');
       const u = node.textContent || '';
       if (/@\\s*E2E[\\w-]+/i.test(u)) node.textContent = u.replace(/@\\s*E2E[\\w-]+/gi, '@communitycorner');
     }
-    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@example.com'; });
+    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina.yusuf@mail.alummahnow.net'; });
     // An avatar initial taken from the run address ('E' of e2e+…) belongs to the example address too:
-    // 'A' (the account-switch clip showed 'E' beside amina@example.com while the name loaded)
+    // 'A' (the account-switch clip showed 'E' beside the example address while the name loaded)
     const scope = root.querySelectorAll ? root : document.body;
     scope.querySelectorAll('[class*="avatar"]').forEach((el) => { if (el.childElementCount === 0 && (el.textContent || '').trim() === 'E') el.textContent = 'A'; });
     if (root.closest && root.closest('[class*="avatar"]') && (root.textContent || '').trim() === 'E') root.textContent = 'A';
@@ -1106,18 +1117,18 @@ async function expectNoLeaks(page: Page): Promise<void> {
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
-async function shoot(page: Page, file: string, region: Locator[] = []): Promise<void> {
+async function shoot(page: Page, file: string, region: Locator[] = [], opts: { keepHeader?: boolean } = {}): Promise<void> {
   // The run account's address (e2e+<run>…@e2e.alummahnow.net) reads as noise: show an example one
   await page.evaluate(() => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
-        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina.yusuf').replace(/@?e2e\.alummahnow\.net/g, '@mail.alummahnow.net');
       }
       // Run-tagged handles (@E2Ehelp<run>…) read as noise too
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
-    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina.yusuf@mail.alummahnow.net'; });
     // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
     // the per-node pass: rewrite the smallest element whose whole text is a run handle
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
@@ -1126,7 +1137,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     });
     // Field values are not text nodes: the profile's (read-only) email field showed the run address
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
-      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@example.com';
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina.yusuf@mail.alummahnow.net';
       else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
     });
   });
@@ -1153,7 +1164,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
     const coreBoxes = region.length ? all : (markers.length ? (await Promise.all(markers.map((m) => m.boundingBox()))).filter(Boolean) as typeof all : all);
     const core = { l: Math.min(...coreBoxes.map((b) => b.x)), t: Math.min(...coreBoxes.map((b) => b.y)), r: Math.max(...coreBoxes.map((b) => b.x + b.width)), b: Math.max(...coreBoxes.map((b) => b.y + b.height)) };
     await page.evaluate(PAGE_HELPERS);
-    clip = await page.evaluate(({ c, core }) => {
+    clip = await page.evaluate(({ c, core, keepHeader }) => {
       // Each edge goes to the nearest clean line, searched directly so it never stops mid-line (audit
       // r3). Clean, best first: (1) crosses no line of text, control, picture, marker or card (a card
       // that could fit is never cut, audit r4); (2) crosses no text, control or picture; (3) no text.
@@ -1224,6 +1235,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       const marks = [...document.querySelectorAll('[data-help-marker]')].map((m) => m.getBoundingClientRect());
       for (const bar of bars) {
         if (marks.some((m) => m.bottom > bar.t && m.top < bar.b)) continue;
+        // A menu that hangs from the header keeps it: the picture shows where the menu opens from, and
+        // the menu's top edge isn't cut at the picture's edge (AUDIT-2 2026-11-21)
+        if (keepHeader && bar.t <= 1) continue;
         if (bar.t >= H - 1 - (bar.b - bar.t) && core.b > bar.t) core.b = Math.max(core.t + 1, bar.t);
         if (bar.t <= 1 && core.t < bar.b) core.t = Math.min(core.b - 1, bar.b);
       }
@@ -1303,7 +1317,7 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       }
       if (notes.length) notes.push(`covered: ${avoidWhat.join(', ')}`);
       return { x: l, y: t, width: r - l, height: b - t, notes, avoid: avoid.length };
-    }, { c: clip, core });
+    }, { c: clip, core, keepHeader: !!opts.keepHeader });
     if (clip && 'notes' in clip) {
       const { notes: cropNotes, avoid: avoidN, ...box } = clip as typeof clip & { notes: string[]; avoid: number };
       if (cropNotes.length) console.log(`help crop ${file}: ${cropNotes.join('; ')} (avoid ${avoidN})`);
@@ -1322,6 +1336,8 @@ interface Scene {
   signedIn?: boolean;
   /** Where the numbers go (see mark) */
   markers?: 'side' | 'above';
+  /** The header stays in the picture (a menu that opens from it) */
+  keepHeader?: boolean;
   /** Puts the page in the state the picture shows; returns [markers, region] */
   run: (page: Page, lang: Lang, device: Device) => Promise<[Locator[], Locator[]]>;
 }
@@ -1396,10 +1412,13 @@ const SCENES: Scene[] = [
     // Markers: you (tagged Personal), then your channel (tagged Channel). One control per marker,
     // never a heading row by itself (owner review 2026-11-16)
     id: 'identity-switch',
-    run: async (page, lang) => {
+    keepHeader: true,
+    run: async (page, lang, device) => {
       // Over the library page, like identity-menu: plain rows behind the menu (audit r4/r5: the
-      // channel header, share button and tab strip were cut under it)
-      await settle(page, '/library', lang);
+      // channel header, share button and tab strip were cut under it). On a phone the menu spans the
+      // width and Library's "Watch later" ran under its foot: Playlists has nothing there, so the
+      // picture gets room under the menu and no text shows through its glass (AUDIT-2 2026-11-21)
+      await settle(page, device === 'phone' ? '/library/playlists' : '/library', lang);
       const menu = await openMenu(page, 'channels');
       return [[menu.getByTestId('nav-channel-option-none'), menu.getByTestId('nav-channel-option').first()], [header(page), menu]];
     },
@@ -1501,7 +1520,7 @@ for (const scene of SCENES) {
         const listed = listedMarkers(lang === 'ar' ? HELP_AR : HELP_EN, scene.id);
         if (listed.some((n) => n !== markers.length)) throw new Error(`${markers.length} markers, but Help lists ${listed.join('/')} under this picture`);
         await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`), scene.markers);
-        await shoot(page, name, region);
+        await shoot(page, name, region, { keepHeader: scene.keepHeader });
       } catch (error) {
         problems.push(`${name}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
         await page.screenshot({ path: test.info().outputPath(`${name}.failed.png`), fullPage: false }).catch(() => undefined);
@@ -1512,8 +1531,11 @@ for (const scene of SCENES) {
   });
 }
 
+/** What a clip does on camera; `poster` retakes the clip's still at that moment (else it is the first frame) */
+type ClipAct = (page: Page, poster: () => Promise<void>) => Promise<void>;
+
 /** Records `act` in a fresh desktop context; keeps from `act` on, trimmed to `seconds`, plus a still */
-async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: (page: Page) => Promise<void>, seconds = 10): Promise<void> {
+async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds = 10): Promise<void> {
   try {
     await recordClip(browser, id, lang, mode, prepare, act, seconds);
   } catch (error) {
@@ -1521,7 +1543,7 @@ async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepar
   }
 }
 
-async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: (page: Page) => Promise<void>, seconds: number): Promise<void> {
+async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds: number): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'help-clip-'));
   try {
     const started = Date.now();
@@ -1537,7 +1559,7 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
       await page.evaluate(CLIP_LEAK_WATCH);
       await page.screenshot({ path: join(CLIPS, `${id}.${lang}.${mode}.png`) });
       offset = (Date.now() - started) / 1000;
-      await act(page);
+      await act(page, async () => { await page.screenshot({ path: join(CLIPS, `${id}.${lang}.${mode}.png`) }); });
       await page.waitForTimeout(1200);
       await expectNoLeaks(page);
       const during = await readClipLeaks(page);
@@ -1560,10 +1582,20 @@ test('clip identity-switch', async ({ browser }) => {
   for (const lang of LANGS) for (const mode of MODES) {
     await clip(browser, 'identity-switch', lang, mode, async (page) => {
       await settle(page, `/video/${videoId}`, lang);
+      // Off camera (before the clip starts), the menu once, both views, until every picture in it has
+      // loaded: on camera it then opens whole, never with empty icon slots or a bare avatar disc
+      // (AUDIT-2 2026-11-21: Website and Your profile icons empty, Weekend Sessions a plain disc)
+      for (const view of ['main', 'channels'] as const) {
+        const warm = await openMenu(page, view);
+        await expect.poll(() => warm.evaluate((m) => [...m.querySelectorAll('img')].every((i) => i.complete && i.naturalWidth > 0)), { timeout: 20_000 }).toBe(true);
+      }
+      await closeMenu(page);
       await page.getByTestId('comment-identity').first().scrollIntoViewIfNeeded();
-    }, async (page) => {
+    }, async (page, poster) => {
       const menu = await openMenu(page, 'channels');
       await page.waitForTimeout(600);
+      // The clip's still shows the switch itself, not the comments under it (AUDIT-2)
+      await poster();
       await menu.getByTestId('nav-channel-option-none').click();
       await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'member', { timeout: 30_000 });
       await page.waitForTimeout(1500);
