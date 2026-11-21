@@ -210,6 +210,8 @@ async function cdnGuid(id: string): Promise<string | null> {
 }
 const data = useOwnData(test as never);
 let creator: Creator;
+/** Each channel's run handle and the handle shown in its place (audit r4: both read @communitycorner) */
+const handles: Array<[string, string]> = [];
 const digits: Record<string, string[]> = {};
 const strips: Record<string, unknown> = {};
 const problems: string[] = [];
@@ -230,6 +232,10 @@ test.beforeAll(async ({ browser }) => {
     const named = await put(`/api/channels/${id}`, { name: c.name.en, nameLocalized: c.name, description: c.description.en, descriptionLocalized: c.description }, id);
     expect(named.status, await named.clone().text()).toBeLessThan(300);
     // Every tab on in the config: what a visitor sees is then down to the content
+    const stored = (await (await apiFetch(user, `/api/channels/${id}`, { headers: { channelId: id } })).json().catch(() => ({}))) as { result?: { handle?: string }; handle?: string; data?: { handle?: string } };
+    const handle = (stored.result?.handle ?? stored.data?.handle ?? stored.handle ?? '').replace(/^@+/, '');
+    if (handle) handles.push([handle, id === full ? 'communitycorner' : 'lanternmarket']);
+    else problems.push(`no handle read for channel ${id}`);
     const tabs = await put(`/api/channels/${id}/tabs`, { defaultTab: 'home', tabs: ALL_TABS.map((tab, position) => ({ id: tab, visible: true, position })) }, id);
     expect(tabs.status, await tabs.clone().text()).toBeLessThan(300);
   }
@@ -309,13 +315,21 @@ async function settle(page: Page, path: string, lang: Lang): Promise<void> {
 }
 
 async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise<void> {
-  await page.evaluate(() => {
+  await page.evaluate((pairs: Array<[string, string]>) => {
+    // Each channel's run handle becomes its own stand-in handle
+    const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const [from, to] of pairs) {
+      const has = new RegExp(escape(from), 'i');
+      const all = new RegExp(escape(from), 'gi');
+      const walkerH = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walkerH.nextNode(); node; node = walkerH.nextNode()) if (node.textContent && has.test(node.textContent)) node.textContent = node.textContent.replace(all, to);
+    }
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
     }
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => { if (el.childElementCount === 0 && /@\s*E2E[\w-]+/i.test(el.textContent ?? '')) el.textContent = (el.textContent ?? '').replace(/@\s*E2E[\w-]+/gi, '@communitycorner'); });
-  });
+  }, handles);
   await page.mouse.move(1, 1);
   await page.waitForTimeout(300);
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -337,7 +351,21 @@ async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise
       }
       return out;
     });
-    problems.push(`${dir}/${file}: page scrolls sideways by ${sideways}px: ${wide.join(' | ')}`);
+    // And what is wider than the window or overflows its own box (#1695)
+    const wider = await page.evaluate(() => {
+      const w = document.documentElement.clientWidth;
+      const out: string[] = [`doc ${document.documentElement.scrollWidth} body ${document.body.scrollWidth} vw ${innerWidth}`];
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+        const r = el.getBoundingClientRect();
+        const overflows = el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'visible' && el.clientWidth > 0;
+        if (r.width <= w + 1 && !overflows) continue;
+        const owner = el.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
+        out.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 50)} in [${owner}] w${Math.round(r.width)} sw${el.scrollWidth}/cw${el.clientWidth}`);
+        if (out.length >= 25) break;
+      }
+      return out;
+    });
+    problems.push(`${dir}/${file}: page scrolls sideways by ${sideways}px: ${wide.join(' | ')} || wider: ${wider.join(' | ')}`);
   }
   strips[`${dir}/${file}`] = await tabsAndChipsInView(page);
   if (lang === 'ar') {
@@ -436,7 +464,7 @@ each('search', false, async (page, lang, tag) => {
   await shoot(page, 'search', `search-type-chips-${tag}`, lang);
 });
 
-each('studio-analytics', true, async (page, lang, tag) => {
+each('studio-analytics', true, async (page, lang, tag, device) => {
   await settle(page, `/studio/${creator.channelIds[0]}/analytics`, lang);
   await expect(page.getByTestId('studio-analytics')).toBeVisible();
   await expect(page.getByTestId('studio-analytics-loading')).toHaveCount(0, { timeout: 30_000 });
@@ -444,9 +472,30 @@ each('studio-analytics', true, async (page, lang, tag) => {
   // under the header or the bottom tab bar (audit r1)
   const metrics = page.locator('[data-testid="studio-analytics"] [role="group"]:has(> button[aria-pressed])').first();
   await expect(metrics).toBeVisible();
-  await metrics.evaluate((el) => el.setAttribute('data-review-centre', ''));
-  await centre(page, '[data-review-centre]');
+  // From the top in every size (audit r4: 360 was scrolled past the title and range), with the
+  // chips in view under the cards
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = await metrics.boundingBox();
+  if (!box || box.y + box.height > page.viewportSize()!.height - 80) {
+    await metrics.evaluate((el) => el.setAttribute('data-review-centre', ''));
+    await centre(page, '[data-review-centre]');
+  }
   await shoot(page, 'studio-analytics', `analytics-metrics-${tag}`, lang);
+  // The Top content table (#1695, audit r5): titles truncate in the space the numbers leave; a table
+  // still wider than its box scrolls inside it with the far edge faded. Phones only
+  if (device === 'desktop') return;
+  const heading = page.locator('#studio-top');
+  await expect(heading).toBeVisible();
+  await heading.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => window.scrollBy(0, -72));
+  await page.waitForTimeout(300);
+  await shoot(page, 'studio-analytics', `analytics-top-${tag}`, lang);
+  const scrollBox = page.getByTestId('studio-top-scroll');
+  if ((await scrollBox.getAttribute('data-scrolls')) === 'end') {
+    await scrollBox.evaluate((el) => el.scrollBy({ left: (getComputedStyle(el).direction === 'rtl' ? -1 : 1) * el.scrollWidth }));
+    await page.waitForTimeout(300);
+    await shoot(page, 'studio-analytics', `analytics-top-scrolled-${tag}`, lang);
+  }
 });
 
 async function centre(page: Page, selector: string): Promise<void> {
