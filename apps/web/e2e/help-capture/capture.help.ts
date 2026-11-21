@@ -217,6 +217,9 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
   await context.route((url) => url.pathname.startsWith('/thumb/'), serveThumb);
+  // No view beacons: each capture visit counted as a view, so the watch page read "No views" in one
+  // picture and "1 view" in its Light/Dark twin (r5 check)
+  await context.route((url) => url.pathname.startsWith('/api/analytics/video'), (route) => route.fulfill({ status: 204, body: '' }));
   // Video cards and Up next show only the demo videos: the stack's seed videos carry test titles
   await context.addInitScript((ids: string[]) => {
     const idOf = (el: Element) => el.getAttribute('data-video-id') || decodeURIComponent((el.getAttribute('href') ?? el.querySelector('a[href*="/video/"]')?.getAttribute('href') ?? '').split('/video/')[1]?.split(/[?#/]/)[0] ?? '');
@@ -231,6 +234,22 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   await context.addInitScript(CLIP_SCRUB);
   const page = await context.newPage();
   return { context, page };
+}
+
+/** The watch page's "views • when" line as the first picture of each language showed it */
+const watchMeta = new Map<Lang, string[]>();
+
+/**
+ * One "views • when" line per language across devices and Light/Dark: the run's later pictures
+ * came minutes after the upload, so "now" turned into "1 minute ago" between twins (r5 check)
+ */
+async function pinWatchMeta(page: Page, lang: Lang): Promise<void> {
+  const parts = page.locator('summary[aria-describedby]').first().locator(':scope > span:not([hidden]):not([aria-hidden]), :scope > time');
+  if ((await parts.count()) === 0) return;
+  const seen = watchMeta.get(lang);
+  // innerHTML: the date keeps its screen-reader text
+  if (!seen) { watchMeta.set(lang, await parts.evaluateAll((els) => els.map((el) => el.innerHTML))); return; }
+  await parts.evaluateAll((els, html) => els.forEach((el, i) => { if (html[i] !== undefined) el.innerHTML = html[i]; }), seen);
 }
 
 async function settle(page: Page, path: string, lang: Lang): Promise<void> {
@@ -1339,6 +1358,7 @@ const SCENES: Scene[] = [
       // The playlist button (#1183 gives it a test id; before, its ListPlus icon tells it apart from Share)
       const save = page.getByTestId('save-to-playlist-button').or(page.locator('.watch-actions button:has(svg.lucide-list-plus)')).first();
       await like.scrollIntoViewIfNeeded();
+      await pinWatchMeta(page, lang);
       return [[like, later, save], [page.locator('.watch-actions').first(), page.getByTestId('watch-channel').first()]];
     },
   },
