@@ -1130,7 +1130,7 @@ const CLIP_LEAK_WATCH = `(() => {
 
 /**
  * Clips: the example address and handle in place of the run's, as the pictures have them (AUDIT:
- * a real-looking fixture address, amina.yusuf@mail.alummahnow.net, AUDIT-2 2026-11-21), kept up while the clip records: a MutationObserver rewrites any run
+ * a real-looking fixture address, amina@alummahnow.net, AUDIT-2 2026-11-21; short enough for the Arabic phone menu), kept up while the clip records: a MutationObserver rewrites any run
  * address or handle the moment it renders, before the next frame is painted
  */
 const CLIP_SCRUB = `(() => {
@@ -1138,11 +1138,11 @@ const CLIP_SCRUB = `(() => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const t = node.textContent || '';
-      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina.yusuf').replace(/@?e2e\\.alummahnow\\.net/g, '@mail.alummahnow.net');
+      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina').replace(/@?e2e\\.alummahnow\\.net/g, '@alummahnow.net');
       const u = node.textContent || '';
       if (/@\\s*E2E[\\w-]+/i.test(u)) node.textContent = u.replace(/@\\s*E2E[\\w-]+/gi, '@communitycorner');
     }
-    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina.yusuf@mail.alummahnow.net'; });
+    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@alummahnow.net'; });
     // An avatar initial taken from the run address ('E' of e2e+…) belongs to the example address too:
     // 'A' (the account-switch clip showed 'E' beside the example address while the name loaded)
     const scope = root.querySelectorAll ? root : document.body;
@@ -1187,12 +1187,12 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
-        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina.yusuf').replace(/@?e2e\.alummahnow\.net/g, '@mail.alummahnow.net');
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@alummahnow.net');
       }
       // Run-tagged handles (@E2Ehelp<run>…) read as noise too
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
-    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina.yusuf@mail.alummahnow.net'; });
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@alummahnow.net'; });
     // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
     // the per-node pass: rewrite the smallest element whose whole text is a run handle
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
@@ -1201,7 +1201,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
     });
     // Field values are not text nodes: the profile's (read-only) email field showed the run address
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
-      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina.yusuf@mail.alummahnow.net';
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@alummahnow.net';
       else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
     });
   });
