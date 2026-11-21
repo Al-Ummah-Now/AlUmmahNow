@@ -109,7 +109,8 @@ describe('page formatters', () => {
       assert.doesNotMatch(text, /US\$|\$US|\$/, `dollar sign in Arabic «${text}»`);
     }
     assert.equal(d.usd(12.69), '١٣ دولار أمريكي');
-    assert.equal(o.usd(12.69), '١٢٫٦٩ دولار أمريكي');
+    // No-break spaces: «دولار أمريكي» never wraps away from its amount (AUDIT-2 #27)
+    assert.equal(o.usd(12.69), '١٢٫٦٩\u00a0دولار\u00a0أمريكي');
   });
 
   it('English is unchanged', () => {

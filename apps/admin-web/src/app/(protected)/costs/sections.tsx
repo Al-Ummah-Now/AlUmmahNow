@@ -33,16 +33,17 @@ export const TREND_COLOR: Record<CostTrendKey, string> = {
   containers: 'var(--spend-containers)',
   ai: 'var(--spend-ai)',
   resend: 'var(--spend-resend)',
+  plan: 'var(--spend-plan)',
   fixed: 'var(--spend-fixed)',
 };
 const PARTS: CostBudgetPart[] = ['cloudflare', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed'];
 const PART_COLOR: Record<CostBudgetPart, string> = {
-  cloudflare: 'var(--spend-qa)',
+  cloudflare: 'var(--spend-cloudflare)',
   bunny: 'var(--spend-bunny)',
   containers: 'var(--spend-containers)',
   ai: 'var(--spend-ai)',
   resend: 'var(--spend-resend)',
-  plan: 'var(--spend-stage)',
+  plan: 'var(--spend-plan)',
   fixed: 'var(--spend-fixed)',
 };
 const TONE_FILL: Record<MeterTone, string> = { ok: 'var(--accent)', warn: 'var(--warning-fg)', danger: 'var(--danger-fg)' };
@@ -61,10 +62,21 @@ interface Common {
 
 const envLabel = (t: Translator, env: string) => (ENV_KEYS as string[]).includes(env) ? t(`costs.envs.${env as CostEnvKey}`) : env;
 
+/** An amount on one line: «٢١٤٫٣٧ دولار أمريكي» wrapped between «دولار» and «أمريكي». */
+export const keepTogether = (s: string) => s.replace(/ /g, '\u00a0');
+
 /** "+$1.20" / "−$0.80" in the locale's digits. */
 export function signedUsd(locale: string): (v: number) => string {
-  const nf = moneyFormat(locale, 'USD', { signDisplay: 'exceptZero', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return (v) => nf.format(v);
+  const nf = moneyFormat(locale, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rtl = locale.startsWith('ar');
+  // Sign first in reading order: a true minus, and in Arabic a right-to-left mark before it so the
+  // sign sits on the number's right («−٠٫١٠ دولار»), never at the visual end; the amount never wraps
+  return (v) => {
+    if (Math.round(v * 100) === 0) return keepTogether(nf.format(0));
+    const body = keepTogether(nf.format(Math.abs(v)));
+    const sign = v > 0 ? '+' : '\u2212';
+    return rtl ? `\u200f${sign}${body}` : `${sign}${body}`;
+  };
 }
 
 function percentList(levels: readonly number[], f: OpsFormats, t: Translator): string {
@@ -343,7 +355,9 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
               <span className={`block ${idle.under ? 'text-success-fg' : 'text-danger-fg'}`} data-testid="costs-idle-status">
                 {idle.under ? t('costs.budget.idleUnder', { target: f.usd(d.idle.targetUsd) }) : t('costs.budget.idleOver', { target: f.usd(d.idle.targetUsd), over: f.usd(idle.overBy) })}
               </span>
-              {idleByEnv && <span className="block">{idleByEnv}</span>}
+              <span className="block" data-testid="costs-idle-parts">
+                {t('costs.budget.idleCloudflare', { value: f.usd(d.idle.parts.cloudflare ?? 0), envs: idleByEnv || '—' })}
+              </span>
             </>
           }
           tone={idle.under ? 'ok' : 'danger'}
@@ -413,6 +427,8 @@ function PartsBar({ d, t, f }: Common & { d: CostsDashboard }) {
             </dt>
             <dd className="text-sm font-medium text-fg tabular-nums">{f.usd(parts[p]?.mtd ?? 0)}</dd>
             <dd className="text-xs text-fg-muted tabular-nums">{t('costs.budget.partProjected', { value: f.usd(parts[p]?.projected ?? 0) })}</dd>
+            {/* The idle month by source: these add up to the idle tile */}
+            <dd className="text-xs text-fg-muted tabular-nums" data-testid={`costs-part-${p}-idle`}>{t('costs.budget.partIdle', { value: f.usd(p === 'resend' ? 0 : (d.idle.parts[p] ?? 0)) })}</dd>
           </div>
         ))}
       </dl>
@@ -514,6 +530,12 @@ export function ProductsPanel({ d, t, f, locale }: Common & { d: CostsDashboard;
         </div>
         </>
       )}
+      {d.products.length > 0 && (
+        // List price to the budget's billed figure, so the two totals on the page visibly agree
+        <p className="cost-tile mt-3 px-3 py-2 text-sm text-fg tabular-nums" data-testid="costs-products-reconcile">
+          {t('costs.breakdown.reconcile', { list: f.usd(total), included: f.usd(Math.max(0, total - d.budget.mtd)), billed: f.usd(d.budget.mtd) })}
+        </p>
+      )}
       {notes.length > 0 && (
         <ul className="mt-3 space-y-0.5 text-xs text-fg-muted" data-testid="costs-source-notes">
           {notes.map((n) => <li key={n}>{n}</li>)}
@@ -535,7 +557,7 @@ export function EnvsPanel({ d, t, f }: Common & { d: CostsDashboard }) {
       </div>
       {/* Four across while the panel is full width; two once it sits beside By product (1800 px, page.tsx).
           A range, because Tailwind emits min-[1800px] before lg, so lg:grid-cols-4 would win over it. */}
-      <dl className="grid grid-cols-2 gap-3 lg:max-[1799px]:grid-cols-4">
+      <dl className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 lg:max-[1799px]:grid-cols-4">
         {values.map((v) => (
           <div key={v.env} className="cost-tile p-3" data-testid={`costs-env-${v.env}`}>
             <dt className="flex items-center gap-1.5 text-xs text-fg-muted">
@@ -569,6 +591,7 @@ export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; lo
         locale={locale}
         format={f.usd}
         dayLabel={f.day}
+        axisUnit={t('costs.breakdown.axisUnit')}
         reference={daily !== null ? { value: daily, label: t('costs.breakdown.dailyBudget', { value: f.usd(daily) }) } : undefined}
         labels={{ chart: t('costs.breakdown.trendTitle'), table: t('costs.breakdown.table'), day: t('costs.breakdown.day'), total: t('costs.breakdown.total'), empty: t('costs.breakdown.empty30') }}
         testId="costs-trend"

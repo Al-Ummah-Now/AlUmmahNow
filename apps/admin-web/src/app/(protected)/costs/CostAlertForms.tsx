@@ -93,12 +93,40 @@ export function MyCostAlerts({ me, accountEmail, digest }: { me: CostSubscriptio
   );
 }
 
-function ThresholdField({ field, label, help, placeholder, value, error, onChange, step, ids }: { field: SettingsField; label: string; help?: string; placeholder?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string }) {
+/** Arabic digits and «،» for a list typed as "50, 80, 100" (readLevels reads both forms back). */
+const arabicList = (v: string) => v.replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!).replace(/,\s*/g, '، ');
+
+function ThresholdField({ field, label, help, placeholder, value, error, onChange, step, ids, list = false }: { field: SettingsField; label: string; help?: string; placeholder?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string; list?: boolean }) {
+  const { locale } = useLanguage();
   const id = `${ids}-${field}`;
   const describedBy = [help ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined;
+  // Labels of one row end on the same line, so the inputs line up when one label wraps
+  const labelCls = `${labelClass} sm:flex sm:min-h-10 sm:items-end`;
+  if (list) {
+    // A list of numbers: a number field drops the separators ("50, 80, 100" read as "50.80100")
+    return (
+      <div>
+        <label htmlFor={id} className={labelCls}>{label}</label>
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          value={locale === 'ar' ? arabicList(value) : value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={`${fieldClass} mt-1 w-full tabular-nums ${error ? 'border-danger-border' : ''}`}
+          data-testid={`costs-threshold-${field}`}
+        />
+        {help && <span id={`${id}-help`} className={helpClass}>{help}</span>}
+        {error && <span id={`${id}-error`} className="mt-1 block text-xs text-danger-fg" data-testid={`costs-threshold-${field}-error`}>{error}</span>}
+      </div>
+    );
+  }
   return (
     <div>
-      <label htmlFor={id} className={labelClass}>{label}</label>
+      <label htmlFor={id} className={labelCls}>{label}</label>
       <NumberField decimal
         id={id}
         dir="ltr"
@@ -165,7 +193,7 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
           <p aria-hidden="true" className={groupTitle}>{t('costs.thresholds.budgetTitle')}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <ThresholdField ids={ids} field="budgetUsd" label={t('costs.thresholds.budgetUsd')} help={t('costs.thresholds.budgetUsdHelp')} placeholder={t('costs.budget.notSet')} value={form.budgetUsd} error={err('budgetUsd')} onChange={(v) => set('budgetUsd', v)} step="1" />
-            <ThresholdField ids={ids} field="budgetLevels" label={t('costs.thresholds.budgetLevels')} help={t('costs.thresholds.budgetLevelsHelp')} value={form.budgetLevels} error={err('budgetLevels')} onChange={(v) => set('budgetLevels', v)} step="1" />
+            <ThresholdField ids={ids} field="budgetLevels" label={t('costs.thresholds.budgetLevels')} help={t('costs.thresholds.budgetLevelsHelp')} value={form.budgetLevels} error={err('budgetLevels')} onChange={(v) => set('budgetLevels', v)} step="1" list />
           </div>
           <label className="flex items-start gap-3 text-sm text-fg">
             <input type="checkbox" className={checkClass} checked={form.projectedAlert} onChange={(e) => set('projectedAlert', e.target.checked)} data-testid="costs-threshold-projectedAlert" />

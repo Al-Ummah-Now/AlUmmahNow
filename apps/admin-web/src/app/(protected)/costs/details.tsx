@@ -9,6 +9,7 @@
  *   price, its idle floor, an open jump and its last 14 days.
  */
 import Link from '@/components/AppLink';
+import { BreakAtHyphens } from '@/components/BreakAtHyphens';
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import type { CostCloudflareLine, CostsDashboard } from '@/lib/api/costs-types';
@@ -25,7 +26,8 @@ const th = 'px-3 py-2 font-medium whitespace-nowrap';
 /** A meter's usage in its own unit: GB-months for storage, hours for Browser Run, else a count. */
 function usage(line: CostCloudflareLine, value: number, t: Translator, f: OpsFormats): string {
   if (line.key.endsWith('_storage_gb')) return t('costs.cloudflare.gbMonths', { value: f.gb(value) });
-  if (line.key === 'browser_hours') return t('costs.cloudflare.hours', { value: f.gb(value) });
+  // Hours agree with their number in Arabic («١٠ ساعات»)
+  if (line.key === 'browser_hours') return t('costs.cloudflare.hours', { count: Math.floor(value * 10) / 10 });
   if (line.key === 'workers_cpu_ms') return t('costs.cloudflare.cpuMs', { value: f.count(value) });
   if (line.key === 'do_gb_seconds') return t('costs.cloudflare.gbSeconds', { value: f.count(value) });
   return f.count(value);
@@ -148,7 +150,44 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
       {d.drivers.length === 0 ? (
         <p className="cost-tile mt-4 px-3 py-4 text-sm text-fg-muted" data-testid="costs-drivers-empty">{t('costs.drivers.empty')}</p>
       ) : (
-        <div className="relative -mx-3 mt-4 overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-label={t('costs.drivers.title')}>
+        <>
+        {/* Phones: one card per resource, every figure labelled; the five-column table needs ~40rem */}
+        <ul className="mt-4 space-y-3 sm:hidden" data-testid="costs-drivers-cards">
+          {d.drivers.map((r) => (
+            <li key={r.id} className="cost-tile p-3 text-sm" data-testid="costs-driver-card" data-env={r.env}>
+              <p className="font-medium text-fg">
+                <bdi><BreakAtHyphens name={r.name} /></bdi>
+                <span className="ms-2 text-xs font-normal text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
+              </p>
+              <p className="mt-1 inline-flex items-center gap-1.5 text-fg-muted">
+                <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full" style={{ background: TREND_COLOR[r.env] }} />
+                {t(`costs.envs.${r.env}`)}
+              </p>
+              {r.spike && (
+                <p className="mt-2">
+                  <span className="inline-block rounded-full border border-danger-border bg-danger-bg px-2 py-0.5 text-xs text-danger-fg">
+                    {t('costs.drivers.jump', { value: f.usd(r.spike.cost), baseline: f.usd(r.spike.baseline) })}
+                  </span>
+                </p>
+              )}
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
+                <div>
+                  <dt className="text-xs text-fg-muted">{t('costs.drivers.mtd')}</dt>
+                  <dd className="tabular-nums text-fg">{f.usd(r.mtdUsd)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-fg-muted">{t('costs.drivers.idle')}</dt>
+                  <dd className="tabular-nums text-fg-muted">{r.idleMonthlyUsd > 0 ? t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) }) : '—'}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs text-fg-muted">{t('costs.drivers.last14')}</dt>
+                  <dd><Spark r={r} f={f} sep={t('costs.listSep')} /></dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div className="relative -mx-3 mt-4 hidden overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:block" tabIndex={0} role="region" aria-label={t('costs.drivers.title')}>
           <table className="w-full min-w-[40rem] text-sm" data-testid="costs-drivers-table">
             <caption className="sr-only">{t('costs.drivers.title')}</caption>
             <thead>
@@ -162,13 +201,11 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
             </thead>
             <tbody>
               {d.drivers.map((r) => {
-                const max = Math.max(0, ...r.daily.values);
-                const label = r.daily.values.map((v, i) => `${f.day(r.daily.days[i]!)}: ${f.usd(v)}`).join(', ');
                 return (
                   <tr key={r.id} className="border-t border-border" data-testid="costs-driver-row" data-env={r.env}>
                     <th scope="row" className="px-3 py-2.5 text-start font-normal text-fg">
                       {/* Isolated: a Latin name next to a Latin kind label would merge into one run in Arabic */}
-                      <bdi className="break-all">{r.name}</bdi>
+                      <bdi><BreakAtHyphens name={r.name} /></bdi>
                       <span className="ms-2 text-xs text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
                       {r.spike && (
                         <span className="ms-2 inline-block rounded-full border border-danger-border bg-danger-bg px-2 py-0.5 text-xs text-danger-fg" data-testid="costs-driver-spike">
@@ -185,11 +222,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                     <td className="px-3 py-2.5 text-end tabular-nums text-fg">{f.usd(r.mtdUsd)}</td>
                     <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg-muted">{r.idleMonthlyUsd > 0 ? t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) }) : '—'}</td>
                     <td className="px-3 py-2.5 text-end">
-                      <span className="inline-flex h-6 items-end gap-0.5" role="img" aria-label={label}>
-                        {r.daily.values.map((v, i) => (
-                          <span key={r.daily.days[i]} className="w-1.5 rounded-t-sm" style={{ height: `${max > 0 && v > 0 ? Math.max(8, (v / max) * 100) : 4}%`, background: TREND_COLOR[r.env], opacity: v > 0 ? 1 : 0.3 }} />
-                        ))}
-                      </span>
+                      <Spark r={r} f={f} sep={t('costs.listSep')} />
                     </td>
                   </tr>
                 );
@@ -197,7 +230,21 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </section>
+  );
+}
+
+/** A driver's last 14 days as bars in its environment's colour, each day in the label. */
+function Spark({ r, f, sep }: { r: CostsDashboard['drivers'][number]; f: OpsFormats; sep: string }) {
+  const max = Math.max(0, ...r.daily.values);
+  const label = r.daily.values.map((v, i) => `${f.day(r.daily.days[i]!)}: ${f.usd(v)}`).join(sep);
+  return (
+    <span className="inline-flex h-6 items-end gap-0.5" role="img" aria-label={label}>
+      {r.daily.values.map((v, i) => (
+        <span key={r.daily.days[i]} className="w-1.5 rounded-t-sm" style={{ height: `${max > 0 && v > 0 ? Math.max(8, (v / max) * 100) : 4}%`, background: TREND_COLOR[r.env], opacity: v > 0 ? 1 : 0.3 }} />
+      ))}
+    </span>
   );
 }

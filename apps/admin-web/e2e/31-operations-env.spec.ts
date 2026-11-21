@@ -85,7 +85,7 @@ test.describe('operations environment switch', () => {
     await expect(page.getByTestId('ops-tiles')).toBeVisible();
     for (const id of ['ops-spend', 'ops-budget-meter', 'ops-idle', 'ops-drivers', 'ops-spend-trend']) await expect(page.getByTestId(id)).toHaveCount(0);
     const line = page.getByTestId('ops-spend-link');
-    await expect(line).toContainText('Spend this month: $');
+    await expect(line).toContainText('All environments this month: $');
     await line.getByRole('link', { name: 'See Costs' }).click();
     await expect(page).toHaveURL(/\/costs$/);
     await expect(page.getByTestId('costs-drivers')).toBeVisible();

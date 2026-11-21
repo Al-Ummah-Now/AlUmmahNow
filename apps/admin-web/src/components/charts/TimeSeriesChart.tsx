@@ -28,10 +28,21 @@ export interface TimeSeriesChartProps {
   testId: string;
 }
 
-const W = 640;
-const H = 200;
-const AXIS = 64;
-const PAD = 14;
+/**
+ * Two geometries in viewBox units, chosen by CSS: the SVG scales to its box, so the desktop one
+ * (640 wide) on a ~320px phone would draw 11-unit text near 6px. The phone one is about as wide as
+ * the box, so its text renders at about 11px.
+ */
+interface Geometry {
+  w: number;
+  h: number;
+  axis: number;
+  timeLabels: number;
+  className: string;
+}
+const DESKTOP: Geometry = { w: 640, h: 200, axis: 64, timeLabels: 5, className: 'hidden sm:block' };
+const PHONE: Geometry = { w: 330, h: 200, axis: 48, timeLabels: 3, className: 'sm:hidden' };
+const PAD = 10;
 const TOP = 12;
 const BOTTOM = 28;
 const COLOR = 'var(--chart-1)';
@@ -42,35 +53,34 @@ export function TimeSeriesChart({ title, points, locale, format, timeLabel, inte
   const scale = niceScale(present, { target: 4, integer });
   const tickNumber = numberFormat(locale, { maximumFractionDigits: 2 });
 
-  const plotStart = rtl ? PAD : AXIS;
-  const plotEnd = rtl ? W - AXIS : W - PAD;
-  const n = points.length;
-  const step = n > 1 ? (plotEnd - plotStart) / (n - 1) : 0;
-  const x = (i: number) => (n > 1 ? (rtl ? plotEnd - i * step : plotStart + i * step) : (plotStart + plotEnd) / 2);
-  const y = (v: number) => TOP + (1 - v / scale.top) * (H - TOP - BOTTOM);
-
-  // Runs of consecutive points with a value: one polyline each (a missing point is a gap)
-  const runs: string[] = [];
-  let current: string[] = [];
-  points.forEach((p, i) => {
-    if (p.value === null || !Number.isFinite(p.value)) {
-      if (current.length > 1) runs.push(current.join(' '));
-      current = [];
-      return;
-    }
-    current.push(`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`);
-  });
-  if (current.length > 1) runs.push(current.join(' '));
-
-  const ticksAt = labelIndices(n, 5);
   const empty = present.length === 0;
   const valueText = (v: number | null) => (v === null ? labels.noValue : format(v));
 
-  return (
-    <figure className="m-0" data-testid={testId}>
-      <figcaption className="mb-2 font-medium text-fg">{title}</figcaption>
-      <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full text-fg-muted" style={{ direction: 'ltr' }} role="img" aria-label={labels.chart}>
+  const plot = (g: Geometry, main: boolean) => {
+    const plotStart = rtl ? PAD : g.axis;
+    const plotEnd = rtl ? g.w - g.axis : g.w - PAD;
+    const n = points.length;
+    const step = n > 1 ? (plotEnd - plotStart) / (n - 1) : 0;
+    const x = (i: number) => (n > 1 ? (rtl ? plotEnd - i * step : plotStart + i * step) : (plotStart + plotEnd) / 2);
+    const y = (v: number) => TOP + (1 - v / scale.top) * (g.h - TOP - BOTTOM);
+
+    // Runs of consecutive points with a value: one polyline each (a missing point is a gap)
+    const runs: string[] = [];
+    let current: string[] = [];
+    points.forEach((p, i) => {
+      if (p.value === null || !Number.isFinite(p.value)) {
+        if (current.length > 1) runs.push(current.join(' '));
+        current = [];
+        return;
+      }
+      current.push(`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`);
+    });
+    if (current.length > 1) runs.push(current.join(' '));
+
+    const ticksAt = labelIndices(n, g.timeLabels);
+    return (
+        <svg key={g.w} viewBox={`0 0 ${g.w} ${g.h}`} className={`h-auto w-full text-fg-muted ${g.className}`}
+        data-geometry={main ? 'desktop' : 'phone'} style={{ direction: 'ltr' }} role="img" aria-label={labels.chart}>
           {scale.ticks.map((v) => (
             <g key={v}>
               <line
@@ -89,8 +99,8 @@ export function TimeSeriesChart({ title, points, locale, format, timeLabel, inte
                 dominantBaseline="middle"
                 fontSize="11"
                 fill="currentColor"
-                data-testid={`${testId}-y-tick`}
-                data-value={tickNumber.format(v)}
+                data-testid={main ? `${testId}-y-tick` : undefined}
+                data-value={main ? tickNumber.format(v) : undefined}
               >
                 {format(v)}
               </text>
@@ -100,17 +110,17 @@ export function TimeSeriesChart({ title, points, locale, format, timeLabel, inte
             <text
               key={points[i].t}
               x={x(i)}
-              y={H - 8}
+              y={g.h - 8}
               fontSize="11"
               fill="currentColor"
               textAnchor={order === 0 ? (rtl ? 'end' : 'start') : order === ticksAt.length - 1 ? (rtl ? 'start' : 'end') : 'middle'}
-              data-testid={`${testId}-x-tick`}
+              data-testid={main ? `${testId}-x-tick` : undefined}
             >
               {timeLabel(points[i].t)}
             </text>
           ))}
           {!empty && (
-            <g data-testid={`${testId}-series`}>
+            <g data-testid={main ? `${testId}-series` : undefined}>
               {runs.map((pts, k) => (
                 <polyline key={k} points={pts} fill="none" style={{ stroke: COLOR }} strokeWidth="2" strokeLinejoin="round" />
               ))}
@@ -124,6 +134,15 @@ export function TimeSeriesChart({ title, points, locale, format, timeLabel, inte
             </g>
           )}
         </svg>
+    );
+  };
+
+  return (
+    <figure className="m-0" data-testid={testId}>
+      <figcaption className="mb-2 font-medium text-fg">{title}</figcaption>
+      <div className="relative">
+        {plot(DESKTOP, true)}
+        {plot(PHONE, false)}
         {empty && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-fg-muted" data-testid={`${testId}-empty`}>
             {labels.empty}

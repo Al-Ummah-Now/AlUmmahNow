@@ -97,7 +97,7 @@ export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedC
           <h2 id="costs-fixed-title" className="text-lg font-semibold text-fg">{t('costs.fixed.title')}</h2>
           <p className="mt-1 text-sm text-fg-muted">{t('costs.fixed.note')}</p>
         </div>
-        <dl className="flex gap-3">
+        <dl className="flex flex-wrap gap-3">
           <div className="cost-tile px-4 py-2">
             <dt className="text-xs text-fg-muted">{t('costs.fixed.mtd')}</dt>
             <dd className="text-lg font-semibold text-fg tabular-nums" data-testid="costs-fixed-mtd">{f.usd(mtd)}</dd>

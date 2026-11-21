@@ -10,9 +10,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import opsRouter, { parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
-import { alertEvent, budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
+import { alertEvent, billIdle, budgetStatus, findSpikes, idleProjection, trendBySource, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
+import { idleBilledCloudflare, type MeterUsage } from '../src/lib/cfBilling';
 
 /** COSTS_DB with apps/cost-monitor's migrations (tests run from apps/admin-api). */
 function costsD1(withTables = true): D1Database {
@@ -255,6 +256,40 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     assert.equal(idle.top[0].id, 'worker:videos-qa');
     assert.ok(!idle.top.some((t) => t.id.includes('messages')));
     assert.equal(idle.targetUsd, 50);
+  });
+
+  it('idle is billed: each meter at its quietest full day x 30 through the allowances, today ignored', () => {
+    const meters = new Map<string, MeterUsage>();
+    [3e6, 2e6, 4e6, 5e6, 2.5e6, 3e6, 6e6].forEach((w, i) => meters.set(day(i + 1), { d1_rows_written: w }));
+    meters.set(day(0), { d1_rows_written: 0 }); // today so far: not a full day
+    // Quietest 2M x 30 = 60M written, 50M included, $1 per million past it
+    assert.equal(idleBilledCloudflare(meters, now), 10);
+    // Under the allowance the idle month bills nothing, whatever its list price
+    assert.equal(idleBilledCloudflare(new Map([[day(1), { d1_rows_written: 1e6 }]]), now), 0);
+    assert.equal(idleBilledCloudflare(new Map(), now), 0);
+  });
+
+  it('billIdle swaps in the billed Cloudflare figure and scales the env split to it', () => {
+    const listed = { monthlyUsd: 212.25, targetUsd: 50, byEnv: { qa: 150, production: 50 }, parts: { cloudflare: 200, bunny: 3, containers: 0, ai: 0, plan: 5, fixed: 4.25 }, top: [], days: [] };
+    const billed = billIdle(listed as never, 50);
+    assert.equal(billed.parts.cloudflare, 50);
+    assert.deepEqual(billed.byEnv, { qa: 37.5, production: 12.5 });
+    assert.equal(billed.monthlyUsd, 50 + 3 + 5 + 4.25);
+    assert.equal(Object.values(billed.byEnv).reduce((a, b) => a + b, 0), billed.parts.cloudflare, 'envs sum to the Cloudflare part');
+    assert.deepEqual(billIdle({ ...listed, byEnv: {}, parts: { ...listed.parts, cloudflare: 0 } } as never, 0).byEnv, {});
+  });
+
+  it('trend: carries the Workers plan and fixed costs per day, today only its elapsed part', () => {
+    const tr = trendBySource([rd(1, 'worker:videos-qa', 2)], { bunny: [], containers: [], ai: [], resend: [] }, () => 0.3, now);
+    const plan = tr.series.find((x) => x.key === 'plan')!.values;
+    const fixed = tr.series.find((x) => x.key === 'fixed')!.values;
+    assert.equal(tr.days.at(-1), day(0));
+    assert.equal(plan.at(-2), Math.round((PLAN_BASE_USD / 30) * 100) / 100);
+    // now is 12:00 UTC: half of today's share
+    assert.equal(plan.at(-1), Math.round((PLAN_BASE_USD / 30 / 2) * 100) / 100);
+    assert.equal(fixed.at(-2), 0.3);
+    assert.equal(fixed.at(-1), 0.15);
+    assert.equal(tr.series.find((x) => x.key === 'qa')!.values.at(-2), 2);
   });
 
   it('jumps: a driver or env total at 2x its 7-day average and enough dollars above it, yesterday or today', () => {

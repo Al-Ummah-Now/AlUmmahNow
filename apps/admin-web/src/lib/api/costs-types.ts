@@ -10,7 +10,7 @@ export type { CfMeterKey, CostAlertKind, CostAlertSettings, CostCredentialView, 
 export type CostBudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
 export type CostBudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan' | 'fixed';
 /** Series of the daily spend chart: the three envs' Cloudflare spend (list price) and every other source. */
-export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed'] as const;
+export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed'] as const;
 export type CostTrendKey = (typeof COST_TREND_KEYS)[number];
 export type CostResourceKind = 'worker' | 'd1' | 'r2' | 'queue' | 'kv' | 'do';
 

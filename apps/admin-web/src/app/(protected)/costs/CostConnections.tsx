@@ -100,9 +100,10 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
 
       <p className="mt-3 text-sm text-fg-muted">{t(`costs.connections.about.${p}`)}</p>
 
-      {(view.updatedAt || testLine) && (
+      {((view.set && view.updatedAt) || testLine) && (
         <div className="cost-tile mt-3 space-y-1.5 p-3 text-xs">
-          {view.updatedAt && (
+          {/* Only a key that is set has a "set by" (a removed key keeps no author) */}
+          {view.set && view.updatedAt && (
             <p className="text-fg-muted" data-testid={`costs-connection-${p}-set-by`}>
               {fillNodes(t(who ? 'costs.connections.setBy' : 'costs.connections.setAt'), { time: <LocalTime value={view.updatedAt} withTime />, ...(who ? { name: who } : {}) })}
             </p>
