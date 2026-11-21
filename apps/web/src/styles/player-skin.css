@@ -1855,7 +1855,9 @@
     height: auto !important;
     aspect-ratio: 16 / 9;
     z-index: 45;
-    box-shadow: var(--fanous-player-menu-edge);
+    /* A hairline edge, not the menu's 40px drop shadow: that shadow fell on the title right under the
+       pinned frame, dimming it in dark mode and leaving a grey band in light mode */
+    box-shadow: 0 1px 0 var(--fanous-c-divider-line);
   }
 
   .custom-video-player[data-pinned][data-portrait] .video-js.vjs-fanous:not(.vjs-fullscreen) {
