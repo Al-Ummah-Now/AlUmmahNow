@@ -182,8 +182,8 @@ async function harness(opts: Options = {}) {
         | undefined)?.count ?? 0,
     );
   /** What initiate leaves in TUS_SESSIONS: the uploader and the channel the upload is for */
-  const issueSession = (sessionId: string, userId: string, channelId: string) =>
-    tusKv.put(`tus:session:${sessionId}`, JSON.stringify({ videoId: `vid-${sessionId}`, userId, channelId, tusEndpoint: 'https://bunny.test/tus', tusHeaders: {} }));
+  const issueSession = (sessionId: string, userId: string, channelId: string, extra: Record<string, unknown> = {}) =>
+    tusKv.put(`tus:session:${sessionId}`, JSON.stringify({ videoId: `vid-${sessionId}`, userId, channelId, tusEndpoint: 'https://bunny.test/tus', tusHeaders: {}, ...extra }));
   const continueHour = (user: string) =>
     Number(
       (db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = ? AND operation = 'video_upload_continue' AND period = 'hour'").get(user) as
@@ -404,6 +404,23 @@ describe('creator tiers: who may upload', () => {
     assert.equal((await h.tusCreate('editor', meta('sess-1'))).status, 403);
     await h.issueSession('sess-2', 'editor', 'editor');
     assert.equal((await h.tusCreate('editor', meta('sess-2'))).status, 403);
+  });
+
+  it('an admin import session (wiki TOOLS-ADMIN TA-5) starts its TUS upload without a tier, uncounted, for its own admin only', async () => {
+    const h = await harness({ tiers: { owner: 'small' } });
+    h.channelRecords.set('ch-1', { id: 'ch-1', userId: 'owner', members: [] });
+    await h.issueSession('imp-1', 'usr_admin', 'ch-1', { adminImport: true });
+    const meta = (id: string) => ({ 'upload-metadata': `tusSessionId ${btoa(id)}` });
+    for (let i = 0; i < 30; i++) assert.notEqual((await h.tusCreate('usr_admin', meta('imp-1'))).status, 403);
+    assert.equal(h.continueHour('owner'), 0, 'never counted against the channel owner');
+    assert.equal(h.continueHour('usr_admin'), 0);
+    // Another user holding the session id gets the normal gate (untiered: refused)
+    assert.equal((await h.tusCreate('mallory-untiered', meta('imp-1'))).status, 403);
+    // A session without the flag is a normal upload: the untiered admin is refused
+    await h.issueSession('plain-1', 'usr_admin', 'ch-1');
+    assert.equal((await h.tusCreate('usr_admin', meta('plain-1'))).status, 403);
+    // The initiate paths are never exempt: an untiered admin still cannot initiate there
+    assert.equal((await h.initiate('usr_admin', { channelId: 'ch-1' })).status, 403);
   });
 
   it('a TUS create repeating an Upload-Metadata key never borrows a channel owner\'s tier', async () => {

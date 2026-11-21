@@ -50,6 +50,8 @@ import { assignTier, createTier, CreatorTierError, deleteTier, purgeTiers, readA
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 import { decideTierRequest, decisionNotificationPayload, listTierRequests, readRequestRow, readTierRequestForAdmin, recordDelivery, TierRequestError, type TierRequestsEnv } from '../lib/tierRequests';
 import { enqueueNotification, type NotificationsEnv } from '../lib/notifications';
+import { InitiateBodySchema, initiateUpload, type InitiateBody } from '../endpoints/video/uploadInitiate';
+import { loadChannelRecord } from '../lib/channelAccess';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -285,6 +287,26 @@ app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.par
 app.post('/users/:id/channels', async (c) => {
 	const input = parse(z.object({ name: z.string().trim().min(1).max(100), handle: z.string().trim().max(60).nullable().optional(), description: z.string().max(5000).nullable().optional() }), await body(c));
 	return ok(c, { channel: await createChannelFor(c.env, c.req.param('id'), input as { name: string; handle?: string | null; description?: string | null }) });
+});
+// Admin Tools bulk import (wiki TOOLS-ADMIN TA-5): the normal initiate for any channel, owned by the
+// channel's owner and uploaded by the acting admin, without the tier gate, upload counters, draft limit
+// or edge limiter (admin-api checked imports:manage and audits every call). Processing, review,
+// captions and categories are the same as any upload. The TUS session belongs to the admin, whose
+// Admin Tools token then uploads to /api/videos/tus.
+const AdminImportInitiate = InitiateBodySchema.omit({ youtubeImport: true }).extend({ channelId: z.string().min(1).max(200) });
+app.post('/import/initiate', async (c) => {
+	const adminId = c.req.header('X-Admin-Actor') ?? '';
+	if (!/^usr_[A-Za-z0-9]{8,64}$/.test(adminId)) throw new admin.AdminError(400, 'invalid_request', 'X-Admin-Actor must be the importing admin\'s user id');
+	const { channelId, ...input } = parse(AdminImportInitiate, await body(c));
+	const channel = await loadChannelRecord(c.env as never, channelId);
+	if (!channel?.userId || channel.isDeleted) throw new admin.AdminError(404, 'channel_not_found', 'No such channel');
+	if (channel.isSuspended) throw new admin.AdminError(409, 'channel_suspended', 'The channel is suspended');
+	const ownerId = channel.userId;
+	return initiateUpload(
+		c as never,
+		{ userId: adminId, roles: null, channelId, ownerId, ...(ownerId !== adminId ? { uploadedBy: adminId } : {}), adminImport: true },
+		input as InitiateBody,
+	);
 });
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));

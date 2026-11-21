@@ -32,6 +32,38 @@ import { prepareImportUpload, recordImportUpload, youtubeItemClaimKey, YtHttpErr
 import { confirmYoutubeImportItem } from "../../middleware/upload-limits";
 import { applySchedule, announceSchedule, scheduleDateProblem } from "../../lib/videoSchedule";
 
+/** The initiate's JSON body (also the admin import's, wiki TOOLS-ADMIN TA-5, without youtubeImport). */
+export const InitiateBodySchema = z.object({
+	title: Str({ description: "Video title" }),
+	description: Str({ description: "Video description" }).optional(),
+	fileSize: Num({ description: "File size in bytes", required: true }),
+	mimeType: Str({ description: "MIME type of the video file", required: true }),
+	isPublic: z.boolean().optional().default(true),
+	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic; a draft is always private)"),
+	isDraft: z.boolean().optional().describe("Save without publishing. A draft is always private"),
+	tags: z.string().optional().describe("Comma-separated tags"),
+	// The web uploader sends these; they were stripped by the schema, so the
+	// Arabic title/description and the category chosen on upload were lost
+	titleLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
+	descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
+	category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
+	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
+	categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
+		.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),
+	thumbnail: z.object({
+		type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
+		data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
+		position: z.number().min(0).max(100).optional().describe("Frame position (0-100%) for auto-generated thumbnails"),
+		filename: z.string().optional().describe("Original filename"),
+		video: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional()
+			.describe("The video file's size as the browser reads it: an image of another shape is not stored (Bunny's frame is used instead)"),
+	}).optional().describe("Thumbnail configuration"),
+	youtubeImport: z.object({ importId: z.string().min(1).max(64), itemId: z.string().min(1).max(64) }).optional()
+		.describe("Move from YouTube (wiki AUN-YT-IMPORT): the import item this file is. Title, description, tags, languages, visibility, schedule and publish date come from the item (the body's values for those are ignored); retrying the same item resumes its video"),
+	fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."),
+});
+export type InitiateBody = z.infer<typeof InitiateBodySchema>;
+
 export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
@@ -41,35 +73,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			body: {
 				content: {
 					"application/json": {
-						schema: z.object({
-							title: Str({ description: "Video title" }),
-							description: Str({ description: "Video description" }).optional(),
-							fileSize: Num({ description: "File size in bytes", required: true }),
-							mimeType: Str({ description: "MIME type of the video file", required: true }),
-							isPublic: z.boolean().optional().default(true),
-							visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic; a draft is always private)"),
-							isDraft: z.boolean().optional().describe("Save without publishing. A draft is always private"),
-							tags: z.string().optional().describe("Comma-separated tags"),
-							// The web uploader sends these; they were stripped by the schema, so the
-							// Arabic title/description and the category chosen on upload were lost
-							titleLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
-							descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
-							category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
-							format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
-							categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
-								.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),
-							thumbnail: z.object({
-								type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
-								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
-								position: z.number().min(0).max(100).optional().describe("Frame position (0-100%) for auto-generated thumbnails"),
-								filename: z.string().optional().describe("Original filename"),
-								video: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional()
-									.describe("The video file's size as the browser reads it: an image of another shape is not stored (Bunny's frame is used instead)"),
-							}).optional().describe("Thumbnail configuration"),
-							youtubeImport: z.object({ importId: z.string().min(1).max(64), itemId: z.string().min(1).max(64) }).optional()
-								.describe("Move from YouTube (wiki AUN-YT-IMPORT): the import item this file is. Title, description, tags, languages, visibility, schedule and publish date come from the item (the body's values for those are ignored); retrying the same item resumes its video"),
-							fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."),
-						}),
+						schema: InitiateBodySchema,
 					},
 				},
 			},
@@ -147,398 +151,420 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		// Get authenticated user ID
 		const userId = this.getUserId(c);
-
-		// Validated outside the catch-all below: a bad request is a 400 with the
-		// issues (chanfana), not a 500
+		// Validated outside the catch-all: a bad request is a 400 with the issues (chanfana), not a 500
 		const request = await this.getValidatedData<typeof this.schema>();
-		// An active category of the admin-managed list (400 unknown_category / retired_category)
-		const refused = categoryRefusal(c, request.body.category);
-		if (refused) return refused;
-		try {
-			const body = request.body;
-			let { title, description, isPublic, visibility, isDraft, tags, titleLocalized, descriptionLocalized, category, fingerprint, categorySuggestionKey } = body;
-			const { fileSize, mimeType, thumbnail, format, youtubeImport } = body;
-
-			// Validate required fields
-			if (!fileSize || fileSize <= 0) {
-				return c.json({
-					success: false,
-					error: "Invalid file size: must be a positive number"
-				}, 400);
-			}
-
-			if (!mimeType || !mimeType.startsWith('video/')) {
-				return c.json({
-					success: false,
-					error: "Invalid MIME type: must be a video format (e.g., video/mp4)"
-				}, 400);
-			}
-
-			const channelId = c.req.header('channelId') || userId;
-			// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
-			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
-			// Move from YouTube: the item's snapshot decides the metadata (lib/youtube-import/service.ts)
-			let imported: ImportUpload | null = null;
-			if (youtubeImport) {
-				try {
-					const roles = (this.getAuth(c).payload as { roles?: string[] } | undefined)?.roles ?? null;
-					imported = await prepareImportUpload(c.env as unknown as YtEnv, { userId, roles }, channelId, youtubeImport as { importId: string; itemId: string });
-				} catch (error) {
-					if (error instanceof YtHttpError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 404);
-					throw error;
-				}
-				const m = imported.metadata;
-				title = m.title;
-				description = m.description;
-				tags = m.tags;
-				titleLocalized = m.titleLocalized;
-				descriptionLocalized = m.descriptionLocalized;
-				visibility = m.visibility;
-				isPublic = m.visibility === 'public';
-				isDraft = false;
-				category = undefined;
-				categorySuggestionKey = undefined;
-				// The item is the claim: retrying it reuses its video (below), not a file fingerprint
-				fingerprint = undefined;
-			}
-			// Record fields only an import sets
-			const importFields = imported
-				? {
-					importedFrom: imported.metadata.importedFrom,
-					...(imported.metadata.language ? { language: imported.metadata.language } : {}),
-					...(imported.metadata.publishedAt ? { publishedAt: imported.metadata.publishedAt } : {}),
-					...(imported.metadata.commentSettings ? { commentSettings: imported.metadata.commentSettings } : {}),
-				}
-				: {};
-			if (fingerprint && fingerprint.size !== fileSize) {
-				return c.json({ success: false, error: "fingerprint.size must equal fileSize" }, 400);
-			}
-
-			// Studio drafts are limited per plan (lib/studioLimits.ts)
-			if (isDraft && channelId !== userId) {
-				const counts = await channelContentCounts(c.env as never, channelId);
-				const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.value.drafts ?? 0 });
-				if (limit) return c.json(limit, 402);
-			}
-
-			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-			const libraryId = parseInt(libraryIdRaw, 10);
-
-			if (isNaN(libraryId)) {
-				return c.json({
-					success: false,
-					error: "Bunny Stream library ID is invalid"
-				}, 500);
-			}
-
-			const bunnyStream = new stream(bunnyKey).forEnv(c.env);
-			type VideoType = z.infer<typeof BusinessVideo>;
-			const bucket = c.env.videos;
-			if (!bucket) {
-				logger.error('[UploadInitiate] R2 bucket binding not available');
-				throw new Error('R2 bucket binding "videos" is not configured');
-			}
-			const repository = new R2Repository<VideoType>(bucket);
-			// The claim: the file's fingerprint, or for a Move from YouTube item the item itself, so
-			// two parallel initiates of one item make one video (the second reuses it)
-			const claimKey = imported
-				? await youtubeItemClaimKey(imported.importRow.id, imported.item.id)
-				: fingerprint
-					? await fingerprintKey(channelId, userId, fingerprint)
-					: undefined;
-
-			// Metadata the uploader entered (applied on create and on reuse)
-			const metadata = {
-				title,
-				description: description || '',
-				// A draft is always private (docs/specs/CREATOR-STUDIO.md §4.4.1); unlisted is D-SEO-5
-				...uploadVisibility(isDraft, visibility, isPublic),
-				...(isDraft ? { isDraft: true } : {}),
-				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
-				...(titleLocalized && { titleLocalized }),
-				...(descriptionLocalized && { descriptionLocalized }),
-				// A category submitted with the form is the uploader's (confirming or replacing the AI suggestion)
-				...(category && { category, categorySource: 'uploader' as const }),
-				...(format && format !== 'auto' && { format }),
-				fileSize,
-				originalFormat: mimeType,
-				...importFields,
-			};
-
-			// Creates the Bunny video and its record (the claim, when there is
-			// one, guarantees this runs once per file).
-			const create = async (): Promise<string> => {
-				// Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
-				const plan = await planIngest(c.env as never, channelId, async () => {
-					const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
-					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-						title,
-						collectionId, // Add to collection if available
-						thumbnailTime: 0,
-					});
-					// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
-					await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId, channelId });
-					return { guid: bunnyVideo.guid, libraryId };
-				});
-				const videoId = plan.videoId;
-				const thumb = await this.processThumbnail(c, videoId, thumbnail, plan.bunny?.guid);
-				const now = new Date().toISOString();
-				// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
-				// stored thumbnail there is no thumbnail URL until Bunny's exists.
-				const video = {
-					...createUploadRecord({
-						videoId,
-						title,
-						description,
-						// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
-						userId: ownerId,
-						uploadedBy,
-						channelId,
-						...uploadVisibility(isDraft, visibility, isPublic),
-						tags,
-						titleLocalized,
-						descriptionLocalized,
-						category,
-						...(category && { categorySource: 'uploader' as const }),
-						format,
-						fileSize,
-						mimeType,
-						customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,
-						bunnyHostname: c.env.bunny_hostname,
-						bunnyLibraryId: libraryId,
-						media: plan.media,
-						now: new Date(now),
-					}),
-					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
-					...(isDraft ? { isDraft: true } : {}),
-					...importFields,
-				};
-				try {
-					await repository.putObject(videoId, video as VideoType);
-					logger.debug('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
-				} catch (error) {
-					// The Bunny video has no record now: the reaper's orphan sweep removes it.
-					logger.error('[UploadInitiate] Failed to save video metadata to R2', {
-						videoId,
-						error: error instanceof Error ? error.message : String(error),
-					});
-					throw error;
-				}
-
-				// AI category (queued, never blocks the upload): adopt the form's suggestion and record
-				// what the uploader kept; without a category and without a suggestion, request one
-				adoptOrRequestSuggestion(c, { videoId, userId, channelId, category: category ?? null, draftKey: categorySuggestionKey });
-
-				// Send analytics event for upload initiation
-				const queue = new Queue(c.env.queue);
-				await queue.send(MessageType.VideoUploadStarted, {
-					videoId,
-					userId,
-					channelId,
-					title,
-					fileSize,
-					mimeType,
-					timestamp: now,
-				});
-
-				// AI moderation of the metadata (queued, never fails the upload). Only a newly
-				// created record is scanned: a replayed initiate that reuses it does not get here.
-				scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: videoId, authorId: userId, channelId, text: videoScanText(video) });
-				return videoId;
-			};
-
-			let videoId: string;
-			let reused = false;
-			// An import item whose video already finished uploading is not uploaded twice
-			const itemVideo = imported?.item.video_id ?? null;
-			if (itemVideo) {
-				const verdict = await checkReusable(c.env as never, itemVideo, { ownerId, uploadedBy, channelId });
-				if (verdict.kind !== 'reuse' && (verdict.why === 'finished' || verdict.why === 'finished at Bunny')) {
-					return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
-				}
-			}
-			if (claimKey) {
-				const outcome = await initiateOnce(claimKey, {
-					store: c.env.global_settings as never,
-					userId,
-					channelId,
-					check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId }),
-					create,
-				});
-				videoId = outcome.videoId;
-				reused = outcome.reused;
-				if (outcome.replaced) logger.debug('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
-			} else {
-				videoId = await create();
-			}
-
-			if (imported) {
-				if (!(await recordImportUpload(c.env as unknown as YtEnv, imported, videoId))) {
-					return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
-				}
-				// A valid item: the upload limits may give this session back (middleware/upload-limits.ts)
-				confirmYoutubeImportItem(c);
-			}
-
-			let stored: PlaceholderRecord | null = null;
-			let thumbnailUrl: string | undefined;
-			let thumbnailSizes: Record<string, string> | undefined;
-			if (reused) {
-				// Same video again: latest metadata (and thumbnail, when one was sent)
-				const thumb = thumbnail?.data ? await this.processThumbnail(c, videoId, thumbnail) : null;
-				const nowIso = new Date().toISOString();
-				const result = await patchVideo(repository, videoId, (fresh) => {
-					const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
-					if (!fields) return false;
-					if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
-					return fields as Partial<VideoType>;
-				}, { ownerId });
-				if (result.status !== 'ok') {
-					logger.warn('[UploadInitiate] Reused video vanished while updating it', { videoId, status: result.status });
-					return c.json({ success: false, error: 'Upload could not be started, retry' }, 503);
-				}
-				stored = result.video as unknown as PlaceholderRecord;
-				// The earlier initiate may have left its Bunny video outside its collection
-				const reusedGuid = bunnyRef(stored as never);
-				if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId);
-				thumbnailUrl = stored.thumbnailUrl as string | undefined;
-				thumbnailSizes = stored.thumbnailSizes as Record<string, string> | undefined;
-			} else {
-				stored = (await repository.getObject(videoId)) as unknown as PlaceholderRecord | null;
-				thumbnailUrl = stored?.thumbnailUrl as string | undefined;
-				thumbnailSizes = stored?.thumbnailSizes as Record<string, string> | undefined;
-			}
-
-			// A video scheduled on YouTube is published here at the same time (never announced as new before then)
-			if (imported?.scheduleAt && stored && !(stored as { scheduledPublishStatus?: string }).scheduledPublishStatus) {
-				await this.scheduleImported(c, repository as never, videoId, ownerId, userId, imported.scheduleAt);
-			}
-
-			// TUS proxy session (no Bunny credentials reach the client); for a
-			// reused video also its earlier upload, resumed at Bunny's offset.
-			const session = await issueTusSession(c.env.TUS_SESSIONS, {
-				libraryId,
-				bunnyKey,
-				userId,
-				channelId,
-				videoId,
-				video: reused ? stored : null,
-			});
-
-			return c.json({
-				success: true,
-				result: {
-					videoId,
-					tusSessionId: session.tusSessionId, // Client uses this to access TUS proxy
-					...(session.tusUploadId ? { tusUploadId: session.tusUploadId } : {}),
-					chunkSize: session.chunkSize,
-					resumable: session.resumable,
-					expiresAt: session.expiresAt,
-					reused,
-					// Thumbnail fields (a stored thumbnail only; Bunny's comes once the video plays)
-					thumbnailUrl: thumbnailUrl || undefined,
-					thumbnailSizes,
-					// Legacy fields for backward compatibility
-					libraryId,
-					status: 'uploading',
-					message: reused ? 'Unfinished upload of this file reused. Use tusSessionId (and tusUploadId) with TUS proxy.' : 'Upload initiated successfully. Use tusSessionId with TUS proxy.',
-				},
-			});
-
-		} catch (error) {
-			if (error instanceof UploadClaimBusyError) {
-				c.header('Retry-After', '3');
-				return c.json({ success: false, error: error.message, retryable: true }, 503);
-			}
-			logger.error("Upload initiate error:", {
-				message: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
-				name: error instanceof Error ? error.name : undefined,
-			});
-
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			// The Errors page gets the caught error (message and stack), not a bare "HTTP 500": with the
-			// X-Error-Ref set here the request wrapper (withErrorReporting) does not record it again.
-			// QA kept 138 "HTTP 500" events on this route with no cause (2026-11-10..13).
-			let ctx: { waitUntil(p: Promise<unknown>): void } | undefined;
-			try {
-				ctx = c.executionCtx;
-			} catch {
-				ctx = undefined;
-			}
-			const reference = reportServerError('api-videos', c.env as never, ctx, error, {
-				route: c.req.path,
-				method: c.req.method,
-				status: 500,
-				extra: { step: 'upload-initiate' },
-			});
-			c.header('X-Error-Ref', reference);
-			return c.json({
-				success: false,
-				error: "Failed to initiate upload",
-				details: errorMessage,
-				reference,
-			}, 500);
-		}
-	}
-
-	/**
-	 * Schedules an imported video that YouTube had scheduled: at its YouTube
-	 * time, or in a few minutes when that is closer than scheduling allows. One
-	 * more than a year away stays private, unscheduled.
-	 */
-	private async scheduleImported(c: AppContext, repository: R2Repository<any>, videoId: string, ownerId: string, userId: string, at: string): Promise<void> {
-		const now = new Date();
-		let date = new Date(at);
-		const problem = scheduleDateProblem(date, now);
-		if (problem === 'too_far' || problem === 'invalid') return;
-		if (problem === 'too_soon') date = new Date(now.getTime() + 6 * 60_000);
-		const saved = await patchVideo(repository, videoId, (fresh: any) => {
-			if (fresh.isPublic || fresh.scheduledPublishStatus) return false;
-			applySchedule(fresh, { date, timezone: 'UTC', userId, now });
-			return {};
-		}, { ownerId });
-		if (saved.status === 'ok' && saved.changed) {
-			await announceSchedule(c.env as never, saved.video as never, { date, timezone: 'UTC', notifyOnPublish: false, userId });
-		}
-	}
-
-	/**
-	 * Store a thumbnail sent with the initiate (custom image or an extracted
-	 * frame) where the Delivery settings store custom thumbnails (lib/thumbnail/store.ts);
-	 * without one, the provider's automatic frame follows once the video is ready
-	 * (Bunny's next to its playlist, under its GUID; R2's from the transcode).
-	 */
-	private async processThumbnail(
-		c: AppContext,
-		videoId: string,
-		thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width?: number; height?: number } } | undefined,
-		bunnyGuid?: string | null,
-	): Promise<{ thumbnailUrl: string; thumbnailType: 'auto' | 'custom'; thumbnailSizes?: Record<string, string>; custom: boolean }> {
-		const fallback = { thumbnailUrl: bunnyGuid ? `https://${c.env.bunny_hostname}/${bunnyGuid}/thumbnail.jpg` : '', thumbnailType: 'auto' as const, custom: false };
-		if (!thumbnail?.data) return fallback;
-		try {
-			logger.debug('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
-			// Process base64 thumbnail data (validates and converts to ArrayBuffer)
-			const processed = await thumbnailProcessor.processBase64(thumbnail.data, thumbnail.filename || 'thumbnail.jpg');
-			// Never store a thumbnail of another shape than the video's: Bunny's own frame is used instead
-			const shape = checkThumbnailShape(imageSize(new Uint8Array(processed.original)), videoSizeOf(thumbnail.video));
-			if (!shape.ok) {
-				logger.warn('[UploadInitiate] Thumbnail dropped: wrong shape, using the automatic frame', { videoId, expected: shape.expected, actual: shape.actual });
-				return fallback;
-			}
-			const stored = await storeCustomThumbnail(c.env as never, videoId, processed.original, { type: 'image/jpeg', extension: 'jpg' });
-			logger.debug('[UploadInitiate] Thumbnail stored', { videoId, store: stored.store, sizes: Object.keys(stored.thumbnailSizes) });
-			return { thumbnailUrl: stored.thumbnailUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: stored.thumbnailSizes, custom: true };
-		} catch (error) {
-			logger.error('[UploadInitiate] Thumbnail processing failed', {
-				videoId,
-				thumbnailType: thumbnail.type,
-				error: error instanceof Error ? error.message : String(error),
-			});
-			// Continue without thumbnail, will fall back to Bunny.net auto-generated
-			return fallback;
-		}
+		const roles = (this.getAuth(c).payload as { roles?: string[] } | undefined)?.roles ?? null;
+		const channelId = c.req.header('channelId') || userId;
+		// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
+		return initiateUpload(c, { userId, roles, channelId, ...uploadIdentity(c, userId) }, request.body as InitiateBody);
 	}
 }
+
+/**
+ * Who starts an upload: the signed-in uploader (the endpoint below), or an admin importing into any
+ * channel (wiki TOOLS-ADMIN TA-5, api-videos /internal/admin/import/initiate via admin-api).
+ * `adminImport` skips the Studio draft limit and marks the TUS session so its create skips the tier
+ * gate (middleware/upload-limits.ts); the edge limiter and the session gate never see the internal route.
+ */
+export interface UploadWho {
+	/** Who uploads: owns the TUS session and the file claim */
+	userId: string;
+	roles: string[] | null;
+	channelId: string;
+	/** The channel owner (the video's owner) */
+	ownerId: string;
+	/** Set when someone other than the owner uploads (a channel member, or an importing admin) */
+	uploadedBy?: string;
+	adminImport?: boolean;
+}
+
+export async function initiateUpload(c: AppContext, who: UploadWho, input: InitiateBody): Promise<Response> {
+	const { userId, channelId, ownerId, uploadedBy } = who;
+	// An active category of the admin-managed list (400 unknown_category / retired_category)
+	const refused = categoryRefusal(c, input.category);
+	if (refused) return refused;
+	try {
+		const body = input;
+		let { title, description, isPublic, visibility, isDraft, tags, titleLocalized, descriptionLocalized, category, fingerprint, categorySuggestionKey } = body;
+		const { fileSize, mimeType, thumbnail, format, youtubeImport } = body;
+
+		// Validate required fields
+		if (!fileSize || fileSize <= 0) {
+			return c.json({
+				success: false,
+				error: "Invalid file size: must be a positive number"
+			}, 400);
+		}
+
+		if (!mimeType || !mimeType.startsWith('video/')) {
+			return c.json({
+				success: false,
+				error: "Invalid MIME type: must be a video format (e.g., video/mp4)"
+			}, 400);
+		}
+
+		// Move from YouTube: the item's snapshot decides the metadata (lib/youtube-import/service.ts)
+		let imported: ImportUpload | null = null;
+		if (youtubeImport) {
+			try {
+				imported = await prepareImportUpload(c.env as unknown as YtEnv, { userId, roles: who.roles }, channelId, youtubeImport as { importId: string; itemId: string });
+			} catch (error) {
+				if (error instanceof YtHttpError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 404);
+				throw error;
+			}
+			const m = imported.metadata;
+			title = m.title;
+			description = m.description;
+			tags = m.tags;
+			titleLocalized = m.titleLocalized;
+			descriptionLocalized = m.descriptionLocalized;
+			visibility = m.visibility;
+			isPublic = m.visibility === 'public';
+			isDraft = false;
+			category = undefined;
+			categorySuggestionKey = undefined;
+			// The item is the claim: retrying it reuses its video (below), not a file fingerprint
+			fingerprint = undefined;
+		}
+		// Record fields only an import sets
+		const importFields = imported
+			? {
+				importedFrom: imported.metadata.importedFrom,
+				...(imported.metadata.language ? { language: imported.metadata.language } : {}),
+				...(imported.metadata.publishedAt ? { publishedAt: imported.metadata.publishedAt } : {}),
+				...(imported.metadata.commentSettings ? { commentSettings: imported.metadata.commentSettings } : {}),
+			}
+			: {};
+		if (fingerprint && fingerprint.size !== fileSize) {
+			return c.json({ success: false, error: "fingerprint.size must equal fileSize" }, 400);
+		}
+
+		// Studio drafts are limited per plan (lib/studioLimits.ts)
+		if (isDraft && channelId !== userId && !who.adminImport) {
+			const counts = await channelContentCounts(c.env as never, channelId);
+			const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.value.drafts ?? 0 });
+			if (limit) return c.json(limit, 402);
+		}
+
+		const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+		const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
+		const libraryId = parseInt(libraryIdRaw, 10);
+
+		if (isNaN(libraryId)) {
+			return c.json({
+				success: false,
+				error: "Bunny Stream library ID is invalid"
+			}, 500);
+		}
+
+		const bunnyStream = new stream(bunnyKey).forEnv(c.env);
+		type VideoType = z.infer<typeof BusinessVideo>;
+		const bucket = c.env.videos;
+		if (!bucket) {
+			logger.error('[UploadInitiate] R2 bucket binding not available');
+			throw new Error('R2 bucket binding "videos" is not configured');
+		}
+		const repository = new R2Repository<VideoType>(bucket);
+		// The claim: the file's fingerprint, or for a Move from YouTube item the item itself, so
+		// two parallel initiates of one item make one video (the second reuses it)
+		const claimKey = imported
+			? await youtubeItemClaimKey(imported.importRow.id, imported.item.id)
+			: fingerprint
+				? await fingerprintKey(channelId, userId, fingerprint)
+				: undefined;
+
+		// Metadata the uploader entered (applied on create and on reuse)
+		const metadata = {
+			title,
+			description: description || '',
+			// A draft is always private (docs/specs/CREATOR-STUDIO.md §4.4.1); unlisted is D-SEO-5
+			...uploadVisibility(isDraft, visibility, isPublic),
+			...(isDraft ? { isDraft: true } : {}),
+			tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+			...(titleLocalized && { titleLocalized }),
+			...(descriptionLocalized && { descriptionLocalized }),
+			// A category submitted with the form is the uploader's (confirming or replacing the AI suggestion)
+			...(category && { category, categorySource: 'uploader' as const }),
+			...(format && format !== 'auto' && { format }),
+			fileSize,
+			originalFormat: mimeType,
+			...importFields,
+		};
+
+		// Creates the Bunny video and its record (the claim, when there is
+		// one, guarantees this runs once per file).
+		const create = async (): Promise<string> => {
+			// Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
+			const plan = await planIngest(c.env as never, channelId, async () => {
+				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
+				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+					title,
+					collectionId, // Add to collection if available
+					thumbnailTime: 0,
+				});
+				// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+				await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId, channelId });
+				return { guid: bunnyVideo.guid, libraryId };
+			});
+			const videoId = plan.videoId;
+			const thumb = await processThumbnail(c, videoId, thumbnail, plan.bunny?.guid);
+			const now = new Date().toISOString();
+			// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
+			// stored thumbnail there is no thumbnail URL until Bunny's exists.
+			const video = {
+				...createUploadRecord({
+					videoId,
+					title,
+					description,
+					// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
+					userId: ownerId,
+					uploadedBy,
+					channelId,
+					...uploadVisibility(isDraft, visibility, isPublic),
+					tags,
+					titleLocalized,
+					descriptionLocalized,
+					category,
+					...(category && { categorySource: 'uploader' as const }),
+					format,
+					fileSize,
+					mimeType,
+					customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,
+					bunnyHostname: c.env.bunny_hostname,
+					bunnyLibraryId: libraryId,
+					media: plan.media,
+					now: new Date(now),
+				}),
+				...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
+				...(isDraft ? { isDraft: true } : {}),
+				...importFields,
+			};
+			try {
+				await repository.putObject(videoId, video as VideoType);
+				logger.debug('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
+			} catch (error) {
+				// The Bunny video has no record now: the reaper's orphan sweep removes it.
+				logger.error('[UploadInitiate] Failed to save video metadata to R2', {
+					videoId,
+					error: error instanceof Error ? error.message : String(error),
+				});
+				throw error;
+			}
+
+			// AI category (queued, never blocks the upload): adopt the form's suggestion and record
+			// what the uploader kept; without a category and without a suggestion, request one
+			adoptOrRequestSuggestion(c, { videoId, userId, channelId, category: category ?? null, draftKey: categorySuggestionKey });
+
+			// Send analytics event for upload initiation
+			const queue = new Queue(c.env.queue);
+			await queue.send(MessageType.VideoUploadStarted, {
+				videoId,
+				userId,
+				channelId,
+				title,
+				fileSize,
+				mimeType,
+				timestamp: now,
+			});
+
+			// AI moderation of the metadata (queued, never fails the upload). Only a newly
+			// created record is scanned: a replayed initiate that reuses it does not get here.
+			scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: videoId, authorId: userId, channelId, text: videoScanText(video) });
+			return videoId;
+		};
+
+		let videoId: string;
+		let reused = false;
+		// An import item whose video already finished uploading is not uploaded twice
+		const itemVideo = imported?.item.video_id ?? null;
+		if (itemVideo) {
+			const verdict = await checkReusable(c.env as never, itemVideo, { ownerId, uploadedBy, channelId });
+			if (verdict.kind !== 'reuse' && (verdict.why === 'finished' || verdict.why === 'finished at Bunny')) {
+				return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
+			}
+		}
+		if (claimKey) {
+			const outcome = await initiateOnce(claimKey, {
+				store: c.env.global_settings as never,
+				userId,
+				channelId,
+				check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId }),
+				create,
+			});
+			videoId = outcome.videoId;
+			reused = outcome.reused;
+			if (outcome.replaced) logger.debug('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
+		} else {
+			videoId = await create();
+		}
+
+		if (imported) {
+			if (!(await recordImportUpload(c.env as unknown as YtEnv, imported, videoId))) {
+				return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
+			}
+			// A valid item: the upload limits may give this session back (middleware/upload-limits.ts)
+			confirmYoutubeImportItem(c);
+		}
+
+		let stored: PlaceholderRecord | null = null;
+		let thumbnailUrl: string | undefined;
+		let thumbnailSizes: Record<string, string> | undefined;
+		if (reused) {
+			// Same video again: latest metadata (and thumbnail, when one was sent)
+			const thumb = thumbnail?.data ? await processThumbnail(c, videoId, thumbnail) : null;
+			const nowIso = new Date().toISOString();
+			const result = await patchVideo(repository, videoId, (fresh) => {
+				const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
+				if (!fields) return false;
+				if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
+				return fields as Partial<VideoType>;
+			}, { ownerId });
+			if (result.status !== 'ok') {
+				logger.warn('[UploadInitiate] Reused video vanished while updating it', { videoId, status: result.status });
+				return c.json({ success: false, error: 'Upload could not be started, retry' }, 503);
+			}
+			stored = result.video as unknown as PlaceholderRecord;
+			// The earlier initiate may have left its Bunny video outside its collection
+			const reusedGuid = bunnyRef(stored as never);
+			if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId);
+			thumbnailUrl = stored.thumbnailUrl as string | undefined;
+			thumbnailSizes = stored.thumbnailSizes as Record<string, string> | undefined;
+		} else {
+			stored = (await repository.getObject(videoId)) as unknown as PlaceholderRecord | null;
+			thumbnailUrl = stored?.thumbnailUrl as string | undefined;
+			thumbnailSizes = stored?.thumbnailSizes as Record<string, string> | undefined;
+		}
+
+		// A video scheduled on YouTube is published here at the same time (never announced as new before then)
+		if (imported?.scheduleAt && stored && !(stored as { scheduledPublishStatus?: string }).scheduledPublishStatus) {
+			await scheduleImported(c, repository as never, videoId, ownerId, userId, imported.scheduleAt);
+		}
+
+		// TUS proxy session (no Bunny credentials reach the client); for a
+		// reused video also its earlier upload, resumed at Bunny's offset.
+		const session = await issueTusSession(c.env.TUS_SESSIONS, {
+			libraryId,
+			bunnyKey,
+			userId,
+			channelId,
+			videoId,
+			video: reused ? stored : null,
+			...(who.adminImport ? { adminImport: true } : {}),
+		});
+
+		return c.json({
+			success: true,
+			result: {
+				videoId,
+				tusSessionId: session.tusSessionId, // Client uses this to access TUS proxy
+				...(session.tusUploadId ? { tusUploadId: session.tusUploadId } : {}),
+				chunkSize: session.chunkSize,
+				resumable: session.resumable,
+				expiresAt: session.expiresAt,
+				reused,
+				// Thumbnail fields (a stored thumbnail only; Bunny's comes once the video plays)
+				thumbnailUrl: thumbnailUrl || undefined,
+				thumbnailSizes,
+				// Legacy fields for backward compatibility
+				libraryId,
+				status: 'uploading',
+				message: reused ? 'Unfinished upload of this file reused. Use tusSessionId (and tusUploadId) with TUS proxy.' : 'Upload initiated successfully. Use tusSessionId with TUS proxy.',
+			},
+		});
+
+	} catch (error) {
+		if (error instanceof UploadClaimBusyError) {
+			c.header('Retry-After', '3');
+			return c.json({ success: false, error: error.message, retryable: true }, 503);
+		}
+		logger.error("Upload initiate error:", {
+			message: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
+			name: error instanceof Error ? error.name : undefined,
+		});
+
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		// The Errors page gets the caught error (message and stack), not a bare "HTTP 500": with the
+		// X-Error-Ref set here the request wrapper (withErrorReporting) does not record it again.
+		// QA kept 138 "HTTP 500" events on this route with no cause (2026-11-10..13).
+		let ctx: { waitUntil(p: Promise<unknown>): void } | undefined;
+		try {
+			ctx = c.executionCtx;
+		} catch {
+			ctx = undefined;
+		}
+		const reference = reportServerError('api-videos', c.env as never, ctx, error, {
+			route: c.req.path,
+			method: c.req.method,
+			status: 500,
+			extra: { step: 'upload-initiate' },
+		});
+		c.header('X-Error-Ref', reference);
+		return c.json({
+			success: false,
+			error: "Failed to initiate upload",
+			details: errorMessage,
+			reference,
+		}, 500);
+	}
+}
+
+/**
+ * Schedules an imported video that YouTube had scheduled: at its YouTube
+ * time, or in a few minutes when that is closer than scheduling allows. One
+ * more than a year away stays private, unscheduled.
+ */
+async function scheduleImported(c: AppContext, repository: R2Repository<any>, videoId: string, ownerId: string, userId: string, at: string): Promise<void> {
+	const now = new Date();
+	let date = new Date(at);
+	const problem = scheduleDateProblem(date, now);
+	if (problem === 'too_far' || problem === 'invalid') return;
+	if (problem === 'too_soon') date = new Date(now.getTime() + 6 * 60_000);
+	const saved = await patchVideo(repository, videoId, (fresh: any) => {
+		if (fresh.isPublic || fresh.scheduledPublishStatus) return false;
+		applySchedule(fresh, { date, timezone: 'UTC', userId, now });
+		return {};
+	}, { ownerId });
+	if (saved.status === 'ok' && saved.changed) {
+		await announceSchedule(c.env as never, saved.video as never, { date, timezone: 'UTC', notifyOnPublish: false, userId });
+	}
+}
+
+/**
+ * Store a thumbnail sent with the initiate (custom image or an extracted
+ * frame) where the Delivery settings store custom thumbnails (lib/thumbnail/store.ts);
+ * without one, the provider's automatic frame follows once the video is ready
+ * (Bunny's next to its playlist, under its GUID; R2's from the transcode).
+ */
+async function processThumbnail(
+	c: AppContext,
+	videoId: string,
+	thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width?: number; height?: number } } | undefined,
+	bunnyGuid?: string | null,
+): Promise<{ thumbnailUrl: string; thumbnailType: 'auto' | 'custom'; thumbnailSizes?: Record<string, string>; custom: boolean }> {
+	const fallback = { thumbnailUrl: bunnyGuid ? `https://${c.env.bunny_hostname}/${bunnyGuid}/thumbnail.jpg` : '', thumbnailType: 'auto' as const, custom: false };
+	if (!thumbnail?.data) return fallback;
+	try {
+		logger.debug('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
+		// Process base64 thumbnail data (validates and converts to ArrayBuffer)
+		const processed = await thumbnailProcessor.processBase64(thumbnail.data, thumbnail.filename || 'thumbnail.jpg');
+		// Never store a thumbnail of another shape than the video's: Bunny's own frame is used instead
+		const shape = checkThumbnailShape(imageSize(new Uint8Array(processed.original)), videoSizeOf(thumbnail.video));
+		if (!shape.ok) {
+			logger.warn('[UploadInitiate] Thumbnail dropped: wrong shape, using the automatic frame', { videoId, expected: shape.expected, actual: shape.actual });
+			return fallback;
+		}
+		const stored = await storeCustomThumbnail(c.env as never, videoId, processed.original, { type: 'image/jpeg', extension: 'jpg' });
+		logger.debug('[UploadInitiate] Thumbnail stored', { videoId, store: stored.store, sizes: Object.keys(stored.thumbnailSizes) });
+		return { thumbnailUrl: stored.thumbnailUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: stored.thumbnailSizes, custom: true };
+	} catch (error) {
+		logger.error('[UploadInitiate] Thumbnail processing failed', {
+			videoId,
+			thumbnailType: thumbnail.type,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		// Continue without thumbnail, will fall back to Bunny.net auto-generated
+		return fallback;
+	}
+}
+
