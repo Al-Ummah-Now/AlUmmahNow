@@ -1,6 +1,6 @@
 'use server';
 
-import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
+import { VideoObject, VideoCategory, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { getApiUrl } from "@/lib/runtime-config";
 import { logger } from '@/lib/logger-server';
 
@@ -293,13 +293,19 @@ export async function getCategoryVideos(
   params: SectionQueryParams = {},
   headers?: { channelId?: string; userId?: string }
 ): Promise<VideoSectionResponse | null> {
+  // A server action: the category arrives from the client. Only a category
+  // slug may reach the API path (CodeQL js/request-forgery).
+  if (typeof category !== 'string' || !CATEGORY_SLUG_PATTERN.test(category)) {
+    logger.debug('[getCategoryVideos] Refused a category that is not a slug');
+    return null;
+  }
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('category', category);
     if (params.limit) queryParams.append('limit', params.limit.toString());
     if (params.cursor) queryParams.append('cursor', params.cursor);
 
-    const url = `${baseUrl}/api/videos/sections/by-category/${category}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${baseUrl}/api/videos/sections/by-category/${encodeURIComponent(category)}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     logger.debug('[getCategoryVideos] Fetching from:', { url, category });
 
     const response = await fetch(url, {

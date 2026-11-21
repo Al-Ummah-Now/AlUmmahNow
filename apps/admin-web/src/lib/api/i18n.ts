@@ -17,6 +17,7 @@ import type {
 } from '@al-ummah/shared-types';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { translationsPath } from './i18n-locale';
 
 function getApiUrl(): string {
   return process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3086';
@@ -34,9 +35,14 @@ export async function getTranslations(
 ): Promise<TranslationData | null> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   logger.debug(`[i18n] Fetching translations`, { requestId, locale });
+  const path = translationsPath(locale);
+  if (!path) {
+    logger.debug(`[i18n] Refused an unsupported locale`, { requestId });
+    return null;
+  }
 
   try {
-    const url = `${getApiUrl()}/api/i18n/translations/${locale}`;
+    const url = `${getApiUrl()}${path}`;
     const response = await fetch(url, {
       headers: {
         Accept: 'application/json',
@@ -173,6 +179,10 @@ export async function updateTranslations(
 ): Promise<{ success: boolean; error?: string }> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   logger.debug(`[i18n] Updating translations`, { requestId, locale, mode });
+  const path = translationsPath(locale);
+  if (!path) {
+    return { success: false, error: 'Unsupported locale' };
+  }
 
   try {
     const session = await getAdminSession();
@@ -187,7 +197,7 @@ export async function updateTranslations(
       hasAccessToken: !!session.accessToken,
     });
 
-    const response = await fetch(`${getAdminApiUrl()}/api/i18n/translations/${locale}`, {
+    const response = await fetch(`${getAdminApiUrl()}${path}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
