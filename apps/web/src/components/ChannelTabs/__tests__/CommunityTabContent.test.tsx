@@ -36,6 +36,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 const mockUser: { current: { id: string } | null } = { current: { id: 'viewer-user' } };
 jest.mock('@/components/AuthProvider/authContext', () => ({
   useAuth: () => ({ user: mockUser.current }),
+  useOptionalAuth: () => ({ user: mockUser.current }),
 }));
 
 // The comment forms read the account (its channels) and the member's profile (#1151)

@@ -19,7 +19,7 @@ import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
 import { avatarInitial } from '@/lib/avatar-initial';
 import { PostStatus } from '@al-ummah/shared-types';
-import PostManageMenu from './PostManageMenu';
+import PostActionsMenu from './PostActionsMenu';
 import { formatScheduledAt } from './management/PostSchedulePicker';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -156,8 +156,8 @@ export default function PostCard({
           {upcoming && <ScheduledLabel at={post.scheduledAt!} locale={locale} />}
         </div>
 
-        {/* The owner's menu (Edit, Delete); nobody else has actions here */}
-        {canManage && <PostManageMenu post={post} onDeleted={onDeleted} onRestored={onRestored} />}
+        {/* ⋮ for everyone: Copy link and Report; the post's channel also gets Edit and Delete (#1515) */}
+        <PostActionsMenu post={post} canManage={canManage} onDeleted={onDeleted} onRestored={onRestored} />
       </div>
 
       {/* Post Content */}

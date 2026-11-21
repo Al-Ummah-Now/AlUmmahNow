@@ -60,7 +60,7 @@ describe('CommentForm without a channel', () => {
     render(<CommentForm postChannelId="their-ch" postId="p1" userDisplayName="Guest" />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hi' } });
     fireEvent.submit(screen.getByRole('textbox').closest('form')!);
-    expect(await screen.findByText(/must be logged in/i)).toBeInTheDocument();
+    expect(await screen.findByText("Sign in to join the conversation")).toBeInTheDocument();
     expect(createPostComment).not.toHaveBeenCalled();
   });
 });
