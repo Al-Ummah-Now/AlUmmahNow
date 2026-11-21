@@ -58,7 +58,7 @@ jobs:
           set -o pipefail
           node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" --paths "$PATHS" | tee report.md
           head -c 900000 report.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: prod-errors-${{ inputs.env || 'stage' }}
           path: report.md

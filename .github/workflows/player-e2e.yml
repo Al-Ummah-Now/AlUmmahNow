@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload report and failure artefacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: player-e2e-${{ matrix.project }}
           path: |

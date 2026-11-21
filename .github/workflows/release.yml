@@ -221,7 +221,7 @@ jobs:
           pnpm --filter "@al-ummah/${{ matrix.part }}" build
           cd "apps/${{ matrix.part }}" && pnpm opennextjs-cloudflare build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.part }}
           path: ${{ matrix.part == 'workers' && 'dist/' || format('apps/{0}/.open-next/', matrix.part) }}
@@ -946,7 +946,7 @@ jobs:
             { echo '### Production release'; echo '```json'; cat release-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: release-result
