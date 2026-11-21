@@ -33,10 +33,11 @@ export function ScrollBox({ children, label, className = '', testId }: { childre
   }, []);
 
   const scrolls = edges.start || edges.end;
+  // A mask reads only alpha: currentColor is the opaque stop (no hard-coded colour).
   // The gradient runs along the inline axis: `to right` is the end edge in LTR, the start edge in RTL
   const fade = 'var(--scrollbox-fade, 2rem)';
   const mask = scrolls
-    ? `linear-gradient(to var(--scrollbox-end, right), ${edges.start ? `transparent, #000 ${fade}` : '#000'}, ${edges.end ? `#000 calc(100% - ${fade}), transparent` : '#000'})`
+    ? `linear-gradient(to var(--scrollbox-end, right), ${edges.start ? `transparent, currentColor ${fade}` : 'currentColor'}, ${edges.end ? `currentColor calc(100% - ${fade}), transparent` : 'currentColor'})`
     : undefined;
 
   return (
