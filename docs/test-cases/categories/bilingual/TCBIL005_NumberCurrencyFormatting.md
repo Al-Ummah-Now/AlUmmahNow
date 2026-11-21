@@ -8,7 +8,7 @@
 **Estimated Duration**: 12 minutes  
 **Author**: Test Automation Team  
 **Date Created**: 2025-11-18  
-**Last Updated**: 2026-11-21 (owner decision: Arabic numbers are never grouped)  
+**Last Updated**: 2026-11-21 (owner decisions: Arabic numbers are never grouped; counts compact from 1,000, millions «م»)  
 
 ## Test Overview
 
@@ -89,8 +89,8 @@ curl http://127.0.0.1:8686/api/localization/currency
 ### Step 1: Test View Count Display (English)
 1. Navigate to `http://localhost:3000/en/videos`
 2. Locate video view counts
-3. Verify thousand separators (commas)
-4. Check large number formatting (1K, 1M, etc.)
+3. Verify counts under 1,000 are full (887) and exact values keep commas (4,887 in analytics tables)
+4. Check counts from 1,000 on are compact, cut to one decimal and never rounded up (4,887 → 4.8K; 1,250,000 → 1.2M)
 5. Test decimal handling in view counts
 6. Verify consistent formatting across videos
 
@@ -98,8 +98,8 @@ curl http://127.0.0.1:8686/api/localization/currency
 1. Navigate to `http://localhost:3000/ar/videos`
 2. Locate video view counts
 3. Verify Arabic numerals (٠-٩)
-4. Check Arabic thousand separators
-5. Test Arabic decimal separators
+4. Check counts from 1,000 on are compact: «٤٫٨ ألف», «ألف مشاهدة», «ألفا مشاهدة», «٣ آلاف مشاهدة»; no thousands mark anywhere («٤٨٨٧» in tables)
+5. Test the Arabic decimal mark «٫» is the only mark inside a number («١٫٢ م مشاهدة»)
 6. Verify RTL text direction for numbers
 
 ### Step 3: Test Like/Dislike Counts (English)
@@ -114,7 +114,7 @@ curl http://127.0.0.1:8686/api/localization/currency
 1. Navigate to same video in Arabic
 2. Check like count in Arabic numerals
 3. Verify dislike count in Arabic
-4. Test Arabic abbreviations (ألف, مليون)
+4. Test Arabic scale words: thousands «ألف / ألفا / آلاف», millions always «{n} م» («١ م», «١٥ م»; never مليون), billions «مليار / ملياران / مليارات»
 5. Check real-time updates in Arabic
 6. Verify RTL number display
 
@@ -212,14 +212,14 @@ curl http://127.0.0.1:8686/api/localization/currency
 - Uses Western numerals (0-9)
 - Thousand separators are commas (1,234)
 - Decimal separator is period (1.23)
-- Large numbers use K/M abbreviations
+- Counts from 1,000 on use K/M/B, cut to one decimal and never rounded up (4.8K, 1.2M); exact values (analytics table cells, watch-time hours, money, file sizes) stay full
 - Currency symbols precede amounts ($99.99)
 
 ### Arabic Number Formatting
 - Uses Arabic numerals (٠-٩)
 - No thousands separator at all (owner 2026-11-21, replacing 2026-11-15's «٬»): «٤٨٨٧», «١٢٣٤٫٥». «٬» and the decimal «٫» look alike in most Arabic UI fonts, so «١٥٬٤١٩٫٩» read as 15,419,9
 - Decimal separator is the Arabic decimal mark «٫» (١٫٢٣), the only mark inside an Arabic number
-- Large numbers use Arabic abbreviations
+- Counts from 1,000 on are compact, cut not rounded: «٤٫٨ ألف», «٣ آلاف مشاهدة», «١٫٢ م مشاهدة» (millions are always «{n} م»; the words مليون/مليونا/ملايين are gone since 2026-11-21), «٣ مليارات»; exact values stay full and ungrouped («٤٨٨٧», «٥٠٦٢٫٦ س»)
 - Currency names follow amounts (٩٩ دولار)
 
 ### Consistency
@@ -678,8 +678,8 @@ pnpm test:cleanup-number-fixtures
 ## Acceptance Criteria Verification
 
 - [ ] English numbers use Western numerals and comma separators
-- [ ] Arabic numbers use Arabic numerals and Arabic separators
-- [ ] Large numbers are properly abbreviated in both languages
+- [ ] Arabic numbers use Arabic numerals, «٫» only, and no thousands mark
+- [ ] Counts from 1,000 on are compact (cut, not rounded) in both languages; millions in Arabic are «{n} م»
 - [ ] Currency formatting is correct for each locale
 - [ ] Percentages display correctly in both languages
 - [ ] Duration formatting is consistent
