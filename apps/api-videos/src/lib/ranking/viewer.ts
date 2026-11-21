@@ -9,7 +9,7 @@
  * not interest). Everything else counts once per viewer per video per day.
  *
  * Members are keyed by user id. Anonymous viewers are keyed by a hash of their
- * address and user agent with a random salt that exists for one UTC day only
+ * address (IPv6: its /64) with a random salt that exists for one UTC day only
  * (search_meta 'discovery:salt:<day>'; the ranking job deletes old salts), so
  * the stored keys can't be linked across days or back to an address.
  */
@@ -75,8 +75,28 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
+ * Pure: the part of an address that identifies one anonymous viewer. IPv4 as is;
+ * IPv6 by its /64 (one household or device gets a whole /64, so rotating the
+ * rest of it is still one viewer). The user agent is left out on purpose: it is
+ * free to change, so it would let one address count as many viewers. Viewers
+ * behind one shared address count once, which only ever under-counts.
+ */
+export function addressBucket(address: string): string {
+	const ip = address.trim().toLowerCase();
+	if (!ip.includes(':')) return ip;
+	const [head, tail = ''] = ip.split('::');
+	const left = head ? head.split(':') : [];
+	const right = tail ? tail.split(':') : [];
+	const groups = ip.includes('::') ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left;
+	return groups
+		.slice(0, 4)
+		.map((g) => (g || '0').replace(/^0+(?=.)/, ''))
+		.join(':') + '::/64';
+}
+
+/**
  * The viewer key for a view that may count: 'u:<userId>' for members, else
- * 'a:<16 hex>' from address + user agent + the day's salt. Null when an
+ * 'a:<16 hex>' from the address (IPv6: its /64) + the day's salt. Null when an
  * anonymous request carries no address (nothing to de-duplicate by: not counted).
  */
 export async function viewerKey(db: SaltDb | undefined, request: Request, userId: string | null | undefined, now = Date.now()): Promise<string | null> {
@@ -84,6 +104,5 @@ export async function viewerKey(db: SaltDb | undefined, request: Request, userId
 	const address = request.headers.get('cf-connecting-ip') ?? request.headers.get('x-real-ip');
 	if (!address || !db) return null;
 	const salt = await dailySalt(db, now);
-	const agent = request.headers.get('user-agent') ?? '';
-	return `a:${(await sha256Hex(`${salt}|${address}|${agent}`)).slice(0, 16)}`;
+	return `a:${(await sha256Hex(`${salt}|${addressBucket(address)}`)).slice(0, 16)}`;
 }

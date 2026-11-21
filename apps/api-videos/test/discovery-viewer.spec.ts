@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankExclusion, resetSaltCache, viewerKey, SALT_KEY_PREFIX } from '../src/lib/ranking/viewer';
+import { addressBucket, rankExclusion, resetSaltCache, viewerKey, SALT_KEY_PREFIX } from '../src/lib/ranking/viewer';
 import { personalOrder, rankPersonal } from '../src/lib/ranking/personal';
 import { MemoryBucket } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -46,6 +46,21 @@ describe('viewer keys', () => {
 		const meta = db.db.prepare("SELECT key, value FROM search_meta WHERE key LIKE 'discovery:salt:%'").all() as Array<{ key: string; value: string }>;
 		assert.equal(meta.length, 2);
 		assert.ok(meta.every((m) => m.key.startsWith(SALT_KEY_PREFIX) && !m.value.includes('1.2.3.4')));
+	});
+
+	it('changing the user agent or the rest of an IPv6 /64 is still one viewer', async () => {
+		const db = new SqliteD1();
+		const firefox = await viewerKey(db as never, request('1.2.3.4', 'Firefox'), null, NOW);
+		const forged = await viewerKey(db as never, request('1.2.3.4', 'curl/8 random-123'), null, NOW);
+		assert.equal(firefox, forged);
+		assert.equal(addressBucket('2001:db8:aa:bb:1:2:3:4'), '2001:db8:aa:bb::/64');
+		assert.equal(addressBucket('2001:0db8:00aa:00bb::9'), '2001:db8:aa:bb::/64');
+		assert.equal(addressBucket('2001:db8::1'), '2001:db8:0:0::/64');
+		const v6a = await viewerKey(db as never, request('2001:db8:aa:bb::1'), null, NOW);
+		const v6b = await viewerKey(db as never, request('2001:db8:aa:bb:ffff::2'), null, NOW);
+		const v6c = await viewerKey(db as never, request('2001:db8:aa:bc::1'), null, NOW);
+		assert.equal(v6a, v6b);
+		assert.notEqual(v6a, v6c);
 	});
 
 	it('an anonymous request without an address is not counted', async () => {
