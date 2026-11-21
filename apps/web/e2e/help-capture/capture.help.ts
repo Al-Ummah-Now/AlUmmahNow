@@ -65,7 +65,7 @@ const DEMOS = [
   // A crop with no drawn play button (videos.webp has one: it doubled the player's own)
   { key: 'tour', art: 'videos-admin.webp', title: NAMES.video },
   // Full-bleed crops only (www.webp is round, with black corners)
-  { key: 'street', art: 'tools.webp', title: { en: 'Lantern street', ar: 'فوانيس رمضان' } },
+  { key: 'street', art: 'tools.webp', title: { en: 'Lantern street', ar: 'شارع الفوانيس' } },
   { key: 'evening', art: 'auth.webp', title: { en: 'Evening lights', ar: 'أضواء المساء' } },
   { key: 'writing', art: 'cms.webp', title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' } },
 ] as const;
@@ -147,6 +147,8 @@ const data = useOwnData(test as never);
 let creator: Creator;
 let channelId = '';
 let videoId = '';
+/** The pages' fixed clock (set once the demos exist) */
+let CLOCK = 0;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -195,6 +197,10 @@ test.beforeAll(async ({ browser }) => {
   const playlistId = res.ok ? ((await res.json()) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id : undefined;
   if (!res.ok) problems.push(`personal playlist not created (${res.status}): ${(await res.text()).slice(0, 200)}`);
   if (playlistId) data.onCleanup(`playlist ${playlistId}`, () => apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE' }));
+  // Every picture's clock: a fixed moment just after the demos were made, so a card reads the same
+  // age in English and Arabic, whenever each was taken (AUDIT-2 2026-11-21: "now" next to «قبل دقيقة
+  // واحدة» on the same card)
+  CLOCK = Date.now() + 2 * 60_000;
 });
 
 async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, opts: { signedIn?: boolean; record?: string; height?: number } = {}): Promise<{ context: BrowserContext; page: Page }> {
@@ -214,6 +220,8 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
     locale: lang === 'ar' ? 'ar' : 'en-US',
     ...(opts.record ? { recordVideo: { dir: opts.record, size: { width: v.width, height: v.height } } } : {}),
   });
+  // Dates and times stand still at CLOCK (timers keep running)
+  if (CLOCK) await context.clock.setFixedTime(CLOCK);
   // No consent banner over the pictures (optional tracking declined); the tour stays away by
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -1437,7 +1445,8 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
           if (found !== null) {
             if (k > 0 && edge) {
               const axis = edge === 'top' || edge === 'bottom' ? 'y' : 'x';
-              const at = Math.round((min + max) / 2);
+              // What sits just past the edge it took (why no cleaner line was found further out)
+              const at = Math.round(found + 4 * outward);
               const blockers = [...cards, ...items].filter((it) => (axis === 'y' ? it.r > l && it.l < r && it.t < at && it.b > at : it.b > t && it.t < b && it.l < at && it.r > at)).slice(0, 3)
                 .map((it) => `${Math.round(it.l)},${Math.round(it.t)} ${Math.round(it.r - it.l)}x${Math.round(it.b - it.t)}`);
               notes.push(`${edge} edge fell back to tier ${k + 1} at ${found} (range ${Math.round(min)}..${Math.round(max)}; at ${at}: ${blockers.join(' | ')})`);
@@ -1467,6 +1476,13 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
           r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')), last ? 'right' : '', true);
         }
       }
+      // An edge a few px inside a card's border shows a sliver of its frame and rounded corners: it
+      // moves just outside the card (AUDIT-2 2026-11-21: the Arabic phone comments card cut 5 px in)
+      const nearCard = (v: number, edge: 'top' | 'bottom') => cards.find((cd) => cd.r > l && cd.l < r && (edge === 'top'
+        ? cd.t < v && v - cd.t <= 16 && cd.t - 6 >= topLimit && cd.t - 6 <= mustT
+        : cd.b > v && cd.b - v <= 16 && cd.b + 6 <= bottomLimit && cd.b + 6 >= mustB));
+      { const cd = nearCard(t, 'top'); if (cd) t = cd.t - 6; }
+      { const cd = nearCard(b, 'bottom'); if (cd) b = cd.b + 6; }
       // Whole pixels, so the English and Arabic twins compare exactly
       t = Math.round(t); b = Math.round(b);
       // The other language's height: its twin is framed the same (AUDIT-2 2026-11-21: 378 vs 370 tall).
@@ -1478,6 +1494,18 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
           if (nb < mustB || nb > bottomLimit) continue;
           if (crosses(items, 'y', nt) || crosses(items, 'y', nb) || cardsCross('y', nt) || cardsCross('y', nb) || avoidIn(nt, mustT, 'y') || avoidIn(mustB, nb, 'y')) continue;
           if (best === null || Math.abs(nt - t) < Math.abs(best - t)) best = nt;
+        }
+        // No clean pair: lines through a card's body (never a few px inside its border) but through no
+        // control, picture or word, so the twins still frame alike
+        if (best === null) {
+          const sliver = (v: number) => cards.some((cd) => cd.r > l && cd.l < r && ((v > cd.t && v - cd.t <= 16) || (v < cd.b && cd.b - v <= 16)));
+          for (let nt = Math.ceil(topLimit); nt <= mustT; nt++) {
+            const nb = nt + match;
+            if (nb < mustB || nb > bottomLimit) continue;
+            if (crosses(items, 'y', nt) || crosses(items, 'y', nb) || sliver(nt) || sliver(nb) || avoidIn(nt, mustT, 'y') || avoidIn(mustB, nb, 'y')) continue;
+            if (best === null || Math.abs(nt - t) < Math.abs(best - t)) best = nt;
+          }
+          if (best !== null) notes.push(`height ${b - t} matched ${match} on lines through a card's body`);
         }
         if (best !== null) { t = best; b = best + match; } else notes.push(`height ${b - t} could not match ${match}`);
       }
