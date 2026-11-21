@@ -17,7 +17,7 @@
  *   4. trims viewer rows older than the longest window and keeps a run summary
  *      in search_meta ('discovery:last-run') for the admin.
  */
-import { reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { DISCOVERY_PIN_RAILS, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { createJob, listJobs, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
 import { SALT_KEY_PREFIX } from './viewer';
@@ -64,7 +64,7 @@ export const CATEGORY_RAILS: readonly RailId[] = ['top', 'new', 'trending:week']
 export const ONLY_LANGUAGE_RAILS: readonly RailId[] = ['trending:day', 'trending:week', 'trending:month'];
 
 /** Admin pin targets (discovery_pins.rail) → the rails they apply to. */
-export const PIN_RAILS = ['featured', 'trending', 'popular', 'new', 'explore'] as const;
+export const PIN_RAILS = DISCOVERY_PIN_RAILS;
 
 /** Accounts whose uploads never rank: E2E run accounts and production throwaways. */
 const TEST_OWNER = /(@e2e\.alummahnow\.net|@delivered\.resend\.dev)$/i;

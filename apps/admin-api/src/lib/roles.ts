@@ -56,6 +56,8 @@ export const PERMISSIONS = {
   'content:translate': ADMIN_ROLE_IDS,
   /** Video categories (Videos admin › Categories): add, rename, reorder, retire and restore. Reading them needs any admin role. */
   'videos:categories': ADMIN_ROLE_IDS,
+  /** Discovery (Videos admin › Discovery, wiki E07): pin and exclude in the ranked lists, order the home rails, rank now. Reading needs any admin role. */
+  'discovery:manage': ADMIN_ROLE_IDS,
   /** Delivery comparison (epic #687): the Bunny/R2 switch, transcode jobs and retry, QoE and cost. */
   'media:manage': ADMIN_ROLE_IDS,
   /** See the max concurrent R2 transcodes and the live transcode figures (Delivery); changing them needs media:manage. */
