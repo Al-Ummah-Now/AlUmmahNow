@@ -69,15 +69,30 @@ export function formatTimestamp(seconds: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
 }
 
+const SCRIPT_OR_STYLE_BLOCK = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\b[^>]*>/gi;
+const HTML_TAG = /<[^>]+>/g;
+
+/** Apply every removal until the text stops changing (a fixed point). */
+function removeUntilStable(input: string, patterns: readonly RegExp[]): string {
+  let out = input;
+  let previous: string;
+  do {
+    previous = out;
+    for (const pattern of patterns) out = out.replace(pattern, '');
+  } while (out !== previous);
+  return out;
+}
+
 /**
  * Sanitize subtitle text to prevent XSS
  * @param text - Raw subtitle text
  * @returns Sanitized text
  */
 export function sanitizeText(text: string): string {
-  // Remove HTML tags
-  text = text.replace(/<script[^>]*>.*?<\/script>/gi, '');
-  text = text.replace(/<[^>]+>/g, '');
+  // Remove script/style blocks with their bodies, then any tag, until nothing
+  // changes: one removal must not join its neighbours into a new tag
+  // (`<scr<b>ipt>`). An end tag may carry spaces or junk before '>'.
+  text = removeUntilStable(text, [SCRIPT_OR_STYLE_BLOCK, HTML_TAG]);
 
   // Remove dangerous characters but preserve formatting
   text = text.replace(/[<>]/g, '');

@@ -325,10 +325,14 @@ export function rowApplies(row: RenameRow): boolean {
 
 /** New titles to write, per subject id and language (rows that apply only). */
 export function renamedTitles(rows: readonly RenameRow[]): Record<string, Partial<Record<TitleLanguage, string>>> {
-  const out: Record<string, Partial<Record<TitleLanguage, string>>> = {};
+  // Ids come from the client's selection: a null-prototype map, so an id like
+  // '__proto__' is an ordinary key and never reaches Object.prototype
+  // (CodeQL js/prototype-polluting-assignment).
+  const out: Record<string, Partial<Record<TitleLanguage, string>>> = Object.create(null);
   for (const row of rows) {
     if (!rowApplies(row)) continue;
-    (out[row.id] ??= {})[row.language] = row.after;
+    const titles: Partial<Record<TitleLanguage, string>> = Object.prototype.hasOwnProperty.call(out, row.id) ? out[row.id] : (out[row.id] = Object.create(null));
+    titles[row.language] = row.after;
   }
   return out;
 }

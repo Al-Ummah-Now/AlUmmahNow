@@ -45,12 +45,24 @@ function stripControlChars(input: string, maxLength: number): string {
   return out.length > maxLength ? out.slice(0, maxLength) : out;
 }
 
+/** Apply every removal until the text stops changing (a fixed point). */
+function removeUntilStable(input: string, patterns: readonly RegExp[]): string {
+  let out = input;
+  let previous: string;
+  do {
+    previous = out;
+    for (const pattern of patterns) out = out.replace(pattern, '');
+  } while (out !== previous);
+  return out;
+}
+
 /** Keys that can pollute Object.prototype when merged. */
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F​-‏‪-‮⁦-⁩]/g;
-const SCRIPT_OR_STYLE_BLOCK = /<(script|style|iframe|object|embed|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+// The end tag may carry spaces or junk before '>' (`</script >`, `</script\tx>`): browsers still close on it.
+const SCRIPT_OR_STYLE_BLOCK = /<(script|style|iframe|object|embed|noscript|template)\b[^>]*>[\s\S]*?<\/\1\b[^>]*>/gi;
 const HTML_TAG = /<\/?[a-z!][^>]*>/gi;
 const DANGEROUS_SCHEME = /\b(?:java|vb|live)script\s*:|\bdata\s*:\s*text\/html/gi;
 
@@ -77,13 +89,11 @@ export function escapeHtml(input: string): string {
 export function sanitizeText(input: string, maxLength = DEFAULTS.maxStringLength): string {
   let out = String(input).normalize('NFC');
   out = out.replace(CONTROL_CHARS, '');
-  // Strip whole script-like blocks first so their bodies do not survive as text.
-  let previous: string;
-  do {
-    previous = out;
-    out = out.replace(SCRIPT_OR_STYLE_BLOCK, '').replace(HTML_TAG, '');
-  } while (out !== previous);
-  out = out.replace(DANGEROUS_SCHEME, '');
+  // Strip whole script-like blocks first so their bodies do not survive as
+  // text, then tags and dangerous schemes, until nothing changes: removing one
+  // match must not join its neighbours into a new one (`<scr<b>ipt>`,
+  // `javajavascript:script:`).
+  out = removeUntilStable(out, [SCRIPT_OR_STYLE_BLOCK, HTML_TAG, DANGEROUS_SCHEME]);
   // Any remaining angle brackets cannot form tags any more; encode them anyway.
   out = out.replace(/[<>]/g, ch => (ch === '<' ? '&lt;' : '&gt;'));
   return out.length > maxLength ? out.slice(0, maxLength) : out;

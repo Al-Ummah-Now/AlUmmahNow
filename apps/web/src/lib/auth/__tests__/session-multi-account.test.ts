@@ -128,6 +128,27 @@ describe('session cookie with several accounts', () => {
     expect([...jar.keys()]).toEqual([SESSION_COOKIE_NAME]);
   });
 
+  it('refuses prototype keys as account ids without touching Object.prototype', async () => {
+    await signIn('usr_a');
+
+    for (const id of ['__proto__', 'constructor', 'toString']) {
+      await expect(SessionManager.setActiveAccount(id)).rejects.toThrow('Account not found');
+      await expect(SessionManager.loadUserChannels(id)).rejects.toThrow('User session not found');
+      await SessionManager.loadUserProfile(id);
+      expect(await SessionManager.getSessionForUser(id)).toBeNull();
+      expect((await SessionManager.refreshAccount(id)).result).toBe('missing');
+      await SessionManager.removeAccount(id);
+    }
+    await expect(signIn('__proto__')).rejects.toThrow('Invalid user id');
+
+    const probe: Record<string, unknown> = {};
+    for (const key of ['activeChannelId', 'lastActivity', 'displayName', 'avatarUrl', 'channels']) {
+      expect(probe[key]).toBeUndefined();
+    }
+    expect((await SessionManager.getActiveSession())?.userId).toBe('usr_a');
+    expect((await SessionManager.getAllSessions()).map((a) => a.userId)).toEqual(['usr_a']);
+  });
+
   it('signing out of every account clears every chunk', async () => {
     await signIn('usr_a');
     await signIn('usr_b');
