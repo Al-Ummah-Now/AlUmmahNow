@@ -30,7 +30,8 @@
     "hono": "^4.13.19",
     "sanitize-html": "^2.18.2",
     "tus-js-client": "^4.3.1",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251106.1",
