@@ -64,3 +64,15 @@ it('puts the item chosen in a transition in the row, and an older observer firin
   act(() => observerBefore());
   expect(rowIds()).toEqual(['row-a', 'row-e']);
 });
+
+it('themes More as a Button only when the row is made of Buttons', async () => {
+  const items = IDS.map((id) => ({ id, label: `Item ${id}`, current: id === 'a' }));
+  const strip = (moreIsButton?: boolean) => (
+    <PriorityStrip items={items} testId="s" moreLabel="More" menuLabel="More items" moreIsButton={moreIsButton} renderItem={(item) => <button type="button" key={item.id}>{item.label}</button>} />
+  );
+  const { rerender } = render(strip());
+  await act(async () => {});
+  expect(screen.getByTestId('s-more')).not.toHaveAttribute('data-slot');
+  rerender(strip(true));
+  expect(screen.getByTestId('s-more')).toHaveAttribute('data-slot', 'button');
+});
