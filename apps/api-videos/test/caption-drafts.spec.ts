@@ -144,6 +144,13 @@ describe('caption drafts', () => {
 		assert.equal(served.status, 200);
 		const vtt = await served.text();
 		assert.match(vtt, /﴿قُلْ هُوَ ٱللَّهُ أَحَدٌ﴾ \(الإخلاص ١١٢:١\)/);
+		// QF terms (2026-11-21): the cue with Quran text ends with QF's attribution (right to left), once;
+		// the reference-only cue has none
+		const blocks = vtt.split(/\n{2,}/);
+		const quranCue = blocks.find((b) => b.includes('﴿'))!;
+		assert.equal(quranCue.split('\n').at(-1), '\u200fبيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)');
+		assert.equal(vtt.split('بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)').length - 1, 1);
+		assert.ok(!blocks.find((b) => b.includes('quran.com/112/2'))!.includes('quran.foundation'));
 		assert.match(vtt, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');
 		assert.ok(!vtt.includes(HEARD));
@@ -161,6 +168,7 @@ describe('caption drafts', () => {
 		const vtt = await (await app().request('/api/videos/v1/subtitles/ar', {}, e as never)).text();
 		assert.match(vtt, /\[القرآن ١١٢:١ · quran\.com\/112\/1\]/);
 		assert.ok(!vtt.includes(HEARD));
+		assert.ok(!vtt.includes('quran.foundation'), 'no Quran text shown, so no attribution');
 	});
 
 	it('an uploaded track of the language is replaced only when asked; a stale publish is refused', async () => {

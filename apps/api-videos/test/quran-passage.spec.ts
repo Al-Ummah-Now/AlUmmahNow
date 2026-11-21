@@ -48,7 +48,8 @@ describe('the Quran passage', () => {
 		assert.equal(body.label, '112:1–2');
 		assert.equal(body.quranComUrl, 'https://quran.com/112/1-2');
 		assert.deepEqual(body.surah, { number: 112, nameArabic: 'الإخلاص', nameSimple: 'Al-Ikhlas' });
-		assert.match(body.attribution.en, /Quran Foundation \(quran\.com\)/);
+		assert.equal(body.attribution.en, 'Quran data provided by Quran Foundation (https://quran.foundation/)');
+		assert.equal(body.attribution.ar, 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)');
 		assert.equal(body.version, VERSION);
 	});
 
