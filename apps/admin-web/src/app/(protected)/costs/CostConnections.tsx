@@ -15,11 +15,11 @@ import { smallButtonClass } from '@/components/content/parts';
 import { fieldClass } from '@/components/ui';
 import { removeCostCredential, saveCostCredential, testCostCredential } from '@/lib/api/costs';
 import type { CostTestResult } from '@/lib/api/costs-types';
-import { opsFormats } from '../operations/model';
 import { credentialState, keyProblem, missingListings, testCodeOf, type CredentialState, type KeyProblem } from './model';
 import { FeedbackLine, useCostAction } from './useCostAction';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { LocalTime } from '@/components/LocalTime';
 
 const PROVIDERS: CostProvider[] = ['cloudflare', 'bunny', 'resend'];
 const STATE_TONE: Record<CredentialState, 'good' | 'warn' | 'bad'> = { set: 'good', unset: 'warn', unreadable: 'bad' };
@@ -50,7 +50,6 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
   const [problem, setProblem] = useState<KeyProblem | null>(null);
   const [fresh, setFresh] = useState<CostTestResult | null>(null);
   const { run, busy, feedback } = useCostAction(`connection:${p}`);
-  const f = opsFormats(locale);
   const state = credentialState(view);
 
   const code = testCodeOf(fresh?.code ?? view.test?.code ?? view.test?.message);
@@ -105,12 +104,12 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
         <div className="cost-tile mt-3 space-y-1.5 p-3 text-xs">
           {view.updatedAt && (
             <p className="text-fg-muted" data-testid={`costs-connection-${p}-set-by`}>
-              {who ? fillNodes(t('costs.connections.setBy', { time: f.time(view.updatedAt) }), { name: who }) : t('costs.connections.setAt', { time: f.time(view.updatedAt) })}
+              {fillNodes(t(who ? 'costs.connections.setBy' : 'costs.connections.setAt'), { time: <LocalTime value={view.updatedAt} withTime />, ...(who ? { name: who } : {}) })}
             </p>
           )}
           {testLine && (
             <div data-testid={`costs-connection-${p}-test-result`} data-ok={testOk ? 'true' : 'false'} data-code={code ?? ''}>
-              <p className="text-fg-muted">{view.test ? t('costs.connections.lastTest', { time: f.time(view.test.at) }) : t('costs.connections.neverTested')}</p>
+              <p className="text-fg-muted">{view.test ? fillNodes(t('costs.connections.lastTest'), { time: <LocalTime value={view.test.at} withTime /> }) : t('costs.connections.neverTested')}</p>
               <p className={`mt-0.5 flex items-start gap-1.5 text-sm ${partial ? 'text-warning-fg' : testOk ? 'text-success-fg' : 'text-danger-fg'}`}>
                 <span aria-hidden="true">{partial ? '!' : testOk ? '✓' : '✕'}</span>
                 <span>{testLine}</span>

@@ -14,6 +14,8 @@ import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, typ
 import { getCostDatabases } from '@/lib/api/costs';
 import type { CostDatabases } from '@/lib/api/costs-types';
 import { DatabaseCapacityGauge } from '@/components/capacity/DatabaseCapacityGauge';
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +67,7 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         <thead>
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t(`operations.charts.${spec.label}`)} • {t('operations.resources.today')}</th>
+            <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) })}</th>
             <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.last7')}</th>
           </tr>
         </thead>
@@ -74,10 +76,12 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
             const max = Math.max(0, ...r.spark.values.map((v) => v ?? 0));
             return (
               <tr key={r.id} className="border-t border-border" data-testid="ops-resource-row">
-                <th scope="row" className="p-2 text-start font-normal text-fg break-all">{r.name}</th>
+                <th scope="row" className="p-2 text-start font-normal text-fg [overflow-wrap:normal] [word-break:normal]" dir="ltr" data-testid="ops-resource-name">
+                  <BreakAtHyphens name={r.name} />
+                </th>
                 <td className="p-2 text-end tabular-nums">{fmt(r.metrics[spec.metric])}</td>
                 <td className="p-2 text-end">
-                  <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(', ')} role="img">
+                  <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(t('costs.listSep'))} role="img">
                     {r.spark.values.map((v, i) => (
                       <span key={r.spark.days[i]} className="w-1.5 bg-accent" style={{ height: `${max > 0 && v ? Math.max(8, (v / max) * 100) : 4}%`, opacity: v ? 1 : 0.3 }} />
                     ))}
@@ -89,6 +93,25 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** A resource name that wraps only after a "-" (al-ummah-now-<wbr>production), never mid-word. */
+function BreakAtHyphens({ name }: { name: string }) {
+  const parts = name.split('-');
+  return (
+    <span title={name}>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {p}
+          {i < parts.length - 1 && (
+            <>
+              -<wbr />
+            </>
+          )}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -142,7 +165,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
           <p className="text-fg-muted mt-1">{t('operations.subtitle')}</p>
           {overview?.dataAsOf && (
             <p className={`mt-1 text-sm ${overview.stale ? 'text-warning-fg' : 'text-fg-muted'}`} data-testid="ops-data-age" data-stale={overview.stale ? 'true' : 'false'}>
-              {overview.stale ? t('operations.stale') : t('operations.dataAsOf', { time: f.time(overview.dataAsOf) })}
+              {overview.stale ? t('operations.stale') : fillNodes(t('operations.dataAsOf'), { time: <LocalTime value={overview.dataAsOf} withTime /> })}
             </p>
           )}
         </div>
@@ -180,7 +203,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
                       <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span> • {a.rule_id} •{' '}
-                      <span className="text-fg-muted">{t('operations.alerts.opened', { time: f.time(a.opened_at) })}</span>
+                      <span className="text-fg-muted">{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime /> })}</span>
                     </li>
                   ))}
                 </ul>

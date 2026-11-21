@@ -289,6 +289,41 @@ test.describe('costs (super admin)', () => {
     }
   });
 
+  test('COSTS-10 a token Cloudflare refuses names Account Analytics Read and offers Check again, not $0 as real', async ({ page }) => {
+    test.skip(!LOCAL_STACK, 'seeds the local stack COSTS_DB directly');
+    await skipUnlessReady();
+    // The collector borrowing the shared token, and its latest hourly run refused (a start time
+    // ahead of every real run, so it is the latest); both put back afterwards
+    const before = await stackSql<{ value: string; updated_at: string }>(COSTS_DB, "SELECT value, updated_at FROM cost_settings WHERE key = 'collector'");
+    const runId = `e2e-refused-${process.env.E2E_RUN_ID ?? Date.now()}`;
+    const ahead = new Date(Date.now() + 86_400_000).toISOString();
+    const now = new Date().toISOString();
+    try {
+      await stackSql(COSTS_DB, `INSERT INTO cost_settings (key, value, updated_at) VALUES ('collector', '{"tokenSource":"release"}', '${now}') ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`);
+      await stackSql(COSTS_DB, `INSERT INTO collector_runs (id, kind, started_at, finished_at, status, detail) VALUES ('${runId}', 'hourly', '${ahead}', '${ahead}', 'failed', '{"token":"release","error":"Cloudflare GraphQL returned no data: not authorized for that account"}')`);
+      const d = await dashboard();
+      test.skip(d.result?.connections.some((c) => c.provider === 'cloudflare' && c.set) ?? false, 'a Cloudflare token is set on this stack');
+      await page.goto('/costs');
+      const banner = page.getByTestId('costs-token-banner');
+      await expect(banner).toHaveAttribute('data-kind', 'refused');
+      await expect(banner).toContainText('missing, not zero');
+      await expect(page.getByTestId('costs-token-permission')).toContainText('Account Analytics Read');
+      await page.getByTestId('costs-token-check').click();
+      await expect(page.getByTestId('costs-token-check-feedback-ok')).toContainText('A collection is queued');
+
+      await setPreferences(page, { locale: 'ar' });
+      await page.goto('/costs');
+      await expect(page.getByTestId('costs-token-banner')).toHaveAttribute('data-kind', 'refused');
+      await expect(page.getByTestId('costs-token-permission')).toContainText('Account Analytics Read');
+      await expect(page.getByTestId('costs-token-check')).toHaveText('افحص مجددًا');
+    } finally {
+      await setPreferences(page, { locale: 'en' }).catch(() => undefined);
+      await stackSql(COSTS_DB, `DELETE FROM collector_runs WHERE id = '${runId}'`);
+      if (!before.length) await stackSql(COSTS_DB, "DELETE FROM cost_settings WHERE key = 'collector'");
+      else await stackSql(COSTS_DB, `UPDATE cost_settings SET value = '${before[0]!.value.replace(/'/g, "''")}', updated_at = '${before[0]!.updated_at}' WHERE key = 'collector'`);
+    }
+  });
+
   test('COSTS-06 Arabic is right to left, and the page fits a phone without sideways scrolling', async ({ page }) => {
     await skipUnlessReady();
     await page.setViewportSize({ width: 375, height: 812 });

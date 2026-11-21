@@ -63,7 +63,7 @@ export default async function CostsPage() {
       {error && <ErrorAlert testId="costs-load-error">{error}</ErrorAlert>}
       {d && (
         <>
-          <TokenNotice d={d} t={t} f={f} check={<CheckCollector />} />
+          <TokenNotice d={d} t={t} check={<CheckCollector />} />
           <BudgetNotice d={d} t={t} />
           <CollectorFailures d={d} t={t} f={f} />
           <BudgetSection d={d} t={t} f={f} />
