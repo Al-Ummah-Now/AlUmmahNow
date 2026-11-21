@@ -3,6 +3,8 @@
    compiled from packages/theme-packages into these two files; a custom package's CSS is inlined
    by the root layout. html[data-theme] is the theme id and the .dark class the mode. */
 @import '../../../web/src/theme/site-themes.css';
+/* The error card (components/FriendlyError.tsx; wiki guides/error-pages.md) */
+@import '../../../../packages/fanous-tokens/errors/aun-error-page.css';
 @import '../../../web/src/theme/materials.css';
 /* Header account button and menus: the shared nav contract (docs/design/NAV.md) */
 @import '../../../../packages/fanous-tokens/nav/aun-nav.css';
@@ -439,4 +441,17 @@ html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 
 .cost-primary:hover:not(:disabled) {
   background: var(--m-primary-hover, var(--accent-hover));
+}
+
+/* The error card's buttons are admin's standard ones (components/ui.tsx) with an icon; inside the
+   admin layout or the public shell the card needs no page height of its own */
+.ep-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.ep-inline {
+  min-height: 0;
+  padding-block: 24px;
 }

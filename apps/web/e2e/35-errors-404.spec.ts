@@ -19,8 +19,8 @@ test('ERR-001 the site root redirects to /en', async ({ page }) => {
 });
 
 for (const [locale, heading, description, home, back] of [
-  ['en', 'Page not found', /does not exist/, 'Go Home', 'Go Back'],
-  ['ar', 'الصفحة غير موجودة', /غير موجودة/, 'العودة إلى الرئيسية', 'العودة للخلف'],
+  ['en', 'Page not found', /couldn't find this page/, 'Go to home', 'Go back'],
+  ['ar', 'الصفحة غير موجودة', /لم نعثر على هذه الصفحة/, 'الصفحة الرئيسية', 'رجوع'],
 ] as const) {
   test(`ERR-002 unknown path shows the localized 404 page with status 404 (${locale})`, async ({ page }) => {
     const response = await page.goto(`/${locale}/e2e-no-such-page/${Date.now()}`);
@@ -33,6 +33,10 @@ for (const [locale, heading, description, home, back] of [
     await expect(main).toContainText(description);
     await expect(main.getByRole('link', { name: home })).toHaveAttribute('href', `/${locale}`);
     await expect(main.getByRole('button', { name: back })).toBeVisible();
+    // The site search (the shared error card, wiki guides/error-pages.md)
+    await expect(main.getByRole('search').getByRole('searchbox')).toBeVisible();
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).not.toHaveCount(0);
+    await expect(page.locator('meta[name="robots"][content="index, follow"]')).toHaveCount(0);
 
     const axe = await new AxeBuilder({ page }).include('[data-testid="not-found-page"]').withTags(WCAG_TAGS).analyze();
     expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} ${n.failureSummary ?? ''}`).join(', ')}`)).toEqual([]);
@@ -55,9 +59,10 @@ test.describe('404 - dark theme', () => {
     await page.goto('/en/e2e-no-such-page');
     const main = page.getByTestId('not-found-page');
     await expect(main).toBeVisible();
-    const bg = await main.evaluate((el) => getComputedStyle(el).backgroundColor);
-    const [r, g, b] = bg.match(/\d+/g)!.map(Number);
-    expect((r + g + b) / 3, `404 background ${bg}`).toBeLessThan(60);
+    // The card sits on the theme's dark street: its heading is light text
+    const color = await main.getByRole('heading', { level: 1 }).evaluate((el) => getComputedStyle(el).color);
+    const [r, g, b] = color.match(/\d+/g)!.map(Number);
+    expect((r + g + b) / 3, `404 heading ${color}`).toBeGreaterThan(160);
   });
 });
 
@@ -67,7 +72,7 @@ test('ERR-005 an unsupported locale is redirected to /en and shows the English 4
   expect(response?.status()).toBe(404);
   const main = page.getByTestId('not-found-page');
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Page not found');
-  await clickAndWaitForURL(page, main.getByRole('link', { name: 'Go Home' }), /\/en\/?$/);
+  await clickAndWaitForURL(page, main.getByRole('link', { name: 'Go to home' }), /\/en\/?$/);
 });
 
 test('ERR-006 a path without a locale is moved under /en and 404s with a real 404 status', async ({ page }) => {
@@ -76,7 +81,7 @@ test('ERR-006 a path without a locale is moved under /en and 404s with a real 40
   expect(response?.status()).toBe(404);
   const main = page.getByTestId('not-found-page');
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Page not found');
-  await expect(main.getByRole('link', { name: 'Go Home' })).toHaveAttribute('href', '/en');
+  await expect(main.getByRole('link', { name: 'Go to home' })).toHaveAttribute('href', '/en');
 });
 
 test('ERR-007 the old unprefixed /video?vid= URL lands on /en/video/<id>', async ({ page }) => {

@@ -171,7 +171,9 @@ describe('error boundaries', () => {
   it('not found offers the way home and no reference', () => {
     const html = render(FriendlyError, { locale: 'en', kind: 'notFound', homeLabel: 'Go to Dashboard' });
     assert.match(html, /Page not found/);
-    assert.match(html, /href="\/dashboard"[^>]*>Go to Dashboard</);
+    assert.match(html, /href="\/dashboard"[^>]*>(?:(?!<\/a>)[\s\S])*Go to Dashboard</);
+    assert.match(html, /Error 404/);
+    assert.match(render(FriendlyError, { locale: 'ar', kind: 'notFound' }), /خطأ ٤٠٤/);
     assert.ok(!html.includes('friendly-error-ref'));
   });
 });
