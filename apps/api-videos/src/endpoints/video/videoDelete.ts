@@ -1,5 +1,5 @@
 import { canOnVideo } from "../../lib/channelAccess";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";

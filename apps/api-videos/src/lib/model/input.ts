@@ -1,5 +1,5 @@
 import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
-import { Bool, DateTime, Str } from "chanfana";
+import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
 
@@ -11,9 +11,9 @@ export const CommentInput = z.object({
 
 export const VideoInput = z.object({
     title: Str({ description: "Video title" }),
-    titleLocalized: z.record(z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
+    titleLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
     description: Str({ required: false, description: "Video description" }),
-    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions"),
     thumbnailUrl: Str({ required: false, description: "Thumbnail URL" }),
     videoUrl: Str({ required: false, description: "Video file URL" }),
     width: z.number().optional(),
@@ -32,8 +32,8 @@ export const VideoInput = z.object({
 export const PlaylistInput = z.object({
     title: Str({ required: false, description: "Playlist title (the original name). May be omitted when titleLocalized has a value: then it is the English name, else the Arabic one" }),
     description: Str({ required: false, description: "Playlist description (defaults to descriptionLocalized's English, else Arabic, value)" }),
-    titleLocalized: z.record(z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
-    descriptionLocalized: z.record(z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"),
+    titleLocalized: z.record(z.string(), z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     videos: z.array(Str()).optional().describe("Videos to add, in order: the channel's own for a channel playlist, any public video for a personal one (validated; above 200 the rest is added by a background job)"),
     isPublic: z.boolean().optional(),
@@ -47,13 +47,13 @@ export const ProfileInput = z.object({
     email: Str({ description: "User email address" }).email(),
     userName: Str({ required: false, description: "Display username" }),
     displayName: Str({ required: false, description: "Display name" }),
-    displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
+    displayNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language display names"),
     firstName: Str({ required: false, description: "First name" }),
-    firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
+    firstNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language first names"),
     lastName: Str({ required: false, description: "Last name" }),
-    lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
+    lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     bio: Str({ required: false, description: "User bio" }),
-    bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
+    bioLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
     coverUrl: Str({ required: false, description: "Profile cover image URL" }),
     timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
@@ -61,9 +61,9 @@ export const ProfileInput = z.object({
 
 export const ChannelInput = z.object({
     name: Str({ description: "Channel name" }),
-    nameLocalized: z.record(z.string()).optional().describe("Multi-language channel names"),
+    nameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel names"),
     description: Str({ required: false, description: "Channel description" }),
-    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language channel descriptions"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: Bool().optional(),
     avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
     coverUrl: Str({ required: false, description: "Channel cover image URL" }),
@@ -72,9 +72,9 @@ export const ChannelInput = z.object({
 // Update operations (for PATCH endpoints) - defined explicitly to preserve OpenAPI metadata
 export const VideoUpdateInput = z.object({
     title: Str({ required: false, description: "Video title" }),
-    titleLocalized: z.record(z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
+    titleLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language titles (e.g., {'en': 'Title', 'ar': 'العنوان'})"),
     description: Str({ required: false, description: "Video description" }),
-    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions"),
     thumbnailUrl: Str({ required: false, description: "Thumbnail URL" }),
     videoUrl: Str({ required: false, description: "Video file URL" }),
     width: z.number().optional(),
@@ -94,8 +94,8 @@ export const VideoUpdateInput = z.object({
 export const PlaylistUpdateInput = z.object({
     title: Str({ required: false, description: "Playlist title" }),
     description: Str({ required: false, description: "Playlist description" }),
-    titleLocalized: z.record(z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it) (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
-    descriptionLocalized: z.record(z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"),
+    titleLocalized: z.record(z.string(), z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it) (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     isPublic: z.boolean().optional(),
     visibility: z.enum(["public", "unlisted", "private"]).optional().describe("public: listed everywhere; unlisted: anyone with the link, never listed, searched or in sitemaps; private: the owner (and the channel's playlist managers) only. Wins over isPublic"),
@@ -110,13 +110,13 @@ export const ProfileUpdateInput = z.object({
     email: Str({ required: false, description: "User email address" }),
     userName: Str({ required: false, description: "Display username" }),
     displayName: Str({ required: false, description: "Display name" }),
-    displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
+    displayNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language display names"),
     firstName: Str({ required: false, description: "First name" }),
-    firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
+    firstNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language first names"),
     lastName: Str({ required: false, description: "Last name" }),
-    lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
+    lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     bio: Str({ required: false, description: "User bio" }),
-    bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
+    bioLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str({ required: false, description: "Profile avatar URL" }),
     coverUrl: Str({ required: false, description: "Profile cover image URL" }),
     timezone: Str({ required: false, description: "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')" }),
@@ -132,9 +132,9 @@ export const MAX_CHANNEL_LINKS = 10;
 
 export const ChannelUpdateInput = z.object({
     name: Str({ required: false, description: "Channel name" }),
-    nameLocalized: z.record(z.string()).optional().describe("Multi-language channel names"),
+    nameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel names"),
     description: Str({ required: false, description: "Channel description" }),
-    descriptionLocalized: z.record(z.string()).optional().describe("Multi-language channel descriptions"),
+    descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language channel descriptions"),
     isMain: z.boolean().optional(),
     avatarUrl: Str({ required: false, description: "Channel avatar URL" }),
     coverUrl: Str({ required: false, description: "Channel cover image URL" }),

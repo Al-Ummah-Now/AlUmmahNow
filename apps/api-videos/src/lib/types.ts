@@ -1,4 +1,4 @@
-import { Bool, DateTime, Str } from "chanfana";
+import { Bool, DateTime, Str } from "./chanfana-params";
 import { z } from "zod";
 import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, type VideoMediaProviders, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 
@@ -71,12 +71,12 @@ export const Comment = BaseComment.extend({
 export const Video = z.object({
     id: Str(),
     title: Str(),
-    titleLocalized: z.record(z.string()).optional(),
+    titleLocalized: z.record(z.string(), z.string()).optional(),
     description: Str().optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     thumbnailUrl: Str().optional(),
     thumbnailType: z.enum(['auto', 'custom']).optional(),
-    thumbnailSizes: z.record(z.string()).optional(),
+    thumbnailSizes: z.record(z.string(), z.string()).optional(),
     // Bunny's auto thumbnail does not exist yet (lib/processing): views omit thumbnailUrl
     thumbnailPending: z.boolean().optional(),
     videoUrl: Str().optional(),
@@ -199,8 +199,8 @@ export const Playlist = z.object({
     title: Str(),
     description: Str().optional(),
     /** Per-language names/descriptions ('en', 'ar'); a language without one shows title/description */
-    titleLocalized: z.record(z.string()).optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    titleLocalized: z.record(z.string(), z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
     /** The channel member who created it, when not the channel's owner (`userId`) */
@@ -218,7 +218,7 @@ export const Playlist = z.object({
     sortField: z.enum(PLAYLIST_SORT_FIELDS).optional(),
     sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional(),
     /** When each video was added (ISO), for the "date added" order */
-    videoAddedAt: z.record(z.string()).optional(),
+    videoAddedAt: z.record(z.string(), z.string()).optional(),
     /** When the automatic order was last sorted from fresh video data (ISO) */
     orderRefreshedAt: Str().optional(),
     /** Cover: this video's thumbnail when the viewer can see it (lib/playlistCovers.ts) */
@@ -243,13 +243,13 @@ export const Profile = z.object({
     email: Str().email(),
     userName: Str().optional(),
     displayName: Str().optional(),
-    displayNameLocalized: z.record(z.string()).optional(),
+    displayNameLocalized: z.record(z.string(), z.string()).optional(),
     firstName: Str().optional(),
-    firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
+    firstNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language first names"),
     lastName: Str().optional(),
-    lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
+    lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     bio: Str().optional(),
-    bioLocalized: z.record(z.string()).optional(),
+    bioLocalized: z.record(z.string(), z.string()).optional(),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     timezone: Str().optional().describe("User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"),
@@ -271,9 +271,9 @@ export const Channel = z.object({
     userId: Str(),
     email: Str().email(),
     name: Str(),
-    nameLocalized: z.record(z.string()).optional(),
+    nameLocalized: z.record(z.string(), z.string()).optional(),
     description: Str().optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     isMain: Bool().default(false),
     isPrivate: z.boolean().optional(), // User-controlled privacy
     avatarUrl: Str().optional(),
@@ -299,7 +299,7 @@ export const Channel = z.object({
         updatedAt: Str().optional(),
     })).optional(),
     // When each person last lost or changed a role here (lib/channelTeam.ts stampMemberChanges); never in views
-    memberChangedAt: z.record(Str()).optional(),
+    memberChangedAt: z.record(z.string(), Str()).optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,
@@ -309,13 +309,13 @@ export const Channel = z.object({
 export const ChannelTab = z.object({
     id: Str({ description: "Tab identifier (home, videos, shorts, etc.)" }),
     name: Str({ description: "Default display name" }),
-    nameLocalized: z.record(z.string()).optional(),
+    nameLocalized: z.record(z.string(), z.string()).optional(),
     icon: Str().optional(),
     type: z.enum(['system', 'custom']),
     visible: Bool({ description: "Whether the tab is visible" }),
     position: z.number().int().min(0),
     url: Str().optional(),
-    metadata: z.record(z.any()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export const ChannelTabConfig = z.object({
@@ -334,7 +334,7 @@ export const ChannelTabConfigUpdateInput = z.object({
         id: Str(),
         visible: Bool().optional(),
         position: z.number().int().min(0).optional(),
-        nameLocalized: z.record(z.string()).optional(),
+        nameLocalized: z.record(z.string(), z.string()).optional(),
     })).optional(),
 });
 
@@ -401,7 +401,7 @@ export const AnalyticsData = z.object({
     metric: z.enum(['views', 'likes', 'comments', 'shares', 'watch_time', 'engagement_rate']),
     value: z.number(),
     timestamp: DateTime(),
-    metadata: z.record(z.any()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export const AnalyticsSummary = z.object({
@@ -411,7 +411,7 @@ export const AnalyticsSummary = z.object({
         startDate: DateTime(),
         endDate: DateTime(),
     }),
-    metrics: z.record(z.object({
+    metrics: z.record(z.string(), z.object({
         current: z.number(),
         previous: z.number().optional(),
         change: z.number().optional(),

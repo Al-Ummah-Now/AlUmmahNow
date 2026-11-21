@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { TRAFFIC_SOURCES, campaignOf, normalizeReferrerHost, originOf } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";

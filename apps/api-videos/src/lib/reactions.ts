@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "./chanfana-params";
 import { z } from "zod";
 import type { Context } from "hono";
 import { DISLIKES_DISABLED_CODE, DISLIKES_DISABLED_MESSAGE } from "@al-ummah/shared-types";

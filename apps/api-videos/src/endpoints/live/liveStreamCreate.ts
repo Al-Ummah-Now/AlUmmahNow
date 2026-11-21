@@ -1,5 +1,5 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamInput } from "../../lib/model/input";

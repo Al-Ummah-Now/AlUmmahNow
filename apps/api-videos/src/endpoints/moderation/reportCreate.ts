@@ -1,5 +1,5 @@
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";

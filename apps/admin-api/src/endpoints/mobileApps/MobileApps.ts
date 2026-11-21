@@ -14,7 +14,7 @@ function preview(settings: Parameters<typeof appleAppSiteAssociation>[0]) {
   };
 }
 
-const StateResponse = z.object({ success: z.boolean(), result: z.record(z.unknown()) });
+const StateResponse = z.object({ success: z.boolean(), result: z.record(z.string(), z.unknown()) });
 
 export class MobileAppsGet extends AdminRoute {
   schema = addAuthToSchema({
@@ -38,7 +38,7 @@ export class MobileAppsPut extends AdminRoute {
     summary: "Save the mobile apps settings",
     description: "Admins only. Replaces the whole document and appends an audit row. Empty values publish nothing: the videos site serves its domain association files only once they list an app, and attestation stays off until switched on with the values it needs.",
     request: {
-      body: { content: { "application/json": { schema: z.object({ settings: z.record(z.unknown()) }) } } },
+      body: { content: { "application/json": { schema: z.object({ settings: z.record(z.string(), z.unknown()) }) } } },
     },
     responses: {
       "200": { description: "Saved settings", content: { "application/json": { schema: StateResponse } } },

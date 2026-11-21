@@ -12,7 +12,7 @@
  * until it returns null.
  */
 
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";

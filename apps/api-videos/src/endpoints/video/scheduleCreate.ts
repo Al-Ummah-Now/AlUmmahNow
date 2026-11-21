@@ -1,6 +1,6 @@
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';

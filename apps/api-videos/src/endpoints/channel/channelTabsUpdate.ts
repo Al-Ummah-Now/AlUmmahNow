@@ -1,5 +1,5 @@
 import { can, channelRoleOf } from "@al-ummah/shared-types";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import {
 	ChannelTabConfig as BusinessChannelTabConfig,

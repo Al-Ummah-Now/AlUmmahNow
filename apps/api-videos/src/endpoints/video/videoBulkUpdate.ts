@@ -1,7 +1,7 @@
 import { bunnyRef } from '../../lib/media/providers';
 import { categoryRefusal } from "../../lib/categories";
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { can, type ChannelRole, VIDEO_VISIBILITIES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
@@ -157,7 +157,7 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 							videoIds: z.array(Str()).min(1).max(MAX_BULK_VIDEOS).optional(),
 							operationId: z.string().regex(OPERATION_ID).optional(),
 							changes: Changes.default({}),
-							perVideo: z.record(z.object({ title: languageText(z.string().max(1000)).optional() })).optional(),
+							perVideo: z.record(z.string(), z.object({ title: languageText(z.string().max(1000)).optional() })).optional(),
 						}),
 					},
 				},

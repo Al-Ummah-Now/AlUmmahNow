@@ -1,6 +1,6 @@
 import { decide, DecisionError, type DecisionEnv } from '../../lib/moderation/reportDecision';
 import { AdminRoute, AppContext } from "../../base";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { ResponseError, ReportSchema, Report } from "../../lib/types";

@@ -1,7 +1,7 @@
 import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
-import { Num, Str, Bool } from "chanfana";
+import { Num, Str, Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
@@ -15,7 +15,7 @@ const VideoResponseSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().optional(),
-  titleLocalized: z.record(z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
+  titleLocalized: z.record(z.string(), z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
   thumbnailUrl: z.string().optional(),
   videoUrl: z.string().optional(),
   channelId: z.string(),

@@ -14,7 +14,7 @@
  * videos admin, and nothing here reads token roles.
  */
 
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import {
 	CHANNEL_MEMBER_ROLES,
@@ -49,7 +49,7 @@ const AccessibleChannelView = z.object({
 	id: Str(),
 	userId: Str(),
 	name: Str(),
-	nameLocalized: z.record(z.string()).optional(),
+	nameLocalized: z.record(z.string(), z.string()).optional(),
 	avatarUrl: Str().optional(),
 	handle: Str().optional(),
 	isMain: z.boolean(),

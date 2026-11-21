@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import R2Repository from "../../lib/r2Repo";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { z } from "zod";

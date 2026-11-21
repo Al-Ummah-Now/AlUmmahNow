@@ -8,7 +8,7 @@
  *
  * Those who moderate the channel's comments (owner, admin, moderator).
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import type { StudioCommentAction } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';

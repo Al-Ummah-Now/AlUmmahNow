@@ -13,7 +13,7 @@
  * owner's creator tier and admin grants (lib/captions/minutes.ts); 402
  * `upgrade_required` when they would run out.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { CAPTION_JOB_ERRORS, CAPTION_JOB_KINDS, CAPTION_JOB_STATUSES, CAPTION_MINUTES_ENTITLEMENT, captionMinutesCanStart, captionMinutesFor } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';

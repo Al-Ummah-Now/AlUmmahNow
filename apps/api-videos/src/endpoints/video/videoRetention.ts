@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { RETENTION_BUCKET_COUNT } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";

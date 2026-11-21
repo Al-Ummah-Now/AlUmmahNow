@@ -13,7 +13,7 @@
  *
  * Owner or a channel role with `video.edit`.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { featureOff } from '../../lib/features/off';
 import { FEATURE_OFF_CODE, AUDIO_TRACKS_ENTITLEMENT, AUDIO_TRACK_KINDS, AUDIO_TRACK_LANGUAGES, AUDIO_TRACK_STATES, type AudioTrack } from '@al-ummah/shared-types';

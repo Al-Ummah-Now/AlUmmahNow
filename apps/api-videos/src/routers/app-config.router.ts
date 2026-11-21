@@ -8,12 +8,12 @@ import { AppConfigDocumentGet, AppConfigDocumentPut, AppConfigEvaluate } from '.
 
 const app = new Hono();
 
-export const appConfigRouter = fromHono(app, { base: '/api/app-config' });
+export const appConfigRouter = fromHono(app);
 
 appConfigRouter.get('/', AppConfigGet);
 
 // Internal admin (Epic 9.5): /internal/* is behind the INTERNAL_API_KEY middleware
-export const appConfigAdminRouter = fromHono(new Hono(), { base: '/internal/app-config' });
+export const appConfigAdminRouter = fromHono(new Hono());
 appConfigAdminRouter.post('/evaluate', AppConfigEvaluate);
 appConfigAdminRouter.get('/:key', AppConfigDocumentGet);
 appConfigAdminRouter.put('/:key', AppConfigDocumentPut);

@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { withPlayback } from '../../lib/media/playback';
 import { z } from "zod";
 import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/types";

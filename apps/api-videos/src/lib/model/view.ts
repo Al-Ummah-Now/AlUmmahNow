@@ -1,5 +1,5 @@
 import { MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
-import { Bool, DateTime, Str } from "chanfana";
+import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 
 // Response/view schemas - define what gets returned to clients
@@ -82,7 +82,7 @@ export const VideoView = z.object({
     userId: Str(),
     channelId: Str(),
     channelName: Str(), // Denormalized for client convenience
-    channelNameLocalized: z.record(z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
+    channelNameLocalized: z.record(z.string(), z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
     channelAvatarUrl: Str().optional(), // Denormalized for client convenience
     channelCoverUrl: Str().optional(), // Denormalized for client convenience
     channelIsVerified: z.boolean().optional(), // Scholar/institution badge (Epic 6.1)
@@ -99,10 +99,10 @@ export const VideoView = z.object({
     isPublic: z.boolean(),
     contentUrl: z.string().optional().describe("Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"),
     isLive: z.boolean(),
-    titleLocalized: z.record(z.string()).optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    titleLocalized: z.record(z.string(), z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     thumbnailType: z.enum(['auto', 'custom']).optional(),
-    thumbnailSizes: z.record(z.string()).optional(),
+    thumbnailSizes: z.record(z.string(), z.string()).optional(),
     tags: z.array(z.string()).optional(),
     category: z.string().optional(),
     categorySource: z.enum(['uploader', 'ai', 'admin']).optional().describe("Who set the category; 'ai' = an AI suggestion the owner has not confirmed"),
@@ -132,13 +132,13 @@ export const PlaylistView = z.object({
     title: Str(),
     description: Str().optional(),
     /** Per-language names/descriptions ('en', 'ar'); a language without one shows title/description */
-    titleLocalized: z.record(z.string()).optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    titleLocalized: z.record(z.string(), z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
     channelId: Str({ description: "The channel it belongs to; '' for a personal playlist (made without a channel)" }),
     channelName: Str(), // Denormalized for client convenience
-    channelNameLocalized: z.record(z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
+    channelNameLocalized: z.record(z.string(), z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     videosCount: z.number(),
@@ -161,14 +161,14 @@ export const ProfileView = z.object({
     email: Str().email(),
     userName: Str().optional(),
     firstName: Str().optional(),
-    firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
+    firstNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language first names"),
     lastName: Str().optional(),
-    lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
+    lastNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language last names"),
     displayName: Str().optional().describe("The display name the user typed (may be empty); use resolvedDisplayName to show the user"),
-    displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
+    displayNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language display names"),
     resolvedDisplayName: Str().describe("The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"),
     bio: Str().optional(),
-    bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
+    bioLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     timezone: Str().optional().describe("User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"),
@@ -194,10 +194,10 @@ export const PublicProfileView = z.object({
     id: Str(),
     userName: Str().optional(),
     displayName: Str().optional().describe("The name to show for the user: the resolved display name (display name, else first + last); never the email"),
-    displayNameLocalized: z.record(z.string()).optional(),
+    displayNameLocalized: z.record(z.string(), z.string()).optional(),
     resolvedDisplayName: Str().describe("Same as displayName; the field name every profile response shares"),
     bio: Str().optional(),
-    bioLocalized: z.record(z.string()).optional(),
+    bioLocalized: z.record(z.string(), z.string()).optional(),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),
@@ -212,16 +212,16 @@ export const PublicUserProfileView = z.object({
     handle: Str(),
     displayName: Str().optional(),
     resolvedDisplayName: Str(),
-    displayNameLocalized: z.record(z.string()).optional(),
+    displayNameLocalized: z.record(z.string(), z.string()).optional(),
     bio: Str().optional(),
-    bioLocalized: z.record(z.string()).optional(),
+    bioLocalized: z.record(z.string(), z.string()).optional(),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     dateCreated: DateTime(),
     channels: z.array(z.object({
         id: Str(),
         name: Str(),
-        nameLocalized: z.record(z.string()).optional(),
+        nameLocalized: z.record(z.string(), z.string()).optional(),
         handle: Str().optional(),
         avatarUrl: Str().optional(),
         isVerified: z.boolean().optional(),
@@ -240,9 +240,9 @@ export const PublicChannelView = z.object({
     suspension: z.object({ at: z.string(), reason: z.string().optional() }).optional(),
     userId: Str(),
     name: Str(),
-    nameLocalized: z.record(z.string()).optional(),
+    nameLocalized: z.record(z.string(), z.string()).optional(),
     description: Str().optional(),
-    descriptionLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string(), z.string()).optional(),
     isMain: z.boolean(),
     isPrivate: z.boolean().optional(),
     isVerified: z.boolean().optional(),
@@ -348,7 +348,7 @@ export const AnalyticsDataView = z.object({
     metric: z.string(),
     value: z.number(),
     timestamp: DateTime(),
-    metadata: z.record(z.any()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export const AnalyticsSummaryView = z.object({
@@ -358,7 +358,7 @@ export const AnalyticsSummaryView = z.object({
         startDate: DateTime(),
         endDate: DateTime(),
     }),
-    metrics: z.record(z.object({
+    metrics: z.record(z.string(), z.object({
         current: z.number(),
         previous: z.number().optional(),
         change: z.number().optional(),
@@ -372,6 +372,6 @@ export const AnalyticsSummaryView = z.object({
     })).optional(),
     chartData: z.array(z.object({
         date: DateTime(),
-        values: z.record(z.number()),
+        values: z.record(z.string(), z.number()),
     })).optional(),
 });

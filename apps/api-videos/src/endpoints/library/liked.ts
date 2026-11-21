@@ -9,7 +9,7 @@
  */
 
 import { withPostViews } from '../../lib/post-views';
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";

@@ -1,4 +1,4 @@
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ChannelSectionTypeSchema } from '../../lib/channelSectionSchemas';

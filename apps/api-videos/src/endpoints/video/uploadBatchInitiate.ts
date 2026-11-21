@@ -1,7 +1,7 @@
 import { fileReusedVideo, uploadCollection } from "../../lib/channelCollection";
 import { categoryRefusal } from "../../lib/categories";
 import { uploadIdentity } from "../../lib/channelAccess";
-import { Str, Num } from "chanfana";
+import { Str, Num } from "../../lib/chanfana-params";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";

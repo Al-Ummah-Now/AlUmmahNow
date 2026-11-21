@@ -7,7 +7,7 @@
  */
 
 import { updateJson, type CasBucket } from '../../lib/r2Cas';
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AdminRoute } from '../../base/AdminRoute';
 import { AppContext } from '../../base/types';
@@ -137,7 +137,7 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
         content: {
           'application/json': {
             schema: z.object({
-              translations: z.record(z.any()).describe('Translation key-value pairs'),
+              translations: z.record(z.string(), z.any()).describe('Translation key-value pairs'),
               merge: Bool({
                 description: 'Whether to merge with existing translations or replace',
                 default: true,

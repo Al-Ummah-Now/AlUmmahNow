@@ -1,4 +1,4 @@
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';

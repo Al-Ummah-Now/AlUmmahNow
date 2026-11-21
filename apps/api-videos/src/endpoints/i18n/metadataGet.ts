@@ -5,7 +5,7 @@
  * Fetches i18n metadata including version, available locales, and checksums for cache invalidation.
  */
 
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { PublicRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';
@@ -57,7 +57,7 @@ export class GetI18nMetadataEndpoint extends PublicRoute {
                 locales: z.array(Str()),
                 defaultLocale: Str(),
                 updatedAt: Str(),
-                checksums: z.record(Str()),
+                checksums: z.record(z.string(), Str()),
                 sections: z.array(Str()),
               }),
             }),

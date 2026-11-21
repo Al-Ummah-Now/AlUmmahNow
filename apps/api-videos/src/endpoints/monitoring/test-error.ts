@@ -1,5 +1,5 @@
 import { PublicRoute, AppContext } from "../../base";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 
 /**

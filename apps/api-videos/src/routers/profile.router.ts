@@ -34,7 +34,7 @@ app.use('/profiles', (c, next) => {
 app.use('/profile', authMiddleware);
 app.use('/profile/*', authMiddleware);
 
-export const profileRouter = fromHono(app, { base: '/api' });
+export const profileRouter = fromHono(app);
 
 // PROFILE ROUTES
 

@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { can, channelRoleOf, readReviewQueueMinutes, STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -96,7 +96,7 @@ export class ChannelContentList extends AuthenticatedRoute {
 		responses: {
 			"200": {
 				description: "Videos and the cursor of the next page",
-				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ items: z.array(z.record(z.unknown())), cursor: z.string().nullable() }) }) } },
+				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ items: z.array(z.record(z.string(), z.unknown())), cursor: z.string().nullable() }) }) } },
 			},
 			...errors,
 		},
@@ -150,7 +150,7 @@ export class ChannelContentSummary extends AuthenticatedRoute {
 		responses: {
 			"200": {
 				description: "Videos per status",
-				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ counts: z.record(z.number()) }) }) } },
+				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ counts: z.record(z.string(), z.number()) }) }) } },
 			},
 			...errors,
 		},

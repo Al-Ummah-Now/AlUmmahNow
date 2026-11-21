@@ -93,7 +93,8 @@ export function transformVideoToView(
         .map((comment) => withoutDislikes(comment as unknown as StoredComment) as unknown as typeof comment);
     return {
         ...publicVideoFields(video),
-        comments: publicComments,
+        // Stored comments as they are (minus hidden ones and dislikes), as before zod 4 typed them precisely
+        comments: publicComments as unknown as z.infer<typeof VideoView>['comments'],
         commentSettings: getCommentSettings(video),
         ...channelNameFields(channel),
         channelAvatarUrl: channel?.avatarUrl,
@@ -155,7 +156,7 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>,
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
         // The owner's own view: a new picture or banner is being checked (VR16); never its URL
-        ...((profile as { pendingImages?: Record<string, { status?: string }> }).pendingImages ? { pendingImages: pendingImageStatus((profile as { pendingImages: Record<string, { status?: string }> }).pendingImages) } : {}),
+        ...((profile as { pendingImages?: Record<string, { status?: string }> }).pendingImages ? { pendingImages: pendingImageStatus((profile as { pendingImages?: Record<string, { status?: string }> }).pendingImages!) } : {}),
         timezone: profile.timezone,
         dateCreated: profile.dateCreated,
         dateModified: profile.dateModified,

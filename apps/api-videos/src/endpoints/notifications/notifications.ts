@@ -19,7 +19,7 @@
  * PUT    /api/notifications/channels/:channelId/bell   { bell: all|highlights|none }
  */
 
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { isMemberSubscribedTo } from '../../lib/subscription-store';

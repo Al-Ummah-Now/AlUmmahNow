@@ -6,9 +6,9 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { ContinueWatchingList, WatchStateList, WatchStatePut } from '../endpoints/watch-state/watchState';
 
-export const watchStateRouter = fromHono(new Hono(), { base: '/api/watch-state' });
+export const watchStateRouter = fromHono(new Hono());
 watchStateRouter.get('/', WatchStateList);
 watchStateRouter.put('/:videoId', WatchStatePut);
 
-export const continueWatchingRouter = fromHono(new Hono(), { base: '/api/continue-watching' });
+export const continueWatchingRouter = fromHono(new Hono());
 continueWatchingRouter.get('/', ContinueWatchingList);

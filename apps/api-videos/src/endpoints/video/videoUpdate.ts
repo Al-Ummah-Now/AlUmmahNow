@@ -5,7 +5,7 @@ import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
 import { unsignedBunnyUrl } from "../../lib/bunny-signing";
 import { canOnVideo } from "../../lib/channelAccess";
 import { applyFormatChoice } from "@al-ummah/shared-types";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { VideoUpdateInput } from "../../lib/model/input";

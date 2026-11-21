@@ -11,7 +11,7 @@
  *
  * Owner or a channel role with `video.edit`. Drafts are never shown to viewers.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { onDeviceTranscriptKey, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';

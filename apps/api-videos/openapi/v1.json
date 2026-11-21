@@ -7236,9 +7236,9 @@
             "schema": {
               "type": "string",
               "enum": [
+                "0",
                 "1",
                 "true",
-                "0",
                 "false"
               ]
             },
@@ -7250,9 +7250,9 @@
             "schema": {
               "type": "string",
               "enum": [
+                "0",
                 "1",
                 "true",
-                "0",
                 "false"
               ]
             },
@@ -9216,7 +9216,8 @@
                               "isDeleted",
                               "deletedAt",
                               "restorableUntil"
-                            ]
+                            ],
+                            "additionalProperties": {}
                           }
                         },
                         "cursor": {
@@ -13638,6 +13639,7 @@
               "description": "Channel ID that will own the post"
             },
             "required": true,
+            "description": "Channel ID that will own the post",
             "name": "channelId",
             "in": "path"
           },
@@ -13650,6 +13652,7 @@
               "description": "User channel ID (for verification)"
             },
             "required": false,
+            "description": "User channel ID (for verification)",
             "name": "channelId",
             "in": "header"
           }
@@ -16811,6 +16814,7 @@
               "description": "User's selected channel ID"
             },
             "required": false,
+            "description": "User's selected channel ID",
             "name": "channelId",
             "in": "header"
           }
@@ -16980,6 +16984,7 @@
               "description": "User's selected channel ID"
             },
             "required": false,
+            "description": "User's selected channel ID",
             "name": "channelId",
             "in": "header"
           }
@@ -17137,6 +17142,7 @@
               "description": "User's selected channel ID"
             },
             "required": false,
+            "description": "User's selected channel ID",
             "name": "channelId",
             "in": "header"
           }
@@ -17894,7 +17900,8 @@
                         "required": [
                           "id",
                           "name"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     },
                     "seasonal": {
@@ -17934,7 +17941,8 @@
                               },
                               "required": [
                                 "id"
-                              ]
+                              ],
+                              "additionalProperties": {}
                             }
                           }
                         },
@@ -17943,7 +17951,8 @@
                           "title",
                           "endsAt",
                           "videos"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     }
                   },
@@ -24101,7 +24110,8 @@
                                 "required": [
                                   "id",
                                   "title"
-                                ]
+                                ],
+                                "additionalProperties": {}
                               }
                             },
                             "required": [
@@ -28926,7 +28936,8 @@
                           "views",
                           "likesCount",
                           "commentsCount"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     },
                     "videos": {
@@ -28974,7 +28985,8 @@
                           "views",
                           "likesCount",
                           "commentsCount"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     },
                     "basedOn": {
@@ -29127,10 +29139,10 @@
             "schema": {
               "type": "string",
               "enum": [
-                "true",
-                "false",
+                "0",
                 "1",
-                "0"
+                "true",
+                "false"
               ],
               "description": "Only verified channels and their content"
             },
@@ -29236,7 +29248,8 @@
                                 "required": [
                                   "id",
                                   "title"
-                                ]
+                                ],
+                                "additionalProperties": {}
                               },
                               "channel": {
                                 "type": "object",
@@ -29295,7 +29308,8 @@
                                 "required": [
                                   "id",
                                   "name"
-                                ]
+                                ],
+                                "additionalProperties": {}
                               }
                             },
                             "required": [
@@ -29333,7 +29347,8 @@
                                 "required": [
                                   "id",
                                   "name"
-                                ]
+                                ],
+                                "additionalProperties": {}
                               },
                               "channel": {
                                 "type": "object",
@@ -29392,7 +29407,8 @@
                                 "required": [
                                   "id",
                                   "content"
-                                ]
+                                ],
+                                "additionalProperties": {}
                               },
                               "channel": {
                                 "type": "object",
@@ -29468,7 +29484,8 @@
                             "required": [
                               "id",
                               "title"
-                            ]
+                            ],
+                            "additionalProperties": {}
                           },
                           "channel": {
                             "type": "object",
@@ -31710,7 +31727,8 @@
                           "views",
                           "likesCount",
                           "commentsCount"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     },
                     "videos": {
@@ -31758,7 +31776,8 @@
                           "views",
                           "likesCount",
                           "commentsCount"
-                        ]
+                        ],
+                        "additionalProperties": {}
                       }
                     }
                   },
@@ -36048,7 +36067,8 @@
                           "enum": [
                             "uploader",
                             "ai",
-                            "admin"
+                            "admin",
+                            null
                           ],
                           "description": "Video requests: who set the video's current category"
                         }
@@ -36282,7 +36302,8 @@
                           "enum": [
                             "uploader",
                             "ai",
-                            "admin"
+                            "admin",
+                            null
                           ],
                           "description": "Video requests: who set the video's current category"
                         }
@@ -36397,7 +36418,8 @@
                           "enum": [
                             "uploader",
                             "ai",
-                            "admin"
+                            "admin",
+                            null
                           ],
                           "description": "Video requests: who set the video's current category"
                         }
@@ -51923,7 +51945,8 @@
                                   "source_missing",
                                   "source_changed",
                                   "translation_failed",
-                                  "failed"
+                                  "failed",
+                                  null
                                 ]
                               },
                               "createdAt": {
@@ -52201,7 +52224,8 @@
                                 "source_missing",
                                 "source_changed",
                                 "translation_failed",
-                                "failed"
+                                "failed",
+                                null
                               ]
                             },
                             "createdAt": {
@@ -52372,7 +52396,8 @@
                                 "source_missing",
                                 "source_changed",
                                 "translation_failed",
-                                "failed"
+                                "failed",
+                                null
                               ]
                             },
                             "createdAt": {
@@ -52843,7 +52868,8 @@
                                 "source_missing",
                                 "source_changed",
                                 "translation_failed",
-                                "failed"
+                                "failed",
+                                null
                               ]
                             },
                             "createdAt": {
@@ -53370,7 +53396,8 @@
                                   "source_missing",
                                   "source_changed",
                                   "translation_failed",
-                                  "failed"
+                                  "failed",
+                                  null
                                 ]
                               },
                               "createdAt": {

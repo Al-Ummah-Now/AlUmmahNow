@@ -1,5 +1,5 @@
 import { ownerSeesSuspendedChannel } from "../../lib/visibility";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -21,9 +21,7 @@ export class ChannelsList extends OptionalAuthRoute {
 					description: "Limit the number of Channels to return",
 					default: 10,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request").optional(),
 				scope: z.enum(["mine", "all"]).optional().describe(
 					"'mine' (default) returns only the authenticated user's channels when signed in; 'all' returns every publicly visible channel (channel directory)",
 				),

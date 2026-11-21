@@ -10,7 +10,7 @@ import { CategoryVideosSection } from '../endpoints/sections/by-category';
 
 const app = new Hono();
 
-export const sectionsRouter = fromHono(app, { base: '/api/videos/sections' });
+export const sectionsRouter = fromHono(app);
 
 // Register video sections routes (all paths are relative to base)
 sectionsRouter.get('/recent', RecentVideosSection);

@@ -1,4 +1,4 @@
-import { Bool } from "chanfana";
+import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel as BusinessChannel, Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ChannelInput } from "../../lib/model/input";

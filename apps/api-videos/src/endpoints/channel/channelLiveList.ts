@@ -1,5 +1,5 @@
 import { isShort } from "@al-ummah/shared-types";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields } from '../../lib/transformations';
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -31,9 +31,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 					description: "Limit the number of live streams to return",
 					default: 12,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request for pagination",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request for pagination").optional(),
 				active: z.boolean().optional().describe("If true, only return currently active live streams"),
 			}),
 			headers: z.object({

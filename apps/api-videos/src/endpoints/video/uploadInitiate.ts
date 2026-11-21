@@ -1,7 +1,7 @@
 import { uploadIdentity } from "../../lib/channelAccess";
 import { categoryRefusal } from "../../lib/categories";
 import { reportServerError, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
-import { Str, Num } from "chanfana";
+import { Str, Num } from "../../lib/chanfana-params";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { checkThumbnailShape, imageSize, videoSizeOf } from '../../lib/thumbnail/shape';
 import { z } from "zod";
@@ -52,8 +52,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							tags: z.string().optional().describe("Comma-separated tags"),
 							// The web uploader sends these; they were stripped by the schema, so the
 							// Arabic title/description and the category chosen on upload were lost
-							titleLocalized: z.record(z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
-							descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
+							titleLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
+							descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
 							category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
 							format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 							categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()

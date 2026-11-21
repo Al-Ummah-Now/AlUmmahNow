@@ -1,5 +1,5 @@
 import { nameLangField, nameLocale } from "../../lib/name-locale";
-import { Bool, Num } from "chanfana";
+import { Bool, Num } from "../../lib/chanfana-params";
 import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
 import { PublicProfileView } from "../../lib/model/view";
@@ -17,9 +17,7 @@ export class ProfilesList extends PublicRoute {
 					description: "Limit the number of profiles to return",
 					default: 10,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request").optional(),
 				lang: nameLangField,
 			}),
 		},

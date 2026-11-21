@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { SEARCH_ENTITY_TYPES, SEARCH_TABLES, SearchDb, pruneSearchIndex } from "@al-ummah/shared-types";
 import { PublicRoute } from "../../base";
@@ -142,7 +142,7 @@ export class SearchIndexStats extends PublicRoute {
     responses: {
       "200": {
         description: "Index stats",
-        content: { "application/json": { schema: z.object({ success: z.boolean(), tables: z.record(z.object({ rows: z.number(), searchable: z.number() })) }).passthrough() } },
+        content: { "application/json": { schema: z.object({ success: z.boolean(), tables: z.record(z.string(), z.object({ rows: z.number(), searchable: z.number() })) }).passthrough() } },
       },
     },
   };

@@ -20,7 +20,7 @@ import {
 
 const app = new Hono();
 
-export const settingsRouter = fromHono(app, { base: '/api/upload-defaults' });
+export const settingsRouter = fromHono(app);
 
 // Upload Defaults (Templates) routes
 // All routes are relative to base: /api/upload-defaults

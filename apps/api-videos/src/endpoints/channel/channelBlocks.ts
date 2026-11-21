@@ -11,7 +11,7 @@
  * `heldBy: 'channel_block'`, seen only by them. The owner and the channel's
  * members cannot be blocked.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { channelRoleOf, type SearchDb } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';

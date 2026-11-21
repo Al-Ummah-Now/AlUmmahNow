@@ -10,7 +10,7 @@
  */
 
 import { canOnVideo } from "../../lib/channelAccess";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -56,7 +56,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 							success: z.boolean(),
 							result: z.object({
 								thumbnailUrl: z.string(),
-								thumbnailSizes: z.record(z.string()),
+								thumbnailSizes: z.record(z.string(), z.string()),
 							}),
 						}),
 					},

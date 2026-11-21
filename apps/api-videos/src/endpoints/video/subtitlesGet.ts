@@ -2,7 +2,7 @@
  * Get specific subtitle track
  */
 
-import { Str, Enumeration } from 'chanfana';
+import { Str, Enumeration } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { captionMarkerRanges } from '@al-ummah/shared-types';
 import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';

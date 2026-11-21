@@ -11,7 +11,7 @@ import {
 import { ClientAnalyticsEventsCreate } from '../endpoints/analytics/clientEvents';
 
 const app = new Hono();
-export const analyticsRouter = fromHono(app, { base: '/api/analytics' });
+export const analyticsRouter = fromHono(app);
 
 // Authenticated, owner-scoped analytics
 analyticsRouter.get('/', AnalyticsGet);

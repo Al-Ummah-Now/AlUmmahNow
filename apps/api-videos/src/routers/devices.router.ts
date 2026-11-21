@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { DeviceRegister, DevicesList, DeviceUnregister, WebPushKey } from '../endpoints/devices/devices';
 
-export const devicesRouter = fromHono(new Hono(), { base: '/api/devices' });
+export const devicesRouter = fromHono(new Hono());
 devicesRouter.get('/', DevicesList);
 devicesRouter.get('/webpush-key', WebPushKey);
 devicesRouter.put('/:installId', DeviceRegister);

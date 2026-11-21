@@ -5,7 +5,7 @@
  */
 
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import R2Repository from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";

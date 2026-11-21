@@ -10,7 +10,7 @@
  *   DELETE /api/live-streams/:id        owner: delete (ends a session still open)
  *   POST /api/live-streams/:id/qoe      sampled player beacon
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AppContext, AuthenticatedRoute, OptionalAuthRoute, PublicRoute } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
@@ -139,7 +139,7 @@ export class LiveStreamGet extends OptionalAuthRoute {
 		tags: ['Live Streams'],
 		summary: 'Get a live stream',
 		request: { params: Params },
-		responses: { '200': Ok(z.object({ stream: z.record(z.any()) }), 'The stream'), '404': Err('Not found') },
+		responses: { '200': Ok(z.object({ stream: z.record(z.string(), z.any()) }), 'The stream'), '404': Err('Not found') },
 	};
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
@@ -157,7 +157,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		summary: 'Live state of a stream',
 		description: 'Polled by Studio (every 5 s) and the watch page. `qoe` tells the player whether to send QoE beacons.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'The state'), '404': Err('Not found') },
+		responses: { '200': Ok(z.record(z.string(), z.any()), 'The state'), '404': Err('Not found') },
 	};
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
@@ -184,7 +184,7 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		summary: 'Encoder settings (owner)',
 		description: '🔒 The ingest URL, stream key and a ready ffmpeg command for the stream\'s current session. Provisions a session when the stream has none.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'Ingest settings'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, or live is not in the creator tier (live_not_in_tier)'), '404': Err('Not found'), '503': Err('No provider available') },
+		responses: { '200': Ok(z.record(z.string(), z.any()), 'Ingest settings'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, or live is not in the creator tier (live_not_in_tier)'), '404': Err('Not found'), '503': Err('No provider available') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
@@ -213,7 +213,7 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		summary: 'Go live (owner)',
 		description: '🔒 Opens ingest for the stream. The stream shows as live when the encoder\'s first video arrives.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'Started'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier\'s streams-at-once limit (live_concurrent_limit)'), '404': Err('Not found'), '503': Err('No provider available') },
+		responses: { '200': Ok(z.record(z.string(), z.any()), 'Started'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier\'s streams-at-once limit (live_concurrent_limit)'), '404': Err('Not found'), '503': Err('No provider available') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
@@ -237,7 +237,7 @@ export class LiveStreamEnd extends AuthenticatedRoute {
 		summary: 'End the stream (owner)',
 		description: '🔒 Stops ingest and publishes the recording.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'Ended'), '403': Err('Not the owner'), '404': Err('Not found') },
+		responses: { '200': Ok(z.record(z.string(), z.any()), 'Ended'), '403': Err('Not the owner'), '404': Err('Not found') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();

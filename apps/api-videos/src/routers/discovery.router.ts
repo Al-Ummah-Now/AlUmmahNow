@@ -11,7 +11,7 @@ const app = new Hono();
  * Mounted at '/api' because the public paths are /api/search/suggestions,
  * /api/trending, /api/recommendations and /api/shorts (the www Shorts viewer).
  */
-export const discoveryRouter = fromHono(app, { base: '/api' });
+export const discoveryRouter = fromHono(app);
 
 discoveryRouter.get('/search/suggestions', SearchSuggestionsGet);
 discoveryRouter.get('/trending', TrendingGet);

@@ -5,7 +5,7 @@
  * audited (moderation_actions). Self-contained so the admin Videos pages can host
  * the same review (admin-web components/CategorySuggestionsReview).
  */
-import { Num, Str } from 'chanfana';
+import { Num, Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { CATEGORY_SLUG_PATTERN, categoryAssignability, loadVideoCategories, type SearchDb } from '@al-ummah/shared-types';

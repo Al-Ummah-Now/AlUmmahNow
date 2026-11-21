@@ -1,5 +1,5 @@
 import { can, isShort, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
@@ -57,10 +57,7 @@ export class VideosList extends OptionalAuthRoute {
 					description: "Limit the number of videos to return",
 					default: 9,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request",
-
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request").optional(),
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
 				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),

@@ -1,4 +1,4 @@
-import { OpenAPIRoute } from 'chanfana';
+import { ApiException, OpenAPIRoute } from 'chanfana';
 import { HTTPException } from 'hono/http-exception';
 import { AppContext, AuthContext } from './types';
 import { logger } from '../lib/logger';
@@ -80,7 +80,19 @@ export abstract class AdminRoute extends OpenAPIRoute {
       path: c.req.path
     });
 
-    return super.execute(...args);
+    try {
+      return await super.execute(...args);
+    } catch (e) {
+      // fromHono() makes chanfana 3 re-throw its own errors (a failed request schema) to app.onError;
+      // answer them here with chanfana's body, as chanfana 2 did
+      if (e instanceof ApiException) {
+        return new Response(JSON.stringify({ success: false, errors: e.buildResponse(), result: {} }), {
+          status: e.status,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw e;
+    }
   }
 
   /**

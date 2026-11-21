@@ -1,5 +1,5 @@
 import { nameLangField, nameLocale } from "../../lib/name-locale";
-import { Bool } from "chanfana";
+import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileView } from "../../lib/model/view";

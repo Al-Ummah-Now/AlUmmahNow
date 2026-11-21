@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { ResponseError } from "../../lib/types";
 import { softDeleteForCreator, type CreatorDeletionResult } from "../../lib/creatorDeletions";

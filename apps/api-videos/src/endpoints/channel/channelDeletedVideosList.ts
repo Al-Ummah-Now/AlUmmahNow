@@ -1,4 +1,4 @@
-import { Bool, Num, Str } from "chanfana";
+import { Bool, Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { canDeleteVideo, channelRoleOf } from "@al-ummah/shared-types";
 import { loadChannelRecord } from "../../lib/channelAccess";

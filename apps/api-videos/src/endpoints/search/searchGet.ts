@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import type { SearchDb, SearchQuery } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";

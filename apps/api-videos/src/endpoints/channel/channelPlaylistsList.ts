@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { scanFill } from "../../lib/listFill";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -26,9 +26,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 					description: "Limit the number of playlists to return",
 					default: 12,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request for pagination",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request for pagination").optional(),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),

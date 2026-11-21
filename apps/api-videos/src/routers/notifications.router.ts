@@ -31,7 +31,7 @@ import {
 
 const app = new Hono();
 
-export const notificationsRouter = fromHono(app, { base: '/api/notifications' });
+export const notificationsRouter = fromHono(app);
 
 notificationsRouter.get('/', NotificationsList);
 notificationsRouter.get('/unread-count', NotificationsUnreadCount);

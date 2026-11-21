@@ -14,7 +14,7 @@ import { SyncTranslationsEndpoint } from '../endpoints/i18n/translationsSync';
 
 const app = new Hono();
 
-export const i18nRouter = fromHono(app, { base: '/api/i18n' });
+export const i18nRouter = fromHono(app);
 
 // i18n routes
 // All routes are relative to base: /api/i18n

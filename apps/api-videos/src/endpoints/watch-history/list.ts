@@ -44,7 +44,7 @@ const WatchHistoryEntrySchema = z.object({
   userId: z.string(),
   videoId: z.string(),
   videoTitle: z.string(),
-  videoTitleLocalized: z.record(z.string()).optional().describe("The video's current title per language (e.g. { en, ar }); show the page language's, else videoTitle"),
+  videoTitleLocalized: z.record(z.string(), z.string()).optional().describe("The video's current title per language (e.g. { en, ar }); show the page language's, else videoTitle"),
   videoThumbnail: z.string().optional(),
   videoDuration: z.number(),
   channelId: z.string(),

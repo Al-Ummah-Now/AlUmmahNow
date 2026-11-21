@@ -2,7 +2,7 @@
  * List all subtitle tracks for a video
  */
 
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';

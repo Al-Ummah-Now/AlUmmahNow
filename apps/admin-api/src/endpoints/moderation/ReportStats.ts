@@ -25,8 +25,8 @@ export class ReportStats extends AdminRoute {
                   resolved: z.number(),
                   dismissed: z.number(),
                 }),
-                byEntityType: z.record(z.number()),
-                byAction: z.record(z.number()),
+                byEntityType: z.record(z.string(), z.number()),
+                byAction: z.record(z.string(), z.number()),
                 recentActivity: z.object({
                   last24Hours: z.number(),
                   last7Days: z.number(),

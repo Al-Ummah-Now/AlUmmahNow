@@ -1,7 +1,7 @@
 import { findPostComment } from './post-comment-helpers';
 import { addToCommentIndex, patchComment, removeFromCommentIndex } from '../../lib/community-comments';
 import { bumpPostComments } from '../../lib/community-posts';
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';

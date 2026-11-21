@@ -4,7 +4,7 @@
 
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
@@ -32,7 +32,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
           content: {
             'multipart/form-data': {
               schema: z.object({
-                subtitle: z.string({ description: "Subtitle file (.srt, .vtt, .sbv); 'file' is accepted as an alias" }),
+                subtitle: z.string().describe("Subtitle file (.srt, .vtt, .sbv); 'file' is accepted as an alias"),
                 language: Str({
                   description: 'ISO 639-1 language code (e.g., en, ar, ur)',
                 }),

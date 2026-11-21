@@ -3,7 +3,7 @@
  * list a channel's deleted videos, restore them, or queue them for
  * permanent deletion. The hourly cleanup erases what is due.
  */
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";

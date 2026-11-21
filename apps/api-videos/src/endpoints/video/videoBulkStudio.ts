@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import type { VideoObject } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";

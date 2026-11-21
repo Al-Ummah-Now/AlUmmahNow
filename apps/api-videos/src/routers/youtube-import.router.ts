@@ -18,7 +18,7 @@ import {
 	YoutubeImportStatus,
 } from '../endpoints/youtube-import/youtubeImport';
 
-export const youtubeImportRouter = fromHono(new Hono(), { base: '/api/youtube-import' });
+export const youtubeImportRouter = fromHono(new Hono());
 youtubeImportRouter.get('/available', YoutubeImportAvailable);
 youtubeImportRouter.get('/status', YoutubeImportStatus);
 youtubeImportRouter.post('/oauth/start', YoutubeImportOAuthStart);

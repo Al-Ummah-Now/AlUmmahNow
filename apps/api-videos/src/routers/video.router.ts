@@ -80,7 +80,7 @@ import { CommentDislikeDelete } from '../endpoints/video/commentDislikeDelete';
 
 const app = new Hono();
 
-export const videoRouter = fromHono(app, { base: '/api/videos' });
+export const videoRouter = fromHono(app);
 
 // ==========================================
 // VIDEO CRUD OPERATIONS

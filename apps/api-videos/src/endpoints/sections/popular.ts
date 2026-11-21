@@ -1,7 +1,7 @@
 import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";

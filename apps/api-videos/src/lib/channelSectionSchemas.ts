@@ -9,7 +9,7 @@ export const ChannelSectionTypeSchema = z.enum(CHANNEL_SECTION_TYPES);
 /** Fields shared by create and update; all optional here */
 const sectionFields = {
   title: z.string().min(1).max(CHANNEL_SECTION_CONSTRAINTS.MAX_TITLE_LENGTH),
-  titleLocalized: z.record(z.string()),
+  titleLocalized: z.record(z.string(), z.string()),
   style: z.enum(['horizontal_row', 'vertical_list']),
   videoIds: z.array(z.string().min(1)).max(CHANNEL_SECTION_CONSTRAINTS.MAX_VIDEO_IDS),
   playlistId: z.string().min(1),

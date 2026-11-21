@@ -1,6 +1,6 @@
 import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { canOnVideo, loadChannelRecord } from "../../lib/channelAccess";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -31,12 +31,12 @@ const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
 const TrafficSchema = z.object({
   totalViews: z.number(),
-  sources: z.record(z.number()),
+  sources: z.record(z.string(), z.number()),
   externalHosts: z.array(z.object({ host: z.string(), views: z.number() })),
-  surfaces: z.record(z.number()).describe("Views per client surface (web, ios, android, embed, …)"),
-  devices: z.record(z.number()).describe("Views per device class (phone, tablet, desktop, tv)"),
-  countries: z.record(z.number()).describe("Views per country (ISO code; top 50 plus other)"),
-  campaigns: z.record(z.number()).describe("Views per utm_source"),
+  surfaces: z.record(z.string(), z.number()).describe("Views per client surface (web, ios, android, embed, …)"),
+  devices: z.record(z.string(), z.number()).describe("Views per device class (phone, tablet, desktop, tv)"),
+  countries: z.record(z.string(), z.number()).describe("Views per country (ISO code; top 50 plus other)"),
+  campaigns: z.record(z.string(), z.number()).describe("Views per utm_source"),
 });
 
 const RetentionSchema = z.object({

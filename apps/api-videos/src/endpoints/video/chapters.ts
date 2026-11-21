@@ -3,7 +3,7 @@
  * Retrieves or generates chapters for a video
  */
 
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import { parseChapters } from '../../lib/chapters/parser';

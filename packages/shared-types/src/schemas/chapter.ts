@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 export const VideoChapterSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   startTime: z.number().min(0),
   endTime: z.number().min(10), // Minimum 10 seconds
   title: z.string().min(1).max(100),

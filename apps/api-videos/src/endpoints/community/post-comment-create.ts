@@ -1,6 +1,6 @@
 import { addToCommentIndex, patchComment } from '../../lib/community-comments';
 import { bumpPostComments } from '../../lib/community-posts';
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import { AuthenticatedRoute, AppContext } from '../../base';

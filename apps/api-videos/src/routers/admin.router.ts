@@ -317,7 +317,7 @@ app.post('/deletions/:kind/:id/purge', async (c) => ok(c, { deletion: await admi
 // Restore legacy profile fields (lib/admin/legacy-restore.ts): dry run, then a queued job
 const LegacyRestoreRequest = z.object({
 	/** admin-api's id for this run, also in its audit rows */
-	runId: z.string().uuid().optional(),
+	runId: z.guid().optional(),
 	approved: z
 		.array(z.object({ id: z.string().regex(/^usr_[0-9a-f]{32}$/), legacyId: z.string().regex(/^[0-9a-f]{32}$/), fields: z.array(z.string().max(100)).min(1).max(50) }))
 		.min(1)

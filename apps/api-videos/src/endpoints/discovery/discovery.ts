@@ -1,4 +1,4 @@
-import { Num, Str, Bool } from "chanfana";
+import { Num, Str, Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
@@ -39,7 +39,7 @@ const SuggestionSchema = z.object({
   handle: z.string().optional(),
   verified: z.boolean().optional(),
   count: z.number().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Longest input a suggestion lookup reads; longer text is cut (the index caps query words too). */
@@ -50,7 +50,7 @@ const INITIAL_MAX_OFFSET = 500;
 const DiscoveryVideoSchema = z.object({
   id: z.string(),
   title: z.string(),
-  titleLocalized: z.record(z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
+  titleLocalized: z.record(z.string(), z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
   channelId: z.string(),
   channelName: z.string().optional(),
   views: z.number(),

@@ -1,7 +1,7 @@
 import { releaseUserHandle } from "../../lib/userHandles";
 import { removeCollectionsFor } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
-import { Bool } from "chanfana";
+import { Bool } from "../../lib/chanfana-params";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { z } from "zod";

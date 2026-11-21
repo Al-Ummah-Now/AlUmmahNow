@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str } from 'chanfana';
+import { OpenAPIRoute } from 'chanfana';
+import { Str } from '../lib/chanfana-params';
 import { z } from 'zod';
 import { LOG_DIR } from '../index';
 
