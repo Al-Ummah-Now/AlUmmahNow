@@ -31,7 +31,7 @@ jobs:
       E2E_ENV: production
       PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:

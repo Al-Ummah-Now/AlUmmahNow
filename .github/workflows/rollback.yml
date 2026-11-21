@@ -46,7 +46,7 @@ jobs:
     timeout-minutes: 15
     environment: ${{ inputs.env == 'production' && 'production' || 'staging' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:

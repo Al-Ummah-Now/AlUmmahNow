@@ -108,7 +108,7 @@ jobs:
             *) echo "::error::env must be qa or stage, got '$E2E_ENV'"; exit 1 ;;
           esac
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || '' }}
           # The job token can write refs (the lock): keep it out of .git/config
@@ -117,7 +117,7 @@ jobs:
       # The artifact scanner comes from this workflow's own commit, never from
       # inputs.ref: it runs with the secrets in its env.
       - name: Check out the artifact scanner (trusted)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: .ci-trusted
           sparse-checkout: |
