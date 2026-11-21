@@ -9,6 +9,7 @@
  * read "Featured"), and a rail with fewer than MIN_HOME_ITEMS videos is left out.
  */
 import { z } from 'zod';
+import { DISCOVERY_HOME_RAILS, type DiscoveryHomeRail } from '@al-ummah/shared-types';
 import { PublicRoute, type AppContext } from '../../base';
 import { Num, Str } from '../../lib/chanfana-params';
 import { logger } from '../../lib/logger';
@@ -18,8 +19,8 @@ import { FeedVideoFields, RailInfoSchema, feedItem } from '../../lib/ranking/sec
 import { railLabelFields, railPage, railScope, type RailPage } from '../../lib/ranking/serve';
 import type { RailId } from '../../lib/ranking/job';
 
-export const HOME_RAIL_KEYS = ['featured', 'trending', 'new', 'popular', 'categories'] as const;
-export type HomeRailKey = (typeof HOME_RAIL_KEYS)[number];
+export const HOME_RAIL_KEYS = DISCOVERY_HOME_RAILS;
+export type HomeRailKey = DiscoveryHomeRail;
 export const DEFAULT_HOME_RAILS: readonly HomeRailKey[] = HOME_RAIL_KEYS;
 
 const HOME_RAIL_ID: Record<Exclude<HomeRailKey, 'categories'>, RailId> = {

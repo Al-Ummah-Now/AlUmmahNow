@@ -47,7 +47,9 @@ export type ContentKind =
   /** Payments: a billing job retried from the Jobs page (id = the job's target). */
   | 'billing'
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
-  | 'import';
+  | 'import'
+  /** Discovery curation (wiki E07): a pin or exclusion (id = '<video|channel>:<id>'), the home rail order (id 'home'). */
+  | 'discovery';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

@@ -99,6 +99,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Video categories (admin-managed): every admin reads, videos:categories changes
   { href: '/categories', label: 'nav.categories', icon: 'tag', group: 'content' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions', icon: 'tag', group: 'content' },
+  // Discovery (wiki E07): ranked lists, home rail order, pins and exclusions; every admin reads, discovery:manage changes
+  { href: '/discovery', label: 'nav.discovery', icon: 'spark', group: 'content' },
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },
   // Captions & translation (AUN-CAPTIONS): budgets, models, DeepL, inline fair use, viewer titles, Quran editions; creators:manage changes
   { href: '/captions-settings', label: 'nav.captionSettings', icon: 'sliders', group: 'content' },
