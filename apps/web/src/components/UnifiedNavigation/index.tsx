@@ -161,6 +161,16 @@ export function UnifiedNavigation() {
   useEffect(() => {
     if (user?.id && knownName) rememberIdentityName(user.id, knownName);
   }, [user?.id, knownName]);
+  // The other accounts' names too (their menu rows): switching to one then shows its name at once,
+  // although the header remounts and its profile is still loading
+  const accountName = (account: { userId: string; displayName?: string; email: string }) =>
+    identityName([userDisplayName(accountProfiles.get(account.userId), lang), account.displayName, lastIdentityName(account.userId)], account.email);
+  useEffect(() => {
+    for (const [id, p] of accountProfiles) {
+      const name = userDisplayName(p, lang);
+      if (name) rememberIdentityName(id, name);
+    }
+  }, [accountProfiles, lang]);
 
   // Get user avatar (always from profile, never from channel)
   const getUserAvatar = () => {
@@ -346,11 +356,11 @@ export function UnifiedNavigation() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="aun-acct-btn"
-        aria-expanded={isOpen}
+        aria-expanded={isOpen && !switching}
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
         disabled={switching}
-        aria-busy={switching || undefined}
+        aria-busy={switching || nameLoading || undefined}
       >
         {/* The identity you act as (owner rule 8): the active channel's logo (or its letter) and its
             name, never your picture or name under a channel; your own picture and name when Personal */}
@@ -461,7 +471,7 @@ export function UnifiedNavigation() {
                 {otherAccounts.map((account) => {
                   const accountAvatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
                   // The name only (#1673); the email is the line under it, never the label
-                  const name = identityName([userDisplayName(accountProfiles.get(account.userId), lang), account.displayName], account.email);
+                  const name = accountName(account);
                   return (
                     <div key={account.userId} className="aun-acct-row" data-testid="nav-account" data-active="false" data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
                       <button

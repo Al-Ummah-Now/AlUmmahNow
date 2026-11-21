@@ -820,7 +820,8 @@
 .aun-identity-tag {
   align-self: flex-start;
   margin-block-start: 2px;
-  padding: 0 var(--fanous-spacing-xs, 4px);
+  /* room under the line for Arabic descenders (the ي of «حساب شخصي») */
+  padding: 1px var(--fanous-spacing-xs, 4px) 3px;
   border-radius: var(--fanous-radius-sm, 4px);
   background: color-mix(in srgb, var(--aun-menu-text) 8%, transparent);
   /* the menu's text colour, not muted: muted text on the tint is under 4.5:1 in some themes */
@@ -877,12 +878,46 @@
   transform: scaleX(-1);
 }
 
+/* An identity or account switch in progress (#1673): the pill keeps who you are, dims its name and
+   draws a loading ring round the avatar. The ring overlays the avatar, so the pill never changes
+   width, and it shows on the avatar-only phone pill too. */
+.aun-acct-btn[aria-busy='true'] {
+  position: relative;
+  cursor: progress;
+}
+.aun-acct-btn[aria-busy='true'] .aun-acct-name,
+.aun-acct-btn[aria-busy='true'] .aun-caret {
+  opacity: 0.6;
+}
+.aun-acct-btn[aria-busy='true']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--fanous-spacing-xs, 4px) - 3px);
+  top: 50%;
+  width: calc(1.75rem + 6px);
+  height: calc(1.75rem + 6px);
+  margin-top: calc(-0.875rem - 3px);
+  border: 2px solid var(--fanous-c-nav-active-text);
+  border-inline-end-color: transparent;
+  border-radius: var(--fanous-radius-full, 999px);
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .aun-acct-btn[aria-busy='true']::before {
+    animation: aun-busy-spin 0.9s linear infinite;
+  }
   .aun-acct-btn,
   .aun-icon-btn,
   .aun-lang,
   .aun-menu-item,
   .aun-acct-signout {
     transition: background-color var(--fanous-duration-fast, 120ms) ease;
+  }
+}
+
+@keyframes aun-busy-spin {
+  to {
+    rotate: 1turn;
   }
 }
