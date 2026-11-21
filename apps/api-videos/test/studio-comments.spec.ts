@@ -26,6 +26,7 @@ import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { UpdateCommunityPost } from '../src/endpoints/community/update-post';
 import { DeleteCommunityPost } from '../src/endpoints/community/delete-post';
 import { RestoreCommunityPost } from '../src/endpoints/community/restore-post';
+import { AdminError, restorePost } from '../src/lib/admin/service';
 import { publicCommentsCount } from '../src/lib/comments';
 import { memberMayActAs } from '../src/lib/channelAccess';
 import { CHANNEL_COMMENTS_KIND, handleChannelCommentsBatch, rebuildNeedsActionKey, runPurgeStep, startCommentPurge } from '../src/lib/channelComments/jobs';
@@ -521,6 +522,21 @@ describe('undoing a post delete (Story 29.4)', () => {
 		assert.equal(res.status, 403);
 		assert.equal((await json(res)).code, 'deleted_by_admin');
 		assert.equal(s.raw.community_posts.read(`posts/${CH}/p1.json`).status, 'deleted');
+	});
+
+	it('never undoes a CSAM takedown of a post the owner had deleted, for the owner or an admin', async () => {
+		const s = await setup();
+		assert.equal((await del(s, OWNER)).status, 200);
+		const stored = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		// Containment adds its own mark beside the owner's delete (lib/csam/contain.ts)
+		await s.raw.community_posts.put(`posts/${CH}/p1.json`, JSON.stringify({ ...stored, csamTakedown: { caseId: 'case-1', at: stored.updatedAt, previousStatus: 'deleted' } }));
+		const res = await restore(s, OWNER);
+		assert.equal(res.status, 403);
+		assert.equal((await json(res)).code, 'deleted_by_admin');
+		await assert.rejects(restorePost(s.env as never, 'p1'), (error: unknown) => error instanceof AdminError && error.code === 'csam_takedown');
+		const after = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		assert.equal(after.status, 'deleted');
+		assert.ok(after.ownerDeletion, 'the owner mark stays with the takedown');
 	});
 });
 

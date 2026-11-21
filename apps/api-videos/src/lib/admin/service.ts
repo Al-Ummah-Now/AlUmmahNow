@@ -1258,7 +1258,14 @@ export async function restorePost(env: AdminServiceEnv, postId: string, owner?: 
 	const channelId = deletion.parentId!;
 	if (owner && owner.channelId !== channelId) throw new AdminError(404, 'deletion_not_found');
 	let byAdmin = false;
+	let takenDown = false;
 	const saved = await repo(env.community_posts).updateObject(postKey(channelId, postId), (post) => {
+		// A CSAM takedown (lib/csam/contain.ts) keeps any earlier delete mark beside its own; no restore
+		// ever undoes it, by the owner or an admin (it ends only in the containment's purge)
+		if (post.csamTakedown) {
+			takenDown = true;
+			return false;
+		}
 		if (owner && post.adminDeletion) {
 			byAdmin = true;
 			return false;
@@ -1271,6 +1278,8 @@ export async function restorePost(env: AdminServiceEnv, postId: string, owner?: 
 		post.updatedAt = now();
 		return true;
 	});
+	// The owner hears only that an admin removed it; an admin learns why it can't come back
+	if (takenDown) throw owner ? new AdminError(403, 'deleted_by_admin', 'An admin removed this post') : new AdminError(409, 'csam_takedown', 'This post was taken down and cannot be restored');
 	if (byAdmin) throw new AdminError(403, 'deleted_by_admin', 'An admin removed this post');
 	if (!saved || saved.status === 'deleted') throw new AdminError(404, 'post_not_found');
 	await removeDeletion(env.SEARCH_DB!, 'post', postId);
