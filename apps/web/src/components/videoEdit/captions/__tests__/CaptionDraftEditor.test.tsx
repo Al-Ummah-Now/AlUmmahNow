@@ -71,7 +71,7 @@ describe('CaptionDraftEditor', () => {
     expect(getQuranPassage).not.toHaveBeenCalled(); // suggestions show no text
     fireEvent.click(within(spans[0]!).getByTestId('caption-quran-accept'));
     expect(await screen.findByText(/قُلْ هُوَ ٱللَّهُ أَحَدٌ/)).toBeTruthy();
-    expect(screen.getByText('Quran text: Quran Foundation (quran.com)')).toBeTruthy();
+    expect(screen.getByText('Quran data provided by Quran Foundation (https://quran.foundation/)')).toBeTruthy();
   });
 
   it('"Confirm all suggested" leaves possible Quran for a look; publish saves over the loaded version first', async () => {
@@ -98,7 +98,7 @@ describe('CaptionDraftEditor', () => {
     fireEvent.click(within(spans[0]!).getByTestId('caption-quran-accept'));
     expect(screen.getAllByTestId('caption-quran-span')[0]!.getAttribute('data-status')).toBe('accepted');
     expect(within(screen.getAllByTestId('caption-quran-span')[0]!).getByRole('link')).toHaveAttribute('href', 'https://quran.com/112/1');
-    expect(screen.queryByText('Quran text: Quran Foundation (quran.com)')).toBeNull();
+    expect(screen.queryByText('Quran data provided by Quran Foundation (https://quran.foundation/)')).toBeNull();
     expect(getQuranPassage).not.toHaveBeenCalled();
   });
 

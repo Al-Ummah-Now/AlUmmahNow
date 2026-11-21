@@ -412,7 +412,7 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     officialText: 'Official text',
     unconfirmedHint: 'Until you confirm it, viewers see the reference with a quran.com link, not the text.',
     textUnavailable: "The official text isn't available right now. Viewers see the reference.",
-    attribution: 'Quran text: Quran Foundation (quran.com)',
+    attribution: 'Quran data provided by Quran Foundation (https://quran.foundation/)',
   },
   translate: {
     action: 'Translate',
@@ -630,7 +630,7 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     officialText: 'النص الرسمي',
     unconfirmedHint: 'حتى تؤكده، يرى المشاهدون الموضع مع رابط quran.com دون النص.',
     textUnavailable: 'النص الرسمي غير متاح الآن، ويرى المشاهدون الموضع.',
-    attribution: 'نص القرآن: مؤسسة القرآن (quran.com)',
+    attribution: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)',
   },
   translate: {
     action: 'ترجمة',
