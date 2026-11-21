@@ -76,6 +76,16 @@ export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPer
 }
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
+  /**
+   * An admin panel that reads Analytics Engine (Web vitals, Abuse) was refused (lib/analytics-engine.ts):
+   * "Check again" runs one cheap SQL call with the same token; resolved once Cloudflare accepts it.
+   */
+  'analytics-engine': async (env, args) => {
+    if (args.panel !== 'vitals' && args.panel !== 'abuse') return { ok: false, status: 'open', result: 'Not an analytics panel' };
+    const { checkAnalyticsAccess } = await import('./analytics-engine');
+    const out = await checkAnalyticsAccess(env);
+    return { ok: out.ok, status: out.ok ? 'resolved' : 'open', result: out.result };
+  },
   /** Builds the art of a custom theme version published before the art existed (lib/theme-art.ts). */
   'theme-art': async (env, args) => {
     const { id, version } = args;

@@ -67,6 +67,9 @@ export const LOCAL_SECRETS: Record<string, string> = {
   MEDIA_SIGN_KEY: 'local-stack-media-sign-key',
   MEDIA_CDN_API_TOKEN: 'local-stack-fake',
   MEDIA_ANALYTICS_TOKEN: 'local-stack-fake',
+  // admin-api's Web vitals and Abuse panels: the one token the fake Cloudflare API's Analytics Engine SQL
+  // route accepts (fake-external.ts), so the panels read it (empty datasets by default)
+  CF_ANALYTICS_TOKEN: 'local-stack-analytics-token',
   RESEND_API_KEY: 'local-stack-fake-resend',
   AUTH_MODERATION_CLIENT_SECRET: 'local-stack-moderation-secret',
   AUTH_ADMIN_CLIENT_SECRET: 'local-stack-auth-admin-secret',

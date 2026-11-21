@@ -8,9 +8,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 process.env.FAKE_BUNNY_ENCODE = 'manual';
-const { bunny, probeMp4, registerFakes, FAKE_CDN_HOST, cdnPath } = await import('../fake-external.ts');
+const { bunny, probeMp4, registerFakes, FAKE_CDN_HOST, cdnPath, fakeCloudflare } = await import('../fake-external.ts');
 const { outboundHandler, refused } = await import('../outbound.ts');
-const { ROOT } = await import('../stack.ts');
+const { ROOT, localSecret } = await import('../stack.ts');
 
 const fixture = (name: string) => readFileSync(join(ROOT, 'apps/web/e2e/test-fixtures', name));
 const call = (url: string, init?: RequestInit) => outboundHandler(new Request(url, init));
@@ -160,5 +160,38 @@ describe('fake media pipeline (R2 transcode + media host)', () => {
       return { status: 200, body: JSON.stringify({ keys: [] }) };
     });
     assert.equal((await fakeTranscode(VID, 'ready')).status, 409);
+  });
+});
+
+describe('fake Cloudflare Analytics Engine SQL API (Web vitals and Abuse panels)', () => {
+  before(() => registerFakes());
+  const sql = (token: string) =>
+    call('https://api.cloudflare.com/client/v4/accounts/acc/analytics_engine/sql', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: 'SELECT blob1 FROM al_ummah_now_rum' });
+
+  it("accepts admin-api's stack token and answers empty datasets by default", async () => {
+    const token = localSecret('CF_ANALYTICS_TOKEN', 'media-cdn-api-token');
+    fakeCloudflare.analytics = 'empty';
+    const res = await sql(token);
+    assert.equal(res.status, 200);
+    assert.deepEqual(((await res.json()) as { data: unknown[] }).data, []);
+    // Another binding of the same secret (CDN purge) keeps its own refused value
+    assert.notEqual(localSecret('MEDIA_CDN_API_TOKEN', 'media-cdn-api-token'), token);
+    assert.equal((await sql('some-other-token')).status, 401);
+  });
+
+  it('refuses the token or throttles on demand, the way Cloudflare does', async () => {
+    const token = localSecret('CF_ANALYTICS_TOKEN', 'media-cdn-api-token');
+    try {
+      fakeCloudflare.analytics = 'auth';
+      const refused = await sql(token);
+      assert.equal(refused.status, 401);
+      assert.equal(((await refused.json()) as { errors: { code: number }[] }).errors[0].code, 10000);
+      fakeCloudflare.analytics = 'rate_limited';
+      const throttled = await sql(token);
+      assert.equal(throttled.status, 429);
+      assert.equal(((await throttled.json()) as { errors: { code: number }[] }).errors[0].code, 10429);
+    } finally {
+      fakeCloudflare.analytics = 'empty';
+    }
   });
 });

@@ -17,7 +17,9 @@
  * - Cloudflare API (api.cloudflare.com): only the read calls of the transcode troubleshooting panel
  *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
  *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
- *   mention, DELETE /__fake/cloudflare forgets it.
+ *   mention, DELETE /__fake/cloudflare forgets it. Also the Analytics Engine SQL API of the Web vitals and
+ *   Abuse panels (admin-api lib/analytics-engine.ts): empty datasets by default; PUT
+ *   /__fake/cloudflare/analytics { mode } makes it refuse the token (auth) or throttle (rate_limited).
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
  *
@@ -414,7 +416,17 @@ function mediaHost(method: string, pathname: string): Response {
 /** Tokens the fake Cloudflare API accepts (the transcode troubleshooting E2E sets one in the admin). */
 export const FAKE_CF_TOKEN_PREFIX = 'e2e-fake-cloudflare-token-';
 const CF_APPLICATION_ID = 'fake-transcoder-app';
-export const fakeCloudflare = { logVideo: null as string | null };
+export const ANALYTICS_MODES = ['empty', 'auth', 'rate_limited'] as const;
+export const fakeCloudflare = { logVideo: null as string | null, analytics: 'empty' as (typeof ANALYTICS_MODES)[number] };
+
+/** Analytics Engine SQL API: the body is the SQL text, the answer the SQL API's JSON or its v4 errors */
+function analyticsEngineSql(): Response {
+  if (fakeCloudflare.analytics === 'auth') return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }], messages: [], result: null }, 401);
+  if (fakeCloudflare.analytics === 'rate_limited') {
+    return json({ success: false, errors: [{ code: 10429, message: 'Rate limited. Please wait and consider throttling your request speed' }], messages: [], result: null }, 429);
+  }
+  return json({ meta: [], data: [], rows: 0 });
+}
 
 /**
  * The QA names the stack's admin-api reads (ENVIRONMENT qa): one transcoder application with
@@ -423,6 +435,13 @@ export const fakeCloudflare = { logVideo: null as string | null };
  */
 async function cloudflareApi(request: Request, url: URL): Promise<Response> {
   const ok = (result: unknown) => json({ success: true, errors: [], messages: [], result });
+  // Analytics Engine SQL: only admin-api's stack token (LOCAL_SECRETS.CF_ANALYTICS_TOKEN)
+  if (/^(\/client\/v4)?\/accounts\/[^/]+\/analytics_engine\/sql$/.test(url.pathname) && request.method === 'POST') {
+    if (request.headers.get('authorization') !== `Bearer ${LOCAL_SECRETS.CF_ANALYTICS_TOKEN}`) {
+      return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }], messages: [], result: null }, 401);
+    }
+    return analyticsEngineSql();
+  }
   if (!(request.headers.get('authorization') ?? '').startsWith(`Bearer ${FAKE_CF_TOKEN_PREFIX}`)) {
     return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403);
   }
@@ -530,6 +549,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up[?video=<id>] (the R2 media pipeline)
  * - GET /__fake/resend/emails
  * - PUT /__fake/cloudflare { logVideo } | DELETE /__fake/cloudflare: the video the fake Cloudflare log lines name
+ * - PUT /__fake/cloudflare/analytics { mode: empty|auth|rate_limited } | DELETE (back to empty): the Analytics Engine SQL API's answer
  * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
  * - GET /__fake/google, POST /__fake/google/consent?mode=…|quota?on=1|reset (fake-google.ts)
  * - GET /__fake/social/posts[?network=] | /webhooks, POST /__fake/social/telegram/post | /fail?network=&status= (fake-social.ts)
@@ -627,6 +647,15 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
   if (kind === 'google') return googleControl(req.method, url);
+  if (kind === 'cloudflare' && url.pathname === '/__fake/cloudflare/analytics') {
+    if (req.method === 'DELETE') fakeCloudflare.analytics = 'empty';
+    else if (req.method === 'PUT') {
+      const { mode } = JSON.parse((await readBody(req)) || '{}') as { mode?: unknown };
+      if (!(ANALYTICS_MODES as readonly unknown[]).includes(mode)) return json({ error: `mode must be one of ${ANALYTICS_MODES.join(', ')}` }, 400);
+      fakeCloudflare.analytics = mode as (typeof ANALYTICS_MODES)[number];
+    }
+    return json({ mode: fakeCloudflare.analytics });
+  }
   if (kind === 'cloudflare') {
     if (req.method === 'DELETE') fakeCloudflare.logVideo = null;
     else if (req.method === 'PUT') {

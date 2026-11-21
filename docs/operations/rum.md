@@ -31,6 +31,16 @@ Data point: `index1` = metric, `blob1..5` = metric, page kind, device, locale, e
 
 **Admin page:** videos admin → Operations → **Web vitals** (`/web-vitals`, `ops:read`). It shows the whole site's p75 LCP, CLS and INP, then one row per page kind × device, busiest first. Each value is rated Good, Needs improvement or Poor at the web.dev limits, and values from fewer than 50 sampled loads are marked. Filters: environment, last 1, 7 or 28 days, and site language (all, en, ar). admin-api `GET /api/vitals/summary` (`apps/admin-api/src/routers/vitals.router.ts`) runs the two Analytics Engine SQL queries with `CF_ANALYTICS_TOKEN`, the same Account Analytics Read token as the Abuse panel, and caches the answer for 5 minutes. A dataset nobody has written to yet shows as "no data".
 
+**What the page shows when it has no numbers** (`apps/admin-api/src/lib/analytics-engine.ts`, shared with the Abuse panel):
+
+| admin-api answer | Page shows | What to do |
+|---|---|---|
+| 200, no samples | "No page loads measured yet in the last N days", with a wider filter to try. Stage and QA say only production is measured (their visitors are mostly test browsers) | Nothing: wait for traffic |
+| 503 `not_configured` | "Web vitals are not set up here" | Give admin-api `CF_ANALYTICS_TOKEN` (Secrets Store `media-cdn-api-token`) and `CLOUDFLARE_ACCOUNT_ID` |
+| 503 `unavailable`, `reason` + `ref` | "Web vitals could not be loaded", the reason, Try again, and the reference of an Errors page needs-action item (`analytics-engine:vitals`, source ops) | See the reason below; after a fix, **Check again** on the Errors page item re-tests the token (`SHOW TABLES`) and closes it. A good page load closes it too |
+
+Reasons: `auth` (401/403, Cloudflare error 10000: the token lacks **Account → Account Analytics → Read**), `rate_limited` (429/10429; repeated auth failures also end here), `query` (Cloudflare rejected the SQL: our bug), `upstream` (5xx), `unreachable`, `bad_response`. Every failure is logged as `[Vitals] Analytics Engine query failed` with the status and Cloudflare's error text (never the token); the read-only **Media diagnostics** workflow (`search: Analytics Engine`) shows those lines for any environment without Cloudflare access. On 2026-11-21 QA answered `auth` (401, `10000 Authentication error`) for both this panel and Abuse: `media-cdn-api-token` has no Account Analytics Read.
+
 From a terminal:
 
 ```bash

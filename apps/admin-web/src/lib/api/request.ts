@@ -48,6 +48,14 @@ async function originHints(): Promise<Record<string, string>> {
  * Call admin-api with the session's bearer token and return the parsed JSON
  * envelope. Throws AdminApiError (with the HTTP status) on any failure.
  */
+/** `reason` and `ref` of a refused read (short tokens only; anything else is dropped) */
+function detailOf(body: Record<string, unknown>): { reason?: string; ref?: string } | undefined {
+  const pick = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : undefined);
+  const reason = pick(body.reason);
+  const ref = pick(body.ref);
+  return reason || ref ? { reason, ref } : undefined;
+}
+
 export async function requestAdmin(endpoint: string, options: RequestInit = {}): Promise<ApiEnvelope> {
   const method = options.method || 'GET';
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -100,7 +108,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
   if (!response.ok || body.success === false) {
     const message = envelopeError(body, `Admin API error: ${response.status} ${response.statusText}`);
     logger.error(`[API Error] ${response.status} ${method} ${endpoint}`, { requestId, status: response.status, error: message });
-    throw new AdminApiError(message, response.ok ? 500 : response.status, typeof body.code === 'string' ? body.code : undefined, problemsOf(body.problems), fieldsOf(body.fields));
+    throw new AdminApiError(message, response.ok ? 500 : response.status, typeof body.code === 'string' ? body.code : undefined, problemsOf(body.problems), fieldsOf(body.fields), detailOf(body));
   }
 
   return body;

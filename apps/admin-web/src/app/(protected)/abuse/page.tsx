@@ -1,5 +1,6 @@
 import { getAbuseSummary, ABUSE_ENVS, ABUSE_KINDS, type AbuseEnv, type AbuseSummary } from '@/lib/api/abuse';
-import { AdminApiError } from '@/lib/api/errors';
+import { analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
+import { PanelState } from '@/components/PanelState';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -33,13 +34,16 @@ export default async function AbusePage({ searchParams }: PageProps) {
   const hours = params.hours === '168' ? 168 : 24;
 
   let summary: AbuseSummary | null = null;
-  let loadError = '';
+  let problem: AnalyticsLoadProblem | null = null;
   try {
     summary = await getAbuseSummary(env, hours);
   } catch (error) {
-    logger.error('[abuse] Failed to load the counters', { error: error instanceof Error ? error.message : String(error) });
-    loadError = error instanceof AdminApiError && error.status === 503 ? t('abusePage.notConfigured') : t('abusePage.loadFailed');
+    problem = analyticsLoadProblem(error);
+    // admin-api already logged a refused read and flagged it on the Errors page; only the unexpected is an error here
+    const log = problem.kind === 'failed' ? logger.error : logger.warn;
+    log('[abuse] Failed to load the counters', { kind: problem.kind, error: error instanceof Error ? error.message : String(error) });
   }
+  const retryHref = `/abuse?${new URLSearchParams({ env, hours: String(hours) })}`;
   const number = (n: number) => numberFormat(locale).format(n);
   const kindLabel = (kind: string) =>
     (ABUSE_KINDS as readonly string[]).includes(kind) ? t(`abusePage.kinds.${kind}` as MessageKey) : kind;
@@ -71,7 +75,24 @@ export default async function AbusePage({ searchParams }: PageProps) {
         <button type="submit" className={secondaryButtonClass}>{t('abusePage.show')}</button>
       </form>
 
-      {loadError && <ErrorAlert testId="abuse-load-error">{loadError}</ErrorAlert>}
+      {problem?.kind === 'not_configured' && (
+        <PanelState tone="setup" testId="abuse-not-configured" title={t('abusePage.notConfiguredTitle')} body={t('abusePage.notConfigured')} action={{ label: t('analyticsPanel.retry'), href: retryHref }} />
+      )}
+      {problem?.kind === 'unavailable' && (
+        <PanelState
+          tone="problem"
+          testId="abuse-unavailable"
+          reason={problem.reason}
+          title={t('abusePage.unavailableTitle')}
+          body={t(`analyticsPanel.reasons.${problem.reason}` as MessageKey)}
+          note={problem.ref ? t('analyticsPanel.flagged') : undefined}
+          action={{ label: t('analyticsPanel.retry'), href: retryHref }}
+          reference={problem.ref ? { label: t('analyticsPanel.reference'), ref: problem.ref, linkLabel: t('analyticsPanel.openErrors') } : undefined}
+        />
+      )}
+      {problem?.kind === 'failed' && (
+        <PanelState tone="problem" testId="abuse-load-error" title={t('abusePage.unavailableTitle')} body={t('abusePage.loadFailed')} action={{ label: t('analyticsPanel.retry'), href: retryHref }} />
+      )}
       {summary && (
         <>
           <section className="mb-6" aria-labelledby="abuse-totals-title" data-testid="abuse-totals">

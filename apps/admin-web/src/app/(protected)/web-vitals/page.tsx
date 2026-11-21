@@ -14,7 +14,8 @@ import {
   type VitalsSummary,
   type VitalsValue,
 } from '@/lib/api/vitals';
-import { AdminApiError } from '@/lib/api/errors';
+import { analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
+import { PanelState } from '@/components/PanelState';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -78,13 +79,18 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
   const siteLocale = pick<VitalsLocale>(params.locale, VITALS_LOCALES, 'all');
 
   let summary: VitalsSummary | null = null;
-  let loadError = '';
+  let problem: AnalyticsLoadProblem | null = null;
   try {
     summary = await getVitalsSummary(env, days, siteLocale);
   } catch (error) {
-    logger.error('[vitals] Failed to load the web vitals', { error: error instanceof Error ? error.message : String(error) });
-    loadError = error instanceof AdminApiError && error.status === 503 ? t('vitalsPage.notConfigured') : t('vitalsPage.loadFailed');
+    problem = analyticsLoadProblem(error);
+    // admin-api already logged a refused read and flagged it on the Errors page; only the unexpected is an error here
+    const log = problem.kind === 'failed' ? logger.error : logger.warn;
+    log('[vitals] Failed to load the web vitals', { kind: problem.kind, error: error instanceof Error ? error.message : String(error) });
   }
+  const href = (over: Partial<{ env: VitalsEnv; days: number; locale: VitalsLocale }> = {}) =>
+    `/web-vitals?${new URLSearchParams({ env: over.env ?? env, days: String(over.days ?? days), locale: over.locale ?? siteLocale })}`;
+  const empty = !!summary && summary.rows.length === 0 && VITALS_METRICS.every((m) => !summary!.overall[m]);
   const label = (group: 'kinds' | 'devices', value: string, known: readonly string[]) =>
     known.includes(value) ? t(`vitalsPage.${group}.${value}` as MessageKey) : value;
 
@@ -123,8 +129,43 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
         <button type="submit" className={secondaryButtonClass}>{t('vitalsPage.show')}</button>
       </form>
 
-      {loadError && <ErrorAlert testId="vitals-load-error">{loadError}</ErrorAlert>}
-      {summary && (
+      {problem?.kind === 'not_configured' && (
+        <PanelState tone="setup" testId="vitals-not-configured" title={t('vitalsPage.notConfiguredTitle')} body={t('vitalsPage.notConfigured')} action={{ label: t('analyticsPanel.retry'), href: href() }} />
+      )}
+      {problem?.kind === 'unavailable' && (
+        <PanelState
+          tone="problem"
+          testId="vitals-unavailable"
+          reason={problem.reason}
+          title={t('vitalsPage.unavailableTitle')}
+          body={t(`analyticsPanel.reasons.${problem.reason}` as MessageKey)}
+          note={problem.ref ? t('analyticsPanel.flagged') : undefined}
+          action={{ label: t('analyticsPanel.retry'), href: href() }}
+          reference={problem.ref ? { label: t('analyticsPanel.reference'), ref: problem.ref, linkLabel: t('analyticsPanel.openErrors') } : undefined}
+        />
+      )}
+      {problem?.kind === 'failed' && (
+        <PanelState tone="problem" testId="vitals-load-error" title={t('vitalsPage.unavailableTitle')} body={t('vitalsPage.loadFailed')} action={{ label: t('analyticsPanel.retry'), href: href() }} />
+      )}
+      {summary && empty && (
+        <PanelState
+          tone="empty"
+          testId="vitals-empty-state"
+          title={t(`vitalsPage.emptyTitle${days}` as MessageKey)}
+          body={t('vitalsPage.emptyBody')}
+          note={env !== 'production' ? t('vitalsPage.emptyNonProduction') : undefined}
+          action={
+            env !== 'production'
+              ? { label: t('vitalsPage.emptyProduction'), href: href({ env: 'production' }) }
+              : days < 28
+                ? { label: t('vitalsPage.emptyLonger'), href: href({ days: 28 }) }
+                : siteLocale !== 'all'
+                  ? { label: t('vitalsPage.emptyAllLanguages'), href: href({ locale: 'all' }) }
+                  : undefined
+          }
+        />
+      )}
+      {summary && !empty && (
         <>
           <section className="mb-6" aria-labelledby="vitals-overall-title" data-testid="vitals-overall">
             <h2 id="vitals-overall-title" className="text-xl font-semibold text-fg mb-3">{t('vitalsPage.overall')}</h2>
