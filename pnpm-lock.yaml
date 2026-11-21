@@ -710,8 +710,8 @@ importers:
         specifier: ^4.13.19
         version: 4.13.19
       jose:
-        specifier: 5.9.6
-        version: 5.9.6
+        specifier: 6.2.17
+        version: 6.2.17
       ws:
         specifier: ^8.23.0
         version: 8.23.0
@@ -4722,8 +4722,8 @@ packages:
   jose@5.9.6:
     resolution: {integrity: sha512-AMlnetc9+CV9asI19zHmrgS/WYsWUwCn2R7RzlbJWD7F9eWYUTGyBmU9o6PxngtLGOiDGPRu+Uc4fhKzbpteZQ==}
 
-  jose@6.1.3:
-    resolution: {integrity: sha512-0TpaTfihd4QMNwrz/ob2Bp7X04yuxJkjRGi4aKmOqwhov54i6u79oCv7T+C7lo70MKH6BesI3vscD1yb/yzKXQ==}
+  jose@6.2.17:
+    resolution: {integrity: sha512-wOuK9V1yujQFH5S0ZWmLcDZN7+IKh9bUCC2ZPCf2HDlol3WWHy+PPyNjEI75FXRLMp3vDKQcupP59xhVU95hcg==}
 
   js-base64@3.7.8:
     resolution: {integrity: sha512-hNngCeKxIUQiEUN3GPJOkz4wF/YvdUdbNL9hsBcMQTkKzboD7T/q3OYOuuPZLUE6dBxSGpwhk5mwuDud7JVAow==}
@@ -7823,7 +7823,7 @@ snapshots:
       express: 5.2.1
       express-rate-limit: 8.7.5(express@5.2.1)
       hono: 4.13.19
-      jose: 6.1.3
+      jose: 6.2.17
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.1
@@ -11217,7 +11217,7 @@ snapshots:
 
   jose@5.9.6: {}
 
-  jose@6.1.3: {}
+  jose@6.2.17: {}
 
   js-base64@3.7.8: {}
 
