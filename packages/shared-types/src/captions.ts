@@ -107,6 +107,17 @@ export const ON_DEVICE_TRANSCRIPT_LIMITS = {
   maxEndMs: 24 * 60 * 60 * 1000,
 } as const;
 
+/**
+ * A Quran span the device already matched (the admin importer, QF terms 2026-11-21): a reference
+ * only, never the words. It goes into the draft as a suggestion like a matcher span.
+ */
+export interface TranscriptQuranRef {
+  /** `surah:ayah:word-surah:ayah:word` */
+  range: string;
+  status: QuranMatchClass;
+  alternatives?: string[];
+}
+
 export type OnDeviceTranscriptCheck =
   | { ok: true; segments: ReviewTranscriptFile['segments'] }
   | { ok: false; error: 'empty' | 'too_many_segments' | 'invalid_segment' | 'too_long'; segment?: number };
@@ -120,9 +131,18 @@ export function validateOnDeviceTranscript(input: unknown): OnDeviceTranscriptCh
   let total = 0;
   let previousStart = 0;
   for (let i = 0; i < input.length; i++) {
-    const s = input[i] as { startMs?: unknown; endMs?: unknown; text?: unknown } | null;
+    const s = input[i] as { startMs?: unknown; endMs?: unknown; text?: unknown; quran?: unknown } | null;
     const startMs = typeof s?.startMs === 'number' ? Math.round(s.startMs) : NaN;
     const endMs = typeof s?.endMs === 'number' ? Math.round(s.endMs) : NaN;
+    if (s?.quran !== undefined) {
+      // A matched span carries its reference and no text at all, so no Quran words reach us
+      const quran = checkQuranRef(s.quran);
+      if (!quran || (s.text !== undefined && s.text !== '')) return { ok: false, error: 'invalid_segment', segment: i };
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs < 0 || endMs <= startMs || endMs > L.maxEndMs || startMs < previousStart) return { ok: false, error: 'invalid_segment', segment: i };
+      previousStart = startMs;
+      segments.push({ startMs, endMs, text: '', quran });
+      continue;
+    }
     const text = typeof s?.text === 'string' ? s.text.replace(/\s+/g, ' ').trim() : null;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || text === null) return { ok: false, error: 'invalid_segment', segment: i };
     if (startMs < 0 || endMs <= startMs || endMs > L.maxEndMs || startMs < previousStart) return { ok: false, error: 'invalid_segment', segment: i };
@@ -133,6 +153,21 @@ export function validateOnDeviceTranscript(input: unknown): OnDeviceTranscriptCh
     if (text) segments.push({ startMs, endMs, text });
   }
   return segments.length ? { ok: true, segments } : { ok: false, error: 'empty' };
+}
+
+function checkQuranRef(input: unknown): TranscriptQuranRef | null {
+  const q = input as { range?: unknown; status?: unknown; alternatives?: unknown } | null;
+  if (!q || typeof q !== 'object' || typeof q.range !== 'string' || !parseQuranRange(q.range)) return null;
+  const status = q.status === undefined ? 'review' : q.status;
+  if (status !== 'confirmed' && status !== 'context' && status !== 'basmala' && status !== 'review') return null;
+  const ref: TranscriptQuranRef = { range: q.range, status };
+  if (q.alternatives !== undefined) {
+    if (!Array.isArray(q.alternatives) || q.alternatives.length > CAPTION_LIMITS.alternatives) return null;
+    if (!q.alternatives.every((a) => typeof a === 'string' && parseQuranRange(a))) return null;
+    const alternatives = (q.alternatives as string[]).filter((a) => a !== q.range);
+    if (alternatives.length) ref.alternatives = alternatives;
+  }
+  return ref;
 }
 
 export interface CaptionClaimState {
@@ -148,14 +183,15 @@ export interface CaptionClaimState {
 export interface ReviewTranscriptFile {
   videoId: string;
   reviewId?: string;
-  segments: Array<{ startMs: number; endMs: number; text: string }>;
+  /** A segment with `quran` is a span matched on the device: `text` is empty */
+  segments: Array<{ startMs: number; endMs: number; text: string; quran?: TranscriptQuranRef }>;
 }
 
 /** Transcript words with segment times spread evenly over them, and the segment each came from. */
 export function transcriptWords(segments: ReviewTranscriptFile['segments']): Array<AsrWord & { seg: number }> {
   const words: Array<AsrWord & { seg: number }> = [];
   segments.forEach((s, seg) => {
-    const parts = s.text.split(/\s+/).filter(Boolean);
+    const parts = s.quran ? [] : s.text.split(/\s+/).filter(Boolean);
     const step = parts.length ? Math.max(0, s.endMs - s.startMs) / parts.length : 0;
     parts.forEach((text, i) => words.push({ text, seg, startMs: Math.round(s.startMs + i * step), endMs: Math.round(s.startMs + (i + 1) * step) }));
   });
@@ -206,7 +242,11 @@ export function captionCuesFromTranscript(segments: ReviewTranscriptFile['segmen
     if (clean) push(words[i]!.startMs, words[j - 1]!.endMs, [{ type: 'speech', text: clean }]);
     i = j;
   }
-  return cues;
+  // Spans matched on the device come as references already: each is its own cue, in time order
+  const matched = segments.filter((s) => s.quran);
+  if (!matched.length) return cues;
+  for (const s of matched) push(s.startMs, s.endMs, [{ type: 'quran', range: s.quran!.range, status: s.quran!.status, ...(s.quran!.alternatives?.length ? { alternatives: s.quran!.alternatives } : {}) }]);
+  return cues.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs).map((c, k) => ({ ...c, id: `c${k + 1}` }));
 }
 
 /** Languages written right to left: their cues get a right-to-left mark per line. */

@@ -401,7 +401,16 @@ export async function requestCaptionJob(
  */
 export async function requestTranslationJob(
 	env: CaptionJobsEnv,
-	input: { video: VideoObject; userId: string; roles?: readonly string[] | null; sourceLanguage: string; language: string; replace: boolean },
+	input: {
+		video: VideoObject;
+		userId: string;
+		roles?: readonly string[] | null;
+		sourceLanguage: string;
+		language: string;
+		replace: boolean;
+		/** The admin importer (wiki TOOLS-ADMIN TA-7): no caption minutes, like an admin's Retry; the platform budget still applies */
+		waive?: boolean;
+	},
 	now = new Date(),
 ): Promise<RequestOutcome> {
 	const { video } = input;
@@ -428,17 +437,19 @@ export async function requestTranslationJob(
 	const subject = await captionSubject(db(env), { userId: input.userId, roles: input.roles, channelOwnerId: video.userId });
 	const minutes = captionMinutesFor(duration, 1);
 	const jobId = crypto.randomUUID();
-	const reserved = await reserveMinutes(db(env), subject, jobId, minutes, now);
-	if ('usage' in reserved) return { refused: 'upgrade_required', usage: reserved.usage, minutes };
+	if (!input.waive) {
+		const reserved = await reserveMinutes(db(env), subject, jobId, minutes, now);
+		if ('usage' in reserved) return { refused: 'upgrade_required', usage: reserved.usage, minutes };
+	}
 
 	const at = now.toISOString();
 	const model = provider === 'deepl' ? 'deepl-pro' : settings.translation.model;
 	const inserted = await db(env)
 		.prepare(
 			`INSERT OR IGNORE INTO caption_jobs (id, idempotency_key, video_id, channel_id, subject_id, requested_by, kind, language, source_language, source_version, replace_draft, provider, model, status, minutes_reserved, waived, attempts, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, 'translate', ?, ?, ?, ?, ?, ?, 'queued', ?, 0, 1, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, 'translate', ?, ?, ?, ?, ?, ?, 'queued', ?, ?, 1, ?, ?)`,
 		)
-		.bind(jobId, key, video.id, video.channelId ?? null, subject.subjectId, input.userId, input.language, input.sourceLanguage, source.version, input.replace ? 1 : 0, provider, model, minutes, at, at)
+		.bind(jobId, key, video.id, video.channelId ?? null, subject.subjectId, input.userId, input.language, input.sourceLanguage, source.version, input.replace ? 1 : 0, provider, model, minutes, input.waive ? 1 : 0, at, at)
 		.run();
 	if ((inserted.meta?.changes ?? 0) === 0) {
 		await releaseMinutes(db(env), jobId, now);

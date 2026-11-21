@@ -328,6 +328,64 @@ export class ReviewTranscriptClaim extends AuthenticatedRoute {
 const ENGINE_PROVIDER = /^[a-z0-9][a-z0-9.+-]{0,39}$/;
 const ENGINE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$/;
 
+/** A timed piece of speech, or a Quran span the device matched: its reference only, never its words */
+export const OnDeviceSegmentSchema = z.object({
+	startMs: z.number(),
+	endMs: z.number(),
+	text: z.string().optional(),
+	quran: z
+		.object({
+			range: z.string().describe('surah:ayah:word-surah:ayah:word'),
+			status: z.enum(['confirmed', 'context', 'basmala', 'review']).optional(),
+			alternatives: z.array(z.string()).optional(),
+		})
+		.optional()
+		.describe('A Quran span matched on the device (no text with it)'),
+});
+
+export type OnDeviceSubmitOutcome =
+	| { ok: true; segments: number }
+	| { ok: false; status: 400 | 409 | 503; error: 'invalid_transcript' | 'draft_exists' | 'claim_pending' | 'queue_unavailable'; reason?: string; segment?: number };
+
+/**
+ * Checks an on-device transcript, stores it and queues the claim job that drafts it. Shared by
+ * desktop Studio (the creator) and the admin importer (wiki TOOLS-ADMIN TA-7, `requestedBy` the admin).
+ */
+export async function submitOnDeviceTranscript(
+	env: { subtitles: R2Bucket; queue: { send(m: unknown): Promise<unknown> } },
+	d: { videoId: string; language: string; segments: unknown; engine: { provider: string; model?: string }; replace?: boolean; requestedBy: string },
+): Promise<OnDeviceSubmitOutcome> {
+	if (!ENGINE_PROVIDER.test(d.engine.provider) || (d.engine.model !== undefined && !ENGINE_MODEL.test(d.engine.model))) {
+		return { ok: false, status: 400, error: 'invalid_transcript', reason: 'engine' };
+	}
+	const checked = validateOnDeviceTranscript(d.segments);
+	if (!checked.ok) {
+		const failed = checked as Extract<typeof checked, { ok: false }>;
+		return { ok: false, status: 400, error: 'invalid_transcript', reason: failed.error, ...(failed.segment !== undefined ? { segment: failed.segment } : {}) };
+	}
+	const segments = (checked as Extract<typeof checked, { ok: true }>).segments;
+	const exists = !!(await readDraft(env.subtitles, d.videoId, d.language));
+	if (exists && !d.replace) return { ok: false, status: 409, error: 'draft_exists' };
+	const transcriptKey = onDeviceTranscriptKey(d.videoId, d.language);
+	const engine = { provider: d.engine.provider, ...(d.engine.model ? { model: d.engine.model } : {}) };
+	let outcome;
+	try {
+		await env.subtitles.put(transcriptKey, JSON.stringify({ videoId: d.videoId, segments }), { httpMetadata: { contentType: 'application/json' } });
+		outcome = await queueClaim(
+			{ subtitles: env.subtitles, queue: env.queue },
+			{ videoId: d.videoId, language: d.language, transcriptKey, source: 'on_device', engine, requestedBy: d.requestedBy, ...(d.replace ? { replace: true } : {}) },
+			exists,
+		);
+	} catch (error) {
+		logger.error('[Captions] On-device transcript could not be queued', { videoId: d.videoId, error: error instanceof Error ? error.message : String(error) });
+		return { ok: false, status: 503, error: 'queue_unavailable' };
+	}
+	if (outcome.status === 'draft_exists') return { ok: false, status: 409, error: 'draft_exists' };
+	if (outcome.status === 'pending') return { ok: false, status: 409, error: 'claim_pending' };
+	logger.info('[Captions] On-device transcript queued', { videoId: d.videoId, language: d.language, segments: segments.length, engine: engine.provider });
+	return { ok: true, segments: segments.length };
+}
+
 export class OnDeviceTranscriptSubmit extends AuthenticatedRoute {
 	schema = addAuthToSchema(
 		{
@@ -341,7 +399,7 @@ export class OnDeviceTranscriptSubmit extends AuthenticatedRoute {
 					content: {
 						'application/json': {
 							schema: z.object({
-								segments: z.array(z.object({ startMs: z.number(), endMs: z.number(), text: z.string() })).describe('Timed speech, in order'),
+								segments: z.array(OnDeviceSegmentSchema).describe('Timed speech, in order'),
 								engine: z.object({ provider: z.string().describe('e.g. whisper.cpp'), model: z.string().optional().describe('e.g. large-v3-turbo-q5_0') }),
 								replace: z.boolean().optional(),
 							}),
@@ -367,34 +425,11 @@ export class OnDeviceTranscriptSubmit extends AuthenticatedRoute {
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		if (!validLanguage(params.language)) return c.json({ success: false, error: 'unsupported_language' }, 400);
-		if (!ENGINE_PROVIDER.test(body.engine.provider) || (body.engine.model !== undefined && !ENGINE_MODEL.test(body.engine.model))) {
-			return c.json({ success: false, error: 'invalid_transcript', reason: 'engine' }, 400);
+		const out = await submitOnDeviceTranscript(c.env as never, { videoId: params.videoId, language: params.language, segments: body.segments, engine: body.engine, replace: body.replace, requestedBy: userId });
+		if (out.ok === false) {
+			const { ok: _ok, status, ...error } = out;
+			return c.json({ success: false, ...error }, status);
 		}
-		const checked = validateOnDeviceTranscript(body.segments);
-		if (!checked.ok) {
-			const failed = checked as Extract<typeof checked, { ok: false }>;
-			return c.json({ success: false, error: 'invalid_transcript', reason: failed.error, ...(failed.segment !== undefined ? { segment: failed.segment } : {}) }, 400);
-		}
-		const segments = (checked as Extract<typeof checked, { ok: true }>).segments;
-		const exists = !!(await readDraft(c.env.subtitles, params.videoId, params.language));
-		if (exists && !body.replace) return c.json({ success: false, error: 'draft_exists' }, 409);
-		const transcriptKey = onDeviceTranscriptKey(params.videoId, params.language);
-		const engine = { provider: body.engine.provider, ...(body.engine.model ? { model: body.engine.model } : {}) };
-		let outcome;
-		try {
-			await c.env.subtitles.put(transcriptKey, JSON.stringify({ videoId: params.videoId, segments }), { httpMetadata: { contentType: 'application/json' } });
-			outcome = await queueClaim(
-				{ subtitles: c.env.subtitles, queue: c.env.queue },
-				{ videoId: params.videoId, language: params.language, transcriptKey, source: 'on_device', engine, requestedBy: userId, ...(body.replace ? { replace: true } : {}) },
-				exists,
-			);
-		} catch (error) {
-			logger.error('[Captions] On-device transcript could not be queued', { videoId: params.videoId, error: error instanceof Error ? error.message : String(error) });
-			return c.json({ success: false, error: 'queue_unavailable' }, 503);
-		}
-		if (outcome.status === 'draft_exists') return c.json({ success: false, error: 'draft_exists' }, 409);
-		if (outcome.status === 'pending') return c.json({ success: false, error: 'claim_pending' }, 409);
-		logger.info('[Captions] On-device transcript queued', { videoId: params.videoId, language: params.language, segments: segments.length, engine: engine.provider });
-		return c.json({ success: true, data: { status: 'queued' as const, segments: segments.length } }, 202);
+		return c.json({ success: true, data: { status: 'queued' as const, segments: out.segments } }, 202);
 	}
 }

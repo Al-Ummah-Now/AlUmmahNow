@@ -143,6 +143,17 @@ describe('transcript translation jobs', () => {
 		assert.equal(await remaining(), 7);
 	});
 
+	it('an admin import is waived: no minutes reserved or charged, even with none left', async () => {
+		const { asEnv, remaining } = await setup(0);
+		const out = await requestTranslationJob(asEnv, { video: video(), userId: 'alice', sourceLanguage: 'ar', language: 'en', replace: false, waive: true }, NOV);
+		assert.ok('job' in out);
+		assert.equal(out.job.waived, true);
+		await finishJob(asEnv, out.job.id, { outcome: 'ready', minutesUsed: 0 }, undefined, NOV);
+		assert.equal(await remaining(), 0);
+		const refused = await translate(asEnv, { language: 'fr' });
+		assert.ok('refused' in refused, 'the same user without the waiver is still refused');
+	});
+
 	it('refuses: same language, no source, a translation as source, an existing draft, a video not ready, paused by the admin', async () => {
 		const { env, asEnv } = await setup();
 		await assert.rejects(translate(asEnv, { language: 'ar' }), /same_language/);

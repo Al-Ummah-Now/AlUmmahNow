@@ -291,3 +291,57 @@ describe('/api/admin/import/items/:id/sidecars (TA-6)', () => {
     assert.equal(((await db.prepare("SELECT COUNT(*) AS n FROM site_settings_log").first<any>())).n, 1, 'the refused call left no audit row');
   });
 });
+
+describe('/api/admin/import/items/:id/transcript and /translations (TA-7)', () => {
+  it('forwards a keys-only transcript and translation requests, auditing counts and languages only', async () => {
+    const db = sqliteD1();
+    const calls: { path: string; body: any }[] = [];
+    let answer: () => Response = () => new Response(JSON.stringify({ success: true, result: { status: 'queued', segments: 2 } }), { status: 200 });
+    const env = {
+      REPORTS_DB: db,
+      INTERNAL_API_KEY: 'k',
+      VIDEOS: {
+        async fetch(input: string, init?: RequestInit) {
+          calls.push({ path: new URL(input).pathname, body: init?.body ? JSON.parse(String(init.body)) : null });
+          return answer();
+        },
+      },
+    };
+    const t = new Date().toISOString();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, video_id, state, created_by, created_at, updated_at) VALUES ('it1','b1','ch1',?, 'a.mp4', 1, 'vid-1', 'uploaded', ?, ?, ?)").bind('e'.repeat(64), ADMIN, t, t).run();
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, roles: ['Admin'] } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const send = async (path: string, body: unknown) => {
+      const res = await app.request(`/api/admin/import/items/${path}`, post(body), env as never);
+      return { status: res.status, body: (await res.json()) as any };
+    };
+    const transcript = {
+      language: 'ar',
+      segments: [{ startMs: 0, endMs: 1000, text: 'قال الشيخ' }, { startMs: 1000, endMs: 4000, quran: { range: '112:1:1-112:4:5' } }],
+      engine: { provider: 'whisper.cpp' },
+    };
+    const res = await send('it1/transcript', transcript);
+    assert.equal(res.status, 202);
+    assert.deepEqual(calls[0], { path: '/internal/admin/import/videos/vid-1/captions/ar/transcript', body: { segments: transcript.segments, engine: transcript.engine } });
+    answer = () => new Response(JSON.stringify({ success: true, result: { results: [{ language: 'en', jobId: 'j1', status: 'queued', existing: false }] } }), { status: 200 });
+    const tr = await send('it1/translations', { sourceLanguage: 'ar', languages: ['en'] });
+    assert.equal(tr.status, 200);
+    assert.equal(tr.body.result.results[0].jobId, 'j1');
+    assert.equal(calls[1]!.path, '/internal/admin/import/videos/vid-1/translations');
+    const rows = (await db.prepare("SELECT new_value FROM site_settings_log ORDER BY rowid").all<any>()).results ?? [];
+    assert.deepEqual(JSON.parse(rows[0].new_value).details, { itemId: 'it1', language: 'ar', segments: 2 });
+    assert.deepEqual(JSON.parse(rows[1].new_value).details, { itemId: 'it1', sourceLanguage: 'ar', languages: ['en'] });
+    assert.ok(!rows[0].new_value.includes('الشيخ'), 'no transcript text in the audit log');
+    // A refusal from api-videos passes through and leaves no audit row
+    answer = () => new Response(JSON.stringify({ success: false, code: 'draft_exists', error: 'draft_exists' }), { status: 409 });
+    const refused = await send('it1/transcript', transcript);
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, 'draft_exists');
+    assert.equal((await send('it1/transcript', { ...transcript, language: '' })).status, 400);
+    assert.equal(((await db.prepare("SELECT COUNT(*) AS n FROM site_settings_log").first<any>())).n, 2);
+  });
+});
