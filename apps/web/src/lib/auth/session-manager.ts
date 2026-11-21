@@ -14,6 +14,7 @@ import type { AccessibleChannel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
+import { isSafeAccountKey, ownAccount } from './own-account';
 import {
   SESSION_COOKIE_NAME,
   deleteSessionCookies,
@@ -418,7 +419,10 @@ export class SessionManager {
       accounts: {},
     };
 
-    const existing = sessionData.accounts[userInfo.id];
+    // The id comes from a verified token; still refuse a key that would write
+    // to Object.prototype instead of the accounts map.
+    if (!isSafeAccountKey(userInfo.id)) throw new Error('Invalid user id');
+    const existing = ownAccount(sessionData.accounts, userInfo.id);
 
     // Check max accounts limit (signing in again to a stored account adds none)
     if (!existing && Object.keys(sessionData.accounts).length >= MAX_ACCOUNTS) {
@@ -464,10 +468,10 @@ export class SessionManager {
     const sessionData = await this.getSessionData();
     if (!sessionData) return;
 
-    const removed = sessionData.accounts[userId];
+    const removed = ownAccount(sessionData.accounts, userId);
     if (removed) await revokeTokensOnSignOut([removed]);
     forgetRotations(userId);
-    delete sessionData.accounts[userId];
+    if (removed) delete sessionData.accounts[userId];
 
     // If removed account was active, switch to another
     if (sessionData.activeUserId === userId) {
@@ -490,12 +494,12 @@ export class SessionManager {
    */
   static async setActiveAccount(userId: string): Promise<void> {
     const sessionData = await this.getSessionData();
-    if (!sessionData || !sessionData.accounts[userId]) {
+    const targetAccount = sessionData ? ownAccount(sessionData.accounts, userId) : null;
+    if (!sessionData || !targetAccount) {
       throw new Error('Account not found');
     }
 
     sessionData.activeUserId = userId;
-    const targetAccount = sessionData.accounts[userId];
 
     // Validate and set active channel
     if (targetAccount.activeChannelId) {
@@ -516,7 +520,7 @@ export class SessionManager {
       sessionData.activeChannelId = mainChannel?.id || null;
     }
 
-    sessionData.accounts[userId].lastActivity = Date.now();
+    targetAccount.lastActivity = Date.now();
 
     await this.setSessionData(sessionData);
 
@@ -691,7 +695,7 @@ export class SessionManager {
     const sessionData = await this.getSessionData();
     if (!sessionData) return null;
 
-    return sessionData.accounts[userId] || null;
+    return ownAccount(sessionData.accounts, userId);
   }
 
   /**
@@ -725,11 +729,10 @@ export class SessionManager {
    */
   static async loadUserChannels(userId: string): Promise<SessionChannel[]> {
     const sessionData = await this.getSessionData();
-    if (!sessionData || !sessionData.accounts[userId]) {
+    const account = sessionData ? ownAccount(sessionData.accounts, userId) : null;
+    if (!sessionData || !account) {
       throw new Error('User session not found');
     }
-
-    const account = sessionData.accounts[userId];
 
     try {
       const live = await this.fetchAccessibleChannels(account);
@@ -766,12 +769,11 @@ export class SessionManager {
    */
   static async loadUserProfile(userId: string): Promise<void> {
     const sessionData = await this.getSessionData();
-    if (!sessionData || !sessionData.accounts[userId]) {
+    const account = sessionData ? ownAccount(sessionData.accounts, userId) : null;
+    if (!sessionData || !account) {
       logger.error('[SessionManager] User session not found for profile load');
       return;
     }
-
-    const account = sessionData.accounts[userId];
 
     try {
       // Import dynamically to avoid circular dependency
@@ -833,7 +835,7 @@ export class SessionManager {
     options: { force?: boolean; staleAccessToken?: string } = {},
   ): Promise<{ result: RefreshAccountResult; account: UserSession | null }> {
     const sessionData = await this.getSessionData();
-    const account = sessionData?.accounts[userId];
+    const account = sessionData ? ownAccount(sessionData.accounts, userId) : null;
     if (!sessionData || !account) return { result: 'missing', account: null };
     if (account.needsSignIn) return { result: 'needs-sign-in', account };
 
@@ -862,7 +864,7 @@ export class SessionManager {
       logger.warn('[SessionManager.refreshAccount] Token refresh failed temporarily; keeping current token', { userId });
     }
 
-    return { result, account: sessionData.accounts[userId] ?? null };
+    return { result, account: ownAccount(sessionData.accounts, userId) };
   }
 
   /**

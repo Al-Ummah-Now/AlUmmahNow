@@ -92,8 +92,10 @@ export function processTemplateVariables(
   const replaceVariables = (text: string | undefined): string => {
     if (!text) return '';
     let result = text;
+    // Plain string replacement: no regex built from the key, and a value with
+    // '$&', '$1' or '$$' (a title, a channel name) is inserted as typed.
     Object.entries(variables).forEach(([key, value]) => {
-      result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      result = result.split(key).join(value);
     });
     return result;
   };

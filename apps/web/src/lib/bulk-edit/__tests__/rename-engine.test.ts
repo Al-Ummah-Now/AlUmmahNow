@@ -251,5 +251,13 @@ describe('empty source values', () => {
     expect(tidyEmptyTokens(`الدرس ١ – ${E}`)).toBe('الدرس ١');
     expect(tidyEmptyTokens('A – – B (x)')).toBe('A – – B (x)');
   });
-});
 
+  it('keeps a hostile subject id as a plain key (prototype pollution)', () => {
+    const row = { id: '__proto__', language: 'en' as const, before: 'a', after: 'b', excluded: false, changed: true, problems: [] };
+    const out = renamedTitles([row, { ...row, id: 'constructor' }]);
+    expect(Object.keys(out).sort()).toEqual(['__proto__', 'constructor']);
+    expect(out['__proto__']).toEqual({ en: 'b' });
+    expect(({} as Record<string, unknown>).en).toBeUndefined();
+    expect(Object.prototype).not.toHaveProperty('en');
+  });
+});

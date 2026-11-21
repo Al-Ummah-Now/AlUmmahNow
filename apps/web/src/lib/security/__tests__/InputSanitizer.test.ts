@@ -53,6 +53,18 @@ describe('sanitizeText', () => {
   it('caps the length', () => {
     expect(sanitizeText('a'.repeat(5000), 100)).toHaveLength(100);
   });
+
+  it('drops a script body whose end tag has spaces or junk before >', () => {
+    expect(sanitizeText('hi<script>steal()</script >there')).toBe('hithere');
+    expect(sanitizeText('hi<script>steal()</script\tfoo="bar">there')).toBe('hithere');
+  });
+
+  it('removes until stable, so a removal never joins a new tag or scheme', () => {
+    const nested = sanitizeText('<scr<script>x</script>ipt>alert(1)</script>');
+    expect(nested).not.toMatch(/<script/i);
+    expect(sanitizeText('jav<b>ascript:alert(1)')).not.toMatch(/javascript\s*:/i);
+    expect(sanitizeText('<b>javascript</b>:alert(1)')).not.toMatch(/javascript\s*:/i);
+  });
 });
 
 describe('escapeHtml / sanitizeUrl', () => {
