@@ -109,9 +109,13 @@ async function expectOneRow(page: Page, strip: string, rowItems: Locator, idOf: 
   return { row, menu };
 }
 
-/** Picks the last entry under More and checks it becomes current and takes a slot in the row */
-async function chooseFromMore(page: Page, strip: string, menu: string[], rowItem: (id: string) => Locator, current: (item: Locator) => Promise<void>, what: string) {
-  const id = menu[menu.length - 1];
+/**
+ * Picks the last entry under More (leaving out `skip`) and checks it becomes current and takes a
+ * slot in the row
+ */
+async function chooseFromMore(page: Page, strip: string, menu: string[], rowItem: (id: string) => Locator, current: (item: Locator) => Promise<void>, what: string, skip: string[] = []) {
+  const id = menu.filter((entry) => !skip.includes(entry)).at(-1);
+  if (!id) return undefined;
   await page.getByTestId(`${strip}-more`).click();
   await page.getByTestId(`${strip}-menu-${id}`).click();
   const item = rowItem(id);
@@ -209,8 +213,8 @@ for (const vp of VIEWPORTS) {
         const studioWhat = `studio tabs ${vp.width}px ${locale}`;
         const studio = await expectOneRow(page, 'studio-tabs-strip', studioTabs, (id) => id.replace(/^studio-tab-/, ''), studioWhat);
         await expect(page.getByTestId('studio-tab-videos')).toHaveAttribute('aria-current', 'page');
-        if (studio.menu.length) {
-          await chooseFromMore(page, 'studio-tabs-strip', studio.menu, (id) => page.getByTestId(`studio-tab-${id}`), (item) => expect(item).toHaveAttribute('aria-current', 'page'), studioWhat);
+        // Posts still opens the channel settings' Community page (lib/studio/nav LEGACY_PAGES), outside Studio
+        if (await chooseFromMore(page, 'studio-tabs-strip', studio.menu, (id) => page.getByTestId(`studio-tab-${id}`), (item) => expect(item).toHaveAttribute('aria-current', 'page'), studioWhat, ['posts'])) {
           await expectOneRow(page, 'studio-tabs-strip', studioTabs, (id) => id.replace(/^studio-tab-/, ''), `${studioWhat}, chosen from More`);
         }
 

@@ -55,7 +55,10 @@ test.describe('operations', () => {
 
   test('OPS-03 tabs and periods are links that keep the other choices', async ({ page }) => {
     await page.goto('/operations?env=qa&range=7d');
-    // One row of tabs (#1669): on a phone Queues may be under "More"
+    // One row of tabs (#1669): on a phone Queues may be under "More". While the row measures its
+    // tabs it is hidden, so wait for it before looking
+    await expect(page.getByTestId('ops-tabs')).toBeVisible();
+    await expect(page.getByTestId('ops-tabs')).not.toHaveAttribute('data-measuring', /.*/);
     if (await page.getByTestId('ops-tab-queue').isVisible()) await page.getByTestId('ops-tab-queue').click();
     else {
       await page.getByTestId('ops-tabs-more').click();
