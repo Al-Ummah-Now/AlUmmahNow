@@ -114,6 +114,12 @@ describe('/api/admin/import', () => {
     assert.equal((await audit()).length, 0);
   });
 
+  it('POST /channels for another owner is allowed to admins, who hold users:manage (as an invite needs)', async () => {
+    const { req, calls } = setup(['Admin']);
+    assert.equal((await req('/api/admin/import/channels', post({ name: 'X', ownerId: OWNER }))).status, 201);
+    assert.equal(calls.length, 1);
+  });
+
   it('validates the new channel before calling api-videos', async () => {
     const { req, calls } = setup(['Admin']);
     assert.equal((await req('/api/admin/import/channels', post({ name: ' ' }))).status, 400);
