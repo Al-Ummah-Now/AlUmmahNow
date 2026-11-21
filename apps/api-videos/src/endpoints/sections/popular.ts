@@ -1,4 +1,4 @@
-import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "../../lib/chanfana-params";
@@ -9,26 +9,11 @@ import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
-import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems, readRail } from "../../lib/ranking/sectionResponse";
+import { railLabelFields, railScope } from "../../lib/ranking/serve";
 
 const VideoResponseSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  channelId: z.string(),
-  channelName: z.string().optional(),
-  channelAvatarUrl: z.string().optional(),
-  dateCreated: z.string(),
-  views: z.number(),
-  likesCount: z.number(),
-  dislikesCount: z.number(),
-  isShort: z.boolean().optional(),
-  commentsCount: z.number(),
-  duration: z.number().optional(),
-  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
-  isPublic: z.boolean().optional(),
+  ...FeedVideoFields,
   engagementRate: z.number().optional(),
 });
 
@@ -41,6 +26,7 @@ const PopularVideosResponseSchema = z.object({
     lastUpdated: z.string(),
     period: z.enum(['all', 'monthly', 'weekly', 'daily']),
     fromIndex: z.boolean(),
+    rail: RailInfoSchema.optional(),
   }),
 });
 
@@ -60,6 +46,7 @@ export class PopularVideosSection extends PublicRoute {
         }).optional(),
         period: z.enum(['all', 'monthly', 'weekly', 'daily']).optional().default('all').describe("Time period for popularity calculation"),
         category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category"),
+        language: z.enum(['ar', 'en']).optional().describe("Viewer's language: its videos rank higher (others stay)"),
         minViews: Num({
           description: "Minimum view count threshold",
           default: 0,
@@ -104,7 +91,23 @@ export class PopularVideosSection extends PublicRoute {
     // Validation stays outside the try: invalid input is a 400 from chanfana
     const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const { limit, cursor, period = 'all', category, minViews = 0 } = data.query;
+      const { limit, cursor, period = 'all', category, minViews = 0, language } = data.query;
+
+      // Ranked rails (wiki E07 "Discovery ranking"): Popular is global (90 days of qualified viewers, relabelled
+      // "featured" while signal is thin); a period asks for that trending window. minViews keeps the old query.
+      if (!minViews) {
+        const rail = period === 'all' ? 'popular' : period === 'daily' ? 'trending:day' : period === 'weekly' ? 'trending:week' : 'trending:month';
+        // Popular has no per-category list: a category's best is its "top" list
+        const ranked = await readRail(c, { rail: category && rail === 'popular' ? 'top' : rail, scope: railScope({ category, language }), limit, cursor });
+        if (ranked) {
+          return c.json({
+            success: true,
+            data: railItems(ranked, (entry) => ({ engagementRate: engagementRateOf(entry.video) })),
+            cursor: ranked.nextCursor,
+            metadata: { totalCount: ranked.meta.items, lastUpdated: ranked.meta.computedAt, period, fromIndex: true, rail: railLabelFields(ranked.meta) },
+          });
+        }
+      }
 
       // Initialize managers
       const videoBucket = c.env.videos;
@@ -260,26 +263,5 @@ function engagementRateOf(video: VideoObject): number {
  * Transform video object for response
  */
 function transformVideoForResponse(video: VideoObject, engagementRate?: number) {
-  return {
-    id: video.id,
-    title: video.title || '',
-    description: video.description,
-    thumbnailUrl: video.thumbnailUrl,
-    videoUrl: video.videoUrl,
-    channelId: video.channelId || '',
-    channelName: video.channelName,
-    channelNameLocalized: video.channelNameLocalized,
-    channelAvatarUrl: video.channelAvatarUrl,
-    dateCreated: video.dateCreated || new Date().toISOString(),
-    views: video.views || 0,
-    likesCount: video.likesCount || 0,
-    dislikesCount: PUBLIC_DISLIKES_COUNT,
-    // Shared rule (search payloads carry it; older entries are computed)
-    isShort: isShortOrFlag(video),
-    commentsCount: video.commentsCount || 0,
-    duration: video.duration,
-    category: video.category,
-    isPublic: video.isPublic !== false,
-    engagementRate: engagementRate || 0,
-  };
+  return { ...feedItem(video as never), engagementRate: engagementRate || 0 };
 }

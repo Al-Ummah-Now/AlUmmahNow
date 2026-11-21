@@ -600,6 +600,12 @@ export const ADMIN_JOB_KINDS = [
   'billing.cancel',
   'billing.refund',
   'billing.reconcile',
+  /**
+   * Discovery ranking (wiki E07; api-videos lib/ranking/job.ts): rank every listed video and
+   * rewrite the rails that changed. Queued hourly by the cron and by an admin's "Run now".
+   * Target 'video' / 'discovery-rails'.
+   */
+  'discovery.rank',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -649,6 +655,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'billing.cancel': ['billing:manage'],
   'billing.refund': ['billing:refund'],
   'billing.reconcile': ['billing:manage'],
+  'discovery.rank': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

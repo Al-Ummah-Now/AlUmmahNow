@@ -1,4 +1,4 @@
-import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "../../lib/chanfana-params";
@@ -9,26 +9,11 @@ import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
-import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems, readRail } from "../../lib/ranking/sectionResponse";
+import { railLabelFields, railScope } from "../../lib/ranking/serve";
 
 const VideoResponseSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  channelId: z.string(),
-  channelName: z.string().optional(),
-  channelAvatarUrl: z.string().optional(),
-  dateCreated: z.string(),
-  views: z.number(),
-  likesCount: z.number(),
-  dislikesCount: z.number(),
-  isShort: z.boolean().optional(),
-  commentsCount: z.number(),
-  duration: z.number().optional(),
-  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
-  isPublic: z.boolean().optional(),
+  ...FeedVideoFields,
 });
 
 const RecentVideosResponseSchema = z.object({
@@ -39,6 +24,7 @@ const RecentVideosResponseSchema = z.object({
     totalCount: z.number().optional(),
     lastUpdated: z.string(),
     fromIndex: z.boolean(),
+    rail: RailInfoSchema.optional(),
   }),
 });
 
@@ -102,6 +88,20 @@ export class RecentVideosSection extends PublicRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     try {
       const { limit, cursor, channelId, category, excludeChannels } = data.query;
+
+      // Ranked rails (wiki E07 "Discovery ranking"): new arrivals (an import counts from its arrival, not its old
+      // publish date), mixed across channels. A channel's own list or an exclusion list keeps the index query.
+      if (!channelId && !(excludeChannels && excludeChannels.length)) {
+        const ranked = await readRail(c, { rail: 'new', scope: railScope({ category }), limit, cursor });
+        if (ranked) {
+          return c.json({
+            success: true,
+            data: railItems(ranked),
+            cursor: ranked.nextCursor,
+            metadata: { totalCount: ranked.meta.items, lastUpdated: ranked.meta.computedAt, fromIndex: true, rail: railLabelFields(ranked.meta) },
+          });
+        }
+      }
 
       // Initialize managers
       const videoBucket = c.env.videos;
@@ -229,25 +229,5 @@ export class RecentVideosSection extends PublicRoute {
  * Transform video object for response
  */
 function transformVideoForResponse(video: VideoObject) {
-  return {
-    id: video.id,
-    title: video.title || '',
-    description: video.description,
-    thumbnailUrl: video.thumbnailUrl,
-    videoUrl: video.videoUrl,
-    channelId: video.channelId || '',
-    channelName: video.channelName,
-    channelNameLocalized: video.channelNameLocalized,
-    channelAvatarUrl: video.channelAvatarUrl,
-    dateCreated: video.dateCreated || new Date().toISOString(),
-    views: video.views || 0,
-    likesCount: video.likesCount || 0,
-    dislikesCount: PUBLIC_DISLIKES_COUNT,
-    // Shared rule (search payloads carry it; older entries are computed)
-    isShort: isShortOrFlag(video),
-    commentsCount: video.commentsCount || 0,
-    duration: video.duration,
-    category: video.category,
-    isPublic: video.isPublic !== false,
-  };
+  return feedItem(video as never);
 }

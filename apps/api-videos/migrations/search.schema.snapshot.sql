@@ -47,6 +47,7 @@
 --   apps/api-videos/migrations/search/0065_default_tier.sql
 --   apps/api-videos/migrations/search/0066_tier_hidden.sql
 --   apps/api-videos/migrations/search/0067_remove_paddle.sql
+--   apps/api-videos/migrations/search/0068_discovery_ranking.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -84,6 +85,11 @@ CREATE TABLE creator_tier_changes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, r
 CREATE TABLE creator_tier_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0, import_counts_limits INTEGER NOT NULL DEFAULT 1, audio_tracks_per_video INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, live_hours_month INTEGER NOT NULL DEFAULT 20, live_max_concurrent INTEGER NOT NULL DEFAULT 1, live_max_stream_minutes INTEGER NOT NULL DEFAULT 240, uploads INTEGER NOT NULL DEFAULT 1, channels INTEGER NOT NULL DEFAULT 1, requestable INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 50, name_ar TEXT, description TEXT, description_ar TEXT, hidden INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
+CREATE TABLE discovery_exclusions (kind TEXT NOT NULL CHECK (kind IN ('video', 'channel')), target_id TEXT NOT NULL, reason TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
+CREATE TABLE discovery_home_rails (rail TEXT PRIMARY KEY, position INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, updated_by TEXT, updated_at INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE discovery_pins (id TEXT PRIMARY KEY, rail TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('video', 'channel')), target_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 1, starts_at INTEGER, ends_at INTEGER, note TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL, UNIQUE (rail, kind, target_id));
+CREATE TABLE discovery_rail_items (rail TEXT NOT NULL, scope TEXT NOT NULL, position INTEGER NOT NULL, video_id TEXT NOT NULL, score REAL NOT NULL DEFAULT 0, reason TEXT NOT NULL, PRIMARY KEY (rail, scope, position)) WITHOUT ROWID;
+CREATE TABLE discovery_rails (rail TEXT NOT NULL, scope TEXT NOT NULL, mode TEXT NOT NULL, label TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, signal_items INTEGER NOT NULL DEFAULT 0, hash TEXT NOT NULL, computed_at INTEGER NOT NULL, PRIMARY KEY (rail, scope)) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
@@ -216,6 +222,7 @@ CREATE INDEX idx_channel_audit_target ON channel_audit (target_user_id);
 CREATE INDEX idx_channel_blocks_user ON channel_blocks (user_id);
 CREATE INDEX idx_channel_comments_author ON channel_comments (author_user_id);
 CREATE INDEX idx_channel_comments_list ON channel_comments (channel_id, status, created_at DESC);
+CREATE INDEX idx_channel_comments_recent ON channel_comments (target_kind, created_at);
 CREATE INDEX idx_channel_comments_removed ON channel_comments (status, removed_at);
 CREATE INDEX idx_channel_comments_target ON channel_comments (target_kind, target_id);
 CREATE INDEX idx_channel_invites_channel ON channel_invites (channel_id, status, created_at);
@@ -238,6 +245,7 @@ CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);

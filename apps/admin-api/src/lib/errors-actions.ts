@@ -53,9 +53,10 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // An audio track that could not be prepared, or a multi-audio package that could not be written,
   // runs again (api-videos lib/audio-tracks/service.ts, wiki AUN-MULTI-AUDIO). A payments job that
   // gave up runs again (api-videos lib/billing/service.ts; Retry also needs the job's own billing
-  // permission, endpoints/errors/ErrorsAdmin.ts).
+  // permission, endpoints/errors/ErrorsAdmin.ts). A discovery ranking run that gave up runs now
+  // (api-videos lib/ranking/job.ts, wiki E07 Discovery ranking).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/discovery/rank'] },
 };
 
 /**

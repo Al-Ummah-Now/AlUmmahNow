@@ -24,6 +24,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'billing.cancel': 'adminJobs.kinds.billingCancel',
   'billing.refund': 'adminJobs.kinds.billingRefund',
   'billing.reconcile': 'adminJobs.kinds.billingReconcile',
+  'discovery.rank': 'adminJobs.kinds.discoveryRank',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

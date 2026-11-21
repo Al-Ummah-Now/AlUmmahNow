@@ -959,6 +959,7 @@ const ar: Messages = {
       billingCancel: 'إلغاء اشتراك',
       billingRefund: 'استرداد دفعة',
       billingReconcile: 'مطابقة الاشتراكات مع المزوّد',
+      discoveryRank: 'ترتيب المرئيات للاستكشاف',
     },
     statuses: {
       queued: 'في الانتظار',

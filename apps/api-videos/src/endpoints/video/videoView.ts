@@ -11,6 +11,7 @@ import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import { normalizeEmbedOrigin } from "../../lib/embed-origin";
 import { countView } from "../../lib/view-counter";
 import { logger } from "../../lib/logger";
+import { rankExclusion, viewerKey } from "../../lib/ranking/viewer";
 
 export class VideoView extends OptionalAuthRoute {
 	schema = {
@@ -150,6 +151,28 @@ export class VideoView extends OptionalAuthRoute {
 		}
 
 		// Send detailed analytics event
+		// May this view count toward Trending / Popular (wiki E07 "Discovery ranking")? Never the owner,
+		// staff, test accounts, crawlers or autoplay; the processor counts a viewer once per video per day.
+		const origin = viewOrigin(c.req.raw, viewData.source === "embed");
+		const auth = this.getAuth(c);
+		const excluded = rankExclusion({
+			userId,
+			roles: auth?.payload?.roles,
+			email: auth?.email ?? auth?.payload?.email,
+			videoOwnerId: video.userId,
+			autoplay: viewData.autoplay === true,
+			device: origin.originDevice,
+		});
+		let rankViewer: string | null = null;
+		if (!excluded) {
+			try {
+				rankViewer = await viewerKey(c.env.SEARCH_DB as never, c.req.raw, userId);
+			} catch (error) {
+				// The view still counts everywhere else; only its ranking signal is lost
+				logger.warn('[views] ranking viewer key unavailable', { videoId: id, error: String(error) });
+			}
+		}
+
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.VideoView, {
 			videoId: id,
@@ -176,7 +199,8 @@ export class VideoView extends OptionalAuthRoute {
 			deviceType: viewData.deviceType,
 			location: viewData.location,
 			// Request origin (request-origin.ts): bounded dimensions only, no UA, IP or URL
-			...viewOrigin(c.req.raw, viewData.source === "embed"),
+			...origin,
+			...(rankViewer ? { rankViewer } : {}),
 			timestamp: new Date().toISOString(),
 			sessionId: crypto.randomUUID(), // Generate unique session ID for this view
 		});

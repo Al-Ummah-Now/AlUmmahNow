@@ -18,6 +18,9 @@ import { initialSuggestionsFromIndex, suggestFromIndex, type IndexSuggestion } f
 import { isWatchHistoryPaused } from "../../lib/watch-history";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems } from "../../lib/ranking/sectionResponse";
+import { railLabelFields, railPage, railScope } from "../../lib/ranking/serve";
+import { sectionFromIndex } from "../../lib/sections/sectionIndex";
 import {
   RecentHistory,
   hydrateRanked,
@@ -46,6 +49,12 @@ const SuggestionSchema = z.object({
 const SUGGEST_MAX_QUERY = 100;
 /** Deepest page a picker can scroll to (OFFSET reads the skipped rows; past this, type to search). */
 const INITIAL_MAX_OFFSET = 500;
+
+/** A trending item: the shared feed card (localized titles, channel names, upload status) and its rank. */
+const TrendingVideoSchema = z.object({
+  ...FeedVideoFields,
+  trendingMetadata: z.object({ rank: z.number(), score: z.number(), viewsVelocity: z.number() }).optional(),
+});
 
 const DiscoveryVideoSchema = z.object({
   id: z.string(),
@@ -189,26 +198,30 @@ export class TrendingGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Trending videos",
-    description: "🔓 Public. Ranks public videos by engagement inside the period (likes and comments weighted by how recent they are) plus view velocity for videos published within the period.",
+    description: "🔓 Public. Discovery ranking (wiki E07): the period's trending list over the whole library, from unique qualified viewers, likes and comments blended into a quality and freshness prior. While too few videos have real signal the list is the newest arrivals instead and `rail.label` says so (new_today, new_this_week, new_this_month, latest).",
     request: {
       query: z.object({
-        period: z.enum(["hour", "day", "week", "month"]).optional().default("day"),
+        period: z.enum(["hour", "day", "week", "month"]).optional().default("day").describe("hour is served as day"),
         category: Str({ description: "Optional category filter" }).optional(),
-        language: Str({ description: "Optional content language filter (e.g. en, ar)" }).regex(/^[a-z]{2,3}$/).optional(),
+        language: Str({ description: "Viewer's language (en, ar): its videos rank higher, others stay" }).regex(/^[a-z]{2,3}$/).optional(),
         limit: Num({ description: "Maximum videos (1-50)", default: 20 }).optional(),
+        cursor: Str({ description: "Cursor from the previous page" }).optional(),
       }),
     },
     responses: {
       "200": {
-        description: "Trending videos (empty when nothing had activity in the period)",
+        description: "Trending videos",
         content: {
           "application/json": {
             schema: z.object({
               success: z.boolean(),
               period: z.string(),
               category: z.string().optional(),
-              data: z.array(DiscoveryVideoSchema),
-              videos: z.array(DiscoveryVideoSchema),
+              language: z.string().optional(),
+              data: z.array(TrendingVideoSchema),
+              videos: z.array(TrendingVideoSchema),
+              cursor: z.string().optional(),
+              rail: RailInfoSchema.optional(),
             }),
           },
         },
@@ -221,33 +234,34 @@ export class TrendingGet extends OptionalAuthRoute {
     const { query } = await this.getValidatedData<typeof this.schema>();
     const period = (query.period || "day") as TrendingPeriod;
     const limit = clampLimit(query.limit, 20, 50);
+    const window = period === "week" ? "week" : period === "month" ? "month" : "day";
 
     try {
-      // Ranking reads every stored video (seconds on a large catalogue), and the
-      // web app calls this from the server, past the browser cache: keep the
-      // answer at the edge for as long as browsers may.
-      const cacheUrl = edgeCacheUrl(c.req.url, `trending/${encodeURIComponent(period)}/${encodeURIComponent(query.category || "")}/${encodeURIComponent(query.language || "")}/${limit}`);
+      // The web app calls this from the server, past the browser cache: keep the answer at the edge briefly
+      const cacheUrl = edgeCacheUrl(c.req.url, `trending/v2/${encodeURIComponent(window)}/${encodeURIComponent(query.category || "")}/${encodeURIComponent(query.language || "")}/${limit}/${encodeURIComponent(query.cursor || "")}`);
       const cached = await readEdgeCache<TrendingBody>(cacheUrl);
       if (cached) {
         c.header("Cache-Control", `public, max-age=${TRENDING_TTL}`);
         c.header("X-Trending-Cache", "HIT");
         return c.json(cached);
       }
-      const videos = await loadDiscoverableVideos(c.env.videos);
-      const ranked = rankTrending(videos, { now: Date.now(), period, category: query.category, language: query.language, limit });
-      const channels = await loadChannelMap(c.env.channels, ranked.map(r => r.video.channelId || ""));
-      const data = ranked.map(({ video, trending, rank }) => ({
-        ...toVideoResponse(video, channels),
-        trendingMetadata: { rank, score: trending.score, viewsVelocity: trending.viewsVelocity },
-      }));
-      logger.debug("[Trending] Served trending videos", { period, category: query.category, language: query.language, count: data.length });
-      const body: TrendingBody = { success: true, period, category: query.category, language: query.language, data, videos: data };
+      let body: TrendingBody;
+      const ranked = await railPage(c.env as never, { rail: `trending:${window}`, scope: railScope({ category: query.category, language: query.language }), limit, cursor: query.cursor });
+      if (ranked) {
+        const data = railItems(ranked, (entry) => ({ trendingMetadata: { rank: entry.position, score: entry.score, viewsVelocity: 0 } }));
+        body = { success: true, period, category: query.category, language: query.language, data, videos: data, cursor: ranked.nextCursor, rail: railLabelFields(ranked.meta) };
+      } else {
+        // Before the first ranking run: the search index's trending query (never a bucket scan, #990)
+        const page = await sectionFromIndex(c.env, { sort: "trending", limit, offset: 0, category: query.category });
+        const data = (page?.videos ?? []).map((video, i) => ({ ...feedItem(video as never), trendingMetadata: { rank: i + 1, score: page?.trending?.get(video.id)?.score ?? 0, viewsVelocity: page?.trending?.get(video.id)?.viewsVelocity ?? 0 } }));
+        body = { success: true, period, category: query.category, language: query.language, data, videos: data };
+      }
       writeEdgeCache(cacheUrl, body, TRENDING_TTL, waitUntilOf(c as never));
       c.header("Cache-Control", `public, max-age=${TRENDING_TTL}`);
       c.header("X-Trending-Cache", "MISS");
       return c.json(body);
     } catch (error) {
-      logger.error("[Trending] Failed to rank trending videos", { error, period });
+      logger.error("[Trending] Failed to load trending videos", { error, period });
       return c.json({ success: false, error: "Failed to load trending videos" }, 500);
     }
   }
@@ -263,6 +277,8 @@ interface TrendingBody {
   language?: string;
   data: unknown[];
   videos: unknown[];
+  cursor?: string;
+  rail?: ReturnType<typeof railLabelFields>;
 }
 
 /** Seconds a recommendations result is reused (a viewer's own entry is shorter-lived). */

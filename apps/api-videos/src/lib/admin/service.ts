@@ -61,6 +61,7 @@ import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRes
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
+import { runDiscoveryRankJob, type DiscoveryEnv } from '../ranking/job';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import {
 	channelVideoStats,
@@ -1715,5 +1716,7 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'billing.cancel': (env, job) => runCancelJob(env as never, job),
 	'billing.refund': (env, job) => runRefundJob(env as never, job),
 	'billing.reconcile': (env, job) => runReconcileJob(env as never, job),
+	// Discovery ranking (lib/ranking/job.ts): hourly from the cron, or "Run now" in the videos admin
+	'discovery.rank': (env, job) => runDiscoveryRankJob(env as DiscoveryEnv, job),
 };
 

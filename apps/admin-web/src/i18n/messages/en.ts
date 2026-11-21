@@ -960,6 +960,7 @@ const en = {
       billingCancel: 'Cancel a subscription',
       billingRefund: 'Refund a payment',
       billingReconcile: 'Check subscriptions with the provider',
+      discoveryRank: 'Rank videos for discovery',
     },
     statuses: {
       queued: 'Queued',

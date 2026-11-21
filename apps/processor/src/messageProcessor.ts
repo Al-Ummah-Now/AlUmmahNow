@@ -9,6 +9,7 @@ import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/
 import { handleCategoryRelabel } from './handlers/category-relabel';
 import { recordRetentionRollup, recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
+import { RankViewerBatch, rankViewerRow } from './lib/discovery-viewers';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
@@ -57,6 +58,8 @@ export class MessageProcessor {
   private readonly counters = new CounterBatch((inc, reason) =>
     this.logger.error('Analytics increment refused', { reason, entityType: inc.entityType, entityId: inc.entityId, metric: inc.metric, day: inc.day })
   );
+  /** Unique qualified viewers for discovery ranking (lib/discovery-viewers.ts), written with the counters */
+  private readonly rankViewers = new RankViewerBatch();
   private readonly batchCounters: boolean;
 
   constructor(logger: Logger, pushProviders?: PushProviders, opts: { batchCounters?: boolean } = {}) {
@@ -71,6 +74,7 @@ export class MessageProcessor {
    * through the queue (that would repeat the message's other effects).
    */
   async flushCounters(env: QueueEnvironment): Promise<void> {
+    await this.flushRankViewers(env);
     if (this.counters.size === 0) return;
     if (!env.NOTIFICATIONS_DB) {
       this.logger.warn('NOTIFICATIONS_DB not bound; analytics increments dropped', { rows: this.counters.size });
@@ -83,6 +87,21 @@ export class MessageProcessor {
       this.logger.debug('Analytics counters written', { rows });
     } catch (error) {
       this.logger.error('Failed to write analytics counters', { rows, error });
+    }
+  }
+
+  /** Ranking viewers are derived data too: a failure is logged, never retried through the queue. */
+  private async flushRankViewers(env: QueueEnvironment): Promise<void> {
+    if (this.rankViewers.size === 0) return;
+    if (!env.NOTIFICATIONS_DB) {
+      this.rankViewers.clear();
+      return;
+    }
+    const rows = this.rankViewers.size;
+    try {
+      await this.rankViewers.flush(env.NOTIFICATIONS_DB);
+    } catch (error) {
+      this.logger.error('Failed to write discovery viewers', { rows, error });
     }
   }
 
@@ -486,6 +505,7 @@ export class MessageProcessor {
     if (recordViewRollup(this.counters, message.payload, message.timestamp)) {
       this.logger.debug('View rollup queued', { videoId: payload.videoId });
     }
+    this.rankViewers.add(rankViewerRow(message.payload, message.timestamp));
   }
 
   private async processVideoWatchTimeMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
