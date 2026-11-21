@@ -216,6 +216,14 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
+  // Images may be cached (the local stack sends no-store): the account menu remounts when you switch
+  // who you act as, and its app icons were refetched, blank for a frame of the clip (AUDIT-2
+  // 2026-11-21). Registered first, so the thumbnail route below still answers /thumb/
+  await context.route('**/*', async (route) => {
+    if (route.request().resourceType() !== 'image') return route.fallback();
+    const res = await route.fetch();
+    return route.fulfill({ response: res, headers: { ...res.headers(), 'cache-control': 'public, max-age=3600' } });
+  });
   await context.route((url) => url.pathname.startsWith('/thumb/'), serveThumb);
   // No view beacons: each capture visit counted as a view, so the watch page read "No views" in one
   // picture and "1 view" in its Light/Dark twin (r5 check)
