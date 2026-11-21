@@ -260,6 +260,47 @@ async function settle(page: Page, path: string, lang: Lang): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+/**
+ * Opens the menu with blank page under its foot: the page is scrolled (before opening, as an open
+ * menu locks it) so no line, picture or control lies from 24 px above the menu's bottom edge to
+ * 20 px below it, and no line sits half under the header. The picture then gets room under the menu
+ * and no text shows through its glass by its last row (AUDIT-2 2026-11-21: «المشاهدة لاحقًا» under
+ * «إنشاء قناة», the menu flush with the picture's edge)
+ */
+async function openMenuOverBlank(page: Page, view: 'main' | 'channels'): Promise<Locator> {
+  const first = await openMenu(page, view);
+  const box = (await first.boundingBox())!;
+  const head = (await header(page).boundingBox())?.height ?? 0;
+  await closeMenu(page);
+  const offset = await page.evaluate(({ foot, head, l, r: right }) => {
+    const spans: Array<{ t: number; b: number; l: number; r: number }> = [];
+    const skip = (el: Element) => !!el.closest('header, [data-testid="nav-menu"]') || ['fixed', 'sticky'].includes(getComputedStyle(el).position);
+    const add = (r: DOMRect) => { if (r.width > 0 && r.height > 0) spans.push({ t: r.top + scrollY, b: r.bottom + scrollY, l: r.left, r: r.right }); };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const el = n.parentElement;
+      if (!n.textContent?.trim() || !el || skip(el)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) add(r);
+    }
+    document.querySelectorAll('img, svg, button, input, a[href]').forEach((el) => { if (!skip(el)) add(el.getBoundingClientRect()); });
+    // Under the menu (and 24 px either side) only: the desktop rail's labels are beside it, not under it
+    const under = spans.filter((sp) => sp.r > l - 24 && sp.l < right + 24);
+    const max = Math.min(600, document.documentElement.scrollHeight - innerHeight);
+    for (let s = 0; s <= max; s++) {
+      const lo = foot + s - 24;
+      const hi = foot + s + 20;
+      if (under.some((sp) => sp.b > lo && sp.t < hi)) continue;
+      if (spans.some((sp) => sp.t < s + head && sp.b > s + head)) continue;
+      return s;
+    }
+    return 0;
+  }, { foot: box.y + box.height, head, l: box.x, r: box.x + box.width });
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), offset);
+  return openMenu(page, view, true);
+}
+
 async function closeMenu(page: Page): Promise<void> {
   const menu = page.getByTestId('nav-menu');
   await expect(async () => {
@@ -268,12 +309,14 @@ async function closeMenu(page: Page): Promise<void> {
   }).toPass({ timeout: 15_000 });
 }
 
-async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise<Locator> {
+async function openMenu(page: Page, view: 'main' | 'channels' = 'main', keepScroll = false): Promise<Locator> {
   const menu = page.getByTestId('nav-menu');
   // The page at its top first: an open menu locks the page's scroll, so a page left part-scrolled (a
   // title half under the header) could not be fixed afterwards
-  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  if (!keepScroll) {
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  }
   await expect(async () => {
     if (!(await menu.isVisible())) await page.getByTestId('nav-menu-trigger').click();
     await expect(menu).toBeVisible({ timeout: 2000 });
@@ -1434,13 +1477,11 @@ const SCENES: Scene[] = [
     // never a heading row by itself (owner review 2026-11-16)
     id: 'identity-switch',
     keepHeader: true,
-    run: async (page, lang, device) => {
+    run: async (page, lang) => {
       // Over the library page, like identity-menu: plain rows behind the menu (audit r4/r5: the
-      // channel header, share button and tab strip were cut under it). On a phone the menu spans the
-      // width and Library's "Watch later" ran under its foot: Playlists has nothing there, so the
-      // picture gets room under the menu and no text shows through its glass (AUDIT-2 2026-11-21)
-      await settle(page, device === 'phone' ? '/library/playlists' : '/library', lang);
-      const menu = await openMenu(page, 'channels');
+      // channel header, share button and tab strip were cut under it), with blank page under its foot
+      await settle(page, '/library', lang);
+      const menu = await openMenuOverBlank(page, 'channels');
       return [[menu.getByTestId('nav-channel-option-none'), menu.getByTestId('nav-channel-option').first()], [header(page), menu]];
     },
   },
