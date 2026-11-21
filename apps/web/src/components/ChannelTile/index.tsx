@@ -57,15 +57,15 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
       <div className="min-w-0 w-full">
         <h3 className="flex items-center justify-center gap-1 font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-          <span className="truncate">{name}</span>
+          <span className="min-w-0 line-clamp-2 break-words" data-testid="channel-tile-name">{name}</span>
           {channel.isVerified && (
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
         </h3>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-          <span>{subscribers}</span>
-          <span aria-hidden="true" className="mx-1">•</span>
-          <span>{videos}</span>
+        {/* Each count stays with its noun; the line breaks between the two counts, never inside one */}
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex flex-wrap justify-center gap-x-1" data-testid="channel-tile-counts">
+          <span className="whitespace-nowrap">{subscribers}</span>
+          <span className="whitespace-nowrap"><span aria-hidden="true">•</span> {videos}</span>
         </p>
         {variant === 'card' && description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">{description}</p>
