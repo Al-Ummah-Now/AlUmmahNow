@@ -42,6 +42,7 @@ import {
 import type { AudioTrackView } from '@al-ummah/shared-types';
 import { audioTrackLabel, matchTracks, writeAudioPreference, type PlayerAudioTrack } from '@/lib/video/audio-tracks';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Levels extends ArrayLike<QualityLevelLike> {
   selectedIndex: number;
   on(e: string, f: () => void): void;
@@ -329,7 +330,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
             <span className="vjs-fanous-mi-icon vjs-fanous-mi-check" aria-hidden="true">{o.id === current && <Check />}</span>
             <span className="vjs-fanous-mi-label">
               {o.lang ? <bdi lang={o.lang} dir="auto">{o.label}</bdi> : o.label}
-              {o.suffix && ` · ${o.suffix}`}
+              {o.suffix && `${metaSeparator(lang, '·')}${o.suffix}`}
             </span>
           </button>
         ))}

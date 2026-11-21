@@ -35,6 +35,7 @@ import { channelLabel } from '@/lib/channel-name';
 import { LEADING_CARDS } from '@/components/VideoThumbnail/leading';
 import { mergeFresh } from '@/lib/ssr/merge-fresh';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 interface PlaylistViewProps {
   playlistId: string;
   /**
@@ -214,7 +215,7 @@ export default function PlaylistView({ playlistId, initialPlaylist, initialParti
               )}
               <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                 <span>{formatVideoCount(videos.length, lang)}</span>
-                <span aria-hidden="true">•</span>
+                <MetaSep lang={lang} gap="0.5rem" />
                 <span className="inline-flex items-center gap-1">
                   {playlist.isPublic === false && <Lock className="w-3.5 h-3.5" />}
                   {playlist.isPublic !== false

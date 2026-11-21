@@ -201,6 +201,6 @@ describe('BatchUploadQueue processing status', () => {
   it('shows Arabic row statuses', () => {
     mockLang = 'ar';
     renderQueue([queueItem('completed', 1)], {}, false);
-    expect(screen.getByTestId('batch-file-status')).toHaveTextContent('تم الرفع · قيد المعالجة');
+    expect(screen.getByTestId('batch-file-status')).toHaveTextContent('تم الرفع، قيد المعالجة');
   });
 });

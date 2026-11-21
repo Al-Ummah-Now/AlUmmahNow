@@ -15,6 +15,7 @@ import { socialClient } from '@/lib/studio/social-client';
 import { CopyButton, Notice, Pill, Section, fill } from './shared';
 import { RelativeDate } from '@/components/RelativeDate';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 /** Event labels are keyed with `_` for `.` (translation paths are dot-joined). */
 const eventName = (names: Record<string, string>, event: string) => names[event.replace('.', '_')] ?? event;
 
@@ -168,7 +169,7 @@ export function SocialWebhooks({ channelId, locale, webhooks, limit, onWebhooks 
             <div className="flex flex-wrap items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-sm" dir="ltr" title={hook.url}>{hook.url}</p>
-                <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]">{hook.events.map((e) => eventName(w.eventNames, e)).join(' · ')}</p>
+                <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]">{hook.events.map((e) => eventName(w.eventNames, e)).join(metaSeparator(locale, '·'))}</p>
                 {hook.lastDeliveryAt ? (
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--fanous-color-text-secondary)]">
                     <span>{w.lastStatus}:</span>

@@ -37,6 +37,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { searchVideoToVideoObject } from '@/lib/search/mappers';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 
+import { joinMeta } from '@/lib/i18n/meta-separator';
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   quran_recitation: BookOpenText,
   quran_tafsir: BookOpen,
@@ -234,7 +235,7 @@ export function SeasonalSection({ rail }: { rail: SeasonalRail }) {
   if (rail.videos.length === 0) return null;
   return (
     <section aria-labelledby={`explore-seasonal-${rail.id}`} data-testid="explore-seasonal" data-rail-id={rail.id}>
-      <SectionHeader id={`explore-seasonal-${rail.id}`} icon={Moon} title={title} subtitle={[subtitle, until].filter(Boolean).join(' · ')} />
+      <SectionHeader id={`explore-seasonal-${rail.id}`} icon={Moon} title={title} subtitle={joinMeta(lang, [subtitle, until], '·')} />
       <Rail testId="explore-seasonal-list">
         {rail.videos.map(video => <RailItem key={video.id}><VideoCard {...searchVideoToVideoObject(video)} /></RailItem>)}
       </Rail>

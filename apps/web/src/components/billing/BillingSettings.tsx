@@ -27,6 +27,7 @@ import { formatBillingAmount } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; billing: MyBilling };
 
 /** After a cancel the job runs in the queue: look again a few times so the row updates on its own. */
@@ -197,7 +198,7 @@ function SubscriptionRow({ sub, name, lang, copy, date, onCancel }: { sub: Billi
         </div>
         <p className="bil-sub-meta">
           {comp ? copy.settings.complimentary : amount}
-          {!comp && <span className="bil-dot" aria-hidden="true">·</span>}
+          {!comp && <MetaSep lang={lang} en="·" gap="6px" className="bil-dot" />}
           {!comp && <span>{fillBillingCopy(copy.settings.via, { provider: copy.providers[sub.provider as keyof BillingCopy["providers"]] ?? sub.provider })}</span>}
         </p>
         {dateLine && <p className="bil-sub-date" data-testid="billing-subscription-date">{dateLine}</p>}

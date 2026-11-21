@@ -164,8 +164,9 @@ There is one sign-out entry, inside the account menu. The header has no separate
   and open use `--fanous-c-nav-hover`. Focus is a 2px `--fanous-c-nav-active-text` ring.
 - Below 768px the name is visually hidden but stays the accessible name. The button shows the
   avatar and the caret (below 400px the avatar alone).
-- The name is at most 12rem, with an ellipsis, so a long name (or the email, when there is no name)
-  never pushes the header apart.
+- The name has one width, 9rem, with an ellipsis: switching who you act as ("Community Corner" and
+  "Amina Yusuf") never moves the header's other controls, and a long name never pushes the header
+  apart (AUDIT-2 2026-11-21: Upload, the bell, language and theme moved 47px on a switch).
 
 ## Account menu
 

@@ -10,6 +10,7 @@ import { VideoCardMenu } from "@/components/library/VideoCardMenu";
 import { channelLabel } from '@/lib/channel-name';
 import { VideoDate, ViewCount } from '@/components/VideoDate';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 /** `imageLoading`: `eager` or `high` for the cards at the top of a list (VideoThumbnail) */
 export type VideoCardProps = VideoObject & { imageLoading?: ImageLoading };
 
@@ -40,7 +41,7 @@ const VideoCardRTL: React.FC<VideoCardProps> = ({ imageLoading, ...video }) => {
             </h3>
             <p className="text-sm truncate">{channelLabel(video, locale)}</p>
             <p className="text-sm">
-              <ViewCount count={video.views} lang={locale} /> • <VideoDate video={video} lang={locale} />
+              <ViewCount count={video.views} lang={locale} />{metaSeparator(locale)}<VideoDate video={video} lang={locale} />
             </p>
           </div>
         </Link>

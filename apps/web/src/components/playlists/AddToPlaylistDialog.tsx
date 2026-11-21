@@ -36,6 +36,7 @@ import { counted, fill } from './text';
 import { FAINT, MUTED, NOTICE, TEXT } from './styles';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 
+import { joinMeta } from '@/lib/i18n/meta-separator';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -169,7 +170,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
 
   const countOf = (playlist: PlaylistWithVideos) => counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
   const subtitleOf = (playlist: PlaylistWithVideos) =>
-    `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${formatVideoCount(countOf(playlist), lang)}`;
+    joinMeta(lang, [playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel, formatVideoCount(countOf(playlist), lang)], '·');
   const toOption = useCallback((playlist: PlaylistWithVideos): AutocompleteOption => ({
     id: playlist.id,
     label: playlistName(playlist, lang),

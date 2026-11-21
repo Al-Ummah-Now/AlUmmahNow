@@ -91,7 +91,7 @@ export const UPLOAD_STATUS_AR: UploadStatusTranslations = {
   viewVideo: 'مشاهدة المرئي',
   editVideo: 'تعديل المرئي',
   uploadAnother: 'رفع مرئي آخر',
-  row: { processing: 'تم الرفع · قيد المعالجة', ready: 'جاهز', failed: 'تعذّرت المعالجة' },
+  row: { processing: 'تم الرفع، قيد المعالجة', ready: 'جاهز', failed: 'تعذّرت المعالجة' },
   batchKeepOpen:
     'أبقِ هذه الصفحة مفتوحة حتى تنتهي جميع عمليات الرفع. تستمر المعالجة لدينا بعد ذلك، وسنُعلمك حين يصبح كل مرئي جاهزًا.',
   batchProcessing: 'انتهت جميع عمليات الرفع. نعالج المرئيات الآن وسنُعلمك حين يصبح كل منها جاهزًا.',

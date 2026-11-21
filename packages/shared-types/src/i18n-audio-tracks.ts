@@ -149,7 +149,7 @@ export const AUDIO_TRACKS_EN: AudioTracksTranslations = {
 export const AUDIO_TRACKS_AR: AudioTracksTranslations = {
   title: 'المسارات الصوتية',
   hint: 'أضف دبلجة أو تعليقًا أو وصفًا صوتيًا. يختار المشاهدون المسار من إعدادات المشغل.',
-  used: 'المسموح: {allowedTracks} · المستخدم: {used}',
+  used: 'المسموح: {allowedTracks}، المستخدم: {used}',
   usedUnlimited: 'أُضيف {used} من المسارات الصوتية',
   add: 'إضافة مسار صوتي',
   limitReached: 'بلغت الحد ({allowed} لكل مرئي).',
@@ -191,7 +191,7 @@ export const AUDIO_TRACKS_AR: AudioTracksTranslations = {
     fileTooBig: 'حجم هذا الملف أكبر من {size}.',
     fileType: 'اختر ملف MP3 أو M4A أو AAC أو WAV أو FLAC أو OGG أو Opus أو MP4 أو WebM.',
     pickStream: 'اختر مسارًا',
-    stream: 'المسار {n} · {details}',
+    stream: 'المسار {n}، {details}',
     look: 'البحث عن مسارات',
     looking: 'جارٍ البحث عن مسارات في ملف المرئي…',
     noneFound: 'لم يُعثر على مسارات صوتية أخرى في ملف هذا المرئي.',

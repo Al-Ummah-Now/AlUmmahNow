@@ -2,6 +2,7 @@
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface AlreadyUploadedPanelProps {
   fileName: string;
   videoId: string;
@@ -28,7 +29,7 @@ export function AlreadyUploadedPanel({ fileName, videoId, className = '', onUplo
         {t.batch.alreadyUploaded}
       </h3>
       <p className="mt-1 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="upload-already-uploaded-hint">
-        <span className="font-medium break-all" dir="auto">{fileName}</span> · {t.upload.alreadyUploadedHint}
+        <span className="font-medium break-all" dir="auto">{fileName}</span>{metaSeparator(lang, '·')}{t.upload.alreadyUploadedHint}
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link href={`/${lang}/video/${videoId}`} className="b b-primary" data-testid="upload-already-uploaded-view">

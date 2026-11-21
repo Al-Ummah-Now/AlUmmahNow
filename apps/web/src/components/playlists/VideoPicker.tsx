@@ -22,6 +22,7 @@ import '@/theme/playlist-tools.css';
 import { counted, fill, formatDuration, localTitle } from './text';
 import { FAINT, MUTED, NOTICE, TEXT } from './styles';
 
+import { joinMeta } from '@/lib/i18n/meta-separator';
 export type PickerFormat = 'all' | 'video' | 'short';
 
 /** What the picker remembers of a chosen video (for the ordered selection tray). */
@@ -142,7 +143,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
     return (result.data || []).map((video) => ({
       id: video.id,
       label: localTitle(video, lang),
-      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' · ') || undefined,
+      subtitle: joinMeta(lang, [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null], '·') || undefined,
       thumbnailUrl: video.thumbnailUrl,
       thumbnailShape: 'wide' as const,
       value: video,

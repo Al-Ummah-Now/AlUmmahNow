@@ -16,6 +16,7 @@ import type { AppTranslations } from '@/lib/i18n/types';
 import { formatAbsoluteDate, formatRelativeTime, formatVideoCount } from '@/lib/format/videoMeta';
 import { channelLabel } from '@/lib/channel-name';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 export interface WatchHistoryEntryProps {
   entry: WatchHistoryItem;
   lang: string;
@@ -52,7 +53,7 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>
-          {' • '}
+          {metaSeparator(lang)}
           {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent))}
         </p>
       </div>

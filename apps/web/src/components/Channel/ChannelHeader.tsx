@@ -16,6 +16,7 @@ import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 import { formatSubscribers } from '@/lib/format/videoMeta';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 interface ChannelHeaderProps {
   channel: Channel;
   locale: string;
@@ -154,7 +155,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
                 <>
-                  <span>•</span>
+                  <MetaSep lang={locale} gap="0.5rem" />
                   <span>
                     {formatVideoCount(channel.videosCount, locale)}
                   </span>
