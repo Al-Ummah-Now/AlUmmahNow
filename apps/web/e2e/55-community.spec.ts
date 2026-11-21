@@ -353,12 +353,16 @@ test.describe('Community tab - visitor', () => {
     await expect(card.getByRole('button', { name: 'التعليقات' })).toBeVisible();
   });
 
-  test('COMM-022 a channel without posts shows the empty state', async ({ page }) => {
-    // The viewer's channel never gets posts in this spec
+  test('COMM-022 a channel without posts has no Community tab for visitors', async ({ page }) => {
+    // The viewer's channel never gets posts in this spec. #1669: no hollow pages, an empty
+    // Community tab is hidden from visitors and a link to it falls back to the default tab
     const empty = viewer.channelIds[0];
     expect((await listPosts(viewer, empty)).length).toBe(0);
     await page.goto(`/en/channels/${empty}?tab=community`);
-    await expect(page.getByTestId('tabpanel-community').getByRole('heading', { name: 'No posts yet' })).toBeVisible();
-    await expect(page.getByText('This channel has not shared any community posts yet.')).toBeVisible();
+    await expect(page).not.toHaveURL(/tab=community/);
+    await expect(page.getByTestId('channel-tabs-strip')).not.toHaveAttribute('data-measuring', /.*/);
+    await expect(page.getByTestId('tab-community')).toHaveCount(0);
+    await expect(page.getByTestId('channel-tabs-strip-more')).toHaveCount(0);
+    await expect(page.getByTestId('tabpanel-community')).toHaveCount(0);
   });
 });

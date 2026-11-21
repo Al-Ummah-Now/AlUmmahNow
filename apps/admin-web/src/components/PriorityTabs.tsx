@@ -62,13 +62,13 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [widths, setWidths] = useState<{ items: number[]; more: number; gap: number } | null>(null);
-  const [visible, setVisible] = useState<number[] | null>(null);
+  /** The nav's inner width (the observer updates it; it does not depend on which tab is current) */
+  const [available, setAvailable] = useState<number | null>(null);
   const signature = tabs.map((tab) => `${tab.id}\u0000${tab.label}`).join('\u0001');
   const current = tabs.findIndex((tab) => tab.current);
 
   useLayoutEffect(() => {
     setWidths(null);
-    setVisible(null);
   }, [signature]);
 
   useLayoutEffect(() => {
@@ -80,37 +80,39 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
     // Again whenever the widths are reset (new labels, fonts in)
   }, [widths, signature]);
 
-  const recompute = useCallback(() => {
+  const measureAvailable = useCallback(() => {
     const nav = navRef.current;
-    if (!nav || !widths) return;
+    if (!nav) return;
     const style = getComputedStyle(nav);
-    const available = nav.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
-    const next = fitItems(widths.items, widths.gap, available, widths.more, current);
-    setVisible((prev) => (prev && prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next));
-  }, [widths, current]);
+    setAvailable(nav.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
+  }, []);
 
-  useLayoutEffect(recompute, [recompute]);
+  useLayoutEffect(measureAvailable, [measureAvailable, widths]);
 
   useEffect(() => {
     const nav = navRef.current;
     if (!nav || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => recompute());
+    const observer = new ResizeObserver(() => measureAvailable());
     observer.observe(nav);
     return () => observer.disconnect();
-  }, [recompute]);
+  }, [measureAvailable]);
 
   useEffect(() => {
     let live = true;
     document.fonts?.ready.then(() => {
-      if (live) {
-        setWidths(null);
-        setVisible(null);
-      }
+      if (live) setWidths(null);
     });
     return () => {
       live = false;
     };
   }, []);
+
+  // The row is worked out on every render from the current tab, so a navigation (a transition)
+  // always shows the new tab in the row; no state can hold an older choice
+  const visible = useMemo(
+    () => (widths && available !== null ? fitItems(widths.items, widths.gap, available, widths.more, current) : null),
+    [widths, available, current],
+  );
 
   const measuring = visible === null;
   const shown = useMemo(() => (visible ? new Set(visible) : null), [visible]);

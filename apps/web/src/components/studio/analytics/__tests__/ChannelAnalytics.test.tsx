@@ -8,7 +8,7 @@ const top = jest.fn();
 const video = jest.fn();
 const retention = jest.fn();
 
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio }, lang: 'en', isRTL: false }) }));
+jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio, common: { moreTabs: 'More', moreTabsMenu: 'More tabs' } }, lang: 'en', isRTL: false }) }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn() } }));
 jest.mock('@/lib/api/studio-analytics', () => ({
   getStudioChannelAnalytics: (...args: unknown[]) => channel(...args),
