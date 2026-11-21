@@ -2276,7 +2276,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     clearing: 'Clearing...',
     confirmClear: 'Clear your entire watch history? This cannot be undone.',
     remove: 'Remove from history',
-    lastWatched: 'Watched {date}',
+    lastWatched: '{date}',
     percentWatched: '{percent}% watched',
     completed: 'Watched',
     loadMore: 'Load more',

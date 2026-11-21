@@ -75,8 +75,10 @@ describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21
     expect(within(card).getByTestId('thumb')).toHaveAttribute('data-src', 'https://img/a.jpg');
     expect(screen.getByTestId('continue-watching-card-count')).toHaveTextContent('7 videos');
     expect(card.querySelector('.plc-progress > span')).toHaveStyle({ inlineSize: '42%' });
-    expect(screen.getByTestId('continue-watching-meta')).toHaveTextContent('Talk a • 42% watched');
-    expect(screen.getByTestId('continue-watching-meta').textContent).toContain('42%\u00a0watched');
+    // Title and progress stack, one per line: no separator left at a line edge
+    const lines = [...screen.getByTestId('continue-watching-meta').querySelectorAll('[data-meta-part]')].map((e) => e.textContent);
+    expect(lines).toEqual(['Talk a', '42%\u00a0watched']);
+    expect(screen.getByTestId('continue-watching-meta').textContent).not.toMatch(/[•·]/);
 
     const resume = screen.getByTestId('continue-watching-resume');
     expect(resume).toHaveAttribute('href', '/en/video/a');
@@ -85,7 +87,7 @@ describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21
     expect(card.contains(resume)).toBe(false);
   });
 
-  it('in Arabic: the Arabic title, ungrouped compact count (the shared formatter, #1665), «،» between the meta parts', async () => {
+  it('in Arabic: the Arabic title, ungrouped compact count (the shared formatter, #1665), title and progress on their own lines', async () => {
     mockLang = 'ar';
     service.list.mockResolvedValue({
       entries: [{ ...entry('a', 42), videoTitleLocalized: { en: 'Weak Hadith 1', ar: 'سلسلة الحديث الضعيف ١' } }],
@@ -103,9 +105,9 @@ describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21
     const raw = screen.getByTestId('continue-watching-meta').textContent ?? '';
     // The number never leaves the word before it: «مشاهدة\u00a0٤٢٪»
     expect(raw).toContain('مشاهدة\u00a0٤٢٪');
-    const meta = raw.replace(/\u00a0/g, ' ');
-    expect(meta).toBe('سلسلة الحديث الضعيف ١، تمت مشاهدة ٤٢٪');
-    expect(meta).not.toMatch(/[•·]/);
+    const lines = [...screen.getByTestId('continue-watching-meta').querySelectorAll('[data-meta-part]')].map((e) => (e.textContent ?? '').replace(/\u00a0/g, ' '));
+    expect(lines).toEqual(['سلسلة الحديث الضعيف ١', 'تمت مشاهدة ٤٢٪']);
+    expect(raw).not.toMatch(/[•·]/);
     expect(screen.getByTestId('continue-watching-resume')).toHaveAttribute('href', '/ar/video/a');
     expect(screen.getByTestId('continue-watching-resume')).toHaveTextContent('تابِع');
   });

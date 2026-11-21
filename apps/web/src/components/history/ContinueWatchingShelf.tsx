@@ -18,7 +18,8 @@ import { PlaylistCardFrame } from '@/components/PlaylistCard/PlaylistCardFrame';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { WatchHistoryService, entryTitle, type WatchHistoryItem } from '@/services/api/watch-history';
-import { formatVideoCount, keepNumbersWithUnits, metaSeparator } from '@/lib/format/videoMeta';
+import { formatVideoCount, keepNumbersWithUnits } from '@/lib/format/videoMeta';
+import { MetaParts } from '@/components/common/MetaParts';
 import { removeUnwantedChars } from '@/lib/utility';
 import { logger } from '@/lib/logger-client';
 import '@/theme/home-rails.css';
@@ -78,9 +79,14 @@ export function ContinueWatchingShelf() {
         )}
         meta={
           <p className="plc-meta" data-testid="continue-watching-meta">
-            <strong dir="auto">{title}</strong>
-            {metaSeparator(lang)}
-            <span className="whitespace-nowrap">{watched}</span>
+            <MetaParts
+              lang={lang}
+              stack="always"
+              parts={[
+                { key: 'title', node: <strong dir="auto">{title}</strong> },
+                { key: 'watched', keep: true, node: watched },
+              ]}
+            />
           </p>
         }
         action={

@@ -93,8 +93,10 @@ describe('History rows: meta separator', () => {
   it('joins the Arabic meta with «،», never • (a dot reads as «٠»)', async () => {
     mockLang = 'ar';
     render(<WatchHistoryPageRTL />);
-    const row = await screen.findByText(/تمت مشاهدة\s٢٠٪/);
-    expect(row.textContent).toContain('، ');
+    const row = (await screen.findByText(/تمت مشاهدة\s٢٠٪/)).closest('p')!;
+    // «،» on one line (sm and up); on phones the parts stack and the separator is hidden
+    expect(row.textContent).toContain('،');
+    expect(row.querySelector('.hidden.sm\\:inline')?.textContent).toBe('،');
     expect(row.textContent).toContain('مشاهدة\u00a0٢٠٪');
     expect(row.textContent).not.toMatch(/[•·]/);
   });
@@ -102,7 +104,7 @@ describe('History rows: meta separator', () => {
   it('keeps • in English', async () => {
     mockLang = 'en';
     render(<WatchHistoryPage />);
-    expect((await screen.findByText(/20%\swatched/)).textContent).toContain(' • ');
+    expect((await screen.findByText(/20%\swatched/)).closest('p')!.textContent).toContain('•');
     // A short bar keeps a visible track (never lost under the thumbnail's rounded corner)
     const bar = screen.getByTestId('watch-history-progress');
     expect(bar.className).toContain('rounded-full');

@@ -14,6 +14,7 @@ import { resolveUrl } from '@/lib/utility';
 import { entryTitle, type WatchHistoryItem } from '@/services/api/watch-history';
 import type { AppTranslations } from '@/lib/i18n/types';
 import { formatAbsoluteDate, formatRelativeTime, formatVideoCount, keepNumbersWithUnits } from '@/lib/format/videoMeta';
+import { MetaParts } from '@/components/common/MetaParts';
 import { channelLabel } from '@/lib/channel-name';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
@@ -62,9 +63,14 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
           <span className="block text-sm text-gray-600 dark:text-gray-400">{channelLabel(entry, lang)}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          <span title={watchedDate}>{keepNumbersWithUnits(t.watchHistory.lastWatched.replace('{date}', watchedOn))}</span>
-          {metaSeparator(lang)}
-          {entry.completed ? t.watchHistory.completed : keepNumbersWithUnits(t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent)))}
+          <MetaParts
+            lang={lang}
+            stack="phone"
+            parts={[
+              { key: 'when', keep: true, node: <span title={watchedDate}>{keepNumbersWithUnits(t.watchHistory.lastWatched.replace('{date}', watchedOn))}</span> },
+              { key: 'progress', keep: true, node: entry.completed ? t.watchHistory.completed : keepNumbersWithUnits(t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent))) },
+            ]}
+          />
         </p>
       </div>
       <button
@@ -158,7 +164,7 @@ export default function WatchHistoryPage({ view = 'all' }: WatchHistoryPageProps
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6" dir="ltr" data-testid="watch-history-page" data-view={view}>
       {confirmDialog}
-      <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:flex-wrap sm:justify-between sm:items-start sm:gap-x-4">
         <div>
           <h1 className="text-3xl font-bold">{continueView ? t.library.continueWatching : t.watchHistory.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
