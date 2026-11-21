@@ -1,6 +1,6 @@
 import { getCaptionSettings, type CaptionSettingsView as View } from '@/lib/api/captions';
 import { getAdminSession } from '@/lib/auth';
-import { canManageCreators } from '@/lib/roles';
+import { canManageCreators, isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
 import { CaptionSettingsView } from '@/components/captions/CaptionSettingsView';
@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
 /**
  * Captions & translation (AUN-CAPTIONS §10): budgets, translation models and DeepL, inline
  * translation's kill switch and fair use, viewer-side titles and the Quran translation editions.
- * Every admin reads it; creators:manage changes it (audited in admin-api).
+ * Every admin reads it; creators:manage changes it (audited in admin-api). The DeepL API key is
+ * super admins only (DeeplKeyPanel).
  */
 export default async function CaptionSettingsPage() {
   const { t } = await getI18n();
@@ -28,7 +29,7 @@ export default async function CaptionSettingsPage() {
         <h1 className="text-3xl font-bold text-fg">{t('captionSettings.title')}</h1>
         <p className="text-fg-muted mt-1">{t('captionSettings.subtitle')}</p>
       </div>
-      {view ? <CaptionSettingsView view={view} canManage={canManageCreators(session?.user.role)} /> : <ErrorAlert testId="caption-settings-load-error">{t('captionSettings.loadFailed')}</ErrorAlert>}
+      {view ? <CaptionSettingsView view={view} canManage={canManageCreators(session?.user.role)} canManageDeeplKey={isSuperAdmin(session?.user.role)} /> : <ErrorAlert testId="caption-settings-load-error">{t('captionSettings.loadFailed')}</ErrorAlert>}
     </div>
   );
 }

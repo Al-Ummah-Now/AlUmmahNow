@@ -36,7 +36,7 @@ import { recordUsage } from '../moderation/usage';
 import { loadQuranIndex } from '../quran/review-matcher';
 import { getApiKey } from '../lib/websocket-notify';
 import { ProviderError, type Usage } from '../review/provider';
-import { translatorFor, type Translator } from './translator';
+import { translatorFor, withoutDeepl, type Translator } from './translator';
 import { BudgetSpent, INLINE_FEATURE, quotationReference, type InlineTranslateEnv } from './inline';
 
 export interface AdminFieldEnv extends InlineTranslateEnv {
@@ -160,7 +160,7 @@ export async function translateAdminFieldItems(
   if (masked.length) {
     const glossary = glossaryFor(await cmsGlossary(env, req.from, req.to, logger, deps.fetcher), masked.map((m) => m.text));
     const ctx = { siteCopy: true, ...(glossary.length ? { glossary } : {}) };
-    const translator = deps.translator ?? (await translatorFor({ ...env, AI_KEY_DEEPL: '' }, 'workers-ai'));
+    const translator = deps.translator ?? (await translatorFor(withoutDeepl(env), 'workers-ai'));
     let last = 'no_attempt';
     for (const m of [INLINE_TRANSLATE_MODELS.primary, INLINE_TRANSLATE_MODELS.fallback]) {
       const answer = await translator.translate({ items: masked, context: [] }, req.from, req.to, ctx, m, usage);

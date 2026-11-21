@@ -76,6 +76,18 @@ export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPer
 }
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
+  /**
+   * DeepL refused a translation (wrong key, month's characters used up; AUN-CAPTIONS DEEPL-KEY). The
+   * job already fell back to Workers AI; Retry tests the key again with DeepL's free /v2/usage and
+   * resolves the item once it works (lib/deepl-key.ts). A new key set on Caption settings does too.
+   */
+  'deepl-key-test': async (env) => {
+    const { testDeeplKey } = await import('./deepl-key');
+    const out = await testDeeplKey(env as never, { id: 'errors-retry', name: null });
+    if (!out) return { ok: false, status: 'open', result: 'No DeepL key is set on Caption settings (a bound AI_KEY_DEEPL secret cannot be tested here)' };
+    if (out.test.ok) return { ok: true, status: 'resolved', result: 'DeepL accepts the key again' };
+    return { ok: false, status: 'open', result: `DeepL still refuses: ${out.test.code}` };
+  },
   /** Builds the art of a custom theme version published before the art existed (lib/theme-art.ts). */
   'theme-art': async (env, args) => {
     const { id, version } = args;

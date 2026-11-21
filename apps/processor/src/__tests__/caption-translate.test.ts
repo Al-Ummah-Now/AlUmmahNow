@@ -10,7 +10,8 @@ import { MessageType, captionDraftKey, captionDraftVersionKey, captionTranslateW
 import { reserveBudget } from '../moderation/budget';
 import { BUDGET_WAIT_SECONDS, CAPTION_JOB_LAST_ATTEMPT } from '../captions/job';
 import { isCaptionTranslatePayload, processCaptionTranslateMessages, readSource } from '../captions/translate';
-import { DeepLTranslator, FixtureTranslator, WorkersAiTranslator, translatorFor, type Translator } from '../captions/translator';
+import { DeepLTranslator, DeeplError, FixtureTranslator, WorkersAiTranslator, deeplKey, resetDeeplFlags, translatorFor, type Translator } from '../captions/translator';
+import { sealServiceCredential } from '@al-ummah/shared-types';
 
 const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), job: jest.fn() } as never;
 const JOB = 'job-tr-0000-1111';
@@ -225,6 +226,44 @@ describe('caption translate consumer', () => {
     expect(report.events[0].action).toMatchObject({ key: `caption-job:${JOB}`, title: 'Caption translation failed', retry: { path: '/internal/captions/jobs/retry', body: { jobId: JOB } } });
   });
 
+  it('DeepL refusing the key flags the admin once (Retry tests the key) and the job goes on with Workers AI (DEEPL-KEY)', async () => {
+    resetDeeplFlags();
+    const { env, sent, subtitles } = setup();
+    const deeplCalls: number[] = [];
+    const refused: Translator = { provider: 'deepl', translate: async () => { deeplCalls.push(1); throw new DeeplError(403); } };
+    const fallback = scripted([good]);
+    let m = message(payload({ provider: 'deepl', model: 'deepl-pro' }));
+    for (let i = 0; i < 5; i++) {
+      await processCaptionTranslateMessages([m], env, undefined, logger, { translator: refused, fallback });
+      expect(m.ack).toHaveBeenCalled();
+      const next = sent.at(-1);
+      if (!next || next.message.payload.nextBatch <= (m.body.payload as CaptionTranslatePayload).nextBatch) break;
+      m = message(next.message.payload);
+    }
+    // One DeepL try per batch, then straight to the Workers AI fallback model (no second DeepL try)
+    expect(deeplCalls.length).toBeGreaterThan(0);
+    expect(fallback.models.every((model) => model === '@cf/google/gemma-4-26b-a4b-it')).toBe(true);
+    expect(subtitles.read<CaptionDraft>(captionDraftKey('v1', 'en'))!.machine).toEqual({ provider: 'workers-ai', model: '@cf/google/gemma-4-26b-a4b-it' });
+    const reports = (globalThis.fetch as jest.Mock).mock.calls.map((c) => JSON.parse(String(c[1].body))).filter((b) => b.events?.[0]?.action?.key === 'deepl-key');
+    expect(reports).toHaveLength(1);
+    expect(reports[0].events[0].action).toMatchObject({ key: 'deepl-key', source: 'ai', title: 'DeepL refused the API key', itemUrl: '/captions-settings#deepl-key', retry: { kind: 'builtin', handler: 'deepl-key-test' } });
+  });
+
+  it('used-up DeepL characters (456) flag the admin; a DeepL outage (503) only falls back', async () => {
+    resetDeeplFlags();
+    for (const status of [456, 503]) {
+      (globalThis.fetch as jest.Mock).mockClear();
+      const { env, sent } = setup();
+      const failing: Translator = { provider: 'deepl', translate: async () => { throw new DeeplError(status); } };
+      const m = message(payload({ provider: 'deepl', model: 'deepl-pro' }));
+      await processCaptionTranslateMessages([m], env, undefined, logger, { translator: failing, fallback: scripted([good]) });
+      expect(m.ack).toHaveBeenCalled();
+      expect(sent.at(-1)!.message.payload.nextBatch).toBe(1);
+      const flagged = (globalThis.fetch as jest.Mock).mock.calls.map((c) => JSON.parse(String(c[1].body))).filter((b) => b.events?.[0]?.action?.key === 'deepl-key');
+      expect(flagged.map((b) => b.events[0].action.title)).toEqual(status === 456 ? ["DeepL's character limit is used up"] : []);
+    }
+  });
+
   it('validates the payload', () => {
     expect(isCaptionTranslatePayload(payload())).toBe(true);
     expect(isCaptionTranslatePayload(payload({ language: 'ar' }))).toBe(false);
@@ -242,5 +281,46 @@ describe('translators', () => {
   it('fixture mode never reaches a model; DeepL without a key is Workers AI', async () => {
     expect((await translatorFor({ TRANSLATION_PROVIDER: 'fixture' }, 'deepl')).provider).toBe('fixture');
     await expect(translatorFor({ AI: { run: jest.fn() } }, 'deepl')).rejects.toThrow(/Refusing/);
+  });
+});
+
+describe('DeepL key and hosts (DEEPL-KEY; DeepL mocked)', () => {
+  const MASTER = 'internal-api-key-for-tests-0123456789';
+  const db = (row: unknown) => ({ prepare: () => ({ bind: () => ({ first: async () => row }) }) }) as never;
+
+  it('the admin’s sealed key wins over the bound secret; an unreadable one falls back to it', async () => {
+    const sealed = await sealServiceCredential('deepl', '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b', MASTER);
+    const row = { provider: 'deepl', ...sealed };
+    expect(await deeplKey({ SEARCH_DB: db(row), INTERNAL_API_KEY: MASTER, AI_KEY_DEEPL: 'bound-key-000000000000' })).toBe('0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b');
+    expect(await deeplKey({ SEARCH_DB: db(row), INTERNAL_API_KEY: 'rotated-internal-key-0000', AI_KEY_DEEPL: 'bound-key-000000000000' })).toBe('bound-key-000000000000');
+    expect(await deeplKey({ SEARCH_DB: db(null), INTERNAL_API_KEY: MASTER })).toBeNull();
+    // A key found means DeepL (whose guard refuses under test); none means Workers AI (no AI binding here)
+    await expect(translatorFor({ SEARCH_DB: db(row), INTERNAL_API_KEY: MASTER }, 'deepl')).rejects.toThrow(/Refusing/);
+    await expect(translatorFor({ SEARCH_DB: db(null), INTERNAL_API_KEY: MASTER }, 'deepl')).rejects.toThrow(/AI binding missing/);
+  });
+
+  it('Free keys (":fx") call api-free.deepl.com, Pro keys api.deepl.com; 403 and 456 are DeeplErrors', async () => {
+    const saved = { NODE_ENV: process.env.NODE_ENV, CI: process.env.CI, E2E_ENV: process.env.E2E_ENV };
+    // The guard reads process.env: lift it for this test only; every call goes to the mock below
+    process.env.NODE_ENV = 'development';
+    delete process.env.CI;
+    delete process.env.E2E_ENV;
+    try {
+      const seen: string[] = [];
+      const answer = (status: number) =>
+        (async (url: RequestInfo) => {
+          seen.push(String(url));
+          return new Response(JSON.stringify({ translations: [{ text: 'Hello' }] }), { status });
+        }) as typeof fetch;
+      const batch = { items: [{ id: 'a', text: 'مرحبا', quran: [] }], context: [] } as never;
+      const usage: never[] = [];
+      await new DeepLTranslator('0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b:fx', {}, answer(200)).translate(batch, 'ar', 'en', {}, 'deepl-pro', usage);
+      await new DeepLTranslator('0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b', {}, answer(200)).translate(batch, 'ar', 'en', {}, 'deepl-pro', usage);
+      expect(seen).toEqual(['https://api-free.deepl.com/v2/translate', 'https://api.deepl.com/v2/translate']);
+      await expect(new DeepLTranslator('k:fx', {}, answer(403)).translate(batch, 'ar', 'en', {}, 'deepl-pro', usage)).rejects.toMatchObject({ code: 'invalid', status: 403 });
+      await expect(new DeepLTranslator('k:fx', {}, answer(456)).translate(batch, 'ar', 'en', {}, 'deepl-pro', usage)).rejects.toMatchObject({ code: 'quota', status: 456 });
+    } finally {
+      for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
   });
 });

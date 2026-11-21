@@ -10,6 +10,7 @@
 import {
   COST_ALERT_KINDS,
   COST_PROVIDERS,
+  deeplCostUsd,
   mergeCostAlertSettings,
   openCostCredential,
   sealCostCredential,
@@ -41,6 +42,7 @@ import {
 import type { D1Database } from './types';
 import { localTime, queueCostEmails, type CostDigest } from './cost-alert-mail';
 import { auditOriginJson } from './request-origin';
+import { deeplKeySummary } from './deepl-key';
 
 export const CF_ACCOUNT_ID = '0e4b6e7f9faf280c3c9bf95995edc64f';
 export const CF_API = 'https://api.cloudflare.com/client/v4';
@@ -458,6 +460,31 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
     collector: await collectorState(env),
     dataAsOf: lastRun?.finished_at ?? null,
     estimated: true,
+    deepl: await deeplMonth(env, now),
+  };
+}
+
+/**
+ * DeepL this month (AUN-CAPTIONS DEEPL-KEY): characters the processor sent (ai_usage_daily model
+ * 'deepl-pro'; DeepL bills characters), the estimate at the key's plan's list price (Free: $0) and
+ * what DeepL itself reported at the last key test. The AI line above already counts it at the
+ * caption budget's rate; this line is the DeepL bill on its own, not added to the totals.
+ */
+export async function deeplMonth(env: CostsEnv, now = new Date()) {
+  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
+  const usage = await env.REPORTS_DB.prepare("SELECT COALESCE(SUM(input_tokens), 0) AS characters, COALESCE(SUM(calls), 0) AS calls FROM ai_usage_daily WHERE model = 'deepl-pro' AND day >= ?")
+    .bind(monthStart)
+    .first<{ characters: number; calls: number }>()
+    .catch(() => null);
+  const key = await deeplKeySummary(env);
+  const characters = num(usage?.characters);
+  return {
+    keySet: key.set,
+    plan: key.plan,
+    characters,
+    calls: num(usage?.calls),
+    costUsd: deeplCostUsd(key.plan, characters),
+    reported: key.test && key.test.characterCount !== null ? { characterCount: key.test.characterCount, characterLimit: key.test.characterLimit, at: key.test.at } : null,
   };
 }
 

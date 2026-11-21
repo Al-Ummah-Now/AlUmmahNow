@@ -33,6 +33,8 @@ import {
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type VideoObject,
+	resolveDeeplKey,
+	type DeeplKeySource,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { cancelMinutes, captionSubject, commitMinutes, readUsage, releaseMinutes, reserveMinutes } from './minutes';
@@ -63,8 +65,21 @@ export interface CaptionJobsEnv {
 	ENVIRONMENT?: string;
 	INTERNAL_API_KEY?: unknown;
 	ERRORS_INGEST_URL?: string;
-	/** DeepL API Pro key (Secrets Store `AI_KEY_DEEPL`, O2); unbound = DeepL is never used */
+	/**
+	 * Fallback DeepL key (Secrets Store `AI_KEY_DEEPL`, O2). The key a super admin sets on Caption
+	 * settings (SEARCH_DB service_credentials, sealed) wins; with neither, DeepL is never used.
+	 */
 	AI_KEY_DEEPL?: unknown;
+}
+
+/** Which DeepL key is usable: the admin's sealed key, else the bound secret, else none. Opened in memory, never kept. */
+export async function deeplKeySource(env: CaptionJobsEnv): Promise<DeeplKeySource | null> {
+	return (await resolveDeeplKey(env as never).catch(() => null))?.source ?? null;
+}
+
+/** True when DeepL can serve this settings' jobs: only looks the key up when an admin turned DeepL on. */
+export async function deeplUsable(env: CaptionJobsEnv, settings: CaptionSettings): Promise<boolean> {
+	return settings.translation.deepl ? (await deeplKeySource(env)) !== null : false;
 }
 
 export class CaptionJobHttpError extends Error {
@@ -163,7 +178,7 @@ export async function writeCaptionSettings(env: CaptionJobsEnv & { global_settin
 	return next;
 }
 
-/** The provider of a translate job: DeepL when an admin turned it on for the language and its key is bound. */
+/** The provider of a translate job: DeepL when an admin turned it on for the language and a key is set (admin or bound). */
 export function translationProviderFor(settings: CaptionSettings, language: string, deeplKeyBound: boolean): TranslationProvider {
 	const t = settings.translation;
 	if (!t.deepl || !deeplKeyBound) return 'workers-ai';
@@ -420,7 +435,7 @@ export async function requestTranslationJob(
 	const source = await readJsonDraft(env, video.id, input.sourceLanguage);
 	if (!source || !source.cues.length) throw new CaptionJobHttpError(404, 'source_missing');
 	if (source.kind !== 'source') throw new CaptionJobHttpError(409, 'source_is_translation');
-	const provider = translationProviderFor(settings, input.language, !!env.AI_KEY_DEEPL);
+	const provider = translationProviderFor(settings, input.language, await deeplUsable(env, settings));
 	const key = await sha256(`${video.id}|translate|${input.language}|${provider}|${input.sourceLanguage}`);
 	const active = await db(env)
 		.prepare("SELECT * FROM caption_jobs WHERE idempotency_key = ? AND status NOT IN ('ready', 'failed', 'cancelled')")

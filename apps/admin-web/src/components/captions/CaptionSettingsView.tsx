@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { listQuranEditions, resetQuranEdition, saveCaptionSettings, setQuranEdition, type CaptionSettings, type CaptionSettingsView as View } from '@/lib/api/captions';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber } from '@/i18n/translate';
-import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
+import { DEEPL_KEY_ANCHOR, DeeplKeyPanel } from './DeeplKeyPanel';
 
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
@@ -25,7 +26,7 @@ const LANG = /^[a-z]{2,3}$/;
  * title/description translation (kill switch, fair use, budget), viewer-side titles and the
  * platform's Quran translation edition per language.
  */
-export function CaptionSettingsView({ view, canManage }: { view: View; canManage: boolean }) {
+export function CaptionSettingsView({ view, canManage, canManageDeeplKey = false }: { view: View; canManage: boolean; canManageDeeplKey?: boolean }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -120,7 +121,15 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
                 <span>
                   <span className="block text-fg">{t('captionSettings.deepl')}</span>
                   <span id={`${ids}-deepl-hint`} className="block text-sm text-fg-muted">
-                    {view.deeplKeyBound ? t('captionSettings.deeplHint') : t('captionSettings.deeplNoKey')}
+                    {view.deeplKeyBound
+                      ? t('captionSettings.deeplHint')
+                      : fillNodes(t('captionSettings.deeplNoKey'), {
+                          link: (
+                            <a href={`#${DEEPL_KEY_ANCHOR}`} className={`${linkClass} underline`} data-testid="deepl-no-key-link">
+                              {t('captionSettings.deeplKey.title')}
+                            </a>
+                          ),
+                        })}
                   </span>
                 </span>
               </label>
@@ -185,6 +194,8 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
         {error && <ErrorAlert testId="caption-settings-error">{error}</ErrorAlert>}
         <p role="status" className="text-sm text-fg" data-testid="caption-settings-saved">{notice}</p>
       </form>
+
+      <DeeplKeyPanel view={view.deeplKey} canManage={canManageDeeplKey} />
 
       <QuranEditions editions={view.editions} canManage={canManage} />
 

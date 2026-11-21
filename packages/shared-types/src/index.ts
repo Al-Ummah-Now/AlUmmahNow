@@ -163,6 +163,7 @@ export * from './social';
 export * from './media-troubleshoot';
 export * from './app-config';
 export * from './cost-credentials';
+export * from './service-credentials';
 // Concurrent R2 transcodes: the autoscaling min–max range up to Cloudflare's limit (Video providers → Cloudflare R2 settings)
 export * from './transcode-limit';
 export * from './page-blocks';
