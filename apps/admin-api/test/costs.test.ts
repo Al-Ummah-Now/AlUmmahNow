@@ -15,6 +15,7 @@ import { envLines, productLines, runWeeklyDigest, testBunny, testCloudflare, tes
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
+import { CF_METERS, type CfMeterKey } from '@al-ummah/shared-types';
 import { analyticsFromRun, costsDashboard } from '../src/lib/costs';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -474,5 +475,80 @@ describe('a token Cloudflare refuses (no Account Analytics Read)', () => {
     assert.equal((await admin.req('/api/costs/collector/check', send('POST'))).status, 403);
     // No queue and no token: nothing to run
     assert.equal((await setup(['Super Admin']).req('/api/costs/collector/check', send('POST'))).status, 503);
+  });
+});
+
+/**
+ * AUDIT-2 (2026-11-21): every tile on /costs is the sum of the rows it summarises. A month of
+ * several resources in every env (each row priced at list from its own meters, as the collector
+ * does), with fixed costs, through costsDashboard; then each total against its rows.
+ */
+describe('every Costs tile equals the sum of its rows', () => {
+  it('Cloudflare, budget, products, envs, trend, fixed and idle all reconcile', async () => {
+    const db = costsD1();
+    const now = new Date('2026-11-21T12:00:00Z');
+    const RES = [
+      { id: 'worker:al-ummah-now-production', kind: 'worker', env: 'production', m: { requests: 1.8e6, cpu_ms: 4e7, log_events: 3e6, logpush_requests: 1.8e6 } },
+      { id: 'worker:al-ummah-now-stage', kind: 'worker', env: 'stage', m: { requests: 4e4, cpu_ms: 6e5, log_events: 5e4 } },
+      { id: 'd1:al-ummah-now-reports', kind: 'd1', env: 'production', m: { reads: 2e8, writes: 1.9e6 } },
+      { id: 'd1:al-ummah-now-reports-qa', kind: 'd1', env: 'qa', m: { reads: 3e7, writes: 4e5 } },
+      { id: 'r2:al-ummah-now-videos', kind: 'r2', env: 'production', m: { reads: 9e5, writes: 4e4 } },
+      { id: 'kv:al-ummah-now-analytics-kv', kind: 'kv', env: 'production', m: { reads: 6e5, writes: 2e4, kv_lists: 1e3, kv_deletes: 500 } },
+      { id: 'queue:al-ummah-now-videos', kind: 'queue', env: 'production', m: { writes: 5e5 } },
+    ] as const;
+    for (let d = 1; d <= 21; d++) {
+      const day = `2026-11-${String(d).padStart(2, '0')}`;
+      // QA storm on the 7th to 12th, like November's
+      const storm = d >= 7 && d <= 12 ? 8 : 1;
+      for (const r of RES) {
+        const k = r.env === 'qa' ? storm : 1;
+        const m: Record<string, number> = Object.fromEntries(Object.entries(r.m).map(([key, v]) => [key, v * k * (d === 21 ? 0.5 : 1)]));
+        // List price, unrounded, as the collector prices a resource-day
+        const cost = Object.entries(meterUsageOf({ kind: r.kind, ...m } as never)).reduce((acc, [key, used]) => acc + ((used ?? 0) / CF_METERS[key as CfMeterKey].unit) * CF_METERS[key as CfMeterKey].price, 0);
+        const cols = Object.keys(m);
+        await db
+          .prepare(`INSERT INTO ops_daily (day, resource_id, kind, env, name, ${cols.join(', ')}, cost_usd, updated_at) VALUES (?, ?, ?, ?, ?, ${cols.map(() => '?').join(', ')}, ?, 'x')`)
+          .bind(day, r.id, r.kind, r.env, r.id.split(':')[1], ...cols.map((c) => m[c]), cost)
+          .run();
+      }
+    }
+    for (const [i, [name, amount, period, start, end]] of ([['Apple Developer', 99, 'yearly', '2026-03-01', null], ['Linear', 10, 'monthly', '2026-06-01', null], ['ElevenLabs', 22, 'monthly', '2026-08-15', '2026-12-14']] as const).entries()) {
+      await db.prepare('INSERT INTO cost_fixed_items (id, name, amount_usd, period, start_date, end_date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, \'x\', \'x\')').bind(`00000000-0000-4000-8000-00000000000${i}`, name, amount, period, start, end).run();
+    }
+    const d = await costsDashboard({ COSTS_DB: db, REPORTS_DB: sqliteD1() } as never, now);
+    const near = (a: number, b: number, tol: number, what: string) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a.toFixed(2)} vs ${b.toFixed(2)}`);
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+    const L = d.cloudflare.lines;
+    assert.ok(d.cloudflare.billedMtd > 0 && d.cloudflare.listMtd > d.cloudflare.billedMtd, 'a month with billed usage past the allowance');
+
+    near(sum(L.map((l) => l.cost)), d.cloudflare.billedMtd, 0.015, 'Cloudflare billed lines = Billed so far');
+    near(sum(L.map((l) => l.listCost)), d.cloudflare.listMtd, 0.06, 'Cloudflare list lines = At list price');
+    near(sum(L.map((l) => l.projectedCost)), d.cloudflare.billedProjected, 0.015, 'Cloudflare month-end lines = Billed by month end');
+    const parts = Object.values(d.budget.parts);
+    near(sum(parts.map((p) => p.mtd)), d.budget.mtd, 0.015, 'Where it goes (so far) = budget month to date');
+    near(sum(parts.map((p) => p.projected)), d.budget.projected, 0.015, 'Where it goes (month end) = forecast');
+    near(d.budget.parts.cloudflare.mtd, d.cloudflare.billedMtd, 0.015, 'budget Cloudflare part = Billed so far');
+    near(d.forecast.trailing, d.budget.projected, 0.015, 'forecast = budget projection');
+
+    const product = (k: string) => d.products.find((p) => p.product === k)?.mtd ?? 0;
+    const lineList = (keys: string[]) => sum(L.filter((l) => keys.includes(l.key)).map((l) => l.listCost));
+    near(product('d1'), lineList(['d1_rows_read', 'd1_rows_written', 'd1_storage_gb']), 0.03, 'By product D1 = its Cloudflare lines');
+    near(product('workers'), lineList(['workers_requests', 'workers_cpu_ms', 'logs_events', 'logpush_requests']), 0.03, 'By product Workers = its lines');
+    const cfProducts = sum(['d1', 'workers', 'r2', 'kv', 'durable_objects', 'queues'].map(product));
+    near(cfProducts, d.cloudflare.listMtd, 0.06, 'Cloudflare products = At list price');
+    const productsTotal = sum(d.products.map((p) => p.mtd));
+    near(productsTotal, d.budget.mtd + (d.cloudflare.listMtd - d.cloudflare.billedMtd), 0.06, 'products at list − included usage = billed month to date');
+    near(sum(Object.values(d.envs)), productsTotal, 0.03, 'By environment = By product');
+    near(d.envs.qa, sum(d.trend.series.find((s) => s.key === 'qa')!.values.filter((_, i) => d.trend.days[i]!.startsWith('2026-11'))), 0.03, 'QA tile = QA bars this month');
+    const trendMonth = sum(d.trend.series.flatMap((s) => s.values.filter((_, i) => d.trend.days[i]!.startsWith('2026-11'))));
+    near(trendMonth, productsTotal, 0.2, 'daily chart this month = By product (per-day cents)');
+
+    near(d.budget.parts.fixed.projected, d.fixed.projected, 0.015, 'fixed part = fixed month end');
+    // Apple $99/yr, Linear $10, ElevenLabs $22 (active Aug 15 – Dec 14, so all of November)
+    near(d.fixed.projected, 99 / 12 + 10 + 22, 0.015, 'fixed month end = its list');
+    near(d.fixed.mtd, (99 / 12 + 10 + 22) * (20.5 / 30), 0.015, 'fixed so far = the elapsed share of the list');
+    near(sum(Object.values(d.idle.parts)), d.idle.monthlyUsd, 0.015, 'idle parts = idle');
+    near(sum(Object.values(d.idle.byEnv)), d.idle.parts.cloudflare, 0.03, 'idle per env = idle Cloudflare');
+    assert.ok(d.idle.monthlyUsd <= d.budget.projected, 'idle never exceeds the month-end forecast');
   });
 });
