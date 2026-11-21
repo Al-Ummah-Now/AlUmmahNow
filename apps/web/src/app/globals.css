@@ -527,3 +527,10 @@ html.fanous-street .demo-layer::after {
   background: var(--fanous-street-tile-pick, var(--fanous-street-tile)) 50% 0 repeat;
   opacity: var(--fanous-street-opacity, 1);
 }
+
+/* The tab strips' More menu (components/ui/PriorityStrip, #1669 audit): an opaque menu surface, so
+   the chips and tabs under it never read through its entries (the theme's glass panel stays on
+   other menus). Specific enough to win over the theme's [role=menu] glass rule */
+html [role=menu].aun-strip-menu.aun-strip-menu.aun-strip-menu[data-slot] {
+  background: var(--fanous-c-menu-bg, var(--popover)) !important;
+}

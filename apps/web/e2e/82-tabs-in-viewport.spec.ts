@@ -136,6 +136,8 @@ async function chooseFromMore(page: Page, strip: string, menu: string[], rowItem
   const item = rowItem(id);
   await expect(item, `${what}: ${id} in the row after choosing it`).toBeVisible();
   await current(item);
+  // The focus moves to the chosen item, not back to More beside it
+  await expect(item, `${what}: ${id} has the focus after choosing it`).toBeFocused();
   return id;
 }
 
