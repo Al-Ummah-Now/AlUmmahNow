@@ -320,16 +320,20 @@ async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise
   await page.waitForTimeout(300);
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   if (sideways > 0) {
-    // Which elements stick out of the window (the innermost ones), to find the cause
+    // Which elements stick out of the window, to find the cause: scrolled back to the start, the
+    // innermost non-fixed elements past either edge
     const wide = await page.evaluate(() => {
+      window.scrollTo(0, window.scrollY);
       const w = document.documentElement.clientWidth;
       const out: string[] = [];
+      const fixed = (el: Element) => { for (let e: Element | null = el; e; e = e.parentElement) if (getComputedStyle(e).position === 'fixed') return true; return false; };
+      const sticks = (el: Element) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.left < -1 || r.right > w + 1); };
       for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+        if (!sticks(el) || fixed(el) || Array.from(el.children).some(sticks)) continue;
         const r = el.getBoundingClientRect();
-        if (!r.width || (r.left >= -1 && r.right <= w + 1)) continue;
-        if (Array.from(el.children).some((c) => { const cr = c.getBoundingClientRect(); return cr.width && (cr.left < -1 || cr.right > w + 1); })) continue;
-        out.push(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className).slice(0, 80)} [${el.getAttribute('data-testid') ?? ''}] ${Math.round(r.left)}..${Math.round(r.right)}`);
-        if (out.length >= 6) break;
+        const owner = el.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
+        out.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)} in [${owner}] ${Math.round(r.left)}..${Math.round(r.right)}`);
+        if (out.length >= 12) break;
       }
       return out;
     });
