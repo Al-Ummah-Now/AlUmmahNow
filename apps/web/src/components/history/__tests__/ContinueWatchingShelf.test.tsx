@@ -76,6 +76,7 @@ describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21
     expect(screen.getByTestId('continue-watching-card-count')).toHaveTextContent('7 videos');
     expect(card.querySelector('.plc-progress > span')).toHaveStyle({ inlineSize: '42%' });
     expect(screen.getByTestId('continue-watching-meta')).toHaveTextContent('Talk a • 42% watched');
+    expect(screen.getByTestId('continue-watching-meta').textContent).toContain('42%\u00a0watched');
 
     const resume = screen.getByTestId('continue-watching-resume');
     expect(resume).toHaveAttribute('href', '/en/video/a');
@@ -99,7 +100,10 @@ describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21
     const count = (screen.getByTestId('continue-watching-card-count').textContent ?? '').replace(/[\u00a0\u061c\u200e\u200f\u202f]/g, ' ').replace(/ +/g, ' ');
     expect(count).toMatch(/^٤٫٨ ألف/);
     expect(count).not.toMatch(/[,،٬]/);
-    const meta = screen.getByTestId('continue-watching-meta').textContent ?? '';
+    const raw = screen.getByTestId('continue-watching-meta').textContent ?? '';
+    // The number never leaves the word before it: «مشاهدة\u00a0٤٢٪»
+    expect(raw).toContain('مشاهدة\u00a0٤٢٪');
+    const meta = raw.replace(/\u00a0/g, ' ');
     expect(meta).toBe('سلسلة الحديث الضعيف ١، تمت مشاهدة ٤٢٪');
     expect(meta).not.toMatch(/[•·]/);
     expect(screen.getByTestId('continue-watching-resume')).toHaveAttribute('href', '/ar/video/a');

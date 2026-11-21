@@ -37,6 +37,15 @@ export function formatVideoCount(count: number | string | null | undefined, lang
   return formatCountNoun(lang, count, 'video', options);
 }
 
+/**
+ * Keeps a number on the same line as its unit and the word before it ("38%\u00a0watched",
+ * «قبل\u00a0٩\u00a0ساعات», «مشاهدة\u00a0٣٨٪»): a line break there splits the value from what it
+ * measures, and in Arabic leaves «٪٣٨» alone on a line.
+ */
+export function keepNumbersWithUnits(text: string): string {
+  return text.replace(/([0-9\u0660-\u0669][0-9\u0660-\u0669\u066b\u066c.,%\u066a]*) /g, '$1\u00a0').replace(/ (?=[0-9\u0660-\u0669])/g, '\u00a0');
+}
+
 /** Between the parts of a meta line: " • " in English, the Arabic comma «، » in Arabic (never • or ·) */
 export function metaSeparator(lang: MetaLang | string): string {
   return lang === 'ar' ? '، ' : ' • ';

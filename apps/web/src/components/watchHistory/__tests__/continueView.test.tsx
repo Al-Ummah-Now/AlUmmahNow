@@ -93,14 +93,19 @@ describe('History rows: meta separator', () => {
   it('joins the Arabic meta with «،», never • (a dot reads as «٠»)', async () => {
     mockLang = 'ar';
     render(<WatchHistoryPageRTL />);
-    const row = await screen.findByText(/تمت مشاهدة ٢٠٪/);
+    const row = await screen.findByText(/تمت مشاهدة\s٢٠٪/);
     expect(row.textContent).toContain('، ');
+    expect(row.textContent).toContain('مشاهدة\u00a0٢٠٪');
     expect(row.textContent).not.toMatch(/[•·]/);
   });
 
   it('keeps • in English', async () => {
     mockLang = 'en';
     render(<WatchHistoryPage />);
-    expect((await screen.findByText(/20% watched/)).textContent).toContain(' • ');
+    expect((await screen.findByText(/20%\swatched/)).textContent).toContain(' • ');
+    // A short bar keeps a visible track (never lost under the thumbnail's rounded corner)
+    const bar = screen.getByTestId('watch-history-progress');
+    expect(bar.className).toContain('rounded-full');
+    expect((bar.firstChild as HTMLElement).style.inlineSize).toBe('20%');
   });
 });

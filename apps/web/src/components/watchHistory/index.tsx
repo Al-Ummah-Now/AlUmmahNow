@@ -13,7 +13,7 @@ import { useWatchHistory, type UseWatchHistoryReturn } from '@/hooks/useWatchHis
 import { resolveUrl } from '@/lib/utility';
 import { entryTitle, type WatchHistoryItem } from '@/services/api/watch-history';
 import type { AppTranslations } from '@/lib/i18n/types';
-import { formatAbsoluteDate, formatRelativeTime, formatVideoCount } from '@/lib/format/videoMeta';
+import { formatAbsoluteDate, formatRelativeTime, formatVideoCount, keepNumbersWithUnits } from '@/lib/format/videoMeta';
 import { channelLabel } from '@/lib/channel-name';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
@@ -37,18 +37,23 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
   return (
     <li className="flex gap-4 items-start p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
       {/* Same target as the title link: hidden from assistive tech and the tab order */}
-      <Link href={`/${lang}/video/${entry.videoId}`} aria-hidden="true" tabIndex={-1} className="relative flex-shrink-0 w-40 h-24 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
+      <Link href={`/${lang}/video/${entry.videoId}`} aria-hidden="true" tabIndex={-1} className="relative flex-shrink-0 w-32 h-[4.5rem] sm:w-40 sm:h-24 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
         {entry.videoThumbnail && (
           <FitImage src={resolveUrl(entry.videoThumbnail)} alt="" sizes="160px" />
         )}
-        <span className="absolute bottom-0 left-0 h-1 bg-red-600" style={{ width: `${percent}%` }} aria-hidden="true" />
+        {/* Inset with a track, so a short bar (9%) is never lost under the rounded corner */}
+        {percent > 0 && (
+          <span className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--fanous-color-text-primary)_30%,transparent)]" aria-hidden="true" data-testid="watch-history-progress">
+            <span className="block h-full rounded-full bg-[var(--fanous-color-primary)]" style={{ inlineSize: `${Math.max(percent, 4)}%` }} />
+          </span>
+        )}
       </Link>
       <div className="flex-1 min-w-0">
         <Link href={`/${lang}/video/${entry.videoId}`} className="font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
           {entryTitle(entry, lang)}
         </Link>
         {entry.channelName && entry.channelId && (
-          <Link href={`/${lang}/channels/${entry.channelId}`} className="block text-sm text-gray-600 dark:text-gray-400 hover:underline">
+          <Link href={`/${lang}/channels/${entry.channelId}`} className="block py-0.5 text-sm text-gray-600 dark:text-gray-400 hover:underline">
             {channelLabel(entry, lang)}
           </Link>
         )}
@@ -57,9 +62,9 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
           <span className="block text-sm text-gray-600 dark:text-gray-400">{channelLabel(entry, lang)}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>
+          <span title={watchedDate}>{keepNumbersWithUnits(t.watchHistory.lastWatched.replace('{date}', watchedOn))}</span>
           {metaSeparator(lang)}
-          {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent))}
+          {entry.completed ? t.watchHistory.completed : keepNumbersWithUnits(t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent)))}
         </p>
       </div>
       <button
@@ -151,9 +156,9 @@ export default function WatchHistoryPage({ view = 'all' }: WatchHistoryPageProps
   const errorMessage = watchHistoryErrorMessage(history.error, t);
 
   return (
-    <div className="max-w-4xl mx-auto p-6" dir="ltr" data-testid="watch-history-page" data-view={view}>
+    <div className="max-w-4xl mx-auto p-4 sm:p-6" dir="ltr" data-testid="watch-history-page" data-view={view}>
       {confirmDialog}
-      <div className="flex justify-between items-center gap-4 mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-3 mb-6">
         <div>
           <h1 className="text-3xl font-bold">{continueView ? t.library.continueWatching : t.watchHistory.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
@@ -166,7 +171,7 @@ export default function WatchHistoryPage({ view = 'all' }: WatchHistoryPageProps
           <Link
             href={continueView ? `/${lang}/history` : `/${lang}/history?view=continue`}
             data-testid="watch-history-view-switch"
-            className="mt-1 inline-block text-sm font-medium text-brand-ink dark:text-brand-ink hover:underline"
+            className="mt-1 inline-block text-sm font-medium text-[var(--fanous-color-link)] underline underline-offset-4 decoration-1 hover:decoration-2"
           >
             {continueView ? t.watchHistory.allHistory : t.library.continueWatching}
           </Link>
