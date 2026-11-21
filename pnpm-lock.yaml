@@ -211,6 +211,9 @@ importers:
       tus-js-client:
         specifier: ^4.3.1
         version: 4.3.1
+      uuid:
+        specifier: ^14.0.3
+        version: 14.0.3
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -354,9 +357,6 @@ importers:
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
-      '@types/uuid':
-        specifier: ^11.0.0
-        version: 11.0.0
       '@typescript-eslint/eslint-plugin':
         specifier: 8.46.4
         version: 8.46.4(@typescript-eslint/parser@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
@@ -585,6 +585,9 @@ importers:
       tw-animate-css:
         specifier: ^1.2.5
         version: 1.4.0
+      uuid:
+        specifier: ^14.0.3
+        version: 14.0.3
       valibot:
         specifier: ^1.5.0
         version: 1.5.0(typescript@5.9.3)
@@ -649,9 +652,6 @@ importers:
       '@types/tus-js-client':
         specifier: ^2.1.0
         version: 2.1.0
-      '@types/uuid':
-        specifier: ^11.0.0
-        version: 11.0.0
       '@types/video.js':
         specifier: ^7.3.58
         version: 7.3.58
@@ -780,9 +780,6 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
-      uuid:
-        specifier: ^13.0.2
-        version: 13.0.2
 
   packages/theme-packages:
     devDependencies:
@@ -3018,10 +3015,6 @@ packages:
   '@types/tus-js-client@2.1.0':
     resolution: {integrity: sha512-GyMvqUtU1Qr5hae/9sp8K8ivXUBh1ibwaiHS2dAa3T2ctmPnaS/kwK6gwOH9UEWKFXHt8bN54/8+ulTWgRnH+g==}
     deprecated: This is a stub types definition. tus-js-client provides its own type definitions, so you do not need this installed.
-
-  '@types/uuid@11.0.0':
-    resolution: {integrity: sha512-HVyk8nj2m+jcFRNazzqyVKiZezyhDKrGUA3jlEcg/nZ6Ms+qHwocba1Y/AaVaznJTAM9xpdFSh+ptbNrhOGvZA==}
-    deprecated: This is a stub types definition. uuid provides its own type definitions, so you do not need this installed.
 
   '@types/video.js@7.3.58':
     resolution: {integrity: sha512-1CQjuSrgbv1/dhmcfQ83eVyYbvGyqhTvb2Opxr0QCV+iJ4J6/J+XWQ3Om59WiwCd1MN3rDUHasx5XRrpUtewYQ==}
@@ -6074,8 +6067,8 @@ packages:
       '@types/react':
         optional: true
 
-  uuid@13.0.2:
-    resolution: {integrity: sha512-vzi9uRZ926x4XV73S/4qQaTwPXM2JBj6/6lI/byHH1jOpCzb0zDbfytgA9LcN/hzb2l7WQSQnxITOVx5un/wGw==}
+  uuid@14.0.3:
+    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
     hasBin: true
 
   v8-to-istanbul@9.3.0:
@@ -8973,10 +8966,6 @@ snapshots:
   '@types/tus-js-client@2.1.0':
     dependencies:
       tus-js-client: 4.3.1
-
-  '@types/uuid@11.0.0':
-    dependencies:
-      uuid: 13.0.2
 
   '@types/video.js@7.3.58': {}
 
@@ -12800,7 +12789,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
-  uuid@13.0.2: {}
+  uuid@14.0.3: {}
 
   v8-to-istanbul@9.3.0:
     dependencies:
