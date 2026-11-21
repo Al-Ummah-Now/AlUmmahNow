@@ -56,28 +56,17 @@ function cached<T>(kind: string, locale: FormatLocale, options: object | undefin
 }
 
 /**
- * The Arabic thousands mark. ICU writes U+066C «٬», which most Arabic fonts (Plex, Noto Kufi,
- * Amiri) draw in the same comma shape as the decimal mark U+066B «٫», so «١٥٬٤١٩٫٩» read as
- * 15,419,9. Arabic groups with a narrow no-break space instead (the SI / ISO 80000 grouping), so
- * the decimal «٫» is the only mark inside an Arabic number: «١٥ ٤١٩٫٩», «٥٦ ١٩٩», «١٫٢ مليون».
- * U+202F never breaks a line and is a number separator for bidi, so the number stays one run.
+ * Owner decision (2026-11-21, replaces 2026-11-15's «٬»): Arabic numbers are never grouped, so
+ * the decimal mark «٫» is the only mark inside one: «٤٨٨٧», «١٢٣٤٫٥», «٥٠٦٢٫٦ س». ICU's Arabic
+ * thousands mark U+066C «٬» is drawn in the same comma shape as «٫» by most Arabic UI fonts
+ * (Plex, Noto Kufi, Amiri), so «١٥٬٤١٩٫٩» read as 15,419,9; a space group was tried and dropped
+ * too. English keeps its grouping: "4,887". Large counts are shown compact anyway («١٫٢ مليون»).
  */
-export const ARABIC_GROUP_SEPARATOR = '\u202f';
-const ARABIC_GROUP = /\u066c/g;
+const ARABIC_NO_GROUPING = { useGrouping: false } as const;
 
-/** Intl.NumberFormat whose Arabic output groups with {@link ARABIC_GROUP_SEPARATOR}. */
-class ArabicNumberFormat extends Intl.NumberFormat {
-  override format(value: number | bigint): string {
-    return super.format(value).replace(ARABIC_GROUP, ARABIC_GROUP_SEPARATOR);
-  }
-  override formatToParts(value?: number | bigint): Intl.NumberFormatPart[] {
-    return super.formatToParts(value).map((part) => (part.type === 'group' ? { ...part, value: ARABIC_GROUP_SEPARATOR } : part));
-  }
-}
-
-/** A cached Intl.NumberFormat with the locale's digits pinned (Arabic grouped with a narrow space). */
+/** A cached Intl.NumberFormat with the locale's digits pinned (Arabic never grouped). */
 export function numberFormat(locale: FormatLocale, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
-  return cached('n', locale, options, (tag) => (isArabicLocale(tag) ? new ArabicNumberFormat(tag, options) : new Intl.NumberFormat(tag, options)));
+  return cached('n', locale, options, (tag) => new Intl.NumberFormat(tag, isArabicLocale(tag) ? { ...options, ...ARABIC_NO_GROUPING } : options));
 }
 
 /**
@@ -121,7 +110,6 @@ export function pluralCategory(locale: FormatLocale, count: number): Intl.LDMLPl
   return pluralRules(locale).select(count);
 }
 
-/** 1234.5 -> "1,234.5" / «١ ٢٣٤٫٥» (narrow no-break space). Non-finite values become 0. */
 /** "A, B and C" / «A وB وC»: names joined in the locale's words (twin of AlUmmahNowAuth packages/ui formatList). */
 export function formatList(locale: FormatLocale, items: readonly string[], type: 'conjunction' | 'disjunction' = 'conjunction'): string {
   // Intl.ListFormat is ES2021; this package's lib is older, so it is typed here. `disjunction`: "A, B or C" / «A أو B أو C»
@@ -129,11 +117,12 @@ export function formatList(locale: FormatLocale, items: readonly string[], type:
   return new ListFormat(isArabicLocale(locale) ? 'ar' : 'en', { style: 'long', type }).format(items);
 }
 
+/** 1234.5 -> "1,234.5" / «١٢٣٤٫٥» (Arabic never grouped). Non-finite values become 0. */
 export function formatNumber(locale: FormatLocale, value: number, options?: Intl.NumberFormatOptions): string {
   return numberFormat(locale, options).format(Number.isFinite(value) ? value : 0);
 }
 
-/** A whole number with grouping: 5400 -> "5,400" / «٥ ٤٠٠» (narrow no-break space). */
+/** A whole number: 5400 -> "5,400" / «٥٤٠٠» (Arabic never grouped). */
 export function formatInteger(locale: FormatLocale, value: number): string {
   return formatNumber(locale, Math.round(Number.isFinite(value) ? value : 0), { maximumFractionDigits: 0 });
 }
@@ -359,7 +348,7 @@ export function localizeDigits(locale: FormatLocale, text: string | number): str
 
 /**
  * Typed text with ٠–٩ (and Persian ۰–۹) turned into 0–9, the Arabic decimal mark «٫» into "."
- * and the thousands marks dropped (Arabic «٬» and the narrow no-break space Arabic groups with).
+ * and any thousands marks dropped (Arabic «٬», or a narrow no-break space, pasted from elsewhere).
  * Use on every typed number before parsing.
  */
 export function parseDigits(text: string): string {

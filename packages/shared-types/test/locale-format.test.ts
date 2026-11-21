@@ -48,13 +48,24 @@ test('every Arabic formatter writes ٠–٩ and no 0–9', () => {
     assert.doesNotMatch(text, ASCII_DIGIT, `0–9 in Arabic output «${text}»`);
     assert.match(text, /[٠-٩]/, `no ٠–٩ in «${text}»`);
   }
-  // Arabic groups with a narrow no-break space (U+202F), so the decimal mark ٫ is the only mark in a number:
-  // «١٥٬٤١٩٫٩» read as 15,419,9 (the two marks look alike); «١٥ ٤١٩٫٩» cannot be misread
-  assert.equal(f.formatInteger('ar', 5400), '٥\u202f٤٠٠');
-  assert.equal(f.numberFormat('ar', { maximumFractionDigits: 1 }).format(15419.9), '١٥\u202f٤١٩٫٩');
-  assert.equal(f.numberFormat('ar').formatToParts(15419).find((p) => p.type === 'group')?.value, '\u202f');
   assert.equal(f.formatClock('ar', 3725), '١:٠٢:٠٥');
   assert.equal(f.fillTemplate('ar', 'آخر {days} أيام', { days: 7 }), 'آخر ٧ أيام');
+});
+
+test('Arabic numbers are never grouped, English keeps its grouping (owner 2026-11-21)', () => {
+  // «٬» and the decimal «٫» look alike in most Arabic UI fonts, so «١٥٬٤١٩٫٩» read as 15,419,9:
+  // «٫» is the only mark inside an Arabic number
+  assert.equal(f.formatInteger('ar', 4887), '٤٨٨٧');
+  assert.equal(f.formatNumber('ar', 1234.5), '١٢٣٤٫٥');
+  assert.equal(f.formatInteger('en', 4887), '4,887');
+  assert.equal(f.formatNumber('en', 1234.5), '1,234.5');
+  assert.equal(f.numberFormat('ar', { useGrouping: true }).format(56199), '٥٦١٩٩');
+  assert.equal(f.formatNumber('ar', 1234567), '١٢٣٤٥٦٧');
+  assert.equal(f.numberFormat('ar', { style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 }).format(5062.6), '٥٠٦٢٫٦ س');
+  assert.equal(f.formatPercent('ar', 23.32), '٢٣٣٢٪\u061c');
+  for (const text of [f.formatInteger('ar', 15419), f.formatNumber('ar', 15419.9), f.formatCompact('ar', 1234567)]) {
+    assert.doesNotMatch(text, /[\u066c,]|[٠-٩][\s\u202f\u00a0][٠-٩]/, `a group mark in «${text}»`);
+  }
 });
 
 test('under a minute is "now", also with numeric always', () => {
@@ -166,7 +177,7 @@ const VIEWS_EN = '{count, plural, one {# view} other {# views}}';
 
 test('fillTemplate plural selects follow the CLDR category of the count', () => {
   assert.deepEqual([0, 1, 2, 3, 10, 11, 100, 1520].map((count) => f.fillTemplate('ar', VIEWS_AR, { count })), [
-    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١\u202f٥٢٠ مشاهدة',
+    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١٥٢٠ مشاهدة',
   ]);
   assert.deepEqual([0, 1, 2, 3, 10, 11, 100].map((count) => f.fillTemplate('en', VIEWS_EN, { count })), [
     '0 views', '1 view', '2 views', '3 views', '10 views', '11 views', '100 views',

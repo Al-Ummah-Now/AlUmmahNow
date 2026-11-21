@@ -79,7 +79,7 @@ describe('formatAbsoluteDate', () => {
 describe('formatViewsExact', () => {
   it('writes the full count with its plural', () => {
     expect(formatViewsExact(1234, 'en')).toBe('1,234 views');
-    expect(formatViewsExact(1234, 'ar')).toBe('١\u202f٢٣٤ مشاهدة');
+    expect(formatViewsExact(1234, 'ar')).toBe('١٢٣٤ مشاهدة');
     expect(formatViewsExact(6, 'ar')).toBe('٦ مشاهدات');
     expect(formatViewsExact(1, 'en')).toBe('1 view');
   });

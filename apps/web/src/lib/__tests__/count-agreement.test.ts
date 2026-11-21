@@ -174,7 +174,7 @@ describe('#1666: counts built in code', () => {
     expect(EXACT.map((n) => charactersOver(true, n))).toEqual(['حرف واحد زيادة', 'حرفان زيادة', '٣ أحرف زيادة', '١٠ أحرف زيادة', '١١ حرفًا زيادة', '١٠٠ حرف زيادة']);
     expect(charactersOver(false, 1)).toBe('1 character over');
     expect(charactersOver(false, 2, { limit: true })).toBe('2 characters over limit');
-    expect(charactersMax(true, 2000)).toBe('٢\u202f٠٠٠ حرف كحد أقصى');
+    expect(charactersMax(true, 2000)).toBe('٢٠٠٠ حرف كحد أقصى');
     expect(charactersMax(false, 2000)).toBe('2,000 characters max');
     expect(charactersLeft(true, 0)).toBe('لم يتبقَّ أي حرف');
   });
