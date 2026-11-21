@@ -687,8 +687,46 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
 - **Edge cache for displayed passages:** `s-maxage` of at most 6 days, never written to R2 or D1.
 - **QF timing data** is never stored in captions (§5.5).
 - **Developer Console:** keep an active account (O12).
-- **Subtitle files must not become a data feed.** Our VTTs carry references, not Quran text, and the text is fetched live by our player and embeds. We don't offer a bulk transcript or VTT download API. Whether a per-video "download subtitles" button counts as "offering QF Content … as data" is a question for QF (O13). Until answered, Quran-bearing tracks have no download button.
+- **Subtitle files must not become a data feed.** Our VTTs carry references, not Quran text, and the text is fetched live by our player and embeds. We don't offer a bulk transcript or VTT download API. QF answered on 2026-11-21 (§9.5): no caption file may keep Quran text or translation permanently. So Quran-bearing tracks have no download button, and any future export must carry references only.
 - **Never used:** The Clear Quran (needs written consent from the publisher), Tanzil translations ("for non-commercial purposes only", https://tanzil.net/trans/), and alquran.cloud ("any non-commercial purpose").
+
+### 9.5 QF terms (2026-11-21)
+
+Quran Foundation answered our permission email (O13) on 2026-11-21. These terms bind every app:
+
+- "No caption files that keep Quran text and translation permanently with each video"; no exception or partnership.
+- Outside Content Sync, QF content may not be stored for more than one week. Compliant: store only verse keys plus our own timestamps in captions, and load text and translation at play time from the Content API, or from a Content Sync copy synced at least every 7 days.
+- Content Sync covers `quran_core` (Uthmani text, word-level data), `translations`, `word_by_word_translations`, `word_by_word_transliterations`, `tafsirs`, `recitations`, `chapter_recitations` (word timing segments) and `articles`.
+- No fixed rate limits: on HTTP 429, back off and honour `Retry-After`. The QF quickstart adds "retry later with bounded exponential backoff and jitter".
+- Backend apps with Client Credentials use granular scopes (`content.quran.read`, `content.translations.read`, `content.sync.read`, …) instead of `content`. Frontend apps get no Content scope and must call Content through our backend.
+- Attribution wherever the text appears: "Quran data provided by Quran Foundation (https://quran.foundation/)", plus the translation edition by name.
+
+Refs: [Content Sync, Content available for offline sync](https://api-docs.quran.foundation/docs/tutorials/content-sync/getting-started#content-available-for-offline-sync), [Quickstart](https://api-docs.quran.foundation/docs/quickstart/), [FAQ: rate limits](https://api-docs.quran.foundation/docs/tutorials/faq#are-there-rate-limits), [Connected apps: content and attribution](https://api-docs.quran.foundation/docs/connected-apps#content-and-attribution-requirements), [Scopes](https://api-docs.quran.foundation/docs/user_related_apis_versioned/scopes/).
+
+**Audit (2026-11-21): every place QF content is fetched, stored, cached, indexed, exported or shipped.**
+
+| Place | What it holds | Verdict |
+|---|---|---|
+| Processor Content Sync job (`apps/processor/src/quran/`) → `quran/` in the private media bucket | `quran_core:1` text and the matcher index (derived material), two versions | Compliant: Content Sync path; synced daily (cron `41 3 * * *` + admin **Sync now**), queue retry with backoff, DLQ, Errors page. Over 3 days without a sync flags `quran-stale`; at 7 days the copy and index are deleted and nothing serves them (references only) |
+| Matcher index in isolate memory (processor `review-matcher.ts`, api-videos `copy.ts`) | the current version, re-checked for freshness on every read | Compliant: never outlives the copy |
+| Caption drafts and published versions (`<videoId>/drafts/…`, subtitles bucket) | `range` + status + timestamps; `heard` is our ASR text | Compliant: verse keys only |
+| Published WebVTT tracks (`<videoId>/<lang>.vtt`) | private-use markers per Quran span | Compliant: filled at serve time by `GET /subtitles/:lang`; responses cache ≤ 1 h + 1 day stale |
+| Translated tracks | markers; translation fetched live per edition | Compliant: edge cache `s-maxage` 6 days (`QF_CACHE_SECONDS`), never R2/D1 |
+| Translation editions list (`/api/v1/quran/translations`) | QF catalogue, edge-cached 1 day | Compliant |
+| `GET /api/v1/quran/passage` | served from the Content Sync copy, `max-age=3600` | Compliant |
+| Review pipeline (#1271) `content_review_findings` | `quran_ref` + our ASR text | Compliant: no QF text |
+| Transcript search index (#1401) | transcript passages with Quran markers stripped | Compliant |
+| Transcript translation (#1398) | Quran spans sent as `⟦Qn⟧` tokens, never QF text | Compliant |
+| Inline / admin-field translation | the creator's own quote + references | Compliant |
+| On-device captions (#1386, desktop/Apple) | Whisper transcript posted to our API; matching runs on the server | Compliant: no Quran text or index in any app |
+| Native apps (Apple, Android, Desktop, Core) | VTTs fetched per watch and kept in memory (Apple: system URL cache, bounded by our Cache-Control); no offline downloads, no QF credentials, no direct QF calls | Compliant storage; attribution added in the served cue (below) |
+| VTT/SRT exports or downloads, JSON-LD/SEO | none exists for Quran-bearing tracks | Compliant |
+| CMS translation flags | quran.com links only | Compliant |
+| api-videos QF client | scopes were `content.quran.read content.translations.read content.metadata.read`; 429 returned null with no backoff | **Fixed:** only the two display scopes; a 429 stops calls from the isolate until `Retry-After` (seconds or HTTP date), or bounded exponential backoff with jitter |
+| Processor QF client | 429 → queue retry, but `Retry-After` as an HTTP date was ignored and the 30-minute cap cut a longer one short | **Fixed:** both forms read; a longer `Retry-After` is honoured up to the queue's 12 h limit |
+| Attribution | "Quran text: Quran Foundation (quran.com)" in Studio only; none in the player or native apps | **Fix in review** (attribution PR, held for the owner's screenshots): QF's wording, en + ar, everywhere Quran text appears |
+
+No stored data violated the terms. Captions have stored references since the first caption-drafts PR, so no cleanup job is needed.
 
 ## 10. Provider routing (admin-configurable)
 
@@ -742,7 +780,7 @@ The credentials were added 2026-11-11 to the al-ummah Secrets Store `f8eddc9944d
     - Mode B needs the `search` scope, which is missing. Until it's granted, QA, stage and production use mode A or the review flow.
     - Display stays live per the owner rule (§5.5): Content Sync would also allow storing, but the owner's decision for captions is references plus a live fetch until QF answers the email (O13).
   - **Client code:**
-    - Request only the granular scopes it needs: `content.quran.read content.translations.read` for display; `content.sync.read` for the sync job.
+    - Request only the granular scopes it needs: `content.quran.read content.translations.read` for display (api-videos `QF_SCOPES`); `content.sync.read` for the sync job (processor). QF answered on 2026-11-21 that backend apps use granular scopes; both clients already have them, so no change is needed.
     - If `@quranjs/api` is used, it must be ≥ 3.17 with `contentScopeMode: "granular"`.
     - Cache one token per scope set.
 - **Prelive data:** prelive holds only part of the Quran ("its data covers only surahs 1–2" per the QF quickstart), so QA tests of QF search must use those surahs.
@@ -752,7 +790,8 @@ The credentials were added 2026-11-11 to the al-ummah Secrets Store `f8eddc9944d
   - **Cache** the token in KV per environment and scope set for its lifetime (about 1 h; `expires_in` is 3600) and **renew early** at 50 minutes (or `expires_in` − 10 min).
   - A single in-flight refresh per isolate stops a burst of callers from each fetching a token.
   - **Retry once on 401:** drop the cached token, fetch a new one, repeat the call once. A second 401, or a 403 / insufficient scopes, fails that call with a typed `auth` error. The job then carries on without QF suggestions; it never fails the caption job.
-  - **429/5xx:** exponential backoff, at most 3 attempts, then continue without QF.
+  - **429** (§9.5): honour `Retry-After` (delta-seconds or an HTTP date). api-videos stops calling QF from that isolate until then, or for a bounded exponential backoff with jitter (1 s → 15 min) when there is no header, and shows the reference meanwhile. The sync job retries on the queue, never sooner than `Retry-After` (up to 12 h), then goes to the DLQ.
+  - **5xx:** the sync job retries on the queue; display shows the reference with its quran.com link.
   - Tokens and secrets are never logged.
 
 ## 11. Native Studio and on-device transcription
@@ -801,6 +840,6 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O10 | ﷺ in Arabic subtitles | **Decided 2026-11-11:** keep the spoken words by default; each channel can switch on the ﷺ symbol |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
 | O12 | QF API access | **Closed except Search (2026-11-11):** both clients get the granular Content scopes, and production Content Sync works. **Owner to request:** the **Search API** permission (`search` scope) for both the pre-production and production apps at https://dev-console.quran.foundation/projects. It is only needed for mode B and review suggestions |
-| O13 | QF partner-permission email | **Sent 2026-11-11 to developers@quran.com, awaiting reply.** Until QF answers: references only, live fetch, edge cache ≤ 7 days, and identification as decided (§5.5) |
+| O13 | QF partner-permission email | **Answered 2026-11-21 (§9.5):** no permanent caption files with Quran text or translation, no exception. Store references and our timestamps only; text at play time from the Content API or a Content Sync copy synced at least every 7 days; nothing else kept over a week; honour 429 `Retry-After`; granular scopes; attribution with the edition name |
 | O14 | **Decided 2026-11-11:** the creator confirms Quran spans before publish; "Confirm all suggested" covers high-confidence matches; unsure matches publish as a reference plus a quran.com link | Done |
 | O15 | DeepL Voice for high-accuracy STT and the Quran second opinion | **Decided (2/13):** optional, off by default, enabled per environment or language by an admin under the per-provider cap; never used for speech-to-speech of Quran |

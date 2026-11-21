@@ -83,6 +83,39 @@ export const quranTextKey = (version: string, surah: number) => `quran/text/${ve
 export const quranIndexKey = (version: string) => `quran/index/${version}.json`;
 /** QF terms: a copy not synced for 7 days is deleted, and never served. */
 export const QURAN_MAX_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+/** A copy not synced for this long flags the admin (Errors page) while there is still time to fix it. */
+export const QURAN_STALE_WARN_MS = 3 * 24 * 60 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// Quran Foundation rate limits (QF 2026-11-21: no fixed limits; on 429 back off and honour Retry-After)
+// ---------------------------------------------------------------------------
+
+/** Longest exponential backoff without a Retry-After. */
+export const QF_BACKOFF_MAX_MS = 15 * 60_000;
+
+/**
+ * A Retry-After header in milliseconds from `now`: delta-seconds (`120`) or an HTTP date
+ * (`Wed, 21 Nov 2026 07:28:00 GMT`). Null when absent or unreadable; never negative.
+ */
+export function qfRetryAfterMs(header: string | null | undefined, now = Date.now()): number | null {
+  const v = header?.trim();
+  if (!v) return null;
+  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  // An HTTP date names its weekday and month; anything else (`-5`, `1.5`) is unreadable
+  if (!/[a-z]{3}/i.test(v)) return null;
+  const at = Date.parse(v);
+  return Number.isFinite(at) ? Math.max(0, at - now) : null;
+}
+
+/**
+ * How long to wait after the `strikes`-th consecutive 429 (1-based): bounded exponential backoff
+ * with jitter (1 s, 2 s, 4 s … up to QF_BACKOFF_MAX_MS), and never less than QF's Retry-After.
+ */
+export function qfBackoffMs(strikes: number, retryAfterMs: number | null, random: () => number = Math.random): number {
+  const exp = Math.min(QF_BACKOFF_MAX_MS, 1000 * 2 ** Math.max(0, Math.min(20, strikes - 1)));
+  const jittered = Math.round(exp * (0.5 + random() / 2));
+  return Math.max(retryAfterMs ?? 0, jittered);
+}
 
 export interface QuranCurrent {
   v: 1;

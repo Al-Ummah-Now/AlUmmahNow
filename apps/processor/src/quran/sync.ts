@@ -18,6 +18,7 @@ import type { Logger } from '@al-ummah/logger';
 import {
   MessageType,
   QURAN_CURRENT_KEY,
+  QURAN_STALE_WARN_MS,
   QURAN_STATE_KEY,
   quranCopyFresh,
   quranIndexKey,
@@ -201,7 +202,25 @@ export async function enforceQuranFreshness(env: QuranSyncEnv, ctx: ExecutionCon
   const bucket = env.REVIEW_MEDIA;
   if (!bucket) return false;
   const current = await readJson<QuranCurrent>(bucket, QURAN_CURRENT_KEY);
-  if (!current || quranCopyFresh(current, now)) return false;
+  if (!current) return false;
+  if (quranCopyFresh(current, now)) {
+    // Syncs run daily: a copy this old means they keep failing. Flag it while there is time to fix it
+    const age = now - Date.parse(current.syncedAt);
+    if (age > QURAN_STALE_WARN_MS) {
+      const days = Math.floor(age / 86_400_000);
+      logger.error('[Quran] Copy not synced for days', { days, syncedAt: current.syncedAt });
+      reportNeedsAction('processor', env, ctx, {
+        key: QURAN_STALE_NEEDS_ACTION_KEY,
+        source: 'queue',
+        title: `Quran text not synced with Quran Foundation for ${days} days`,
+        message: `Last sync ${current.syncedAt}. QF terms allow 7 days: after that the copy is deleted and Quran captions show references only.`,
+        itemType: 'quran-sync',
+        retry: RETRY,
+        retryLabel: 'Sync now',
+      });
+    }
+    return false;
+  }
   const state = (await readJson<QuranSyncState>(bucket, QURAN_STATE_KEY)) ?? { v: 1 };
   await bucket.delete(QURAN_CURRENT_KEY);
   await deleteVersions(bucket, [...new Set([current.version, ...(state.versions ?? [])])]);
@@ -236,8 +255,16 @@ export interface QuranQueueMessage {
   retry: (options?: { delaySeconds?: number }) => void;
 }
 
+/** Cloudflare Queues' longest retry delay (12 h). */
+const QUEUE_MAX_DELAY_SECONDS = 43_200;
+
+/**
+ * The queue's retry delay: 1, 2, 4 … 30 min, and never sooner than QF's Retry-After (QF 2026-11-21:
+ * on 429 back off and honour Retry-After), which the 30-minute cap does not cut short.
+ */
 export function quranRetryDelaySeconds(attempts: number, retryAfter?: number): number {
-  return Math.min(1800, Math.max(retryAfter ?? 0, 60 * 2 ** Math.max(0, attempts - 1)));
+  const exp = Math.min(1800, 60 * 2 ** Math.max(0, attempts - 1));
+  return Math.min(QUEUE_MAX_DELAY_SECONDS, Math.max(retryAfter ?? 0, exp));
 }
 
 function isPayload(p: unknown): p is QuranContentSyncPayload {

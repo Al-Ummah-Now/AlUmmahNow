@@ -2,9 +2,12 @@
  * Quran Foundation Content API client for the Content Sync job (AUN-CAPTIONS mode A).
  *
  * OAuth2 client credentials (scope `content.sync.read`), token cached for the invocation and
- * refreshed once on a 401. 429 and 5xx are retryable (the queue backs off); other 4xx are not.
+ * refreshed once on a 401. 429 and 5xx are retryable (the queue backs off, never sooner than QF's
+ * Retry-After: delta-seconds or an HTTP date); other 4xx are not.
  * Never called from a test, CI or E2E run with the real network: tests pass a fake `fetchImpl`.
  */
+
+import { qfRetryAfterMs } from '@al-ummah/shared-types';
 
 type SecretBinding = string | { get(): Promise<string> } | undefined;
 
@@ -112,7 +115,8 @@ export class QfClient {
 async function toError(res: Response, what: string): Promise<QfError> {
   const body = (await res.json().catch(() => null)) as { error?: string | { code?: string; message?: string }; code?: string; message?: string } | null;
   const code = (typeof body?.error === 'object' ? body.error.code : typeof body?.error === 'string' ? body.error : body?.code) ?? undefined;
-  const retryAfter = Number(res.headers.get('retry-after')) || undefined;
+  const retryAfterMs = qfRetryAfterMs(res.headers.get('retry-after'));
+  const retryAfter = retryAfterMs === null ? undefined : Math.ceil(retryAfterMs / 1000);
   const retryable = res.status === 429 || res.status >= 500;
   return new QfError(`QF ${what}: ${res.status}${code ? ` ${code}` : ''}`, res.status, retryable, code, retryAfter);
 }
