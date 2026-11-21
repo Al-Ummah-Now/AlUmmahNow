@@ -273,6 +273,15 @@ async function openMenuOverBlank(page: Page, view: 'main' | 'channels'): Promise
   const head = (await header(page).boundingBox())?.height ?? 0;
   await closeMenu(page);
   const offset = await page.evaluate(({ foot, head, l, r: right }) => {
+    // A phone's Library is shorter than the screen, so it can't scroll at all (every offset was
+    // rejected, room -1): blank page added at its end gives the menu's foot somewhere empty to sit
+    const need = 600 - (document.documentElement.scrollHeight - innerHeight);
+    if (need > 0) {
+      const spacer = document.createElement('div');
+      spacer.dataset.helpSpacer = '';
+      spacer.style.height = `${need}px`;
+      document.body.append(spacer);
+    }
     const spans: Array<{ t: number; b: number; l: number; r: number }> = [];
     const skip = (el: Element) => !!el.closest('header, [data-testid="nav-menu"]') || ['fixed', 'sticky'].includes(getComputedStyle(el).position);
     const add = (r: DOMRect) => { if (r.width > 0 && r.height > 0) spans.push({ t: r.top + scrollY, b: r.bottom + scrollY, l: r.left, r: r.right }); };
@@ -301,9 +310,9 @@ async function openMenuOverBlank(page: Page, view: 'main' | 'channels'): Promise
       if (room > best.room) best = { s, room };
       if (room >= 24) break;
     }
-    return best;
+    return { ...best, max };
   }, { foot: box.y + box.height, head, l: box.x, r: box.x + box.width });
-  console.log(`help menu over blank: scrolled ${offset.s} px, ${offset.room} px clear around the menu's foot`);
+  console.log(`help menu over blank: scrolled ${offset.s} of ${offset.max} px, ${offset.room} px clear around the menu's foot`);
   await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), offset.s);
   return openMenu(page, view, true);
 }
@@ -1137,7 +1146,7 @@ const CLIP_LEAK_WATCH = `(() => {
 
 /**
  * Clips: the example address and handle in place of the run's, as the pictures have them (AUDIT:
- * a real-looking fixture address, amina@alummahnow.net, AUDIT-2 2026-11-21; short enough for the Arabic phone menu), kept up while the clip records: a MutationObserver rewrites any run
+ * a real-looking fixture address, amina@yusuf.net, AUDIT-2 2026-11-21; 15 characters, short enough for the Arabic phone menu: 20 wrapped and was cut), kept up while the clip records: a MutationObserver rewrites any run
  * address or handle the moment it renders, before the next frame is painted
  */
 const CLIP_SCRUB = `(() => {
@@ -1145,11 +1154,11 @@ const CLIP_SCRUB = `(() => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const t = node.textContent || '';
-      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina').replace(/@?e2e\\.alummahnow\\.net/g, '@alummahnow.net');
+      if (/e2e\\.alummahnow\\.net|e2e\\+/.test(t)) node.textContent = t.replace(/e2e\\+[^@\\s]*/g, 'amina').replace(/@?e2e\\.alummahnow\\.net/g, '@yusuf.net');
       const u = node.textContent || '';
       if (/@\\s*E2E[\\w-]+/i.test(u)) node.textContent = u.replace(/@\\s*E2E[\\w-]+/gi, '@communitycorner');
     }
-    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@alummahnow.net'; });
+    if (root.querySelectorAll) root.querySelectorAll('input, textarea').forEach((el) => { if (/e2e\\+|e2e\\.alummahnow\\.net/.test(el.value)) el.value = 'amina@yusuf.net'; });
     // An avatar initial taken from the run address ('E' of e2e+…) belongs to the example address too:
     // 'A' (the account-switch clip showed 'E' beside the example address while the name loaded)
     const scope = root.querySelectorAll ? root : document.body;
@@ -1194,12 +1203,12 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
-        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@alummahnow.net');
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@yusuf.net');
       }
       // Run-tagged handles (@E2Ehelp<run>…) read as noise too
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
-    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@alummahnow.net'; });
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@yusuf.net'; });
     // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
     // the per-node pass: rewrite the smallest element whose whole text is a run handle
     document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
@@ -1208,7 +1217,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
     });
     // Field values are not text nodes: the profile's (read-only) email field showed the run address
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
-      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@alummahnow.net';
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@yusuf.net';
       else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
     });
   });
