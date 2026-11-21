@@ -469,7 +469,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const iy = Math.max(0, Math.min(b.y + b.h, r.bottom) - Math.max(b.y, r.top));
       return (ix * iy) / (b.w * b.h) >= 0.6;
     });
-    // Every line of visible text, as its line box (ascenders and descenders included, measured, not guessed)
+    // Every line of visible text, as its letters' ink (measured with its own font: __help.ink)
     const texts: Box[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -479,7 +479,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       range.selectNodeContents(node);
       for (const b of range.getClientRects()) {
         if (b.width <= 0 || b.height <= 0 || b.bottom < 0 || b.top > innerHeight) continue;
-        const box = fromRect(b, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
+        const inked = (window as unknown as { __help: { ink: (e: Element, t: string, r: DOMRect) => DOMRect } }).__help.ink(el, node.textContent ?? '', b);
+        const box = fromRect(inked, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
         if (!hidden(box, el)) texts.push(box);
       }
     }
@@ -786,7 +787,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       range.selectNodeContents(node);
       for (const b of range.getClientRects()) {
         if (b.width <= 0 || b.height <= 0) continue;
-        const box = fromRect(b, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
+        const inked = (window as unknown as { __help: { ink: (e: Element, t: string, r: DOMRect) => DOMRect } }).__help.ink(el, node.textContent ?? '', b);
+        const box = fromRect(inked, { what: `"${(node.textContent ?? '').trim().slice(0, 24)}"`, el });
         // Less than a pixel of it inside the frame shows nothing (a tab strip's next tab starting at the
         // screen's edge): not a line in the picture
         const inW = Math.min(box.x + box.w, frame.x + frame.w) - Math.max(box.x, frame.x);
@@ -1034,7 +1036,26 @@ const PAGE_HELPERS = `(() => {
   };
   const cards = () => [...document.querySelectorAll('body *')].filter((el) => !(el.closest('svg') && el.tagName.toLowerCase() !== 'svg') && isCard(el));
   const pictureSel = 'img, svg, video, canvas, [role="img"], input, select, textarea, button';
-  window.__help = { overlays, visible, cards, isCard, pictureSel };
+  // A line of text as its letters' ink, measured with its own font (canvas), not its line box: an
+  // Arabic line box runs far above and below the letters («تتصرّف باسم» 26 px tall at 14 px), so
+  // outlines that fit in English found no room in Arabic (AUDIT-2 2026-11-21: Amina's row outlined
+  // in English, number-only in Arabic). 1 px of slack each way; never larger than the line box.
+  const inkCtx = document.createElement('canvas').getContext('2d');
+  const ink = (el, text, b) => {
+    const cs = getComputedStyle(el);
+    if (!inkCtx || !text) return b;
+    inkCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    inkCtx.direction = cs.direction === 'rtl' ? 'rtl' : 'ltr';
+    const m = inkCtx.measureText(text);
+    const fa = m.fontBoundingBoxAscent;
+    const fd = m.fontBoundingBoxDescent;
+    if (!(fa + fd > 0) || !(b.height > 0)) return b;
+    const baseline = b.top + fa * (b.height / (fa + fd));
+    const top = Math.max(b.top, baseline - m.actualBoundingBoxAscent - 1);
+    const bottom = Math.min(b.bottom, baseline + m.actualBoundingBoxDescent + 1);
+    return bottom - top > 1 ? new DOMRect(b.left, top, b.width, bottom - top) : b;
+  };
+  window.__help = { overlays, visible, cards, isCard, pictureSel, ink };
 })()`;
 
 /** Fails when a run account, run handle or run address is anywhere a reader can see (pictures and clips) */
