@@ -421,9 +421,9 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= window.innerWidth * 0.6 && b.height > 20 && b.height < window.innerHeight * 0.3 && (b.top <= 1 || b.bottom >= window.innerHeight - 1);
+      return b.width >= window.innerWidth * 0.6 && b.height > 20 && b.height < window.innerHeight * 0.3 && (b.top <= 1 || b.bottom >= window.innerHeight - 1 || !!el.closest("[data-pinned]"));
     }).map((el) => el.getBoundingClientRect());
-    const top = Math.max(0, ...bars.filter((b) => b.top <= 1).map((b) => b.bottom));
+    const top = Math.max(0, ...bars.filter((b) => b.bottom < window.innerHeight / 2).map((b) => b.bottom));
     const bottom = Math.min(window.innerHeight, ...bars.filter((b) => b.bottom >= window.innerHeight - 1).map((b) => b.top));
     const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')].map((t) => t.getBoundingClientRect());
     if (!targets.length) return;
@@ -605,7 +605,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1);
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1 || !!el.closest("[data-pinned]"));
     }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
     const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
     const onScreen = (b: Box) => b.x >= 2 && b.y >= 2 && b.x + b.w <= innerWidth - 2 && b.y + b.h <= innerHeight - 2;
@@ -867,7 +867,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       const pos = getComputedStyle(el).position;
       if (pos !== 'fixed' && pos !== 'sticky') return false;
       const b = el.getBoundingClientRect();
-      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1);
+      return b.width >= innerWidth * 0.6 && b.height > 20 && b.height < innerHeight * 0.3 && (b.top <= 1 || b.bottom >= innerHeight - 1 || !!el.closest("[data-pinned]"));
     }).map((el) => fromRect(el.getBoundingClientRect(), { el }));
     // Is (x, y) covered by something that isn't `el` or part of it? Markers ignore the pointer, so
     // they never count; a bar does
@@ -1039,7 +1039,7 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     // Nothing whole is cut by the picture's edge: a picture, an icon, a control, or a card that fits
     // the room (audit r4: the email field, the hero, the next card, thumbnails, rail icons, a sliver)
     const help = (window as unknown as { __help: { visible: (el: Element) => { l: number; t: number; r: number; b: number } | null; cards: () => Element[]; overlays: () => Element[]; pictureSel: string } }).__help;
-    const barTop = Math.max(0, ...bars.filter((br) => br.y <= 1).map((br) => br.y + br.h));
+    const barTop = Math.max(0, ...bars.filter((br) => br.y + br.h < innerHeight / 2).map((br) => br.y + br.h));
     const barBottom = Math.min(innerHeight, ...bars.filter((br) => br.y + br.h >= innerHeight - 1).map((br) => br.y));
     const cutBy = (vb: { l: number; t: number; r: number; b: number }) => {
       const b = { x: vb.l, y: vb.t, w: vb.r - vb.l, h: vb.b - vb.t };
@@ -1337,7 +1337,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
         const pos = getComputedStyle(el).position;
         if (pos !== 'fixed' && pos !== 'sticky') return false;
         const b = el.getBoundingClientRect();
-        return b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1);
+        return b.width >= W * 0.6 && b.height > 20 && b.height < H * 0.3 && (b.top <= 1 || b.bottom >= H - 1 || !!el.closest("[data-pinned]"));
       });
       const barRects = barEls.map((be) => be.getBoundingClientRect());
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -1391,7 +1391,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
         // the menu's top edge isn't cut at the picture's edge (AUDIT-2 2026-11-21)
         if (keepHeader && bar.t <= 1) continue;
         if (bar.t >= H - 1 - (bar.b - bar.t) && core.b > bar.t) core.b = Math.max(core.t + 1, bar.t);
-        if (bar.t <= 1 && core.t < bar.b) core.t = Math.min(core.b - 1, bar.b);
+        if (bar.b < H / 2 && core.t < bar.b) core.t = Math.min(core.b - 1, bar.b);
       }
       let l = c.x; let t = c.y; let r = c.x + c.width; let b = c.y + c.height;
       // A bar the core is in is taken whole, full width; a bar the core is not in is left out
@@ -1604,6 +1604,17 @@ const SCENES: Scene[] = [
       const headTop = await page.getByTestId('comments-count').first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
       const headerH = (await header(page).boundingBox())?.height ?? 0;
       await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), Math.max(0, headTop - headerH - 48));
+      // A phone pins the player under the header once it scrolls (lib/video/mini-player.ts): the heading
+      // goes 48 px under the player instead (AUDIT-2 2026-11-21: the English phone crop cut the player)
+      await page.waitForTimeout(300);
+      const pinnedBottom = await page.evaluate(() => {
+        const p = document.querySelector('[data-pinned] .video-js') ?? document.querySelector('[data-pinned]');
+        return p ? p.getBoundingClientRect().bottom : 0;
+      });
+      if (pinnedBottom > headerH) {
+        await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), Math.max(0, headTop - pinnedBottom - 48));
+        await page.waitForTimeout(300);
+      }
       const box = page.getByTestId('comment-input').first();
       // The whole composer card with its buttons, and the section's heading row above it in full: the
       // crop never slices a heading or a button (owner audit 2026-11-16)
@@ -1717,7 +1728,7 @@ test('clip identity-switch', async ({ browser }) => {
       await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'member', { timeout: 30_000 });
       await expect(page.getByTestId('nav-menu-trigger')).not.toHaveAttribute('aria-busy', 'true');
       await page.waitForTimeout(2000);
-    }, 12);
+    }, 12, CLIP_HEIGHT);
     // Back to the channel off camera, so every other picture shows it active
     const { context, page } = await open(browser, lang, 'desktop', mode);
     try {
@@ -1771,21 +1782,22 @@ for (const scene of SCENES) {
 type ClipAct = (page: Page, poster: () => Promise<void>) => Promise<void>;
 
 /** Records `act` in a fresh desktop context; keeps from `act` on, trimmed to `seconds`, plus a still */
-async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds = 10): Promise<void> {
+async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds = 10, height?: number): Promise<void> {
   try {
-    await recordClip(browser, id, lang, mode, prepare, act, seconds);
+    await recordClip(browser, id, lang, mode, prepare, act, seconds, height);
   } catch (error) {
     problems.push(`clip ${id}.${lang}.${mode}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
   }
 }
 
-async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds: number): Promise<void> {
+async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: ClipAct, seconds: number, height?: number): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'help-clip-'));
   try {
     const started = Date.now();
-    // Taller than the desktop pictures: the side rail fits whole, no scroll chevron over a cut item
-    // (AUDIT-2 2026-11-21)
-    const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir, height: CLIP_HEIGHT });
+    // `height`: a taller window for a clip whose still shows the side rail whole, no scroll chevron over
+    // a cut item (AUDIT-2 2026-11-21); the rest keep the desktop height (the mini player needs the
+    // page to scroll its player away)
+    const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir, height });
     // Recorded clips move: only they keep motion on
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     let offset = 0;
