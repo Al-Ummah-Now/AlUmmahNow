@@ -80,6 +80,8 @@ test.describe('tab rows on phones', () => {
             await page.getByTestId(`${nav}-menu-${id}`).click();
             await expect(page.getByTestId(`${prefix}${id}`)).toHaveAttribute(nav === 'app-config-tabs' ? 'aria-pressed' : 'aria-current', nav === 'app-config-tabs' ? 'true' : 'page');
             await expect(page.getByTestId(`${prefix}${id}`), `${what}: ${id} has the focus after choosing it`).toBeFocused();
+            // Picked with the pointer: the current style shows it, no keyboard focus ring
+            expect(await page.getByTestId(`${prefix}${id}`).evaluate((el) => el.hasAttribute('data-pointer-focus') || !el.matches(':focus-visible')), `${what}: no focus ring after a pointer pick`).toBe(true);
             expectStrip(`${what}, ${id} chosen`, vp.width, await readStrip(page, nav, prefix), ids);
           }
         }

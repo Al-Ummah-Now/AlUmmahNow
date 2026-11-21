@@ -12,6 +12,23 @@ import { fitToViewport } from '../../../../packages/fanous-tokens/nav/menu-fit.j
  * the menu it takes the row's last slot). The menu is the shared header menu (aun-menu: frosted,
  * kept on screen), a real menu for keyboards and screen readers.
  */
+
+/**
+ * Focus without the keyboard ring (after a pointer pick): `focusVisible: false` where the browser
+ * has it, and `data-pointer-focus` (globals.css hides the ring) until a key is pressed or it blurs
+ */
+function focusQuietly(el: HTMLElement) {
+  el.setAttribute('data-pointer-focus', '');
+  const clear = () => {
+    el.removeAttribute('data-pointer-focus');
+    el.removeEventListener('blur', clear);
+    el.removeEventListener('keydown', clear);
+  };
+  el.addEventListener('blur', clear);
+  el.addEventListener('keydown', clear);
+  el.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+}
+
 export interface PriorityTab {
   id: string;
   label: string;
@@ -131,6 +148,9 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
   // A tab picked from the menu gets the focus once it is current and in the row (after the state
   // change or the navigation), not More beside it
   const focusChosen = useRef<string | null>(null);
+  // A pointer pick takes the focus without the keyboard ring (the active style shows the choice);
+  // a keyboard pick (Enter/Space: a click with detail 0) shows the ring
+  const pickedByPointer = useRef(false);
   useEffect(() => {
     const id = focusChosen.current;
     if (!id || measuring || tabs[current]?.id !== id) return;
@@ -138,7 +158,8 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
     const el = index >= 0 ? (rowRef.current?.children[index]?.firstElementChild as HTMLElement | null | undefined) : undefined;
     if (!el) return;
     focusChosen.current = null;
-    el.focus({ preventScroll: true });
+    if (pickedByPointer.current) focusQuietly(el);
+    else el.focus({ preventScroll: true });
   });
 
   useEffect(() => {
@@ -229,8 +250,9 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                       role="menuitem"
                       tabIndex={-1}
                       aria-current={tab.current ? 'page' : undefined}
-                      onClick={() => {
+                      onClick={(event) => {
                         focusChosen.current = tab.id;
+                        pickedByPointer.current = event.detail > 0;
                         close(false);
                       }}
                       className={`aun-menu-item ${tab.current ? 'font-semibold' : ''}`}
@@ -244,9 +266,10 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
                       type="button"
                       role="menuitem"
                       tabIndex={-1}
-                      onClick={() => {
+                      onClick={(event) => {
                         // The chosen tab takes a slot in the row and the focus
                         focusChosen.current = tab.id;
+                        pickedByPointer.current = event.detail > 0;
                         close(false);
                         onSelect?.(tab.id);
                       }}

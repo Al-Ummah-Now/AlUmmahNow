@@ -44,6 +44,22 @@ interface PriorityStripProps<T extends PriorityItem> {
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
+/**
+ * Focus without the keyboard ring (after a pointer pick): `focusVisible: false` where the browser
+ * has it, and `data-pointer-focus` (globals.css hides the ring) until a key is pressed or it blurs
+ */
+function focusQuietly(el: HTMLElement) {
+  el.setAttribute('data-pointer-focus', '');
+  const clear = () => {
+    el.removeAttribute('data-pointer-focus');
+    el.removeEventListener('blur', clear);
+    el.removeEventListener('keydown', clear);
+  };
+  el.addEventListener('blur', clear);
+  el.addEventListener('keydown', clear);
+  el.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+}
+
 /** How many leading items fit, and where the current one goes (exported for tests) */
 export function fitItems(widths: number[], gap: number, available: number, moreWidth: number, current: number): number[] {
   const n = widths.length;
@@ -156,6 +172,9 @@ export function PriorityStrip<T extends PriorityItem>({
   // ring then sat beside the new current item): Radix's return to the trigger is skipped, and the
   // item is focused once it is current and in the row (a state change or a navigation later)
   const focusChosen = useRef<string | null>(null);
+  // How the pick was made: a pointer pick takes the focus without the keyboard ring (the active
+  // style already shows it), a keyboard pick shows the ring
+  const pickedByPointer = useRef(false);
   useEffect(() => {
     const id = focusChosen.current;
     if (!id || measuring || items[current]?.id !== id) return;
@@ -163,7 +182,8 @@ export function PriorityStrip<T extends PriorityItem>({
     const el = index >= 0 ? (rowRef.current?.children[index] as HTMLElement | undefined) : undefined;
     if (!el) return;
     focusChosen.current = null;
-    el.focus({ preventScroll: true });
+    if (pickedByPointer.current) focusQuietly(el);
+    else el.focus({ preventScroll: true });
   });
 
   return (
@@ -183,7 +203,10 @@ export function PriorityStrip<T extends PriorityItem>({
           <DropdownMenu
             onOpenChange={(next) => {
               // A pick that never became current (it left the page) is forgotten on the next open
-              if (next) focusChosen.current = null;
+              if (next) {
+                focusChosen.current = null;
+                pickedByPointer.current = false;
+              }
               setOpen(next);
             }}
           >
@@ -209,6 +232,12 @@ export function PriorityStrip<T extends PriorityItem>({
               className="aun-strip-menu min-w-44 data-[state=closed]:animate-none!"
               onCloseAutoFocus={(event) => {
                 if (focusChosen.current) event.preventDefault();
+              }}
+              onPointerDown={() => {
+                pickedByPointer.current = true;
+              }}
+              onKeyDown={() => {
+                pickedByPointer.current = false;
               }}
             >
               {menuItems.map((item) => {

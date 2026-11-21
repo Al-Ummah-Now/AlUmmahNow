@@ -62,10 +62,11 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
         </h3>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-          <span>{subscribers}</span>
-          <span aria-hidden="true" className="mx-1">•</span>
-          <span>{videos}</span>
+        {/* Each part stays whole; a narrow card breaks the line only at the dot (#1669 audit) */}
+        <p className="flex flex-wrap items-center justify-center gap-x-1 text-xs text-gray-600 dark:text-gray-400 mt-1">
+          <span className="whitespace-nowrap">{subscribers}</span>
+          <span aria-hidden="true">•</span>
+          <span className="whitespace-nowrap">{videos}</span>
         </p>
         {variant === 'card' && description && (
           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">{description}</p>

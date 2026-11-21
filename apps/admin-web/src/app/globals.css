@@ -440,3 +440,11 @@ html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 .cost-primary:hover:not(:disabled) {
   background: var(--m-primary-hover, var(--accent-hover));
 }
+
+/* A tab focused after a pointer pick from More (PriorityTabs focusQuietly): no keyboard ring, its
+   active style shows the choice; the ring comes back on the next key press */
+[data-pointer-focus]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}

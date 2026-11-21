@@ -138,6 +138,8 @@ async function chooseFromMore(page: Page, strip: string, menu: string[], rowItem
   await current(item);
   // The focus moves to the chosen item, not back to More beside it
   await expect(item, `${what}: ${id} has the focus after choosing it`).toBeFocused();
+  // Picked with the pointer: the active style shows it, no keyboard focus ring
+  expect(await item.evaluate((el) => getComputedStyle(el).outlineStyle), `${what}: no focus ring after a pointer pick`).toBe('none');
   return id;
 }
 

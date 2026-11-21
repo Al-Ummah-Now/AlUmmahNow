@@ -534,3 +534,16 @@ html.fanous-street .demo-layer::after {
 html [role=menu].aun-strip-menu.aun-strip-menu.aun-strip-menu[data-slot] {
   background: var(--fanous-c-menu-bg, var(--popover)) !important;
 }
+
+/* A tab or chip focused after a pointer pick from More (PriorityStrip focusQuietly): no keyboard
+   ring, its active style shows the choice; the ring comes back on the next key press */
+[data-pointer-focus]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ScrollBox (a table wider than its box on a phone): the fade runs towards the inline end, and a
+   thin scrollbar stays visible where the platform draws one */
+[dir=rtl] .scroll-box { --scrollbox-end: left; }
+.scroll-box-scrolls { scrollbar-width: thin; }
+.scroll-box-scrolls:focus-visible { outline: 2px solid var(--fanous-color-focus-ring, currentColor); outline-offset: 2px; }
