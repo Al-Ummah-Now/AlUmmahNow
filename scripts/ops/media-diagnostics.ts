@@ -34,6 +34,9 @@ export interface Names {
 	media: string;
 	videos: string;
 	admin: string;
+	/** The web app and the Auth issuer: a sign-in's redirect and the pages it lands on */
+	web: string;
+	auth: string;
 	queue: string;
 	dlq: string;
 }
@@ -46,9 +49,9 @@ export const SEARCH_D1: Record<EnvName, string> = {
 };
 
 export function namesFor(env: EnvName): Names {
-	if (env === 'production') return { media: 'al-ummah-now-media', videos: 'videos', admin: 'al-ummah-admin-api', queue: 'al-ummah-now-transcode', dlq: 'al-ummah-now-transcode-dlq' };
-	if (env === 'stage') return { media: 'al-ummah-now-media-stage', videos: 'videos-stage', admin: 'al-ummah-admin-api-stage', queue: 'al-ummah-now-transcode-stage', dlq: 'al-ummah-now-transcode-dlq-stage' };
-	return { media: 'al-ummah-now-media-qa', videos: 'videos-qa', admin: 'al-ummah-admin-api-qa', queue: 'al-ummah-now-transcode-qa', dlq: 'al-ummah-now-transcode-dlq-qa' };
+	if (env === 'production') return { web: 'al-ummah-now-production', auth: 'al-ummah-now-auth', media: 'al-ummah-now-media', videos: 'videos', admin: 'al-ummah-admin-api', queue: 'al-ummah-now-transcode', dlq: 'al-ummah-now-transcode-dlq' };
+	if (env === 'stage') return { web: 'al-ummah-now-stage', auth: 'al-ummah-now-auth-stage', media: 'al-ummah-now-media-stage', videos: 'videos-stage', admin: 'al-ummah-admin-api-stage', queue: 'al-ummah-now-transcode-stage', dlq: 'al-ummah-now-transcode-dlq-stage' };
+	return { web: 'al-ummah-web-qa', auth: 'al-ummah-now-auth-qa', media: 'al-ummah-now-media-qa', videos: 'videos-qa', admin: 'al-ummah-admin-api-qa', queue: 'al-ummah-now-transcode-qa', dlq: 'al-ummah-now-transcode-dlq-qa' };
 }
 
 function arg(name: string, fallback: string): string {
@@ -318,6 +321,48 @@ async function costInputs(env: EnvName): Promise<void> {
 	p();
 }
 
+/** api-videos' read-only Auth D1 binding per environment (the Auth issuer's database), for its query analytics. */
+export const AUTH_D1: Record<EnvName, string> = {
+	production: 'af76f007-e21e-43aa-88de-ebfefe46fb56',
+	stage: 'c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2',
+	qa: '',
+};
+
+/**
+ * The slowest D1 queries of the window, per database (Cloudflare GraphQL query analytics, read-only):
+ * a long query blocks every other query on a D1 database, sign-in included (Auth D1, 2026-11-13).
+ */
+async function slowQueries(env: EnvName, since: Date, until: Date): Promise<void> {
+	p('## Slowest D1 queries in the window');
+	for (const [name, id] of [['auth', AUTH_D1[env]], ['search', SEARCH_D1[env]]] as const) {
+		if (!id) continue;
+		const gql = await post('/graphql', {
+			query: `query($a: String!, $d: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $a}) {
+				d1QueriesAdaptiveGroups(limit: 12, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [sum_queryDurationMs_DESC]) {
+					count dimensions { query } avg { queryDurationMs } sum { queryDurationMs rowsRead rowsWritten } }
+				d1AnalyticsAdaptiveGroups(limit: 300, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [datetimeMinute_ASC]) {
+					dimensions { datetimeMinute } sum { readQueries writeQueries } quantiles { queryBatchTimeMsP90 queryBatchTimeMsP99 } }
+			} } }`,
+			variables: { a: account, d: id, s: since.toISOString(), u: until.toISOString() },
+		});
+		const acc = gql.body?.data?.viewer?.accounts?.[0];
+		p(`### ${name} D1`);
+		if (!acc) {
+			p(`- analytics unavailable: ${JSON.stringify(gql.body?.errors ?? null).slice(0, 300)}`);
+			continue;
+		}
+		for (const q of acc.d1QueriesAdaptiveGroups ?? []) {
+			p(`- avg ${Math.round(q.avg?.queryDurationMs ?? 0)} ms, ${q.count}x, total ${Math.round(q.sum?.queryDurationMs ?? 0)} ms, rows read ${q.sum?.rowsRead ?? 0}: ${String(q.dimensions?.query ?? '').replace(/\s+/g, ' ').slice(0, 260)}`);
+		}
+		p('- minutes with p99 batch time over 1 s:');
+		for (const m of acc.d1AnalyticsAdaptiveGroups ?? []) {
+			const p99 = m.quantiles?.queryBatchTimeMsP99 ?? 0;
+			if (p99 > 1000) p(`  - ${m.dimensions.datetimeMinute}: p99 ${Math.round(p99)} ms, p90 ${Math.round(m.quantiles?.queryBatchTimeMsP90 ?? 0)} ms, reads ${m.sum?.readQueries ?? 0}, writes ${m.sum?.writeQueries ?? 0}`);
+		}
+	}
+	p();
+}
+
 async function main(): Promise<void> {
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
 	const env = arg('env', 'production') as EnvName;
@@ -332,9 +377,10 @@ async function main(): Promise<void> {
 	await deployments(names);
 	await queues(names, since, until);
 	await containers(names);
+	await slowQueries(env, since, until);
 	await startTimes(env);
 	await costInputs(env);
-	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
+	for (const s of [names.media, names.videos, names.admin, names.web, names.auth]) await logs(s, since, until, search);
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);
 	process.stdout.write(out.join('\n') + '\n');
