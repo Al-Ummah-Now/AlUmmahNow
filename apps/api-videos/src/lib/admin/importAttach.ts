@@ -168,10 +168,16 @@ export async function runImportAttach(env: AttachEnv, job: AdminJob): Promise<Jo
 		done.add('captions');
 	}
 	if (sidecars.playlistId && !done.has('playlist')) {
-		const outcome = await addVideosNow(env, sidecars.playlistId, String(video.channelId ?? ''), [video.id as string]);
-		if (outcome.missing) warnings.push('playlist_missing');
-		else if (outcome.notInChannel) warnings.push('playlist_other_channel');
-		else if (outcome.overLimit) warnings.push('playlist_full');
+		// Only a playlist of the video's own channel (addVideosNow checks the videos, not the playlist)
+		const playlist = await new R2Repository<{ channelId?: string | null; isDeleted?: boolean }>(env.playlists).getObject(sidecars.playlistId);
+		if (!playlist || playlist.isDeleted) warnings.push('playlist_missing');
+		else if (!video.channelId || playlist.channelId !== video.channelId) warnings.push('playlist_other_channel');
+		else {
+			const outcome = await addVideosNow(env, sidecars.playlistId, video.channelId as string, [video.id as string]);
+			if (outcome.missing) warnings.push('playlist_missing');
+			else if (outcome.notInChannel) warnings.push('playlist_other_channel');
+			else if (outcome.overLimit) warnings.push('playlist_full');
+		}
 		done.add('playlist');
 	}
 

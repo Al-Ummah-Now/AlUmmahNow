@@ -108,6 +108,18 @@ describe('runImportAttach', () => {
 		assert.equal(custom.video().thumbnailUrl, 'https://img/own.jpg');
 	});
 
+	it('adds to a playlist of the video\'s own channel only', async () => {
+		const own = harness({ uploadStatus: 'ready', duration: 60 });
+		await own.env.playlists.put('pl-other', JSON.stringify({ id: 'pl-other', channelId: 'ch2', videos: [] }));
+		await own.init({ playlistId: 'pl-other' });
+		const refused = await runImportAttach(own.env as never, own.job());
+		assert.deepEqual((refused as any).result.warnings, ['playlist_other_channel']);
+		assert.deepEqual(JSON.parse(own.env.playlists.store.get('pl-other')!).videos, []);
+		const missing = harness({ uploadStatus: 'ready', duration: 60 });
+		await missing.init({ playlistId: 'pl-none' });
+		assert.deepEqual(((await runImportAttach(missing.env as never, missing.job())) as any).result.warnings, ['playlist_missing']);
+	});
+
 	it('schedules a private video for its publish date, and warns for a date in the past', async () => {
 		const h = harness({ uploadStatus: 'ready', duration: 60 });
 		const at = new Date(Date.now() + 3 * 86400_000).toISOString();
