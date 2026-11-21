@@ -776,7 +776,8 @@ function printSummary(fatal?: unknown): void {
 
   const stepSummary = process.env.GITHUB_STEP_SUMMARY;
   if (stepSummary) {
-    const esc = (s: string) => s.replace(/\|/g, '\\|');
+    // Markdown table cell: escape backslashes first, then the column separator
+    const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
     const lines = [
       `## QA seed (${MODE})`,
       '',

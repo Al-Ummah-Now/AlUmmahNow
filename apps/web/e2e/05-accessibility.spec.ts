@@ -95,7 +95,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
         await card.focus();
         await expect(card).toBeFocused({ timeout: 3000 });
         await page.keyboard.press('Enter');
-        await expect(page).toHaveURL(new RegExp(`${href!.replace(/[?]/g, '\\?')}$`), { timeout: 5000 });
+        await expect(page).toHaveURL(new RegExp(`${href!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), { timeout: 5000 });
       }
     }).toPass({ timeout: 60000 });
   });

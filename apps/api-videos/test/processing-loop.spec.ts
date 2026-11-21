@@ -500,7 +500,7 @@ describe('ready at the first encoded resolution', () => {
 		thumbnailStatus[ID] = 404;
 		const result = await syncVideoFromBunny(env, ID, { now: NOW, bunny: FINISHED as never });
 		assert.equal(result.plan?.outcome, 'playable');
-		assert.match(thumbnailChecks[0], new RegExp(`^https://${HOST}/${ID}/thumbnail\\.jpg\\?token=[\\w-]+&expires=\\d+$`));
+		assert.match(thumbnailChecks[0], new RegExp(`^https://${HOST.replace(/\./g, '\\.')}/${ID}/thumbnail\\.jpg\\?token=[\\w-]+&expires=\\d+$`));
 		const view = JSON.parse(await (await env.videos.get(ID)).text());
 		assert.equal(view.thumbnailPending, true);
 	});

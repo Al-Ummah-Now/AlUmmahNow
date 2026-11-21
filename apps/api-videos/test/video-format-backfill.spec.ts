@@ -65,7 +65,7 @@ beforeEach(() => {
 	globalThis.fetch = (async (input: RequestInfo | URL) => {
 		const url = String(input);
 		fetched.push(url);
-		if (url.includes('video.bunnycdn.com')) {
+		if (new URL(url).host === 'video.bunnycdn.com') {
 			const r = bunny[url.split('/videos/')[1]] ?? { status: 404 };
 			return new Response(r.body ? JSON.stringify(r.body) : null, { status: r.status });
 		}
@@ -133,7 +133,7 @@ describe('every library, every legacy record', () => {
 		assert.deepEqual([await stored(env, 'k-legacy-api')].map((v) => [v.width, v.height, v.duration]), [[1080, 1920, 75]]);
 		assert.deepEqual([await stored(env, 'l-other-lib')].map((v) => [v.width, v.height, v.duration]), [[720, 1280, 12]]);
 		assert.deepEqual([await stored(env, 'm-no-playurl')].map((v) => [v.width, v.height, v.duration]), [[1920, 1080, 100]]);
-		assert.ok(!fetched.some((u) => u.includes('video.bunnycdn.com') && u.includes('l-other-lib')), 'no API call for another library');
+		assert.ok(!fetched.some((u) => new URL(u).host === 'video.bunnycdn.com' && u.includes('l-other-lib')), 'no API call for another library');
 		assert.equal(counts.shorts, 2, 'k and l: vertical and short');
 		assert.equal(counts.flagged, 0);
 		const choice = await stored(env, 'n-choice');
