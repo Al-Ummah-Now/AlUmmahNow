@@ -31,4 +31,13 @@ describe('navigateOrLoad', () => {
     jest.advanceTimersByTime(2500);
     expect(assign).not.toHaveBeenCalled();
   });
+
+  it('a move that commits and is then undone by Back does not load the target (seamless next)', () => {
+    navigateOrLoad((href) => window.history.pushState(null, '', href), '/en/video/b?list=p&index=1', 2000, assign);
+    // The move commits, then the viewer goes Back before the fallback's deadline
+    jest.advanceTimersByTime(500);
+    window.history.replaceState(null, '', '/en/video/a?list=p&index=0');
+    jest.advanceTimersByTime(2000);
+    expect(assign).not.toHaveBeenCalled();
+  });
 });
