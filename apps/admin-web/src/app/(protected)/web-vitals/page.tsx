@@ -14,7 +14,7 @@ import {
   type VitalsSummary,
   type VitalsValue,
 } from '@/lib/api/vitals';
-import { analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
+import { ANALYTICS_CODES, analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
 import { PanelState } from '@/components/PanelState';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
@@ -139,6 +139,7 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
           reason={problem.reason}
           title={t('vitalsPage.unavailableTitle')}
           body={t(`analyticsPanel.reasons.${problem.reason}` as MessageKey)}
+          codes={ANALYTICS_CODES}
           note={problem.ref ? t('analyticsPanel.flagged') : undefined}
           action={{ label: t('analyticsPanel.retry'), href: href() }}
           reference={problem.ref ? { label: t('analyticsPanel.reference'), ref: problem.ref, linkLabel: t('analyticsPanel.openErrors') } : undefined}

@@ -10,7 +10,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createTranslator, type MessageKey } from '../src/i18n/translate';
 import { AdminApiError } from '../src/lib/api/errors';
-import { ANALYTICS_REASONS, analyticsLoadProblem } from '../src/lib/api/analytics-state';
+import { ANALYTICS_CODES, ANALYTICS_REASONS, analyticsLoadProblem } from '../src/lib/api/analytics-state';
 import { PanelState } from '../src/components/PanelState';
 
 // The components use the automatic JSX runtime under Next; tsx compiles them to React.createElement
@@ -77,6 +77,7 @@ describe('panel state copy', () => {
         reason: 'auth',
         title: t('vitalsPage.unavailableTitle'),
         body: t('analyticsPanel.reasons.auth'),
+        codes: ANALYTICS_CODES,
         note: t('analyticsPanel.flagged'),
         action: { label: t('analyticsPanel.retry'), href: '/web-vitals?env=production&days=7&locale=all' },
         reference: { label: t('analyticsPanel.reference'), ref: 'ERR-AB12-CD34', linkLabel: t('analyticsPanel.openErrors') },
@@ -89,6 +90,9 @@ describe('panel state copy', () => {
     assert.match(html, /<code dir="ltr"[^>]*>ERR-AB12-CD34<\/code>/);
     assert.doesNotMatch(html, /غير مُعدّة/);
     assert.doesNotMatch(html, / · /);
+    // The secret's name and the permission never break across lines and stay left to right in Arabic
+    assert.match(html, /<code dir="ltr" class="font-mono text-fg whitespace-nowrap">media-cdn-api-token<\/code>/);
+    assert.match(html, /<code dir="ltr" class="font-mono text-fg whitespace-nowrap">Account → Account Analytics → Read<\/code>/);
   });
 
   it('renders the empty state as a status, not an alert', () => {

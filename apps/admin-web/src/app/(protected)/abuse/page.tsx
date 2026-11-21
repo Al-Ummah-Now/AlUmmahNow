@@ -1,5 +1,5 @@
 import { getAbuseSummary, ABUSE_ENVS, ABUSE_KINDS, type AbuseEnv, type AbuseSummary } from '@/lib/api/abuse';
-import { analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
+import { ANALYTICS_CODES, analyticsLoadProblem, type AnalyticsLoadProblem } from '@/lib/api/analytics-state';
 import { PanelState } from '@/components/PanelState';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
@@ -85,6 +85,7 @@ export default async function AbusePage({ searchParams }: PageProps) {
           reason={problem.reason}
           title={t('abusePage.unavailableTitle')}
           body={t(`analyticsPanel.reasons.${problem.reason}` as MessageKey)}
+          codes={ANALYTICS_CODES}
           note={problem.ref ? t('analyticsPanel.flagged') : undefined}
           action={{ label: t('analyticsPanel.retry'), href: retryHref }}
           reference={problem.ref ? { label: t('analyticsPanel.reference'), ref: problem.ref, linkLabel: t('analyticsPanel.openErrors') } : undefined}

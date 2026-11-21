@@ -19,6 +19,8 @@ export interface PanelStateProps {
   tone: Tone;
   title: string;
   body: string;
+  /** Names inside `body` shown as unbreakable left-to-right code (a secret's name, a permission) */
+  codes?: string[];
   /** Second paragraph (the reason's fix, or why stage/QA stay empty) */
   note?: string;
   /** The Errors page item: "Reference" + the ERR-… code, and a link to it */
@@ -31,7 +33,7 @@ export interface PanelStateProps {
   reason?: string;
 }
 
-export function PanelState({ tone, title, body, note, reference, action, secondary, testId, reason }: PanelStateProps) {
+export function PanelState({ tone, title, body, codes = [], note, reference, action, secondary, testId, reason }: PanelStateProps) {
   const t = TONE[tone];
   return (
     <section
@@ -49,7 +51,7 @@ export function PanelState({ tone, title, body, note, reference, action, seconda
       <h2 id={`${testId}-title`} className="text-xl font-semibold text-fg max-w-xl">
         {title}
       </h2>
-      <p className="text-fg-muted max-w-xl">{body}</p>
+      <p className="text-fg-muted max-w-xl">{withCodes(body, codes)}</p>
       {note && <p className="text-sm text-fg max-w-xl bg-surface-2 border border-border rounded px-4 py-3" data-testid={`${testId}-note`}>{note}</p>}
       {(action || secondary) && (
         <div className="flex flex-wrap justify-center gap-3 mt-2">
@@ -77,5 +79,21 @@ export function PanelState({ tone, title, body, note, reference, action, seconda
         </div>
       )}
     </section>
+  );
+}
+
+/** `text` with each of `codes` wrapped in <code> that never breaks across lines */
+function withCodes(text: string, codes: string[]): React.ReactNode {
+  const found = codes.filter((c) => c && text.includes(c));
+  if (!found.length) return text;
+  const pattern = new RegExp(`(${found.map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
+  return text.split(pattern).map((part, i) =>
+    found.includes(part) ? (
+      <code key={i} dir="ltr" className="font-mono text-fg whitespace-nowrap">
+        {part}
+      </code>
+    ) : (
+      part
+    ),
   );
 }

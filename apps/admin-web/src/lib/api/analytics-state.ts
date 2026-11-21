@@ -12,6 +12,9 @@ import { AdminApiError } from './errors';
 export const ANALYTICS_REASONS = ['auth', 'rate_limited', 'query', 'upstream', 'unreachable', 'bad_response'] as const;
 export type AnalyticsReason = (typeof ANALYTICS_REASONS)[number] | 'unknown';
 
+/** Names the reasons quote, shown as code: the token's Secrets Store name and the permission it needs */
+export const ANALYTICS_CODES = ['media-cdn-api-token', 'Account → Account Analytics → Read'];
+
 export type AnalyticsLoadProblem =
   | { kind: 'not_configured' }
   | { kind: 'unavailable'; reason: AnalyticsReason; ref?: string }
