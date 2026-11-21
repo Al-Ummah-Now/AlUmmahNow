@@ -21,7 +21,12 @@
     // The Worker sees chunk requests first, so `?dpl=<old build>` reaches the
     // old version's assets (skew protection). Must match in every config: the
     // OpenNext build reads it from wrangler.jsonc.
-    "run_worker_first": ["/_next/static/*"]
+    "run_worker_first": ["/_next/static/*"],
+    // Public files only at their exact path, as Next.js serves them, so no
+    // alias (/foo for /foo.html) skips the middleware. OpenNext >= 1.20.10
+    // refuses to build otherwise when run_worker_first is set.
+    "html_handling": "none",
+    "not_found_handling": "none"
   },
   "observability": {
     "enabled": true
