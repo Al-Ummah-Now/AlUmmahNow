@@ -53,7 +53,7 @@ class HttpError extends Error {
 
 const app = new Hono<Env>();
 const actorOf = (c: C) => c.get('auth')?.userId ?? 'unknown';
-const PREVIEW_SCOPE = /^(|lang:(ar|en)|cat:[a-z0-9_-]{1,64})$/;
+const PREVIEW_SCOPE = /^(|lang:(ar|en)|only:(ar|en)|cat:[a-z0-9_-]{1,64})$/;
 const PREVIEW_RAILS = ['trending:day', 'trending:week', 'trending:month', 'popular', 'new', 'featured', 'top'];
 
 app.onError((error, c) => {
