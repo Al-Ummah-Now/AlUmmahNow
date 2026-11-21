@@ -52,12 +52,15 @@ test.describe('Channel name in the page language', () => {
       const channelLink = page.locator(`a[href="/${lang}/channels/${own.channelId()}"]`).filter({ hasText: expected }).first();
       await expect(channelLink).toBeVisible({ timeout: 30_000 });
 
-      // The views and date line reads like the cards: views • relative time, with the exact date
-      // and time on hover and in the expanded description (owner, 2026-11-13: «6 مشاهدات   أمس»)
+      // The views and date line reads like the cards: views • relative time (Arabic joins with «،»,
+      // lib/i18n/meta-separator.ts), with the exact date and time on hover and in the expanded
+      // description (owner, 2026-11-13: «6 مشاهدات   أمس»)
+      const sep = lang === 'ar' ? '،' : '•';
       const summary = page.locator('.watch-desc summary');
-      await expect(summary).toContainText('•');
+      await expect(summary).toContainText(sep);
+      if (lang === 'ar') await expect(summary).not.toContainText('•');
       // The exact count and what the date is: on hover/focus (and for screen readers), in full when expanded
-      await expect(summary).toHaveAttribute('data-tip', new RegExp(`•\\s*${published} `));
+      await expect(summary).toHaveAttribute('data-tip', new RegExp(`${sep}\\s*${published} `));
       await expect(summary.locator('time.rel-date')).not.toHaveText(lang === 'ar' ? 'أمس' : 'yesterday');
       await summary.click();
       await expect(page.getByTestId('watch-published')).toContainText(published);
