@@ -142,10 +142,8 @@ export function PriorityStrip<T extends PriorityItem>({
   const menuItems = measuring ? [] : items.filter((_, i) => !shown!.has(i));
   const hasMenu = measuring || menuItems.length > 0;
 
-  const choose = (item: T) => {
-    setOpen(false);
-    onSelect?.(item);
-  };
+  // Radix closes the menu after a select; the strip only reports the choice
+  const choose = (item: T) => onSelect?.(item);
 
   return (
     <div ref={holderRef} className={`relative flex min-w-0 flex-1 items-center ${className}`} data-testid={testId} data-measuring={measuring || undefined}>
@@ -159,7 +157,9 @@ export function PriorityStrip<T extends PriorityItem>({
       {hasMenu && (
         // The row's own gap before More (fitItems counts it)
         <div className={`shrink-0 ${measuring ? 'invisible' : ''}`} style={widths?.gap ? { marginInlineStart: widths.gap } : undefined}>
-          <DropdownMenu open={open && !measuring} onOpenChange={setOpen}>
+          {/* Radix owns the open state (the strip only follows it): closing it here as well, inside
+              Radix's own select, left the next press on More doing nothing */}
+          <DropdownMenu onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 ref={moreRef}
