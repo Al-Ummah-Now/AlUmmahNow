@@ -785,8 +785,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 	ctx.waitUntil(
 		(async () => {
 			try {
-				// Search and ownership indexes: one queued reconcile job per kind, each walking its whole
-				// bucket in steps through the admin-jobs queue (lib/search/reconcileJobs.ts)
+				// Search and ownership indexes: weekly, one queued reconcile job per kind, each walking its
+				// whole bucket in steps through the admin-jobs queue; daily, the repair job (lib/search/reconcileJobs.ts)
 				await startIndexReconcile(rawEnv as never);
 			} catch (error) {
 				logger.error('[IndexMaintenance] Could not queue the daily passes', { error: error instanceof Error ? error.message : String(error) });

@@ -1,8 +1,13 @@
 /**
  * Index maintenance from the crons, as queued admin jobs (never inline).
  *
- * Daily: one 'search.rebuild-ownership' job per ownership kind (resuming the
- * pass in progress) and one 'search.reconcile' job per search entity. Each
+ * Weekly (the daily cron, on INDEX_RECONCILE_WEEKDAY): one
+ * 'search.rebuild-ownership' job per ownership kind (resuming the pass in
+ * progress) and one 'search.reconcile' job per search entity. Weekly, not
+ * daily: a full pass marks every row seen (one row write plus its
+ * indexed_at index entry), about 1M D1 row writes per pass at 100k videos
+ * and as many profiles; with failed writes repaired per object, the pass is
+ * only a safety net. Other days the cron only kicks the repair job. Each
  * job walks its bucket in steps of 2000 objects, queuing the next step at
  * once, so a full pass of a 30k-video catalogue finishes in minutes (the
  * inline sweeps did 2000 ownership / 300 search objects a day: ~100 days).
@@ -22,11 +27,19 @@ const BUCKET_FOR_KIND: Record<string, string> = { video: 'videos', channel: 'cha
 
 export type IndexMaintenanceEnv = OwnershipRebuildEnv & SearchReconcileEnv & RepairJobEnv;
 
-/** Daily: queue every reconcile pass (each deduped against an active job of its own). */
-export async function startIndexReconcile(env: IndexMaintenanceEnv): Promise<{ queued: AdminJob[]; failed: string[] }> {
+/** UTC day of the week (0 = Sunday) on which the daily cron queues the full reconcile passes. */
+export const INDEX_RECONCILE_WEEKDAY = 0;
+
+/**
+ * From the daily cron: on INDEX_RECONCILE_WEEKDAY queue every reconcile pass
+ * (each deduped against an active job of its own); every day start the repair
+ * job when objects wait for repair.
+ */
+export async function startIndexReconcile(env: IndexMaintenanceEnv, now = Date.now()): Promise<{ queued: AdminJob[]; failed: string[] }> {
   const queued: AdminJob[] = [];
   const failed: string[] = [];
-  for (const kind of ALL_OWNERSHIP_KINDS) {
+  const fullPass = new Date(now).getUTCDay() === INDEX_RECONCILE_WEEKDAY;
+  for (const kind of fullPass ? ALL_OWNERSHIP_KINDS : []) {
     if (!env[BUCKET_FOR_KIND[kind]]) continue;
     try {
       queued.push((await startOwnershipRebuild(env, kind, 'system', { fresh: false })).job);
@@ -35,7 +48,7 @@ export async function startIndexReconcile(env: IndexMaintenanceEnv): Promise<{ q
       logger.error('[IndexMaintenance] Could not queue the ownership pass', { kind, error: error instanceof Error ? error.message : String(error) });
     }
   }
-  for (const entity of SEARCH_ENTITY_TYPES) {
+  for (const entity of fullPass ? SEARCH_ENTITY_TYPES : []) {
     if (!env[BUCKET_FOR_KIND[entity]]) continue;
     try {
       queued.push((await startSearchReconcile(env, entity, 'system')).job);
@@ -51,7 +64,7 @@ export async function startIndexReconcile(env: IndexMaintenanceEnv): Promise<{ q
     failed.push('repairs');
     logger.error('[IndexMaintenance] Could not start the repair job', { error: error instanceof Error ? error.message : String(error) });
   }
-  logger.info('[IndexMaintenance] Daily passes queued', { jobs: queued.length, failed });
+  logger.info('[IndexMaintenance] Daily index maintenance queued', { fullPass, jobs: queued.length, failed });
   if (failed.length) throw new Error(`Could not queue: ${failed.join(', ')}`);
   return { queued, failed };
 }
