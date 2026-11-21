@@ -1,3 +1,4 @@
+import { onImportAttachFailed } from './lib/admin/importAttach';
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import attestationRouter from './routers/attestation.router';
 import { batchJob, constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
@@ -933,7 +934,9 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 					? onBillingJobFailed(jobEnv, job, error)
 					: job.kind === DISCOVERY_RANK_JOB
 						? Promise.resolve(flagDiscoveryRankFailed(jobEnv, job, error))
-						: Promise.resolve(),
+						: job.kind === 'import.attach'
+							? onImportAttachFailed(jobEnv, job, error)
+							: Promise.resolve(),
 			);
 			return;
 		}

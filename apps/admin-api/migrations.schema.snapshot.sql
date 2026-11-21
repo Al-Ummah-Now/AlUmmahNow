@@ -39,6 +39,7 @@
 --   apps/admin-api/migrations/0044_creator_invites_tier_and_video.sql
 --   apps/admin-api/migrations/0045_invite_wording_link_flow.sql
 --   apps/admin-api/migrations/0046_admin_import_batches.sql
+--   apps/admin-api/migrations/0047_import_items_attach_job.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -69,7 +70,7 @@ CREATE TABLE error_rate (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT
 CREATE TABLE error_refs (ref TEXT PRIMARY KEY, group_id TEXT NOT NULL, event_id TEXT, created_at TEXT NOT NULL);
 CREATE TABLE error_releases (environment TEXT NOT NULL, app TEXT NOT NULL, release TEXT NOT NULL, first_seen TEXT NOT NULL, PRIMARY KEY (environment, app, release));
 CREATE TABLE import_batches (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, name TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE import_items (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, channel_id TEXT NOT NULL, sha256 TEXT NOT NULL, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, video_id TEXT, state TEXT NOT NULL DEFAULT 'initiated', error TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE import_items (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, channel_id TEXT NOT NULL, sha256 TEXT NOT NULL, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, video_id TEXT, state TEXT NOT NULL DEFAULT 'initiated', error TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, attach_job_id TEXT);
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);

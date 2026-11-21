@@ -126,3 +126,21 @@ describe('/internal/admin/import/initiate', () => {
 		assert.equal(h.env.videos.store.size, 1, 'nothing else was created');
 	});
 });
+
+describe('/internal/admin/import/videos/:videoId/sidecars', () => {
+	it('refuses a missing video and sidecars that cannot be attached, before queueing anything', async () => {
+		const h = harness();
+		const app = new Hono();
+		app.route('/internal/admin', adminInternalRouter as never);
+		const send = async (videoId: string, body: unknown) => {
+			const res = await app.request(`/internal/admin/import/videos/${videoId}/sidecars`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN }, body: JSON.stringify(body) }, h.env);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		assert.equal((await send('nope', { chapters: '0:00 Intro' })).body.code, 'video_not_found');
+		await h.env.videos.put('vid-1', JSON.stringify({ id: 'vid-1', userId: OWNER }));
+		const bad = await send('vid-1', {});
+		assert.equal(bad.status, 400);
+		assert.equal(bad.body.code, 'invalid_request');
+		assert.equal([...h.env.global_settings.store.keys()].filter((k) => k.startsWith('admin-import/')).length, 0);
+	});
+});
