@@ -14,6 +14,8 @@ import { COST_TREND_KEYS, type CostBudgetPart, type CostEnvKey, type CostMover, 
 import { budgetMeter, dailyBudget, idleStatus, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
 import { moneyFormat } from '@al-ummah/shared-types';
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 
 export const ENV_KEYS: CostEnvKey[] = ['production', 'stage', 'qa', 'account'];
 export const ENV_COLOR: Record<CostEnvKey, string> = {
@@ -69,7 +71,7 @@ function percentList(levels: readonly number[], f: OpsFormats, t: Translator): s
   return levels.map((l) => f.percent(l)).join(t('costs.listSep'));
 }
 
-export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | null; now: Date }) {
+export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; now: Date }) {
   const age = d ? dataAge(d.dataAsOf, now) : null;
   return (
     <header className="cost-hero p-5 sm:p-6" data-testid="costs-header">
@@ -81,7 +83,7 @@ export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | nul
         {age && (
           <p className="cost-pill min-w-0 max-w-full" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
             <span aria-hidden="true" className={`cost-dot ${age.stale ? 'text-warning-fg' : 'text-success-fg'}`} />
-            <span className="min-w-0 break-words tabular-nums">{age.never ? t('costs.dataNever') : age.stale ? t('costs.dataStale', { time: f.time(d!.dataAsOf!) }) : t('costs.dataAsOf', { time: f.time(d!.dataAsOf!) })}</span>
+            <span className="min-w-0 break-words tabular-nums">{age.never ? t('costs.dataNever') : fillNodes(t(age.stale ? 'costs.dataStale' : 'costs.dataAsOf'), { time: <LocalTime value={d!.dataAsOf!} withTime /> })}</span>
           </p>
         )}
       </div>
@@ -92,7 +94,7 @@ export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | nul
 
 /** The no-token banner (prominent) or the release-token note (quiet). */
 /** `check`: the "Check again" button (a client component, passed in by the page). */
-export function TokenNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f?: OpsFormats; check?: React.ReactNode }) {
+export function TokenNotice({ d, t, check }: { d: CostsDashboard; t: Translator; check?: React.ReactNode }) {
   const notice = tokenNotice(d.collector, d.connections);
   if (notice === 'release') {
     return (
@@ -101,7 +103,7 @@ export function TokenNotice({ d, t, f, check }: { d: CostsDashboard; t: Translat
       </p>
     );
   }
-  if (notice === 'refused') return <RefusedNotice d={d} t={t} f={f} check={check} />;
+  if (notice === 'refused') return <RefusedNotice d={d} t={t} check={check} />;
   if (notice !== 'missing') return null;
   return (
     <section className="cost-banner p-5" role="status" aria-labelledby="costs-token-title" data-testid="costs-token-banner" data-kind="missing">
@@ -168,7 +170,7 @@ const KEY_ICON = (
  * Cloudflare refuses the collector's token (no Account Analytics Read): the Cloudflare figures
  * are missing, not zero. Names the permission, where to fix it, and "Check again" for super admins.
  */
-function RefusedNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f?: OpsFormats; check?: React.ReactNode }) {
+function RefusedNotice({ d, t, check }: { d: CostsDashboard; t: Translator; check?: React.ReactNode }) {
   const via = d.collector.analytics?.via === 'test' ? 'test' : 'run';
   const lastGood = d.dataAsOf;
   return (
@@ -180,7 +182,7 @@ function RefusedNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f
       <p className="mt-1 max-w-3xl text-sm text-fg" data-testid="costs-token-permission">
         {t(d.collector.tokenSource === 'admin' ? 'costs.token.refusedAdminToken' : 'costs.token.refusedSharedToken', { permission: t('costs.token.permission') })}
       </p>
-      <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood && f ? t('costs.token.refusedSince', { time: f.time(lastGood) }) : t('costs.token.refusedNever')}</p>
+      <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood ? fillNodes(t('costs.token.refusedSince'), { time: <LocalTime value={lastGood} withTime /> }) : t('costs.token.refusedNever')}</p>
       <div className="mt-3 flex flex-wrap items-start gap-3">
         {d.canManage ? (
           <>
@@ -197,14 +199,14 @@ function RefusedNotice({ d, t, f, check }: { d: CostsDashboard; t: Translator; f
   );
 }
 
-export function CollectorFailures({ d, t, f }: Common & { d: CostsDashboard }) {
+export function CollectorFailures({ d, t }: Common & { d: CostsDashboard }) {
   if (!d.collector.lastJobFailures.length) return null;
   return (
     <div className="cost-note px-4 py-3 text-sm" data-testid="costs-collector-failures">
       <ul className="space-y-1 text-fg">
         {d.collector.lastJobFailures.map((j) => (
           <li key={`${j.job}-${j.at}`}>
-            {t('costs.failures', { job: j.job, time: f.time(j.at) })}
+            {fillNodes(t('costs.failures', { job: j.job }), { time: <LocalTime value={j.at} withTime /> })}
           </li>
         ))}
       </ul>
@@ -370,7 +372,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                       <span aria-hidden="true" className={`cost-dot ${kind === 'spike' ? 'text-warning-fg' : 'text-danger-fg'}`} />
                       <bdi>{alertText(d, a.key, t, f)}</bdi>
                     </span>
-                    <span className="text-xs text-fg-muted tabular-nums">{t('costs.budget.opened', { time: f.time(a.opened_at) })}</span>
+                    <span className="text-xs text-fg-muted tabular-nums">{fillNodes(t('costs.budget.opened'), { time: <LocalTime value={a.opened_at} withTime /> })}</span>
                   </li>
                 );
               })}

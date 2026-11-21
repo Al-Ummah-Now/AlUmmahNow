@@ -4147,7 +4147,7 @@ const ar: Messages = {
     resources: {
       title: 'الموارد',
       name: 'الاسم',
-      today: 'اليوم',
+      metricToday: '{metric} اليوم',
       last7: 'آخر {#7} أيام',
       empty: 'لم تُبلغ أي موارد عن بيانات بعد.',
     },

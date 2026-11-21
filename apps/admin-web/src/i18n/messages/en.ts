@@ -4149,7 +4149,7 @@ const en = {
     resources: {
       title: 'Resources',
       name: 'Name',
-      today: 'Today',
+      metricToday: '{metric} today',
       last7: 'Last {#7} days',
       empty: 'No resources reported data yet.',
     },

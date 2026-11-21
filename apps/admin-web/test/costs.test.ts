@@ -352,10 +352,10 @@ describe('costs sections render', () => {
     assert.match(cf, /data-testid="costs-cf-list"[^>]*>\$110\.46</);
     assert.ok(cf.indexOf('D1 rows written') < cf.indexOf('Analytics Engine writes'), 'billed lines first');
     assert.ok(cf.includes('Cloudflare does not bill this yet.'));
-    assert.ok(cf.includes('110.5M') && cf.includes('50M'), 'usage and allowance as compact counts');
+    assert.ok(cf.includes('110.4M') && cf.includes('50M'), 'usage (110.46M) and allowance as compact counts, cut not rounded');
     const budget = render(h(sections.BudgetSection, { d, t, f }));
     assert.match(budget, /data-testid="costs-idle-status"[^>]*>\$162\.25 over the \$50\.00 target/);
-    assert.ok(budget.includes('Production $62.25 · QA $150.00'));
+    assert.ok(budget.includes('Production $62.25 • QA $150.00'));
     const budgetAr = render(h(sections.BudgetSection, { d, t: createTranslator('ar'), f: opsFormats('ar') }));
     assert.ok(budgetAr.includes('، '), 'Arabic joins the env list with «،»');
     assert.ok(!budgetAr.includes(' · '));
