@@ -8,7 +8,7 @@
  * someone else saved meanwhile is never overwritten: the save answers with a conflict and the
  * admin loads the latest.
  */
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sameAppConfigDocument as sameDocument, type AppConfigDocumentKey } from '@al-ummah/shared-types';
 import { getAppConfigDocument, saveAppConfigDocument, type AppConfigHistoryEntry } from '@/lib/api/appConfig';
@@ -28,6 +28,7 @@ import {
   type VersionDraft,
 } from './app-config-model';
 import { RuleList } from './RuleList';
+import { PriorityTabs } from '@/components/PriorityTabs';
 import { VersionList } from './VersionList';
 import { DryRun } from './DryRun';
 
@@ -53,7 +54,6 @@ export function AppConfigEditor({ initial, history }: Props) {
   const [fromServer, setFromServer] = useState<Record<AppConfigDocumentKey, Problem[]>>({ flags: [], config: [], versions: [] });
   const [notice, setNotice] = useState<Record<AppConfigDocumentKey, Notice>>({ flags: null, config: null, versions: null });
   const [busy, setBusy] = useState<AppConfigDocumentKey | null>(null);
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const built = useMemo(
     () => ({
@@ -146,14 +146,6 @@ export function AppConfigEditor({ initial, history }: Props) {
     return { flags: built.flags.value, config: built.config.value, versions: built.versions.value };
   }, [built]);
 
-  function onTabKey(e: React.KeyboardEvent, index: number) {
-    const next = e.key === 'ArrowRight' || e.key === 'ArrowLeft' ? (index + ((e.key === 'ArrowRight') === (document.dir !== 'rtl') ? 1 : -1) + KEYS.length) % KEYS.length : e.key === 'Home' ? 0 : e.key === 'End' ? KEYS.length - 1 : -1;
-    if (next < 0) return;
-    e.preventDefault();
-    setTab(KEYS[next]);
-    tabRefs.current[KEYS[next]]?.focus();
-  }
-
   const preview = built[tab].value;
   const n = notice[tab];
   const problems = shownProblems(tab);
@@ -161,33 +153,26 @@ export function AppConfigEditor({ initial, history }: Props) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-4 [&_input]:scroll-mb-40 [&_input]:scroll-mt-24 [&_select]:scroll-mb-40 [&_select]:scroll-mt-24 [&_textarea]:scroll-mb-40 [&_textarea]:scroll-mt-24">
-        <div role="tablist" aria-label={t('appConfig.tabsLabel')} className="flex flex-wrap gap-1 border-b border-border">
-          {KEYS.map((key, i) => (
-            <button
-              key={key}
-              ref={(el) => {
-                tabRefs.current[key] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`${ids}-tab-${key}`}
-              aria-selected={tab === key}
-              aria-controls={`${ids}-panel`}
-              tabIndex={tab === key ? 0 : -1}
-              onClick={() => setTab(key)}
-              onKeyDown={(e) => onTabKey(e, i)}
-              className={`-mb-px min-h-11 rounded-t border-b-2 px-4 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${tab === key ? 'border-accent text-fg' : 'border-transparent text-fg-muted hover:text-fg'}`}
-              data-testid={`app-config-tab-${key}`}
-            >
-              {t(`appConfig.tabs.${key}`)}
-              {dirty(key) && (
-                <span className="ms-2 inline-block h-2 w-2 rounded-full bg-accent align-middle" aria-label={t('appConfig.unsaved')} role="img" />
-              )}
-            </button>
-          ))}
-        </div>
+        {/* One row: the documents that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
+        <PriorityTabs
+          label={t('appConfig.tabsLabel')}
+          testId="app-config-tabs"
+          className="border-b border-border"
+          rowClassName="gap-1"
+          tabClassName="-mb-px block min-h-11 whitespace-nowrap rounded-t border-b-2 px-4 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          currentClassName="border-accent text-fg"
+          idleClassName="border-transparent text-fg-muted hover:text-fg"
+          tabTestIdPrefix="app-config-tab-"
+          onSelect={(id) => setTab(id as AppConfigDocumentKey)}
+          tabs={KEYS.map((key) => ({
+            id: key,
+            label: t(`appConfig.tabs.${key}`),
+            current: tab === key,
+            extra: dirty(key) ? <span className="ms-2 inline-block h-2 w-2 rounded-full bg-accent align-middle" aria-label={t('appConfig.unsaved')} role="img" /> : undefined,
+          }))}
+        />
 
-        <div role="tabpanel" id={`${ids}-panel`} aria-labelledby={`${ids}-tab-${tab}`} className="space-y-4" data-testid="app-config-panel" data-document={tab}>
+        <div role="region" id={`${ids}-panel`} aria-label={t(`appConfig.tabs.${tab}`)} className="space-y-4" data-testid="app-config-panel" data-document={tab}>
           <p className="max-w-3xl text-sm text-fg-muted">{t(`appConfig.intro.${tab}`)}</p>
           {tab === 'versions' ? (
             <VersionList

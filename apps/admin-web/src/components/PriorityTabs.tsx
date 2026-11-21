@@ -6,7 +6,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { fitToViewport } from '../../../../packages/fanous-tokens/nav/menu-fit.js';
 
 /**
- * One row of link tabs that never cuts a tab at the edge and never wraps (owner rule, #1669; the
+ * One row of tabs (links, or buttons with `onSelect`) that never cuts a tab at the edge and never wraps (owner rule, #1669; the
  * videos site's components/ui/PriorityStrip): as many tabs as fit, measured at run time, the rest
  * in a "More ▾" menu at the row's end, and the current tab always in the row (when it would be in
  * the menu it takes the row's last slot). The menu is the shared header menu (aun-menu: frosted,
@@ -15,7 +15,8 @@ import { fitToViewport } from '../../../../packages/fanous-tokens/nav/menu-fit.j
 export interface PriorityTab {
   id: string;
   label: string;
-  href: string;
+  /** A link tab; without it the tab is a button that calls `onSelect` (state, not a page) */
+  href?: string;
   current: boolean;
   /** Shown after the label in the row and the menu (a count badge) */
   extra?: ReactNode;
@@ -36,6 +37,8 @@ interface PriorityTabsProps {
   testId?: string;
   /** Test ids of the tabs: `<prefix><id>` (a string: server pages render this) */
   tabTestIdPrefix?: string;
+  /** Tabs without `href`: a press in the row or the menu (the row's buttons say aria-pressed) */
+  onSelect?: (id: string) => void;
 }
 
 /** How many leading tabs fit, and where the current one goes (the videos site's fitItems) */
@@ -53,7 +56,7 @@ export function fitItems(widths: number[], gap: number, available: number, moreW
   return current >= 0 && widths[current] + gap + moreWidth <= available + 0.5 ? [current] : [];
 }
 
-export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idleClassName, className = '', rowClassName = '', testId, tabTestIdPrefix }: PriorityTabsProps) {
+export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idleClassName, className = '', rowClassName = '', testId, tabTestIdPrefix, onSelect }: PriorityTabsProps) {
   const { t } = useLanguage();
   const navRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLUListElement>(null);
@@ -168,10 +171,17 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
       <ul ref={rowRef} className={`flex min-w-0 flex-nowrap [&>*]:shrink-0 ${measuring ? 'invisible overflow-hidden' : ''} ${rowClassName}`}>
         {rowTabs.map((tab) => (
           <li key={tab.id}>
-            <Link href={tab.href} aria-current={tab.current ? 'page' : undefined} className={`${tabClassName} ${tab.current ? currentClassName : idleClassName}`} data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}${tab.id}` : undefined}>
-              {tab.label}
-              {tab.extra}
-            </Link>
+            {tab.href ? (
+              <Link href={tab.href} aria-current={tab.current ? 'page' : undefined} className={`${tabClassName} ${tab.current ? currentClassName : idleClassName}`} data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}${tab.id}` : undefined}>
+                {tab.label}
+                {tab.extra}
+              </Link>
+            ) : (
+              <button type="button" aria-pressed={tab.current} onClick={() => onSelect?.(tab.id)} className={`${tabClassName} ${tab.current ? currentClassName : idleClassName}`} data-testid={tabTestIdPrefix ? `${tabTestIdPrefix}${tab.id}` : undefined}>
+                {tab.label}
+                {tab.extra}
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -196,18 +206,36 @@ export function PriorityTabs({ tabs, label, tabClassName, currentClassName, idle
             <ul ref={menuRef} id={menuId} role="menu" aria-label={t('common.moreTabsMenu')} onKeyDown={onMenuKey} className="aun-menu" style={{ width: 'max-content', minWidth: '12rem', maxWidth: 'calc(100vw - 16px)', paddingTop: 4 }} data-testid={testId ? `${testId}-menu` : undefined}>
               {menuTabs.map((tab) => (
                 <li key={tab.id} role="none">
-                  <Link
-                    href={tab.href}
-                    role="menuitem"
-                    tabIndex={-1}
-                    aria-current={tab.current ? 'page' : undefined}
-                    onClick={() => close(false)}
-                    className={`aun-menu-item ${tab.current ? 'font-semibold' : ''}`}
-                    data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
-                  >
-                    {tab.label}
-                    {tab.extra}
-                  </Link>
+                  {tab.href ? (
+                    <Link
+                      href={tab.href}
+                      role="menuitem"
+                      tabIndex={-1}
+                      aria-current={tab.current ? 'page' : undefined}
+                      onClick={() => close(false)}
+                      className={`aun-menu-item ${tab.current ? 'font-semibold' : ''}`}
+                      data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
+                    >
+                      {tab.label}
+                      {tab.extra}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      tabIndex={-1}
+                      onClick={() => {
+                        // The chosen tab takes a slot in the row; focus goes back to More
+                        close(true);
+                        onSelect?.(tab.id);
+                      }}
+                      className={`aun-menu-item w-full text-start ${tab.current ? 'font-semibold' : ''}`}
+                      data-testid={testId ? `${testId}-menu-${tab.id}` : undefined}
+                    >
+                      {tab.label}
+                      {tab.extra}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
