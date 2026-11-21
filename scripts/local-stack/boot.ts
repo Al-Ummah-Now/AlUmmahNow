@@ -289,7 +289,10 @@ function migrationPlan(prepared: Prepared[]): { worker: string; binding: string;
           entry.binding = String(db.binding);
         }
         const dir = join(appDir(p.worker), String(db.migrations_dir));
-        if (!entry.dirs.includes(dir)) entry.dirs.push(dir);
+        // A worker may name a migrations dir it does not ship (the Auth admin build's generated
+        // wrangler.json; its AUTH_DB is migrated by the auth worker): nothing to apply there
+        if (!existsSync(dir)) log(`${p.name}: no migrations at ${dir}, skipped (${db.binding})`);
+        else if (!entry.dirs.includes(dir)) entry.dirs.push(dir);
       }
       plan.set(id, entry);
     }
