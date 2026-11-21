@@ -38,7 +38,7 @@ export function VideoDetails({ title, channelName, channelHref, options, avatarA
   // No logo: the channel's first letter, as on its channel page and tiles (never a stock silhouette)
   const avatar = options.channelAvatar
     ? <Image src={options.channelAvatar} alt={avatarAlt} sizes="40px" className="bg-gray-500 object-cover" fill />
-    : <span role={avatarAlt ? 'img' : undefined} aria-label={avatarAlt || undefined} data-testid="watch-avatar-letter" className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-lg font-semibold text-gray-600 dark:text-gray-300"><span aria-hidden="true">{Array.from(name.trim())[0]?.toUpperCase() ?? ''}</span></span>;
+    : <span role={avatarAlt ? 'img' : undefined} aria-label={avatarAlt || undefined} data-testid="watch-avatar-letter" className="absolute inset-0 flex items-center justify-center bg-[var(--fanous-color-surface-raised)] text-lg font-semibold text-[var(--fanous-color-text-secondary)]"><span aria-hidden="true">{Array.from(name.trim())[0]?.toUpperCase() ?? ''}</span></span>;
   const badge = options.channelVerified && <VerifiedBadge className="ms-1" />;
   const nameNode = channelHref
     ? <Link href={channelHref} data-testid="watch-channel-link" className="watch-channel-name">{name}{badge}</Link>

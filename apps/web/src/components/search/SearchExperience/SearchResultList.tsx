@@ -34,7 +34,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           {post.channelAvatar ? (
             <Image src={resolveUrl(post.channelAvatar)} alt="" fill sizes="36px" className="object-cover" />
           ) : (
-            <span className="text-sm font-semibold text-gray-600 dark:text-gray-300" aria-hidden="true" data-testid="post-avatar-letter">
+            <span className="text-sm font-semibold text-[var(--fanous-color-text-secondary)]" aria-hidden="true" data-testid="post-avatar-letter">
               {Array.from(channelLabel(post, lang).trim())[0]?.toUpperCase() ?? ''}
             </span>
           )}

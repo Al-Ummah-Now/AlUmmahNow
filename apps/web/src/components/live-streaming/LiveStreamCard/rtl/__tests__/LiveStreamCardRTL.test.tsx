@@ -15,12 +15,12 @@ describe('LiveStreamCardRTL', () => {
     expect(container.textContent).not.toMatch(/\bLIVE\b/);
   });
 
-  it('shows the viewer count on a dark pill with white text', () => {
+  it('shows the viewer count on the duration badge colours, never red text on the thumbnail', () => {
     const { container } = renderWithProviders(<LiveStreamCardRTL stream={createMockLiveStream({ status: 'live' })} />);
     const pill = [...container.querySelectorAll<HTMLElement>('[role="status"]')].find((el) => el.textContent?.includes('ألف')) as HTMLElement;
     expect(pill).toBeTruthy(); // the mock stream has 1,234 viewers: «١٫٢ ألف»
-    expect(pill.className).toMatch(/bg-black\/75/);
-    expect(pill.className).toMatch(/text-white/);
+    expect(pill.className).toMatch(/bg-\[var\(--fanous-c-badge-duration-bg\)\]/);
+    expect(pill.className).toMatch(/text-\[var\(--fanous-c-badge-duration-text\)\]/);
     expect(pill.className).not.toMatch(/text-red-600/);
   });
 });

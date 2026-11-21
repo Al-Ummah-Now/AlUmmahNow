@@ -200,7 +200,7 @@ export const LiveStreamCard = React.memo<LiveStreamCardProps>(
           {/* Viewer Count (top-right overlay) */}
           {stream.status === 'live' && showViewers && stream.viewerCount !== undefined && (
             <div className="absolute top-2 right-2 z-10">
-              <ViewerCount count={stream.viewerCount} isLive className="rounded bg-black/75 px-2 py-0.5 text-white dark:text-white" />
+              <ViewerCount count={stream.viewerCount} isLive className="rounded bg-[var(--fanous-c-badge-duration-bg)] px-2 py-0.5 text-[var(--fanous-c-badge-duration-text)] dark:text-[var(--fanous-c-badge-duration-text)]" />
             </div>
           )}
 
