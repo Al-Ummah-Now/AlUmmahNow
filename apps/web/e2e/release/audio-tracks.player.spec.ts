@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import { test, expect, type Page } from '@playwright/test';
 import { encoding, untilEncoded } from './encode';
 import { trackRunUploads } from './run-videos';
+import { providerAttempts } from './provider-retry';
 import { releaseEnv, target } from './targets';
 import { apiFetch, contextAccessToken, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { ownerUploadStatus } from './builders';
@@ -78,124 +79,124 @@ function audioRequests(page: Page): string[] {
 }
 
 test.describe('Release: multiple audio tracks', () => {
-  test('a dub added in Studio is packaged, plays first in its language and switches in the Audio menu', async ({ page }) => {
-    const env = releaseEnv();
-    test.skip(env !== 'qa' && env !== 'stage', `${env} has no media container (R2 delivery and packaging run on QA and stage)`);
-    test.setTimeout(22 * 60_000);
+  test('a dub added in Studio is packaged, plays first in its language and switches in the Audio menu', async ({ browser }, testInfo) =>
+    providerAttempts(browser, testInfo, { perAttemptMs: 22 * 60_000 }, async ({ page }) => {
+      const env = releaseEnv();
+      test.skip(env !== 'qa' && env !== 'stage', `${env} has no media container (R2 delivery and packaging run on QA and stage)`);
 
-    const user = await signUpOnWeb(page, 'audio-media-gate');
-    await createProfile(user);
-    // Extra audio tracks are a tier entitlement (0 on Creator): the Unlimited tier allows them
-    await setCreatorTier(user, 'unlimited');
-    const channelId = await createChannel(page, user, `Release E2E audio ${Date.now().toString(36)}`);
+      const user = await signUpOnWeb(page, 'audio-media-gate');
+      await createProfile(user);
+      // Extra audio tracks are a tier entitlement (0 on Creator): the Unlimited tier allows them
+      await setCreatorTier(user, 'unlimited');
+      const channelId = await createChannel(page, user, `Release E2E audio ${Date.now().toString(36)}`);
 
-    await page.goto(`${target().web}/en/upload`);
-    await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-    await page.getByTestId('upload-file-input').setInputFiles(CLIP);
-    await expect(page.getByTestId('upload-details')).toBeVisible();
-    const title = `Release E2E audio ${Date.now().toString(36)}`;
-    await page.getByTestId('upload-title-en').fill(title);
-    await page.getByTestId('upload-submit').click();
-    await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
-    await page.goto('about:blank');
+      await page.goto(`${target().web}/en/upload`);
+      await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+      await page.getByTestId('upload-file-input').setInputFiles(CLIP);
+      await expect(page.getByTestId('upload-details')).toBeVisible();
+      const title = `Release E2E audio ${Date.now().toString(36)}`;
+      await page.getByTestId('upload-title-en').fill(title);
+      await page.getByTestId('upload-submit').click();
+      await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
+      await page.goto('about:blank');
 
-    let videoId = '';
-    try {
-      await expect
-        .poll(async () => {
-          const res = await apiFetch(user, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
-          const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> };
-          videoId = body.data?.find((v) => v.title === title)?.id ?? '';
-          return videoId;
-        }, { message: 'the upload is not in the owner\'s video search', timeout: 60000 })
-        .not.toBe('');
-
-      const first = await studio(user, videoId, channelId);
-      test.skip(first.status === 404 && !first.view, `${env}: the API predates the audio tracks routes`);
-      expect(first.status, 'GET audio-tracks').toBe(200);
-
-      // The rendition first (Bunny encode, then the R2 transcode): tracks can be added once it is ready
-      await untilEncoded('the video and its R2 rendition',
-        () => expect.poll(async () => (await studio(user, videoId, channelId)).view?.ready ?? false, { message: 'the video never became ready for tracks', timeout: R2_READY_TIMEOUT_MS, intervals: [10_000] }).toBe(true),
-        // Not ready yet is 404 to anyone but the owner (#1241): ask as the owner, with a fresh token
-        async () => encoding((await publicView(videoId)).uploadStatus ?? (await ownerUploadStatus(videoId, { accessToken: (await contextAccessToken(page.context())) ?? user.accessToken }))),
-        'the encode and R2 transcode');
-
-      // Add the English dub and send its file (one chunk) the way Studio does
-      const bytes = fs.readFileSync(TONE);
-      const added = await apiFetch(user, `/api/videos/${videoId}/audio-tracks`, {
-        method: 'POST',
-        headers: { channelId, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language: 'en', kind: 'dub', label: 'English', originalLanguage: 'ar', source: { type: 'upload', bytes: bytes.length, fileName: 'e2e-audio-tone.m4a', contentType: 'audio/mp4' } }),
-      });
-      const addedBody = (await added.json().catch(() => ({}))) as { data?: { track?: StudioTrack }; error?: string };
-      expect(added.status, `add the track: ${addedBody.error ?? ''}`).toBe(201);
-      const trackId = addedBody.data!.track!.id;
-      const chunk = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}/upload?offset=0`, { method: 'PUT', headers: { channelId, 'Content-Type': 'application/octet-stream' }, body: bytes });
-      expect(chunk.status, 'the chunk is stored').toBe(200);
-      const done = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}/complete`, { method: 'POST', headers: { channelId } });
-      expect(done.status, 'processing starts').toBe(202);
-
-      // Normalised, then packaged with the original: viewers hear both
-      let view: StudioView | undefined;
-      await untilEncoded('the dub and the audio package',
-        () => expect
+      let videoId = '';
+      try {
+        await expect
           .poll(async () => {
-            view = (await studio(user, videoId, channelId)).view;
-            const t = view?.tracks.find((x) => x.id === trackId);
-            return t?.state === 'failed' || view?.package.status === 'failed' ? 'failed' : t?.state === 'ready' && view?.package.playing ? 'playing' : `${t?.state}/${view?.package.status}`;
-          }, { message: 'the dub never played (track state / package status)', timeout: TRACK_READY_TIMEOUT_MS, intervals: [10_000] })
-          .toMatch(/^(playing|failed)$/),
-        async () => true,
-        'the audio track and package jobs (Containers)');
-      expect(view!.tracks.find((x) => x.id === trackId)!.state, 'the dub was prepared').toBe('ready');
-      expect(view!.package.status, 'the package was written').toBe('ready');
+            const res = await apiFetch(user, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
+            const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> };
+            videoId = body.data?.find((v) => v.title === title)?.id ?? '';
+            return videoId;
+          }, { message: 'the upload is not in the owner\'s video search', timeout: 60000 })
+          .not.toBe('');
 
-      const pub = await publicView(videoId);
-      expect(pub.audioTracks?.map((t) => [t.id, t.language, t.kind]), 'viewers get both tracks, the original first').toEqual([
-        ['orig', 'ar', 'original'],
-        [trackId, 'en', 'dub'],
-      ]);
-      const play = new URL(pub.playUrl!);
-      expect(MEDIA_HOSTS).toContain(play.host);
-      expect(play.pathname, 'the package master').toMatch(/\/master_a\d+\.m3u8$/);
-      const master = await (await fetch(pub.playUrl!)).text();
-      expect(master).toContain('#EXT-X-MEDIA:TYPE=AUDIO');
-      expect(master).toContain(`URI="a/${trackId}/index.m3u8"`);
-      expect(master).toContain('URI="a/orig/index.m3u8"');
+        const first = await studio(user, videoId, channelId);
+        test.skip(first.status === 404 && !first.view, `${env}: the API predates the audio tracks routes`);
+        expect(first.status, 'GET audio-tracks').toBe(200);
 
-      // The watch page in English: the dub first (site language), then the original from the menu
-      const requested = audioRequests(page);
-      await page.goto(watchUrl(videoId, 'en'));
-      await page.waitForSelector('.video-js video', { timeout: 45000 });
-      await page.evaluate(async () => {
-        const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
-        v.muted = true;
-        await v.play().catch(() => undefined);
-      });
-      await expect.poll(() => requested.includes(trackId), { message: 'the English dub is loaded first on /en', timeout: 30000 }).toBe(true);
-      await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime), { timeout: 30000 }).toBeGreaterThan(1);
+        // The rendition first (Bunny encode, then the R2 transcode): tracks can be added once it is ready
+        await untilEncoded('the video and its R2 rendition',
+          () => expect.poll(async () => (await studio(user, videoId, channelId)).view?.ready ?? false, { message: 'the video never became ready for tracks', timeout: R2_READY_TIMEOUT_MS, intervals: [10_000] }).toBe(true),
+          // Not ready yet is 404 to anyone but the owner (#1241): ask as the owner, with a fresh token
+          async () => encoding((await publicView(videoId)).uploadStatus ?? (await ownerUploadStatus(videoId, { accessToken: (await contextAccessToken(page.context())) ?? user.accessToken }))),
+          'the encode and R2 transcode');
 
-      await page.locator('.video-js .vjs-fanous-settings').click();
-      const menu = page.getByTestId('player-settings-menu');
-      await expect(menu).toBeVisible();
-      await menu.locator('[data-row="audio"]').click();
-      const options = menu.getByRole('menuitemradio');
-      await expect(options).toHaveCount(2);
-      await expect(options.nth(1), 'the dub is the current track').toHaveAttribute('aria-checked', 'true');
-      await expect(options.nth(1)).toHaveAttribute('lang', 'en');
-      await options.nth(0).click();
-      await expect.poll(() => requested.includes('orig'), { message: 'switching loads the original audio rendition', timeout: 30000 }).toBe(true);
-      const t0 = await page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime);
-      await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime), { message: 'it keeps playing after the switch', timeout: 30000 }).not.toBe(t0);
+        // Add the English dub and send its file (one chunk) the way Studio does
+        const bytes = fs.readFileSync(TONE);
+        const added = await apiFetch(user, `/api/videos/${videoId}/audio-tracks`, {
+          method: 'POST',
+          headers: { channelId, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ language: 'en', kind: 'dub', label: 'English', originalLanguage: 'ar', source: { type: 'upload', bytes: bytes.length, fileName: 'e2e-audio-tone.m4a', contentType: 'audio/mp4' } }),
+        });
+        const addedBody = (await added.json().catch(() => ({}))) as { data?: { track?: StudioTrack }; error?: string };
+        expect(added.status, `add the track: ${addedBody.error ?? ''}`).toBe(201);
+        const trackId = addedBody.data!.track!.id;
+        const chunk = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}/upload?offset=0`, { method: 'PUT', headers: { channelId, 'Content-Type': 'application/octet-stream' }, body: bytes });
+        expect(chunk.status, 'the chunk is stored').toBe(200);
+        const done = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}/complete`, { method: 'POST', headers: { channelId } });
+        expect(done.status, 'processing starts').toBe(202);
 
-      // Deleting the dub: the original alone again
-      const removed = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}`, { method: 'DELETE', headers: { channelId } });
-      expect(removed.status, 'delete the track').toBe(200);
-      await expect.poll(async () => (await publicView(videoId)).audioTracks ?? [], { message: 'viewers no longer get the dub', timeout: 60000 }).toEqual([]);
-      expect(new URL((await publicView(videoId)).playUrl!).pathname).not.toMatch(/master_a\d+\.m3u8$/);
-    } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
-    }
-  });
+        // Normalised, then packaged with the original: viewers hear both
+        let view: StudioView | undefined;
+        await untilEncoded('the dub and the audio package',
+          () => expect
+            .poll(async () => {
+              view = (await studio(user, videoId, channelId)).view;
+              const t = view?.tracks.find((x) => x.id === trackId);
+              return t?.state === 'failed' || view?.package.status === 'failed' ? 'failed' : t?.state === 'ready' && view?.package.playing ? 'playing' : `${t?.state}/${view?.package.status}`;
+            }, { message: 'the dub never played (track state / package status)', timeout: TRACK_READY_TIMEOUT_MS, intervals: [10_000] })
+            .toMatch(/^(playing|failed)$/),
+          async () => true,
+          'the audio track and package jobs (Containers)');
+        expect(view!.tracks.find((x) => x.id === trackId)!.state, 'the dub was prepared').toBe('ready');
+        expect(view!.package.status, 'the package was written').toBe('ready');
+
+        const pub = await publicView(videoId);
+        expect(pub.audioTracks?.map((t) => [t.id, t.language, t.kind]), 'viewers get both tracks, the original first').toEqual([
+          ['orig', 'ar', 'original'],
+          [trackId, 'en', 'dub'],
+        ]);
+        const play = new URL(pub.playUrl!);
+        expect(MEDIA_HOSTS).toContain(play.host);
+        expect(play.pathname, 'the package master').toMatch(/\/master_a\d+\.m3u8$/);
+        const master = await (await fetch(pub.playUrl!)).text();
+        expect(master).toContain('#EXT-X-MEDIA:TYPE=AUDIO');
+        expect(master).toContain(`URI="a/${trackId}/index.m3u8"`);
+        expect(master).toContain('URI="a/orig/index.m3u8"');
+
+        // The watch page in English: the dub first (site language), then the original from the menu
+        const requested = audioRequests(page);
+        await page.goto(watchUrl(videoId, 'en'));
+        await page.waitForSelector('.video-js video', { timeout: 45000 });
+        await page.evaluate(async () => {
+          const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
+          v.muted = true;
+          await v.play().catch(() => undefined);
+        });
+        await expect.poll(() => requested.includes(trackId), { message: 'the English dub is loaded first on /en', timeout: 30000 }).toBe(true);
+        await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime), { timeout: 30000 }).toBeGreaterThan(1);
+
+        await page.locator('.video-js .vjs-fanous-settings').click();
+        const menu = page.getByTestId('player-settings-menu');
+        await expect(menu).toBeVisible();
+        await menu.locator('[data-row="audio"]').click();
+        const options = menu.getByRole('menuitemradio');
+        await expect(options).toHaveCount(2);
+        await expect(options.nth(1), 'the dub is the current track').toHaveAttribute('aria-checked', 'true');
+        await expect(options.nth(1)).toHaveAttribute('lang', 'en');
+        await options.nth(0).click();
+        await expect.poll(() => requested.includes('orig'), { message: 'switching loads the original audio rendition', timeout: 30000 }).toBe(true);
+        const t0 = await page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime);
+        await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.currentTime), { message: 'it keeps playing after the switch', timeout: 30000 }).not.toBe(t0);
+
+        // Deleting the dub: the original alone again
+        const removed = await apiFetch(user, `/api/videos/${videoId}/audio-tracks/${trackId}`, { method: 'DELETE', headers: { channelId } });
+        expect(removed.status, 'delete the track').toBe(200);
+        await expect.poll(async () => (await publicView(videoId)).audioTracks ?? [], { message: 'viewers no longer get the dub', timeout: 60000 }).toEqual([]);
+        expect(new URL((await publicView(videoId)).playUrl!).pathname).not.toMatch(/master_a\d+\.m3u8$/);
+      } finally {
+        if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
+      }
+    }));
 });

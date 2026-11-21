@@ -6,6 +6,7 @@ import { appendFileSync } from 'node:fs';
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
 import { fetchRetry } from './net';
+import { noteProviderNoAnswer, noteProviderResponse } from './provider-retry';
 import { readSinkCode } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 
@@ -271,7 +272,19 @@ export async function apiFetch(user: Pick<WebUser, 'accessToken'>, path: string,
   // production and the local stack ignore it (docs/features/bot-protection.md)
   if (!headers.has('X-Turnstile-Token')) headers.set('X-Turnstile-Token', 'XXXX.DUMMY.TOKEN.XXXX');
   // A dropped connection is retried for requests that are safe to repeat (net.ts)
-  return fetchRetry(`${target().api}${path}`, { ...init, headers });
+  const url = `${target().api}${path}`;
+  const method = init.method ?? 'GET';
+  const started = Date.now();
+  try {
+    const res = await fetchRetry(url, { ...init, headers });
+    // Provider health for the no-retry upload specs (provider-retry.ts)
+    noteProviderResponse(url, res.status, Date.now() - started, method);
+    return res;
+  } catch (error) {
+    // A caller's own abort (a cleanup budget) is not the provider's doing; a timeout or a dropped connection is
+    if (!(error instanceof Error && error.name === 'AbortError')) noteProviderNoAnswer(url, error instanceof Error ? error.message : String(error), method);
+    throw error;
+  }
 }
 
 /** Creates the user's video profile (new users are sent to the create-profile page otherwise). */

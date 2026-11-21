@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { trackRunUploads } from './run-videos';
+import { providerAttempts } from './provider-retry';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -96,140 +97,143 @@ async function createChannelInMenu(page: Page, user: WebUser, channelName: strin
 }
 
 test.describe('Release: uploads', () => {
-  test('profile and channel images upload and are served', async ({ page }) => {
-    const user = await signUpOnWeb(page, 'rel-images');
-    await createProfile(user);
-    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
-    await grantCreatorTier(user);
+  test('profile and channel images upload and are served', async ({ browser }, testInfo) =>
+    providerAttempts(browser, testInfo, {}, async ({ page }) => {
+      const user = await signUpOnWeb(page, 'rel-images');
+      await createProfile(user);
+      // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+      await grantCreatorTier(user);
 
-    const profileRes = await apiFetch(user, '/api/profile/avatar', { method: 'PUT', body: imageForm() });
-    const profileText = await profileRes.text();
-    expect(profileRes.status, `PUT /api/profile/avatar: ${profileText}`).toBe(200);
-    await expectServedImage((JSON.parse(profileText) as { avatarUrl?: string }).avatarUrl);
+      const profileRes = await apiFetch(user, '/api/profile/avatar', { method: 'PUT', body: imageForm() });
+      const profileText = await profileRes.text();
+      expect(profileRes.status, `PUT /api/profile/avatar: ${profileText}`).toBe(200);
+      await expectServedImage((JSON.parse(profileText) as { avatarUrl?: string }).avatarUrl);
 
-    const channelId = await createChannel(user, `Release E2E images ${Date.now().toString(36)}`);
-    const channelRes = await apiFetch(user, `/api/channels/${channelId}/avatar`, {
-      method: 'PUT',
-      body: imageForm(),
-      headers: { channelId },
-    });
-    const channelText = await channelRes.text();
-    expect(channelRes.status, `PUT /api/channels/:id/avatar: ${channelText}`).toBe(200);
-    await expectServedImage((JSON.parse(channelText) as { avatarUrl?: string }).avatarUrl);
-  });
+      const channelId = await createChannel(user, `Release E2E images ${Date.now().toString(36)}`);
+      const channelRes = await apiFetch(user, `/api/channels/${channelId}/avatar`, {
+        method: 'PUT',
+        body: imageForm(),
+        headers: { channelId },
+      });
+      const channelText = await channelRes.text();
+      expect(channelRes.status, `PUT /api/channels/:id/avatar: ${channelText}`).toBe(200);
+      await expectServedImage((JSON.parse(channelText) as { avatarUrl?: string }).avatarUrl);
+    }));
 
-  test('a video uploaded on the upload page is listed as the user\'s video', async ({ page }) => {
-    const user = await signUpOnWeb(page, 'rel-upload');
-    await createProfile(user);
-    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
-    await grantCreatorTier(user);
-    const channelName = `Release E2E uploads ${Date.now().toString(36)}`;
-    const channelId = await createChannelInMenu(page, user, channelName);
+  test('a video uploaded on the upload page is listed as the user\'s video', async ({ browser }, testInfo) =>
+    providerAttempts(browser, testInfo, {}, async ({ page }) => {
+      const user = await signUpOnWeb(page, 'rel-upload');
+      await createProfile(user);
+      // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+      await grantCreatorTier(user);
+      const channelName = `Release E2E uploads ${Date.now().toString(36)}`;
+      const channelId = await createChannelInMenu(page, user, channelName);
 
-    await page.goto(`${target().web}/en/upload`);
-    await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-    await page.getByTestId('upload-file-input').setInputFiles(VIDEO);
-    await expect(page.getByTestId('upload-details')).toBeVisible();
-    const title = `Release E2E upload ${Date.now().toString(36)}`;
-    await page.getByTestId('upload-title-en').fill(title);
-    // Keep it out of public listings
-    await page.getByTestId('upload-is-public').uncheck();
+      await page.goto(`${target().web}/en/upload`);
+      await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+      await page.getByTestId('upload-file-input').setInputFiles(VIDEO);
+      await expect(page.getByTestId('upload-details')).toBeVisible();
+      const title = `Release E2E upload ${Date.now().toString(36)}`;
+      await page.getByTestId('upload-title-en').fill(title);
+      // Keep it out of public listings
+      await page.getByTestId('upload-is-public').uncheck();
 
-    // The first chunk follows initiate, the TUS create and a resume HEAD (#1188 retries it): on a busy
-    // stage that took longer than the default 15 s (v2026.11.13.8 encode part). Uploads run with no
-    // retries (Bunny cap), so give it the time the upload has (success waits 150 s)
-    const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH', { timeout: 90_000 });
-    await page.getByTestId('upload-submit').click();
-    expect((await tus).status(), 'TUS chunk upload').toBeLessThan(300);
-    await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
+      // The first chunk follows initiate, the TUS create and a resume HEAD (#1188 retries it): on a busy
+      // stage that took longer than the default 15 s (v2026.11.13.8 encode part). Uploads run with no
+      // retries (Bunny cap), so give it the time the upload has (success waits 150 s)
+      const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH', { timeout: 90_000 });
+      await page.getByTestId('upload-submit').click();
+      expect((await tus).status(), 'TUS chunk upload').toBeLessThan(300);
+      await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
 
-    let videoId = '';
-    try {
-      await expect
-        .poll(
-          async () => {
-            const res = await apiFetch(user, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
-            const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> };
-            videoId = body.data?.find((v) => v.title === title)?.id ?? '';
-            return videoId;
-          },
-          { message: 'the uploaded video is not in the owner\'s video search', timeout: 60000 },
-        )
-        .not.toBe('');
+      let videoId = '';
+      try {
+        await expect
+          .poll(
+            async () => {
+              const res = await apiFetch(user, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
+              const body = (await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> };
+              videoId = body.data?.find((v) => v.title === title)?.id ?? '';
+              return videoId;
+            },
+            { message: 'the uploaded video is not in the owner\'s video search', timeout: 60000 },
+          )
+          .not.toBe('');
 
-      // Studio's Videos list shows it (Processing until encoded, then Published)
-      // The list is client-rendered: it is read once it shows rows or its empty state (never mid-load)
-      const listed = page.locator('[data-testid="studio-video-row"], [data-testid="studio-videos-empty"]').first();
-      await expect
-        .poll(async () => {
-          for (const status of ['processing', 'published']) {
-            await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=${status}`);
-            await expect(listed).toBeVisible({ timeout: 30000 });
-            if (await page.getByTestId('studio-video-row').filter({ hasText: title }).count()) return true;
-          }
-          return false;
-        }, { message: 'the upload is not in Studio\'s Videos list', timeout: 90000, intervals: [3000] })
-        .toBe(true);
-    } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
-    }
-  });
+        // Studio's Videos list shows it (Processing until encoded, then Published)
+        // The list is client-rendered: it is read once it shows rows or its empty state (never mid-load)
+        const listed = page.locator('[data-testid="studio-video-row"], [data-testid="studio-videos-empty"]').first();
+        await expect
+          .poll(async () => {
+            for (const status of ['processing', 'published']) {
+              await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=${status}`);
+              await expect(listed).toBeVisible({ timeout: 30000 });
+              if (await page.getByTestId('studio-video-row').filter({ hasText: title }).count()) return true;
+            }
+            return false;
+          }, { message: 'the upload is not in Studio\'s Videos list', timeout: 90000, intervals: [3000] })
+          .toBe(true);
+      } finally {
+        if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
+      }
+    }));
   // 2026-11-10 "single video upload, thumbs dont match aspect": frames were drawn
   // into a fixed 1280x720 canvas, so a vertical video got a squashed thumbnail
-  test('a vertical video keeps its 9:16 shape in the thumbnail picker, the preview and the stored thumbnail', async ({ page }) => {
-    const user = await signUpOnWeb(page, 'rel-thumb-aspect');
-    await createProfile(user);
-    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
-    await grantCreatorTier(user);
-    const channelId = await createChannelInMenu(page, user, `Release E2E thumbs ${Date.now().toString(36)}`);
+  test('a vertical video keeps its 9:16 shape in the thumbnail picker, the preview and the stored thumbnail', async ({ browser }, testInfo) =>
+    providerAttempts(browser, testInfo, {}, async ({ page }) => {
+      const user = await signUpOnWeb(page, 'rel-thumb-aspect');
+      await createProfile(user);
+      // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+      await grantCreatorTier(user);
+      const channelId = await createChannelInMenu(page, user, `Release E2E thumbs ${Date.now().toString(36)}`);
 
-    await page.goto(`${target().web}/en/upload`);
-    await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-    await page.getByTestId('upload-file-input').setInputFiles(VERTICAL_VIDEO);
-    await expect(page.getByTestId('upload-details')).toBeVisible();
+      await page.goto(`${target().web}/en/upload`);
+      await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+      await page.getByTestId('upload-file-input').setInputFiles(VERTICAL_VIDEO);
+      await expect(page.getByTestId('upload-details')).toBeVisible();
 
-    const frames = page.getByTestId('upload-thumbnail-frame');
-    await expect(frames).toHaveCount(5, { timeout: 60000 });
-    const sizes = await frames.locator('img[data-testid="thumbnail-image"]').evaluateAll((imgs) =>
-      (imgs as HTMLImageElement[]).map((i) => [i.naturalWidth, i.naturalHeight]),
-    );
-    expect(sizes, 'one image per frame').toHaveLength(5);
-    for (const [w, h] of sizes) expect(w / h, `frame ${w}x${h} is not 9:16`).toBeCloseTo(9 / 16, 2);
-    // Shown whole (letterboxed) in the 16:9 tiles, not cropped or stretched
-    await expect(frames.nth(2).locator('img[data-testid="thumbnail-image"]')).toHaveAttribute('data-fit', 'contain');
+      const frames = page.getByTestId('upload-thumbnail-frame');
+      await expect(frames).toHaveCount(5, { timeout: 60000 });
+      const sizes = await frames.locator('img[data-testid="thumbnail-image"]').evaluateAll((imgs) =>
+        (imgs as HTMLImageElement[]).map((i) => [i.naturalWidth, i.naturalHeight]),
+      );
+      expect(sizes, 'one image per frame').toHaveLength(5);
+      for (const [w, h] of sizes) expect(w / h, `frame ${w}x${h} is not 9:16`).toBeCloseTo(9 / 16, 2);
+      // Shown whole (letterboxed) in the 16:9 tiles, not cropped or stretched
+      await expect(frames.nth(2).locator('img[data-testid="thumbnail-image"]')).toHaveAttribute('data-fit', 'contain');
 
-    await frames.nth(2).click();
-    const preview = page.getByTestId('upload-thumbnail-preview').locator('img');
-    await expect(preview).toBeVisible();
-    const shape = await preview.evaluate((i: HTMLImageElement) => {
-      const r = i.getBoundingClientRect();
-      return { natural: i.naturalWidth / i.naturalHeight, rendered: r.width / r.height };
-    });
-    expect(shape.natural, 'selected thumbnail is not 9:16').toBeCloseTo(9 / 16, 2);
-    expect(Math.abs(shape.rendered - shape.natural), 'preview is drawn distorted').toBeLessThan(0.02);
+      await frames.nth(2).click();
+      const preview = page.getByTestId('upload-thumbnail-preview').locator('img');
+      await expect(preview).toBeVisible();
+      const shape = await preview.evaluate((i: HTMLImageElement) => {
+        const r = i.getBoundingClientRect();
+        return { natural: i.naturalWidth / i.naturalHeight, rendered: r.width / r.height };
+      });
+      expect(shape.natural, 'selected thumbnail is not 9:16').toBeCloseTo(9 / 16, 2);
+      expect(Math.abs(shape.rendered - shape.natural), 'preview is drawn distorted').toBeLessThan(0.02);
 
-    const title = `Release E2E vertical thumb ${Date.now().toString(36)}`;
-    await page.getByTestId('upload-title-en').fill(title);
-    await page.getByTestId('upload-is-public').uncheck();
-    const initiate = page.waitForResponse((r) => /\/api\/videos\/upload\/initiate/.test(r.url()) && r.request().method() === 'POST');
-    await page.getByTestId('upload-submit').click();
-    const initiated = (await (await initiate).json().catch(() => ({}))) as { result?: { videoId?: string; thumbnailUrl?: string } };
-    const videoId = initiated.result?.videoId ?? '';
-    try {
-      expect(videoId, 'upload initiate returned no video id').toBeTruthy();
-      await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
-      // The stored thumbnail is the 720x1280 frame, not a 1280x720 one
-      const res = await apiFetch(user, `/api/videos/${videoId}`, { headers: { channelId } });
-      const body = (await res.json().catch(() => ({}))) as { result?: { thumbnailUrl?: string; video?: { thumbnailUrl?: string } }; thumbnailUrl?: string };
-      const thumbnailUrl = body.result?.video?.thumbnailUrl ?? body.result?.thumbnailUrl ?? body.thumbnailUrl ?? initiated.result?.thumbnailUrl;
-      expect(thumbnailUrl, 'no thumbnail stored for the upload').toBeTruthy();
-      const image = await fetchRetry(thumbnailUrl as string);
-      expect(image.status, `GET ${thumbnailUrl}`).toBe(200);
-      const pixels = imagePixels(new Uint8Array(await image.arrayBuffer()));
-      expect(pixels, 'stored thumbnail is not a readable JPEG/PNG').not.toBeNull();
-      expect(pixels!.width / pixels!.height, `stored thumbnail is ${pixels!.width}x${pixels!.height}`).toBeCloseTo(9 / 16, 2);
-    } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
-    }
-  });
+      const title = `Release E2E vertical thumb ${Date.now().toString(36)}`;
+      await page.getByTestId('upload-title-en').fill(title);
+      await page.getByTestId('upload-is-public').uncheck();
+      const initiate = page.waitForResponse((r) => /\/api\/videos\/upload\/initiate/.test(r.url()) && r.request().method() === 'POST');
+      await page.getByTestId('upload-submit').click();
+      const initiated = (await (await initiate).json().catch(() => ({}))) as { result?: { videoId?: string; thumbnailUrl?: string } };
+      const videoId = initiated.result?.videoId ?? '';
+      try {
+        expect(videoId, 'upload initiate returned no video id').toBeTruthy();
+        await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
+        // The stored thumbnail is the 720x1280 frame, not a 1280x720 one
+        const res = await apiFetch(user, `/api/videos/${videoId}`, { headers: { channelId } });
+        const body = (await res.json().catch(() => ({}))) as { result?: { thumbnailUrl?: string; video?: { thumbnailUrl?: string } }; thumbnailUrl?: string };
+        const thumbnailUrl = body.result?.video?.thumbnailUrl ?? body.result?.thumbnailUrl ?? body.thumbnailUrl ?? initiated.result?.thumbnailUrl;
+        expect(thumbnailUrl, 'no thumbnail stored for the upload').toBeTruthy();
+        const image = await fetchRetry(thumbnailUrl as string);
+        expect(image.status, `GET ${thumbnailUrl}`).toBe(200);
+        const pixels = imagePixels(new Uint8Array(await image.arrayBuffer()));
+        expect(pixels, 'stored thumbnail is not a readable JPEG/PNG').not.toBeNull();
+        expect(pixels!.width / pixels!.height, `stored thumbnail is ${pixels!.width}x${pixels!.height}`).toBeCloseTo(9 / 16, 2);
+      } finally {
+        if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
+      }
+    }));
 });

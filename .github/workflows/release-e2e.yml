@@ -314,15 +314,22 @@ jobs:
       # Real Bunny uploads are capped (owner, 2026-11-12: a full QA run made 200-300 and ~9,000 piled up
       # in the shared test library). Every upload is in the run resource file: the builders' videos and
       # the upload page's (trackRunUploads). Expected per release: 8 (3 shared clips + 5 upload specs).
+      # A spec retried after a provider slowdown (e2e/release/provider-retry.ts: once, its first
+      # attempt's videos deleted) records a "provider-retry" line and may upload once more.
       - name: Bunny upload cap
         if: always()
         env:
           UPLOAD_CAP: 10
         run: |
           n=0
-          if [ -f "$E2E_RUN_RESOURCES_FILE" ]; then n=$(awk '$1 == "video" { print $2 }' "$E2E_RUN_RESOURCES_FILE" | sort -u | wc -l | tr -d ' '); fi
-          echo "### Bunny uploads (${{ matrix.part }} part): $n of at most $UPLOAD_CAP" >> "$GITHUB_STEP_SUMMARY"
-          echo "Real Bunny uploads in this part: $n (cap $UPLOAD_CAP)"
+          r=0
+          if [ -f "$E2E_RUN_RESOURCES_FILE" ]; then
+            n=$(awk '$1 == "video" { print $2 }' "$E2E_RUN_RESOURCES_FILE" | sort -u | wc -l | tr -d ' ')
+            r=$(awk '$1 == "provider-retry" { print $2 }' "$E2E_RUN_RESOURCES_FILE" | sort -u | wc -l | tr -d ' ')
+          fi
+          UPLOAD_CAP=$((UPLOAD_CAP + r))
+          echo "### Bunny uploads (${{ matrix.part }} part): $n of at most $UPLOAD_CAP ($r provider retries)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Real Bunny uploads in this part: $n (cap $UPLOAD_CAP, $r provider retries)"
           if [ "$n" -gt "$UPLOAD_CAP" ]; then
             echo "::error::$n real Bunny uploads in this run part, over the cap of $UPLOAD_CAP: a spec uploads its own video where a shared run video (e2e/release/run-videos.ts) would do, or retries re-upload"
             exit 1
