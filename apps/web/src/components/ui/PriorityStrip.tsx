@@ -176,7 +176,9 @@ export function PriorityStrip<T extends PriorityItem>({
                 <ChevronDown aria-hidden="true" className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" aria-label={menuLabel} data-testid={testId ? `${testId}-menu` : undefined} className="min-w-44">
+            {/* No exit animation: while a closing menu fades out Radix keeps it mounted, and when it
+                goes it hands focus back to More, which closed a menu opened again in that time */}
+            <DropdownMenuContent align="end" aria-label={menuLabel} data-testid={testId ? `${testId}-menu` : undefined} className="min-w-44 data-[state=closed]:animate-none!">
               {menuItems.map((item) => {
                 const shared = {
                   'aria-current': item.current ? ('true' as const) : undefined,
