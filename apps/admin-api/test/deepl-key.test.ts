@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { openServiceCredential, type ServiceCredentialRow } from '@al-ummah/shared-types';
 import contentRouter from '../src/routers/content.router';
 import { BUILTIN_RETRIES } from '../src/lib/errors-actions';
+import { registerStepUpRoutes } from '../src/middleware/step-up-routes';
 import { sqliteD1 } from './d1-sqlite';
 
 const INTERNAL = 'qa-internal-api-key-0123456789';
@@ -60,7 +61,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-function setup(deeplKeySource: 'admin' | 'binding' | null = null) {
+function setup(deeplKeySource: 'admin' | 'binding' | null = null, opts: { stepUp?: boolean } = {}) {
   const env = {
     SEARCH_DB: searchD1(),
     REPORTS_DB: sqliteD1(),
@@ -78,6 +79,7 @@ function setup(deeplKeySource: 'admin' | 'binding' | null = null) {
     c.set('auth' as never, { userId: c.req.header('x-test-user') ?? 'super-1', roles, email: 'owner@example.com', payload: { name: 'Owner' } } as never);
     await next();
   });
+  if (opts.stepUp) registerStepUpRoutes(app);
   app.route('/api/content', contentRouter);
   const req = (path: string, init: RequestInit & { roles?: string; json?: unknown } = {}) => {
     const { roles = 'super_admin', json: body, ...rest } = init;
@@ -93,6 +95,17 @@ const auditRows = async (env: { REPORTS_DB: D1Database }) =>
   ((await env.REPORTS_DB.prepare("SELECT key, old_value, new_value, actor_id FROM site_settings_log WHERE key = 'content:captions-settings:deepl-key' ORDER BY created_at, rowid").all<{ key: string; old_value: string | null; new_value: string; actor_id: string }>()).results ?? []);
 
 describe('DeepL key on Caption settings', () => {
+
+  it('replacing or removing the key needs a recent sign-in (step-up); the key test does not', async () => {
+    // The test identity's token has no auth_time, so every step-up route answers 401 step_up_required
+    const { req, env } = setup(null, { stepUp: true });
+    const put = await req('/api/content/captions/deepl-key', { method: 'PUT', json: { value: `${'a'.repeat(36)}:fx` } });
+    assert.equal(put.status, 401);
+    assert.equal(((await put.json()) as { code?: string }).code, 'step_up_required');
+    assert.equal((await req('/api/content/captions/deepl-key', { method: 'DELETE' })).status, 401);
+    assert.equal(await row(env), null, 'nothing was stored');
+    assert.equal((await req('/api/content/captions/deepl-key/test', { method: 'POST' })).status, 404, 'no key yet, but the test route ran');
+  });
   it('only super admins set, test or remove it; admins see its state', async () => {
     const { req } = setup();
     for (const roles of ['admin', 'moderator']) {

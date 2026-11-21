@@ -56,6 +56,10 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/billing/payments/:id/refund', what: 'Refund a payment' },
   { method: 'POST', path: '/api/billing/subscriptions/:id/cancel', what: 'Cancel a subscription' },
   { method: 'POST', path: '/api/billing/comps', what: 'Grant a complimentary tier' },
+  // Provider keys (AUN-CAPTIONS DEEPL-KEY): replacing or removing the DeepL API key. Its test only
+  // reads DeepL's usage with the stored key, so it needs no step-up
+  { method: 'PUT', path: '/api/content/captions/deepl-key', what: 'DeepL API key' },
+  { method: 'DELETE', path: '/api/content/captions/deepl-key', what: 'Remove the DeepL API key' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {
