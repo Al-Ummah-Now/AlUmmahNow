@@ -33,6 +33,8 @@ const CLIPS = join(OUT, 'clips');
 const LANGS: Lang[] = ['en', 'ar'];
 const MODES: Mode[] = ['light', 'dark'];
 const DEVICES: Device[] = ['desktop', 'phone'];
+/** Clips' window height (desktop width): the side rail's every item shows */
+const CLIP_HEIGHT = 920;
 const VIEWPORT: Record<Device, { width: number; height: number; scale: number; mobile: boolean }> = {
   desktop: { width: 1280, height: 800, scale: 1, mobile: false },
   phone: { width: 390, height: 844, scale: 2, mobile: true },
@@ -195,8 +197,8 @@ test.beforeAll(async ({ browser }) => {
   if (playlistId) data.onCleanup(`playlist ${playlistId}`, () => apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE' }));
 });
 
-async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, opts: { signedIn?: boolean; record?: string } = {}): Promise<{ context: BrowserContext; page: Page }> {
-  const v = VIEWPORT[device];
+async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, opts: { signedIn?: boolean; record?: string; height?: number } = {}): Promise<{ context: BrowserContext; page: Page }> {
+  const v = { ...VIEWPORT[device], ...(opts.height ? { height: opts.height } : {}) };
   const context = await browser.newContext({
     // New contexts do not inherit the config's `use`: the stack's proxy for the faked CDN (video, images)
     proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' },
@@ -241,6 +243,17 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // The example address and handle from the first paint, for pictures and clips alike: markers are
   // placed on the page as shown (r5: the long run address filled the profile row, so 1 found no spot)
   await context.addInitScript(CLIP_SCRUB);
+  // Arabic pictures show the demo comment in Arabic (AUDIT-2 2026-11-21: an English comment under
+  // «ركن المجتمع»); comments carry no translation, so the text is swapped where it is shown
+  if (lang === 'ar') {
+    await context.addInitScript(([from, to]: string[]) => {
+      const swap = (root: Node) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent?.includes(from)) n.textContent = n.textContent.replace(from, to);
+      };
+      new MutationObserver((ms) => ms.forEach((m) => swap(m.target))).observe(document, { subtree: true, childList: true, characterData: true });
+    }, [NAMES.comment.en, NAMES.comment.ar]);
+  }
   const page = await context.newPage();
   return { context, page };
 }
@@ -334,6 +347,26 @@ async function closeMenu(page: Page): Promise<void> {
   }).toPass({ timeout: 15_000 });
 }
 
+/**
+ * The pointer moved off everything that reacts to it: a row left under the pointer after a click stays
+ * shaded (AUDIT-2 2026-11-21: Weekend Sessions shaded beside the ticked channel, a related video
+ * highlighted for the rest of the clip). An open menu's full-screen backdrop is fine: it hovers nothing
+ */
+async function parkPointer(page: Page): Promise<void> {
+  const spot = await page.evaluate(() => {
+    const live = 'a, button, input, textarea, select, label, summary, video, img, li, article, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [role="row"], [tabindex], [data-testid="nav-menu"]';
+    for (let y = innerHeight - 6; y > 6; y -= 12) for (let x = 6; x < innerWidth - 6; x += 12) {
+      const el = document.elementFromPoint(x, y);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const backdrop = getComputedStyle(el).position === 'fixed' && r.width >= innerWidth - 1 && r.height >= innerHeight - 1;
+      if (backdrop || (!el.closest(live) && !el.closest('header') && getComputedStyle(el).cursor !== 'pointer')) return { x, y };
+    }
+    return null;
+  });
+  if (spot) await page.mouse.move(spot.x, spot.y);
+}
+
 async function openMenu(page: Page, view: 'main' | 'channels' = 'main', keepScroll = false): Promise<Locator> {
   const menu = page.getByTestId('nav-menu');
   // The page at its top first: an open menu locks the page's scroll, so a page left part-scrolled (a
@@ -350,6 +383,7 @@ async function openMenu(page: Page, view: 'main' | 'channels' = 'main', keepScro
     await menu.getByTestId('nav-switch-channel').click();
     await expect(menu.getByTestId('nav-channel-option-none')).toBeVisible();
   }
+  await parkPointer(page);
   return menu;
 }
 
@@ -631,11 +665,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const myBars = (window as unknown as { __help: { barsFor: (e: Element, b: Box[]) => Box[] } }).__help.barsFor(target, bars);
       const myStraddle = (b: Box) => myBars.some((bar) => hit(b, bar) && !contains(bar, b));
       const barClash = (b: Box) => myStraddle(grow(b, 2));
+      // A row in an open menu keeps its outline inside the menu, clear of its border (AUDIT-2
+      // 2026-11-21: the full-width account rows' boxes ran 4-8 px past the menu's rounded edge)
+      const menuOf = target.closest('[data-testid="nav-menu"]');
+      const menuBox = menuOf ? fromRect(menuOf.getBoundingClientRect()) : null;
+      const escapes = (b: Box) => !!menuBox && !contains(grow(menuBox, -3), grow(b, 2));
       let o = outline(gMax);
-      for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
-      bare.push(crowded(o).length > 0 || myStraddle(grow(o, 2)));
+      for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o) || escapes(o)); g--) o = outline(g);
+      bare.push(crowded(o).length > 0 || myStraddle(grow(o, 2)) || escapes(o));
       // Why it went number-only, in the run's notes (AUDIT-2: an outline in English, none in Arabic)
-      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...myBars.filter((bar) => hit(grow(o, 2), bar) && !contains(bar, grow(o, 2))).map((bar) => `a bar ${Math.round(bar.y)}+${Math.round(bar.h)} (outline ${Math.round(o.y)}+${Math.round(o.h)}, target ${Math.round(r.top)}+${Math.round(r.height)})`)].slice(0, 3).join(' | ') : '');
+      bareWhy.push(bare[bare.length - 1] ? [...(escapes(o) ? ["its menu's edge"] : []), ...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...myBars.filter((bar) => hit(grow(o, 2), bar) && !contains(bar, grow(o, 2))).map((bar) => `a bar ${Math.round(bar.y)}+${Math.round(bar.h)} (outline ${Math.round(o.y)}+${Math.round(o.h)}, target ${Math.round(r.top)}+${Math.round(r.height)})`)].slice(0, 3).join(' | ') : '');
       rings.push(o);
       radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
     }
@@ -984,6 +1023,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       if (!contains(frame, outer)) out.push(`outline ${o.what} is cut by the picture's edge`);
       const oTarget = document.querySelector(`[data-help-target="${o.what}"]`);
       if (straddlesBar(outer, oTarget ? barsHere(oTarget) : bars)) out.push(`outline ${o.what} runs under the header or tab bar`);
+      const oMenu = oTarget?.closest('[data-testid="nav-menu"]');
+      if (oMenu && !contains(grow(fromRect(oMenu.getBoundingClientRect()), -1), outer)) out.push(`outline ${o.what} crosses its menu's edge`);
       const t = texts.find((x) => hit(x, grow(outer, CLEAR)) && !contains(grow(o, -(4 + CLEAR)), x));
       if (t) out.push(`outline ${o.what} is within ${CLEAR} px of ${t.what}`);
       const p = pictures.find((x) => hit(x, outer) && !contains(grow(o, -4), x) && !ownOf(o, x));
@@ -1228,7 +1269,7 @@ async function expectNoLeaks(page: Page): Promise<void> {
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
-async function shoot(page: Page, file: string, region: Locator[] = [], opts: { keepHeader?: boolean } = {}): Promise<void> {
+async function shoot(page: Page, file: string, region: Locator[] = [], opts: { keepHeader?: boolean; height?: number } = {}): Promise<number> {
   // The run account's address (e2e+<run>…@e2e.alummahnow.net) reads as noise: show an example one
   await page.evaluate(() => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -1275,7 +1316,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
     const coreBoxes = region.length ? all : (markers.length ? (await Promise.all(markers.map((m) => m.boundingBox()))).filter(Boolean) as typeof all : all);
     const core = { l: Math.min(...coreBoxes.map((b) => b.x)), t: Math.min(...coreBoxes.map((b) => b.y)), r: Math.max(...coreBoxes.map((b) => b.x + b.width)), b: Math.max(...coreBoxes.map((b) => b.y + b.height)) };
     await page.evaluate(PAGE_HELPERS);
-    clip = await page.evaluate(({ c, core, keepHeader }) => {
+    clip = await page.evaluate(({ c, core, keepHeader, match }) => {
       // Each edge goes to the nearest clean line, searched directly so it never stops mid-line (audit
       // r3). Clean, best first: (1) crosses no line of text, control, picture, marker or card (a card
       // that could fit is never cut, audit r4); (2) crosses no text, control or picture; (3) no text.
@@ -1426,9 +1467,23 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
           r = pick(Math.min(W, Math.max(r, core.r)), mustR, W, 1, tiersFor('x', (x) => !avoidIn(mustR, x, 'x')), last ? 'right' : '', true);
         }
       }
+      // Whole pixels, so the English and Arabic twins compare exactly
+      t = Math.round(t); b = Math.round(b);
+      // The other language's height: its twin is framed the same (AUDIT-2 2026-11-21: 378 vs 370 tall).
+      // The pair of clean lines exactly that far apart nearest this crop's top
+      if (match && b - t !== match) {
+        let best: number | null = null;
+        for (let nt = Math.ceil(topLimit); nt <= mustT; nt++) {
+          const nb = nt + match;
+          if (nb < mustB || nb > bottomLimit) continue;
+          if (crosses(items, 'y', nt) || crosses(items, 'y', nb) || cardsCross('y', nt) || cardsCross('y', nb) || avoidIn(nt, mustT, 'y') || avoidIn(mustB, nb, 'y')) continue;
+          if (best === null || Math.abs(nt - t) < Math.abs(best - t)) best = nt;
+        }
+        if (best !== null) { t = best; b = best + match; } else notes.push(`height ${b - t} could not match ${match}`);
+      }
       if (notes.length) notes.push(`covered: ${avoidWhat.join(', ')}`);
       return { x: l, y: t, width: r - l, height: b - t, notes, avoid: avoid.length };
-    }, { c: clip, core, keepHeader: !!opts.keepHeader });
+    }, { c: clip, core, keepHeader: !!opts.keepHeader, match: opts.height ?? 0 });
     if (clip && 'notes' in clip) {
       const { notes: cropNotes, avoid: avoidN, ...box } = clip as typeof clip & { notes: string[]; avoid: number };
       if (cropNotes.length) console.log(`help crop ${file}: ${cropNotes.join('; ')} (avoid ${avoidN})`);
@@ -1440,6 +1495,7 @@ async function shoot(page: Page, file: string, region: Locator[] = [], opts: { k
   await page.screenshot({ path: png, clip, animations: 'disabled' });
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-c:v', 'libwebp', '-quality', '82', '-compression_level', '6', join(OUT, `${file}.webp`)]);
   rmSync(png);
+  return Math.round(clip?.height ?? viewport.height);
 }
 
 interface Scene {
@@ -1542,6 +1598,12 @@ const SCENES: Scene[] = [
       await settle(page, `/video/${videoId}`, lang);
       const line = page.getByTestId('comment-identity').first();
       await line.scrollIntoViewIfNeeded();
+      // The heading row 48 px under the header in every language: the whole form shows above a
+      // phone's tab bar, and the English and Arabic twins frame alike (AUDIT-2 2026-11-21: the form ran
+      // off the bottom; the card's top at 45 in English, 85 in Arabic)
+      const headTop = await page.getByTestId('comments-count').first().evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+      const headerH = (await header(page).boundingBox())?.height ?? 0;
+      await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), Math.max(0, headTop - headerH - 48));
       const box = page.getByTestId('comment-input').first();
       // The whole composer card with its buttons, and the section's heading row above it in full: the
       // crop never slices a heading or a button (owner audit 2026-11-16)
@@ -1620,10 +1682,61 @@ function listedMarkers(help: HelpTranslations, picture: string): number[] {
     .map((block) => block.markers?.length ?? 0);
 }
 
+// Runs before the pictures: the appearance picture marks the notifications read, and the clip's bell
+// then lost the badge its stills show (AUDIT-2 2026-11-21)
+test('clip identity-switch', async ({ browser }) => {
+  test.setTimeout(8 * 60_000);
+  for (const lang of LANGS) for (const mode of MODES) {
+    // One switch, as Help's caption says: from the channel to yourself, the picture by the comment
+    // box changing with it. Same steps in every clip, a settled end, the way back off camera
+    // (AUDIT-2 2026-11-21: a setup switch recorded first, the four clips different)
+    await clip(browser, 'identity-switch', lang, mode, async (page) => {
+      await settle(page, `/video/${videoId}`, lang);
+      await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'channel', { timeout: 30_000 });
+      // Off camera, the menu once, both views, until every picture in it has loaded (AUDIT-2: empty
+      // icon slots, a bare avatar disc)
+      for (const view of ['main', 'channels'] as const) {
+        const warm = await openMenu(page, view);
+        await expect.poll(() => warm.evaluate((m) => [...m.querySelectorAll('img')].every((i) => i.complete && i.naturalWidth > 0)), { timeout: 20_000 }).toBe(true);
+      }
+      await closeMenu(page);
+      // The comment box in view under the header, where the menu opens
+      await page.getByTestId('comment-identity').first().evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      await parkPointer(page);
+    }, async (page, poster) => {
+      const menu = await openMenu(page, 'main', true);
+      await page.waitForTimeout(900);
+      await menu.getByTestId('nav-switch-channel').click();
+      await expect(menu.getByTestId('nav-channel-option-none')).toBeVisible();
+      await parkPointer(page);
+      await page.waitForTimeout(900);
+      // The clip's still: the picker, about to switch (AUDIT-2)
+      await poster();
+      await menu.getByTestId('nav-channel-option-none').click();
+      await parkPointer(page);
+      await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'member', { timeout: 30_000 });
+      await expect(page.getByTestId('nav-menu-trigger')).not.toHaveAttribute('aria-busy', 'true');
+      await page.waitForTimeout(2000);
+    }, 12);
+    // Back to the channel off camera, so every other picture shows it active
+    const { context, page } = await open(browser, lang, 'desktop', mode);
+    try {
+      await settle(page, `/video/${videoId}`, lang);
+      const menu = await openMenu(page, 'channels');
+      await menu.locator(`[data-testid="nav-channel-option"][data-channel-id="${channelId}"]`).click();
+      await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'channel', { timeout: 30_000 });
+    } catch (error) {
+      problems.push(`clip identity-switch.${lang}.${mode}: switching back to the channel: ${(error as Error).message.split('\n')[0]}`);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 for (const scene of SCENES) {
   test(`picture ${scene.id}`, async ({ browser }) => {
-    test.setTimeout(8 * 60_000);
-    for (const lang of LANGS) for (const device of DEVICES) for (const mode of MODES) {
+    test.setTimeout(12 * 60_000);
+    const take = async (lang: Lang, device: Device, mode: Mode, height?: number, retake = false): Promise<number | undefined> => {
       const name = `${scene.id}.${lang}.${device}.${mode}`;
       const { context, page } = await open(browser, lang, device, mode, { signedIn: scene.signedIn });
       try {
@@ -1631,13 +1744,24 @@ for (const scene of SCENES) {
         // Each picture's numbers match the numbered list Help shows under it
         const listed = listedMarkers(lang === 'ar' ? HELP_AR : HELP_EN, scene.id);
         if (listed.some((n) => n !== markers.length)) throw new Error(`${markers.length} markers, but Help lists ${listed.join('/')} under this picture`);
-        await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`), scene.markers);
-        await shoot(page, name, region, { keepHeader: scene.keepHeader });
+        await mark(page, lang, markers, (msg) => { if (!retake) notes.push(`${name}: ${msg}`); }, scene.markers);
+        return await shoot(page, name, region, { keepHeader: scene.keepHeader, height });
       } catch (error) {
         problems.push(`${name}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
         await page.screenshot({ path: test.info().outputPath(`${name}.failed.png`), fullPage: false }).catch(() => undefined);
+        return undefined;
       } finally {
         await context.close();
+      }
+    };
+    // English and Arabic framed alike: Arabic takes English's height; when it can't, English is
+    // retaken at Arabic's (AUDIT-2 2026-11-21: twins 378 and 370 tall, 562 and 602)
+    for (const device of DEVICES) for (const mode of MODES) {
+      const first = await take(LANGS[0], device, mode);
+      const second = await take(LANGS[1], device, mode, first);
+      if (first !== undefined && second !== undefined && second !== first) {
+        const again = await take(LANGS[0], device, mode, second, true);
+        if (again !== second) notes.push(`${scene.id}.${device}.${mode}: en ${again} and ar ${second} tall`);
       }
     }
   });
@@ -1659,7 +1783,9 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
   const dir = mkdtempSync(join(tmpdir(), 'help-clip-'));
   try {
     const started = Date.now();
-    const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir });
+    // Taller than the desktop pictures: the side rail fits whole, no scroll chevron over a cut item
+    // (AUDIT-2 2026-11-21)
+    const { context, page } = await open(browser, lang, 'desktop', mode, { record: dir, height: CLIP_HEIGHT });
     // Recorded clips move: only they keep motion on
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     let offset = 0;
@@ -1700,7 +1826,7 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
     const ends = [...(probe.stderr ?? '').matchAll(/black_end:\s*([\d.]+)/g)].map((m) => Number(m[1]));
     if (ends.length) offset = ends[ends.length - 1] + 0.05;
     else console.log(`help clip ${id}.${lang}.${mode}: no cut frame found, trimmed by time (${offset.toFixed(2)} s)`);
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', offset.toFixed(2), '-t', String(seconds), '-i', join(dir, raw), '-an', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1', join(CLIPS, `${id}.${lang}.${mode}.webm`)]);
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', offset.toFixed(2), '-t', String(seconds), '-i', join(dir, raw), '-an', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '31', '-row-mt', '1', join(CLIPS, `${id}.${lang}.${mode}.webm`)]);
     const png = join(CLIPS, `${id}.${lang}.${mode}.png`);
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-c:v', 'libwebp', '-quality', '80', join(CLIPS, `${id}.${lang}.${mode}.webp`)]);
     rmSync(png);
@@ -1708,36 +1834,6 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
     rmSync(dir, { recursive: true, force: true });
   }
 }
-
-test('clip identity-switch', async ({ browser }) => {
-  test.setTimeout(6 * 60_000);
-  for (const lang of LANGS) for (const mode of MODES) {
-    await clip(browser, 'identity-switch', lang, mode, async (page) => {
-      await settle(page, `/video/${videoId}`, lang);
-      // Off camera (before the clip starts), the menu once, both views, until every picture in it has
-      // loaded: on camera it then opens whole, never with empty icon slots or a bare avatar disc
-      // (AUDIT-2 2026-11-21: Website and Your profile icons empty, Weekend Sessions a plain disc)
-      for (const view of ['main', 'channels'] as const) {
-        const warm = await openMenu(page, view);
-        await expect.poll(() => warm.evaluate((m) => [...m.querySelectorAll('img')].every((i) => i.complete && i.naturalWidth > 0)), { timeout: 20_000 }).toBe(true);
-      }
-      await closeMenu(page);
-      await page.getByTestId('comment-identity').first().scrollIntoViewIfNeeded();
-    }, async (page, poster) => {
-      const menu = await openMenu(page, 'channels');
-      await page.waitForTimeout(600);
-      // The clip's still shows the switch itself, not the comments under it (AUDIT-2)
-      await poster();
-      await menu.getByTestId('nav-channel-option-none').click();
-      await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'member', { timeout: 30_000 });
-      await page.waitForTimeout(1500);
-      // Back to the channel, so every other picture shows it active
-      const again = await openMenu(page, 'channels');
-      await again.locator(`[data-testid="nav-channel-option"][data-channel-id="${channelId}"]`).click();
-      await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'channel', { timeout: 30_000 });
-    }, 12);
-  }
-});
 
 test('clip creating-upload', async ({ browser }) => {
   test.setTimeout(6 * 60_000);
