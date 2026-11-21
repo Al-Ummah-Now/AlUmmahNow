@@ -10,9 +10,12 @@
  *   beyond a week outside Content Sync); never in R2 or D1. QF unreachable → the reference with a
  *   quran.com link.
  * - OAuth2 client credentials, granular scopes, one token per isolate renewed early, one retry on 401.
+ * - HTTP 429 (QF 2026-11-21: no fixed limits; back off and honour Retry-After): the isolate stops
+ *   calling QF until Retry-After (or a bounded exponential backoff with jitter) has passed; callers
+ *   meanwhile get null and show the reference with its quran.com link.
  *   Tests and E2E never call the real QF: they pass `fetchImpl`; the client refuses otherwise.
  */
-import { DEFAULT_QURAN_TRANSLATIONS, cleanQfTranslation, type QuranTranslationEdition } from '@al-ummah/shared-types';
+import { DEFAULT_QURAN_TRANSLATIONS, cleanQfTranslation, qfBackoffMs, qfRetryAfterMs, type QuranTranslationEdition } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 
 type SecretBinding = string | { get(): Promise<string> } | undefined;
@@ -30,7 +33,8 @@ export interface QfTranslationEnv {
 	E2E_ENV?: string;
 }
 
-export const QF_SCOPES = 'content.quran.read content.translations.read content.metadata.read';
+/** Only what display needs: verse translations by key, and the translations catalogue. */
+export const QF_SCOPES = 'content.quran.read content.translations.read';
 /** Edge cache of a fetched translation: under the 7-day limit. */
 export const QF_CACHE_SECONDS = 6 * 24 * 3600;
 /** Most ayat fetched for one span (a longer span shows the reference). */
@@ -47,9 +51,26 @@ const under = (e: Pick<QfTranslationEnv, 'NODE_ENV' | 'CI' | 'E2E_ENV'>) => e.NO
 // (Workers' handle_cross_request_promise_resolution), so concurrent requests each fetch one.
 let token: { value: string; until: number } | null = null;
 
-/** Drops the cached token (tests). */
+/** Rate limited by QF: no call before `until`; `strikes` consecutive 429s so far. */
+let backoff: { until: number; strikes: number } = { until: 0, strikes: 0 };
+
+/** Drops the cached token and any 429 backoff (tests). */
 export function resetQfToken(): void {
 	token = null;
+	backoff = { until: 0, strikes: 0 };
+}
+
+/** When the isolate may call QF again (0 = now); tests and logs. */
+export const qfBackoffUntil = () => backoff.until;
+
+/** The token endpoint answered 429 (already recorded in `backoff`). */
+class QfRateLimited extends Error {}
+
+function rateLimited(res: Response, where: string, now = Date.now()): void {
+	const retryAfterMs = qfRetryAfterMs(res.headers.get('retry-after'), now);
+	const strikes = backoff.strikes + 1;
+	backoff = { until: now + qfBackoffMs(strikes, retryAfterMs), strikes };
+	logger.warn('[Quran] QF answered 429; backing off', { where, strikes, retryAfterMs, waitMs: backoff.until - now });
 }
 
 async function getToken(env: QfTranslationEnv, f: typeof fetch, force: boolean): Promise<string> {
@@ -64,6 +85,10 @@ async function getToken(env: QfTranslationEnv, f: typeof fetch, force: boolean):
 			headers: { authorization: `Basic ${btoa(`${id}:${key}`)}`, 'content-type': 'application/x-www-form-urlencoded' },
 			body: `grant_type=client_credentials&scope=${encodeURIComponent(QF_SCOPES)}`,
 		});
+		if (res.status === 429) {
+			rateLimited(res, 'token');
+			throw new QfRateLimited('QF token: 429');
+		}
 		if (!res.ok) throw new Error(`QF token: ${res.status}`);
 		const body = (await res.json().catch(() => null)) as { access_token?: string; expires_in?: number } | null;
 		if (!body?.access_token) throw new Error('QF token response had no access_token');
@@ -79,17 +104,27 @@ export async function qfGet<T>(env: QfTranslationEnv, path: string, fetchImpl?: 
 	if (!fetchImpl && under(env)) throw new Error('[Quran] Refusing to call Quran Foundation from a test, CI or E2E run: pass a fixture fetch');
 	const f = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
 	const base = `${(env.QF_API_HOST || 'https://apis.quran.foundation').replace(/\/$/, '')}/content`;
+	if (Date.now() < backoff.until) {
+		logger.debug('[Quran] QF backoff in effect; not calling', { path: path.split('?')[0], untilMs: backoff.until });
+		return null;
+	}
 	try {
 		const id = await secret(env.QF_CLIENT_ID);
 		const send = async (force: boolean) => f(`${base}${path}`, { headers: { 'x-auth-token': await getToken(env, f, force), 'x-client-id': id, accept: 'application/json' } });
 		let res = await send(false);
 		if (res.status === 401) res = await send(true);
+		if (res.status === 429) {
+			rateLimited(res, path.split('?')[0]!);
+			return null;
+		}
+		backoff = { until: 0, strikes: 0 };
 		if (!res.ok) {
 			logger.warn('[Quran] QF answered an error', { path: path.split('?')[0], status: res.status });
 			return null;
 		}
 		return (await res.json()) as T;
 	} catch (error) {
+		if (error instanceof QfRateLimited) return null;
 		logger.warn('[Quran] QF unreachable', { path: path.split('?')[0], error: error instanceof Error ? error.message : String(error) });
 		return null;
 	}

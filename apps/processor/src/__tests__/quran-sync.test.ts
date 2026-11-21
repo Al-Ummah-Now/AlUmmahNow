@@ -318,8 +318,24 @@ describe('the queue job and the admin', () => {
     expect(m.ack).not.toHaveBeenCalled();
     expect(quranRetryDelaySeconds(4)).toBe(480);
     expect(quranRetryDelaySeconds(9)).toBe(1800);
+    // A Retry-After past the 30-minute cap is still honoured (up to the queue's 12 h limit)
+    expect(quranRetryDelaySeconds(1, 7200)).toBe(7200);
+    expect(quranRetryDelaySeconds(1, 99_999)).toBe(43_200);
     await Promise.all(pending);
     expect(posts).toHaveLength(0);
+  });
+
+  it('QF busy with Retry-After as an HTTP date: the retry waits until then', async () => {
+    const m = message(1);
+    const at = new Date(Date.now() + 600_000).toUTCString();
+    const fetchImpl = (async (input: RequestInfo | URL) =>
+      String(input).endsWith('/oauth2/token')
+        ? Response.json({ access_token: 't', expires_in: 3600 })
+        : Response.json({ message: 'Too many requests, please try again later', type: 'rate_limit_exceeded' }, { status: 429, headers: { 'retry-after': at } })) as typeof fetch;
+    await processQuranSyncMessages([m], env(), ctx(), logger, { fetchImpl, complete: false });
+    const delay = (m.retry.mock.calls[0]![0] as { delaySeconds: number }).delaySeconds;
+    expect(delay).toBeGreaterThanOrEqual(598);
+    expect(delay).toBeLessThanOrEqual(601);
   });
 
   it('a verse that fails the check: nothing is written, the token stays, the admin is flagged with Sync now', async () => {
@@ -354,6 +370,18 @@ describe('the queue job and the admin', () => {
     expect(e.MESSAGE_QUEUE.send).toHaveBeenCalledWith(expect.objectContaining({ type: MessageType.QuranContentSync, payload: { reason: 'cron' } }));
     await Promise.all(pending);
     expect(posts[0]!.events![0]!.action).toEqual(expect.objectContaining({ key: 'quran-stale', retryLabel: 'Sync now' }));
+  });
+
+  it('a copy not synced for over 3 days flags the admin while it is still served (a good sync resolves it: see above)', async () => {
+    const e = env();
+    await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
+    expect(await enforceQuranFreshness(e, ctx(), logger, Date.parse('2026-11-15T03:41:00.000Z'))).toBe(false);
+    await Promise.all(pending);
+    expect(posts).toHaveLength(0);
+    expect(await enforceQuranFreshness(e, ctx(), logger, Date.parse('2026-11-17T04:00:00.000Z'))).toBe(false);
+    expect(e.REVIEW_MEDIA.store.has(QURAN_CURRENT_KEY)).toBe(true);
+    await Promise.all(pending);
+    expect(posts[0]!.events![0]!.action).toEqual(expect.objectContaining({ key: 'quran-stale', title: 'Quran text not synced with Quran Foundation for 4 days', retryLabel: 'Sync now' }));
   });
 
   it('the daily run is skipped where QF is not configured', async () => {
