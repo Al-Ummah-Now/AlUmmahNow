@@ -39,6 +39,7 @@ const HomeRailSchema = z.object({
 	key: z.enum(HOME_RAIL_KEYS).describe('The home rail (admin order)'),
 	rail: z.string().describe('The ranked list behind it, for "See all": /api/videos/sections/* or /api/trending'),
 	category: z.string().optional(),
+	categoryLabel: z.object({ en: z.string(), ar: z.string() }).optional().describe("A category rail's heading per language"),
 	info: RailInfoSchema,
 	data: z.array(z.object(FeedVideoFields)),
 	cursor: z.string().optional(),
@@ -61,11 +62,17 @@ export async function homeRailOrder(db: Db | undefined): Promise<HomeRailKey[]> 
 	}
 }
 
-async function categoryOrder(db: Db | undefined): Promise<string[]> {
+interface CategoryRow {
+	value: string;
+	label_en: string;
+	label_ar: string;
+}
+
+async function categoryOrder(db: Db | undefined): Promise<CategoryRow[]> {
 	if (!db) return [];
 	try {
-		const { results = [] } = await db.prepare('SELECT value FROM video_categories WHERE retired = 0 ORDER BY position, value').all<{ value: string }>();
-		return results.map((r) => r.value);
+		const { results = [] } = await db.prepare('SELECT value, label_en, label_ar FROM video_categories WHERE retired = 0 ORDER BY position, value').all<CategoryRow>();
+		return results;
 	} catch {
 		return [];
 	}
@@ -133,12 +140,14 @@ export class DiscoveryHome extends PublicRoute {
 		// Read a little more than a rail shows: earlier rails may take some of its videos
 		const read = limit + 8;
 		const wanted: Array<{ key: HomeRailKey; rail: RailId; category?: string; scope: string }> = [];
+		const categoryLabels = new Map<string, { en: string; ar: string }>();
 		for (const key of order) {
 			if (key !== 'categories') {
 				wanted.push({ key, rail: HOME_RAIL_ID[key], scope });
 			} else {
-				for (const category of (await categoryOrder(db)).slice(0, MAX_CATEGORY_RAILS * 3)) {
-					wanted.push({ key, rail: 'top', category, scope: railScope({ category }) });
+				for (const row of (await categoryOrder(db)).slice(0, MAX_CATEGORY_RAILS * 3)) {
+					categoryLabels.set(row.value, { en: row.label_en, ar: row.label_ar });
+					wanted.push({ key, rail: 'top', category: row.value, scope: railScope({ category: row.value }) });
 				}
 			}
 		}
@@ -154,7 +163,7 @@ export class DiscoveryHome extends PublicRoute {
 			.map((r) => ({
 				key: r.key,
 				rail: r.rail,
-				...(r.category ? { category: r.category } : {}),
+				...(r.category ? { category: r.category, categoryLabel: categoryLabels.get(r.category) } : {}),
 				info: railLabelFields(r.page.meta),
 				data: r.videos.map((e) => feedItem(e.video as never)),
 				...(r.page.nextCursor ? { cursor: r.page.nextCursor } : {}),

@@ -252,6 +252,19 @@ describe('home rails', () => {
 		assert.ok(!data.rails.some((r: any) => r.key === 'featured' || r.key === 'categories'));
 	});
 
+	it('category rails carry the category name in both languages', async () => {
+		const { env } = await library(120);
+		await runDiscoveryRank(env, NOW);
+		const app = buildApp((r: any) => r.get('/api/discovery/home', DiscoveryHome));
+		const { data } = (await (await app.request('/api/discovery/home?limit=4', {}, env)).json()) as any;
+		const categoryRails = data.rails.filter((r: any) => r.key === 'categories');
+		assert.ok(categoryRails.length > 0);
+		for (const r of categoryRails) {
+			assert.ok(r.categoryLabel?.en && r.categoryLabel?.ar, JSON.stringify(r.categoryLabel));
+			assert.notEqual(r.categoryLabel.en, r.categoryLabel.ar);
+		}
+	});
+
 	it('dedupeHome drops a rail that would show fewer than the minimum', () => {
 		const entry = (id: string) => ({ video: { id } as any, position: 1, reason: 'prior' as const, score: 1 });
 		const meta = (label: string) => ({ rail: 'new' as const, scope: '', mode: 'new' as const, label: label as any, items: 5, signalItems: 0, computedAt: '' });

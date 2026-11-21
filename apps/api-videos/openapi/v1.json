@@ -17900,6 +17900,22 @@
                               "category": {
                                 "type": "string"
                               },
+                              "categoryLabel": {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "ar": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "en",
+                                  "ar"
+                                ],
+                                "description": "A category rail's heading per language"
+                              },
                               "info": {
                                 "type": "object",
                                 "properties": {
@@ -31913,10 +31929,10 @@
             "schema": {
               "type": "string",
               "pattern": "^[a-z]{2,3}$",
-              "description": "Viewer's language (en, ar): its videos rank higher, others stay"
+              "description": "Content language filter (en, ar): only that language's videos"
             },
             "required": false,
-            "description": "Viewer's language (en, ar): its videos rank higher, others stay",
+            "description": "Content language filter (en, ar): only that language's videos",
             "name": "language",
             "in": "query"
           },
