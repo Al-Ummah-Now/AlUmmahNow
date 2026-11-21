@@ -180,7 +180,13 @@ function RefusedNotice({ d, t, check }: { d: CostsDashboard; t: Translator; chec
         <span>{t('costs.token.refusedTitle')}</span>
       </h2>
       <p className="mt-1 max-w-3xl text-sm text-fg" data-testid="costs-token-permission">
-        {t(d.collector.tokenSource === 'admin' ? 'costs.token.refusedAdminToken' : 'costs.token.refusedSharedToken', { permission: t('costs.token.permission') })}
+        {fillNodes(t(d.collector.tokenSource === 'admin' ? 'costs.token.refusedAdminToken' : 'costs.token.refusedSharedToken'), {
+          permission: (
+            <span dir="ltr" className="whitespace-nowrap font-semibold">
+              {t('costs.token.permission')}
+            </span>
+          ),
+        })}
       </p>
       <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood ? fillNodes(t('costs.token.refusedSince'), { time: <LocalTime value={lastGood} withTime /> }) : t('costs.token.refusedNever')}</p>
       <div className="mt-3 flex flex-wrap items-start gap-3">
@@ -295,7 +301,8 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
               {m.ticks.map((tick) => (
                 <span key={tick} className="absolute -translate-x-1/2 rtl:translate-x-1/2" style={{ insetInlineStart: `${tick}%` }}>{f.percent(tick / 100)}</span>
               ))}
-              <span className="absolute end-0">{f.usd(cap)}</span>
+              {/* The budget is in the line above the bar; on a phone this label ran into the 80% tick */}
+              <span className="absolute end-0 hidden sm:inline">{f.usd(cap)}</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
               <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full" style={{ background: TONE_FILL[m.tone] }} />{t('costs.budget.legendSpent')}</span>
