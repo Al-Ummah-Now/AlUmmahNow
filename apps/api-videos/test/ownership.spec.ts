@@ -11,6 +11,7 @@ import {
 	reconcileOwnershipIndex,
 	runOwnershipPass,
 	scheduleOwnershipHeal,
+	withOwnershipLease,
 } from '../src/lib/search/ownership';
 import { ChannelsList } from '../src/endpoints/channel/channelList';
 import { ChannelVideosList } from '../src/endpoints/channel/channelVideosList';
@@ -271,12 +272,14 @@ describe('ownership rebuild pass', () => {
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 	});
 
-	it('the self-heal re-syncs dirty rows without a full pass when the marker is there', async () => {
+	it('a rebuild job step drains dirty marks left by older workers', async () => {
 		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
 		await runOwnershipPass(raw as never, 'channel');
 		raw.channels.store.set('a', JSON.stringify(channel('a', { name: 'Fresh' })));
 		await invalidateOwnership(db, 'channel', Date.now(), 'a');
+		assert.equal(await isOwnershipComplete(db, 'channel'), false);
 		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		await drainJobs(raw as never);
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 		assert.equal(rows(db, 'channel')[0]?.admin_title, 'Fresh');
 	});
@@ -341,33 +344,12 @@ describe('ownership rebuild pass', () => {
 		assert.equal(rest.complete, true);
 	});
 
-	it('a failed self-heal keeps its lease, so the next fallback waits instead of adding load', async () => {
+	it('a finishing pass releases only its own lease, never one taken after it', async () => {
 		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
-		const list = raw.channels.list.bind(raw.channels);
-		raw.channels.list = async () => { throw new Error('D1_ERROR: D1 DB is overloaded'); };
-		await scheduleOwnershipHeal(raw as never, null, 'channel');
-		assert.ok(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), 'the lease is kept');
-		raw.channels.list = list;
-		const calls = raw.channels.calls;
-		await scheduleOwnershipHeal(raw as never, null, 'channel');
-		assert.equal(raw.channels.calls, calls, 'no new pass while the lease runs');
-		assert.equal(await isOwnershipComplete(db, 'channel'), false);
-		// Once it expires the next fallback heals
-		db.db.prepare("UPDATE search_meta SET updated_at = 0 WHERE key = 'ownership:heal:channel'").run();
-		await scheduleOwnershipHeal(raw as never, null, 'channel');
-		assert.equal(await isOwnershipComplete(db, 'channel'), true);
-		assert.equal(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), undefined, 'released after a step that worked');
-	});
-
-	it('a finishing heal releases only its own lease, never one taken after it', async () => {
-		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
-		const get = raw.channels.get.bind(raw.channels);
-		raw.channels.get = async (key: string) => {
-			// While this heal runs, its lease is replaced (it overran, or an operator holds the index)
+		await withOwnershipLease(raw as never, 'channel', async () => {
+			// While this pass runs, its lease is replaced (it overran, or an operator holds the index)
 			db.db.prepare("UPDATE search_meta SET updated_at = ? WHERE key = 'ownership:heal:channel'").run(Date.now() + 3_600_000);
-			return get(key);
-		};
-		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		});
 		assert.ok(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), 'the newer lease survives');
 	});
 

@@ -899,6 +899,8 @@ export async function saveYoutubeImportSettings(
 
 export async function saveYoutubeImportClientSecret(value: string): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
   return mutate('/api/youtube-import/client-secret', 'PUT', { value });
+}
+
 /** Puts failed per-object index repairs back in the repair job's queue: one, or all when `target` is omitted. */
 export async function retryIndexRepairs(target?: { entity: string; id: string }): Promise<ActionResult<{ rearmed: number; job: AdminJob | null }>> {
   return mutate('/api/processing/index-repairs/retry', 'POST', target ?? {});

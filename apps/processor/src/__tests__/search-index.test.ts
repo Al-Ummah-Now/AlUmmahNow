@@ -73,7 +73,7 @@ describe('search index sync', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
-  it('an ownership write D1 rejects is retried through the queue, not by voiding the whole index (#859)', async () => {
+  it('an ownership write D1 rejects is recorded for the repair job, never by voiding the whole index (#859)', async () => {
     const { env, processor, executed } = setup();
     const db = (env as unknown as { SEARCH_DB: { prepare: jest.Mock } }).SEARCH_DB;
     const prepare = db.prepare.getMockImplementation() as (sql: string) => { bind: (...v: unknown[]) => { run: () => Promise<unknown> } };
@@ -88,11 +88,12 @@ describe('search index sync', () => {
     });
     const video = { id: 'v9', title: 'Seerah', isPublic: true, channelId: 'c1' };
     const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v9', object: video }), env);
-    expect(result.success).toBe(false);
-    expect(result.shouldRetry).toBe(true);
-    // Only the row is marked; the complete marker is never deleted (that restarted the rebuild under load)
+    // The one object goes to index_repairs (the repair job rewrites it from R2); the message is done
+    expect(result.success).toBe(true);
+    // The complete marker is never deleted (that restarted the rebuild under load), and no dirty mark is written
     expect(executed.some(e => e.sql.includes('DELETE FROM search_meta'))).toBe(false);
-    expect(executed.some(e => e.values.includes('ownership:dirty:video:v9'))).toBe(true);
+    expect(executed.some(e => e.values.includes('ownership:dirty:video:v9'))).toBe(false);
+    expect(executed.some(e => e.sql.includes('INSERT INTO index_repairs') && e.values.includes('v9'))).toBe(true);
   });
 
   it('skips quietly when SEARCH_DB is not bound', async () => {

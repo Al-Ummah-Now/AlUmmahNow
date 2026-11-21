@@ -964,7 +964,6 @@ const ar: Messages = {
       billingRefund: 'استرداد دفعة',
       billingReconcile: 'مطابقة الاشتراكات مع المزوّد',
       discoveryRank: 'ترتيب المرئيات للاستكشاف',
-      playlistAddVideos: 'إضافة فيديوهات إلى قائمة تشغيل',
       searchRepairObjects: 'إصلاح عناصر الفهرس',
       searchReconcile: 'فحص فهرس البحث',
     },
