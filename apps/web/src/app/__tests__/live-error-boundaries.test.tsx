@@ -22,7 +22,7 @@ describe('live route error boundaries', () => {
     render(<LiveError error={error} reset={reset} />);
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveAttribute('aria-labelledby', 'friendly-error-title');
+    expect(alert).toHaveAttribute('aria-labelledby', 'ep-title-generic');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Something went wrong');
     expect(screen.getByRole('link', { name: 'Go to home' })).toHaveAttribute('href', '/en');
     await waitFor(() => expect(report).toHaveBeenCalledWith(error, expect.objectContaining({ kind: 'boundary', extra: expect.objectContaining({ boundary: 'live' }) })));

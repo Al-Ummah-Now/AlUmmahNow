@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { errorScreenStrings, type FriendlyErrorKind } from '@al-ummah/shared-types';
+import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorCodeLabel, errorKindIcon, errorScreenStrings, type ErrorPageIcon, type FriendlyErrorKind } from '@al-ummah/shared-types';
 import { boundaryOutcome, handleBoundaryError } from '@/lib/errors/boundary';
 import { reportError } from '@/lib/errors/reporter';
 import { recoverFromVersionSkew } from '@/lib/version-skew';
@@ -21,8 +21,9 @@ interface FriendlyErrorProps {
 }
 
 /**
- * The only thing a user sees when something fails: themed, en/ar with RTL,
- * an action that fits, and the reference to quote. Never a stack, a
+ * The only thing a user sees when something fails: the shared error card (frosted glass, badge, the
+ * "Error 404" line, words and actions as on every Al Ummah Now app; wiki guides/error-pages.md),
+ * en/ar with RTL, an action that fits, Go back, and the reference to quote. Never a stack, a
  * framework URL or the error's own text.
  */
 export function FriendlyError({ locale, kind, reference, onRetry, inline = false, homeLabel }: FriendlyErrorProps) {
@@ -31,45 +32,80 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const reload = () => window.location.reload();
   const home = homeLabel || s.goHome;
+  const status = ERROR_KIND_STATUS[kind];
+  // After mount only (the server can't know the history)
+  const [canGoBack, setCanGoBack] = useState(false);
+  useEffect(() => setCanGoBack(window.history.length > 1), []);
 
-  let primary: { label: string; onClick?: () => void; href?: string };
-  if (kind === 'update') primary = { label: s.reload, onClick: reload };
-  else if (kind === 'session') primary = { label: s.signIn, href: '/login' };
-  else if (kind === 'notFound') primary = { label: home, href: '/dashboard' };
-  else primary = { label: s.tryAgain, onClick: onRetry ?? reload };
-  const showHome = kind !== 'notFound' && kind !== 'session';
+  let primary: { label: string; icon: ErrorPageIcon; onClick?: () => void; href?: string };
+  if (kind === 'update') primary = { label: s.reload, icon: 'update', onClick: reload };
+  else if (kind === 'session') primary = { label: s.signIn, icon: 'session', href: '/login' };
+  else if (kind === 'notFound' || kind === 'gone') primary = { label: home, icon: 'home', href: '/dashboard' };
+  else primary = { label: s.tryAgain, icon: 'retry', onClick: onRetry ?? reload };
+  const showHome = kind !== 'notFound' && kind !== 'gone' && kind !== 'session';
+  const primaryInner = (
+    <>
+      <Icon name={primary.icon} />
+      <span>{primary.label}</span>
+    </>
+  );
 
   return (
     <div
       lang={locale}
       dir={dir}
-      role={kind === 'notFound' ? undefined : 'alert'}
-      className={`${inline ? '' : 'min-h-[60vh] flex items-center justify-center px-4'}`}
+      role={kind === 'notFound' || kind === 'gone' ? undefined : 'alert'}
+      className={`ep${inline ? ' ep-inline' : ''}`}
       data-testid="friendly-error"
       data-kind={kind}
+      data-error-status={status}
     >
-      <div className="max-w-lg w-full bg-surface border border-border rounded-lg p-8 text-center">
-        <h1 className="text-2xl font-bold text-fg mb-3">{copy.title}</h1>
-        <p className="text-fg-muted mb-6">{copy.body}</p>
-        <div className="flex flex-wrap justify-center gap-3 mb-6">
-          {primary.href ? (
-            <a href={primary.href} className={primaryButtonClass} data-testid="friendly-error-action">
-              {primary.label}
-            </a>
-          ) : (
-            <button type="button" onClick={primary.onClick} className={primaryButtonClass} data-testid="friendly-error-action">
-              {primary.label}
-            </button>
-          )}
-          {showHome && (
-            <a href="/dashboard" className={secondaryButtonClass}>
-              {home}
-            </a>
-          )}
+      <section className="ep-card" aria-labelledby="ep-title">
+        <div className="ep-head">
+          <span className="ep-badge" aria-hidden="true">
+            <Icon name={errorKindIcon(kind)} />
+          </span>
+          <div className="ep-heading">
+            {status ? <p className="ep-code">{errorCodeLabel(locale, status)}</p> : null}
+            <h1 className="ep-title" id="ep-title">{copy.title}</h1>
+          </div>
+          <p className="ep-body">{copy.body}</p>
         </div>
         {reference && <ReferenceBox reference={reference} label={s.reference} hint={s.referenceHint} copyLabel={s.copy} copiedLabel={s.copied} />}
-      </div>
+        <footer className="ep-foot">
+          <div className="ep-actions">
+            {canGoBack ? (
+              <button type="button" onClick={() => window.history.back()} className={`${secondaryButtonClass} ep-btn`} data-testid="friendly-error-back">
+                <Icon name="back" />
+                <span>{s.goBack}</span>
+              </button>
+            ) : null}
+            {showHome && (
+              <a href="/dashboard" className={`${secondaryButtonClass} ep-btn`}>
+                <Icon name="home" />
+                <span>{home}</span>
+              </a>
+            )}
+            {primary.href ? (
+              <a href={primary.href} className={`${primaryButtonClass} ep-btn`} data-testid="friendly-error-action">
+                {primaryInner}
+              </a>
+            ) : (
+              <button type="button" onClick={primary.onClick} className={`${primaryButtonClass} ep-btn`} data-testid="friendly-error-action">
+                {primaryInner}
+              </button>
+            )}
+          </div>
+        </footer>
+      </section>
     </div>
+  );
+}
+
+/** The card's icons: the shared lucide shapes (@al-ummah/shared-types ERROR_PAGE_ICONS). */
+function Icon({ name }: { name: ErrorPageIcon }) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" data-icon={name} dangerouslySetInnerHTML={{ __html: ERROR_PAGE_ICONS[name] }} />
   );
 }
 
@@ -85,22 +121,18 @@ function ReferenceBox({ reference, label, hint, copyLabel, copiedLabel }: { refe
     }
   };
   return (
-    <div className="border-t border-border pt-4">
-      <p className="text-sm text-fg-muted mb-2">{hint}</p>
-      <div className="inline-flex items-center gap-3 bg-surface-2 border border-border rounded px-3 py-2">
-        <span className="text-sm text-fg-muted">{label}</span>
-        <code className="font-mono font-semibold text-fg" dir="ltr" data-testid="friendly-error-ref">
+    <div className="ep-ref">
+      <div className="ep-ref-row">
+        <span className="ep-ref-label">{label}</span>
+        <code className="ep-ref-code" dir="ltr" data-testid="friendly-error-ref">
           {reference}
         </code>
-        <button
-          type="button"
-          onClick={copyRef}
-          className="text-sm text-link hover:text-link-hover underline-offset-2 hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          data-testid="friendly-error-copy"
-        >
+        <button type="button" onClick={copyRef} className="ep-ref-copy" data-testid="friendly-error-copy">
+          <Icon name="copy" />
           <span aria-live="polite">{copied ? copiedLabel : copyLabel}</span>
         </button>
       </div>
+      <p className="ep-ref-hint">{hint}</p>
     </div>
   );
 }
