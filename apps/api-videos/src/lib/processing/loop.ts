@@ -574,12 +574,17 @@ async function sweepCandidates(env: ProcessingEnv, previous: SweepStats | null):
 		try {
 			if (await isOwnershipComplete(db as never, 'video')) {
 				const after = previous?.source === 'index' ? previous.resume?.after ?? '' : '';
-				const placeholders = NOT_READY.map(() => '?').join(', ');
+				// One seek of (kind, upload_status, id) per status, merged here: with IN (...) and
+				// ORDER BY id the planner walks the primary key instead, reading every ready video
+				// after the cursor to find the few that are not (~100k rows a run at 100k videos)
+				const sql = NOT_READY.map(
+					() => `SELECT * FROM (SELECT id FROM content_ownership WHERE kind = 'video' AND upload_status = ? AND id > ? ORDER BY id LIMIT ?)`,
+				).join(' UNION ALL ');
 				const page = await db
-					.prepare(`SELECT id FROM content_ownership WHERE kind = 'video' AND upload_status IN (${placeholders}) AND id > ? ORDER BY id LIMIT ?`)
-					.bind(...NOT_READY, after, SWEEP_MAX_OBJECTS + 1)
+					.prepare(sql)
+					.bind(...NOT_READY.flatMap((status) => [status, after, SWEEP_MAX_OBJECTS + 1]))
 					.all<{ id: string }>();
-				const rows = (page.results ?? []).map((r) => r.id);
+				const rows = (page.results ?? []).map((r) => r.id).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, SWEEP_MAX_OBJECTS + 1);
 				const ids = rows.slice(0, SWEEP_MAX_OBJECTS);
 				const wrapped = rows.length <= SWEEP_MAX_OBJECTS;
 				const failed = await db

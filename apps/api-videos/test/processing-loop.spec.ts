@@ -339,7 +339,7 @@ describe('sweep candidates', () => {
 					bind: () => stmt,
 					// The completeness check (marker present, no row marked for re-sync)
 					first: async () => (/search_meta/.test(sql) ? { value: '1', complete: 1, dirty: 0 } : null),
-					all: async () => ({ results: /upload_status IN/.test(sql) ? [{ id: ID }] : [] }),
+					all: async () => ({ results: /upload_status = \?/.test(sql) ? [{ id: ID }] : [] }),
 				};
 				return stmt;
 			},
@@ -355,7 +355,7 @@ describe('sweep candidates', () => {
 		assert.equal(stats.scanned, 1);
 		assert.equal(stats.loopsStarted, 1);
 		assert.ok(gets <= 3, `read ${gets} objects, not the whole bucket`);
-		assert.ok(queries.some((q) => /upload_status IN/.test(q)));
+		assert.ok(queries.some((q) => /upload_status = \? AND id > \?/.test(q)), 'one index seek per status');
 	});
 
 	it('a run reads at most SWEEP_MAX_OBJECTS videos of a 30k catalogue and the next runs continue where it stopped', async () => {
