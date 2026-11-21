@@ -178,15 +178,15 @@ describe('identity switch never shows the email (#1673)', () => {
     // Before the profile: no name yet, and the email is not promoted to the name line
     expect(await screen.findByTestId('nav-user-name')).toHaveTextContent('');
     // ...a skeleton holds the name's place, in the menu and in the pill
-    expect(screen.getByTestId('nav-user-name')).toHaveClass('sk');
-    expect(screen.getByTestId('nav-trigger-name')).toHaveClass('sk');
+    expect(screen.getByTestId('nav-user-name').querySelector('[data-skeleton]')).not.toBeNull();
+    expect(screen.getByTestId('nav-trigger-name').querySelector('[data-skeleton]')).not.toBeNull();
     expect(screen.getByTestId('nav-trigger-name')).toHaveAttribute('data-loading', 'true');
     expect(screen.getByTestId('nav-profile-link')).toHaveTextContent(AMINA);
     expectNoEmailInHeader();
     await resolveProfiles();
     expect(screen.getByTestId('nav-user-name')).toHaveTextContent('Amina Yusuf');
-    expect(screen.getByTestId('nav-user-name')).not.toHaveClass('sk');
-    expect(screen.getByTestId('nav-trigger-name')).not.toHaveClass('sk');
+    expect(screen.getByTestId('nav-user-name').querySelector('[data-skeleton]')).toBeNull();
+    expect(screen.getByTestId('nav-trigger-name').querySelector('[data-skeleton]')).toBeNull();
     expect(screen.getByTestId('nav-trigger-name')).not.toHaveAttribute('data-loading');
   });
 });
