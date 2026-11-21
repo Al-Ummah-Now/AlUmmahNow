@@ -1,4 +1,5 @@
 import Link from '@/components/AppLink';
+import { BreakAtHyphens } from '@/components/BreakAtHyphens';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import { getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
@@ -93,25 +94,6 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** A resource name that wraps only after a "-" (al-ummah-now-<wbr>production), never mid-word. */
-function BreakAtHyphens({ name }: { name: string }) {
-  const parts = name.split('-');
-  return (
-    <span title={name}>
-      {parts.map((p, i) => (
-        <span key={i}>
-          {p}
-          {i < parts.length - 1 && (
-            <>
-              -<wbr />
-            </>
-          )}
-        </span>
-      ))}
-    </span>
   );
 }
 

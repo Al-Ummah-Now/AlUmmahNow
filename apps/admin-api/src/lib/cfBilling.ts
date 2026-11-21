@@ -111,6 +111,23 @@ export interface CloudflareBilled {
   usage: { mtd: MeterUsage; projected: MeterUsage };
 }
 
+/**
+ * The idle month at billed rates: each meter at its quietest of the last 7 full days, times 30
+ * (storage: the latest day's GB, a GB-month), through the same allowances as the invoice. The
+ * per-resource idle figures are at list price; this is what the account would actually be billed.
+ */
+export function idleBilledCloudflare(days: Map<string, MeterUsage>, now: Date): number {
+  const today = now.toISOString().slice(0, 10);
+  const full = [...days.keys()].filter((d) => d < today).sort().slice(-7);
+  if (!full.length) return 0;
+  const usage: MeterUsage = {};
+  const keys = new Set(full.flatMap((d) => Object.keys(days.get(d)!) as CfMeterKey[]));
+  for (const k of keys) {
+    usage[k] = STORAGE_METERS.includes(k) ? (days.get(full[full.length - 1]!)![k] ?? 0) : Math.min(...full.map((d) => days.get(d)![k] ?? 0)) * 30;
+  }
+  return billMonth(usage).total;
+}
+
 /** The month's billed estimate and its projection from per-day meter usage. */
 export function billedCloudflare(days: Map<string, MeterUsage>, now: Date): CloudflareBilled {
   const month = now.toISOString().slice(0, 7);

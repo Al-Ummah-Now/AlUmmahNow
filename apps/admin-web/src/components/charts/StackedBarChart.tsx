@@ -5,7 +5,7 @@
  * between segments so neighbouring colours stay apart, a legend with each series' total, hover
  * titles per segment, and a <details> table as the text alternative. No hooks.
  */
-import { labelIndices, niceScale, numberFormat, metaSeparator } from '@al-ummah/shared-types';
+import { labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
 
 export interface StackedSeries {
   key: string;
@@ -26,33 +26,121 @@ export interface StackedBarChartProps {
   labels: { chart: string; table: string; day: string; total: string; empty: string };
   /** A horizontal reference line (e.g. the daily share of the budget), keyed in the legend. */
   reference?: { value: number; label: string };
+  /**
+   * The value axis's unit (e.g. "USD"). When set, ticks are bare numbers (up to two decimals, so
+   * $0.50 steps never print as two "$1" ticks) with the unit once above the axis; a long currency
+   * name on every tick crowds and clips the axis in Arabic.
+   */
+  axisUnit?: string;
   testId: string;
 }
 
-const W = 640;
-const H = 220;
-const AXIS = 64;
-const PAD = 14;
+/**
+ * Two geometries in viewBox units, chosen by CSS: the SVG scales to its box, so the desktop one
+ * (640 wide) on a ~320px phone would draw 11-unit text near 6px and the plot ~110px tall. The phone
+ * one is about as wide as the box, so its text renders at about 11px and the plot stays tall.
+ */
+interface Geometry {
+  w: number;
+  h: number;
+  axis: number;
+  dayLabels: number;
+  className: string;
+}
+const DESKTOP: Geometry = { w: 640, h: 220, axis: 64, dayLabels: 5, className: 'hidden sm:block' };
+const PHONE: Geometry = { w: 330, h: 230, axis: 40, dayLabels: 3, className: 'sm:hidden' };
+const PAD = 8;
 const TOP = 12;
-const BOTTOM = 28;
+const UNIT_TOP = 32;
+const BOTTOM = 26;
 
-export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, testId }: StackedBarChartProps) {
+export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, testId }: StackedBarChartProps) {
   const rtl = /^ar\b/.test(locale);
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
   const scale = niceScale(top > 0 ? [top] : [], { target: 4 });
   const tickNumber = numberFormat(locale, { maximumFractionDigits: 2 });
-  const plotStart = rtl ? PAD : AXIS;
-  const plotEnd = rtl ? W - AXIS : W - PAD;
   const n = days.length;
-  const slot = n > 0 ? (plotEnd - plotStart) / n : 0;
-  const barW = Math.max(2, slot * 0.72);
-  const x = (i: number) => (rtl ? plotEnd - (i + 1) * slot : plotStart + i * slot) + (slot - barW) / 2;
-  const y = (v: number) => TOP + (1 - v / scale.top) * (H - TOP - BOTTOM);
-  const ticksAt = labelIndices(n, 5);
   // Nothing spent: the reference line alone is not data
   const empty = !totals.some((v) => v > 0);
   const seriesTotal = (s: StackedSeries) => s.values.reduce((a, b) => a + b, 0);
+
+  const plot = (g: Geometry, main: boolean) => {
+    const plotStart = rtl ? PAD : g.axis;
+    const plotEnd = rtl ? g.w - g.axis : g.w - PAD;
+    const slot = n > 0 ? (plotEnd - plotStart) / n : 0;
+    const barW = Math.max(2, slot * 0.72);
+    const x = (i: number) => (rtl ? plotEnd - (i + 1) * slot : plotStart + i * slot) + (slot - barW) / 2;
+    const top0 = axisUnit ? UNIT_TOP : TOP;
+    const y = (v: number) => top0 + (1 - v / scale.top) * (g.h - top0 - BOTTOM);
+    const ticksAt = labelIndices(n, g.dayLabels);
+    // Test ids and the accessible name only on the desktop copy; the phone copy is the same data
+    const tid = (id: string) => (main ? id : undefined);
+    return (
+      <svg
+        key={g.w}
+        viewBox={`0 0 ${g.w} ${g.h}`}
+        className={`h-auto w-full text-fg-muted ${g.className}`}
+        style={{ direction: 'ltr' }}
+        role="img"
+        aria-label={labels.chart}
+        data-geometry={main ? 'desktop' : 'phone'}
+      >
+        {scale.ticks.map((v) => (
+          <g key={v}>
+            <line x1={plotStart} x2={plotEnd} y1={y(v)} y2={y(v)} style={{ stroke: v === 0 ? 'var(--fg-muted)' : 'var(--border)' }} strokeDasharray={v === 0 ? undefined : '3 3'} strokeWidth="1" />
+            <text x={rtl ? plotEnd + 6 : plotStart - 6} y={y(v)} textAnchor={rtl ? 'start' : 'end'} dominantBaseline="middle" fontSize="11" fill="currentColor" data-value={main ? tickNumber.format(v) : undefined}>
+              {axisUnit ? tickNumber.format(v) : format(v)}
+            </text>
+          </g>
+        ))}
+        {axisUnit && (
+          <text x={rtl ? g.w - 2 : 2} y={4} textAnchor={rtl ? 'end' : 'start'} dominantBaseline="hanging" fontSize="11" fill="currentColor" data-testid={tid(`${testId}-unit`)}>
+            {axisUnit}
+          </text>
+        )}
+        {!empty &&
+          days.map((day, i) => {
+            let base = 0;
+            return (
+              <g key={day} data-testid={tid(`${testId}-bar`)} data-day={main ? day : undefined} data-total={main ? totals[i].toFixed(2) : undefined}>
+                {series.map((s) => {
+                  const v = s.values[i] ?? 0;
+                  if (v <= 0) return null;
+                  const y0 = y(base);
+                  base += v;
+                  const y1 = y(base);
+                  return (
+                    <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
+                      <title>{`${dayLabel(day)} • ${s.label}: ${format(v)}`}</title>
+                    </rect>
+                  );
+                })}
+              </g>
+            );
+          })}
+        {reference && reference.value > 0 && !empty && (
+          <g data-testid={tid(`${testId}-reference`)}>
+            <line x1={plotStart} x2={plotEnd} y1={y(reference.value)} y2={y(reference.value)} style={{ stroke: 'var(--danger-fg)' }} strokeDasharray="6 4" strokeWidth="1.5">
+              <title>{reference.label}</title>
+            </line>
+          </g>
+        )}
+        {ticksAt.map((i, order) => (
+          <text
+            key={days[i]}
+            x={x(i) + barW / 2}
+            y={g.h - 8}
+            fontSize="11"
+            fill="currentColor"
+            textAnchor={order === 0 ? (rtl ? 'end' : 'start') : order === ticksAt.length - 1 ? (rtl ? 'start' : 'end') : 'middle'}
+          >
+            {dayLabel(days[i])}
+          </text>
+        ))}
+      </svg>
+    );
+  };
 
   return (
     <figure className="m-0" data-testid={testId}>
@@ -73,63 +161,8 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
         )}
       </ul>
       <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full text-fg-muted" style={{ direction: 'ltr' }} role="img" aria-label={labels.chart}>
-          {scale.ticks.map((v) => (
-            <g key={v}>
-              <line x1={plotStart} x2={plotEnd} y1={y(v)} y2={y(v)} style={{ stroke: v === 0 ? 'var(--fg-muted)' : 'var(--border)' }} strokeDasharray={v === 0 ? undefined : '3 3'} strokeWidth="1" />
-              <text
-                x={rtl ? plotEnd + 6 : plotStart - 6}
-                y={y(v)}
-                textAnchor={rtl ? 'start' : 'end'}
-                dominantBaseline="middle"
-                fontSize="11"
-                fill="currentColor"
-                data-value={tickNumber.format(v)}
-              >
-                {format(v)}
-              </text>
-            </g>
-          ))}
-          {!empty &&
-            days.map((day, i) => {
-              let base = 0;
-              return (
-                <g key={day} data-testid={`${testId}-bar`} data-day={day} data-total={totals[i].toFixed(2)}>
-                  {series.map((s) => {
-                    const v = s.values[i] ?? 0;
-                    if (v <= 0) return null;
-                    const y0 = y(base);
-                    base += v;
-                    const y1 = y(base);
-                    return (
-                      <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
-                        <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}`}</title>
-                      </rect>
-                    );
-                  })}
-                </g>
-              );
-            })}
-          {reference && reference.value > 0 && !empty && (
-            <g data-testid={`${testId}-reference`}>
-              <line x1={plotStart} x2={plotEnd} y1={y(reference.value)} y2={y(reference.value)} style={{ stroke: 'var(--danger-fg)' }} strokeDasharray="6 4" strokeWidth="1.5">
-                <title>{reference.label}</title>
-              </line>
-            </g>
-          )}
-          {ticksAt.map((i, order) => (
-            <text
-              key={days[i]}
-              x={x(i) + barW / 2}
-              y={H - 8}
-              fontSize="11"
-              fill="currentColor"
-              textAnchor={order === 0 ? (rtl ? 'end' : 'start') : order === ticksAt.length - 1 ? (rtl ? 'start' : 'end') : 'middle'}
-            >
-              {dayLabel(days[i])}
-            </text>
-          ))}
-        </svg>
+        {plot(DESKTOP, true)}
+        {plot(PHONE, false)}
         {empty && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-fg-muted" data-testid={`${testId}-empty`}>
             {labels.empty}

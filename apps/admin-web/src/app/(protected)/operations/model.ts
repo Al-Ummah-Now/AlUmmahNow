@@ -115,6 +115,7 @@ export function opsFormats(locale: string): OpsFormats {
   const compact = compactNumber(locale);
   const ms = numberFormat(loc, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
   const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
+  const micro = numberFormat(loc, { style: 'unit', unit: 'microsecond', unitDisplay: loc.startsWith('ar') ? 'long' : 'short', maximumFractionDigits: 0 });
   const small = numberFormat(loc, { maximumFractionDigits: 2 });
   const usd = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -132,12 +133,15 @@ export function opsFormats(locale: string): OpsFormats {
       return numberFormat(loc, { style: 'unit', unit: BYTE_UNITS[i], unitDisplay: 'short', maximumFractionDigits: n < 10 ? 1 : 0 }).format(n);
     },
     ms: (v) => ms.format(v),
-    // CPU comes in microseconds: shown in ms from 1,000 µs
-    us: (v) => (v >= 1000 ? ms.format(v / 1000) : `${compact(v)} µs`),
+    // CPU comes in microseconds: shown in ms from 1,000 µs, below that in the locale's unit name
+    // (Arabic spells it out: its short form «م.ث.» reads like ms). Zero is in ms, so an axis
+    // starting at 0 under ms ticks doesn't switch units at its base.
+    us: (v) => (v >= 1000 || v === 0 ? ms.format(v / 1000) : micro.format(v)),
     gbs: (v) => `${compact(Math.round(v))} GB-s`,
     gb: (v) => (Math.abs(v) >= 1000 ? compact(v) : small.format(v)),
     percent: (v) => percent.format(v),
-    usd: (v) => usd.format(v),
+    // One line always: the Arabic currency name has a space («دولار أمريكي»)
+    usd: (v) => usd.format(v).replace(/ /g, '\u00a0'),
     hour: (t) => {
       const d = date(t);
       return Number.isNaN(d.getTime()) ? t : formatHour(d.toISOString().slice(0, 13), loc as Locale);

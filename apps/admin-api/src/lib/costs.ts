@@ -24,6 +24,7 @@ import { logger } from './logger';
 import {
   BASELINE_DAYS,
   PLAN_BASE_USD,
+  billIdle,
   costDrivers,
   costWindowStart,
   findSpikes,
@@ -40,6 +41,7 @@ import {
   type DayCost,
   type ResourceDay,
 } from './opsCost';
+import { idleBilledCloudflare } from './cfBilling';
 import { CF_METERS, fixedCostMonthShare } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
 import { loadD1Limits, parseD1LimitsInput } from './d1Capacity';
@@ -519,10 +521,10 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
   const back14 = new Date(now.getTime() - 15 * 86_400_000).toISOString().slice(0, 10);
   const from = back14 < since ? back14 : since;
   const [resourceDays, productDays] = await Promise.all([loadResourceDays(env, from), loadProductDays(env, from)]);
-  const { budget, billed, fixed, extras } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
+  const { budget, billed, fixed, extras, meterDays } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
   const products = productLines(resourceDays, extras, now, fixed);
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
-  const idle = idleProjection(resourceDays, extras, now, fixed.projected);
+  const idle = billIdle(idleProjection(resourceDays, extras, now, fixed.projected), idleBilledCloudflare(meterDays, now));
   // A fixed cost's day: its month's share for that one day, when it is active then
   const fixedDaily = (day: string) => fixed.items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
   const trend = trendBySource(resourceDays, extras, fixedDaily, now);

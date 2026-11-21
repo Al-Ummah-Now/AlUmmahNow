@@ -406,8 +406,10 @@ describe('Cloudflare billed estimate (COST-GAPS)', () => {
     assert.ok(d.products.some((p) => p.product === 'fixed'));
     assert.equal(d.idle.parts.fixed, 8.25);
     assert.equal(d.drivers[0]!.id, 'worker:al-ummah-now-production');
-    assert.deepEqual(d.trend.series.map((x) => x.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed']);
-    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-1), 0.28);
+    assert.deepEqual(d.trend.series.map((x) => x.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed']);
+    // Today (12:00 UTC) carries half its $0.28 daily share, so the month's days sum to its month to date
+    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-2), 0.28);
+    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-1), 0.14);
   });
 });
 

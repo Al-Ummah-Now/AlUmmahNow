@@ -49,6 +49,9 @@ function render(values: (number | null)[], locale: 'en' | 'ar' = 'en') {
 const ticks = (html: string) => [...html.matchAll(/data-testid="c-y-tick" data-value="([^"]*)"/g)].map((m) => m[1]);
 const tickX = (html: string) => [...html.matchAll(/<text x="([\d.]+)"[^>]*data-testid="c-y-tick"/g)].map((m) => Number(m[1]));
 
+/** The chart's desktop or phone SVG (each chart draws both; CSS shows one). */
+const svgOf = (html: string, geometry: 'desktop' | 'phone') => html.match(new RegExp(`<svg[^>]*data-geometry="${geometry}"[\\s\\S]*?</svg>`))?.[0] ?? '';
+
 describe('TimeSeriesChart', () => {
   it('draws a 0-based value axis on round ticks', () => {
     assert.deepEqual(ticks(render([0, 3, 70, 12])), ['0', '20', '40', '60', '80']);
@@ -65,7 +68,8 @@ describe('TimeSeriesChart', () => {
 
   it('leaves a gap for missing points and lists every point in the table', () => {
     const html = render([5, 6, null, 8, 9]);
-    assert.equal((html.match(/<polyline/g) ?? []).length, 2);
+    assert.equal((svgOf(html, 'desktop').match(/<polyline/g) ?? []).length, 2);
+    assert.equal((svgOf(html, 'phone').match(/<polyline/g) ?? []).length, 2);
     assert.equal((html.match(/<tr class="border-t/g) ?? []).length, 5);
   });
 
@@ -97,6 +101,8 @@ describe('model', () => {
     assert.equal(f.bytes(14_713_740), '15 MB');
     assert.equal(f.bytes(2_500_000_000), '2.5 GB');
     assert.equal(f.us(129_251), '129.3 ms');
+    assert.equal(f.us(0), '0 ms', 'zero matches the ms ticks above it');
+    assert.equal(opsFormats('ar').us(0), opsFormats('ar').ms(0));
     assert.equal(f.usd(1.5), '$1.50');
     assert.match(opsFormats('ar').usd(1.5), ARABIC_DIGITS);
   });
@@ -166,7 +172,8 @@ describe('spend', () => {
   it('stacked chart: one bar per day with its total, a segment per non-zero value, legend totals, table', () => {
     const html = stacked();
     assert.deepEqual([...html.matchAll(/data-testid="s-bar" data-day="[^"]+" data-total="([^"]+)"/g)].map((m) => m[1]), ['1.50', '2.00', '3.00']);
-    assert.equal((html.match(/<rect/g) ?? []).length, 4);
+    assert.equal((svgOf(html, 'desktop').match(/<rect/g) ?? []).length, 4);
+    assert.equal((svgOf(html, 'phone').match(/<rect/g) ?? []).length, 4);
     assert.match(html, /data-testid="s-reference"/);
     assert.match(html, /QA<\/span><span class="tabular-nums">\$3\.00/);
     assert.equal((html.match(/<tr class="border-t border-border">/g) ?? []).length, 3);
@@ -175,8 +182,12 @@ describe('spend', () => {
   it('stacked chart: Arabic digits and the axis on the right; empty when nothing was spent', () => {
     const ar = stacked('ar');
     assert.match(ar, ARABIC_DIGITS);
-    const xs = [...ar.matchAll(/<text x="([\d.]+)" y="[\d.]+" text-anchor="start" dominant-baseline="middle"/g)].map((m) => Number(m[1]));
+    const tickXs = (svg: string) => [...svg.matchAll(/<text x="([\d.]+)" y="[\d.]+" text-anchor="start" dominant-baseline="middle"/g)].map((m) => Number(m[1]));
+    const xs = tickXs(svgOf(ar, 'desktop'));
     assert.ok(xs.length > 0 && xs.every((x) => x > 500));
+    // The phone geometry (330 wide) keeps the axis on the right too
+    const phone = tickXs(svgOf(ar, 'phone'));
+    assert.ok(phone.length > 0 && phone.every((x) => x > 250));
     assert.match(stacked('en', [[0, 0, 0], [0, 0, 0]]), /data-testid="s-empty"/);
   });
 

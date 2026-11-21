@@ -204,6 +204,20 @@ export function idleProjection(
   };
 }
 
+/**
+ * The idle month with Cloudflare at billed rates (cfBilling idleBilledCloudflare): the per-resource
+ * floors are list prices, so the account's included usage would otherwise be counted as cost and
+ * the idle month could exceed the projected one. The per-env split keeps its list-price shares.
+ */
+export function billIdle(idle: IdleProjection, cloudflareBilled: number): IdleProjection {
+  const listCf = idle.parts.cloudflare;
+  const ratio = listCf > 0 ? cloudflareBilled / listCf : 0;
+  const byEnv: Record<string, number> = {};
+  for (const [k, v] of Object.entries(idle.byEnv)) byEnv[k] = round2(v * ratio);
+  const parts = { ...idle.parts, cloudflare: round2(cloudflareBilled) };
+  return { ...idle, byEnv, parts, monthlyUsd: round2(Object.values(parts).reduce((s, x) => s + x, 0)) };
+}
+
 export interface Spike {
   /** Errors page key: ops-cost:spike:<env>:<resource id | total>. */
   key: string;
@@ -264,7 +278,7 @@ export function findSpikes(rows: ResourceDay[], now: Date, rule: SpikeRule = DEF
 // Spend views (moved from the Operations page to the Costs page, owner 2026-11-21)
 // ---------------------------------------------------------------------------------------------
 
-export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'fixed'] as const;
+export const COST_TREND_KEYS = ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed'] as const;
 export type CostTrendKey = (typeof COST_TREND_KEYS)[number];
 
 /**
@@ -286,6 +300,12 @@ export function trendBySource(
   }
   const series = (m: Map<string, number> | undefined) => days.map((d) => round2(m?.get(d) ?? 0));
   const fromList = (list: DayCost[]) => new Map(list.map((x) => [x.day, num(x.cost)]));
+  // Monthly fees accrue by the minute, like the month to date: today carries only its elapsed part,
+  // so a month's days sum to its month-to-date figure
+  const today = days[days.length - 1]!;
+  const elapsed = (now.getTime() - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
+  const share = (d: string, perDay: number) => perDay * (d === today ? elapsed : 1);
+  const daysIn = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate();
   return {
     days,
     series: [
@@ -294,7 +314,8 @@ export function trendBySource(
       { key: 'containers' as const, values: series(fromList(extras.containers)) },
       { key: 'ai' as const, values: series(fromList(extras.ai)) },
       { key: 'resend' as const, values: series(fromList(extras.resend)) },
-      { key: 'fixed' as const, values: days.map((d) => round2(fixedDaily(d))) },
+      { key: 'plan' as const, values: days.map((d) => round2(share(d, PLAN_BASE_USD / daysIn(d)))) },
+      { key: 'fixed' as const, values: days.map((d) => round2(share(d, fixedDaily(d)))) },
     ],
   };
 }
@@ -522,7 +543,7 @@ export async function loadBudget(env: CostDbs, now: Date, settings: CostAlertSet
     cloudflare: { mtd: billed.mtd.total, projected: billed.projected.total },
     fixed: { mtd: fixed.mtd, projected: fixed.projected },
   });
-  return { budget, billed, fixed, resourceDays, productDays, extras };
+  return { budget, billed, fixed, resourceDays, productDays, extras, meterDays };
 }
 
 /** The alert settings (COSTS_DB cost_settings 'alerts'), defaults when unset or not migrated. */

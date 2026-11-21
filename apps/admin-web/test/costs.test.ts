@@ -418,3 +418,57 @@ describe('costs sections render', () => {
     assert.ok(linesAr.every((l) => l.length > 0 && !/[A-Za-z]{4,}/.test(l.replace(/admin-api-qa|QA/g, ''))), `Arabic alert lines: ${linesAr.join(' | ')}`);
   });
 });
+
+describe('costs audit fixes (AUDIT-2 2026-11-21)', () => {
+  const render = (el: React.ReactElement) => renderToStaticMarkup(el as never);
+  const h = (c: unknown, props: object) => React.createElement(c as React.FC, props as never);
+  const days = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+
+  for (const locale of ['en', 'ar'] as const) {
+    it(`the daily chart's axis is bare numbers with the unit once, no repeated ticks (${locale})`, () => {
+      const t = createTranslator(locale);
+      const f = opsFormats(locale);
+      const d = freshDashboard({ trend: { days, values: days.map(() => 1.6), series: [{ key: 'production', values: days.map(() => 1.6) }] } as CostsDashboard['trend'] });
+      const html = render(h(sections.TrendPanel, { d, t, f, locale }));
+      assert.match(html, new RegExp(`data-testid="costs-trend-unit"[^>]*>${locale === 'ar' ? 'دولار' : 'USD'}<`));
+      const ticks = [...html.matchAll(/data-value="([^"]+)"[^>]*>([^<]+)</g)].map((m) => m[2]);
+      assert.ok(ticks.length >= 3, 'several ticks');
+      assert.equal(new Set(ticks).size, ticks.length, `no tick label twice: ${ticks.join(' | ')}`);
+      for (const tick of ticks) assert.ok(!/دولار|\$/.test(tick), `tick "${tick}" carries no currency`);
+    });
+  }
+
+  it('signs amounts sign-first and keeps the Arabic currency on one line', () => {
+    const en = sections.signedUsd('en');
+    assert.equal(en(2.3), '+$2.30');
+    assert.equal(en(-0.1), '−$0.10');
+    assert.equal(en(0.001), '$0.00');
+    const ar = sections.signedUsd('ar');
+    const minus = ar(-106.71);
+    assert.ok(minus.startsWith('‏−'), 'RLM then the minus sign: the sign reads first');
+    assert.ok(!minus.slice(2).includes(' '), 'no breaking space inside the amount');
+  });
+
+  it('reconciles products at list price with the billed month to date', () => {
+    const t = createTranslator('en');
+    const d = freshDashboard({ budget: { ...freshDashboard().budget, mtd: 146.21 }, products: [{ product: 'd1', mtd: 201.88, projected: 260, last7: 50, prev7: 40 }] });
+    const html = render(h(sections.ProductsPanel, { d, t, f: opsFormats('en'), locale: 'en' }));
+    assert.match(html, /data-testid="costs-products-reconcile"/);
+    assert.ok(html.includes('$201.88') && html.includes('$55.67') && html.includes('$146.21'), 'list, included usage and billed');
+  });
+
+  it('lists drivers as labelled cards on phones and wraps names only at hyphens', () => {
+    const t = createTranslator('ar');
+    const f = opsFormats('ar');
+    const d = freshDashboard({
+      drivers: [{ id: 'worker:al-ummah-auth-qa', env: 'qa', kind: 'worker', name: 'al-ummah-auth-qa', mtdUsd: 12.5, idleMonthlyUsd: 3, spike: null, daily: { days: days.slice(0, 14), values: Array(14).fill(1) } }],
+    });
+    const html = render(h(details.DriversSection, { d, t, f }));
+    assert.match(html, /class="[^"]*sm:hidden" data-testid="costs-drivers-cards"/);
+    assert.match(html, /data-testid="costs-driver-card"/);
+    assert.ok(html.replace(/<\/?span>/g, '').includes('al-<wbr/>ummah-<wbr/>auth-<wbr/>qa'), 'breaks only after "-"');
+    assert.ok(!html.includes('break-all'));
+    assert.ok(!html.includes('أمريكي, '), 'the spoken list joins days with the Arabic separator');
+    for (const key of ['mtd', 'idle', 'last14'] as const) assert.ok(html.includes(t(`costs.drivers.${key}`)), `card labels ${key}`);
+  });
+});
