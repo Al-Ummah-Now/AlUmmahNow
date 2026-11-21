@@ -16,6 +16,9 @@ import { pickHomeFeatured } from "@/lib/video/hero";
 import type { PaginationResponse } from "@/lib/api/types";
 import { mergeFresh } from "@/lib/ssr/merge-fresh";
 import { SignInBanner } from "@/components/home/SignInBanner";
+import { HomeRails } from "@/components/home/HomeRails";
+import { getHomeRails } from "@/lib/api/discovery-home";
+import type { HomeRail } from "@/lib/discovery/home-rails";
 
 /** Never featured on the home hero (kept from the original pick). */
 const HOME_HERO_EXCLUDED: ReadonlySet<string> = new Set(["e42e5deb-c86a-40b0-b8ec-6072fc550dba"]);
@@ -37,10 +40,18 @@ interface HomePageClientProps {
   initialPage?: PaginationResponse<VideoObject>;
   /** The server dropped an image only the viewer may see: reload the first page after hydration */
   initialPartial?: boolean;
+  /**
+   * The ranked rails (wiki E07 "Discovery ranking"), read on the server in the page language. Missing
+   * when the API was slow or down: the page then fetches them after hydration.
+   */
+  initialRails?: HomeRail[];
+  /** The server dropped an image in the rails: reload them after hydration */
+  initialRailsPartial?: boolean;
 }
 
-const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial = false }) => {
-  const { t, isRTL } = useLanguage();
+const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial = false, initialRails, initialRailsPartial = false }) => {
+  const { t, isRTL, lang } = useLanguage();
+  const [rails, setRails] = useState<HomeRail[]>(() => initialRails ?? []);
   const { user: _user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>(() => initialPage?.data ?? []);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
@@ -105,6 +116,18 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
     fetchVideos(null);
   }, [fetchVideos]);
 
+  // The rails when the server could not read them (or dropped an image only the viewer may see)
+  const railsLoaded = useRef(!!initialRails && !initialRailsPartial);
+  useEffect(() => {
+    if (railsLoaded.current) return;
+    railsLoaded.current = true;
+    getHomeRails(lang === 'ar' ? 'ar' : 'en')
+      .then((fresh) => {
+        if (fresh) setRails(fresh);
+      })
+      .catch((error) => logger.warn('VideosPage: loading the home rails failed', { error }));
+  }, [lang]);
+
   // A ready landscape video unless an editor featured one (lib/video/hero.ts)
   const featured = pickHomeFeatured(videos, HOME_HERO_EXCLUDED);
 
@@ -126,6 +149,7 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
 <SignInBanner />
 <ContinueWatchingShelf />
 {featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
+<HomeRails rails={rails} />
 <h1 className="home-h text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards

@@ -26,6 +26,7 @@ jest.mock('@/components/videoCard/index', () => ({
 }));
 jest.mock('@/components/videoCard/rtl/index', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/lib/api/videos', () => ({ fetchVideosWithPagination: jest.fn() }));
+jest.mock('@/lib/api/discovery-home', () => ({ getHomeRails: jest.fn(() => Promise.resolve([])) }));
 
 const mockFetchVideos = fetchVideosWithPagination as jest.MockedFunction<typeof fetchVideosWithPagination>;
 

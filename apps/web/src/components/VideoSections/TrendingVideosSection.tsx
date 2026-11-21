@@ -10,6 +10,7 @@ import {
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import VideoCard from '@/components/videoCard';
+import { railHeading } from '@al-ummah/shared-types';
 
 export interface TrendingVideosSectionProps {
   initialVideos?: TrendingVideoObject[];
@@ -48,6 +49,10 @@ export function TrendingVideosSection({
   const [hasMore, setHasMore] = useState(true);
   const [algorithm, setAlgorithm] = useState<AlgorithmOption>(initialAlgorithm);
   const [timeWindow] = useState<TimeWindowOption>(initialTimeWindow);
+  // What the ranked list is right now (wiki E07): "New this week" until enough viewers count, and
+  // then the cards carry no trending rank either
+  const [railLabel, setRailLabel] = useState<string | null>(null);
+  const isTrending = !railLabel || railLabel.startsWith('trending');
 
   const fetchVideos = useCallback(async (loadMore = false) => {
     try {
@@ -82,6 +87,7 @@ export function TrendingVideosSection({
           setVideos(response.data);
         }
 
+        if (!loadMore) setRailLabel(response.metadata.rail?.label ?? null);
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
         logger.debug('[TrendingVideosSection] Videos loaded', {
@@ -146,7 +152,8 @@ export function TrendingVideosSection({
   ) : undefined;
 
   // Wrap videos with trending badges if enabled - return array of JSX elements
-  const videosWithBadges = showTrendingBadges
+  const badges = showTrendingBadges && isTrending;
+  const videosWithBadges = badges
     ? videos.map((video) => (
         <TrendingVideoCard key={video.id} video={video} isRTL={isRTL} />
       ))
@@ -167,10 +174,10 @@ export function TrendingVideosSection({
               clipRule="evenodd"
             />
           </svg>
-          <span>{t.sections?.trendingVideos || 'Trending'}</span>
+          <span>{railHeading(t.rails, railLabel) ?? (t.sections?.trendingVideos || 'Trending')}</span>
         </div>
       }
-      videos={showTrendingBadges ? [] : videos}
+      videos={badges ? [] : videos}
       loading={loading}
       error={error}
       onLoadMore={handleLoadMore}
@@ -182,7 +189,7 @@ export function TrendingVideosSection({
       viewAllHref={`/sections/trending?algorithm=${algorithm}&timeWindow=${timeWindow}`}
       headerActions={algorithmSelector}
     >
-      {showTrendingBadges && !loading && videosWithBadges && (
+      {badges && !loading && videosWithBadges && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" dir={isRTL ? 'rtl' : 'ltr'}>
           {videosWithBadges}
         </div>

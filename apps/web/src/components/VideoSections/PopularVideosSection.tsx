@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { VideoObject } from '@al-ummah/shared-types';
+import { VideoObject, railHeading } from '@al-ummah/shared-types';
 import { VideoSection } from './VideoSection';
 import { getPopularVideos, type PopularVideosParams } from '@/lib/api/sections';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -38,6 +38,8 @@ export function PopularVideosSection({
   const [cursor, setCursor] = useState<string | undefined>();
   const [hasMore, setHasMore] = useState(true);
   const [period, setPeriod] = useState<PeriodOption>(initialPeriod);
+  // What the ranked list is right now (wiki E07): "Featured" until enough viewers count
+  const [railLabel, setRailLabel] = useState<string | null>(null);
 
   const fetchVideos = useCallback(async (loadMore = false) => {
     try {
@@ -71,6 +73,7 @@ export function PopularVideosSection({
           setVideos(response.data);
         }
 
+        if (!loadMore) setRailLabel(response.metadata.rail?.label ?? null);
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
         logger.debug('[PopularVideosSection] Videos loaded', {
@@ -143,7 +146,7 @@ export function PopularVideosSection({
 
   return (
     <VideoSection
-      title={t.sections?.popularVideos || 'Popular Videos'}
+      title={railHeading(t.rails, railLabel) ?? (t.sections?.popularVideos || 'Popular Videos')}
       videos={videos}
       loading={loading}
       error={error}

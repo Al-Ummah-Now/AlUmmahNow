@@ -58,7 +58,7 @@ export function ExploreBody({ model, renderLiveCard }: { model: ExploreModel; re
 
       {trending.status === 'loading' && <RailSkeleton />}
       {trending.status === 'error' && <SectionError onRetry={model.retryTrending} />}
-      {trending.status === 'ready' && <TrendingSection videos={trending.data.videos} fallback={trending.data.fallback} />}
+      {trending.status === 'ready' && <TrendingSection videos={trending.data.videos} fallback={trending.data.fallback} label={trending.data.label} />}
 
       {explore.status === 'loading' && <RailSkeleton />}
       {explore.status === 'error' && <SectionError onRetry={model.retryExplore} />}

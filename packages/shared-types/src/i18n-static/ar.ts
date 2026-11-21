@@ -18,6 +18,7 @@ import { HUMAN_CHECK_AR } from '../i18n-human-check';
 import { HELP_AR } from '../i18n-help';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
 import { SIGN_IN_BANNER_AR } from '../i18n-signin-banner';
+import { RAILS_AR } from '../i18n-rails';
 import { CAPTIONS_AR } from '../i18n-captions';
 import { AUDIO_TRACKS_AR } from '../i18n-audio-tracks';
 import { BILLING_AR } from '../i18n-billing';
@@ -145,6 +146,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
   uploadStatus: UPLOAD_STATUS_AR,
   signInBanner: SIGN_IN_BANNER_AR,
+  rails: RAILS_AR,
   captions: CAPTIONS_AR,
   audioTracks: AUDIO_TRACKS_AR,
   billing: BILLING_AR,
