@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { PriorityStrip } from '@/components/ui/PriorityStrip';
+import { ScrollBox } from '@/components/ui/ScrollBox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
@@ -209,8 +210,9 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               <>
                 {/* The title column takes what the numbers leave and truncates (max-w-0 + w-full: an
                     auto-layout table ignores max-width on a cell); the wrapper keeps any excess inside the
-                    table, never a sideways page (#1695: Arabic at 360 px) */}
-                <div className="overflow-x-auto">
+                    table, never a sideways page (#1695: Arabic at 360 px). When it still does not fit,
+                    ScrollBox fades the edge with more to see and takes the focus for the arrow keys */}
+                <ScrollBox label={text.topContent} testId="studio-top-scroll">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-xs text-muted-foreground">
@@ -233,7 +235,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                     ))}
                   </tbody>
                 </table>
-                </div>
+                </ScrollBox>
                 {topCursor && <Button variant="outline" className="mt-3" onClick={() => void loadMore()}>{text.loadMore}</Button>}
               </>
             )}
