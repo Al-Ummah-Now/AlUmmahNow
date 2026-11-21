@@ -64,11 +64,12 @@ describe('ChannelAnalytics', () => {
     expect((await screen.findAllByTestId('studio-top-row'))[0]).toHaveTextContent('V a');
   });
 
-  it('Top content titles truncate inside the width the numbers leave, so the table fits a phone', async () => {
+  it('Top content titles wrap to two lines inside the width the numbers leave, so the table fits a phone and similar titles keep their distinguishing end', async () => {
     renderOverview();
     const rows = await screen.findAllByTestId('studio-top-row');
     const title = within(rows[0]).getByTestId('studio-top-title');
-    expect(title).toHaveClass('block', 'truncate');
+    expect(title).toHaveClass('line-clamp-2', 'break-words');
+    expect(title).not.toHaveClass('truncate');
     expect(title).toHaveAttribute('title', 'V b');
     expect(title.closest('td')).toHaveClass('w-full', 'max-w-0');
     for (const cell of [...rows[0].querySelectorAll('td')].slice(1)) expect(cell).toHaveClass('whitespace-nowrap');

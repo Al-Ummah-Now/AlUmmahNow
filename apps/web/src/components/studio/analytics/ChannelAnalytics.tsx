@@ -222,7 +222,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                         {/* The title takes only the width the one-line numbers leave (w-full + max-w-0), and
                             truncates: the table never grows past a phone's width */}
                         <td className="w-full max-w-0 p-2">
-                          <Link href={videoHref(item.videoId)} dir="auto" title={item.title} className="block truncate text-foreground hover:underline" data-testid="studio-top-title">{item.title}</Link>
+                          <Link href={videoHref(item.videoId)} dir="auto" title={item.title} className="line-clamp-2 break-words text-foreground hover:underline" data-testid="studio-top-title">{item.title}</Link>
                         </td>
                         <td className="whitespace-nowrap p-2 text-end tabular-nums">{number.format(item.views)}</td>
                         <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
