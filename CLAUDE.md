@@ -645,6 +645,7 @@ on a spec missing from it.
 | Check | Runs | Target |
 |---|---|---|
 | **Local E2E** (`local-e2e.yml`) | every PR, every push to `main`, nightly, every release | local stack (`E2E_ENV=local`) |
+| **Player E2E** (`player-e2e.yml`) | PRs touching the player, resume storage, the lockfile or the web's next config; every push to `main`; every release (gates production) | local `next dev` with the player harness and HLS fixtures, Chrome, Firefox, WebKit, phones |
 | Release → `stage-e2e` (`release-e2e.yml`) | every release | stage, deployed specs only |
 | Legacy E2E (`e2e-tests.yml`) | once after every release tag's Release run (`workflow_run`), by hand | QA, specs not yet on the local stack; never gates |
 
@@ -652,7 +653,7 @@ Every Local E2E job (admin, web, release) ends with a gating leftover check: any
 created that is still on its stack fails the job, apart from revocations and search tombstones
 (`scripts/local-stack/leftovers.ts`, teardown in `scripts/local-stack/run-teardown.ts`).
 
-A release promotes production only when both Local E2E and the stage run pass. How the stack
+A release promotes production only when Local E2E, Player E2E and the stage run pass. How the stack
 works, how to run it and its specs, the own-data and cleanup rules and the quarantine format are in
 `docs/testing/LOCAL-STACK.md`.
 

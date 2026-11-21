@@ -572,6 +572,18 @@ jobs:
     uses: ./.github/workflows/local-e2e.yml
     secrets: inherit
 
+  # The player suite (player-e2e.yml: Chrome, Firefox, WebKit, phones) on the tagged commit. It
+  # runs on every push to main too; here it makes sure no tag reaches production with a broken
+  # player (#1696: resume broke on main through a dependency bump and nothing ran the suite).
+  player-e2e:
+    name: Player E2E
+    needs: resolve
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/player-e2e.yml
+    secrets: inherit
+
   # Live secrets check (scripts/release/check-secrets.ts, manifest in
   # secrets-manifest.ts): every worker has its required secrets, no binding points
   # at a deleted Secrets Store secret, no test-only secret in production, and every
@@ -601,12 +613,13 @@ jobs:
   # production 0% smoke still gates the promote. Unset the variable afterwards.
   production:
     name: Production (migrate, 0% smoke, promote)
-    needs: [resolve, stage, stage-e2e, local-e2e, secrets-stage, secrets-production]
+    needs: [resolve, stage, stage-e2e, local-e2e, player-e2e, secrets-stage, secrets-production]
     if: >-
       always() &&
       needs.resolve.outputs.production == 'true' &&
       needs.stage.result == 'success' &&
       needs.local-e2e.result == 'success' &&
+      needs.player-e2e.result == 'success' &&
       needs.secrets-stage.result == 'success' &&
       needs.secrets-production.result == 'success' &&
       (needs.stage-e2e.result == 'success' ||

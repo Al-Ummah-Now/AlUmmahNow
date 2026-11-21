@@ -6,6 +6,12 @@ name: Player E2E
 
 on:
   workflow_dispatch:
+  # Every push to main, whatever it touched: the player broke on main through a dependency bump
+  # (next 16.4's React, #1696) that no player path below matched, and nothing ran it for five days
+  push:
+    branches: [main]
+  # The release gate (release.yml job player-e2e) on the tagged commit
+  workflow_call:
   pull_request:
     branches: [main]
     paths:
@@ -15,10 +21,19 @@ on:
       - 'apps/web/src/lib/accessibility/**'
       - 'apps/web/src/styles/player-skin.css'
       - 'apps/web/src/styles/video-player.css'
+      # Resume: saved progress on the device and from the API (#242, #1696)
+      - 'apps/web/src/hooks/useWatchProgress.ts'
+      - 'apps/web/src/services/api/watch-history.ts'
+      - 'apps/web/src/lib/storage/**'
+      - 'apps/web/src/lib/crypto.ts'
       # The [locale] folder: brackets are glob syntax, so match the segment with *
       - 'apps/web/src/app/*/dev/player/**'
       - 'apps/web/e2e/player/**'
       - 'apps/web/playwright.player.config.ts'
+      # Framework and dependency changes (next ships its own React; #1696)
+      - 'pnpm-lock.yaml'
+      - 'apps/web/package.json'
+      - 'apps/web/next.config.ts'
       - 'packages/fanous-tokens/**'
       - '.github/workflows/player-e2e.yml'
 
@@ -26,9 +41,11 @@ permissions:
   contents: read
   packages: read
 
+# Pull requests: a new push replaces the run. main and releases: never cancelled, so every main
+# commit and every tag gets a result (GitHub still keeps only the newest pending run per group)
 concurrency:
-  group: player-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: player-e2e-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   player-e2e:

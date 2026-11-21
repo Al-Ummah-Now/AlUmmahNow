@@ -176,6 +176,13 @@ export const NODES: NodeDef[] = [
       'apps/web/src/styles/player-skin.css',
       'apps/web/src/styles/video-player.css',
       'apps/web/src/app/*/dev/player/**',
+      // Resume: saved progress on the device and from the API (#1696)
+      'apps/web/src/hooks/useWatchProgress.ts',
+      'apps/web/src/services/api/watch-history.ts',
+      'apps/web/src/lib/storage/**',
+      'apps/web/src/lib/crypto.ts',
+      // next ships its own React: a framework change can break the player (#1696)
+      'apps/web/next.config.ts',
     ],
   },
   // cost-monitor's D1 migrations are applied through admin-api's config (COSTS_DB), which the stack boots

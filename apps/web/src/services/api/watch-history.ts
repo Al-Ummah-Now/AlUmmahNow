@@ -143,18 +143,48 @@ export function applyLocalProgressRetention(
   );
 }
 
-/** Read and delete the pre-encryption plaintext entry, if any. */
+/**
+ * Read the pre-encryption plaintext entry, if any. It stays on the device until
+ * its encrypted copy is written (removeLegacyPlaintextProgress), so a read cut
+ * short mid-migration never loses it.
+ */
 function readLegacyPlaintextProgress(): Record<string, WatchProgress> | null {
   try {
     if (typeof localStorage === 'undefined') return null;
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return null;
-    localStorage.removeItem(STORAGE_KEY);
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, WatchProgress>) : null;
+    if (typeof parsed === 'object' && parsed !== null) return parsed as Record<string, WatchProgress>;
   } catch {
-    return null;
+    // unreadable: dropped below
   }
+  removeLegacyPlaintextProgress();
+  return null;
+}
+
+function removeLegacyPlaintextProgress(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // storage unavailable: nothing to remove
+  }
+}
+
+/**
+ * On-device progress is read, changed and written back asynchronously (the
+ * encryption is async), so two operations at once would each start from the
+ * same stored value: the later write drops the earlier one's change, and a
+ * second read during the legacy migration found neither the plaintext nor the
+ * not-yet-written encrypted copy. React Strict Mode runs the player's load
+ * effect twice at once, which lost the saved position that way (#1696). Every
+ * operation on it therefore runs one after another.
+ */
+let localProgressQueue: Promise<unknown> = Promise.resolve();
+
+function withLocalProgress<T>(operation: () => Promise<T>): Promise<T> {
+  const run = localProgressQueue.then(operation, operation);
+  localProgressQueue = run.catch(() => undefined);
+  return run;
 }
 
 /**
@@ -281,9 +311,11 @@ export class WatchHistoryService {
    */
   static async saveLocal(progress: WatchProgress): Promise<void> {
     try {
-      const stored = await this.getStoredProgress();
-      stored[progress.videoId] = minimizeLocalProgress(progress);
-      await this.writeStoredProgress(stored);
+      await withLocalProgress(async () => {
+        const stored = await this.getStoredProgress();
+        stored[progress.videoId] = minimizeLocalProgress(progress);
+        await this.writeStoredProgress(stored);
+      });
       if (process.env.NODE_ENV === 'development') {
         logger.debug('[WatchHistoryService] Saved progress locally (encrypted)', { videoId: progress.videoId });
       }
@@ -300,7 +332,7 @@ export class WatchHistoryService {
    */
   static async getLocal(videoId: string): Promise<WatchProgress | null> {
     try {
-      const stored = await this.getStoredProgress();
+      const stored = await withLocalProgress(() => this.getStoredProgress());
       return stored[videoId] || null;
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to get local progress:', error);
@@ -321,6 +353,7 @@ export class WatchHistoryService {
     if (legacy || Object.keys(pruned).length !== Object.keys(encrypted).length) {
       await this.writeStoredProgress(pruned);
     }
+    if (legacy) removeLegacyPlaintextProgress();
     return pruned;
   }
 
@@ -344,8 +377,9 @@ export class WatchHistoryService {
     authToken: string
   ): Promise<{ synced: number; failed: number }> {
     try {
-      const stored = await this.getStoredProgress();
-      const remainingProgress: Record<string, WatchProgress> = { ...stored };
+      // The API calls run outside the queue so a slow network never holds up resume reads
+      const stored = await withLocalProgress(() => this.getStoredProgress());
+      const syncedEntries = new Map<string, WatchProgress>();
 
       let synced = 0;
       let failed = 0;
@@ -354,7 +388,7 @@ export class WatchHistoryService {
         const result = await this.saveProgress({ ...progress }, authToken);
         if (result.success) {
           synced++;
-          delete remainingProgress[videoId];
+          syncedEntries.set(videoId, progress);
         } else {
           failed++;
         }
@@ -364,7 +398,14 @@ export class WatchHistoryService {
         logger.debug(`[WatchHistoryService] Synced ${synced} items from device storage to API`);
       }
 
-      await this.writeStoredProgress(remainingProgress);
+      // Remove what was synced, keeping any entry saved again on this device meanwhile
+      await withLocalProgress(async () => {
+        const current = await this.getStoredProgress();
+        for (const [videoId, progress] of syncedEntries) {
+          if (current[videoId]?.timestamp === progress.timestamp) delete current[videoId];
+        }
+        await this.writeStoredProgress(current);
+      });
       return { synced, failed };
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to sync local progress to API:', error);
@@ -392,9 +433,11 @@ export class WatchHistoryService {
         );
       }
 
-      const stored = await this.getStoredProgress();
-      delete stored[videoId];
-      await this.writeStoredProgress(stored);
+      await withLocalProgress(async () => {
+        const stored = await this.getStoredProgress();
+        delete stored[videoId];
+        await this.writeStoredProgress(stored);
+      });
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to clear progress:', error);
     }
@@ -402,12 +445,13 @@ export class WatchHistoryService {
 
   /** Remove all watch progress stored on this device. */
   static clearLocal(): void {
-    EncryptedStorage.removeItem(STORAGE_KEY);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // storage unavailable: nothing to clear
-    }
+    const clear = async () => {
+      EncryptedStorage.removeItem(STORAGE_KEY);
+      removeLegacyPlaintextProgress();
+    };
+    void clear();
+    // A save already under way would write its entries back: clear again once it is done
+    void withLocalProgress(clear);
   }
   /**
    * List the active account's watch history (newest first).
