@@ -11,19 +11,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   MoreVertical,
   Eye,
@@ -34,14 +23,17 @@ import {
   ThumbsUp,
   MessageSquare
 } from 'lucide-react';
+import { formatScheduledAt } from './PostSchedulePicker';
 
 interface PostCardProps {
   post: CommunityPost;
   locale: string;
   onView: (post: CommunityPost) => void;
-  /** Omit to hide the Edit action (there is no post edit page yet) */
+  /** Omit to hide the Edit action */
   onEdit?: (post: CommunityPost) => void;
   onDelete: (postId: string) => Promise<void>;
+  /** A scheduled post: publish it now (Story 29.4) */
+  onPublishNow?: (post: CommunityPost) => Promise<void>;
 }
 
 const POST_TYPE_LABELS = {
@@ -63,7 +55,7 @@ const STATUS_LABELS = {
   [PostStatus.DELETED]: { en: 'Deleted', ar: 'محذوف' }
 };
 
-export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardProps) {
+export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow }: PostCardProps) {
   const isRTL = locale === 'ar';
   // Whether the text is cut at two lines (measured, and again when the card's width changes)
   const textRef = useRef<HTMLParagraphElement>(null);
@@ -79,14 +71,24 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
     return () => ro.disconnect();
   }, [post.content]);
   const { t } = useLanguage();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const isScheduled = post.status === PostStatus.SCHEDULED && !!post.scheduledAt;
+  const publishNow = async () => {
+    if (!onPublishNow) return;
+    setPublishing(true);
+    try {
+      await onPublishNow(post);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
+  // No confirm: the delete is a 30-day soft delete with an Undo toast (the page's onDelete)
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await onDelete(post.id);
-      setShowDeleteDialog(false);
     } catch (error) {
       logger.error('Delete failed:', error);
     } finally {
@@ -141,9 +143,9 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </p>
 
               <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3 md:w-4 md:h-4" />
-                  {timeAgo}
+                <span className="flex items-center gap-1" data-testid={isScheduled ? 'managed-post-scheduled-at' : undefined}>
+                  <Calendar className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  {isScheduled ? t.community.scheduledFor.replace('{date}', formatScheduledAt(post.scheduledAt!, locale)) : timeAgo}
                 </span>
                 <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.views, 'view')}>
                   <Eye className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
@@ -163,7 +165,14 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </div>
             </div>
 
-            <DropdownMenu>
+            <div className="flex shrink-0 items-center gap-2">
+            {isScheduled && onPublishNow && (
+              <Button variant="outline" size="sm" onClick={publishNow} disabled={publishing} data-testid="managed-post-publish-now">
+                {t.community.publishNow}
+              </Button>
+            )}
+            {/* Not modal: the rest of the page is never aria-hidden while it is open */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -178,53 +187,31 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               {/* Below the button (never over the author line), its end edge on the button's: inside the screen in both directions */}
               <DropdownMenuContent side="bottom" align="end">
                 <DropdownMenuItem onClick={() => onView(post)}>
-                  <Eye className="w-4 h-4" aria-hidden="true" />
-                  {isRTL ? 'عرض' : 'View'}
+                  <Eye className="w-4 h-4 me-2" aria-hidden="true" />
+                  {t.community.viewPost}
                 </DropdownMenuItem>
                 {onEdit && (
                   <DropdownMenuItem onClick={() => onEdit(post)}>
-                    <Edit className="w-4 h-4" aria-hidden="true" />
-                    {isRTL ? 'تعديل' : 'Edit'}
+                    <Edit className="w-4 h-4 me-2" aria-hidden="true" />
+                    {t.community.editPost}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteDialog(true)}>
-                  <Trash2 className="w-4 h-4" aria-hidden="true" />
-                  {isRTL ? 'حذف' : 'Delete'}
+                <DropdownMenuItem
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                  className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
+                  data-testid="studio-post-delete"
+                >
+                  <Trash2 className="w-4 h-4 me-2 text-[var(--fanous-color-error-text)]" aria-hidden="true" />
+                  {deleting ? t.community.deleting : t.community.deletePost}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </div>
       </Card>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {isRTL
-                ? 'هل أنت متأكد من حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.'
-                : 'Are you sure you want to delete this post? This action cannot be undone.'
-              }
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>
-              {isRTL ? 'إلغاء' : 'Cancel'}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? (isRTL ? 'جاري الحذف...' : 'Deleting...') : (isRTL ? 'حذف' : 'Delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

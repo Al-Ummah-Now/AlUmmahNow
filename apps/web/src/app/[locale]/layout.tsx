@@ -19,6 +19,7 @@ import ProfileGuard from '@/components/ProfileGuard';
 import { HtmlLocaleAttributes } from '@/components/HtmlLocaleAttributes';
 import { NavigationRecorder } from '@/components/analytics/NavigationRecorder';
 import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
+import UndoToastHost from '@/components/common/UndoToastHost';
 
 interface LocaleLayoutProps {
   children: React.ReactNode;
@@ -69,6 +70,8 @@ export default async function LocaleLayout({
       <NavigationRecorder />
       <div dir={dir} lang={locale}>
         {children}
+        {/* The app-wide Undo toast (lib/undo-toast): outlives the card or page that showed it */}
+        <UndoToastHost />
       </div>
     </ProfileGuard>
   );

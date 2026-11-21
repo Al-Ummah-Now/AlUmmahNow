@@ -54,3 +54,13 @@ export async function checkBulkScheduleAllowed(
 	const value = await resolveValue(env, 'studio.bulkSchedule', [{ type: 'user', id: userId }], resolver);
 	return value === false ? refused('studio.bulkSchedule', null, null, 'Bulk scheduling is off for this account.') : null;
 }
+
+/** Null when the channel may schedule community posts (`posts.scheduled`, Story 29.4). */
+export async function checkPostScheduleAllowed(
+	env: unknown,
+	input: { userId: string; channelId: string },
+	resolver: EntitlementResolver | null = projectResolver(),
+): Promise<UpgradeRequiredError | null> {
+	const value = await resolveValue(env, 'posts.scheduled', [{ type: 'channel', id: input.channelId }, { type: 'user', id: input.userId }], resolver);
+	return value === false ? refused('posts.scheduled', null, null, 'Your plan does not include scheduled posts.') : null;
+}

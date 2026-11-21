@@ -14,6 +14,7 @@ import { pluralText } from './toast-queue';
 export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'newVideo',
   'liveStarted',
+  'newPost',
   'commentReply',
   'newComment',
   'newSubscriber',

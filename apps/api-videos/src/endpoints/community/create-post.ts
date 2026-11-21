@@ -21,12 +21,14 @@ import { imageGate, queueImageScan } from '../../lib/review/images';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
 import { markScheduled } from '../../lib/scheduled-posts';
+import { postScheduleProblem } from '../../lib/post-schedule';
+import { checkPostScheduleAllowed } from '../../lib/studioLimits';
 import { can, channelRoleOf, parsePostFields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
-const sanitizeOptions = {
+export const sanitizeOptions = {
   allowedTags: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
   allowedAttributes: {
     'a': ['href']
@@ -150,12 +152,21 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         },
       },
       400: {
-        description: 'Invalid request',
+        description: 'Invalid request (a scheduledAt sooner than 5 minutes or more than a year ahead: code schedule_too_soon / schedule_too_far)',
         content: {
           'application/json': {
             schema: z.object({
               error: z.string(),
+              code: z.string().optional(),
             }),
+          },
+        },
+      },
+      402: {
+        description: 'The plan does not include scheduled posts (posts.scheduled)',
+        content: {
+          'application/json': {
+            schema: z.object({ success: z.literal(false), error: z.literal('upgrade_required'), entitlement: z.string(), message: z.string() }),
           },
         },
       },
@@ -190,6 +201,15 @@ export class CreateCommunityPost extends AuthenticatedRoute {
     const v2 = parsePostFields(body.type, body, { mediaHost: platformMediaHost(c.env) });
     if ('error' in v2) {
       return c.json({ error: postFieldsMessage(v2), code: v2.error, field: v2.field }, 400);
+    }
+    // A scheduled post: 5 minutes to a year ahead (the same window as scheduled videos), and the plan allows it
+    if (body.scheduledAt !== undefined) {
+      const problem = postScheduleProblem(body.scheduledAt);
+      if (problem) {
+        return c.json({ error: problem.message, code: problem.code, field: 'scheduledAt' }, 400);
+      }
+      const refusal = await checkPostScheduleAllowed(c.env, { userId, channelId });
+      if (refusal) return c.json(refusal, 402);
     }
     const imageHost = platformMediaHost(c.env);
     const badImage = (body.images ?? []).find((img: { url?: string }) => img.url !== undefined && !isPlatformImage(img.url, imageHost));

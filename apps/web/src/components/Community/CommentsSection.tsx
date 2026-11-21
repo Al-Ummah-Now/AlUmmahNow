@@ -127,11 +127,13 @@ export default function CommentsSection({
     <div
       id={`post-${postId}-comments`}
       className={cn(
-        'border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4'
+        // No fill of its own: the card's shared surface shows through (owner review; aun-surfaces)
+        'border-t border-[var(--fanous-color-divider)] bg-transparent p-4',
+        isRTL && 'text-right'
       )}
     >
       {/* Header */}
-      <div className={cn('flex items-center justify-between mb-4')}>
+      <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {totalComments > 0
             ? isRTL
@@ -144,7 +146,7 @@ export default function CommentsSection({
 
         {/* Sort Selector */}
         {comments.length > 0 && (
-          <div className={cn('flex items-center gap-2')}>
+          <div className="flex items-center gap-2">
             <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
             </svg>
@@ -192,7 +194,7 @@ export default function CommentsSection({
       {loading && (
         <div className="space-y-6">
           {[1, 2, 3].map((i) => (
-            <div key={i} className={cn('flex gap-3 animate-pulse')}>
+            <div key={i} className="flex animate-pulse gap-3">
               <div className="w-10 h-10 bg-gray-300 dark:bg-gray-600 rounded-full flex-shrink-0" />
               <div className="flex-1 space-y-2">
                 <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/4" />

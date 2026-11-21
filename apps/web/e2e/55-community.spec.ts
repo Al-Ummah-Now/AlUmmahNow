@@ -4,15 +4,24 @@ import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { centerX, clickUntil, expectRtl, fillStable, tempName } from './test-utils/channel-content';
 import { useOwnData, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
+import { AxeBuilder } from '@axe-core/playwright';
+import { SITE_THEMES } from '@al-ummah/shared-types';
+import { actionRowContrast } from './test-utils/action-row-contrast';
 
-/** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
-const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
+/** A time `ms` from now as a datetime-local value in the browser's zone (the runner's) */
+const localIn = (ms: number) => {
+  const d = new Date(Date.now() + ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 /**
  * Community posts: the owner's post manager in Studio
- * (/studio/[id]/content/posts, /new and /[postId]/edit: text, poll and quiz
- * posts, validation, edit, delete) and how posts render on the channel Community
- * tab (post card, like/unlike, comments as they exist today).
+ * (/studio/[id]/content/posts, /new and /[postId]/edit:
+ * text, poll and quiz posts, validation, edit, scheduling, publish now, delete),
+ * the owner's Edit/Delete menu on the post card, the subscriber notification
+ * for a new post (Story 29.4), and how posts render on the channel Community
+ * tab (post card, like/unlike, comments).
  *
  * Own data (release/builders.ts): an owner and a viewer, each a creator with
  * one channel, made for this spec and deleted afterwards. The owner's posts
@@ -115,6 +124,13 @@ async function openNewPost(page: Page, locale: 'en' | 'ar' = 'en') {
 }
 
 /** Selects a post type card (retried: the first click can land before hydration) */
+/** The composer's date and time fields, from a `YYYY-MM-DDTHH:mm` local time. */
+async function fillSchedule(page: Page, local: string) {
+  const [date, time] = local.split('T');
+  await page.getByTestId('post-schedule-date').fill(date);
+  await page.getByTestId('post-schedule-time').fill(time);
+}
+
 async function selectType(page: Page, type: string) {
   const option = page.locator(`[role="radio"][data-post-type="${type}"]`);
   await clickUntil(option, async () => expect(option).toHaveAttribute('aria-checked', 'true', { timeout: 3000 }));
@@ -138,7 +154,7 @@ test.describe('Post manager', () => {
     await createTextPost(`${marker} hello community`);
     await page.goto(`/en/studio/${channelId()}/content/posts`);
     await expect(page.getByTestId('studio-frame')).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'Manage Posts' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Manage posts' })).toBeVisible();
     // Status is a link in the URL (?status=); Published is the default
     await expect(page.getByTestId('studio-posts-status-published')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('studio-posts-status-scheduled')).toHaveAttribute('href', `/en/studio/${channelId()}/content/posts?status=scheduled`);
@@ -157,13 +173,13 @@ test.describe('Post manager', () => {
     await expect(page.getByTestId('managed-post')).toHaveCount(0);
     await expect(page.getByText(/^No results/)).toBeVisible();
 
-    // View opens the channel Community tab
+    // View opens the post's own page; Edit is offered too
     await search.fill('');
     await search.press('Escape');
     await card.getByTestId('post-actions').click();
     await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
     await page.getByRole('menuitem', { name: 'View' }).click();
-    await expect(page).toHaveURL(channelPageUrl('en', channelId(), '\\?tab=community$'));
+    await expect(page).toHaveURL(/\/en\/post\/[^/?#]+$/);
     await expect(postCard(page, marker)).toBeVisible();
   });
 
@@ -190,12 +206,11 @@ test.describe('Post manager', () => {
       await expect(postCard(community, marker).getByRole('heading', { level: 3 })).toHaveText(channelName);
       await community.close();
 
-      // Delete from the manager (confirmation dialog)
+      // Delete from the manager: at once, no confirm (a soft delete with an Undo toast)
       await managed.getByTestId('post-actions').click();
       await page.getByRole('menuitem', { name: 'Delete' }).click();
-      const confirm = page.getByRole('alertdialog');
-      await expect(confirm.getByRole('heading', { name: 'Confirm Delete' })).toBeVisible();
-      await confirm.getByRole('button', { name: 'Delete' }).click();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await expect(page.getByTestId('post-delete-toast')).toContainText('Post deleted');
       await expect(managed).toHaveCount(0);
       await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.content?.includes(marker))).toBe(false);
     } finally {
@@ -287,6 +302,110 @@ test.describe('Post manager', () => {
     expect(res?.status()).toBe(404);
   });
 
+  test('COMM-016 schedules a post: hidden from visitors, listed as scheduled, then published now', async ({ page }) => {
+    const marker = tempName('Sched');
+    try {
+      await openNewPost(page);
+      await selectType(page, 'text');
+      await fillStable(page.getByLabel('Content'), `${marker} for later`);
+      await page.getByTestId('post-schedule-later').check();
+      await expect(page.getByTestId('post-publish')).toHaveText('Schedule');
+      await expect(page.getByTestId('post-schedule-timezone')).toContainText('Time zone:');
+      // Too soon is refused in the composer
+      await fillSchedule(page, localIn(60_000));
+      await page.getByTestId('post-publish').click();
+      await expect(page.getByTestId('post-schedule-error')).toHaveText('Pick a time at least 5 minutes from now');
+      await fillSchedule(page, localIn(3 * 3600_000));
+      await page.getByTestId('post-publish').click();
+      await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId()}/content/posts$`));
+
+      // Not on the channel for anyone else until its time
+      let postId = '';
+      await expect.poll(async () => {
+        postId = (await listPosts(owner, channelId(), channelId())).find((p) => p.content?.includes(marker))?.id ?? '';
+        return postId;
+      }).not.toBe('');
+      const post = { id: postId };
+      expect((await listPosts(viewer, channelId(), viewer.channelIds[0])).some((p) => p.id === post.id)).toBe(false);
+
+      await page.getByTestId('studio-posts-status-scheduled').click();
+      await expect(page).toHaveURL(/\?status=scheduled$/);
+      const managed = page.getByTestId('managed-post').filter({ hasText: marker });
+      await expectListed(page, managed);
+      await expect(managed.getByTestId('managed-post-scheduled-at')).toContainText('Scheduled for');
+      await expect(page.getByTestId('studio-posts-status-draft')).toHaveCount(0);
+
+      await managed.getByTestId('managed-post-publish-now').click();
+      await expect(managed).toHaveCount(0);
+      await page.getByTestId('studio-posts-status-published').click();
+      await expect(page.getByTestId('managed-post').filter({ hasText: marker })).toBeVisible();
+      await expect.poll(async () => (await listPosts(viewer, channelId(), viewer.channelIds[0])).some((p) => p.id === post.id)).toBe(true);
+    } finally {
+      await deletePostsContaining(marker);
+    }
+  });
+
+  test('COMM-009 the owner deletes a post from its card, then Undo brings it back', async ({ page }) => {
+    const marker = tempName('CardDel');
+    const { id } = await createTextPost(`${marker} delete me`);
+    try {
+      await page.goto(`/en/channels/${channelId()}?tab=community`);
+      const card = postCard(page, marker);
+      const actions = card.getByRole('button', { name: 'Post actions' });
+      await expectHydrated(actions);
+      await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible({ timeout: 3000 }));
+      await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', `/en/studio/${channelId()}/content/posts/${id}/edit`);
+      await page.getByRole('menuitem', { name: 'Delete' }).click();
+      // No confirm: the post goes at once and the toast offers Undo
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      const toast = page.getByTestId('post-delete-toast');
+      await expect(toast).toContainText('Post deleted');
+      await expect(card).toHaveCount(0);
+      await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.id === id)).toBe(false);
+
+      await toast.getByRole('button', { name: 'Undo' }).click();
+      await expect(toast).toHaveCount(0);
+      await expect(card).toBeVisible();
+      await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.id === id)).toBe(true);
+    } finally {
+      await deletePostsContaining(marker);
+    }
+  });
+
+  test('COMM-014 Arabic delete toast is RTL and translated', async ({ page }) => {
+    const marker = tempName('ArDel');
+    await createTextPost(`${marker} delete me`);
+    try {
+      await page.goto(`/ar/channels/${channelId()}?tab=community`);
+      const card = postCard(page, marker);
+      const actions = card.getByRole('button', { name: 'إجراءات المنشور' });
+      await expectHydrated(actions);
+      await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'حذف' })).toBeVisible({ timeout: 3000 }));
+      await page.getByRole('menuitem', { name: 'حذف' }).click();
+      const toast = page.getByTestId('post-delete-toast');
+      await expect(toast).toContainText('حُذف المنشور');
+      await expect(toast).toHaveAttribute('dir', 'rtl');
+      await expect(toast.getByRole('button', { name: 'تراجع' })).toBeVisible();
+      await expect(toast.getByRole('button', { name: 'إغلاق' })).toBeVisible();
+    } finally {
+      await deletePostsContaining(marker);
+    }
+  });
+
+  test('COMM-013 Arabic editor and schedule controls are RTL and translated', async ({ page }) => {
+    const marker = tempName('ArEdit');
+    const { id } = await createTextPost(`${marker} نص`);
+    await page.goto(`/ar/studio/${channelId()}/content/posts/${id}/edit`);
+    await expectRtl(page);
+    await expect(page.getByRole('heading', { level: 2, name: 'تعديل المنشور' })).toBeVisible();
+    await expect(page.getByTestId('post-save')).toHaveText('حفظ التغييرات');
+    await expect(page.getByTestId('studio-back')).toHaveAccessibleName('العودة إلى المنشورات');
+    await openNewPost(page, 'ar');
+    await expect(page.getByText('وقت النشر')).toBeVisible();
+    await page.getByTestId('post-schedule-later').check();
+    await expect(page.getByTestId('post-publish')).toHaveText('جدولة');
+  });
+
   test('COMM-006 Arabic post editor is RTL and translated', async ({ page }) => {
     await openNewPost(page, 'ar');
     await expectRtl(page);
@@ -330,6 +449,72 @@ test.describe('Community tab - engagement', () => {
     await expect.poll(async () => (await listPosts(viewer, channelId(), acting)).find((p) => p.id === post.id)?.viewerHasLiked).toBe(false);
   });
 
+  test('COMM-015 every count and icon in the action row meets AA in every theme, light and dark, idle and active', async ({ page }) => {
+    test.setTimeout(240_000);
+    const marker = tempName('Contrast');
+    await createTextPost(`${marker} contrast check`);
+    const failures: string[] = [];
+    for (const mode of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto(`/en/channels/${channelId()}?tab=community`);
+      await page.evaluate((m) => localStorage.setItem('theme', m), mode);
+      await page.reload();
+      const card = postCard(page, marker);
+      const row = card.getByTestId('post-actions-row');
+      await expectHydrated(card.getByRole('button', { name: 'Like' }));
+      for (const state of ['idle', 'active'] as const) {
+        if (state === 'active') {
+          // Liked and comments open: the active colour on Like and Comment
+          await card.getByRole('button', { name: 'Like' }).click();
+          await expect(card.getByRole('button', { name: 'Unlike' })).toHaveAttribute('aria-pressed', 'true');
+          const comments = card.getByRole('button', { name: /Comments/ });
+          if ((await comments.getAttribute('aria-pressed')) !== 'true') await comments.click();
+          await expect(comments).toHaveAttribute('aria-pressed', 'true');
+        }
+        for (const theme of SITE_THEMES) {
+          await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+          await page.waitForTimeout(150);
+          // Against the real pixels behind each count and icon (the card is glass over the page)
+          for (const r of await actionRowContrast(page, row)) {
+            if (r.ratio < r.required) failures.push(`${theme} ${mode} ${state} ${r.name}: ${r.ratio}:1 < ${r.required}:1 (${r.color})`);
+          }
+          const axe = await new AxeBuilder({ page }).include('[data-testid="post-actions-row"]').withRules(['color-contrast']).analyze();
+          for (const v of axe.violations) failures.push(`${theme} ${mode} ${state} axe ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
+        }
+      }
+      // Back to idle for the next mode
+      await card.getByRole('button', { name: 'Unlike' }).click();
+      await expect(card.getByRole('button', { name: 'Like' })).toHaveAttribute('aria-pressed', 'false');
+    }
+    expect(failures, failures.join('\n')).toEqual([]);
+  });
+
+  test('COMM-012 a subscriber is notified of a new post and the notification opens it', async ({ page }) => {
+    const marker = tempName('Notify');
+    const acting = viewer.channelIds[0];
+    const sub = await apiFetch(viewer.user, `/api/channels/${channelId()}/subscriptions`, { method: 'POST', headers: { channelId: acting } });
+    expect(sub.status, 'subscribe').toBeLessThan(300);
+    try {
+      const { id } = await createTextPost(`${marker} news for subscribers`);
+      // CommunityPostCreated → processor → paged fan-out → the subscriber's stored notification
+      await expect.poll(async () => {
+        const res = await apiFetch(viewer.user, '/api/notifications?limit=50');
+        const items = ((await res.json()) as { result?: { items?: Array<{ notificationKey: string; actionUrl?: string }> } }).result?.items ?? [];
+        return items.some((n) => n.notificationKey === 'newPost' && n.actionUrl === `/post/${id}`);
+      }, { timeout: 60_000 }).toBe(true);
+      await page.goto('/en/notifications');
+      const row = page.getByRole('link', { name: new RegExp(marker) }).first();
+      await expect(row).toBeVisible();
+      await row.click();
+      await expect(page).toHaveURL(new RegExp(`/en/post/${id}$`));
+      await expect(postCard(page, marker)).toBeVisible();
+      // A viewer has no owner menu on someone else's post
+      await expect(postCard(page, marker).getByRole('button', { name: 'Post actions' })).toHaveCount(0);
+    } finally {
+      await apiFetch(viewer.user, `/api/channels/${channelId()}/subscriptions`, { method: 'DELETE', headers: { channelId: acting } });
+    }
+  });
+
   test('COMM-011 a signed-in viewer comments on a post', async ({ page }) => {
     const marker = tempName('Comment');
     // Deleting the post (scope cleanup) removes its comments
@@ -358,6 +543,8 @@ test.describe('Community tab - visitor', () => {
     await expect(card).toBeVisible();
     await expect(card.getByText(/^(just now|\d+ minutes? ago)$/)).toBeVisible();
     await expect(card.getByRole('button', { name: 'Like' })).toBeDisabled();
+    // No owner menu (and no dead "more" button) for visitors
+    await expect(card.getByRole('button', { name: /Post actions|More options/ })).toHaveCount(0);
     await clickUntil(card.getByRole('button', { name: 'Comments' }), async () =>
       expect(card.getByText('Be the first to comment!')).toBeVisible({ timeout: 3000 })
     );

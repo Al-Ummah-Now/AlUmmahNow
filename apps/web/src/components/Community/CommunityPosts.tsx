@@ -2,7 +2,7 @@
 
 import { logger } from '@/lib/logger-client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CommunityPost } from '@al-ummah/shared-types';
 import { getCommunityPost, listCommunityPosts } from '@/lib/api/community-posts';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -32,8 +32,12 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   const channelName = account?.channel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim();
   const viewerUserId = user?.id;
   const viewerChannelId = activeChannel?.channelId;
+  // The owner acting as the post's channel may edit and delete it (channel members cannot, api-videos)
+  const canManage = (post: CommunityPost) => Boolean(viewerUserId && activeChannel && activeChannel.channelId === post.channelId && activeChannel.userId === viewerUserId);
 
   const [posts, setPosts] = useState<CommunityPost[]>([]);
+  /** Posts the owner deleted on this page, with their place (Undo puts them back) */
+  const removedPosts = useRef(new Map<string, { post: CommunityPost; index: number }>());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
@@ -184,6 +188,21 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
           channelId={viewerChannelId}
           userId={viewerUserId}
           openPostLabel={t.community.openPost}
+          canManage={canManage(post)}
+          onDeleted={(id) => {
+            // Kept with its place, so Undo puts it back where it was
+            setPosts((prev) => {
+              const index = prev.findIndex((p) => p.id === id);
+              if (index >= 0) removedPosts.current.set(id, { post: prev[index], index });
+              return prev.filter((p) => p.id !== id);
+            });
+          }}
+          onRestored={(id) => {
+            const removed = removedPosts.current.get(id);
+            if (!removed) return;
+            removedPosts.current.delete(id);
+            setPosts((prev) => (prev.some((p) => p.id === id) ? prev : [...prev.slice(0, removed.index), removed.post, ...prev.slice(removed.index)]));
+          }}
           // With a channel active, comments are that channel's; without one, the member's own (#1151)
           userAvatar={activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl}
           userDisplayName={activeChannel ? channelName || undefined : userDisplayName(profile, lang, user?.email) || undefined}

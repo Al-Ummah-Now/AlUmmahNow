@@ -163,7 +163,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
                 <>
-                  <MetaSep lang={locale} gap="0.5rem" />
+                  {subscriberCount !== undefined && <MetaSep lang={locale} gap="0.5rem" />}
                   <span>
                     {formatVideoCount(channel.videosCount, locale)}
                   </span>

@@ -353,7 +353,7 @@ export default function SubtitleUploadModal({
                     md:w-10 md:h-10
                     text-blue-500
                   " />
-                  <div className="text-left">
+                  <div className="text-start">
                     <p className="
                       text-sm
                       md:text-base

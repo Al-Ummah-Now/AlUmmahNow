@@ -7,11 +7,14 @@
  */
 
 import { isShort, type VideoFormatInput } from './video-format';
+import { postTitle, type PostLike } from './post-schema';
 
 /** Settings categories a user can turn on/off. */
 export const OPTIONAL_NOTIFICATION_CATEGORIES = [
   'new_videos',
   'live',
+  /** Community posts from channels the user subscribes to (Story 29.4) */
+  'posts',
   'replies',
   'comments',
   'subscribers',
@@ -42,6 +45,8 @@ export function isOptionalNotificationCategory(category: unknown): category is O
 export const NOTIFICATION_KEYS = [
   'newVideo',
   'liveStarted',
+  /** A channel the user subscribes to published a community post (params: channelName, postExcerpt) */
+  'newPost',
   'commentReply',
   'newComment',
   'newSubscriber',
@@ -82,6 +87,7 @@ export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCategory> = {
   newVideo: 'new_videos',
   liveStarted: 'live',
+  newPost: 'posts',
   commentReply: 'replies',
   newComment: 'comments',
   newSubscriber: 'subscribers',
@@ -109,6 +115,7 @@ export type RealtimeNotificationType = 'like' | 'comment' | 'subscription' | 'up
 export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotificationType> = {
   newVideo: 'subscription',
   liveStarted: 'subscription',
+  newPost: 'subscription',
   commentReply: 'comment',
   newComment: 'comment',
   newSubscriber: 'subscription',
@@ -130,7 +137,7 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   tierChanged: 'system',
 };
 
-/** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */
+/** Per-channel bell: every upload, live & post; highlights (long-form uploads, live & posts); or nothing. */
 export const CHANNEL_BELL_LEVELS = ['all', 'highlights', 'none'] as const;
 export type ChannelBellLevel = (typeof CHANNEL_BELL_LEVELS)[number];
 export const DEFAULT_CHANNEL_BELL: ChannelBellLevel = 'highlights';
@@ -157,14 +164,20 @@ export interface NotificationCreatePayload {
   createdAt?: number;
 }
 
-export type NotificationFanoutKind = 'new_video' | 'live_started';
+export type NotificationFanoutKind = 'new_video' | 'live_started' | 'new_post';
+
+export const NOTIFICATION_FANOUT_KINDS: readonly NotificationFanoutKind[] = ['new_video', 'live_started', 'new_post'];
+
+export function isNotificationFanoutKind(value: unknown): value is NotificationFanoutKind {
+  return typeof value === 'string' && (NOTIFICATION_FANOUT_KINDS as readonly string[]).includes(value);
+}
 
 /** Queue payload of MessageType.NotificationFanout. */
 export interface NotificationFanoutPayload {
   kind: NotificationFanoutKind;
   channelId: string;
   entityId: string;
-  /** Long-form upload or live: delivered to bell = highlights as well as all. */
+  /** Long-form upload, live or a post: delivered to bell = highlights as well as all. */
   isHighlight: boolean;
   params?: NotificationParams;
   actionUrl?: string;
@@ -358,5 +371,26 @@ export function newVideoFanout(video: NewVideoFanoutVideo & { channelId: string 
     params: { ...channelParams, videoTitle: video.title || '' },
     actionUrl: `/video/${video.id}`,
     actorUserId: video.userId,
+  };
+}
+
+/** The fields of a stored community post the "new post" fan-out reads. */
+export type NewPostFanoutPost = PostLike & { id: string; channelId: string; userId?: string };
+
+/**
+ * The subscriber fan-out for a community post that went live (Story 29.4): built by the processor
+ * when it handles CommunityPostCreated, whoever sent it (create, "Publish now", the scheduled-posts
+ * cron, image review clearing a held post). Posts reach bell = all and highlights; the processor
+ * de-duplicates on kind and post id, so a repeated event notifies nobody twice.
+ */
+export function newPostFanout(post: NewPostFanoutPost, channelParams: Record<string, string>): NotificationFanoutPayload {
+  return {
+    kind: 'new_post',
+    channelId: post.channelId,
+    entityId: post.id,
+    isHighlight: true,
+    params: { ...channelParams, postExcerpt: postTitle(post) },
+    actionUrl: `/post/${encodeURIComponent(post.id)}`,
+    ...(post.userId ? { actorUserId: post.userId } : {}),
   };
 }
