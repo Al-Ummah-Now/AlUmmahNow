@@ -13,6 +13,7 @@ import { railPage } from '../src/lib/ranking/serve';
 import { dedupeHome, DiscoveryHome, MIN_HOME_ITEMS } from '../src/endpoints/discovery/home';
 import { TrendingVideosSection } from '../src/endpoints/sections/trending';
 import { PopularVideosSection } from '../src/endpoints/sections/popular';
+import { TrendingGet } from '../src/endpoints/discovery/discovery';
 import { SALT_KEY_PREFIX } from '../src/lib/ranking/viewer';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -154,6 +155,20 @@ describe('discovery ranking job', () => {
 		assert.deepEqual(days, ['2026-11-20']);
 		const salts = (search.db.prepare("SELECT key FROM search_meta WHERE key LIKE 'discovery:salt:%' ORDER BY key").all() as Array<{ key: string }>).map((r) => r.key);
 		assert.deepEqual(salts, [`${SALT_KEY_PREFIX}2026-11-20`, `${SALT_KEY_PREFIX}2026-11-21`]);
+	});
+});
+
+describe('content-language trending (Explore)', () => {
+	it('/api/trending?language=ar lists only Arabic videos', async () => {
+		const { search, env } = await library(30, (i) => (i % 3 === 0 ? { title: `درس في التفسير رقم ${i}`, titleLocalized: { ar: `درس في التفسير رقم ${i}` }, description: 'شرح مبسط للآيات' } : {}));
+		await runDiscoveryRank(env, NOW);
+		const languages = search.db.prepare("SELECT DISTINCT v.language FROM discovery_rail_items r JOIN search_videos v ON v.id = r.video_id WHERE r.rail = 'trending:week' AND r.scope = 'only:ar'").all() as Array<{ language: string }>;
+		assert.deepEqual(languages.map((l) => l.language), ['ar']);
+		const app = buildApp((r: any) => r.get('/api/trending', TrendingGet));
+		const body = (await (await app.request('/api/trending?period=week&language=ar&limit=50', {}, env)).json()) as any;
+		assert.equal(body.data.length, 10);
+		assert.ok(body.data.every((v: any) => Number(v.id.slice(1)) % 3 === 0));
+		assert.equal(body.rail.label, 'new_this_week');
 	});
 });
 

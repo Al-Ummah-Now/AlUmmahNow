@@ -203,7 +203,7 @@ export class TrendingGet extends OptionalAuthRoute {
       query: z.object({
         period: z.enum(["hour", "day", "week", "month"]).optional().default("day").describe("hour is served as day"),
         category: Str({ description: "Optional category filter" }).optional(),
-        language: Str({ description: "Viewer's language (en, ar): its videos rank higher, others stay" }).regex(/^[a-z]{2,3}$/).optional(),
+        language: Str({ description: "Content language filter (en, ar): only that language's videos" }).regex(/^[a-z]{2,3}$/).optional(),
         limit: Num({ description: "Maximum videos (1-50)", default: 20 }).optional(),
         cursor: Str({ description: "Cursor from the previous page" }).optional(),
       }),
@@ -246,7 +246,7 @@ export class TrendingGet extends OptionalAuthRoute {
         return c.json(cached);
       }
       let body: TrendingBody;
-      const ranked = await railPage(c.env as never, { rail: `trending:${window}`, scope: railScope({ category: query.category, language: query.language }), limit, cursor: query.cursor });
+      const ranked = await railPage(c.env as never, { rail: `trending:${window}`, scope: railScope({ category: query.category, onlyLanguage: query.language }), limit, cursor: query.cursor });
       if (ranked) {
         const data = railItems(ranked, (entry) => ({ trendingMetadata: { rank: entry.position, score: entry.score, viewsVelocity: 0 } }));
         body = { success: true, period, category: query.category, language: query.language, data, videos: data, cursor: ranked.nextCursor, rail: railLabelFields(ranked.meta) };

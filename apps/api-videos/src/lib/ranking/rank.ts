@@ -332,6 +332,8 @@ export interface BuildOptions {
 	language?: string | null;
 	/** Category the rail is limited to */
 	category?: string | null;
+	/** Content language the rail is limited to (Explore's language filter) */
+	onlyLanguage?: string | null;
 	/** Leave Shorts out (home rails show videos; Shorts have their own shelf) */
 	excludeShorts?: boolean;
 	pins?: readonly Pin[];
@@ -348,7 +350,8 @@ function candidates(inputs: RankInputs, options: BuildOptions): RankVideo[] {
 		(v) =>
 			isRailEligible(v) &&
 			(!options.excludeShorts || !v.isShort) &&
-			(!options.category || v.category === options.category),
+			(!options.category || v.category === options.category) &&
+			(!options.onlyLanguage || v.language === options.onlyLanguage),
 	);
 }
 
