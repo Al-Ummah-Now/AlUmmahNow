@@ -1,4 +1,4 @@
-import { changePercent, originRows, rangeDates, sumMetrics, trafficRows } from '../analytics';
+import { changePercent, originRows, rangeDates, sumMetrics, topContentTitle, trafficRows } from '../analytics';
 
 const NOW = new Date('2026-11-09T12:00:00.000Z');
 
@@ -75,5 +75,23 @@ describe('originRows (where viewers watch)', () => {
   it('is empty before anything was collected (older APIs omit the field)', () => {
     expect(originRows(undefined, 10)).toEqual([]);
     expect(originRows({ web: 3 }, 0)).toEqual([]);
+  });
+});
+
+describe('topContentTitle', () => {
+  const item = { title: 'Lantern street at night', titleLocalized: { en: 'Lantern street at night', ar: 'شارع الفوانيس ليلًا' } };
+
+  it('shows the translation for the UI language', () => {
+    expect(topContentTitle(item, 'ar')).toBe('شارع الفوانيس ليلًا');
+    expect(topContentTitle(item, 'en')).toBe('Lantern street at night');
+  });
+
+  it('falls back to the stored title when there is no translation', () => {
+    expect(topContentTitle({ title: 'Fresh bread' }, 'ar')).toBe('Fresh bread');
+    expect(topContentTitle({ title: 'Fresh bread', titleLocalized: { en: 'Fresh bread' } }, 'ar')).toBe('Fresh bread');
+  });
+
+  it('takes its half of a bilingual "EN | AR" title', () => {
+    expect(topContentTitle({ title: 'Mint tea | شاي بالنعناع' }, 'ar')).toBe('شاي بالنعناع');
   });
 });

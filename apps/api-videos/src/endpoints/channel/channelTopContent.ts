@@ -78,6 +78,8 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			return {
 				videoId: video.id,
 				title: video.title,
+				// The page shows the title in the UI language (AUDIT r6)
+				...((video as { titleLocalized?: Record<string, string> }).titleLocalized ? { titleLocalized: (video as { titleLocalized?: Record<string, string> }).titleLocalized } : {}),
 				thumbnailUrl: (video as AnalyticsVideo).thumbnailUrl,
 				isPublic: video.isPublic !== false,
 				...rangeStats(rollups, days),

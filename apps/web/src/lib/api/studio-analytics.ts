@@ -37,6 +37,8 @@ export interface RetentionCurve {
 export interface TopContentItem {
   videoId: string;
   title: string;
+  /** The title per language, when the creator translated it */
+  titleLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   isPublic: boolean;
   views: number;

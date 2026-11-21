@@ -1,5 +1,7 @@
 /** Date ranges and sums for the Studio Analytics page (spec §4.6). */
 
+import { localizedText } from '@/lib/playlists/playlist-names';
+
 export type RangePreset = '7' | '28' | '90' | '365' | 'all';
 
 export const RANGE_PRESETS: readonly RangePreset[] = ['7', '28', '90', '365', 'all'];
@@ -97,4 +99,12 @@ export function trafficRows(traffic: TrafficData): Array<{ source: string; views
   return Object.entries(traffic.sources)
     .map(([source, views]) => ({ source, views, share: Math.round((views / traffic.totalViews) * 1000) / 1000 }))
     .sort((a, b) => Number(a.source === 'unknown') - Number(b.source === 'unknown') || b.views - a.views);
+}
+
+/**
+ * A Top content row's title in the UI language: the video's own translation, else its stored title
+ * (its half of an "EN | AR" title), the same as the Content page (AUDIT r6: Arabic showed English)
+ */
+export function topContentTitle(item: { title: string; titleLocalized?: Record<string, string> | null }, lang: string): string {
+  return localizedText(item.title, item.titleLocalized, lang) || item.title;
 }
