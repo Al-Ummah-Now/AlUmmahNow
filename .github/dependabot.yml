@@ -1,15 +1,19 @@
 version: 2
 updates:
-  # Root workspace dependencies
+  # One npm entry for the whole pnpm workspace (pnpm-workspace.yaml lists
+  # apps/* and packages/*). Dependabot run from "/" updates every workspace
+  # package.json AND the root pnpm-lock.yaml. Per-directory entries
+  # ("/apps/web", "/packages/shared-types", ...) only ever changed the one
+  # package.json and never the lock, so their PRs failed
+  # `pnpm install --frozen-lockfile` every time. Don't add them back.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "America/New_York"
     open-pull-requests-limit: 10
-    reviewers:
-      - "meywd"
     labels:
       - "dependencies"
       - "automated"
@@ -17,127 +21,92 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      # Group patch updates together
-      patch-updates:
+      # Security fixes across the workspace land as one PR.
+      security:
+        applies-to: security-updates
         patterns:
           - "*"
+      # vite, vitest and every @vitest/* must stay on matching versions
+      # (@vitest/* pins vitest exactly; vitest pins a vite range), so they
+      # always move together, majors included.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "vite"
         update-types:
-          - "patch"
-      # Group dev dependencies
-      dev-dependencies:
-        dependency-type: "development"
-        update-types:
+          - "major"
           - "minor"
           - "patch"
-
-  # Web app (Next.js)
-  - package-ecosystem: "npm"
-    directory: "/apps/web"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "meywd"
-    labels:
-      - "dependencies"
-      - "web"
-    commit-message:
-      prefix: "chore(web)"
-    groups:
-      nextjs:
+      # Next and React move together (one React across web and admin-web).
+      react-next:
         patterns:
           - "next"
           - "@next/*"
+          - "eslint-config-next"
           - "react"
           - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - "minor"
+          - "patch"
+      # Workers tooling is its own PR: wrangler drives miniflare, which carries
+      # patches/miniflare@<version>.patch, and @opennextjs/cloudflare declares a
+      # newer wrangler peer than we run.
       cloudflare:
         patterns:
+          - "wrangler"
+          - "miniflare"
           - "@cloudflare/*"
-          - "@opennextjs/cloudflare"
-
-  # API Videos (Hono)
-  - package-ecosystem: "npm"
-    directory: "/apps/api-videos"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "meywd"
-    labels:
-      - "dependencies"
-      - "api"
-    commit-message:
-      prefix: "chore(api)"
-    groups:
-      hono:
+          - "@opennextjs/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Everything else minor/patch: one PR. Majors stay one PR each.
+      minor-and-patch:
         patterns:
-          - "hono"
-          - "chanfana"
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # TypeScript 7 (the native compiler) ships no JS compiler API:
+      # require("typescript") only exposes the version. typescript-eslint
+      # (peer typescript <6.1), ts-jest (peer <7) and Next's build-time type
+      # check all need that API. Revisit when they support TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # wrangler >= 4.125 depends on the miniflare 5 pre-release line; the
+      # local stack runs miniflare 4 with patches/miniflare@4.20260706.0.patch.
+      # Moving needs that patch ported first.
+      - dependency-name: "wrangler"
+        versions: [">=4.125.0"]
+      - dependency-name: "miniflare"
+        versions: [">=5.0.0-0"]
 
-  # Processor
-  - package-ecosystem: "npm"
-    directory: "/apps/processor"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "meywd"
-    labels:
-      - "dependencies"
-      - "processor"
-    commit-message:
-      prefix: "chore(processor)"
-
-  # WebSocket Server
-  - package-ecosystem: "npm"
-    directory: "/apps/websocket-server"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "meywd"
-    labels:
-      - "dependencies"
-      - "websocket"
-    commit-message:
-      prefix: "chore(websocket)"
-
-  # Shared Types
-  - package-ecosystem: "npm"
-    directory: "/packages/shared-types"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 3
-    reviewers:
-      - "meywd"
-    labels:
-      - "dependencies"
-      - "shared-types"
-    commit-message:
-      prefix: "chore(types)"
-
-  # GitHub Actions
+  # GitHub Actions: workflows plus the composite actions in .github/actions.
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 3
-    reviewers:
-      - "meywd"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "ci/cd"
     commit-message:
       prefix: "chore(ci)"
+    groups:
+      # Minor/patch action bumps: one grouped PR per directory. Majors stay
+      # one PR each.
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
