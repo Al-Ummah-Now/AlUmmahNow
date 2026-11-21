@@ -11,7 +11,8 @@
  *                    values as the media container's ladder.mjs) and the limits of a pre-encoded
  *                    upload, so the app encodes exactly what the server checks
  *   POST /channels   { name, handle?, description?, ownerId? } → 201 { channel } — a channel owned by
- *                    `ownerId` (a videos user) or, without one, by the acting admin; the same
+ *                    `ownerId` (a videos user; needs users:manage, as an invite does) or, without
+ *                    one, by the acting admin; the same
  *                    validation as an admin making a channel for an invite (409 duplicate name or
  *                    taken handle) and no tier or max-channels check. Audited (content:import:<id>).
  */
@@ -94,6 +95,10 @@ app.post('/channels', async (c) => {
   if (parsed.ok === false) return fail(c, 400, 'invalid_request', parsed.error);
   const { ownerId: chosen, ...input } = parsed.value;
   const ownerId = chosen ?? actorOf(c);
+  // A channel for someone else is what an invite does: the same users:manage it needs (invites.router.ts)
+  if (ownerId !== actorOf(c) && !hasContentPermission(auth(c)?.roles, 'users:manage')) {
+    return fail(c, 403, 'forbidden', 'The users:manage permission is required to make a channel for another user');
+  }
   const db = c.env.REPORTS_DB;
   // The channel id exists only once api-videos made it: the row is written first (so nothing goes
   // unaudited), pointed at the channel afterwards, and dropped if api-videos refuses.
