@@ -26,10 +26,16 @@ export interface UseWatchHistoryReturn {
   togglePause: () => Promise<void>;
 }
 
+export interface UseWatchHistoryOptions {
+  /** false: only started, unfinished videos (the Continue watching view); omitted: everything */
+  completed?: boolean;
+}
+
 /**
  * Paginated watch history of the active account with remove/clear actions.
  */
-export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
+export function useWatchHistory(enabled: boolean, options: UseWatchHistoryOptions = {}): UseWatchHistoryReturn {
+  const { completed } = options;
   const [entries, setEntries] = useState<WatchHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
@@ -44,7 +50,7 @@ export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
   const reload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    const page = await WatchHistoryService.list({ limit: PAGE_SIZE });
+    const page = await WatchHistoryService.list({ limit: PAGE_SIZE, completed });
     if (!page) {
       setError('load');
     } else {
@@ -52,15 +58,15 @@ export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
       setTotal(page.total || 0);
       setCursor(page.cursor);
       setHasMore(!!page.hasMore);
-      logger.debug('[useWatchHistory] Loaded history', { count: page.entries?.length, total: page.total });
+      logger.debug('[useWatchHistory] Loaded history', { count: page.entries?.length, total: page.total, completed });
     }
     setIsLoading(false);
-  }, []);
+  }, [completed]);
 
   const loadMore = useCallback(async () => {
     if (!hasMore || !cursor) return;
     setIsLoadingMore(true);
-    const page = await WatchHistoryService.list({ limit: PAGE_SIZE, cursor });
+    const page = await WatchHistoryService.list({ limit: PAGE_SIZE, cursor, completed });
     if (!page) {
       setError('load');
     } else {
@@ -73,7 +79,7 @@ export function useWatchHistory(enabled: boolean): UseWatchHistoryReturn {
       setHasMore(!!page.hasMore);
     }
     setIsLoadingMore(false);
-  }, [cursor, hasMore]);
+  }, [cursor, hasMore, completed]);
 
   const remove = useCallback(async (videoId: string) => {
     setError(null);

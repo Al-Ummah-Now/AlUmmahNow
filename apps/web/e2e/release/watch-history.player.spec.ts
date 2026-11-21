@@ -70,10 +70,11 @@ test.describe('Release: watch history', () => {
     await page.goto(`${target().web}/en/history`);
     await expect(page.getByText(video!.title, { exact: false }).first()).toBeVisible({ timeout: 30000 });
 
-    // Continue watching shows the picture: a loaded image can still sit in a
-    // zero-height box (aspect-video produces no CSS), so the rendered size counts.
+    // Continue watching is one card (owner 2026-11-21) with the newest unfinished video's picture:
+    // a loaded image can still sit in a zero-height box (aspect-video produces no CSS), so the
+    // rendered size counts.
     await page.goto(`${target().web}/en`);
-    const tile = page.locator(`[data-testid="continue-watching-video"][data-video-id="${video!.id}"]`);
+    const tile = page.locator(`[data-testid="continue-watching"][data-video-id="${video!.id}"]`);
     await expect(tile).toBeVisible({ timeout: 30000 });
     await tile.scrollIntoViewIfNeeded();
     await expect
@@ -88,8 +89,15 @@ test.describe('Release: watch history', () => {
             if (!img) return 'placeholder';
             return img.complete && img.naturalWidth > 0 ? 'loaded' : `image did not load: ${img.currentSrc}`;
           }),
-        { message: 'Continue watching tile shows its thumbnail', timeout: 20000 },
+        { message: 'Continue watching card shows its thumbnail', timeout: 20000 },
       )
       .toBe(video!.thumbnailUrl ? 'loaded' : 'placeholder');
+    await expect(tile.getByTestId('continue-watching-resume')).toHaveAttribute('href', `/en/video/${video!.id}`);
+
+    // The card opens the Continue watching view of the history page, which lists the video
+    await tile.getByTestId('continue-watching-card').click();
+    await expect(page).toHaveURL(/\/en\/history\?view=continue$/);
+    await expect(page.getByTestId('watch-history-page')).toHaveAttribute('data-view', 'continue');
+    await expect(page.getByText(video!.title, { exact: false }).first()).toBeVisible({ timeout: 30000 });
   });
 });

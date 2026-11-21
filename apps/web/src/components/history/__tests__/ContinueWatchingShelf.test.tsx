@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 let mockLang: 'en' | 'ar' = 'en';
 jest.mock('@/hooks/useLanguage', () => ({
@@ -22,7 +22,12 @@ jest.mock('@/components/AuthProvider/authContext', () => ({
 
 jest.mock('@/components/VideoThumbnail', () => ({
   __esModule: true,
-  default: ({ alt }: { alt: string }) => <span data-testid="thumb">{alt}</span>,
+  THUMBNAIL_16_9: {},
+  default: ({ src, children }: { src?: string; children?: React.ReactNode }) => (
+    <span data-testid="thumb" data-src={src}>
+      {children}
+    </span>
+  ),
 }));
 
 const mockWarn = jest.fn();
@@ -31,69 +36,80 @@ jest.mock('@/lib/logger-client', () => ({
 }));
 
 jest.mock('@/services/api/watch-history', () => ({
+  ...jest.requireActual('@/services/api/watch-history'),
   WatchHistoryService: { list: jest.fn(), getPaused: jest.fn() },
 }));
 
 import { WatchHistoryService } from '@/services/api/watch-history';
-import { ContinueWatchingShelf, CONTINUE_WATCHING_LIMIT } from '../ContinueWatchingShelf';
+import { ContinueWatchingShelf } from '../ContinueWatchingShelf';
 
 const service = WatchHistoryService as jest.Mocked<typeof WatchHistoryService>;
 
 const entry = (videoId: string, percentageWatched: number) => ({
-  id: `u1:${videoId}`, userId: 'u1', videoId, videoTitle: `Lecture ${videoId}`, videoDuration: 600,
+  id: `u1:${videoId}`, userId: 'u1', videoId, videoTitle: `Talk ${videoId}`, videoDuration: 600, videoThumbnail: `https://img/${videoId}.jpg`,
   channelId: 'c1', channelName: 'Noor', firstWatchedAt: '', lastWatchedAt: '', watchCount: 1,
   progress: 6 * percentageWatched, completed: false, percentageWatched,
 });
 
-/** Lets the shelf's load settle (it renders nothing until then, or for good). */
+/** Lets the card's load settle (it renders nothing until then, or for good). */
 const settle = () => waitFor(() => expect(service.list).toHaveBeenCalled());
 
-describe('ContinueWatchingShelf (#242)', () => {
+describe('ContinueWatchingShelf: one playlist-style card (#242, owner 2026-11-21)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLang = 'en';
     mockUser = { id: 'u1' };
     service.getPaused.mockResolvedValue(false);
-    service.list.mockResolvedValue({ entries: [entry('a', 42.4), entry('b', 10)], total: 2, hasMore: false });
+    service.list.mockResolvedValue({ entries: [entry('a', 42.4)], total: 7, hasMore: true });
   });
 
-  it('lists unfinished videos with their progress, linking to the watch page', async () => {
+  it('is one card: the newest unfinished video on the cover, the count, its progress, links to the list and to resume', async () => {
     render(<ContinueWatchingShelf />);
-    expect(await screen.findByRole('heading', { name: 'Continue watching' })).toBeInTheDocument();
-    expect(service.list).toHaveBeenCalledWith({ limit: CONTINUE_WATCHING_LIMIT, completed: false });
+    const card = await screen.findByTestId('continue-watching-card');
+    expect(service.list).toHaveBeenCalledWith({ limit: 1, completed: false });
+    expect(screen.getAllByTestId('continue-watching-card')).toHaveLength(1);
+    expect(screen.queryByTestId('continue-watching-video')).toBeNull();
 
-    const tiles = screen.getAllByTestId('continue-watching-video');
-    expect(tiles).toHaveLength(2);
-    expect(tiles[0]).toHaveAttribute('href', '/en/video/a');
-    const bar = screen.getAllByRole('progressbar')[0];
-    expect(bar).toHaveAttribute('aria-valuenow', '42');
-    expect(bar).toHaveAccessibleName('42% watched');
+    expect(within(card).getByRole('heading', { name: 'Continue watching' })).toBeInTheDocument();
+    expect(card).toHaveAttribute('href', '/en/history?view=continue');
+    expect(within(card).getByTestId('thumb')).toHaveAttribute('data-src', 'https://img/a.jpg');
+    expect(screen.getByTestId('continue-watching-card-count')).toHaveTextContent('7 videos');
+    expect(card.querySelector('.plc-progress > span')).toHaveStyle({ inlineSize: '42%' });
+    expect(screen.getByTestId('continue-watching-meta')).toHaveTextContent('Talk a • 42% watched');
+
+    const resume = screen.getByTestId('continue-watching-resume');
+    expect(resume).toHaveAttribute('href', '/en/video/a');
+    expect(resume).toHaveAccessibleName('Resume Talk a');
+    // Its own link, never nested in the card's link
+    expect(card.contains(resume)).toBe(false);
   });
 
-  it('is labelled in Arabic', async () => {
+  it('in Arabic: the Arabic title, ungrouped compact count (the shared formatter, #1665), «،» between the meta parts', async () => {
     mockLang = 'ar';
-    render(<ContinueWatchingShelf />);
-    expect(await screen.findByRole('heading', { name: 'متابعة المشاهدة' })).toBeInTheDocument();
-    expect(screen.getAllByTestId('continue-watching-video')[0]).toHaveAttribute('href', '/ar/video/a');
-  });
-
-  it("shows each video's title in the page language (an Arabic page, the Arabic title)", async () => {
     service.list.mockResolvedValue({
-      entries: [{ ...entry('a', 42), videoTitle: 'Weak Hadith 1', videoTitleLocalized: { en: 'Weak Hadith 1', ar: 'سلسلة الحديث الضعيف ١' } }, entry('b', 10)],
-      total: 2,
-      hasMore: false,
+      entries: [{ ...entry('a', 42), videoTitleLocalized: { en: 'Weak Hadith 1', ar: 'سلسلة الحديث الضعيف ١' } }],
+      total: 4800,
+      hasMore: true,
     });
-    mockLang = 'ar';
-    const { unmount } = render(<ContinueWatchingShelf />);
-    const tiles = await screen.findAllByTestId('continue-watching-video');
-    expect(tiles[0]).toHaveTextContent('سلسلة الحديث الضعيف ١');
-    expect(tiles[0]).not.toHaveTextContent('Weak Hadith 1');
-    // No Arabic title: the stored one
-    expect(tiles[1]).toHaveTextContent('Lecture b');
-    unmount();
-    mockLang = 'en';
     render(<ContinueWatchingShelf />);
-    expect((await screen.findAllByTestId('continue-watching-video'))[0]).toHaveTextContent('Weak Hadith 1');
+    const card = await screen.findByTestId('continue-watching-card');
+    expect(within(card).getByRole('heading', { name: 'متابعة المشاهدة' })).toBeInTheDocument();
+    expect(card).toHaveAttribute('href', '/ar/history?view=continue');
+    // Direction marks and no-break spaces read as plain spaces
+    const count = (screen.getByTestId('continue-watching-card-count').textContent ?? '').replace(/[\u00a0\u061c\u200e\u200f\u202f]/g, ' ').replace(/ +/g, ' ');
+    expect(count).toMatch(/^٤٫٨ ألف/);
+    expect(count).not.toMatch(/[,،٬]/);
+    const meta = screen.getByTestId('continue-watching-meta').textContent ?? '';
+    expect(meta).toBe('سلسلة الحديث الضعيف ١، تمت مشاهدة ٤٢٪');
+    expect(meta).not.toMatch(/[•·]/);
+    expect(screen.getByTestId('continue-watching-resume')).toHaveAttribute('href', '/ar/video/a');
+    expect(screen.getByTestId('continue-watching-resume')).toHaveTextContent('تابِع');
+  });
+
+  it('counts one when the page has no total', async () => {
+    service.list.mockResolvedValue({ entries: [entry('a', 10)], total: 0, hasMore: false });
+    render(<ContinueWatchingShelf />);
+    expect(await screen.findByTestId('continue-watching-card-count')).toHaveTextContent('1 video');
   });
 
   it('renders nothing for a signed-out visitor and never calls the API', () => {

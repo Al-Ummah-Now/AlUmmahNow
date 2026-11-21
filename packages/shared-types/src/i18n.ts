@@ -2555,6 +2555,15 @@ export interface AppTranslations {
     resume: string;
     pausedNotice: string;
     pauseFailed: string;
+    /** Resume link over the home Continue watching card: opens the newest unfinished video where it stopped */
+    resumeTop: string;
+    /** Accessible name of that link, `{title}` is the video */
+    resumeTopLabel: string;
+    /** History page, Continue watching view: the subtitle and the link back to the whole history */
+    continueSubtitle: string;
+    allHistory: string;
+    /** Continue watching view with nothing left to continue */
+    continueEmpty: string;
   };
 
   settings?: {

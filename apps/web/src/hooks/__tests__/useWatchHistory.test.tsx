@@ -50,3 +50,29 @@ describe('useWatchHistory - pause', () => {
     expect(WatchHistoryService.list).not.toHaveBeenCalled();
   });
 });
+
+describe('useWatchHistory - Continue watching view', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('asks for unfinished videos only, on the first page and the next', async () => {
+    (WatchHistoryService.getPaused as jest.Mock).mockResolvedValue(false);
+    (WatchHistoryService.list as jest.Mock).mockResolvedValueOnce({
+      entries: [{ videoId: 'a' }], total: 2, hasMore: true, cursor: 'c1',
+    }).mockResolvedValueOnce({ entries: [{ videoId: 'b' }], total: 2, hasMore: false });
+    const { result } = renderHook(() => useWatchHistory(true, { completed: false }));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(WatchHistoryService.list).toHaveBeenCalledWith({ limit: 20, completed: false });
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(WatchHistoryService.list).toHaveBeenLastCalledWith({ limit: 20, cursor: 'c1', completed: false });
+    expect(result.current.entries.map((e) => e.videoId)).toEqual(['a', 'b']);
+  });
+
+  it('asks for everything without the option', async () => {
+    (WatchHistoryService.getPaused as jest.Mock).mockResolvedValue(false);
+    renderHook(() => useWatchHistory(true));
+    await waitFor(() => expect(WatchHistoryService.list).toHaveBeenCalledWith({ limit: 20, completed: undefined }));
+  });
+});

@@ -37,6 +37,11 @@ export function formatVideoCount(count: number | string | null | undefined, lang
   return formatCountNoun(lang, count, 'video', options);
 }
 
+/** Between the parts of a meta line: " • " in English, the Arabic comma «، » in Arabic (never • or ·) */
+export function metaSeparator(lang: MetaLang | string): string {
+  return lang === 'ar' ? '، ' : ' • ';
+}
+
 const toDate = (value: Date | string | number | null | undefined): Date | null => {
   if (value === null || value === undefined || value === '') return null;
   const date = value instanceof Date ? value : new Date(value);
