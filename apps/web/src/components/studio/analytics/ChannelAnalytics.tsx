@@ -10,7 +10,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
 import { formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
-import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
+import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, topContentTitle, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
 import { StatCard, TrafficSources, ViewerOrigins } from './parts';
 
@@ -208,7 +208,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
               <p className="text-sm text-muted-foreground">{text.empty}</p>
             ) : (
               <>
-                {/* The title column takes what the numbers leave and truncates (max-w-0 + w-full: an
+                {/* Numbers stay whole ("39.1 min" never splits from its unit). The title column takes what the numbers leave and truncates (max-w-0 + w-full: an
                     auto-layout table ignores max-width on a cell); the wrapper keeps any excess inside the
                     table, never a sideways page (#1695: Arabic at 360 px). When it still does not fit,
                     ScrollBox fades the edge with more to see and takes the focus for the arrow keys */}
@@ -226,11 +226,11 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                     {sorted.map((item) => (
                       <tr key={item.videoId} className="border-b border-border" data-testid="studio-top-row">
                         <td className="w-full max-w-0 p-2">
-                          <Link href={videoHref(item.videoId)} dir="auto" className="block truncate text-foreground hover:underline">{item.title}</Link>
+                          <Link href={videoHref(item.videoId)} dir="auto" className="block truncate text-foreground hover:underline">{topContentTitle(item, locale)}</Link>
                         </td>
-                        <td className="p-2 text-end tabular-nums">{number.format(item.views)}</td>
-                        <td className="p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
-                        <td className="p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{number.format(item.views)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
                       </tr>
                     ))}
                   </tbody>
