@@ -11,6 +11,6 @@
     "check:nav-icons": "node --experimental-strip-types --no-warnings src/nav-icons.ts --check"
   },
   "devDependencies": {
-    "sharp": "0.34.5"
+    "sharp": "0.35.5"
   }
 }
