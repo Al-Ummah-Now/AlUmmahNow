@@ -379,8 +379,9 @@ a.group svg.lucide-chevron-right{align-self:center}
 .video-card button{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){.video-card button:hover{background:var(--m-hover)!important}}
 
-/* Search */
-[data-testid=search-input-clear]{position:absolute!important;inset-inline-end:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;min-width:0;min-height:0;display:grid;place-items:center;padding:0}
+/* Search. The clear button is centred with `translate` only: Tailwind's -translate-y-1/2 also sets `translate`,
+   and a `transform` here would add a second -50%, lifting the × to the box's top edge */
+[data-testid=search-input-clear]{position:absolute!important;inset-inline-end:8px;top:50%;translate:0 -50%;transform:none;width:28px;height:28px;min-width:0;min-height:0;display:grid;place-items:center;padding:0}
 
 /* Sign-in */
 main:has(.demo-gfx){min-height:calc(100dvh - 140px)}
