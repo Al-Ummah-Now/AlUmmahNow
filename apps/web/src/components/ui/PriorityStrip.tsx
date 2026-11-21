@@ -94,8 +94,8 @@ export function PriorityStrip<T extends PriorityItem>({
     // Again whenever the widths are reset (new labels, fonts in)
   }, [widths, signature]);
 
-  // While the menu is open the row stays as it is: a page scrollbar coming or going (the open menu,
-  // content below changing height) would otherwise refit the row and unmount More with its menu
+  // While the menu is open the row stays as it is: the menu locks the page scroll, so the scrollbar
+  // goes, the strip widens and a refit would fit every item and unmount More with its open menu
   const openRef = useRef(false);
   useIsomorphicLayoutEffect(() => {
     openRef.current = open;
@@ -159,9 +159,7 @@ export function PriorityStrip<T extends PriorityItem>({
       {hasMenu && (
         // The row's own gap before More (fitItems counts it)
         <div className={`shrink-0 ${measuring ? 'invisible' : ''}`} style={widths?.gap ? { marginInlineStart: widths.gap } : undefined}>
-          {/* Not modal: a modal menu locks the page scroll, which removes the scrollbar, widens the
-              strip, fits every item and so unmounts More and its open menu */}
-          <DropdownMenu open={open && !measuring} onOpenChange={setOpen} modal={false}>
+          <DropdownMenu open={open && !measuring} onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 ref={moreRef}
