@@ -33,7 +33,9 @@ export type FirstPartyClient =
   | 'adminIos'
   | 'adminMac'
   | 'adminWindows'
-  | 'adminAndroid';
+  | 'adminAndroid'
+  /** AlUmmahNowTools, the desktop admin import app (wiki TOOLS-ADMIN). */
+  | 'adminTools';
 
 export type AuthEnvironment = 'production' | 'qa';
 
@@ -56,6 +58,7 @@ export const FIRST_PARTY_CLIENT_IDS: Record<AuthEnvironment, Record<FirstPartyCl
     adminMac: '6a65d365-1352-4ffa-922f-4053d461ac3a',
     adminWindows: '288b80b9-ecc6-4927-8b5a-bded5aa00e55',
     adminAndroid: '6634c4c9-a80d-4961-9427-d997349f8ea2',
+    adminTools: 'cf0d26c6-4cd1-4bbf-8247-c63a5d417b15',
   },
   qa: {
     web: 'e0de3c30-0304-4ac4-86d6-1e185dec0439',
@@ -74,6 +77,7 @@ export const FIRST_PARTY_CLIENT_IDS: Record<AuthEnvironment, Record<FirstPartyCl
     adminMac: '1c230211-7b90-4d0a-be9d-3068ebd79d5b',
     adminWindows: '306b6f10-d9f0-4609-84a1-23c92da978e9',
     adminAndroid: '5b44a4f7-d369-4d12-bc69-028d0276604a',
+    adminTools: '75f36653-4dfd-44af-8f67-588a5b7e9613',
   },
 };
 
@@ -81,10 +85,11 @@ const NATIVE: FirstPartyClient[] = ['viewerMobile', 'viewerTv', 'viewerDesktop',
 
 /** The clients each service takes access tokens from. */
 export const SERVICE_AUDIENCES = {
-  /** The public API: the sites, www's profile read at sign-in, every native app. */
-  'api-videos': ['web', 'adminWeb', 'www', 'sites', ...NATIVE],
+  /** The public API: the sites, www's profile read at sign-in, every native app; Admin Tools for its
+   *  resumable uploads (TUS) to the sessions admin-api opened for it. */
+  'api-videos': ['web', 'adminWeb', 'www', 'sites', ...NATIVE, 'adminTools'],
   /** The admin API: admin-web, the web server's Studio routes (site domains, contact), the native apps. */
-  'admin-api': ['adminWeb', 'web', ...NATIVE],
+  'admin-api': ['adminWeb', 'web', ...NATIVE, 'adminTools'],
   /** Realtime: the web and admin sites and the native apps. */
   'websocket-server': ['web', 'adminWeb', ...NATIVE],
   /** The web site checks only its own sessions' tokens. */

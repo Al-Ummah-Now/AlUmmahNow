@@ -76,6 +76,10 @@ export const PERMISSIONS = {
   'audit:read': ADMIN_ROLE_IDS,
   /** Settings › Emails: edit, restore and test-send the system emails (the creator invite today). */
   'emails:manage': ADMIN_ROLE_IDS,
+  /** Admin Tools (wiki TOOLS-ADMIN): bulk import into any channel without tier quotas or upload limits; every request audited. */
+  'imports:manage': ADMIN_ROLE_IDS,
+  /** Admin Tools: add, change and remove a channel's social import sources and their sync schedule. */
+  'import_sources:manage': ['super_admin'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

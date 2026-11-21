@@ -36,6 +36,7 @@ import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
 import youtubeImportRouter from './routers/youtubeImport.router';
+import adminImportRouter from './routers/adminImport.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
 import socialRouter from './routers/social.router';
 import videoCategoriesRouter from './routers/videoCategories.router';
@@ -266,6 +267,8 @@ app.route('/api/media', mediaRouter);
 
 // Move from YouTube (wiki AUN-YT-IMPORT): on/off and the Google client id; media:manage, audited proxy to api-videos
 app.route('/api/youtube-import', youtubeImportRouter);
+// Admin Tools, the desktop import app (wiki TOOLS-ADMIN): imports:manage, audited
+app.route('/api/admin/import', adminImportRouter);
 
 // Platform notification settings (what opening the notification menu does): settings:manage to change, audited proxy to api-videos
 app.route('/api/notification-settings', notificationSettingsRouter);
