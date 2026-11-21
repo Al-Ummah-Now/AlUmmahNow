@@ -148,6 +148,32 @@ describe('identity switch never shows the email (#1673)', () => {
     expectNoEmailInHeader();
   });
 
+  it('an account switch that remounts the header shows the new account by the name its menu row had', async () => {
+    state = { user: amina(), accounts: accountsFor('u1'), loading: false };
+    const first = render(<UnifiedNavigation />);
+    await resolveProfiles(); // Omar's row profile arrives while Amina is active
+    first.unmount();
+    pendingProfiles.length = 0;
+    // The switch lands, the header remounts and Omar's profile has not come back yet
+    state = { user: omar(), accounts: accountsFor('u2'), loading: false };
+    render(<UnifiedNavigation />);
+    const name = screen.getByTestId('nav-trigger-name');
+    expect(name).toHaveTextContent('Omar Farouk');
+    expect(name.querySelector('[data-skeleton]')).toBeNull();
+    expect(screen.getByTestId('nav-menu-trigger').querySelector('span.aun-avatar')).toHaveTextContent('O');
+    expectNoEmailInHeader();
+  });
+
+  it('a switch in progress marks the pill busy (the loading ring) and keeps who you are', () => {
+    state = { user: amina({ displayName: 'Amina Yusuf' }), accounts: accountsFor('u1'), loading: true };
+    render(<UnifiedNavigation />);
+    const trigger = screen.getByTestId('nav-menu-trigger');
+    expect(trigger).toHaveAttribute('aria-busy', 'true');
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false'); // the menu hides while it switches, so no open look
+    expect(within(trigger).getByTestId('nav-trigger-name')).toHaveTextContent('Amina Yusuf');
+  });
+
   it('switching account shows the other account by its name from the menu row, never its email', async () => {
     state = { user: amina(), accounts: accountsFor('u1'), loading: false };
     const { rerender } = render(<UnifiedNavigation />);
