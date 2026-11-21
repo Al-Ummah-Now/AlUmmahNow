@@ -16,6 +16,7 @@ import { PauseHistoryButton, PausedNotice, watchHistoryErrorMessage, type WatchH
 import { formatAbsoluteDate, formatRelativeTime, formatVideoCount } from '@/lib/format/videoMeta';
 import { channelLabel } from '@/lib/channel-name';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryProps) {
   const percent = Math.max(0, Math.min(100, Math.round(entry.percentageWatched || 0)));
   const watchedOn = formatRelativeTime(entry.lastWatchedAt, lang === 'ar' ? 'ar' : 'en');
@@ -45,7 +46,7 @@ function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryPro
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>
-          {' • '}
+          {metaSeparator(lang)}
           {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent))}
         </p>
       </div>

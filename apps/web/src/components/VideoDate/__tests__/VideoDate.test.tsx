@@ -70,11 +70,12 @@ describe('views and the watch page line', () => {
     mockLang = 'ar';
     render(<details><WatchMetaSummary video={{ dateCreated: dayAgo }} views={1234} lang="ar" describedById="tip" /><WatchMetaDetail video={{ dateCreated: dayAgo }} views={1234} lang="ar" /></details>);
     const summary = document.querySelector('summary')!;
-    expect(summary.textContent).toContain('•');
+    expect(summary.querySelector('[data-meta-sep]')?.textContent).toBe('،');
+    expect(summary.textContent).not.toMatch(/[•·]/);
     expect(summary).toHaveAttribute('aria-describedby', 'tip');
-    expect(summary.getAttribute('data-tip')).toMatch(/^١٬٢٣٤ مشاهدة • نُشر في /);
+    expect(summary.getAttribute('data-tip')).toMatch(/^١٬٢٣٤ مشاهدة، نُشر في /);
     expect(document.getElementById('tip')?.textContent).toBe(summary.getAttribute('data-tip'));
-    expect(screen.getByTestId('watch-published')).toHaveTextContent(/^١٬٢٣٤ مشاهدة • نُشر في /);
+    expect(screen.getByTestId('watch-published')).toHaveTextContent(/^١٬٢٣٤ مشاهدة، نُشر في /);
   });
 
   it('a video moved from YouTube says when it was first published there (en and ar)', () => {

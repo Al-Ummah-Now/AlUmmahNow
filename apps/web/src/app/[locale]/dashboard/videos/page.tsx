@@ -38,6 +38,7 @@ import {
 import { channelLabel } from '@/lib/channel-name';
 import { VideoDate, ViewCount } from '@/components/VideoDate';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 /** The search API's format filter: Shorts (≤ 3 min and vertical or square, or chosen by the uploader), other videos, live */
@@ -614,7 +615,7 @@ export default function VideoDashboardPage() {
                   </h3>
                   <p className="text-sm truncate">{channelLabel(video, lang)}</p>
                   <p className="text-sm" data-testid="dashboard-video-meta">
-                    <ViewCount count={video.views} lang={lang} /> • <VideoDate video={video} lang={lang} />
+                    <ViewCount count={video.views} lang={lang} />{metaSeparator(lang)}<VideoDate video={video} lang={lang} />
                   </p>
 
                   {/* Privacy + status badges */}

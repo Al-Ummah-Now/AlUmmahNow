@@ -165,3 +165,14 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.ok(tight > css.indexOf('.aun-signin {') && tight > css.indexOf('.aun-lang {\n  display'), 'the 400px Sign in / language rule comes after theirs');
   assert.match(css.slice(tight, css.indexOf('\n}\n', tight)), /\.aun-signin \{\n    padding-inline: var\(--fanous-spacing-md, 12px\);/);
 });
+
+test('the account name has one width, so switching who you act as never moves the header (AUDIT-2 2026-11-21)', () => {
+  const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');
+  const name = css.slice(css.indexOf('.aun-acct-name {'), css.indexOf('}', css.indexOf('.aun-acct-name {')));
+  // a fixed slot, not a cap: "Community Corner" and "Amina Yusuf" take the same room
+  assert.match(name, /inline-size: \d+(\.\d+)?rem;/);
+  assert.doesNotMatch(name, /max-width/);
+  // a longer name ends in an ellipsis on one line
+  assert.match(name, /text-overflow: ellipsis;/);
+  assert.match(name, /white-space: nowrap;/);
+});

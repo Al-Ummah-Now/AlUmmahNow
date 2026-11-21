@@ -21,6 +21,7 @@ import { formatCount } from './labels';
 import { RelativeDate } from '@/components/RelativeDate';
 import { channelLabel } from '@/lib/channel-name';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 function PostResultCard({ post }: { post: SearchPostPayload }) {
   const { t, lang } = useLanguage();
   const date = post.createdAt ? new Date(post.createdAt) : null;
@@ -41,7 +42,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t.search.communityPost}
-            {date && !Number.isNaN(date.getTime()) && <> · <RelativeDate value={date} lang={lang} label="published" /></>}
+            {date && !Number.isNaN(date.getTime()) && <>{metaSeparator(lang, '·')}<RelativeDate value={date} lang={lang} label="published" /></>}
           </p>
         </div>
       </div>

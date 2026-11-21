@@ -37,5 +37,12 @@ html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px;
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc(100% - 28px); }
 html[data-theme='fawanees'] #comments { padding-block: 16px; }
-html[data-theme='fawanees'] .related-videos { padding-block: 12px; }
+/* Inner padding on both sides (logical, so English and Arabic alike): the heading and each row's
+   hover band sit inside the card, never on its edge (AUDIT-2 2026-11-21). The heading lines up with
+   the thumbnails: card 8px + the row's own 6px */
+html[data-theme='fawanees'] .related-videos { padding-block: 12px; padding-inline: 8px; }
+html[data-theme='fawanees'] .related-videos > h2 { padding-inline: 6px; }
+/* Stacked under the player (and in theatre) the rows have no padding of their own */
+@media (max-width: 1023px) { html[data-theme='fawanees'] .related-videos > h2 { padding-inline: 0; } }
+html[data-theme='fawanees'] [data-theatre] .related-videos > h2 { padding-inline: 0; }
 

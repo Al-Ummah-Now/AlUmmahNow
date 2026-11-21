@@ -97,3 +97,42 @@ for (const lang of ['en', 'ar'] as const) {
     await expectNoEmailEverShown(page, emails);
   });
 }
+
+/** Where each header control sits (x of its box), for the controls this header shows */
+async function headerControlXs(page: Page): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const id of ['header-upload', 'notification-bell', 'language-toggle', 'theme-toggle', 'nav-menu-trigger']) {
+    const el = page.locator('header').getByTestId(id).first();
+    if (!(await el.isVisible().catch(() => false))) continue;
+    const box = await el.boundingBox();
+    if (box) out[id] = Math.round(box.x);
+  }
+  return out;
+}
+
+// AUDIT-2 2026-11-21: the account pill sized itself to the name, so switching from "Community
+// Corner" to "Amina Yusuf" moved Upload, the bell, the language and theme buttons by 47px (English).
+// The pill's name now has one width; nothing in the header moves when who you act as changes.
+for (const lang of ['en', 'ar'] as const) {
+  for (const width of [1280, 900, 390]) {
+    test(`the header's controls stay put when switching who you act as (${lang}, ${width}px) @nav`, async ({ page }) => {
+      const multi = readAccount('multi');
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/${lang}`);
+      await openAccountMenu(page);
+      await switchAccountTo(page, multi);
+      const channel = multi.channels[0];
+      await actAs(page, channel.id);
+      await expect(page.getByTestId('nav-menu-trigger')).not.toHaveAttribute('aria-busy', 'true');
+      const asChannel = await headerControlXs(page);
+      await actAs(page, null);
+      await expect(page.getByTestId('nav-menu-trigger')).not.toHaveAttribute('aria-busy', 'true');
+      const asPersonal = await headerControlXs(page);
+      // Upload is hidden when acting as yourself on an account that may not create channels: that
+      // control coming and going is intended; the ones shown both times must not move
+      const both = Object.keys(asChannel).filter((id) => id in asPersonal);
+      expect(both.length).toBeGreaterThanOrEqual(3);
+      expect(Object.fromEntries(both.map((id) => [id, asPersonal[id]]))).toEqual(Object.fromEntries(both.map((id) => [id, asChannel[id]])));
+    });
+  }
+}

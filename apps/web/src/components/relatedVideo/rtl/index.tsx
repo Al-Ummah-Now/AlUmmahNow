@@ -9,6 +9,7 @@ import { formatDuration } from '@/lib/playlists/playlist-utils';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { channelLabel } from '@/lib/channel-name';
 import { VideoDate, ViewCount } from '@/components/VideoDate';
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
   const { lang } = useLanguage();
 
@@ -22,7 +23,7 @@ const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
       <div className="rv-b">
         <h3 className="rv-title" dir="auto">{removeUnwantedChars(info.titleLocalized?.[lang] || info.title)}</h3>
         <p className="rv-sub">{channelLabel(info, lang)}</p>
-        <p className="rv-sub"><ViewCount count={info.views} lang={lang} /> • <VideoDate video={info} lang={lang} /></p>
+        <p className="rv-sub"><ViewCount count={info.views} lang={lang} />{metaSeparator(lang)}<VideoDate video={info} lang={lang} /></p>
       </div>
     </Link>
   );

@@ -28,6 +28,7 @@ import {
   type QuranEdition,
 } from '@/lib/api/translate-client';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 const CARD = 'rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] p-4 sm:p-6 space-y-4';
 const MUTED = 'text-sm text-[var(--fanous-color-text-secondary)]';
 const SELECT = 'min-h-11 w-full rounded-md border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-background)] px-3 text-sm text-[var(--fanous-color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-primary)]';
@@ -92,7 +93,7 @@ function EditionRow({ channelId, row, onChange }: { channelId: string; row: Chan
       </label>
       {unavailable ? (
         <p className={MUTED}>
-          <span dir="auto">{row.name}</span> · {cs.unavailable}
+          <span dir="auto">{row.name}</span>{metaSeparator(lang, '·')}{cs.unavailable}
         </p>
       ) : (
         <div className="flex flex-col gap-2 sm:flex-row">

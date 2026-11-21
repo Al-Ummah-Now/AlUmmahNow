@@ -12,6 +12,7 @@ import { formatScheduledTime } from '@/utils/dateFormatters';
 import { Clock, Play, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 export interface CalendarEventProps {
   id: string;
   title: string;
@@ -265,7 +266,7 @@ export function CalendarEvent({
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <Clock size={14} className="flex-shrink-0" />
             <span className="font-medium">{shortTime}</span>
-            <span className="text-gray-400 dark:text-gray-500">•</span>
+            <MetaSep lang={locale} gap="0.5rem" className="text-gray-400 dark:text-gray-500" />
             <span>{scheduledTime}</span>
           </div>
 

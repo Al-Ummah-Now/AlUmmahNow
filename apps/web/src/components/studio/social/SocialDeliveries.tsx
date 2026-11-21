@@ -10,6 +10,7 @@ import { linkFixes, reasonKey, socialClient } from '@/lib/studio/social-client';
 import { NetworkMark, Notice, Pill, Section } from './shared';
 import { RelativeDate } from '@/components/RelativeDate';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 const TONE = { sent: 'ok', queued: 'muted', sending: 'muted', failed: 'error', blocked: 'warn', cancelled: 'muted' } as const;
 
 export function SocialDeliveries({ channelId, locale, deliveries, onDeliveries }: { channelId: string; locale: 'en' | 'ar'; deliveries: SocialDeliveryView[]; onDeliveries: (d: SocialDeliveryView[]) => void }) {
@@ -46,9 +47,9 @@ export function SocialDeliveries({ channelId, locale, deliveries, onDeliveries }
                     <p className="line-clamp-2 break-words text-start text-sm font-medium"><bdi>{item.entityTitle || item.entityId}</bdi></p>
                     <p className="text-xs text-[var(--fanous-color-text-secondary)]">
                       <span>{s.networks[item.network]}</span>
-                      <span aria-hidden="true"> · </span>
+                      <MetaSep lang={locale} en="·" spaced />
                       <span>{s.events[item.event]}</span>
-                      <span aria-hidden="true"> · </span>
+                      <MetaSep lang={locale} en="·" spaced />
                       <RelativeDate value={item.updatedAt} lang={locale} />
                     </p>
                     {failed && item.error ? <p className="mt-1 text-xs text-[var(--fanous-color-error-text)]" data-testid="social-delivery-reason">{(d.reasons as Record<string, string>)[reasonKey(item.error)]}</p> : null}

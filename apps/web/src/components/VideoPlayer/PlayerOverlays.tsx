@@ -20,6 +20,7 @@ import { ListRestart, Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-
 import type { EndSuggestion, UpNext } from '@/lib/video/player-ui';
 import type { VideoPlayerTranslations } from '@/lib/video/i18n/types';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 /** Seconds before the next video starts on its own */
 export const AUTO_ADVANCE_SECONDS = 3;
 const RING_RADIUS = 9;
@@ -170,7 +171,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
       <div className="vjs-fanous-next-card" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
         <p className="vjs-fanous-next-kicker">
           {t.chrome.upNext}
-          {upNext.badge && <span className="vjs-fanous-next-badge" data-testid="player-next-badge"> · {upNext.badge}</span>}
+          {upNext.badge && <span className="vjs-fanous-next-badge" data-testid="player-next-badge">{metaSeparator(dir === 'rtl' ? 'ar' : 'en', '·')}{upNext.badge}</span>}
         </p>
         <button
           type="button"
