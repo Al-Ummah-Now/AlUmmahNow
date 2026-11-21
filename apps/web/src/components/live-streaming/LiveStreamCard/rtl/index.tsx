@@ -14,7 +14,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { StreamStatusBadge } from '../../StreamStatusBadge';
+import { StreamStatusBadgeRTL } from '../../StreamStatusBadge/rtl';
 import { ViewerCountRTL } from '../../ViewerCount/rtl';
 import type { LiveStreamCardProps } from '../types';
 
@@ -205,7 +205,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
 
           {/* RTL: Status Badge (top-RIGHT, opposite of LTR top-left) */}
           <div className="absolute top-2 right-2 z-10">
-            <StreamStatusBadge
+            <StreamStatusBadgeRTL
               status={stream.status}
               scheduledTime={stream.scheduledStartTime}
               endedTime={stream.endedAt}
@@ -215,7 +215,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
           {/* RTL: Viewer Count (top-LEFT, opposite of LTR top-right) */}
           {stream.status === 'live' && showViewers && stream.viewerCount !== undefined && (
             <div className="absolute top-2 left-2 z-10">
-              <ViewerCountRTL count={stream.viewerCount} isLive />
+              <ViewerCountRTL count={stream.viewerCount} isLive className="rounded bg-black/75 px-2 py-0.5 text-white dark:text-white" />
             </div>
           )}
 
