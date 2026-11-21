@@ -11,6 +11,8 @@
 import { logger } from '@/lib/logger-client';
 
 export const NAVIGATION_FALLBACK_MS = 2000;
+/** How often the address is checked for the move having committed */
+const MOVE_POLL_MS = 100;
 
 /**
  * True once the fallback has started a page load: this document is about to be replaced. The
@@ -37,14 +39,23 @@ export function navigateOrLoad(
     return;
   }
   const target = new URL(href, window.location.href);
-  // Only a move that went nowhere falls back: any other address (this target, or a later move the
-  // viewer made meanwhile) means the router is working
-  const from = window.location.pathname + window.location.search;
+  // Only a move that went nowhere falls back: any other address at any point before the deadline
+  // (this target, or a later move the viewer made meanwhile) means the router is working. Checking
+  // only at the deadline is not enough: a move that commits and is then undone by Back (the
+  // address is the starting one again) would load the target over the page the viewer went back to.
+  const address = () => window.location.pathname + window.location.search;
+  const from = address();
   push(href);
-  window.setTimeout(() => {
-    if (window.location.pathname + window.location.search !== from) return;
+  const deadline = Date.now() + timeoutMs;
+  const check = () => {
+    if (address() !== from) return;
+    if (Date.now() < deadline) {
+      window.setTimeout(check, Math.min(MOVE_POLL_MS, deadline - Date.now()));
+      return;
+    }
     logger.warn('[Navigation] Client navigation did not commit; loading the page', { href });
     pageLoadPending = true;
     load(target.toString());
-  }, timeoutMs);
+  };
+  window.setTimeout(check, Math.min(MOVE_POLL_MS, timeoutMs));
 }
