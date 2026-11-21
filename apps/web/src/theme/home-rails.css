@@ -59,6 +59,9 @@ html[lang=ar] .hr-title{line-height:1.6}
 @media(max-width:639px){
   .hr-list{grid-auto-columns:80%;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
   .hr-track[data-more-end] .hr-list,.hr-track[data-more-start] .hr-list,.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:none;mask-image:none}
-  .hr-title{font-size:18px}
+  /* A long category name wraps to a second line instead of losing its end */
+  .hr-title{font-size:18px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .hr-rule{display:none}
+  .hr-all{margin-inline-start:auto}
 }
 @media(prefers-reduced-motion:reduce){.hr-all,.hr-all svg,.hr-nav{transition:none}}
