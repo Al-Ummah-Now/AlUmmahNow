@@ -113,7 +113,7 @@ describe('account menu: Acting as', () => {
     const name = screen.getByTestId('nav-trigger-name');
     expect(name).not.toHaveTextContent('Amina Yusuf');
     expect(name).not.toHaveTextContent('other@test.local');
-    expect(name).toHaveClass('sk');
+    expect(name.querySelector('[data-skeleton]')).not.toBeNull();
   });
 
   it('names you by the name already known for the account, never the email or an @handle (#1673)', async () => {
