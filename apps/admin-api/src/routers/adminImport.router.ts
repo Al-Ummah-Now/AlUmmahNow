@@ -34,6 +34,12 @@
  *                                 { item, jobId } — attached by api-videos' queued job 'import.attach'
  *                                 (retried, on the Jobs page; a failure goes to the Errors page with Retry).
  *                                 Audited per video.
+ *   POST /items/:id/transcript    { language, segments, engine, replace? } (TA-7) → 202 { status, segments }:
+ *                                 a transcript made on the admin's computer, Quran spans as references only
+ *                                 ({ startMs, endMs, quran: { range, status?, alternatives? } }, no words:
+ *                                 QF terms 2026-11-21). The on-device claim job drafts it. Audited per video.
+ *   POST /items/:id/translations  { sourceLanguage, languages[], replace? } (TA-7) → { results[] }: a caption
+ *                                 job per language from the source draft, no caption minutes. Audited per video.
  *   POST /items/:id/failed        { error } the app gave up on the file → { item }
  */
 import { Hono, type Context } from 'hono';
@@ -350,6 +356,48 @@ app.post('/items/:id/sidecars', async (c) => {
   }
   await db.prepare('UPDATE import_items SET attach_job_id = ?, updated_at = ? WHERE id = ?').bind(queued.jobId, now(), item.id).run();
   return c.json({ success: true, result: { item: itemView({ ...item, attach_job_id: queued.jobId }), jobId: queued.jobId } }, 202);
+});
+/** An audited call to api-videos for an item's video; the audit row goes again if the call fails. */
+async function forItemVideo<T>(c: C, action: string, call: (videoId: string, body: Record<string, unknown>) => Promise<T>) {
+  const item = await readItem(c, c.req.param('id') ?? '');
+  if (!item) return { response: fail(c, 404, 'item_not_found', 'No such import item') };
+  if (!item.video_id) return { response: c.json({ success: false, code: 'no_video', error: 'This file has no video yet: open its upload first' }, 409) };
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { response: fail(c, 400, 'invalid_request', 'A JSON object is required') };
+  const db = c.env.REPORTS_DB;
+  const auditId = await writeAudit(db, { kind: 'import', id: item.video_id, action, actorId: actorOf(c), details: { itemId: item.id, ...summarise(body) } });
+  try {
+    return { result: await call(item.video_id, body) };
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
+}
+// What a caption request asked for, never the transcript itself
+const summarise = (b: Record<string, unknown>) => ({
+  ...(typeof b.language === 'string' ? { language: b.language } : {}),
+  ...(Array.isArray(b.segments) ? { segments: b.segments.length } : {}),
+  ...(typeof b.sourceLanguage === 'string' ? { sourceLanguage: b.sourceLanguage } : {}),
+  ...(Array.isArray(b.languages) ? { languages: b.languages.filter((l) => typeof l === 'string').slice(0, 10) } : {}),
+  ...(b.replace === true ? { replace: true } : {}),
+});
+
+app.post('/items/:id/transcript', async (c) => {
+  const out = await forItemVideo(c, 'captions:transcript', (videoId, body) => {
+    const language = typeof body.language === 'string' ? body.language : '';
+    if (!/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(language)) throw new VideosError(400, 'unsupported_language', 'language is required');
+    const { language: _language, ...rest } = body;
+    return videos<{ status: string; segments: number }>(c, `/import/videos/${encodeURIComponent(videoId)}/captions/${encodeURIComponent(language)}/transcript`, { method: 'POST', json: rest });
+  });
+  if ('response' in out) return out.response;
+  return c.json({ success: true, result: out.result }, 202);
+});
+app.post('/items/:id/translations', async (c) => {
+  const out = await forItemVideo(c, 'captions:translate', (videoId, body) =>
+    videos<{ results: unknown[] }>(c, `/import/videos/${encodeURIComponent(videoId)}/translations`, { method: 'POST', json: body }),
+  );
+  if ('response' in out) return out.response;
+  return c.json({ success: true, result: out.result });
 });
 app.post('/items/:id/failed', async (c) => {
   const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;

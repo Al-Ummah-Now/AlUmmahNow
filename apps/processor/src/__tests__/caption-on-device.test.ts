@@ -79,6 +79,29 @@ describe('on-device transcript claims', () => {
     expect(e.subtitles.store.has(KEY)).toBe(false);
   });
 
+  it('spans matched on the device go in as references, in time order, with the matcher on the rest', async () => {
+    const e = env();
+    e.subtitles.store.set(
+      KEY,
+      JSON.stringify({
+        videoId: 'v1',
+        segments: [
+          { startMs: 0, endMs: 3000, text: 'قال الشيخ في درس اليوم' },
+          { startMs: 3000, endMs: 5000, text: '', quran: { range: '1:1:1-1:1:4', status: 'basmala' } },
+          { startMs: 5000, endMs: 11000, text: RECITED },
+          { startMs: 11000, endMs: 12000, text: 'والحمد لله' },
+        ],
+      }),
+    );
+    expect(await runCaptionClaim(e as never, payload() as never)).toMatchObject({ status: 'drafted', quran: 2 });
+    const draft = e.subtitles.read<CaptionDraft>(captionDraftKey('v1', 'ar'))!;
+    expect(draft.cues.map((c) => c.id)).toEqual(draft.cues.map((_, k) => `c${k + 1}`));
+    expect(draft.cues.map((c) => c.startMs)).toEqual([...draft.cues.map((c) => c.startMs)].sort((a, b) => a - b));
+    const quran = draft.cues.flatMap((c) => c.segments).filter((s) => s.type === 'quran');
+    expect(quran[0]).toEqual({ type: 'quran', range: '1:1:1-1:1:4', status: 'basmala' });
+    expect(quran[1]).toEqual(expect.objectContaining({ range: '112:1:1-112:4:5' }));
+  });
+
   it('only this video and language: the key must be its own on-device key', () => {
     expect(isClaimPayload(payload())).toBe(true);
     expect(isClaimPayload(payload({ transcriptKey: onDeviceTranscriptKey('v2', 'ar') }))).toBe(false);

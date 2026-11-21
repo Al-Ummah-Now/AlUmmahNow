@@ -92,4 +92,21 @@ describe('on-device transcript → caption draft', () => {
 		const long = Array.from({ length: 1001 }, (_, i) => ({ startMs: i * 10, endMs: i * 10 + 5, text: 'x'.repeat(L.maxSegmentChars) }));
 		assert.deepEqual(validateOnDeviceTranscript(long), { ok: false, error: 'too_long' });
 	});
+
+	it('a span matched on the device is a reference with no words (QF terms)', () => {
+		const ok = validateOnDeviceTranscript([
+			{ startMs: 0, endMs: 1000, text: 'قال الشيخ' },
+			{ startMs: 1000, endMs: 4000, quran: { range: '112:1:1-112:4:5', status: 'confirmed', alternatives: ['112:1:1-112:4:5', '2:255:1-2:255:3'] } },
+			{ startMs: 4000, endMs: 5000, quran: { range: '1:1:1-1:1:4' } },
+		]) as any;
+		assert.equal(ok.ok, true);
+		assert.deepEqual(ok.segments[1], { startMs: 1000, endMs: 4000, text: '', quran: { range: '112:1:1-112:4:5', status: 'confirmed', alternatives: ['2:255:1-2:255:3'] } });
+		assert.deepEqual(ok.segments[2].quran, { range: '1:1:1-1:1:4', status: 'review' });
+		// The words of a span never come with it, a bad reference or a creator's "accepted" is refused
+		const bad = (quran: unknown, text?: string) => (validateOnDeviceTranscript([{ startMs: 0, endMs: 1000, quran, ...(text === undefined ? {} : { text }) }]) as any).error;
+		assert.equal(bad({ range: '112:1:1-112:4:5' }, 'قل هو الله احد'), 'invalid_segment');
+		assert.equal(bad({ range: 'not-a-range' }), 'invalid_segment');
+		assert.equal(bad({ range: '112:1:1-112:4:5', status: 'accepted' }), 'invalid_segment');
+		assert.equal(bad({ range: '112:1:1-112:4:5', alternatives: ['x'] }), 'invalid_segment');
+	});
 });

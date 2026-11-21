@@ -54,6 +54,10 @@ import { InitiateBodySchema, initiateUpload, type InitiateBody } from '../endpoi
 import { loadChannelRecord } from '../lib/channelAccess';
 import { IMPORT_ATTACH_JOB_KIND, stageImportSidecars, validateSidecars, type AttachEnv } from '../lib/admin/importAttach';
 import { getJob as getAdminJob, retryJob as retryAdminJob } from '../lib/admin/jobs';
+import { OnDeviceSegmentSchema, submitOnDeviceTranscript } from '../endpoints/captions/captionDrafts';
+import { CaptionJobHttpError, requestTranslationJob } from '../lib/captions/jobs';
+import { SubtitleService } from '../lib/subtitles';
+import type { VideoObject } from '@al-ummah/shared-types';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -296,9 +300,22 @@ app.post('/users/:id/channels', async (c) => {
 // captions and categories are the same as any upload. The TUS session belongs to the admin, whose
 // Admin Tools token then uploads to /api/videos/tus.
 const AdminImportInitiate = InitiateBodySchema.omit({ youtubeImport: true }).extend({ channelId: z.string().min(1).max(200) });
-app.post('/import/initiate', async (c) => {
+const importingAdmin = (c: Context<Env>) => {
 	const adminId = c.req.header('X-Admin-Actor') ?? '';
 	if (!/^usr_[A-Za-z0-9]{8,64}$/.test(adminId)) throw new admin.AdminError(400, 'invalid_request', 'X-Admin-Actor must be the importing admin\'s user id');
+	return adminId;
+};
+const importVideo = async (c: Context<Env>) => {
+	const video = await new R2Repository<VideoObject & { isDeleted?: boolean }>(c.env.videos as R2Bucket).getObject(c.req.param('videoId') ?? '');
+	if (!video || video.isDeleted) throw new admin.AdminError(404, 'video_not_found', 'No such video');
+	return video;
+};
+const captionLanguage = (language: string) => {
+	if (!new SubtitleService().validateLanguage(language)) throw new admin.AdminError(400, 'unsupported_language', `Unsupported language ${language}`);
+	return language;
+};
+app.post('/import/initiate', async (c) => {
+	const adminId = importingAdmin(c);
 	const { channelId, ...input } = parse(AdminImportInitiate, await body(c));
 	const channel = await loadChannelRecord(c.env as never, channelId);
 	if (!channel?.userId || channel.isDeleted) throw new admin.AdminError(404, 'channel_not_found', 'No such channel');
@@ -319,6 +336,53 @@ app.post('/import/videos/:videoId/sidecars', async (c) => {
 	const checked = validateSidecars(await body(c));
 	if (checked.ok === false) throw new admin.AdminError(400, 'invalid_request', checked.error);
 	return ok(c, await stageImportSidecars(c.env as unknown as AttachEnv, videoId, checked.value, actor(c)));
+});
+// Admin Tools transcript (TA-7): made on the admin's computer, Quran spans already references (QF
+// terms: never the words). The same claim job as desktop Studio drafts it; requestedBy is the admin.
+const ImportTranscript = z.object({
+	segments: z.array(OnDeviceSegmentSchema),
+	engine: z.object({ provider: z.string(), model: z.string().optional() }),
+	replace: z.boolean().optional(),
+});
+app.post('/import/videos/:videoId/captions/:language/transcript', async (c) => {
+	const adminId = importingAdmin(c);
+	const video = await importVideo(c);
+	const language = captionLanguage(c.req.param('language'));
+	const input = parse(ImportTranscript, await body(c));
+	const out = await submitOnDeviceTranscript(c.env as never, { videoId: video.id, language, segments: input.segments, engine: input.engine, replace: input.replace, requestedBy: adminId });
+	if (out.ok === false) {
+		const { ok: _ok, status, error, ...detail } = out;
+		return c.json({ success: false, code: error, error, ...detail }, status);
+	}
+	return ok(c, { status: 'queued', segments: out.segments });
+});
+// Admin Tools translations (TA-7) of the video's source draft: one caption job per language, no
+// caption minutes (an admin import). Quran stays references, rendered in the channel's edition.
+const ImportTranslations = z.object({
+	sourceLanguage: z.string().min(2).max(12),
+	languages: z.array(z.string().min(2).max(12)).min(1).max(10),
+	replace: z.boolean().optional(),
+});
+app.post('/import/videos/:videoId/translations', async (c) => {
+	const adminId = importingAdmin(c);
+	const video = await importVideo(c);
+	const input = parse(ImportTranslations, await body(c));
+	const sourceLanguage = captionLanguage(input.sourceLanguage);
+	const results: Array<{ language: string; jobId?: string; status?: string; existing?: boolean; error?: string }> = [];
+	for (const language of [...new Set(input.languages)]) {
+		try {
+			captionLanguage(language);
+			const out = await requestTranslationJob(c.env as never, { video, userId: adminId, roles: null, sourceLanguage, language, replace: !!input.replace, waive: true });
+			// Waived jobs never meet the minutes check, so a refusal cannot come back here
+			if ('job' in out) results.push({ language, jobId: out.job.id, status: out.job.status, existing: out.existing });
+			else results.push({ language, error: out.refused });
+		} catch (error) {
+			if (error instanceof CaptionJobHttpError) results.push({ language, error: error.code });
+			else if (error instanceof admin.AdminError) results.push({ language, error: 'unsupported_language' });
+			else throw error;
+		}
+	}
+	return ok(c, { results });
 });
 // The Errors page's Retry on an attach job that gave up (admin-api lib/errors-actions.ts)
 app.post('/import/attach/retry', async (c) => {

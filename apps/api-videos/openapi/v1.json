@@ -52554,12 +52554,39 @@
                         },
                         "text": {
                           "type": "string"
+                        },
+                        "quran": {
+                          "type": "object",
+                          "properties": {
+                            "range": {
+                              "type": "string",
+                              "description": "surah:ayah:word-surah:ayah:word"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "confirmed",
+                                "context",
+                                "basmala",
+                                "review"
+                              ]
+                            },
+                            "alternatives": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "range"
+                          ],
+                          "description": "A Quran span matched on the device (no text with it)"
                         }
                       },
                       "required": [
                         "startMs",
-                        "endMs",
-                        "text"
+                        "endMs"
                       ]
                     },
                     "description": "Timed speech, in order"
