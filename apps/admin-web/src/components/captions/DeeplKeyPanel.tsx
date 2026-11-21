@@ -11,7 +11,8 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { validateDeeplKey, type DeeplKeyView, type DeeplTestCode, type DeeplUsageResult } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import type { MessageKey } from '@/i18n/translate';
+import { opsFormats } from '@/app/(protected)/operations/model';
 import { ConfirmButton } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass } from '@/components/ui';
@@ -23,7 +24,7 @@ import { reportError } from '@/lib/errors/reporter';
 import { logger } from '@/lib/logger-client';
 
 type Feedback = { kind: 'ok' | 'error'; text: string } | null;
-type State = 'set' | 'unset' | 'unreadable';
+type State = 'set' | 'unset' | 'unreadable' | 'refused' | 'quota';
 const KNOWN_CODES = ['forbidden', 'not_set', 'invalid_key', 'not_configured'] as const;
 const EMPTY: DeeplKeyView = { set: false, last4: null, plan: null, updatedBy: null, updatedByName: null, updatedAt: null, test: null, source: null };
 
@@ -40,8 +41,14 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fresh, setFresh] = useState<DeeplUsageResult | null>(null);
 
-  const state: State = !key.set ? 'unset' : key.unreadable ? 'unreadable' : 'set';
-  const n = (v: number) => formatNumber(v, locale);
+  // The newest test: one just made on this page, else the stored one
+  const test: { ok: boolean; code: DeeplTestCode; characterCount: number | null; characterLimit: number | null } | null = fresh ?? key.test;
+  // A key DeepL refused, or whose characters are used up, is shown as that, never as a healthy "Set"
+  const state: State = !key.set ? 'unset' : key.unreadable ? 'unreadable' : test?.code === 'invalid' ? 'refused' : test?.code === 'quota' ? 'quota' : 'set';
+  // The admin's shared formats, the same as the Costs page's DeepL line (compact counts, admin times)
+  const f = opsFormats(locale);
+  const n = (v: number) => f.count(v);
+  const when = (iso: string) => f.time(iso);
 
   function describe(result: Extract<ActionResult<unknown>, { ok: false }>, action: string): string {
     if (result.status === 401) return t('errors.notAuthenticated');
@@ -90,8 +97,6 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
     if (out) setFresh(out.test ?? null);
   }
 
-  // The newest test: one just made on this page, else the stored one
-  const test: { ok: boolean; code: DeeplTestCode; characterCount: number | null; characterLimit: number | null } | null = fresh ?? key.test;
   const testLine = test ? testText(test) : null;
   function testText(r: NonNullable<typeof test>): string {
     const used = r.characterCount !== null ? n(r.characterCount) : null;
@@ -107,16 +112,16 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
       : state === 'unreadable'
         ? t('captionSettings.deeplKey.status.unreadable')
         : key.last4
-          ? t('captionSettings.deeplKey.status.set', { last4: key.last4 })
-          : t('captionSettings.deeplKey.status.setPlain');
-  const tone = state === 'set' ? 'text-success-fg' : state === 'unreadable' ? 'text-danger-fg' : 'text-fg-muted';
+          ? t(`captionSettings.deeplKey.status.${state}`, { last4: key.last4 })
+          : t(`captionSettings.deeplKey.status.${state}Plain`);
+  const tone = state === 'set' ? 'text-success-fg' : state === 'unset' ? 'text-fg-muted' : state === 'quota' ? 'text-warning-fg' : 'text-danger-fg';
   const who: React.ReactNode = key.updatedByName || (key.updatedBy ? <UserName id={key.updatedBy} showEmail={false} /> : null);
 
   return (
     <section id={DEEPL_KEY_ANCHOR} className={`${cardClass} scroll-mt-24`} aria-labelledby={`${ids}-title`} data-testid="deepl-key" data-state={state}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg">{t('captionSettings.deeplKey.title')}</h2>
-        {key.plan && state === 'set' && (
+        {key.plan && key.set && !key.unreadable && (
           <span className="rounded-full border border-border px-2 py-0.5 text-xs text-fg-muted" data-testid="deepl-key-plan">{t(`captionSettings.deeplKey.plan.${key.plan}`)}</span>
         )}
       </div>
@@ -133,13 +138,13 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
           {key.updatedAt && (
             <p className="text-fg-muted" data-testid="deepl-key-set-by">
               {who
-                ? fillNodes(t('captionSettings.deeplKey.setBy', { time: formatDate(key.updatedAt, locale, true) }), { name: who })
-                : t('captionSettings.deeplKey.setAt', { time: formatDate(key.updatedAt, locale, true) })}
+                ? fillNodes(t('captionSettings.deeplKey.setBy', { time: when(key.updatedAt) }), { name: who })
+                : t('captionSettings.deeplKey.setAt', { time: when(key.updatedAt) })}
             </p>
           )}
           {test && testLine && (
             <div data-testid="deepl-key-test-result" data-ok={test.ok ? 'true' : 'false'} data-code={test.code}>
-              {key.test && !fresh && <p className="text-xs text-fg-muted">{t('captionSettings.deeplKey.lastTest', { time: formatDate(key.test.at, locale, true) })}</p>}
+              {key.test && !fresh && <p className="text-xs text-fg-muted">{t('captionSettings.deeplKey.lastTest', { time: when(key.test.at) })}</p>}
               <p className={`mt-0.5 flex items-start gap-1.5 ${test.ok ? 'text-success-fg' : 'text-danger-fg'}`}>
                 <span aria-hidden="true">{test.ok ? '✓' : '✕'}</span>
                 <span>{testLine}</span>
@@ -171,7 +176,7 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
               className={`${fieldClass} mt-1 w-full max-w-xl font-mono ${problem ? 'border-danger-border' : ''}`}
               data-testid="deepl-key-input"
             />
-            <span id={`${ids}-help`} className="mt-1 block text-xs text-fg-muted">{t('captionSettings.deeplKey.keyHelp')}</span>
+            <span id={`${ids}-help`} className="mt-1 block text-xs text-fg-muted">{t(key.set ? 'captionSettings.deeplKey.keyHelp' : 'captionSettings.deeplKey.keyHelpFirst')}</span>
             {problem && (
               <span id={`${ids}-error`} className="mt-1 block text-xs text-danger-fg" data-testid="deepl-key-error">
                 {t(`captionSettings.deeplKey.keyErrors.${problem === 'spaces' ? 'spaces' : 'shape'}`)}

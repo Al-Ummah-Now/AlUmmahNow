@@ -18,6 +18,7 @@ import { sqliteD1 } from './d1-sqlite';
 const INTERNAL = 'qa-internal-api-key-0123456789';
 const PRO = '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b';
 const FREE = `9a8b7c6d-5e4f-3a2b-1c0d-ffeeddccbbaa:fx`;
+const FREE_LAST4 = 'bbaa';
 
 /** SEARCH_DB with the service_credentials migration (api-videos migrations/search 0069). */
 function searchD1(): D1Database {
@@ -153,11 +154,11 @@ describe('DeepL key on Caption settings', () => {
     await req('/api/content/captions/deepl-key', { method: 'PUT', json: { value: PRO } });
     const out = (await (await req('/api/content/captions/deepl-key', { method: 'PUT', json: { value: FREE } })).json()) as { result: { deeplKey: { plan: string; last4: string }; test: { plan: string } } };
     assert.equal(out.result.deeplKey.plan, 'free');
-    assert.equal(out.result.deeplKey.last4, 'a:fx');
+    assert.equal(out.result.deeplKey.last4, FREE_LAST4);
     assert.equal(out.result.test.plan, 'free');
     assert.equal(seen[1], 'https://api-free.deepl.com/v2/usage a:fx');
     const audit = await auditRows(env);
-    assert.deepEqual(JSON.parse(audit[1]!.new_value), { action: 'deepl-key-replace', details: { last4: 'a:fx', plan: 'free' } });
+    assert.deepEqual(JSON.parse(audit[1]!.new_value), { action: 'deepl-key-replace', details: { last4: FREE_LAST4, plan: 'free' } });
     assert.deepEqual(JSON.parse(audit[1]!.old_value!), { last4: '4a5b', plan: 'pro' });
   });
 

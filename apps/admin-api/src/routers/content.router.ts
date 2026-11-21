@@ -19,7 +19,7 @@ import {
   ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
-  credentialLast4,
+  deeplLast4,
   deeplPlanOf,
   validateDeeplKey,
   type AdminDeletionKind,
@@ -930,7 +930,7 @@ app.put('/captions/deepl-key', async (c) => {
   if (problem) return c.json({ success: false, code: 'invalid_key', reason: problem, error: DEEPL_KEY_ERRORS[problem] }, 400);
   const before = await deeplKeyView(c.env);
   const plan = deeplPlanOf(String(value));
-  const last4 = credentialLast4(String(value));
+  const last4 = deeplLast4(String(value));
   // Audited first with last4 and plan only; a failed save drops the row again
   const out = await audited(c, { kind: 'captions-settings', id: 'deepl-key', action: before.set ? 'deepl-key-replace' : 'deepl-key-set', details: { last4, plan }, ...(before.set ? { previous: { last4: before.last4, plan: before.plan } } : {}) }, () =>
     saveDeeplKey(c.env, String(value), deeplActor(c)));

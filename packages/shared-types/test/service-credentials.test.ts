@@ -30,6 +30,10 @@ describe('sealServiceCredential / openServiceCredential', () => {
     assert.equal(await openServiceCredential({ provider: 'deepl', ...sealed }, MASTER), PRO);
   });
 
+  it('a Free key shows its own last four, not the ":fx" suffix', async () => {
+    assert.equal((await sealServiceCredential('deepl', FREE, MASTER)).last4, '4a5b');
+  });
+
   it('a rotated master or another purpose cannot open it', async () => {
     const sealed = await sealServiceCredential('deepl', PRO, MASTER);
     assert.equal(await openServiceCredential({ provider: 'deepl', ...sealed }, 'another-internal-api-key-0000'), null);

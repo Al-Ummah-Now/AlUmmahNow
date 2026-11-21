@@ -74,6 +74,11 @@ export function credentialLast4(value: string): string {
   return v.length >= 12 ? v.slice(-4) : '';
 }
 
+/** A DeepL key's last four: of the key itself, never the ":fx" Free suffix (the plan already says Free). */
+export function deeplLast4(value: string): string {
+  return credentialLast4(value.trim().replace(/:fx$/, ''));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Service credentials (SEARCH_DB service_credentials)
 // ---------------------------------------------------------------------------------------------
@@ -113,7 +118,7 @@ export class ServiceCredentialError extends Error {}
 export async function sealServiceCredential(provider: ServiceCredentialProvider, value: string, internalApiKey: string | null | undefined): Promise<SealedValue & { last4: string }> {
   const master = serviceMasterSecret(internalApiKey);
   if (!master) throw new ServiceCredentialError('No key to encrypt credentials with (INTERNAL_API_KEY is not bound)');
-  return { ...(await sealSecretValue(serviceAad(provider), value, master)), last4: credentialLast4(value) };
+  return { ...(await sealSecretValue(serviceAad(provider), value, master)), last4: provider === 'deepl' ? deeplLast4(value) : credentialLast4(value) };
 }
 
 export async function openServiceCredential(row: Pick<ServiceCredentialRow, 'provider' | 'ciphertext' | 'iv' | 'key_id'>, internalApiKey: string | null | undefined): Promise<string | null> {

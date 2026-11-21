@@ -18,6 +18,8 @@ interface DeeplKeyView { set: boolean; last4: string | null; plan: 'free' | 'pro
 // Shaped like real DeepL keys; the fake answers by the markers (FAKE_DEEPL_REFUSED in fake-external.ts)
 const FREE_KEY = `${crypto.randomUUID()}:fx`;
 const REFUSED_KEY = `e2erefused-${crypto.randomUUID()}`;
+// Shown as the key's own last four: the ":fx" suffix is the plan, not part of what identifies the key
+const FREE_LAST4 = FREE_KEY.slice(0, -3).slice(-4);
 const superToken = () => readTokens().superadmin;
 
 async function keyState(token = superToken()) {
@@ -103,7 +105,7 @@ test.describe('DeepL key (super admin)', () => {
     await expect(page.getByTestId('deepl-key-feedback-ok')).toHaveText('Key saved. DeepL accepts it.');
     await expect(page.getByTestId('deepl-key-input')).toHaveValue('');
     await expect(page.getByTestId('deepl-key')).toHaveAttribute('data-state', 'set');
-    await expect(page.getByTestId('deepl-key-status')).toHaveText(`Set, ending in ${FREE_KEY.slice(-4)}`);
+    await expect(page.getByTestId('deepl-key-status')).toHaveText(`Set, ending in ${FREE_LAST4}`);
     await expect(page.getByTestId('deepl-key-plan')).toHaveText('DeepL API Free');
     const result = page.getByTestId('deepl-key-test-result');
     await expect(result).toHaveAttribute('data-ok', 'true');
@@ -115,7 +117,7 @@ test.describe('DeepL key (super admin)', () => {
     expect(await page.content()).not.toContain(FREE_KEY);
 
     const view = (await keyState()).view!;
-    expect(view).toMatchObject({ set: true, last4: FREE_KEY.slice(-4), plan: 'free', source: 'admin', test: { ok: true, code: 'ok' } });
+    expect(view).toMatchObject({ set: true, last4: FREE_LAST4, plan: 'free', source: 'admin', test: { ok: true, code: 'ok' } });
     expect(JSON.stringify((await adminApi('/api/content/captions/settings', { token: superToken() })).body)).not.toContain(FREE_KEY);
 
     await page.reload();
@@ -131,6 +133,9 @@ test.describe('DeepL key (super admin)', () => {
     await page.getByTestId('deepl-key-save').click();
     await expect(page.getByTestId('deepl-key-feedback-ok')).toHaveText('Key saved, but the test failed. See the result above.');
     await expect(page.getByTestId('deepl-key-plan')).toHaveText('DeepL API Pro');
+    // Never a healthy "Set": the pill says DeepL refused it
+    await expect(page.getByTestId('deepl-key')).toHaveAttribute('data-state', 'refused');
+    await expect(page.getByTestId('deepl-key-status')).toHaveText(`Refused by DeepL, ending in ${REFUSED_KEY.slice(-4)}`);
     const result = page.getByTestId('deepl-key-test-result');
     await expect(result).toHaveAttribute('data-ok', 'false');
     await expect(result).toHaveAttribute('data-code', 'invalid');
