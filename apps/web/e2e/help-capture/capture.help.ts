@@ -621,7 +621,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
       bare.push(crowded(o).length > 0 || straddlesBar(grow(o, 2)));
       // Why it went number-only, in the run's notes (AUDIT-2: an outline in English, none in Arabic)
-      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...(straddlesBar(grow(o, 2)) ? ['a bar'] : [])].slice(0, 3).join(' | ') : '');
+      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...bars.filter((bar) => hit(grow(o, 2), bar) && !contains(bar, grow(o, 2))).map((bar) => `a bar ${Math.round(bar.y)}+${Math.round(bar.h)} (outline ${Math.round(o.y)}+${Math.round(o.h)}, target ${Math.round(r.top)}+${Math.round(r.height)})`)].slice(0, 3).join(' | ') : '');
       rings.push(o);
       radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
     }
@@ -1474,6 +1474,9 @@ const SCENES: Scene[] = [
   },
   {
     id: 'identity-menu',
+    // The header stays in: the menu hangs from it, and without it the crop started at the menu's top
+    // border (AUDIT-2 2026-11-21)
+    keepHeader: true,
     run: async (page, lang) => {
       // Over the library page: plain text rows behind the menu, so the crop can end at the menu with
       // nothing half shown (audit r4: the channel page's thumbnails were cut under it; on phones its
