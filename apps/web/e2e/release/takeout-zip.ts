@@ -4,6 +4,7 @@
  * indexes in the browser. The same format as apps/api-videos/test/zip-fixture.ts, kept inside the
  * e2e tree so release specs import nothing outside it.
  */
+import { Buffer } from 'node:buffer';
 import { deflateRawSync } from 'node:zlib';
 
 export interface ZipEntry {
