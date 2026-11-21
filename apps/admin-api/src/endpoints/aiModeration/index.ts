@@ -2,7 +2,7 @@
  * /api/moderation/ai/* (Epic 28). Super Admin, Admin and Moderator can view and review;
  * only Super Admin and Admin change the config (kill switch, cap, policies).
  */
-import { Num, Str } from 'chanfana';
+import { Num, Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
 import { AdminRoute, AppContext } from '../../base';

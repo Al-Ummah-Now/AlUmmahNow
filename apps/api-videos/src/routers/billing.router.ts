@@ -180,7 +180,7 @@ app.get('/users/:id', async (c) => {
 });
 
 // Retry a failed billing job (the Errors page's Retry, via admin-api SERVICE_RETRIES)
-const RetryBody = z.object({ jobId: z.string().uuid(), kind: z.string().max(40) }).strict();
+const RetryBody = z.object({ jobId: z.guid(), kind: z.string().max(40) }).strict();
 app.post('/jobs/retry', async (c) => {
 	const { jobId, kind } = parse(RetryBody, await body(c));
 	const job = await getJob(c.env, jobId);

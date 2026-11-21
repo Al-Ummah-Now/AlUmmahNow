@@ -51,8 +51,8 @@ wrangler deploy             # Alternative deployment command
 ### Core Technology Stack
 - **Runtime:** Cloudflare Workers with `nodejs_compat` flag
 - **Framework:** Hono v4+ (fast edge web framework)
-- **OpenAPI:** chanfana v2+ (OpenAPI 3.1 integration for Hono)
-- **Validation:** Zod v3+ (schema validation and TypeScript types)
+- **OpenAPI:** chanfana v3 (OpenAPI 3.1 integration for Hono). chanfana 3 dropped the `Str()`/`Num()`/`Bool()`/`DateTime()`/`Int()`/`Enumeration()` helpers: existing endpoints import chanfana 2-compatible ones from `src/lib/chanfana-params.ts`; new code can use plain zod. Sub-routers are `fromHono(new Hono())` without `base` (the mount path in `routers/index.ts` is the prefix)
+- **Validation:** Zod v4 (schema validation and TypeScript types). A failed request schema is a 400 `{ success: false, errors: [{ code: 7001, message, path }] }` (`base/ValidatedRoute.ts`)
 - **Authentication:** @openauthjs/openauth (JWT/OAuth2)
 - **Storage:** Cloudflare R2 (object storage), KV (key-value store)
 - **Streaming:** Bunny.net Stream API and Storage SDK

@@ -3,7 +3,7 @@
  * List and create upload templates
  */
 
-import { Str, Bool, Num } from 'chanfana';
+import { Str, Bool, Num } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { isDefaultTemplate, pointerCache, setDefaultTemplate } from '../../lib/uploadDefaultPointer';
 import R2Repository from '../../lib/r2Repo';

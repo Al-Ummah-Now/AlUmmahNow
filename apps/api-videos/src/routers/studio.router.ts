@@ -7,7 +7,7 @@ import { BrandKitGet, BrandKitPut, StudioAssetCreate, StudioAssetDelete, StudioA
 
 const app = new Hono();
 
-export const studioRouter = fromHono(app, { base: '/api/studio' });
+export const studioRouter = fromHono(app);
 
 studioRouter.get('/brand-kit', BrandKitGet);
 studioRouter.put('/brand-kit', BrandKitPut);

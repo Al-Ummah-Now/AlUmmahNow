@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistInput } from "../../lib/model/input";

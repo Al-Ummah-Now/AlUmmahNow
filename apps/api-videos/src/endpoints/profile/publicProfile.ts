@@ -15,7 +15,7 @@
  * suspended channels, playlists and videos are left out, for the owner too (this is the visitor view).
  */
 
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, OptionalAuthRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";

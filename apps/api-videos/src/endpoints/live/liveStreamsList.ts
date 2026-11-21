@@ -1,6 +1,6 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { liveRecordingWithheld, recordingHidden } from './liveSession';
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
 import { LiveStreamView } from "../../lib/model/view";

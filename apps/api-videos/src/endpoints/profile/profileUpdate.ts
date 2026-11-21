@@ -2,7 +2,7 @@ import { nameLocale } from "../../lib/name-locale";
 import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
 import { bearerOf, namesChanged, syncNamesToAuth } from "../../lib/auth-name-sync";
-import { Bool } from "chanfana";
+import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import { ProfileUpdateInput } from "../../lib/model/input";

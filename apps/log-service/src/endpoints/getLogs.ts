@@ -1,4 +1,5 @@
-import { OpenAPIRoute, Str, Num } from 'chanfana';
+import { OpenAPIRoute } from 'chanfana';
+import { Str, Num } from '../lib/chanfana-params';
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';

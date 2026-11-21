@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { ChannelInviteAccept, ChannelInviteDecline, MyChannelInvites } from '../endpoints/channel/channelInvites';
 
-export const channelInvitesRouter = fromHono(new Hono(), { base: '/api/channel-invites' });
+export const channelInvitesRouter = fromHono(new Hono());
 channelInvitesRouter.get('/', MyChannelInvites);
 channelInvitesRouter.post('/:id/accept', ChannelInviteAccept);
 channelInvitesRouter.post('/:id/decline', ChannelInviteDecline);

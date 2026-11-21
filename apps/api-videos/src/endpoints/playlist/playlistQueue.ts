@@ -7,7 +7,7 @@
  * the same answer as a missing one. System playlists (Watch later) are only
  * reachable through their alias, so their stored ids never travel in URLs.
  */
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";

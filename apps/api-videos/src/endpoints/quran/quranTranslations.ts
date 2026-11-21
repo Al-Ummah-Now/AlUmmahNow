@@ -7,7 +7,7 @@
  *   PUT    /api/channels/:channelId/quran-translations/:language { id }  pick an edition (channel.edit)
  *   DELETE /api/channels/:channelId/quran-translations/:language         back to the platform's
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { DEFAULT_QURAN_TRANSLATIONS, can, channelRoleOf } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, PublicRoute, type AppContext } from '../../base';

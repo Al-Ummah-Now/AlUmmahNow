@@ -22,7 +22,7 @@ import {
 
 const app = new Hono();
 
-export const playlistRouter = fromHono(app, { base: '/api/playlists' });
+export const playlistRouter = fromHono(app);
 
 // Register routes with paths RELATIVE to base (/api/playlists)
 // CRUD operations

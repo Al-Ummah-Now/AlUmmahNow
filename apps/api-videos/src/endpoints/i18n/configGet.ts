@@ -5,7 +5,7 @@
  * Fetches i18n configuration including available locales and RTL settings.
  */
 
-import { Str, Bool, Num } from 'chanfana';
+import { Str, Bool, Num } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { PublicRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';

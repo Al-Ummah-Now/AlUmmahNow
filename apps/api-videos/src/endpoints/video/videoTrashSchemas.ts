@@ -2,7 +2,7 @@
  * OpenAPI schemas shared by the creator delete / restore / trash routes
  * (lib/videoTrash.ts).
  */
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { ResponseError } from "../../lib/types";
 

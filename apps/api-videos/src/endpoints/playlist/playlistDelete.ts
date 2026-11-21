@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import R2Repository from "../../lib/r2Repo";
 import { Playlist, ResponseError } from "../../lib/types";

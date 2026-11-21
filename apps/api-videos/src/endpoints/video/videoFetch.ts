@@ -1,6 +1,6 @@
 import { withPlayback } from '../../lib/media/playback';
 import { canOnVideo } from "../../lib/channelAccess";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";

@@ -1,4 +1,4 @@
-import { Str, Int } from "chanfana";
+import { Str, Int } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel, Profile, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";

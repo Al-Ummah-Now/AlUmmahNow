@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { MEDIA_PROVIDER_IDS, PLAYBACK_FALLBACK_REASONS } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";

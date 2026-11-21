@@ -1,5 +1,5 @@
 import { isShort } from "@al-ummah/shared-types";
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { string, z } from "zod";
@@ -32,9 +32,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 					description: "Limit the number of shorts to return",
 					default: 12,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request for pagination",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request for pagination").optional(),
 				sort: z.enum(["latest", "popular", "oldest"]).optional().default("latest").describe("Sort order for shorts"),
 			}),
 			headers: z.object({

@@ -20,8 +20,8 @@ const AppConfigResponse = z.object({
 		latestVersion: z.string().nullable(),
 		storeUrl: z.string().nullable(),
 	}),
-	flags: z.record(z.unknown()).describe('Feature flags for this app build (Epic 9.5)'),
-	config: z.record(z.unknown()).describe('Remote configuration values (Epic 9.5)'),
+	flags: z.record(z.string(), z.unknown()).describe('Feature flags for this app build (Epic 9.5)'),
+	config: z.record(z.string(), z.unknown()).describe('Remote configuration values (Epic 9.5)'),
 });
 
 export class AppConfigGet extends PublicRoute {

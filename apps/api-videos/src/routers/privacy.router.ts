@@ -9,7 +9,7 @@ import { PrivacyConsentGet, PrivacyConsentPut, PrivacyErase, PrivacyExport } fro
 
 const app = new Hono();
 
-export const privacyRouter = fromHono(app, { base: '/api/privacy' });
+export const privacyRouter = fromHono(app);
 
 privacyRouter.get('/export', PrivacyExport);
 privacyRouter.delete('/data', PrivacyErase);

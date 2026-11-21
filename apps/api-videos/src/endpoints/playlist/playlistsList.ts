@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { canManagePlaylist } from "../../lib/channelAccess";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
@@ -46,12 +46,8 @@ export class PlaylistsList extends OptionalAuthRoute {
                     description: "Limit the number of playlists to return",
                     default: 10,
                 }),
-                cursor: string({
-                    description: "The last cursor returned from the previous request",
-                }).optional(),
-                channelId: string({
-                    description: "Only return playlists that belong to this channel, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last)",
-                }).optional(),
+                cursor: string().describe("The last cursor returned from the previous request").optional(),
+                channelId: string().describe("Only return playlists that belong to this channel, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last)").optional(),
                 mine: z.enum(["true", "false"]).optional().describe("true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last). Channel playlists are listed with channelId"),
                 q: Str({ description: "With channelId or mine: only playlists whose name (any language, case-insensitive) contains this text" }).max(200).optional(),
             }),

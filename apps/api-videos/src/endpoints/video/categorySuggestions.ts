@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import {
 	CATEGORY_TEXT_LIMITS,

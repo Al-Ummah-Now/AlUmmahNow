@@ -1,5 +1,5 @@
 import { setCommentPinned, swapPinnedPointer } from '../../lib/community-comments';
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';

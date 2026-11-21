@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { TranslateCreate, TranslateUsageGet } from '../endpoints/translate/translate';
 
-export const translateRouter = fromHono(new Hono(), { base: '/api/translate' });
+export const translateRouter = fromHono(new Hono());
 translateRouter.post('/', TranslateCreate);
 translateRouter.get('/usage', TranslateUsageGet);
 

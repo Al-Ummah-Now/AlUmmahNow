@@ -33,7 +33,7 @@ import { UploadCommunityPostGif } from '../endpoints/community/upload-gif';
 
 const app = new Hono();
 
-export const communityRouter = fromHono(app, { base: '/api/community' });
+export const communityRouter = fromHono(app);
 
 // Posts - List and Get (public)
 communityRouter.get('/channels/:channelId/posts', ListCommunityPosts);

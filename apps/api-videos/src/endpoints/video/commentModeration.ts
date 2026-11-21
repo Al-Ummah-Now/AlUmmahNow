@@ -9,7 +9,7 @@
  *
  * The video's owner, or a member whose channel role grants `comment.moderate`.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import type { StudioCommentAction } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';

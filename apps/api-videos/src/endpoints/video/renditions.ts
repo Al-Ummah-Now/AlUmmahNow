@@ -10,7 +10,7 @@
  * When the original upload completes, the transcode job takes the ready renditions and verifies
  * them; it uses them only when they match exactly what it would have encoded (lib/media/prebuilt.ts).
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { PREBUILT_LIMITS, isPrebuiltStagingId, prebuiltStagingPrefix, type PrebuiltUploadState, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';

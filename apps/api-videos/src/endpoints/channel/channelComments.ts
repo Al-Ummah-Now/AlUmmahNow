@@ -9,7 +9,7 @@
  * (owner, admin, moderator); a site role never grants it. Rows come from the
  * channel_comments index (lib/channelComments), the text from R2.
  */
-import { Num, Str } from 'chanfana';
+import { Num, Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import {
 	can,

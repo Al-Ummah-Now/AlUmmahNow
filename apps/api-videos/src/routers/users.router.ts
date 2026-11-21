@@ -17,7 +17,7 @@ app.use('*', async (c, next) => {
 	c.header('X-Robots-Tag', 'noindex, nofollow');
 });
 
-export const usersRouter = fromHono(app, { base: '/api/users' });
+export const usersRouter = fromHono(app);
 
 usersRouter.get('/by-handle/:handle', UserByHandleFetch);
 usersRouter.get('/by-handle/:handle/subscriptions', UserSubscriptionsPublicList);

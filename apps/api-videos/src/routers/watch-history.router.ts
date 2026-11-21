@@ -29,7 +29,7 @@ import { GetWatchHistorySettings, UpdateWatchHistorySettings } from '../endpoint
 
 const app = new Hono();
 
-export const watchHistoryRouter = fromHono(app, { base: '/api/watch-history' });
+export const watchHistoryRouter = fromHono(app);
 
 // Register routes with paths RELATIVE to base (/api/watch-history)
 

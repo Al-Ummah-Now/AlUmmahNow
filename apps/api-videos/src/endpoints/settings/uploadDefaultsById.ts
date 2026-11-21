@@ -3,7 +3,7 @@
  * Get, update, and delete individual upload templates
  */
 
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { ValidatedRoute } from '../../base/ValidatedRoute';
 import { z } from 'zod';
 import { clearDefaultTemplate, isDefaultTemplate, readDefaultPointer, setDefaultTemplate } from '../../lib/uploadDefaultPointer';

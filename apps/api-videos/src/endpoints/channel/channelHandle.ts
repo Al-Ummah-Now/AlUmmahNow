@@ -7,7 +7,7 @@
  * - POST /internal/channels/backfill-handles          (X-API-Key) default handles for old channels
  */
 
-import { Bool, Num, Str } from "chanfana";
+import { Bool, Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
@@ -129,7 +129,7 @@ export class ChannelAbout extends OptionalAuthRoute {
 								channelId: Str(),
 								handle: Str().nullable(),
 								description: Str(),
-								descriptionLocalized: z.record(z.string()),
+								descriptionLocalized: z.record(z.string(), z.string()),
 								links: z.array(z.object({ title: Str(), url: Str() })),
 								contactEmail: Str().nullable(),
 								location: Str().nullable(),

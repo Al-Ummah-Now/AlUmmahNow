@@ -71,7 +71,7 @@ export const CreateTemplateRequestSchema = z.object({
   name: z.string().min(1).max(100),
   nameLocalized: LocalizedTextSchema.optional(),
   description: z.string().max(500).optional(),
-  channelId: z.string().uuid().optional(),
+  channelId: z.guid().optional(),
   isDefault: z.boolean().optional(),
   template: TemplateFieldsSchema,
 });
@@ -183,7 +183,7 @@ export function validateCreateTemplateRequest(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      error.errors.forEach(err => {
+      error.issues.forEach(err => {
         errors.push({
           field: err.path.join('.'),
           message: err.message,
@@ -282,7 +282,7 @@ export function validateUpdateTemplateRequest(
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      error.errors.forEach(err => {
+      error.issues.forEach(err => {
         errors.push({
           field: err.path.join('.'),
           message: err.message,

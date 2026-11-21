@@ -1,5 +1,6 @@
 import { isShort } from "@al-ummah/shared-types";
-import { Num, OpenAPIRoute, Str } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { string, z } from "zod";
@@ -34,9 +35,7 @@ export class VideoSearch extends OptionalAuthRoute {
 					description: "Limit the number of videos to return",
 					default: 9,
 				}),
-				cursor: string({
-					description: "The last cursor returned from the previous request",
-				}).optional(),
+				cursor: string().describe("The last cursor returned from the previous request").optional(),
 				sort: z.enum(["relevance", "date", "views", "title"]).optional().default("relevance").describe("Sort order for search results"),
 				filter: z.enum(["all", "public", "private"]).optional().default("all").describe("Filter by video privacy"),
 				channelIds: Str({

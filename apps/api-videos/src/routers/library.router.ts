@@ -21,7 +21,7 @@ import { LikedVideosList, SavedPostAdd, SavedPostRemove, SavedPostStatus, SavedP
 
 const app = new Hono();
 
-export const libraryRouter = fromHono(app, { base: '/api/library' });
+export const libraryRouter = fromHono(app);
 
 libraryRouter.get('/watch-later', WatchLaterList);
 libraryRouter.post('/watch-later', WatchLaterAdd);

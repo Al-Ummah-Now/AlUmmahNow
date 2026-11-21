@@ -4,7 +4,7 @@
 
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';

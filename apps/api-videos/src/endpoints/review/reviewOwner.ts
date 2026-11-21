@@ -5,7 +5,7 @@
  *
  * Allowed for the owner and channel members who may edit the video (video.edit).
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';

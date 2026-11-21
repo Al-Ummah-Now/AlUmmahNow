@@ -37,7 +37,7 @@ export class SitemapSummaryGet extends PublicRoute {
 		responses: {
 			"200": {
 				description: "Counts per kind",
-				content: { "application/json": { schema: z.object({ pageSize: z.number(), kinds: z.record(z.object({ count: z.number(), pages: z.number(), lastModified: z.string().nullable() })) }) } },
+				content: { "application/json": { schema: z.object({ pageSize: z.number(), kinds: z.record(z.string(), z.object({ count: z.number(), pages: z.number(), lastModified: z.string().nullable() })) }) } },
 			},
 			"503": { description: "The search index is not available", content: { "application/json": { schema: ResponseError } } },
 		},
@@ -57,7 +57,7 @@ export class SitemapSummaryGet extends PublicRoute {
 const SitemapVideoItem = z.object({
 	id: z.string(),
 	title: z.string(),
-	titleLocalized: z.record(z.string()).optional(),
+	titleLocalized: z.record(z.string(), z.string()).optional(),
 	description: z.string().optional(),
 	duration: z.number().nullable(),
 	isShort: z.boolean(),

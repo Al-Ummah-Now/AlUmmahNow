@@ -1,4 +1,4 @@
-import { Num } from "chanfana";
+import { Num } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";

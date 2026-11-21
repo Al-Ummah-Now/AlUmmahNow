@@ -1,5 +1,5 @@
 import { OptionalAuthRoute, AppContext } from '../../base';
-import { Str, Num } from 'chanfana';
+import { Str, Num } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';

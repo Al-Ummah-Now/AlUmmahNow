@@ -1,6 +1,6 @@
 import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { ResponseError } from "../../lib/types";
 import { AnalyticsQueryInput } from "../../lib/model/input";

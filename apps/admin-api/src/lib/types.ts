@@ -1,4 +1,4 @@
-import { Str, DateTime } from "chanfana";
+import { Str, DateTime } from "./chanfana-params";
 import { z } from "zod";
 
 // Re-export shared D1 and moderation types

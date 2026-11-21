@@ -1,4 +1,4 @@
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { ReactorHeaders, dislikesDisabledResponse, dislikesDisabledResponseSchema } from "../../lib/reactions";

@@ -1,6 +1,6 @@
 import { uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { VideoInput } from "../../lib/model/input";
@@ -134,7 +134,7 @@ export class VideoCreate extends AuthenticatedRoute {
 		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
-		await repository.putObject(video.id, video);
+		await repository.putObject(video.id, video as VideoType);
 
 		// Send queue message for video creation
 		const queue = new Queue(c.env.queue);
@@ -148,7 +148,7 @@ export class VideoCreate extends AuthenticatedRoute {
 		scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: video.id, authorId: effectiveUserId, channelId, text: videoScanText(video) });
 
 		// Transform to view model for response
-		const videoView = transformVideoToView(video);
+		const videoView = transformVideoToView(video as VideoType);
 
 		// Return the created video
 		return {

@@ -15,7 +15,7 @@
  * invitations, and every email gets the same answer.
  */
 
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import {
 	CHANNEL_MEMBER_ROLES,
@@ -267,7 +267,7 @@ export class ChannelAuditList extends AuthenticatedRoute {
 const MyInviteView = z.object({
 	id: Str(),
 	role: MemberRoleEnum,
-	channel: z.object({ id: Str(), name: Str(), nameLocalized: z.record(z.string()).optional(), handle: Str().optional(), avatarUrl: Str().optional() }),
+	channel: z.object({ id: Str(), name: Str(), nameLocalized: z.record(z.string(), z.string()).optional(), handle: Str().optional(), avatarUrl: Str().optional() }),
 	invitedBy: z.object({ userId: Str(), displayName: Str().optional() }),
 	createdAt: Str(),
 	expiresAt: Str(),

@@ -6,7 +6,7 @@ import { LiveStreamUpdate } from '../endpoints/live/liveStreamUpdate';
 import { LiveStreamDelete, LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamQoe, LiveStreamStart, LiveStreamStateGet, LiveStreamViewers } from '../endpoints/live/liveSession';
 
 const app = new Hono();
-export const liveRouter = fromHono(app, { base: '/api/live-streams' });
+export const liveRouter = fromHono(app);
 
 // Public endpoints
 liveRouter.get('/', LiveStreamsList);

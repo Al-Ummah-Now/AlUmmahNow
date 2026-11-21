@@ -1,5 +1,7 @@
 # Implementation Story: Migrating Al Ummah Now API to chanfana with Zod v4
 
+> **Status (2026-11-21): done.** api-videos, admin-api and log-service run chanfana 3.7 on zod 4.6.7 (Dependabot GHSA-mrhx-c7xc-m3w5). The removed parameter helpers live on in each app's `src/lib/chanfana-params.ts` with chanfana 2 behaviour; validation errors use chanfana 3's `{ code: 7001, message, path }` shape.
+
 ## Overview
 
 This story documents the migration of the Al Ummah Now video platform API from chanfana with Zod v3 to chanfana with Zod v4. The migration improves bundle size, error messaging, and overall performance while maintaining API compatibility.

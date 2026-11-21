@@ -11,7 +11,7 @@
  * `overrides` (written before #982) is served as stored.
  */
 
-import { Str, Bool } from 'chanfana';
+import { Str, Bool } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { PublicRoute, AppContext } from '../../base';
 import { logger } from '../../lib/logger';

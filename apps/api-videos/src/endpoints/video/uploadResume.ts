@@ -1,6 +1,7 @@
 import { bunnyLibraryForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
-import { OpenAPIRoute, Str } from "chanfana";
+import { OpenAPIRoute } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";

@@ -11,7 +11,7 @@
  * the field and the creator reviews it before saving. Text inside {…} (a Quran quotation) is
  * never machine-translated.
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { INLINE_TRANSLATE_FIELDS, INLINE_TRANSLATE_LIMITS, can, channelRoleOf, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, PublicRoute, type AppContext } from '../../base';

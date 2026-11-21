@@ -52,7 +52,7 @@ import handleChannelCoverUpdate from '../endpoints/channel/channelCoverUpdate';
 const app = new Hono();
 
 // Create OpenAPI router with base path
-export const channelRouter = fromHono(app, { base: '/api/channels' });
+export const channelRouter = fromHono(app);
 
 // ============================================================================
 // CRUD OPERATIONS

@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -44,7 +44,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 		responses: {
 			"200": {
 				description: "Videos and the cursor of the next page",
-				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ items: z.array(z.record(z.unknown())), cursor: z.string().nullable() }) }) } },
+				content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ items: z.array(z.record(z.string(), z.unknown())), cursor: z.string().nullable() }) }) } },
 			},
 			"403": { description: "No access", content: { "application/json": { schema: ResponseError } } },
 			"404": { description: "Channel not found", content: { "application/json": { schema: ResponseError } } },

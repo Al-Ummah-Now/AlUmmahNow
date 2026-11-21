@@ -11,7 +11,7 @@
  * The kit belongs to the account: with a `channelId` header a channel team member reads the kit of
  * the channel's owner; only the owner writes (lib/channelAccess.ts keeps unlisted writes owner only).
  */
-import { Str } from 'chanfana';
+import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';

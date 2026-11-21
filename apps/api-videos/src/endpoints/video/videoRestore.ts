@@ -1,4 +1,4 @@
-import { Bool, Str } from "chanfana";
+import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { canOnVideo } from "../../lib/channelAccess";
 import { Video as BusinessVideo } from "../../lib/types";

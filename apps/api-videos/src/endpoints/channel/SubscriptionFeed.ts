@@ -1,4 +1,4 @@
-import { Num, Str } from "chanfana";
+import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel, Profile, Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";

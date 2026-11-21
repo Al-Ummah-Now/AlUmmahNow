@@ -1,5 +1,5 @@
 import { ownerSeesSuspendedChannel } from "../../lib/visibility";
-import { Str } from "chanfana";
+import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
