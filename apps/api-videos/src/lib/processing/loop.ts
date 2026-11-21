@@ -562,7 +562,7 @@ async function loadVideos(env: ProcessingEnv, keys: string[]): Promise<LoopVideo
 /**
  * Records one run looks at, at most SWEEP_MAX_OBJECTS. From the ownership
  * index when it is complete: the not-ready videos in id order after where the
- * last run stopped (index (kind, upload_status, id), migration 0013), wrapping
+ * last run stopped (index (kind, upload_status, id), migration 0070), wrapping
  * around at the end; failed uploads are counted in SQL, not loaded. Otherwise
  * one bounded slice of the bucket, continuing from the last run's R2 cursor.
  * Both used to read everything every 10 minutes: every failed upload ever, or

@@ -151,7 +151,7 @@ export async function channelVideosFromIndex<T>(
 				}
 			}
 			if (channelId === null) next += consumed;
-			else if (consumed) position = (ids as { positions: KeysetPosition[] }).positions[consumed - 1];
+			else if (consumed && 'positions' in ids) position = ids.positions[consumed - 1];
 			const more = consumed < ids.ids.length || ids.hasMore;
 			if (!more) return { videos, cursor: '', examined: read };
 			if (videos.length >= limit) break;
