@@ -163,6 +163,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                   moreLabel={t.common.moreTabs}
                   menuLabel={t.common.moreTabsMenu}
                   moreClassName={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+                  moreIsButton
                   onSelect={(item) => setMetric(item.id as Metric)}
                   rowProps={{ role: 'group', 'aria-label': text.metricLabel, 'data-testid': 'studio-analytics-metrics', className: 'gap-2' }}
                   renderItem={(item) => (

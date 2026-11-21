@@ -37,6 +37,8 @@ interface PriorityStripProps<T extends PriorityItem> {
   className?: string;
   /** Classes of the More button (match the row's items) */
   moreClassName?: string;
+  /** The row's items are the site's Button: More is themed as one too (the theme styles Button by its data-slot) */
+  moreIsButton?: boolean;
   testId?: string;
 }
 
@@ -67,6 +69,7 @@ export function PriorityStrip<T extends PriorityItem>({
   rowProps,
   className = '',
   moreClassName = '',
+  moreIsButton = false,
   testId,
 }: PriorityStripProps<T>) {
   const holderRef = useRef<HTMLDivElement>(null);
@@ -168,6 +171,7 @@ export function PriorityStrip<T extends PriorityItem>({
               <button
                 ref={moreRef}
                 type="button"
+                data-slot={moreIsButton ? 'button' : undefined}
                 tabIndex={measuring ? -1 : undefined}
                 data-testid={testId ? `${testId}-more` : undefined}
                 className={`inline-flex items-center gap-1 whitespace-nowrap ${moreClassName}`}
