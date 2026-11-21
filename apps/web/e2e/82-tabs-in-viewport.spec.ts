@@ -94,7 +94,22 @@ async function expectOneRow(page: Page, strip: string, rowItems: Locator, idOf: 
     await more.click();
     const prefix = `${strip}-menu-`;
     const entries = page.locator(`[data-testid^="${prefix}"]`);
-    await expect(entries.first()).toBeVisible();
+    // When the menu does not open, say what the strip looked like (trigger, row, focus, page)
+    if (!(await entries.first().waitFor({ timeout: 10_000 }).then(() => true, () => false))) {
+      const state = await page.evaluate((id) => {
+        const trigger = document.querySelector(`[data-testid="${id}-more"]`);
+        const holder = document.querySelector(`[data-testid="${id}"]`);
+        return JSON.stringify({
+          trigger: trigger && { state: trigger.getAttribute('data-state'), expanded: trigger.getAttribute('aria-expanded'), rect: trigger.getBoundingClientRect().toJSON() },
+          measuring: holder?.getAttribute('data-measuring'),
+          menus: document.querySelectorAll('[role="menu"]').length,
+          bodyPointer: getComputedStyle(document.body).pointerEvents,
+          focus: document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName,
+          width: document.documentElement.clientWidth,
+        });
+      }, strip);
+      throw new Error(`${what}: More did not open its menu: ${state}`);
+    }
     menu = await entries.evaluateAll((els, p) => els.map((e) => (e.getAttribute('data-testid') ?? '').slice(p.length)), prefix);
     // The menu is on screen too
     for (const box of await entries.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.right]; }))) {
