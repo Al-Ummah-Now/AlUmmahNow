@@ -17,6 +17,11 @@ import { formatAbsoluteDate, formatRelativeTime, formatVideoCount } from '@/lib/
 import { channelLabel } from '@/lib/channel-name';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
+export interface WatchHistoryPageProps {
+  /** `continue`: the Continue watching view (`/history?view=continue`) */
+  view?: 'all' | 'continue';
+}
+
 export interface WatchHistoryEntryProps {
   entry: WatchHistoryItem;
   lang: string;
@@ -112,10 +117,12 @@ export function PausedNotice({ history, t }: { history: UseWatchHistoryReturn; t
 /**
  * Watch history page content (LTR).
  */
-export default function WatchHistoryPage() {
+export default function WatchHistoryPage({ view = 'all' }: WatchHistoryPageProps = {}) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-  const history = useWatchHistory(!!user);
+  const continueView = view === 'continue';
+  // The Continue watching view (the home page's card opens it): started, unfinished videos only
+  const history = useWatchHistory(!!user, continueView ? { completed: false } : {});
 
   const { confirm, dialog: confirmDialog } = useConfirm();
 
@@ -135,7 +142,7 @@ export default function WatchHistoryPage() {
     return (
       <div className="p-6 text-center" dir="ltr">
         <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">{t.watchHistory.title}</h1>
+        <h1 className="text-2xl font-bold mb-2">{continueView ? t.library.continueWatching : t.watchHistory.title}</h1>
         <p className="text-gray-600 dark:text-gray-400">{t.watchHistory.signInRequired}</p>
       </div>
     );
@@ -144,20 +151,30 @@ export default function WatchHistoryPage() {
   const errorMessage = watchHistoryErrorMessage(history.error, t);
 
   return (
-    <div className="max-w-4xl mx-auto p-6" dir="ltr">
+    <div className="max-w-4xl mx-auto p-6" dir="ltr" data-testid="watch-history-page" data-view={view}>
       {confirmDialog}
       <div className="flex justify-between items-center gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold">{t.watchHistory.title}</h1>
+          <h1 className="text-3xl font-bold">{continueView ? t.library.continueWatching : t.watchHistory.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             {history.total > 0
-              ? formatVideoCount(history.total, lang)
-              : t.watchHistory.subtitle}
+              ? formatVideoCount(history.total, lang, { compact: true })
+              : continueView
+                ? t.watchHistory.continueSubtitle
+                : t.watchHistory.subtitle}
           </p>
+          <Link
+            href={continueView ? `/${lang}/history` : `/${lang}/history?view=continue`}
+            data-testid="watch-history-view-switch"
+            className="mt-1 inline-block text-sm font-medium text-brand-ink dark:text-brand-ink hover:underline"
+          >
+            {continueView ? t.watchHistory.allHistory : t.library.continueWatching}
+          </Link>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <PauseHistoryButton history={history} t={t} />
-          {history.entries.length > 0 && (
+          {/* Clearing is for the whole history, never offered from the Continue watching view */}
+          {!continueView && history.entries.length > 0 && (
             <Button variant="outline" size="sm" onClick={handleClear} disabled={history.isClearing} className="flex items-center gap-2">
               <Trash2 className="w-4 h-4" />
               {history.isClearing ? t.watchHistory.clearing : t.watchHistory.clearAll}
@@ -180,7 +197,7 @@ export default function WatchHistoryPage() {
         <div className="text-center py-12">
           <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">{t.watchHistory.empty}</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{t.watchHistory.emptyDescription}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{continueView ? t.watchHistory.continueEmpty : t.watchHistory.emptyDescription}</p>
           <Link href={`/${lang}`} className="text-brand-ink dark:text-brand-ink hover:underline">{t.watchHistory.browseVideos}</Link>
         </div>
       ) : (

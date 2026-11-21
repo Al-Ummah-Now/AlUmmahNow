@@ -2283,6 +2283,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     resume: 'تشغيل السجل مجدداً',
     pausedNotice: 'سجل المشاهدة متوقف مؤقتاً. لن تُضاف المرئيات التي تشاهدها الآن إلى سجلك ولن تُستخدم في الاقتراحات.',
     pauseFailed: 'تعذر تغيير إعداد السجل. يرجى المحاولة مرة أخرى.',
+    resumeTop: 'تابِع',
+    resumeTopLabel: 'تابِع {title}',
+    continueSubtitle: 'مرئيات بدأتها ولم تُكملها، الأحدث أولًا',
+    allHistory: 'السجل كاملًا',
+    continueEmpty: 'لا شيء لمتابعته. تظهر هنا المرئيات التي تبدأها ولا تُكملها.',
   },
 
   live: {

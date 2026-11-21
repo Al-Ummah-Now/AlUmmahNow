@@ -2290,6 +2290,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     resume: 'Turn history back on',
     pausedNotice: 'Watch history is paused. Videos you watch now are not added to your history or used for recommendations.',
     pauseFailed: 'Could not change the history setting. Please try again.',
+    resumeTop: 'Resume',
+    resumeTopLabel: 'Resume {title}',
+    continueSubtitle: 'Videos you started and have not finished, newest first',
+    allHistory: 'All history',
+    continueEmpty: 'Nothing to continue. Videos you start and leave unfinished appear here.',
   },
 
   live: {

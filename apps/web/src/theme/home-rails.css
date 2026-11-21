@@ -36,16 +36,16 @@ html[lang=ar] .hr-title{line-height:1.6}
   overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline:2px;overscroll-behavior-x:contain;scrollbar-width:none}
 .hr-list::-webkit-scrollbar{display:none}
 .hr-list>li{min-width:0;scroll-snap-align:start}
-/* The edge the rail can still scroll to fades out */
-.hr-track[data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),#000 calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),#000 calc(100% - 56px),transparent)}
-.hr-track[data-more-start] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px);mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px)}
-.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px,#000 calc(100% - 56px),transparent)}
+/* The edge the rail can still scroll to fades out (a mask reads only alpha: currentColor is the opaque stop) */
+.hr-track[data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),currentColor calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),currentColor calc(100% - 56px),transparent)}
+.hr-track[data-more-start] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,currentColor 56px);mask-image:linear-gradient(var(--to-end,to right),transparent,currentColor 56px)}
+.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,currentColor 56px,currentColor calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),transparent,currentColor 56px,currentColor calc(100% - 56px),transparent)}
 
 /* Page buttons (pointer devices): the theme's raised material, centred on the thumbnails */
 .hr-nav{position:absolute;z-index:2;inset-block-start:calc(8px + 8px + 96px);transform:translateY(-50%);
   display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:50%;cursor:pointer;
   color:var(--fanous-color-text-primary);background:var(--m-raised,var(--fanous-color-surface-raised));
-  box-shadow:var(--m-raised-edge,0 6px 18px -6px rgb(0 0 0/.45));-webkit-backdrop-filter:var(--m-blur,none);backdrop-filter:var(--m-blur,none);
+  box-shadow:var(--m-raised-edge,none);-webkit-backdrop-filter:var(--m-blur,none);backdrop-filter:var(--m-blur,none);
   transition:opacity .2s,transform .2s}
 .hr-nav svg{width:22px;height:22px}
 [dir=rtl] .hr-nav svg{transform:scaleX(-1)}
@@ -65,3 +65,8 @@ html[lang=ar] .hr-title{line-height:1.6}
   .hr-all{margin-inline-start:auto}
 }
 @media(prefers-reduced-motion:reduce){.hr-all,.hr-all svg,.hr-nav{transition:none}}
+
+/* Continue watching (components/history/ContinueWatchingShelf.tsx): one playlist-style card as wide as
+   a rail card, above the hero */
+.hcw{inline-size:clamp(232px,calc((100% - 4 * 16px) / 4.3),340px);margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg)}
+@media(max-width:639px){.hcw{inline-size:80%}}

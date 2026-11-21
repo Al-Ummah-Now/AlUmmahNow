@@ -72,7 +72,7 @@ test.describe('Video title in the page language: Continue watching', () => {
   // The "multi" suite user: no other spec records its watch history (33-watch-history uses "none")
   test.use({ storageState: AUTH_STATE.multi });
 
-  test('the home shelf shows the Arabic title on /ar and the English one on /en', async ({ page, request }) => {
+  test('the home card shows the Arabic title on /ar and the English one on /en', async ({ page, request }) => {
     const video = own.videos()[0];
     const { accessToken } = readAccount('multi');
     const duration = 40; // the landscape40 clip
@@ -81,10 +81,13 @@ test.describe('Video title in the page language: Continue watching', () => {
     try {
       for (const [lang, expected, other] of [['ar', TITLE_AR, video.title], ['en', video.title, TITLE_AR]] as const) {
         await page.goto(`/${lang}`);
-        const tile = page.locator(`[data-testid="continue-watching-video"][href="/${lang}/video/${video.id}"]`);
-        await expect(tile).toBeVisible({ timeout: 30_000 });
-        await expect(tile).toContainText(expected);
-        await expect(tile).not.toContainText(other);
+        // One card (owner 2026-11-21): the newest unfinished video's title in its meta line, Resume opens it
+        const card = page.locator(`[data-testid="continue-watching"][data-video-id="${video.id}"]`);
+        await expect(card).toBeVisible({ timeout: 30_000 });
+        await expect(card.getByTestId('continue-watching-meta')).toContainText(expected);
+        await expect(card.getByTestId('continue-watching-meta')).not.toContainText(other);
+        await expect(card.getByTestId('continue-watching-resume')).toHaveAttribute('href', `/${lang}/video/${video.id}`);
+        await expect(card.getByTestId('continue-watching-card')).toHaveAttribute('href', `/${lang}/history?view=continue`);
       }
     } finally {
       await apiCall(request, 'DELETE', `/api/watch-history/${video.id}`, { token: accessToken });
