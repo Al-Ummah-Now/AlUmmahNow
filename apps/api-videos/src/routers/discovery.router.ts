@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { SearchSuggestionsGet, TrendingGet, RecommendationsGet } from '../endpoints/discovery/discovery';
 import { ShortsPublicFeed } from '../endpoints/video/publicPlay';
+import { DiscoveryHome } from '../endpoints/discovery/home';
 import { SitemapPageGet, SitemapSummaryGet } from '../endpoints/sitemap/sitemap';
 
 const app = new Hono();
@@ -15,6 +16,8 @@ export const discoveryRouter = fromHono(app);
 
 discoveryRouter.get('/search/suggestions', SearchSuggestionsGet);
 discoveryRouter.get('/trending', TrendingGet);
+// The home page's ranked rails in the admin's order (wiki E07 Discovery ranking)
+discoveryRouter.get('/discovery/home', DiscoveryHome);
 discoveryRouter.get('/recommendations', RecommendationsGet);
 discoveryRouter.get('/shorts', ShortsPublicFeed);
 // The videos site's sitemaps (wiki AUN-SEO): public items only

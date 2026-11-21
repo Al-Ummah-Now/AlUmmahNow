@@ -1,35 +1,17 @@
-import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str, Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
-import { VideoObject, VideoCategory } from "@al-ummah/shared-types";
-import R2Repository from "../../lib/r2Repo";
-import { IndexManager } from "../../lib/indexManager";
-import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
-import { isWatchHistoryPaused } from "../../lib/watch-history";
-import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { rankRecommendations } from "../../lib/discovery";
+import { hydrateRanked, loadCandidatePool } from "../../lib/recommendations";
+import { withChannelNames } from "../../lib/channelNames";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems, readRail } from "../../lib/ranking/sectionResponse";
+import { decodeRailCursor, encodeRailCursor, railIds, railLabelFields, railScope } from "../../lib/ranking/serve";
+import { personalOrder } from "../../lib/ranking/personal";
+import { RAIL_LIMIT } from "../../lib/ranking/job";
 
 const VideoResponseSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  titleLocalized: z.record(z.string(), z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
-  thumbnailUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  channelId: z.string(),
-  channelName: z.string().optional(),
-  channelAvatarUrl: z.string().optional(),
-  dateCreated: z.string(),
-  views: z.number(),
-  likesCount: z.number(),
-  dislikesCount: z.number(),
-  isShort: z.boolean().optional(),
-  commentsCount: z.number(),
-  duration: z.number().optional(),
-  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
-  isPublic: z.boolean().optional(),
+  ...FeedVideoFields,
   recommendationScore: z.number().optional(),
 });
 
@@ -41,6 +23,8 @@ const RecommendedVideosResponseSchema = z.object({
     strategy: z.enum(['popular', 'category-based', 'random']),
     basedOn: z.string().optional(),
     lastUpdated: z.string(),
+    personal: z.boolean().optional().describe("True when ordered for this viewer (subscriptions and watch history; never while history is paused)"),
+    rail: RailInfoSchema.optional(),
   }),
 });
 
@@ -48,7 +32,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
   schema = {
     tags: ["Video Sections"],
     summary: "Get Recommended Videos",
-    description: "Get recommended videos. MVP implementation uses popular videos or category-based recommendations.",
+    description: "Recommended videos (wiki E07 Discovery ranking). Signed in with watch history on: ordered for the viewer from their subscriptions and recent history, without videos already watched. Otherwise (signed out, or history paused): the site's top list. With seedVideoId: videos like that one.",
     request: {
       query: z.object({
         limit: Num({
@@ -58,9 +42,10 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
         cursor: Str({
           description: "Pagination cursor from previous response",
         }).optional(),
-        strategy: z.enum(['popular', 'category-based', 'random']).optional().default('popular').describe("Recommendation strategy"),
+        strategy: z.enum(['popular', 'category-based', 'random']).optional().default('popular').describe("Accepted for older clients; the order is the discovery ranking"),
+        language: z.enum(['ar', 'en']).optional().describe("Viewer's language: its videos rank higher (others stay)"),
         excludeWatched: Bool({
-          description: "Exclude user's watch history (requires auth)",
+          description: "Accepted for older clients: a personal list always leaves watched videos out",
           default: false,
         }).optional(),
         seedVideoId: Str({
@@ -106,280 +91,69 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
     // Validation stays outside the try: invalid input is a 400 from chanfana
     const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const { limit: requested, cursor, strategy = 'popular', excludeWatched = false, seedVideoId } = data.query;
-      // 1–50 as documented; list sizes below are multiples of it (SCALABILITY-AUDIT AV-16)
+      const { limit: requested, cursor, strategy = 'popular', seedVideoId, language } = data.query;
       const limit = Math.min(50, Math.max(1, Math.trunc(requested) || 12));
       const userId = this.getUserId(c);
+      const scope = railScope({ language });
+      const now = Date.now();
 
-      // Initialize managers
-      const videoBucket = c.env.videos;
-      const indexManager = new IndexManager(videoBucket);
-      const videoRepo = new R2Repository<VideoObject>(videoBucket);
-
-      let recommendedVideos: VideoObject[] = [];
-      let basedOn: string | undefined;
-      let watchedVideoIds: Set<string> = new Set();
-
-      // Get user's watch history if excludeWatched is true and user is authenticated
-      // While watch history is paused it is not used for recommendations (#242)
-      if (excludeWatched && userId && !(await isWatchHistoryPaused(c.env.profiles, userId).catch(() => false))) {
-        try {
-          const watchHistoryBucket = c.env.watch_history;
-          if (watchHistoryBucket) {
-            const watchHistory = await getWatchHistory(watchHistoryBucket, userId);
-            watchedVideoIds = new Set(watchHistory);
-            logger.debug("Loaded watch history for recommendations", { userId, watchedCount: watchedVideoIds.size });
-          }
-        } catch (error) {
-          logger.warn("Failed to load watch history", { error, userId });
-        }
-      }
-
-      // Get seed video if provided
-      let seedVideo: VideoObject | null = null;
+      // Like one video: the related-videos ranking over the index (lib/recommendations.ts)
       if (seedVideoId) {
-        seedVideo = await videoRepo.getObject(seedVideoId);
-        if (seedVideo) {
-          basedOn = `Video: ${seedVideo.title || seedVideoId}`;
+        const pool = await loadCandidatePool(c.env as never, seedVideoId, []);
+        const offset = decodeRailCursor(cursor);
+        const ranked = rankRecommendations(pool.candidates, { seeds: pool.seeds, exclude: new Set([seedVideoId]), limit: offset + limit + 5, now });
+        const page = await hydrateRanked(c.env.videos, ranked.slice(offset), limit);
+        const named = await withChannelNames(c.env.channels, page.map((p) => p.video));
+        return c.json({
+          success: true,
+          data: page.map((p, i) => ({ ...feedItem(named[i] as never), recommendationScore: p.score })),
+          cursor: offset + limit < ranked.length && page.length === limit ? encodeRailCursor(offset + limit) : undefined,
+          metadata: { strategy, basedOn: `Video: ${seedVideoId}`, lastUpdated: new Date(now).toISOString(), personal: false },
+        });
+      }
+
+      // Signed in with history on: ordered for the viewer (never while their history is paused)
+      if (userId) {
+        const topIds = await railIds(c.env as never, 'top', scope, RAIL_LIMIT);
+        const order = await personalOrder(c.env as never, userId, topIds ?? [], now);
+        if (order) {
+          const offset = decodeRailCursor(cursor);
+          const slice = order.slice(offset, offset + limit + 5);
+          const page = await hydrateRanked(c.env.videos, slice.map((o) => ({ video: { id: o.id } as never, score: o.score })), limit);
+          const named = await withChannelNames(c.env.channels, page.map((p) => p.video));
+          const end = offset + limit;
+          return c.json({
+            success: true,
+            data: page.map((p, i) => ({ ...feedItem(named[i] as never), recommendationScore: p.score })),
+            cursor: end < order.length && page.length === limit ? encodeRailCursor(end) : undefined,
+            metadata: { strategy, basedOn: 'Your subscriptions and watch history', lastUpdated: new Date(now).toISOString(), personal: true },
+          });
         }
       }
 
-      switch (strategy) {
-        case 'category-based':
-          recommendedVideos = await getCategoryBasedRecommendations(
-            indexManager,
-            videoRepo,
-            seedVideo,
-            limit,
-            cursor,
-            watchedVideoIds
-          );
-          if (!basedOn && seedVideo?.category) {
-            basedOn = `Category: ${seedVideo.category}`;
-          }
-          break;
-
-        case 'random':
-          recommendedVideos = await getRandomRecommendations(
-            videoRepo,
-            limit,
-            cursor,
-            watchedVideoIds
-          );
-          basedOn = "Random selection";
-          break;
-
-        case 'popular':
-        default:
-          // Use popular videos as recommendations (MVP approach)
-          const popularIndex = await indexManager.getPopularVideosIndex('weekly');
-
-          if (popularIndex) {
-            // Use popular videos from index
-            let startIndex = 0;
-            if (cursor) {
-              try {
-                const decodedCursor = JSON.parse(atob(cursor));
-                startIndex = decodedCursor.offset || 0;
-              } catch (e) {
-                logger.debug("Invalid cursor provided", { cursor });
-              }
-            }
-
-            const endIndex = startIndex + limit;
-            const pageVideos = popularIndex.videos
-              .filter(v => !watchedVideoIds.has(v.videoId))
-              .slice(startIndex, endIndex);
-
-            // Fetch full video objects
-            recommendedVideos = await Promise.all(
-              pageVideos.map(async (indexVideo) => {
-                const video = await videoRepo.getObject(indexVideo.videoId);
-                if (video) {
-                  // Add recommendation score based on popularity
-                  (video as any).recommendationScore = calculateRecommendationScore(video, indexVideo.engagementRate);
-                }
-                return video;
-              })
-            ).then(results => results.filter(v => isVideoPubliclyVisible(v)) as VideoObject[]);
-
-            basedOn = "Weekly popular videos";
-          } else {
-            // Fallback to direct query
-            const listResult = await videoRepo.listObjects(limit * 2, cursor);
-            recommendedVideos = (listResult.items || [])
-              .filter(v => isVideoPubliclyVisible(v) && !watchedVideoIds.has(v.id))
-              .sort((a, b) => (b.views || 0) - (a.views || 0))
-              .slice(0, limit);
-
-            basedOn = "Popular videos";
-          }
-          break;
+      // Everyone else: the site's top list (quality, freshness, admin picks, viewer signal as it builds)
+      const ranked = await readRail(c, { rail: 'top', scope, limit, cursor });
+      if (ranked) {
+        return c.json({
+          success: true,
+          data: railItems(ranked, (entry) => ({ recommendationScore: entry.score })),
+          cursor: ranked.nextCursor,
+          metadata: { strategy, basedOn: 'Top on Al Ummah Now', lastUpdated: ranked.meta.computedAt, personal: false, rail: railLabelFields(ranked.meta) },
+        });
       }
-
-      // Add recommendation scores if not already present
-      recommendedVideos = recommendedVideos.map(video => {
-        if (!(video as any).recommendationScore) {
-          (video as any).recommendationScore = calculateRecommendationScore(video);
-        }
-        return video;
-      });
-
+      // Before the first ranking run: newest videos from the index
+      const pool = await loadCandidatePool(c.env as never, undefined, []);
+      const fallback = rankRecommendations(pool.candidates, { seeds: [], exclude: new Set(), limit: limit + 5, now });
+      const page = await hydrateRanked(c.env.videos, fallback, limit);
+      const named = await withChannelNames(c.env.channels, page.map((p) => p.video));
       return c.json({
         success: true,
-        data: recommendedVideos.map(transformVideoForResponse),
-        cursor: undefined, // Simple implementation for MVP
-        metadata: {
-          strategy,
-          basedOn,
-          lastUpdated: new Date().toISOString(),
-        },
+        data: page.map((p, i) => ({ ...feedItem(named[i] as never), recommendationScore: p.score })),
+        cursor: undefined,
+        metadata: { strategy, basedOn: 'Recent videos', lastUpdated: new Date(now).toISOString(), personal: false },
       });
     } catch (error) {
       return emptyShelf(c, "recommended", error);
     }
   }
-}
-
-/**
- * Get category-based recommendations
- */
-async function getCategoryBasedRecommendations(
-  indexManager: IndexManager,
-  videoRepo: R2Repository<VideoObject>,
-  seedVideo: VideoObject | null,
-  limit: number,
-  cursor: string | undefined,
-  excludeIds: Set<string>
-): Promise<VideoObject[]> {
-  // If we have a seed video with a category, use it
-  const category = seedVideo?.category;
-
-  if (category) {
-    // Try to get from category index
-    const categoryIndex = await indexManager.getCategoryVideosIndex(category);
-
-    if (categoryIndex) {
-      const filteredVideos = categoryIndex.videos.filter(v => !excludeIds.has(v.videoId));
-      const videos = await Promise.all(
-        filteredVideos.slice(0, limit).map(v => videoRepo.getObject(v.videoId))
-      );
-      return videos.filter(v => isVideoPubliclyVisible(v)) as VideoObject[];
-    }
-  }
-
-  // Fallback to popular videos
-  const popularIndex = await indexManager.getPopularVideosIndex('weekly');
-  if (popularIndex) {
-    const videos = await Promise.all(
-      popularIndex.videos
-        .filter(v => !excludeIds.has(v.videoId))
-        .slice(0, limit)
-        .map(v => videoRepo.getObject(v.videoId))
-    );
-    return videos.filter(v => isVideoPubliclyVisible(v)) as VideoObject[];
-  }
-
-  return [];
-}
-
-/**
- * Get random recommendations
- */
-async function getRandomRecommendations(
-  videoRepo: R2Repository<VideoObject>,
-  limit: number,
-  cursor: string | undefined,
-  excludeIds: Set<string>
-): Promise<VideoObject[]> {
-  // Fetch more videos than needed to account for filtering
-  const listResult = await videoRepo.listObjects(limit * 3, cursor);
-  const videos = (listResult.items || [])
-    .filter(v => isVideoPubliclyVisible(v) && !excludeIds.has(v.id));
-
-  // Shuffle array
-  for (let i = videos.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [videos[i], videos[j]] = [videos[j], videos[i]];
-  }
-
-  return videos.slice(0, limit);
-}
-
-/**
- * Get user's watch history
- */
-async function getWatchHistory(watchHistoryBucket: R2Bucket, userId: string): Promise<string[]> {
-  try {
-    // Watch history entries are stored one per video with key `<userId>:<videoId>`
-    const prefix = `${userId}:`;
-    const listing = await watchHistoryBucket.list({ prefix, limit: 1000 });
-    return listing.objects.map(object => object.key.slice(prefix.length)).filter(Boolean);
-  } catch (error) {
-    logger.error("Failed to get watch history", { error, userId });
-    return [];
-  }
-}
-
-/**
- * Calculate recommendation score
- */
-function calculateRecommendationScore(video: VideoObject, engagementRate?: number): number {
-  const views = video.views || 0;
-  const likes = video.likesCount || 0;
-  const comments = video.commentsCount || 0;
-
-  // Simple scoring for MVP
-  const viewScore = Math.min(100, views / 1000);
-  const engagementScore = engagementRate ? engagementRate * 100 : ((likes + comments) / Math.max(1, views)) * 100;
-  const recencyScore = getRecencyScore(video.dateCreated);
-
-  return Math.round((viewScore * 0.4) + (engagementScore * 0.4) + (recencyScore * 0.2));
-}
-
-/**
- * Get recency score based on video age
- */
-function getRecencyScore(dateCreated?: string): number {
-  if (!dateCreated) return 0;
-
-  const ageInDays = (Date.now() - new Date(dateCreated).getTime()) / (1000 * 60 * 60 * 24);
-
-  if (ageInDays < 1) return 100;
-  if (ageInDays < 7) return 80;
-  if (ageInDays < 30) return 60;
-  if (ageInDays < 90) return 40;
-  return 20;
-}
-
-/**
- * Transform video object for response
- */
-function transformVideoForResponse(video: VideoObject) {
-  return {
-    id: video.id,
-    title: video.title || '',
-    // Per-language title and description, as every other list (an Arabic page shows the Arabic title)
-    ...(video.titleLocalized ? { titleLocalized: video.titleLocalized } : {}),
-    description: video.description,
-    ...(video.descriptionLocalized ? { descriptionLocalized: video.descriptionLocalized } : {}),
-    thumbnailUrl: video.thumbnailUrl,
-    videoUrl: video.videoUrl,
-    channelId: video.channelId || '',
-    channelName: video.channelName,
-    channelNameLocalized: video.channelNameLocalized,
-    channelAvatarUrl: video.channelAvatarUrl,
-    dateCreated: video.dateCreated || new Date().toISOString(),
-    ...(video.publishedAt ? { publishedAt: video.publishedAt } : {}),
-    views: video.views || 0,
-    likesCount: video.likesCount || 0,
-    dislikesCount: PUBLIC_DISLIKES_COUNT,
-    // Shared rule (search payloads carry it; older entries are computed)
-    isShort: isShortOrFlag(video),
-    commentsCount: video.commentsCount || 0,
-    duration: video.duration,
-    category: video.category,
-    isPublic: video.isPublic !== false,
-    recommendationScore: (video as any).recommendationScore || 0,
-  };
 }

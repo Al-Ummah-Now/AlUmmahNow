@@ -1,4 +1,4 @@
-import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { publicVideoFields } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
@@ -11,7 +11,8 @@ import { processTrendingVideos, processTimeWindowTrendingVideos, processCategory
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
-import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems, readRail } from "../../lib/ranking/sectionResponse";
+import { railLabelFields, railScope } from "../../lib/ranking/serve";
 
 const TrendingMetadataSchema = z.object({
   rank: z.number(),
@@ -22,24 +23,8 @@ const TrendingMetadataSchema = z.object({
 });
 
 const TrendingVideoResponseSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  channelId: z.string(),
-  channelName: z.string().optional(),
-  channelAvatarUrl: z.string().optional(),
-  dateCreated: z.string(),
-  views: z.number(),
-  likesCount: z.number(),
-  dislikesCount: z.number(),
-  isShort: z.boolean().optional(),
-  commentsCount: z.number(),
-  duration: z.number().optional(),
-  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
-  isPublic: z.boolean().optional(),
-  trendingMetadata: TrendingMetadataSchema,
+  ...FeedVideoFields,
+  trendingMetadata: TrendingMetadataSchema.optional(),
 });
 
 const TrendingVideosResponseSchema = z.object({
@@ -51,6 +36,7 @@ const TrendingVideosResponseSchema = z.object({
     lastCalculated: z.string(),
     nextUpdate: z.string(),
     fromIndex: z.boolean(),
+    rail: RailInfoSchema.optional(),
   }),
 });
 
@@ -69,7 +55,9 @@ export class TrendingVideosSection extends PublicRoute {
           description: "Pagination cursor from previous response",
         }).optional(),
         algorithm: z.enum(['velocity', 'engagement', 'hybrid']).optional().default('hybrid').describe("Trending algorithm to use"),
-        timeWindow: z.enum(['6h', '12h', '24h', '48h']).optional().default('24h').describe("Time window for trending calculation"),
+        window: z.enum(['day', 'week', 'month']).optional().describe("Trending window (discovery ranking): today, this week or this month. Overrides timeWindow"),
+        timeWindow: z.enum(['6h', '12h', '24h', '48h']).optional().default('24h').describe("Older clients: any value means the day window"),
+        language: z.enum(['ar', 'en']).optional().describe("Viewer's language: its videos rank higher (others stay)"),
         category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category"),
         region: Str({
           description: "Geographic region for trending (future enhancement)",
@@ -114,7 +102,26 @@ export class TrendingVideosSection extends PublicRoute {
     // Validation stays outside the try: invalid input is a 400 from chanfana
     const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const { limit, cursor, algorithm = 'hybrid', timeWindow = '24h', category, region } = data.query;
+      const { limit, cursor, algorithm = 'hybrid', timeWindow = '24h', category, region, window, language } = data.query;
+
+      // Ranked rails (wiki E07 "Discovery ranking"): the whole library, keyset pages, relabelled when signal is thin
+      const ranked = await readRail(c, { rail: `trending:${window ?? 'day'}`, scope: railScope({ category, language }), limit, cursor });
+      if (ranked) {
+        return c.json({
+          success: true,
+          data: railItems(ranked, (entry) => ({
+            trendingMetadata: { rank: entry.position, score: entry.score, viewsVelocity: 0, percentageIncrease: 0, peakTime: undefined },
+          })),
+          cursor: ranked.nextCursor,
+          metadata: {
+            algorithmVersion: "2.0.0",
+            lastCalculated: ranked.meta.computedAt,
+            nextUpdate: new Date(Date.parse(ranked.meta.computedAt) + 60 * 60 * 1000).toISOString(),
+            fromIndex: true,
+            rail: railLabelFields(ranked.meta),
+          },
+        });
+      }
 
       // Parse time window to hours
       const timeWindowHours = parseTimeWindow(timeWindow);
@@ -310,26 +317,5 @@ function parseTimeWindow(timeWindow: string): number {
  * Transform trending video for response
  */
 function transformTrendingVideoForResponse(video: any) {
-  return {
-    id: video.id,
-    title: video.title || '',
-    description: video.description,
-    thumbnailUrl: video.thumbnailUrl,
-    videoUrl: video.videoUrl,
-    channelId: video.channelId || '',
-    channelName: video.channelName,
-    channelNameLocalized: video.channelNameLocalized,
-    channelAvatarUrl: video.channelAvatarUrl,
-    dateCreated: video.dateCreated || new Date().toISOString(),
-    views: video.views || 0,
-    likesCount: video.likesCount || 0,
-    dislikesCount: PUBLIC_DISLIKES_COUNT,
-    // Shared rule (search payloads carry it; older entries are computed)
-    isShort: isShortOrFlag(video),
-    commentsCount: video.commentsCount || 0,
-    duration: video.duration,
-    category: video.category,
-    isPublic: video.isPublic !== false,
-    trendingMetadata: video.trendingMetadata,
-  };
+  return { ...feedItem(video), trendingMetadata: video.trendingMetadata };
 }

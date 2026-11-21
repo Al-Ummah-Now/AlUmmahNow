@@ -68,6 +68,8 @@ import { handleCreateTierRequest, handleMyTier, handleMyTierRequests, handleUpgr
 import { handleAbandonCheckout, handlePaymentReceipt, handleBillingPlans, handleFakeCancel, handleMyCheckout, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
 import billingInternalRouter from "./routers/billing.router";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
+import { DISCOVERY_RANK_JOB, flagDiscoveryRankFailed, startDiscoveryRank } from "./lib/ranking/job";
+import { createDiscoveryInternalRouter } from "./endpoints/discovery/discoveryInternal";
 import { sweepEntitlements } from "./lib/billing/store";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
@@ -381,6 +383,7 @@ app.route('/internal/social', socialInternalRouter as never);
 app.route('/api/social', socialRouter as never);
 // R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
 app.route('/internal/media', createMediaInternalRouter() as never);
+app.route('/internal/discovery', createDiscoveryInternalRouter() as never);
 // Platform notification settings (admin-api proxies with the admin role + audit)
 app.route('/internal/notifications', createNotificationsInternalRouter() as never);
 // Pre-publication review: the processor's outcomes and admin-api's decisions (docs/specs/VIDEO-REVIEW.md)
@@ -746,6 +749,17 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepStalledUploads(withSearchSync(rawEnv, ctx) as never)
 				.catch((error) => logger.error('[Uploads] Stalled-upload sweep failed', { error: error instanceof Error ? error.message : String(error) })),
 		);
+		// Hourly: discovery ranking (lib/ranking/job.ts) as an admin job: retried with backoff, DLQ, and an
+		// Errors page item when it gives up. Skipped while one is queued or running, or ran under 50 min ago.
+		ctx.waitUntil(
+			startDiscoveryRank(rawEnv as never, 'system', { scheduled: true }).then(
+				(r) => (r.existing ? undefined : logger.info('[Discovery] Ranking run queued', { jobId: r.job?.id })),
+				(error) => {
+					logger.error('[Discovery] Ranking run not queued', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'discovery-rank-schedule', error);
+				},
+			),
+		);
 		// Hourly: Move from YouTube upkeep: stale consents, settled imports closed, idle ones ended,
 		// old snapshots emptied (lib/youtube-import/sweep.ts)
 		ctx.waitUntil(
@@ -915,7 +929,11 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
 			const jobEnv = withSearchSync(env, ctx) as never;
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, jobEnv, ADMIN_JOB_HANDLERS, (job, error) =>
-				job.kind.startsWith('billing.') ? onBillingJobFailed(jobEnv, job, error) : Promise.resolve(),
+				job.kind.startsWith('billing.')
+					? onBillingJobFailed(jobEnv, job, error)
+					: job.kind === DISCOVERY_RANK_JOB
+						? Promise.resolve(flagDiscoveryRankFailed(jobEnv, job, error))
+						: Promise.resolve(),
 			);
 			return;
 		}

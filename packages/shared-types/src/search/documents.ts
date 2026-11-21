@@ -53,6 +53,10 @@ export interface SearchVideoPayload {
   channelNameLocalized?: Record<string, string>;
   channelAvatarUrl?: string;
   dateCreated?: string;
+  /** When the video arrived on the platform (its record's dateCreated); `dateCreated` above is its original publish date when it has one (imports). Discovery ranking's freshness. */
+  addedAt?: string;
+  /** Has captions/subtitles (discovery ranking's completeness) */
+  hasCaptions?: boolean;
   /** R2 key of the public MP4 (`pub/<id>/<rev>/video.mp4`, media-delivery publicMp4Path) for the video sitemap's content_loc */
   mp4Path?: string;
 }
@@ -292,6 +296,8 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       channelName: str(obj.channelName) ?? str(obj.channel),
       channelAvatarUrl: str(obj.channelAvatarUrl),
       dateCreated: str(obj.publishedAt) ?? str(obj.dateCreated),
+      addedAt: str(obj.dateCreated) ?? str(obj.createdAt),
+      hasCaptions: obj.hasSubtitles === true || (Array.isArray(obj.subtitleLanguages) && obj.subtitleLanguages.length > 0) || (Array.isArray(obj.subtitles) && obj.subtitles.length > 0),
       mp4Path: publicMp4Path(obj) ?? undefined,
     },
   };

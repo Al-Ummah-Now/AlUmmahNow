@@ -1,4 +1,4 @@
-import { isShortOrFlag, CATEGORY_SLUG_PATTERN, findVideoCategory } from "@al-ummah/shared-types";
+import { CATEGORY_SLUG_PATTERN, findVideoCategory } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "../../lib/chanfana-params";
@@ -9,26 +9,11 @@ import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
-import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { FeedVideoFields, RailInfoSchema, feedItem, railItems, readRail } from "../../lib/ranking/sectionResponse";
+import { railLabelFields, railScope } from "../../lib/ranking/serve";
 
 const VideoResponseSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  channelId: z.string(),
-  channelName: z.string().optional(),
-  channelAvatarUrl: z.string().optional(),
-  dateCreated: z.string(),
-  views: z.number(),
-  likesCount: z.number(),
-  dislikesCount: z.number(),
-  isShort: z.boolean().optional(),
-  commentsCount: z.number(),
-  duration: z.number().optional(),
-  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
-  isPublic: z.boolean().optional(),
+  ...FeedVideoFields,
 });
 
 const CategoryVideosResponseSchema = z.object({
@@ -39,8 +24,9 @@ const CategoryVideosResponseSchema = z.object({
     category: z.string().regex(CATEGORY_SLUG_PATTERN),
     totalCount: z.number().optional(),
     lastUpdated: z.string(),
-    sortBy: z.enum(['recent', 'popular', 'trending']),
+    sortBy: z.enum(['top', 'recent', 'popular', 'trending']),
     fromIndex: z.boolean(),
+    rail: RailInfoSchema.optional(),
   }),
 });
 
@@ -61,7 +47,7 @@ export class CategoryVideosSection extends PublicRoute {
         cursor: Str({
           description: "Pagination cursor from previous response",
         }).optional(),
-        sort: z.enum(['recent', 'popular', 'trending']).optional().default('recent').describe("Sort order for videos"),
+        sort: z.enum(['top', 'recent', 'popular', 'trending']).optional().default('top').describe("Sort order: top (discovery ranking: quality, freshness, admin picks, and viewer signal as it builds), recent (new arrivals), popular, trending (this week)"),
         subCategory: Str({
           description: "Sub-category for more granular filtering (future enhancement)",
         }).optional(),
@@ -117,7 +103,7 @@ export class CategoryVideosSection extends PublicRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     try {
       const { category } = data.params;
-      const { limit, cursor, sort = 'recent', subCategory } = data.query;
+      const { limit, cursor, sort = 'top', subCategory } = data.query;
 
       // A category of the admin-managed list (retired ones keep their pages)
       if (!findVideoCategory(category)) {
@@ -130,13 +116,27 @@ export class CategoryVideosSection extends PublicRoute {
         );
       }
 
+      // Ranked rails (wiki E07 "Discovery ranking"): the category's top, new and this week's trending lists
+      const rail = sort === 'recent' ? 'new' : sort === 'trending' ? 'trending:week' : 'top';
+      const ranked = await readRail(c, { rail, scope: railScope({ category }), limit, cursor });
+      if (ranked) {
+        return c.json({
+          success: true,
+          data: railItems(ranked),
+          cursor: ranked.nextCursor,
+          metadata: { category, totalCount: ranked.meta.items, lastUpdated: ranked.meta.computedAt, sortBy: sort, fromIndex: true, rail: railLabelFields(ranked.meta) },
+        });
+      }
+      // Before the first ranking run: the old index query ('top' reads as popular there)
+      const indexSort = sort === 'top' ? 'popular' : sort;
+
       // Initialize managers
       const videoBucket = c.env.videos;
       const indexManager = new IndexManager(videoBucket);
       const videoRepo = new R2Repository<VideoObject>(videoBucket);
 
       // From the D1 search index when it is bound (SCALABILITY-AUDIT AV-15)
-      const page = await sectionFromIndex(c.env, { sort, limit, offset: decodeOffset(cursor), category });
+      const page = await sectionFromIndex(c.env, { sort: indexSort, limit, offset: decodeOffset(cursor), category });
       if (page) {
         return c.json({
           success: true,
@@ -320,25 +320,5 @@ function calculateFullTrendingScore(video: VideoObject): number {
  * Transform video object for response
  */
 function transformVideoForResponse(video: VideoObject) {
-  return {
-    id: video.id,
-    title: video.title || '',
-    description: video.description,
-    thumbnailUrl: video.thumbnailUrl,
-    videoUrl: video.videoUrl,
-    channelId: video.channelId || '',
-    channelName: video.channelName,
-    channelNameLocalized: video.channelNameLocalized,
-    channelAvatarUrl: video.channelAvatarUrl,
-    dateCreated: video.dateCreated || new Date().toISOString(),
-    views: video.views || 0,
-    likesCount: video.likesCount || 0,
-    dislikesCount: PUBLIC_DISLIKES_COUNT,
-    // Shared rule (search payloads carry it; older entries are computed)
-    isShort: isShortOrFlag(video),
-    commentsCount: video.commentsCount || 0,
-    duration: video.duration,
-    category: video.category,
-    isPublic: video.isPublic !== false,
-  };
+  return feedItem(video as never);
 }

@@ -17819,6 +17819,270 @@
         }
       }
     },
+    "/api/v1/discovery/home": {
+      "get": {
+        "tags": [
+          "Video Sections"
+        ],
+        "summary": "Home rails",
+        "description": "🔓 Public. The home page rails in the order set in the videos admin, each the first page of its ranked list (wiki E07 Discovery ranking). Rails never repeat a video or a heading, and thin rails are left out. `info.label` is the heading to show (with no viewer signal Trending reads new_this_week, Popular reads featured).",
+        "operationId": "get_DiscoveryHome",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "description": "Viewer's language: its videos rank higher (others stay)"
+            },
+            "required": false,
+            "description": "Viewer's language: its videos rank higher (others stay)",
+            "name": "language",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "description": "Videos per rail (4-24)"
+            },
+            "required": false,
+            "description": "Videos per rail (4-24)",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Alias of language"
+            },
+            "required": false,
+            "description": "Alias of language",
+            "name": "lang",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Home rails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "rails": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "enum": [
+                                  "featured",
+                                  "trending",
+                                  "new",
+                                  "popular",
+                                  "categories"
+                                ],
+                                "description": "The home rail (admin order)"
+                              },
+                              "rail": {
+                                "type": "string",
+                                "description": "The ranked list behind it, for \"See all\": /api/videos/sections/* or /api/trending"
+                              },
+                              "category": {
+                                "type": "string"
+                              },
+                              "info": {
+                                "type": "object",
+                                "properties": {
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "trending",
+                                      "popular",
+                                      "new",
+                                      "featured",
+                                      "top"
+                                    ],
+                                    "description": "What the list is ordered by right now"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "enum": [
+                                      "trending_today",
+                                      "trending_this_week",
+                                      "trending_this_month",
+                                      "popular",
+                                      "new_today",
+                                      "new_this_week",
+                                      "new_this_month",
+                                      "latest",
+                                      "featured",
+                                      "top"
+                                    ],
+                                    "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                                  },
+                                  "signalItems": {
+                                    "type": "number",
+                                    "description": "Videos in the list with enough qualified viewers to count"
+                                  },
+                                  "computedAt": {
+                                    "type": "string",
+                                    "description": "When the ranking last ran"
+                                  }
+                                },
+                                "required": [
+                                  "mode",
+                                  "label",
+                                  "signalItems",
+                                  "computedAt"
+                                ],
+                                "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
+                              },
+                              "data": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "titleLocalized": {
+                                      "type": "object",
+                                      "additionalProperties": {
+                                        "type": "string"
+                                      },
+                                      "description": "Title per language (en, ar); a language without one shows `title`"
+                                    },
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "descriptionLocalized": {
+                                      "type": "object",
+                                      "additionalProperties": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "thumbnailUrl": {
+                                      "type": "string"
+                                    },
+                                    "videoUrl": {
+                                      "type": "string"
+                                    },
+                                    "playUrl": {
+                                      "type": "string"
+                                    },
+                                    "channelId": {
+                                      "type": "string"
+                                    },
+                                    "channelName": {
+                                      "type": "string"
+                                    },
+                                    "channelNameLocalized": {
+                                      "type": "object",
+                                      "additionalProperties": {
+                                        "type": "string"
+                                      },
+                                      "description": "The channel's name per language"
+                                    },
+                                    "channelAvatarUrl": {
+                                      "type": "string"
+                                    },
+                                    "dateCreated": {
+                                      "type": "string"
+                                    },
+                                    "publishedAt": {
+                                      "type": "string",
+                                      "description": "Original publish date (imports keep theirs)"
+                                    },
+                                    "views": {
+                                      "type": "number"
+                                    },
+                                    "likesCount": {
+                                      "type": "number"
+                                    },
+                                    "dislikesCount": {
+                                      "type": "number"
+                                    },
+                                    "isShort": {
+                                      "type": "boolean"
+                                    },
+                                    "commentsCount": {
+                                      "type": "number"
+                                    },
+                                    "duration": {
+                                      "type": "number"
+                                    },
+                                    "category": {
+                                      "type": "string",
+                                      "pattern": "^[a-z][a-z0-9_]{1,39}$"
+                                    },
+                                    "isPublic": {
+                                      "type": "boolean"
+                                    },
+                                    "uploadStatus": {
+                                      "type": "string",
+                                      "description": "Always \"ready\": feeds list only finished, public, released videos"
+                                    },
+                                    "width": {
+                                      "type": "number"
+                                    },
+                                    "height": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "title",
+                                    "channelId",
+                                    "dateCreated",
+                                    "views",
+                                    "likesCount",
+                                    "dislikesCount",
+                                    "commentsCount"
+                                  ]
+                                }
+                              },
+                              "cursor": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "rail",
+                              "info",
+                              "data"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "rails"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/explore": {
       "get": {
         "tags": [
@@ -31615,7 +31879,7 @@
           "Search"
         ],
         "summary": "Trending videos",
-        "description": "🔓 Public. Ranks public videos by engagement inside the period (likes and comments weighted by how recent they are) plus view velocity for videos published within the period.",
+        "description": "🔓 Public. Discovery ranking (wiki E07): the period's trending list over the whole library, from unique qualified viewers, likes and comments blended into a quality and freshness prior. While too few videos have real signal the list is the newest arrivals instead and `rail.label` says so (new_today, new_this_week, new_this_month, latest).",
         "operationId": "get_TrendingGet",
         "parameters": [
           {
@@ -31627,9 +31891,11 @@
                 "week",
                 "month"
               ],
-              "default": "day"
+              "default": "day",
+              "description": "hour is served as day"
             },
             "required": false,
+            "description": "hour is served as day",
             "name": "period",
             "in": "query"
           },
@@ -31647,10 +31913,10 @@
             "schema": {
               "type": "string",
               "pattern": "^[a-z]{2,3}$",
-              "description": "Optional content language filter (e.g. en, ar)"
+              "description": "Viewer's language (en, ar): its videos rank higher, others stay"
             },
             "required": false,
-            "description": "Optional content language filter (e.g. en, ar)",
+            "description": "Viewer's language (en, ar): its videos rank higher, others stay",
             "name": "language",
             "in": "query"
           },
@@ -31663,11 +31929,21 @@
             "description": "Maximum videos (1-50)",
             "name": "limit",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Cursor from the previous page"
+            },
+            "required": false,
+            "description": "Cursor from the previous page",
+            "name": "cursor",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Trending videos (empty when nothing had activity in the period)",
+            "description": "Trending videos",
             "content": {
               "application/json": {
                 "schema": {
@@ -31680,6 +31956,9 @@
                       "type": "string"
                     },
                     "category": {
+                      "type": "string"
+                    },
+                    "language": {
                       "type": "string"
                     },
                     "data": {
@@ -31698,7 +31977,25 @@
                             "additionalProperties": {
                               "type": "string"
                             },
-                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "thumbnailUrl": {
+                            "type": "string"
+                          },
+                          "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
+                            "type": "string"
                           },
                           "channelId": {
                             "type": "string"
@@ -31706,29 +32003,88 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
+                          "channelAvatarUrl": {
+                            "type": "string"
+                          },
+                          "dateCreated": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
+                          },
                           "views": {
                             "type": "number"
                           },
                           "likesCount": {
                             "type": "number"
                           },
+                          "dislikesCount": {
+                            "type": "number"
+                          },
+                          "isShort": {
+                            "type": "boolean"
+                          },
                           "commentsCount": {
                             "type": "number"
                           },
-                          "seriesNext": {
-                            "type": "boolean",
-                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
+                          "duration": {
+                            "type": "number"
+                          },
+                          "category": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
+                          },
+                          "isPublic": {
+                            "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          },
+                          "trendingMetadata": {
+                            "type": "object",
+                            "properties": {
+                              "rank": {
+                                "type": "number"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "viewsVelocity": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "rank",
+                              "score",
+                              "viewsVelocity"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "title",
                           "channelId",
+                          "dateCreated",
                           "views",
                           "likesCount",
+                          "dislikesCount",
                           "commentsCount"
-                        ],
-                        "additionalProperties": {}
+                        ]
                       }
                     },
                     "videos": {
@@ -31747,7 +32103,25 @@
                             "additionalProperties": {
                               "type": "string"
                             },
-                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "thumbnailUrl": {
+                            "type": "string"
+                          },
+                          "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
+                            "type": "string"
                           },
                           "channelId": {
                             "type": "string"
@@ -31755,30 +32129,139 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
+                          "channelAvatarUrl": {
+                            "type": "string"
+                          },
+                          "dateCreated": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
+                          },
                           "views": {
                             "type": "number"
                           },
                           "likesCount": {
                             "type": "number"
                           },
+                          "dislikesCount": {
+                            "type": "number"
+                          },
+                          "isShort": {
+                            "type": "boolean"
+                          },
                           "commentsCount": {
                             "type": "number"
                           },
-                          "seriesNext": {
-                            "type": "boolean",
-                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
+                          "duration": {
+                            "type": "number"
+                          },
+                          "category": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
+                          },
+                          "isPublic": {
+                            "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          },
+                          "trendingMetadata": {
+                            "type": "object",
+                            "properties": {
+                              "rank": {
+                                "type": "number"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "viewsVelocity": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "rank",
+                              "score",
+                              "viewsVelocity"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "title",
                           "channelId",
+                          "dateCreated",
                           "views",
                           "likesCount",
+                          "dislikesCount",
                           "commentsCount"
-                        ],
-                        "additionalProperties": {}
+                        ]
                       }
+                    },
+                    "cursor": {
+                      "type": "string"
+                    },
+                    "rail": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "trending",
+                            "popular",
+                            "new",
+                            "featured",
+                            "top"
+                          ],
+                          "description": "What the list is ordered by right now"
+                        },
+                        "label": {
+                          "type": "string",
+                          "enum": [
+                            "trending_today",
+                            "trending_this_week",
+                            "trending_this_month",
+                            "popular",
+                            "new_today",
+                            "new_this_week",
+                            "new_this_month",
+                            "latest",
+                            "featured",
+                            "top"
+                          ],
+                          "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                        },
+                        "signalItems": {
+                          "type": "number",
+                          "description": "Videos in the list with enough qualified viewers to count"
+                        },
+                        "computedAt": {
+                          "type": "string",
+                          "description": "When the ranking last ran"
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "label",
+                        "signalItems",
+                        "computedAt"
+                      ],
+                      "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                     }
                   },
                   "required": [
@@ -37424,15 +37907,16 @@
             "schema": {
               "type": "string",
               "enum": [
+                "top",
                 "recent",
                 "popular",
                 "trending"
               ],
-              "default": "recent",
-              "description": "Sort order for videos"
+              "default": "top",
+              "description": "Sort order: top (discovery ranking: quality, freshness, admin picks, and viewer signal as it builds), recent (new arrivals), popular, trending (this week)"
             },
             "required": false,
-            "description": "Sort order for videos",
+            "description": "Sort order: top (discovery ranking: quality, freshness, admin picks, and viewer signal as it builds), recent (new arrivals), popular, trending (this week)",
             "name": "sort",
             "in": "query"
           },
@@ -37469,13 +37953,29 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "thumbnailUrl": {
                             "type": "string"
                           },
                           "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
                             "type": "string"
                           },
                           "channelId": {
@@ -37484,11 +37984,22 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
                           "dateCreated": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
                           },
                           "views": {
                             "type": "number"
@@ -37514,6 +38025,16 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -37547,6 +38068,7 @@
                         "sortBy": {
                           "type": "string",
                           "enum": [
+                            "top",
                             "recent",
                             "popular",
                             "trending"
@@ -37554,6 +38076,53 @@
                         },
                         "fromIndex": {
                           "type": "boolean"
+                        },
+                        "rail": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "trending",
+                                "popular",
+                                "new",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "What the list is ordered by right now"
+                            },
+                            "label": {
+                              "type": "string",
+                              "enum": [
+                                "trending_today",
+                                "trending_this_week",
+                                "trending_this_month",
+                                "popular",
+                                "new_today",
+                                "new_this_week",
+                                "new_this_month",
+                                "latest",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                            },
+                            "signalItems": {
+                              "type": "number",
+                              "description": "Videos in the list with enough qualified viewers to count"
+                            },
+                            "computedAt": {
+                              "type": "string",
+                              "description": "When the ranking last ran"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "label",
+                            "signalItems",
+                            "computedAt"
+                          ],
+                          "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                         }
                       },
                       "required": [
@@ -37701,6 +38270,20 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "description": "Viewer's language: its videos rank higher (others stay)"
+            },
+            "required": false,
+            "description": "Viewer's language: its videos rank higher (others stay)",
+            "name": "language",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "number",
               "description": "Minimum view count threshold"
             },
@@ -37732,13 +38315,29 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "thumbnailUrl": {
                             "type": "string"
                           },
                           "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
                             "type": "string"
                           },
                           "channelId": {
@@ -37747,11 +38346,22 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
                           "dateCreated": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
                           },
                           "views": {
                             "type": "number"
@@ -37777,6 +38387,16 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
                           },
                           "engagementRate": {
                             "type": "number"
@@ -37817,6 +38437,53 @@
                         },
                         "fromIndex": {
                           "type": "boolean"
+                        },
+                        "rail": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "trending",
+                                "popular",
+                                "new",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "What the list is ordered by right now"
+                            },
+                            "label": {
+                              "type": "string",
+                              "enum": [
+                                "trending_today",
+                                "trending_this_week",
+                                "trending_this_month",
+                                "popular",
+                                "new_today",
+                                "new_this_week",
+                                "new_this_month",
+                                "latest",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                            },
+                            "signalItems": {
+                              "type": "number",
+                              "description": "Videos in the list with enough qualified viewers to count"
+                            },
+                            "computedAt": {
+                              "type": "string",
+                              "description": "When the ranking last ran"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "label",
+                            "signalItems",
+                            "computedAt"
+                          ],
+                          "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                         }
                       },
                       "required": [
@@ -37968,13 +38635,29 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "thumbnailUrl": {
                             "type": "string"
                           },
                           "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
                             "type": "string"
                           },
                           "channelId": {
@@ -37983,11 +38666,22 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
                           "dateCreated": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
                           },
                           "views": {
                             "type": "number"
@@ -38013,6 +38707,16 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
                           }
                         },
                         "required": [
@@ -38041,6 +38745,53 @@
                         },
                         "fromIndex": {
                           "type": "boolean"
+                        },
+                        "rail": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "trending",
+                                "popular",
+                                "new",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "What the list is ordered by right now"
+                            },
+                            "label": {
+                              "type": "string",
+                              "enum": [
+                                "trending_today",
+                                "trending_this_week",
+                                "trending_this_month",
+                                "popular",
+                                "new_today",
+                                "new_this_week",
+                                "new_this_month",
+                                "latest",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                            },
+                            "signalItems": {
+                              "type": "number",
+                              "description": "Videos in the list with enough qualified viewers to count"
+                            },
+                            "computedAt": {
+                              "type": "string",
+                              "description": "When the ranking last ran"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "label",
+                            "signalItems",
+                            "computedAt"
+                          ],
+                          "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                         }
                       },
                       "required": [
@@ -38111,7 +38862,7 @@
           "Video Sections"
         ],
         "summary": "Get Recommended Videos",
-        "description": "Get recommended videos. MVP implementation uses popular videos or category-based recommendations.",
+        "description": "Recommended videos (wiki E07 Discovery ranking). Signed in with watch history on: ordered for the viewer from their subscriptions and recent history, without videos already watched. Otherwise (signed out, or history paused): the site's top list. With seedVideoId: videos like that one.",
         "operationId": "get_RecommendedVideosSection",
         "parameters": [
           {
@@ -38143,20 +38894,34 @@
                 "random"
               ],
               "default": "popular",
-              "description": "Recommendation strategy"
+              "description": "Accepted for older clients; the order is the discovery ranking"
             },
             "required": false,
-            "description": "Recommendation strategy",
+            "description": "Accepted for older clients; the order is the discovery ranking",
             "name": "strategy",
             "in": "query"
           },
           {
             "schema": {
-              "type": "boolean",
-              "description": "Exclude user's watch history (requires auth)"
+              "type": "string",
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "description": "Viewer's language: its videos rank higher (others stay)"
             },
             "required": false,
-            "description": "Exclude user's watch history (requires auth)",
+            "description": "Viewer's language: its videos rank higher (others stay)",
+            "name": "language",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "description": "Accepted for older clients: a personal list always leaves watched videos out"
+            },
+            "required": false,
+            "description": "Accepted for older clients: a personal list always leaves watched videos out",
             "name": "excludeWatched",
             "in": "query"
           },
@@ -38193,20 +38958,29 @@
                           "title": {
                             "type": "string"
                           },
-                          "description": {
-                            "type": "string"
-                          },
                           "titleLocalized": {
                             "type": "object",
                             "additionalProperties": {
                               "type": "string"
                             },
-                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "thumbnailUrl": {
                             "type": "string"
                           },
                           "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
                             "type": "string"
                           },
                           "channelId": {
@@ -38215,11 +38989,22 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
                           "dateCreated": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
                           },
                           "views": {
                             "type": "number"
@@ -38245,6 +39030,16 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
                           },
                           "recommendationScore": {
                             "type": "number"
@@ -38281,6 +39076,57 @@
                         },
                         "lastUpdated": {
                           "type": "string"
+                        },
+                        "personal": {
+                          "type": "boolean",
+                          "description": "True when ordered for this viewer (subscriptions and watch history; never while history is paused)"
+                        },
+                        "rail": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "trending",
+                                "popular",
+                                "new",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "What the list is ordered by right now"
+                            },
+                            "label": {
+                              "type": "string",
+                              "enum": [
+                                "trending_today",
+                                "trending_this_week",
+                                "trending_this_month",
+                                "popular",
+                                "new_today",
+                                "new_this_week",
+                                "new_this_month",
+                                "latest",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                            },
+                            "signalItems": {
+                              "type": "number",
+                              "description": "Videos in the list with enough qualified viewers to count"
+                            },
+                            "computedAt": {
+                              "type": "string",
+                              "description": "When the ranking last ran"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "label",
+                            "signalItems",
+                            "computedAt"
+                          ],
+                          "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                         }
                       },
                       "required": [
@@ -38394,17 +39240,46 @@
             "schema": {
               "type": "string",
               "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "description": "Trending window (discovery ranking): today, this week or this month. Overrides timeWindow"
+            },
+            "required": false,
+            "description": "Trending window (discovery ranking): today, this week or this month. Overrides timeWindow",
+            "name": "window",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "6h",
                 "12h",
                 "24h",
                 "48h"
               ],
               "default": "24h",
-              "description": "Time window for trending calculation"
+              "description": "Older clients: any value means the day window"
             },
             "required": false,
-            "description": "Time window for trending calculation",
+            "description": "Older clients: any value means the day window",
             "name": "timeWindow",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "description": "Viewer's language: its videos rank higher (others stay)"
+            },
+            "required": false,
+            "description": "Viewer's language: its videos rank higher (others stay)",
+            "name": "language",
             "in": "query"
           },
           {
@@ -38451,13 +39326,29 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (en, ar); a language without one shows `title`"
+                          },
                           "description": {
                             "type": "string"
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "thumbnailUrl": {
                             "type": "string"
                           },
                           "videoUrl": {
+                            "type": "string"
+                          },
+                          "playUrl": {
                             "type": "string"
                           },
                           "channelId": {
@@ -38466,11 +39357,22 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
                           "dateCreated": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string",
+                            "description": "Original publish date (imports keep theirs)"
                           },
                           "views": {
                             "type": "number"
@@ -38496,6 +39398,16 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "description": "Always \"ready\": feeds list only finished, public, released videos"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
                           },
                           "trendingMetadata": {
                             "type": "object",
@@ -38532,8 +39444,7 @@
                           "views",
                           "likesCount",
                           "dislikesCount",
-                          "commentsCount",
-                          "trendingMetadata"
+                          "commentsCount"
                         ]
                       }
                     },
@@ -38554,6 +39465,53 @@
                         },
                         "fromIndex": {
                           "type": "boolean"
+                        },
+                        "rail": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "trending",
+                                "popular",
+                                "new",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "What the list is ordered by right now"
+                            },
+                            "label": {
+                              "type": "string",
+                              "enum": [
+                                "trending_today",
+                                "trending_this_week",
+                                "trending_this_month",
+                                "popular",
+                                "new_today",
+                                "new_this_week",
+                                "new_this_month",
+                                "latest",
+                                "featured",
+                                "top"
+                              ],
+                              "description": "Heading to show: with too little viewer signal Trending becomes new_today / new_this_week / new_this_month / latest and Popular becomes featured"
+                            },
+                            "signalItems": {
+                              "type": "number",
+                              "description": "Videos in the list with enough qualified viewers to count"
+                            },
+                            "computedAt": {
+                              "type": "string",
+                              "description": "When the ranking last ran"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "label",
+                            "signalItems",
+                            "computedAt"
+                          ],
+                          "description": "Discovery ranking (wiki E07): present when the list comes from the ranked rails"
                         }
                       },
                       "required": [
