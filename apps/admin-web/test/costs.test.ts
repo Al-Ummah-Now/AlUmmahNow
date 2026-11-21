@@ -66,6 +66,15 @@ describe('costs model: data age and token notice', () => {
     assert.equal(tokenNotice({ tokenSource: 'release' }, set), null);
     assert.equal(tokenNotice({ tokenSource: 'admin' }, set), null);
   });
+
+  it('says the token is refused (no Account Analytics Read) before the quieter notes', () => {
+    const refused = { state: 'refused' as const, at: '2026-11-21T10:05:00Z', via: 'run' as const };
+    assert.equal(tokenNotice({ tokenSource: 'release', analytics: refused }, [{ provider: 'cloudflare', set: false }]), 'refused');
+    assert.equal(tokenNotice({ tokenSource: 'admin', analytics: { ...refused, via: 'test' } }, [{ provider: 'cloudflare', set: true }]), 'refused');
+    // No token at all is still "missing"; an ok or unknown read changes nothing
+    assert.equal(tokenNotice({ tokenSource: 'none', analytics: refused }, []), 'missing');
+    assert.equal(tokenNotice({ tokenSource: 'release', analytics: { state: 'ok', at: null, via: 'run' } }, []), 'release');
+  });
 });
 
 describe('costs model: alerts, connections, deltas', () => {
@@ -366,6 +375,23 @@ describe('costs sections render', () => {
     const set = freshDashboard({ collector: { tokenSource: 'admin', at: null, lastJobFailures: [] } });
     set.connections[0] = { ...set.connections[0], set: true };
     assert.equal(render(React.createElement(sections.TokenNotice as React.FC, { d: set, t } as never)), '');
+  });
+
+  it('a refused token names the permission, says the Cloudflare figures are missing, and offers Check again', () => {
+    const t = createTranslator('en');
+    const f = opsFormats('en');
+    const analytics = { state: 'refused' as const, at: '2026-11-21T10:05:00Z', via: 'run' as const };
+    const d = freshDashboard({ collector: { tokenSource: 'release', at: null, lastJobFailures: [], analytics } });
+    const check = React.createElement('button', { 'data-testid': 'costs-token-check' }, 'Check again');
+    const html = render(React.createElement(sections.TokenNotice as React.FC, { d, t, f, check } as never));
+    assert.match(html, /data-kind="refused"/);
+    assert.ok(html.includes('Account Analytics Read'));
+    assert.ok(html.includes('missing, not zero'));
+    assert.ok(html.includes('costs-token-check'));
+    assert.ok(html.includes('#connections'));
+    const ar = render(React.createElement(sections.TokenNotice as React.FC, { d: { ...d, canManage: false }, t: createTranslator('ar'), f: opsFormats('ar'), check } as never));
+    assert.ok(ar.includes('Account Analytics Read'));
+    assert.ok(!ar.includes('costs-token-check'));
   });
 
   it('turns open alerts into readable lines', () => {

@@ -67,10 +67,19 @@ export interface CostAlertRow {
 
 export type CostTokenSource = 'admin' | 'release' | 'none' | 'unknown';
 
+/** Whether Cloudflare lets the collector read Account Analytics (admin-api lib/costs.ts collectorState). */
+export interface CostCollectorAnalytics {
+  state: 'ok' | 'refused' | 'unknown';
+  at: string | null;
+  via: 'run' | 'test' | null;
+}
+
 export interface CostCollectorState {
   tokenSource: CostTokenSource;
   at: string | null;
   lastJobFailures: { job: string; at: string; detail: string | null }[];
+  /** Missing from an admin-api older than COST-GAPS: read as unknown. */
+  analytics?: CostCollectorAnalytics;
 }
 
 export interface CostSubscription {

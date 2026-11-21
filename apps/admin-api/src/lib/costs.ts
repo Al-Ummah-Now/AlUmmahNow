@@ -63,6 +63,8 @@ export interface CostsEnv {
   INTERNAL_API_KEY?: SecretBinding;
   COST_CREDENTIALS_KEY?: SecretBinding;
   CLOUDFLARE_ACCOUNT_ID?: string;
+  /** cost-monitor's job queue: "Check again" queues an hourly collection */
+  COST_JOBS_QUEUE?: { send(body: unknown, opts?: { contentType?: string }): Promise<void> };
 }
 
 async function secret(binding: SecretBinding): Promise<string> {
@@ -421,10 +423,42 @@ export function topMovers(resourceDays: ResourceDay[], products: ProductLine[], 
   };
 }
 
+/**
+ * Whether Cloudflare lets the collector read Account Analytics: 'refused' when the latest hourly
+ * run failed (or came back partial) with an authentication or permission answer, or the admin
+ * token's own test said it cannot read analytics. The Costs page then names the missing
+ * permission instead of letting the zeros pass for real figures.
+ */
+export interface CollectorAnalytics {
+  state: 'ok' | 'refused' | 'unknown';
+  /** When that was seen (the run's or the test's time). */
+  at: string | null;
+  /** 'run': the hourly collection was refused; 'test': the admin token's test was. */
+  via: 'run' | 'test' | null;
+}
+
 export interface CollectorState {
   tokenSource: 'admin' | 'release' | 'none' | 'unknown';
   at: string | null;
   lastJobFailures: { job: string; at: string; detail: string | null }[];
+  analytics: CollectorAnalytics;
+}
+
+/** Cloudflare's answers to a token without the permission: HTTP 401/403, code 10000, "not authorized". */
+const REFUSED = /HTTP 40[13]\b|\b10000\b|authenticat|not authori[sz]ed|unauthori[sz]ed|permission|forbidden/i;
+
+/** A finished hourly run (collector_runs) → refused, ok, or nothing to say. */
+export function analyticsFromRun(run: { status: string; detail: string | null; finished_at: string | null } | null): CollectorAnalytics {
+  if (!run) return { state: 'unknown', at: null, via: null };
+  let detail: { error?: unknown; errors?: unknown } = {};
+  try {
+    detail = run.detail ? JSON.parse(run.detail) : {};
+  } catch {
+    detail = {};
+  }
+  const said = [detail.error, ...(Array.isArray(detail.errors) ? detail.errors : [])].filter((x) => typeof x === 'string').join(' ');
+  if ((run.status === 'failed' || run.status === 'partial') && REFUSED.test(said)) return { state: 'refused', at: run.finished_at, via: 'run' };
+  return { state: run.status === 'ok' ? 'ok' : 'unknown', at: run.finished_at, via: run.status === 'ok' ? 'run' : null };
 }
 
 export async function collectorState(env: CostsEnv): Promise<CollectorState> {
@@ -441,7 +475,41 @@ export async function collectorState(env: CostsEnv): Promise<CollectorState> {
     .bind(new Date(Date.now() - 2 * 86_400_000).toISOString())
     .all<{ job: string; at: string; detail: string | null }>()
     .catch(() => ({ results: [] }))).results ?? [];
-  return { tokenSource: parsed.tokenSource ?? 'unknown', at: parsed.at ?? null, lastJobFailures: failures };
+  const run = await db
+    .prepare("SELECT status, detail, finished_at FROM collector_runs WHERE kind = 'hourly' AND status != 'running' ORDER BY started_at DESC LIMIT 1")
+    .first<{ status: string; detail: string | null; finished_at: string | null }>()
+    .catch(() => null);
+  let analytics = analyticsFromRun(run);
+  // The admin token's last test, when it is newer and said the token cannot read analytics
+  const test = await db
+    .prepare("SELECT test_message, test_at FROM cost_credentials WHERE provider = 'cloudflare'")
+    .first<{ test_message: string | null; test_at: string | null }>()
+    .catch(() => null);
+  const testCode = (test?.test_message ?? '').split(':')[0]?.trim();
+  if (test?.test_at && (testCode === 'cf_no_analytics' || testCode === 'cf_invalid' || testCode === 'cf_inactive') && (!analytics.at || test.test_at >= analytics.at)) {
+    analytics = { state: 'refused', at: test.test_at, via: 'test' };
+  }
+  return { tokenSource: parsed.tokenSource ?? 'unknown', at: parsed.at ?? null, lastJobFailures: failures, analytics };
+}
+
+/**
+ * "Check again" on the Costs page: queues an hourly collection now (idempotent: every write is an
+ * upsert of an hour), and re-tests the admin token when one is set. The page reads the outcome on
+ * its next load; the run takes a minute or two.
+ */
+export async function checkCollectorAgain(env: CostsEnv, actor: Actor, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ queued: boolean; tested: boolean }> {
+  let queued = false;
+  if (env.COST_JOBS_QUEUE) {
+    try {
+      await env.COST_JOBS_QUEUE.send({ v: 1, job: 'hourly', at: now.toISOString() }, { contentType: 'json' });
+      queued = true;
+    } catch (error) {
+      logger.warn('[Costs] Could not queue the hourly collection', { error: error instanceof Error ? error.message.slice(0, 200) : String(error) });
+    }
+  }
+  const tested = !!(await retestCredential(env, 'cloudflare', actor, fetchImpl, now).catch(() => null));
+  logger.info('[Costs] Collector check requested', { actorId: actor.id, queued, tested });
+  return { queued, tested };
 }
 
 export async function costsDashboard(env: CostsEnv, now = new Date()) {

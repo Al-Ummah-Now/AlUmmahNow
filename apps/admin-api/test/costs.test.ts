@@ -15,7 +15,7 @@ import { envLines, productLines, runWeeklyDigest, testBunny, testCloudflare, tes
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
-import { costsDashboard } from '../src/lib/costs';
+import { analyticsFromRun, costsDashboard } from '../src/lib/costs';
 import { sqliteD1 } from './d1-sqlite';
 
 const INTERNAL = 'qa-internal-api-key-0123456789';
@@ -436,5 +436,41 @@ describe('fixed and other costs (COST-GAPS)', () => {
       [`costs:fixed:${item.id}`, false, 'string'],
       [`costs:fixed:${item.id}`, false, '{"removed":true}'],
     ]);
+  });
+});
+
+describe('a token Cloudflare refuses (no Account Analytics Read)', () => {
+  const run = (status: string, detail: unknown) => ({ status, detail: JSON.stringify(detail), finished_at: '2026-11-21T10:05:00Z' });
+
+  it('reads the hourly run: refused on 401/403, code 10000 or "not authorized"; ok and other failures are not', () => {
+    assert.equal(analyticsFromRun(run('failed', { error: 'Cloudflare GraphQL returned no data: not authorized for that account' })).state, 'refused');
+    assert.equal(analyticsFromRun(run('failed', { error: 'Cloudflare GraphQL answered HTTP 401' })).state, 'refused');
+    assert.equal(analyticsFromRun(run('partial', { errors: ['Authentication error (10000)'] })).state, 'refused');
+    assert.deepEqual(analyticsFromRun(run('ok', {})), { state: 'ok', at: '2026-11-21T10:05:00Z', via: 'run' });
+    assert.equal(analyticsFromRun(run('failed', { error: 'collector is not configured (account id or COLLECT_ENVS missing)' })).state, 'unknown');
+    assert.equal(analyticsFromRun(run('partial', { errors: ['dataset is not available'] })).state, 'unknown');
+    assert.equal(analyticsFromRun(null).state, 'unknown');
+  });
+
+  it('the dashboard says so, and a super admin\'s "Check again" queues an hourly collection (admins may not)', async () => {
+    const { req, env } = setup(['Super Admin']);
+    await env.COSTS_DB.prepare("INSERT INTO collector_runs (id, kind, started_at, finished_at, status, detail) VALUES ('r1', 'hourly', '2026-11-21T10:00:00Z', '2026-11-21T10:05:00Z', 'failed', ?)")
+      .bind(JSON.stringify({ token: 'release', error: 'Cloudflare GraphQL returned no data: not authorized for that account' }))
+      .run();
+    const body = (await (await req('/api/costs')).json()) as { result: { collector: { analytics: { state: string; via: string } } } };
+    assert.deepEqual(body.result.collector.analytics, { state: 'refused', at: '2026-11-21T10:05:00Z', via: 'run' });
+
+    const sent: unknown[] = [];
+    (env as Record<string, unknown>).COST_JOBS_QUEUE = { send: async (b: unknown) => void sent.push(b) };
+    const res = await req('/api/costs/collector/check', send('POST'));
+    assert.equal(res.status, 200);
+    assert.deepEqual(((await res.json()) as { result: unknown }).result, { queued: true, tested: false });
+    assert.equal(sent.length, 1);
+    assert.equal((sent[0] as { job: string; v: number }).job, 'hourly');
+
+    const admin = setup(['Admin']);
+    assert.equal((await admin.req('/api/costs/collector/check', send('POST'))).status, 403);
+    // No queue and no token: nothing to run
+    assert.equal((await setup(['Super Admin']).req('/api/costs/collector/check', send('POST'))).status, 503);
   });
 });

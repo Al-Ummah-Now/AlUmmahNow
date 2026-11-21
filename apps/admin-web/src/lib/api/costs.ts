@@ -31,6 +31,11 @@ export async function testCostCredential(provider: CostProvider): Promise<Action
   return toResult(() => fetchAdmin<CostCredentialResult>(credentialPath(provider, true), { method: 'POST' }));
 }
 
+/** "Check again" after a refused token: queues an hourly collection and re-tests the admin token. */
+export async function checkCostCollector(): Promise<ActionResult<{ queued: boolean; tested: boolean }>> {
+  return toResult(() => fetchAdmin<{ queued: boolean; tested: boolean }>('/api/costs/collector/check', { method: 'POST' }));
+}
+
 export async function removeCostCredential(provider: CostProvider): Promise<ActionResult<{ provider: CostProvider; set: false }>> {
   return toResult(() => fetchAdmin<{ provider: CostProvider; set: false }>(credentialPath(provider), { method: 'DELETE' }));
 }
