@@ -13,6 +13,7 @@ import { validateDeeplKey, type DeeplKeyView, type DeeplTestCode, type DeeplUsag
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { opsFormats } from '@/app/(protected)/operations/model';
+import { keepTimeTogether } from '@/i18n/time-together';
 import { ConfirmButton } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass } from '@/components/ui';
@@ -48,7 +49,7 @@ export function DeeplKeyPanel({ view, canManage }: { view: DeeplKeyView | null |
   // The admin's shared formats, the same as the Costs page's DeepL line (compact counts, admin times)
   const f = opsFormats(locale);
   const n = (v: number) => f.count(v);
-  const when = (iso: string) => f.time(iso);
+  const when = (iso: string) => keepTimeTogether(f.time(iso));
 
   function describe(result: Extract<ActionResult<unknown>, { ok: false }>, action: string): string {
     if (result.status === 401) return t('errors.notAuthenticated');

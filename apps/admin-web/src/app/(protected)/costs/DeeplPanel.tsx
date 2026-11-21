@@ -5,6 +5,7 @@
  * The AI line in By product already counts DeepL at the caption budget's rate, so this panel is not
  * added to the totals. The key is managed on Caption settings.
  */
+import { keepTimeTogether } from '@/i18n/time-together';
 import Link from '@/components/AppLink';
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
@@ -39,8 +40,8 @@ export function DeeplPanel({ d, t, f }: { d: CostsDashboard; t: Translator; f: O
       {deepl.reported && (
         <p className="mt-3 text-xs text-fg-muted" data-testid="costs-deepl-reported">
           {deepl.reported.characterLimit !== null
-            ? t('costs.deepl.reported', { used: f.count(deepl.reported.characterCount), limit: f.count(deepl.reported.characterLimit), time: f.time(deepl.reported.at) })
-            : t('costs.deepl.reportedNoLimit', { used: f.count(deepl.reported.characterCount), time: f.time(deepl.reported.at) })}
+            ? t('costs.deepl.reported', { used: f.count(deepl.reported.characterCount), limit: f.count(deepl.reported.characterLimit), time: keepTimeTogether(f.time(deepl.reported.at)) })
+            : t('costs.deepl.reportedNoLimit', { used: f.count(deepl.reported.characterCount), time: keepTimeTogether(f.time(deepl.reported.at)) })}
         </p>
       )}
     </section>
