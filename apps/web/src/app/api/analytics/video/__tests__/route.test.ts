@@ -78,4 +78,18 @@ describe('POST /api/analytics/video', () => {
     await POST(request({ events: [{ videoId: 'v1', eventType: 'play' }], context: { source: 'embed' } }));
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    '../../admin/users',
+    'v1/../../x',
+    'v1?redirect=https://evil.example',
+    'https://evil.example/',
+    '//evil.example',
+    'v1#frag',
+    'a'.repeat(200),
+    42,
+  ])('never forwards a view for the untrusted id %p (request forgery)', async (videoId) => {
+    await POST(request({ events: [{ videoId, eventType: 'ready' }] }));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

@@ -14,6 +14,7 @@ import { watchTimeReports, type WatchTimeEvent } from '@/lib/video/watch-time';
 import { retentionReports, type RetentionEvent } from '@/lib/video/retention';
 import { viewContextFromBatch } from '@/lib/embed/view-context';
 import { trafficFromBatch } from '@/lib/analytics/traffic-source';
+import { isValidContentId } from '@/lib/embed/params';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,13 +55,16 @@ export async function POST(request: NextRequest) {
       for (const event of readyEvents) {
         const videoId = event.videoId;
 
-        if (!videoId) {
-          logger.warn('[Analytics] Ready event missing videoId:', event);
+        // The id comes from the request body: only an opaque id may reach the
+        // API path, so '../', '?', '#', '@' or a full URL can't redirect the
+        // server-side request (CodeQL js/request-forgery).
+        if (!isValidContentId(videoId)) {
+          logger.debug('[Analytics] Ready event without a valid videoId');
           continue;
         }
 
         try {
-          const viewEndpoint = `${apiUrl}/api/videos/${videoId}/view`;
+          const viewEndpoint = `${apiUrl}/api/videos/${encodeURIComponent(videoId)}/view`;
 
           const response = await fetch(viewEndpoint, {
             method: 'POST',
