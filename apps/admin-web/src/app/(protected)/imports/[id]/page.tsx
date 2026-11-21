@@ -79,7 +79,7 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
             ) : (
               t('imports.channelGone')
             ),
-            date: <LocalTime value={batch.createdAt} />,
+            date: <LocalTime value={batch.createdAt} withTime />,
             actor: <UserName id={batch.createdBy} showEmail={false} />,
           })}
         </p>

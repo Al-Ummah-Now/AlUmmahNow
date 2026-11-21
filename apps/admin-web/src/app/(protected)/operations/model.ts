@@ -6,6 +6,8 @@
 import { compactNumber, dateTimeFormat, moneyFormat, numberFormat } from '@al-ummah/shared-types';
 import { OPS_ENVS, OPS_KINDS, OPS_RANGES, type OpsBudgetLevel, type OpsCosts, type OpsEnv, type OpsKind, type OpsMetric, type OpsRange, type OpsSeries } from '@/lib/api/ops-types';
 
+import { formatDate, formatHour } from '@/i18n/translate';
+import type { Locale } from '@/i18n/config';
 type Param = string | string[] | undefined;
 const one = (v: Param) => (Array.isArray(v) ? v[0] : v);
 
@@ -111,9 +113,7 @@ export function opsFormats(locale: string): OpsFormats {
   const ms = numberFormat(loc, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
   const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
   const usd = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const hour = dateTimeFormat(loc, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' });
   const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const time = dateTimeFormat(loc, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
   const month = dateTimeFormat(loc, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const date = (s: string) => new Date(s.length === 10 ? `${s}T00:00:00Z` : s);
   return {
@@ -133,10 +133,13 @@ export function opsFormats(locale: string): OpsFormats {
     gbs: (v) => `${compact(Math.round(v))} GB-s`,
     percent: (v) => percent.format(v),
     usd: (v) => usd.format(v),
-    hour: (t) => hour.format(date(t)),
+    hour: (t) => {
+      const d = date(t);
+      return Number.isNaN(d.getTime()) ? t : formatHour(d.toISOString().slice(0, 13), loc as Locale);
+    },
     day: (t) => day.format(date(t)),
     month: (ym) => month.format(date(`${ym}-01`)),
-    time: (iso) => `${time.format(date(iso))} UTC`,
+    time: (iso) => formatDate(date(iso), loc as Locale, true),
   };
 }
 

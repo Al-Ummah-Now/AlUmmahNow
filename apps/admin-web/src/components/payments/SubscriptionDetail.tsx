@@ -9,6 +9,7 @@ import { PAYMENT_TONE, SUBSCRIPTION_TONE } from '@/lib/payments';
 import { providerName } from './provider-name';
 import { CancelSubscription, RefundPayment } from './SubscriptionActions';
 
+import { LocalTime } from '@/components/LocalTime';
 const EVENT_TONE = { queued: 'info', processed: 'good', ignored: 'neutral', failed: 'bad' } as const;
 
 /**
@@ -20,7 +21,7 @@ export async function SubscriptionDetail({ detail, back, can }: { detail: AdminB
   const { t, locale } = await getI18n();
   const { subscription: s, payments, events } = detail;
   const name = s.displayName || t('payments.subs.unknownUser');
-  const date = (v: string | null) => (v ? formatDate(v, locale, true) : t('payments.detail.none'));
+  const date = (v: string | null) => (v ? <LocalTime value={v} withTime /> : t('payments.detail.none'));
   const money = (amount: number, currency: string) => (
     <span dir="ltr">
       <span className="inline-block" dir="auto">
@@ -113,7 +114,7 @@ export async function SubscriptionDetail({ detail, back, can }: { detail: AdminB
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id} className="border-t border-border align-top" data-testid="payments-payment-row" data-status={p.status}>
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(p.occurredAt, locale, true)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LocalTime value={p.occurredAt} withTime /></td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {money(p.amount, p.currency)}
                       {p.refundedAmount > 0 && <span className="block text-xs text-fg-muted">{t('payments.detail.refunded', { amount: formatBillingAmount(p.refundedAmount, p.currency, locale) })}</span>}
@@ -178,7 +179,7 @@ export async function SubscriptionDetail({ detail, back, can }: { detail: AdminB
                     <td className="px-3 py-2">
                       <Chip tone={EVENT_TONE[ev.status]}>{t(`payments.eventStatus.${ev.status}`)}</Chip>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(ev.receivedAt, locale, true)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><LocalTime value={ev.receivedAt} withTime /></td>
                     <td className="px-3 py-2 whitespace-nowrap">{date(ev.processedAt)}</td>
                     <td className="px-3 py-2">
                       {ev.jobId ? (

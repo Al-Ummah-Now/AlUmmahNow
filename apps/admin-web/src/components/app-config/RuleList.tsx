@@ -206,7 +206,7 @@ function RuleCard({
               {!d.enabled && <span className="rounded-full border border-border bg-surface-2 px-2 text-xs text-fg-muted">{t('appConfig.ruleOff')}</span>}
               {problems.length > 0 && <span className="rounded-full border border-danger-border bg-danger-bg px-2 text-xs text-danger-fg">{formatNumber(problems.length, locale)}</span>}
             </span>
-            <span className="text-xs text-fg-muted [overflow-wrap:anywhere]">{facts.length ? facts.join(' · ') : t('appConfig.everywhere')}</span>
+            <span className="text-xs text-fg-muted [overflow-wrap:anywhere]">{facts.length ? facts.join(t('common.sep')) : t('appConfig.everywhere')}</span>
           </span>
         </button>
         <div className="flex shrink-0 gap-1">

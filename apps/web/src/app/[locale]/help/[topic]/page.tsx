@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { HELP_AR, HELP_EN } from '@al-ummah/shared-types';
+import { HELP_AR, HELP_EN, joinMeta } from '@al-ummah/shared-types';
 import { HelpTopicPage } from '@/components/help/HelpTopicPage';
 import { HelpNetworksProvider } from '@/components/help/HelpNetworks';
 import { getHelpNetworks } from '@/lib/help/social-server';
@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { locale, topic } = await params;
   if (!isHelpTopic(topic)) return {};
   const h = locale === 'ar' ? HELP_AR : HELP_EN;
-  return { title: `${h.topics[topic].title} · ${h.title}`, description: h.topics[topic].summary };
+  return { title: joinMeta(locale, [h.topics[topic].title, h.title]), description: h.topics[topic].summary };
 }
 
 export default async function HelpTopicRoute({ params }: { params: Params }) {

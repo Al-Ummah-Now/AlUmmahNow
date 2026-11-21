@@ -2,7 +2,6 @@ import Link from '@/components/AppLink';
 import { deleteComment, getContentPermissions, listComments } from '@/lib/api/content';
 import type { AdminCommentRow, AdminContentPermission, AdminPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
@@ -12,11 +11,12 @@ import { logger } from '@/lib/logger';
 import { adminUserName } from '@/lib/user-name';
 import { getNames } from '@/lib/api/audit';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 export default async function CommentsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = pickParams(await searchParams, { q: 'text', videoId: 'text', userId: 'text', page: 'page' });
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const page = Number(params.page ?? 1);
 
   let data: AdminPage<AdminCommentRow> | null = null;
@@ -78,7 +78,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                         parts={[
                           c.videoTitle || t('videos.untitled'),
                           <Link key="u" href={`/users/${encodeURIComponent(c.userId)}`} className={linkClass}>{userName(c.userId)}</Link>,
-                          <time key="d" dateTime={c.createdAt}>{formatDate(c.createdAt, locale)}</time>,
+                          <LocalTime value={c.createdAt} key="d" />,
                         ]}
                       />
                     </td>
@@ -88,7 +88,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[9rem]`}>
                       <Link href={`/users/${encodeURIComponent(c.userId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="comment-user-link">{userName(c.userId)}</Link>
                     </td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}><time dateTime={c.createdAt}>{formatDate(c.createdAt, locale, true)}</time></td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}><LocalTime value={c.createdAt} withTime /></td>
                     {canDelete && (
                       <td role="cell" className={cardTable.actions}>
                         <DeleteRowButton title={t('comments.deleteTitle')} body={t('comments.deleteBody')} testId="comment-delete" onDelete={deleteComment.bind(null, c.videoId, c.id)} />

@@ -4,7 +4,6 @@ import { getBackfillOverview, getBackfillRun, getMediaProviders, listBackfillRun
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { Chip } from '@/components/content/parts';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
@@ -16,6 +15,7 @@ import { RetireSection } from './RetireSection';
 import { RUN_STATUS_LABEL, RUN_TONE, scopeChannelRefs, scopeText } from './labels';
 import { getNames } from '@/lib/api/audit';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -50,7 +50,7 @@ function environmentLabel(env: string | undefined) {
 
 export default async function BackfillPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const session = await getAdminSession();
   if (!canManageMedia(session?.user.role)) {
     return <ErrorAlert testId="backfill-no-access">{t('mediaBackfill.noAccess')}</ErrorAlert>;
@@ -100,7 +100,7 @@ export default async function BackfillPage({ searchParams }: PageProps) {
                       <span className="text-sm text-fg">{scopeText(r, t, names)}</span>
                       <Chip tone={RUN_TONE[r.status]}>{t(RUN_STATUS_LABEL[r.status])}</Chip>
                     </span>
-                    <span className="block text-xs text-fg-muted mt-1">{formatDate(r.createdAt, locale, true)}</span>
+                    <span className="block text-xs text-fg-muted mt-1"><LocalTime value={r.createdAt} withTime /></span>
                   </Link>
                 </li>
               ))}

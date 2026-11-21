@@ -14,5 +14,5 @@ export default async function StudioVideoAnalyticsRoute({ params }: Props) {
   if (!access) return <StudioNoAccess locale={locale} channelId={channelId} />;
   const video = await getVideoById(decodeURIComponent(videoId));
   if (!video || video.channelId !== channelId) notFound();
-  return <View locale={locale} channelId={channelId} video={{ id: video.id, title: video.title, duration: video.duration, dateCreated: video.dateCreated }} />;
+  return <View locale={locale} channelId={channelId} video={{ id: video.id, title: video.title, titleLocalized: video.titleLocalized, duration: video.duration, dateCreated: video.dateCreated }} />;
 }

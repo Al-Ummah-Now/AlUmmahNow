@@ -16,8 +16,9 @@ const small = 'text-xs text-fg-muted';
 const btn = 'text-xs font-medium px-2 py-1 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg';
 
 export function IssueText({ messages, testId }: { messages: string[]; testId?: string }) {
+  const { t } = useLanguage();
   if (!messages.length) return null;
-  return <p role="alert" className="text-xs text-danger-fg mt-1" data-testid={testId ?? 'field-error'}>{messages.join(' · ')}</p>;
+  return <p role="alert" className="text-xs text-danger-fg mt-1" data-testid={testId ?? 'field-error'}>{messages.join(t('common.sep'))}</p>;
 }
 
 function ContrastBadge({ checks }: { checks: ContrastCheck[] }) {

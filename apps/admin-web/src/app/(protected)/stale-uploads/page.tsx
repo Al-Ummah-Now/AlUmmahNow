@@ -4,7 +4,7 @@ import type { StaleUploadsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseStaleUploads } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { FILTER_LABEL, STALE_FILTERS, parseStaleFilter, statusQuery, TYPE_LABEL } from './labels';
@@ -13,6 +13,7 @@ import { StaleUploadsTable } from './StaleUploadsTable';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { UserName } from '@/components/audit/UserName';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -108,7 +109,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
                 <tbody>
                   {data.audit.map((row) => (
                     <tr key={row.key} className="border-b border-border last:border-0">
-                      <td className={tdClass}>{formatDate(row.at, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={row.at} withTime /></td>
                       <td className={tdClass} dir="ltr">{row.videoId}</td>
                       <td className={tdClass}>{t(TYPE_LABEL[row.target])}</td>
                       <td className={tdClass}>{row.actor ? <UserName id={row.actor} showEmail={false} /> : '—'}</td>
@@ -145,7 +146,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
                 <tbody>
                   {data.deadLetters.map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={d.receivedAt} withTime /></td>
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || '—'}</td>
                       <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>

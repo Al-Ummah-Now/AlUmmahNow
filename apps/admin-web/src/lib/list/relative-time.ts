@@ -1,4 +1,5 @@
-import { dateTimeFormat, relativeTimeFormat } from '@al-ummah/shared-types';
+import { metaSeparator, relativeTimeFormat } from '@al-ummah/shared-types';
+import { formatDate, formatUtc } from '../../i18n/translate';
 /**
  * "3 minutes ago" for list rows, in the admin's language (Intl.RelativeTimeFormat),
  * with the exact time for the hover title. Pure apart from Intl.
@@ -32,9 +33,10 @@ export function formatRelative(value: string | number | Date, locale: string, no
   return relativeTimeFormat(locale, { numeric: 'auto' }).format(amount, unit);
 }
 
-/** The exact time for the title: date and time in the admin's language, with the time zone. */
+/** The exact time for the title: the viewer's local time with its zone, then the same time in UTC. */
 export function formatExact(value: string | number | Date, locale: string): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return dateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long' }).format(date);
+  const loc = locale === 'ar' ? 'ar' : 'en';
+  return `${formatDate(date, loc, true)}${metaSeparator(loc)}${formatUtc(date, loc)}`;
 }

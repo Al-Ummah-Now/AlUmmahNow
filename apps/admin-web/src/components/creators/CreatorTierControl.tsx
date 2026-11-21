@@ -6,7 +6,7 @@ import { CREATOR_TIER_IDS, creatorTierOrigin, type CreatorTier, type CreatorTier
 import { defaultTierName, isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage, tierLabel } from '@/lib/creator-tiers';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
@@ -15,6 +15,7 @@ import { TierChangeDialog } from './TierChangeDialog';
 import { useNames } from '@/components/audit/useNames';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 export interface CurrentTier {
   tierId: string;
   origin: CreatorTierOrigin;
@@ -41,7 +42,7 @@ export interface CreatorTierControlProps {
 
 /** Fills a "{actor}, {date}" template with each value in its own <bdi>. */
 /** "Assigned by <name>, <date>" for an admin known by id; "Assigned by an admin, <date>" until (or unless) the name is known. */
-function AssignedBy({ id, date }: { id: string | null; date: string }) {
+function AssignedBy({ id, date }: { id: string | null; date: React.ReactNode }) {
   const { t } = useLanguage();
   const names = useNames(id ? [{ kind: 'user', id }] : []);
   const person = id ? names.users[id] : undefined;
@@ -134,12 +135,12 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
               admin, …"); names and dates isolated, so an English name in Arabic does not scramble the line */}
           {current.origin === 'admin'
             ? current.assignedByName
-              ? withIsolated(t('creators.assignedByActor'), { actor: current.assignedByName, date: formatDate(current.assignedAt, locale) })
+              ? withIsolated(t('creators.assignedByActor'), { actor: current.assignedByName, date: <LocalTime value={current.assignedAt} /> })
               // Only the id stored (the user page): the admin's name once looked up, else "an admin", never a raw id
-              : <AssignedBy id={current.assignedBy ?? null} date={formatDate(current.assignedAt, locale)} />
+              : <AssignedBy id={current.assignedBy ?? null} date={<LocalTime value={current.assignedAt} />} />
             : current.origin === 'super_admin'
               ? t(ORIGIN_LABEL[current.origin])
-              : withIsolated(t('creators.originOn'), { origin: t(ORIGIN_LABEL[current.origin]), date: formatDate(current.assignedAt, locale) })}
+              : withIsolated(t('creators.originOn'), { origin: t(ORIGIN_LABEL[current.origin]), date: <LocalTime value={current.assignedAt} /> })}
         </p>
       )}
       {superAdmin && <p className="text-xs text-fg-muted max-w-xs" data-testid={`${testId}-super-admin`}>{t('creators.superAdminLocked')}</p>}

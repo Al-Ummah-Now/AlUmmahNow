@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { listQuranEditions, resetQuranEdition, saveCaptionSettings, setQuranEdition, type CaptionSettings, type CaptionSettingsView as View } from '@/lib/api/captions';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
@@ -13,6 +13,7 @@ import { parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
   { id: '@cf/google/gemma-4-26b-a4b-it', name: 'Gemma 4 26B' },
@@ -238,7 +239,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
         ) : (
           <ul className="space-y-1 text-sm text-fg-muted" data-testid="caption-settings-history">
             {view.audit.map((a) => (
-              <li key={a.id}>{fillNodes(t('captionSettings.historyEntry', { date: formatDate(a.createdAt, locale, true) }), { actor: <UserName id={a.actorId} showEmail={false} /> })}</li>
+              <li key={a.id}>{fillNodes(t('captionSettings.historyEntry'), { date: <LocalTime value={a.createdAt} withTime />, actor: <UserName id={a.actorId} showEmail={false} /> })}</li>
             ))}
           </ul>
         )}

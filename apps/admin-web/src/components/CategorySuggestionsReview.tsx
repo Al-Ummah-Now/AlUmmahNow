@@ -17,6 +17,7 @@ import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { Select } from '@/components/select/Select';
+import { Sep } from '@/components/Sep';
 
 const pct = (confidence: number | null) => (confidence === null ? null : Math.round(confidence * 100));
 
@@ -209,7 +210,7 @@ export function CategorySuggestionsReview({
                             <div className="mt-2 flex flex-wrap gap-1" aria-label={t('categorySuggestions.options')}>
                               {item.options.slice(1).map((o) => (
                                 <span key={o.category} className="px-2 py-0.5 rounded bg-surface-2 text-fg-muted text-xs">
-                                  {categoryLabel(o.category, locale, categories)} · {pct(o.confidence)}%
+                                  {categoryLabel(o.category, locale, categories)}<Sep />{pct(o.confidence)}%
                                 </span>
                               ))}
                             </div>

@@ -6,7 +6,7 @@
  * (with retry); the API answers null for a missing or someone else's video.
  */
 
-import { formatClock, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { formatClock, formatDate, formatNumber, formatPercent, fillTemplate } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { getVideoAnalytics } from '@/lib/api/analytics';
@@ -82,7 +82,7 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
           </header>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card title={t.analytics.views} value={fmt(state.data.views)} icon="eye" />
-            <Card title={d.watchTimeTotal} value={d.hoursValue.replace('{hours}', formatNumber(locale, Math.round((state.data.watchTime / 3600) * 10) / 10))} icon="clock" />
+            <Card title={d.watchTimeTotal} value={fillTemplate(locale, d.hoursValue, { hours: Math.round((state.data.watchTime / 3600) * 10) / 10 })} icon="clock" />
             <Card title={d.avgViewDuration} value={formatDuration(state.data.avgViewDuration, locale)} icon="clock" />
             <Card title={d.likes} value={fmt(state.data.likes)} icon="heart" />
             <Card title={d.comments} value={fmt(state.data.comments)} icon="message" />

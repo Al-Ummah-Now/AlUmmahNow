@@ -7,7 +7,7 @@
  * siteVisitsReport): cookieless daily counters, aggregates only. Pure: server
  * and client safe.
  */
-import { compactNumber, dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
+import { compactNumber, dateTimeFormat, formatCompact, numberFormat } from '@al-ummah/shared-types';
 import type { Translator } from '@/i18n/translate';
 
 /** admin-api /api/content/analytics/visits (api-videos lib/site-visits.ts). */
@@ -161,8 +161,10 @@ export function shareOf(visits: number, total: number): number {
 }
 
 export interface VisitFormats {
-  /** Exact count with the locale's digits (tiles, tables) */
+  /** Exact count with the locale's digits (table cells) */
   count: (v: number) => string;
+  /** A tile's count: compact from 1,000 on, cut not rounded (owner 2026-11-21) */
+  stat: (v: number) => string;
   /** Compact count for the chart axis */
   axis: (v: number) => string;
   percent: (share: number) => string;
@@ -181,6 +183,7 @@ export function visitFormats(locale: string): VisitFormats {
   const asDate = (d: string) => new Date(`${d}T00:00:00Z`);
   return {
     count: (v) => count.format(v),
+    stat: (v) => formatCompact(loc, v),
     axis: compactNumber(locale),
     percent: (s) => percent.format(s),
     day: (d) => day.format(asDate(d)),

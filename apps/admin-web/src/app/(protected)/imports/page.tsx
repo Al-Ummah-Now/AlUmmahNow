@@ -120,7 +120,7 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
                   </td>
                   <td className={`${cardTable.cell} pt-0 md:pt-3 text-sm text-fg-muted`}>
                     <span className={phoneLabel} aria-hidden="true">{t('imports.colStarted')}</span>
-                    <LocalTime value={b.createdAt} />
+                    <LocalTime value={b.createdAt} withTime />
                   </td>
                 </tr>
               ))}

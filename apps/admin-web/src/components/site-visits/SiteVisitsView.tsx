@@ -160,11 +160,11 @@ export function SiteVisitsPanel({ report, t, locale }: { report: SiteVisitsRepor
   return (
     <div className="space-y-6" data-testid="site-visits-panel" data-days={report.days}>
       <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="site-visits-tiles">
-        <Tile label={t('siteVisits.tiles.visits')} value={f.count(total)} sub={range} testId="site-visits-total" />
-        <Tile label={t('siteVisits.tiles.average')} value={f.count(Math.round(average))} sub={periodLabel} testId="site-visits-average" />
+        <Tile label={t('siteVisits.tiles.visits')} value={f.stat(total)} sub={range} testId="site-visits-total" />
+        <Tile label={t('siteVisits.tiles.average')} value={f.stat(Math.round(average))} sub={periodLabel} testId="site-visits-average" />
         <Tile
           label={t('siteVisits.tiles.busiest')}
-          value={busiest ? f.count(busiest.value) : t('siteVisits.none')}
+          value={busiest ? f.stat(busiest.value) : t('siteVisits.none')}
           sub={busiest ? f.date(busiest.t) : periodLabel}
           testId="site-visits-busiest"
         />

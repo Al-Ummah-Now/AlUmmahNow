@@ -3,7 +3,7 @@ import { localizedPlaylistText } from '@al-ummah/shared-types';
 import { deletePlaylist, getContentPermissions, listPlaylists } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPlaylistRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatCount, formatDate, formatNumber } from '@/i18n/translate';
+import { formatCount, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { adminUserName } from '@/lib/user-name';
 import { getNames } from '@/lib/api/audit';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 export default async function PlaylistsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -89,7 +90,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                           channelName && p.channelId ? <Link key="c" href={`/channels/${encodeURIComponent(p.channelId)}`} className={linkClass}>{channelName}</Link> : null,
                           ownerName && p.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(p.ownerId)}`} className={linkClass}>{ownerName}</Link> : null,
                           formatCount(p.videoCount, 'video', locale),
-                          p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
+                          p.createdAt ? <LocalTime value={p.createdAt} key="d" /> : null,
                         ]}
                       />
                     </td>
@@ -100,7 +101,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                       {ownerName && p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-owner-link">{ownerName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(p.videoCount, locale)}</td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : t('content.none')}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <LocalTime value={p.createdAt} /> : t('content.none')}</td>
                     {canDelete && (
                       <td role="cell" className={cardTable.actions}>
                         <DeleteRowButton title={t('playlists.deleteTitle')} body={t('playlists.deleteBody')} testId="playlist-delete" onDelete={deletePlaylist.bind(null, p.id)} />

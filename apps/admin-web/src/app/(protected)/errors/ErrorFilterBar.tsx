@@ -65,10 +65,10 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
         <label htmlFor="errors-release" className="text-sm text-fg-muted">
           {t('errorsPage.releaseFilter')}
         </label>
-        <Select id="errors-release" name="release" defaultValue={filters.release ?? ''} onChange={submitOnChange} className={`${fieldClass} font-mono`} dir="ltr">
+        <Select id="errors-release" name="release" defaultValue={filters.release ?? ''} onChange={submitOnChange} className={fieldClass}>
           <option value="">{t('errorsPage.allReleases')}</option>
           {releases.map((r) => (
-            <option key={r} value={r}>
+            <option key={r} value={r} dir="ltr">
               {r}
             </option>
           ))}

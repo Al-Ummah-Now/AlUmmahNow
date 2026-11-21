@@ -5,7 +5,6 @@ import { listCreatorTierChoices } from '@/lib/api/creators';
 import { tierLabel } from '@/lib/creator-tiers';
 import { INVITE_STATUSES, type InviteListStatus, type InviteView } from '@/lib/api/invite-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass, primaryButtonClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { BackLink, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
@@ -14,6 +13,8 @@ import { InviteActions } from '@/components/invites/InviteActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { logger } from '@/lib/logger';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 const DAY = 86_400_000;
@@ -91,7 +92,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                     <td className={`${tdClass} max-md:p-0`}>
                       <div className="flex flex-col items-start gap-1">
                         <InviteStatusChip status={inv.status} t={t} />
-                        {inv.status === 'invited' && inv.expiresAt && <span className="text-xs text-fg-muted">{t('invites.expiresAt', { date: formatDate(inv.expiresAt, locale) })}</span>}
+                        {inv.status === 'invited' && inv.expiresAt && <span className="text-xs text-fg-muted">{fillNodes(t('invites.expiresAt'), { date: <LocalTime value={inv.expiresAt} /> })}</span>}
                         {inv.delivery === 'sent' && <span className="text-xs text-fg-muted">{inv.emailSent ? t('invites.emailSent', { count: inv.sendCount }) : t('invites.emailNotSent')}</span>}
                         {inv.pendingOp && !inv.opError && <span className="text-xs text-fg-muted">{t('invites.pending')}</span>}
                         {(inv.deliveryError || inv.opError) && <span className="text-xs text-danger-fg break-words" dir="ltr">{inv.opError ?? inv.deliveryError}</span>}
@@ -101,7 +102,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
                       <div className="flex flex-col gap-1">
-                        <span className="text-fg-muted" data-testid="invite-tier">{t('invites.tierLine', { tier: tierName(inv.tierId) })}{inv.authRoles.includes('Scholar') ? ` · ${t('invites.scholar')}` : ''}</span>
+                        <span className="text-fg-muted" data-testid="invite-tier">{t('invites.tierLine', { tier: tierName(inv.tierId) })}{inv.authRoles.includes('Scholar') ? `${t('common.sep')}${t('invites.scholar')}` : ''}</span>
                         {inv.channels.map((ch) => (
                           <Link key={ch.id} href={`/channels/${encodeURIComponent(ch.id)}`} className={linkClass} dir="auto" data-testid="invite-channel">
                             {ch.name}{ch.handle ? ` (@${ch.handle})` : ''}
@@ -110,7 +111,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                       </div>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
-                      <time dateTime={inv.createdAt}>{formatDate(inv.createdAt, locale)}</time>
+                      <LocalTime value={inv.createdAt} />
                       {inv.createdByEmail && <span className="block text-xs" dir="ltr">{t('invites.byWhom', { who: inv.createdByEmail })}</span>}
                     </td>
                     <td className={`${tdClass} max-md:p-0`}>

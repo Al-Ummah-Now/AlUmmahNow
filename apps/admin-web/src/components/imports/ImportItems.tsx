@@ -163,7 +163,7 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
                     </span>
                     <span className="block text-xs text-fg-muted mt-0.5">
                       {/* File sizes stay exact; Arabic is never grouped and joins with «،» (number rule O38) */}
-                      {fillNodes(t('imports.fileMeta'), { size: formatBytes(locale, item.fileSize), date: <LocalTime value={item.createdAt} /> })}
+                      {fillNodes(t('imports.fileMeta'), { size: formatBytes(locale, item.fileSize), date: <LocalTime value={item.createdAt} withTime /> })}
                     </span>
                     <span className="block mt-1.5">
                       <Chip tone={STATE_TONE[item.state]} testId="import-item-state">

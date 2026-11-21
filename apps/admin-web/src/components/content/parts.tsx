@@ -4,10 +4,12 @@
  */
 import Link from '@/components/AppLink';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type Translator } from '@/i18n/translate';
+import { type Translator } from '@/i18n/translate';
 import type { ContentReport } from '@/lib/api/content-types';
 import { cardClass, linkClass } from '@/components/ui';
 
+import { LocalTime } from '@/components/LocalTime';
+import { Sep } from '@/components/Sep';
 export type ChipTone = 'neutral' | 'good' | 'info' | 'warn' | 'bad';
 
 const toneClasses: Record<ChipTone, string> = {
@@ -201,7 +203,7 @@ export function StatGrid({ stats }: { stats: { label: string; value: string; tes
   );
 }
 
-export function ReportsCard({ reports, t, locale }: { reports: ContentReport[]; t: Translator; locale: Locale }) {
+export function ReportsCard({ reports, t }: { reports: ContentReport[]; t: Translator; locale: Locale }) {
   return (
     <SectionCard title={t('content.reports')} testId="content-reports" id="content-reports-title">
       {reports.length === 0 ? (
@@ -212,11 +214,11 @@ export function ReportsCard({ reports, t, locale }: { reports: ContentReport[]; 
             <li key={r.id} className="py-3 flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-fg text-sm">
-                  <TranslatedValue t={t} prefix="reason" value={r.reason} /> · <TranslatedValue t={t} prefix="status" value={r.status} />
+                  <TranslatedValue t={t} prefix="reason" value={r.reason} /><Sep /><TranslatedValue t={t} prefix="status" value={r.status} />
                 </p>
                 {r.description && <p className="text-fg-muted text-sm break-words" dir="auto">{r.description}</p>}
                 <p className="text-fg-subtle text-xs">
-                  <time dateTime={r.createdAt}>{formatDate(r.createdAt, locale, true)}</time>
+                  <LocalTime value={r.createdAt} withTime />
                 </p>
               </div>
               <Link href={`/moderation/reports/${encodeURIComponent(r.id)}`} className={`${linkClass} text-sm`}>
@@ -264,7 +266,7 @@ export function MetaLine({ parts, className = '', testId }: { parts: React.React
       <span className="flex flex-wrap -ms-[1em]">
         {shown.map((part, i) => (
           <span key={i} className="relative min-w-0 ps-[1em]">
-            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">·</span>
+            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">•</span>
             <bdi>{part}</bdi>
           </span>
         ))}

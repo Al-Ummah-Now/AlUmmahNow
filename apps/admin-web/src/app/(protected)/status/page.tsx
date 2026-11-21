@@ -5,13 +5,14 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { DeletedIncidents, IncidentCard, NewIncidentForm } from './StatusAdmin';
 import { publicStatusUrl } from './model';
 import { StatusSubscriptions } from './StatusSubscriptions';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const STATE_CLASS: Record<string, string> = {
@@ -96,7 +97,7 @@ export default async function StatusAdminPage() {
                         <tr key={c.id} className="border-t border-border" data-testid="status-check-row" data-component={c.id} data-public={c.public ? 'true' : 'false'} data-state={row?.state ?? 'none'}>
                           <th scope="row" className="p-2 text-start font-normal text-fg">{name(c.id)}</th>
                           <td className={`p-2 font-medium ${row ? STATE_CLASS[row.state] : 'text-fg-muted'}`}>{row ? t(`statusPage.states.${row.state}` as MessageKey) : '—'}</td>
-                          <td className="p-2 whitespace-nowrap text-fg-muted">{row ? formatDate(row.since, locale, true) : '—'}</td>
+                          <td className="p-2 whitespace-nowrap text-fg-muted">{row ? <LocalTime value={row.since} withTime /> : '—'}</td>
                           <td className="p-2 text-end tabular-nums text-fg-muted">{typeof up === 'number' ? percent(up) : '—'}</td>
                           <td className="p-2 text-fg-muted break-words" dir="ltr">{row?.detail ?? '—'}</td>
                         </tr>

@@ -1,4 +1,4 @@
-import { formatNumber, formatCompact } from '@al-ummah/shared-types';
+import { formatCompact, fillTemplate } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useEffect, useState } from 'react';
@@ -141,7 +141,7 @@ export function VideoMetricsDisplay({
         href={`#${COMMENTS_ID}`}
         className="wa-comments"
         data-testid="video-comments-count"
-        aria-label={t.a11y.commentsCount.replace('{count}', formatNumber(lang, metrics.commentsCount))}
+        aria-label={fillTemplate(lang, t.a11y.commentsCount, { count: metrics.commentsCount })}
       >
         <MessageCircle aria-hidden="true" />
         <span>{formatCount(metrics.commentsCount)}</span>

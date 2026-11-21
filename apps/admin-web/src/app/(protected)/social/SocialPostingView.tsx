@@ -8,10 +8,12 @@ import { clearSocialCredentials, saveSocialCredentials, saveSocialSettings, type
 import { useConfirm } from '@/components/content/actions';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
+import { formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
 import { logger } from '@/lib/logger-client';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const STATUSES = ['sent', 'queued', 'sending', 'failed', 'blocked', 'cancelled'] as const;
 const ACCOUNT_STATUSES = ['active', 'needs_reconnect', 'revoked', 'suspended'] as const;
 
@@ -143,24 +145,19 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
   );
 
   const historyText = (h: SocialHistoryEntry) => {
-    const date = formatDate(h.createdAt, locale, true);
-    // The sentence is built with a marker for the name, which is then kept on one line (bdi + nowrap): the line
-    // wraps before a person's name, never inside it
-    const marker = '\u2063';
     const sentence = h.key === 'social:settings'
-      ? t('socialPosting.historySettings', { date, actor: marker })
+      ? t('socialPosting.historySettings')
       : t('socialPosting.historyCredentials', {
-          date,
           network: net(h.key.split(':')[2] ?? ''),
           action: h.newValue.includes('cleared') ? t('socialPosting.actionCleared') : t('socialPosting.actionSet'),
-          actor: marker,
         });
-    const [before, after = ''] = sentence.split(marker);
+    // The name is kept on one line (nowrap): the line wraps before a person's name, never inside it
     return (
       <>
-        {before}
-        <bdi className="whitespace-nowrap" data-testid="social-history-actor">{h.actorName || t('socialPosting.someAdmin')}</bdi>
-        {after}
+        {fillNodes(sentence, {
+          date: <LocalTime value={h.createdAt} withTime />,
+          actor: <span className="whitespace-nowrap" data-testid="social-history-actor">{h.actorName || t('socialPosting.someAdmin')}</span>,
+        })}
       </>
     );
   };
@@ -360,7 +357,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                 <li key={f.id} className="rounded border border-border p-3 text-sm">
                   <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-fg-muted">
                     <span>{net(f.network)}</span>
-                    <span>{formatDate(f.updated_at, locale, true)}</span>
+                    <span><LocalTime value={f.updated_at} withTime /></span>
                   </p>
                   <p className="mt-1 break-words text-start font-medium text-fg"><bdi>{f.entity_title || f.entity_id}</bdi></p>
                   <p className="mt-1">{failureChannel(f)}</p>
@@ -380,7 +377,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                       <td className={td} dir="auto">{f.entity_title || f.entity_id}</td>
                       <td className={td}>{failureChannel(f)}</td>
                       <td className={`${td} break-words`}>{failureError(f)}</td>
-                      <td className={`${td} whitespace-nowrap`}>{formatDate(f.updated_at, locale, true)}</td>
+                      <td className={`${td} whitespace-nowrap`}><LocalTime value={f.updated_at} withTime /></td>
                     </tr>
                   ))}
                 </tbody>

@@ -13,13 +13,14 @@ import {
 } from '@al-ummah/shared-types';
 import { saveMobileApps, type MobileAppsChange, type MobileAppsView } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 const ROLE_LABEL: Record<MobileAppRole, MessageKey> = {
   viewer: 'mobileApps.roleViewer',
   studio: 'mobileApps.roleStudio',
@@ -85,7 +86,7 @@ function problemsOf(settings: MobileAppsSettings): Map<string, string> {
 }
 
 export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: MobileAppsView; history: MobileAppsChange[]; canEdit: boolean; siteUrl: string | null }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const [draft, setDraft] = useState<Draft>(() => toDraft(state.settings));
@@ -389,7 +390,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
       <div className="space-y-3">
         <p className="text-sm text-fg-muted" data-testid="mobile-apps-last-changed">
           {state.updatedAt
-            ? fillNodes(t('mobileApps.lastChanged', { date: formatDate(state.updatedAt, locale, true) }), { actor: state.updatedBy ? <UserName id={state.updatedBy} showEmail={false} /> : '—' })
+            ? fillNodes(t('mobileApps.lastChanged'), { date: <LocalTime value={state.updatedAt} withTime />, actor: state.updatedBy ? <UserName id={state.updatedBy} showEmail={false} /> : '—' })
             : t('mobileApps.neverChanged')}
         </p>
         {canEdit ? (
@@ -424,7 +425,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
         ) : (
           <ul className="space-y-1 text-sm text-fg-muted" data-testid="mobile-apps-history">
             {history.map((h) => (
-              <li key={h.id}>{fillNodes(t('mobileApps.historyEntry', { date: formatDate(h.createdAt, locale, true), summary: changeSummary(h, t) }), { actor: <UserName id={h.actorId} showEmail={false} /> })}</li>
+              <li key={h.id}>{fillNodes(t('mobileApps.historyEntry', { summary: changeSummary(h, t) }), { date: <LocalTime value={h.createdAt} withTime />, actor: <UserName id={h.actorId} showEmail={false} /> })}</li>
             ))}
           </ul>
         )}

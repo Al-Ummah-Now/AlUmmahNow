@@ -1,7 +1,6 @@
 import { formatBillingAmount, type BillingPayment, type BillingSubscription } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { Chip } from '@/components/content/parts';
 import { getUserBilling } from '@/lib/api/billing';
@@ -12,6 +11,7 @@ import { providerName } from './provider-name';
 import { CompForm } from './CompForm';
 import { tierLabel } from '@/lib/creator-tiers';
 
+import { LocalTime } from '@/components/LocalTime';
 /**
  * The user page's payments (wiki AUN-SUBS, GET /api/billing/users/:id): their
  * subscriptions (each opens its page) and payments, and the comp form with
@@ -58,7 +58,7 @@ export async function UserBillingPanel({ userId, canManage }: { userId: string; 
                     </Link>
                     <span className="text-fg-muted">{providerName(t, s.provider)}</span>
                     <Chip tone={SUBSCRIPTION_TONE[s.status]}>{t(`payments.status.${s.status}`)}</Chip>
-                    {(s.accessUntil ?? s.currentPeriodEnd) && <span className="text-fg-muted">{formatDate((s.accessUntil ?? s.currentPeriodEnd)!, locale)}</span>}
+                    {(s.accessUntil ?? s.currentPeriodEnd) && <span className="text-fg-muted"><LocalTime value={(s.accessUntil ?? s.currentPeriodEnd)!} /></span>}
                   </li>
                 ))}
               </ul>
@@ -70,7 +70,7 @@ export async function UserBillingPanel({ userId, canManage }: { userId: string; 
               <ul className="divide-y divide-border rounded border border-border">
                 {data.payments.map((p) => (
                   <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-sm" data-testid="user-billing-payment">
-                    <span className="text-fg-muted">{formatDate(p.occurredAt, locale, true)}</span>
+                    <span className="text-fg-muted"><LocalTime value={p.occurredAt} withTime /></span>
                     <span className="font-medium text-fg">{money(p.amount, p.currency)}</span>
                     <Chip tone={PAYMENT_TONE[p.status]}>{t(`payments.paymentStatus.${p.status}`)}</Chip>
                     {p.subscriptionId && (

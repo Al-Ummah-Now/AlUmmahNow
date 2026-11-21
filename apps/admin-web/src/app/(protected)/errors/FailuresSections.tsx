@@ -18,6 +18,8 @@ import { IndexRepairRetryButton } from './IndexRepairRetryButton';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import type { MessageKey } from '@/i18n/translate';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 /** Label of each ownership index kind (Errors page, "Index out of sync"). */
 export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile' | 'playlist' | 'stream', MessageKey> = {
   video: 'errorsPage.indexKindVideo',
@@ -162,7 +164,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-index" data-testid="errors-index-section">
           <div className="mb-3">
             <h2 id="errors-index" className="text-xl font-semibold text-fg">{t('errorsPage.indexTitle')}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.indexHint'), { when: <LocalTime value={data.indexDrift[0].at} /> })}</p>
+            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.indexHint'), { when: <LocalTime value={data.indexDrift[0].at} withTime /> })}</p>
           </div>
           <div className="bg-surface border border-border rounded-lg overflow-x-auto">
             <table className="w-full" data-testid="errors-index">
@@ -183,7 +185,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                   <tr key={d.kind} className="border-b border-border last:border-0" data-index-kind={d.kind}>
                     <td className={tdClass}>
                       <div className="text-fg">{t(INDEX_KIND_LABEL[d.kind])}</div>
-                      <div className="text-fg-muted text-xs"><LocalTime value={d.at} /></div>
+                      <div className="text-fg-muted text-xs"><LocalTime value={d.at} withTime /></div>
                     </td>
                     <td className={tdClass}>{d.stored}</td>
                     <td className={tdClass}>{d.indexed}</td>
@@ -290,7 +292,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
               <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.repairsHint')}</p>
               <p className="mt-1 text-sm text-fg" data-testid="index-repairs-counts">
                 {t('errorsPage.repairsCounts', { pending: data.indexRepairs.pending, failed: data.indexRepairs.failedTotal })}
-                {data.indexRepairs.job && ` · ${t('errorsPage.repairsJobStatus', { status: t(JOB_STATUS_LABEL[data.indexRepairs.job.status]) })}`}
+                {data.indexRepairs.job && `${t('common.sep')}${t('errorsPage.repairsJobStatus', { status: t(JOB_STATUS_LABEL[data.indexRepairs.job.status]) })}`}
               </p>
             </div>
             {data.indexRepairs.failedTotal > 0 && <IndexRepairRetryButton />}
@@ -399,7 +401,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     const when = v.processingIssue?.at || v.dateModified;
                     return (
                       <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                        <td className={tdClass}>{when ? <LocalTime value={when} /> : '—'}</td>
+                        <td className={tdClass}>{when ? <LocalTime value={when} withTime /> : '—'}</td>
                         <td className={tdClass}>
                           <div className="font-medium text-fg">{v.title || v.id}</div>
                           <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
@@ -438,7 +440,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {data.deadLetters.map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className={tdClass}><LocalTime value={d.receivedAt} /></td>
+                      <td className={tdClass}><LocalTime value={d.receivedAt} withTime /></td>
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>
@@ -473,7 +475,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {(data.erasureDeadLetters ?? []).map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0" data-dead-letter-id={d.id}>
-                      <td className={tdClass}><LocalTime value={d.receivedAt} /></td>
+                      <td className={tdClass}><LocalTime value={d.receivedAt} withTime /></td>
                       <td className={tdClass}>
                         {d.userId ? (
                           <Link href={`/users/${encodeURIComponent(d.userId)}`} className={linkClass} dir="ltr">{d.userId}</Link>
@@ -516,7 +518,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {(data.thumbnailRuns ?? []).map((r) => (
                     <tr key={r.id} className="border-b border-border last:border-0" data-run-id={r.id}>
-                      <td className={tdClass}><LocalTime value={r.finishedAt || r.updatedAt} /></td>
+                      <td className={tdClass}><LocalTime value={r.finishedAt || r.updatedAt} withTime /></td>
                       <td className={tdClass}>
                         <div className="text-fg">{t(r.params.dryRun === false ? 'processing.thumbsModeFix' : 'processing.thumbsModeCheck')}</div>
                         <div className="text-fg-muted text-xs" dir="ltr">{r.id}</div>
@@ -536,7 +538,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-thumb-flagged">
           <div className="mb-3">
             <h2 id="errors-thumb-flagged" className="text-xl font-semibold text-fg">{t('errorsPage.thumbFlaggedTitle')}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.thumbFlaggedHint'), { when: <LocalTime value={data.thumbnailFlagged.checkedAt} /> })}</p>
+            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.thumbFlaggedHint'), { when: <LocalTime value={data.thumbnailFlagged.checkedAt} withTime /> })}</p>
           </div>
           {data.thumbnailFlagged.items.length === 0 ? (
             <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-thumb-flagged-empty">{t('errorsPage.thumbFlaggedEmpty')}</div>
@@ -591,7 +593,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {formatFlagged.items.map((v) => (
                     <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                      <td className={tdClass}>{v.formatIssue?.at ? <LocalTime value={v.formatIssue.at} /> : '—'}</td>
+                      <td className={tdClass}>{v.formatIssue?.at ? <LocalTime value={v.formatIssue.at} withTime /> : '—'}</td>
                       <td className={tdClass}>
                         <div className="font-medium text-fg">{v.title || v.id}</div>
                         <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
@@ -629,7 +631,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {contactFailed.messages.map((m) => (
                     <tr key={m.id} className="border-b border-border last:border-0" data-message-id={m.id}>
-                      <td className={tdClass}><LocalTime value={m.send_failed_at ?? m.updated_at} /></td>
+                      <td className={tdClass}><LocalTime value={m.send_failed_at ?? m.updated_at} withTime /></td>
                       <td className={tdClass}>
                         <Link href={`/contact/${encodeURIComponent(m.id)}`} className={linkClass} aria-label={t('contact.openMessage', { name: m.name })}>
                           <span dir="auto">{m.name}</span>

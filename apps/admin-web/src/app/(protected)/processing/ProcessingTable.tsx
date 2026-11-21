@@ -7,11 +7,13 @@ import type { ActionResult } from '@/lib/api/errors';
 import type { ProcessingVideoRow, SyncPreview } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { ISSUE_LABEL, OUTCOME_LABEL, bunnyLabel, checkLabel, ourStatusLabel } from './labels';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
+import { Sep } from '@/components/Sep';
 const thClass = 'text-start px-3 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-3 py-3 align-top text-sm';
 
@@ -20,7 +22,7 @@ const tdClass = 'px-3 py-3 align-top text-sm';
  * shows a dry-run preview first; applying, Retry and Mark failed go through
  * admin-api (permission + audit) and queue the work in api-videos.
  */
-export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; locale: Locale }) {
+export function ProcessingTable({ rows }: { rows: ProcessingVideoRow[]; locale: Locale }) {
   const router = useRouter();
   const { t } = useLanguage();
   const ids = useId();
@@ -34,7 +36,6 @@ export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; 
   const chosen = [...selected];
   const allSelected = rows.length > 0 && selected.size === rows.length;
   const titleOf = (id: string) => rows.find((r) => r.id === id)?.title || id;
-  const fmt = (d: string) => formatDate(d, locale, true);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -134,7 +135,7 @@ export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; 
             {preview.map((p) => (
               <li key={p.videoId} className="text-sm text-fg" data-video-id={p.videoId} data-outcome={p.plan?.outcome ?? 'error'}>
                 <span className="font-medium">{titleOf(p.videoId)}</span>
-                {' · '}
+                <Sep />
                 {bunnyLabel(t, p.bunny)}
                 {' → '}
                 {outcomeText(p)}
@@ -186,7 +187,7 @@ export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; 
                 <td className={tdClass}>
                   <div className="font-medium text-fg">{row.title || row.id}</div>
                   <div className="text-fg-muted text-xs" dir="ltr">{row.id}</div>
-                  {row.dateCreated && <div className="text-fg-muted text-xs">{t('processing.created', { date: fmt(row.dateCreated) })}</div>}
+                  {row.dateCreated && <div className="text-fg-muted text-xs">{fillNodes(t('processing.created'), { date: <LocalTime value={row.dateCreated} withTime /> })}</div>}
                 </td>
                 <td className={tdClass}>
                   <div className="text-fg">{ourStatusLabel(t, row.uploadStatus)}</div>
@@ -198,7 +199,12 @@ export function ProcessingTable({ rows, locale }: { rows: ProcessingVideoRow[]; 
                     <div className="text-fg-muted text-xs" dir="ltr">{row.bunny.availableResolutions}</div>
                   )}
                 </td>
-                <td className={tdClass}>{checkLabel(t, row.processingCheck, fmt)}</td>
+                <td className={tdClass}>
+                  {/* The next check time goes in as <LocalTime> (local with zone, UTC on hover) */}
+                  {fillNodes(checkLabel(t, row.processingCheck, () => '{date}'), {
+                    date: row.processingCheck?.nextCheckAt ? <LocalTime value={row.processingCheck.nextCheckAt} withTime /> : '',
+                  })}
+                </td>
                 <td className={tdClass}>
                   {row.processingIssue ? (
                     <>

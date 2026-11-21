@@ -19,8 +19,9 @@ import { ErrorGroupActions } from './ErrorGroupActions';
 import { NeedsActionItemButtons } from './NeedsActionItemButtons';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
-import { dateTimeFormat, normalizeRoute, pluralCategory, scrubContext, type ErrorContext, type RequestOrigin } from '@al-ummah/shared-types';
+import { normalizeRoute, pluralCategory, scrubContext, type ErrorContext, type RequestOrigin } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -93,8 +94,8 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         <Fact align={start} label={t('errorsPage.environment')} value={environmentName(t, group.environment)} />
         <Fact align={start} label={t('errorsPage.occurrences')} value={formatNumber(group.occurrences, locale)} />
         <Fact align={start} label={t('errorsPage.usersAffected')} value={formatNumber(group.users, locale)} />
-        <Fact align={start} label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} />} />
-        <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={group.last_seen} />} />
+        <Fact align={start} label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} withTime />} />
+        <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={group.last_seen} withTime />} />
         <Fact align={start} label={t('errorsPage.firstRelease')} value={group.first_release ?? '—'} mono />
         <Fact align={start} label={t('errorsPage.lastRelease')} value={group.last_release ?? '—'} mono />
         {group.route && <Fact align={start} label={t('errorsPage.route')} value={group.route} mono />}
@@ -138,7 +139,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                     <Fact align={start} label={t('errorsPage.itemSource')} value={translateDynamic(t, 'itemSource', item.source)} />
                     <Fact align={start} label={t('errorsPage.itemAttempts')} value={formatNumber(item.attempts, locale)} />
                     <Fact align={start} label={t('errorsPage.itemLastResult')} value={item.last_attempt_result ?? '—'} />
-                    <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={item.updated_at} />} />
+                    <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={item.updated_at} withTime />} />
                   </dl>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {href && (
@@ -163,7 +164,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           <HourlyChart
             hours={hourly}
             label={t('errorsPage.timeline')}
-            barTitle={(h) => fillNodes(t('errorsPage.timelineHour'), { hour: <LocalTime value={hourDate(h.hour).toISOString()} />, count: formatNumber(h.occurrences, locale) })}
+            barTitle={(h) => fillNodes(t('errorsPage.timelineHour'), { hour: <LocalTime value={hourDate(h.hour).toISOString()} withTime />, count: formatNumber(h.occurrences, locale) })}
             locale={locale}
             hourLabel={(hour) => <LocalHour value={hourDate(hour).toISOString()} />}
             tableLabel={t('errorsPage.timelineTable')}
@@ -191,7 +192,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-fg-muted">
-                    {t('errorsPage.colLastSeen')}: <LocalTime value={r.last_seen} />
+                    {t('errorsPage.colLastSeen')}: <LocalTime value={r.last_seen} withTime />
                   </p>
                 </li>
               ))}
@@ -299,7 +300,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
   const template = e.route ? normalizeRoute(e.route) : '';
   const code = (v: string) => <code dir="ltr">{v}</code>;
   const facts: [string, React.ReactNode][] = [
-    [t('errorsPage.occurredAt'), <LocalTime key="at" value={e.occurred_at} />],
+    [t('errorsPage.occurredAt'), <LocalTime key="at" value={e.occurred_at} withTime />],
     [t('errorsPage.route'), e.route ? code(`${e.method ? `${e.method} ` : ''}${e.route}`) : '—'],
   ];
   if (template && template !== e.route) facts.push([t('errorsPage.routeTemplate'), code(template)]);
@@ -361,7 +362,6 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
   }
   if (ctx?.origin) facts.push(...originFacts(ctx.origin, t, locale));
   facts.push([t('errorsPage.browser'), [e.browser, e.os].filter((v): v is string => !!v).map((v) => platformName(t, locale, v)).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ? languageName(e.locale, locale) : '—'], [t('errorsPage.theme'), e.theme ?? '—']);
-  const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
     <li className={`border rounded p-4 ${highlighted ? 'border-accent ring-1 ring-accent' : 'border-border'}`} data-testid="error-sample" data-ref={e.ref}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
@@ -386,9 +386,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
           <ol className="space-y-1 text-xs" data-testid="error-sample-breadcrumbs">
             {ctx.breadcrumbs.map((b, i) => (
               <li key={i} className="flex flex-wrap gap-x-2 min-w-0">
-                <time dateTime={b.at} className="text-fg-subtle tabular-nums whitespace-nowrap">
-                  {time.format(new Date(b.at))}
-                </time>
+                <LocalTime value={b.at} clock className="text-fg-subtle tabular-nums whitespace-nowrap" />
                 <span className="text-fg-muted">{b.kind}</span>
                 <code dir="ltr" className="text-fg break-words [overflow-wrap:anywhere] min-w-0" style={{ textAlign: 'start' }}>
                   {b.message}
@@ -443,7 +441,7 @@ function ActivityEntry({ entry: a, t }: { entry: ErrorActivity; t: Translator })
             : t('errorsPage.by', { actor: a.actor_email ?? t('errorsPage.system') })}
         </span>
       </p>
-      <LocalTime value={a.created_at} className="text-xs text-fg-subtle" />
+      <LocalTime value={a.created_at} withTime className="text-xs text-fg-subtle" />
       {a.body && <p className="mt-1 text-sm text-fg whitespace-pre-wrap break-words" dir="auto">{a.body}</p>}
     </li>
   );

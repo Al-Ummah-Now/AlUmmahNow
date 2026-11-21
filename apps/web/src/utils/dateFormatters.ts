@@ -3,7 +3,7 @@
  * Handles date formatting for both Gregorian and Hijri calendars
  */
 
-import { formatDate as formatLocaleDate, formatNumber } from '@al-ummah/shared-types';
+import { formatDate as formatLocaleDate, formatNumber, relativeTimeFormat } from '@al-ummah/shared-types';
 import { formatHijriDate, gregorianToHijri } from './hijriConverter';
 
 export type CalendarType = 'gregorian' | 'hijri';
@@ -103,13 +103,13 @@ export function formatScheduledTime(
   const absDiffHours = Math.abs(diffHours);
   const absDiffDays = Math.abs(diffDays);
   const n = (value: number) => formatNumber(locale, value);
+  // CLDR wording agrees with the count: «قبل دقيقتين», «قبل ٣ دقائق», «خلال ١١ ساعة» (#1666)
+  const arRelative = (value: number, unit: 'minute' | 'hour' | 'day') => relativeTimeFormat('ar', { numeric: 'always' }).format(value, unit);
 
   // Less than 1 hour
   if (absDiffMinutes < 60) {
     if (locale === 'ar') {
-      return isPast
-        ? `قبل ${n(absDiffMinutes)} دقيقة`
-        : `خلال ${n(absDiffMinutes)} دقيقة`;
+      return arRelative(isPast ? -absDiffMinutes : absDiffMinutes, 'minute');
     }
     return isPast
       ? `${n(absDiffMinutes)} minute${absDiffMinutes !== 1 ? 's' : ''} ago`
@@ -119,9 +119,7 @@ export function formatScheduledTime(
   // Less than 24 hours
   if (absDiffHours < 24) {
     if (locale === 'ar') {
-      return isPast
-        ? `قبل ${n(absDiffHours)} ساعة`
-        : `خلال ${n(absDiffHours)} ساعة`;
+      return arRelative(isPast ? -absDiffHours : absDiffHours, 'hour');
     }
     return isPast
       ? `${n(absDiffHours)} hour${absDiffHours !== 1 ? 's' : ''} ago`
@@ -130,9 +128,7 @@ export function formatScheduledTime(
 
   // Days
   if (locale === 'ar') {
-    return isPast
-      ? `قبل ${n(absDiffDays)} يوم`
-      : `خلال ${n(absDiffDays)} يوم`;
+    return arRelative(isPast ? -absDiffDays : absDiffDays, 'day');
   }
   return isPast
     ? `${n(absDiffDays)} day${absDiffDays !== 1 ? 's' : ''} ago`

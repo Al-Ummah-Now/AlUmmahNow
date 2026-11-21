@@ -48,9 +48,24 @@ test('every Arabic formatter writes ٠–٩ and no 0–9', () => {
     assert.doesNotMatch(text, ASCII_DIGIT, `0–9 in Arabic output «${text}»`);
     assert.match(text, /[٠-٩]/, `no ٠–٩ in «${text}»`);
   }
-  assert.equal(f.formatInteger('ar', 5400), '٥٬٤٠٠');
   assert.equal(f.formatClock('ar', 3725), '١:٠٢:٠٥');
   assert.equal(f.fillTemplate('ar', 'آخر {days} أيام', { days: 7 }), 'آخر ٧ أيام');
+});
+
+test('Arabic numbers are never grouped, English keeps its grouping (owner 2026-11-21)', () => {
+  // «٬» and the decimal «٫» look alike in most Arabic UI fonts, so «١٥٬٤١٩٫٩» read as 15,419,9:
+  // «٫» is the only mark inside an Arabic number
+  assert.equal(f.formatInteger('ar', 4887), '٤٨٨٧');
+  assert.equal(f.formatNumber('ar', 1234.5), '١٢٣٤٫٥');
+  assert.equal(f.formatInteger('en', 4887), '4,887');
+  assert.equal(f.formatNumber('en', 1234.5), '1,234.5');
+  assert.equal(f.numberFormat('ar', { useGrouping: true }).format(56199), '٥٦١٩٩');
+  assert.equal(f.formatNumber('ar', 1234567), '١٢٣٤٥٦٧');
+  assert.equal(f.numberFormat('ar', { style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 }).format(5062.6), '٥٠٦٢٫٦ س');
+  assert.equal(f.formatPercent('ar', 23.32), '٢٣٣٢٪\u061c');
+  for (const text of [f.formatInteger('ar', 15419), f.formatNumber('ar', 15419.9), f.formatCompact('ar', 1234567)]) {
+    assert.doesNotMatch(text, /[\u066c,]|[٠-٩][\s\u202f\u00a0][٠-٩]/, `a group mark in «${text}»`);
+  }
 });
 
 test('under a minute is "now", also with numeric always', () => {
@@ -83,6 +98,7 @@ test('typed numbers accept both digit systems', () => {
   assert.equal(f.parseDigits('۱۲'), '12');
   assert.equal(f.parseDigits('+٩٦٦ ٥٠'), '+966 50');
   assert.equal(f.parseLocaleNumber('١٬٢٣٤٫٥'), 1234.5);
+  assert.equal(f.parseLocaleNumber('١\u202f٢٣٤٫٥'), 1234.5);
   assert.equal(f.parseLocaleNumber('1,234.5'), 1234.5);
   assert.ok(Number.isNaN(f.parseLocaleNumber('')));
   assert.equal(f.localizeDigits('en', '2026-11'), '2026-11');
@@ -131,3 +147,122 @@ test('Arabic file sizes write the unit in full, ungrouped, like the Tools app', 
   assert.equal(f.formatBytes('ar-SA', 1024 ** 3), '١ غيغابايت');
   assert.equal(f.formatBytes('en', 1536), '1.5 kB');
 });
+// Owner's final rule 2026-11-20 (identical on Android, Apple, Desktop and web): exactly 1 or 2 has
+// no digit («ألف», «ألفان»; «ألفا» before a noun), whole 3–10 the plural («٣ آلاف»), 11+ and
+// every decimal the singular («١١ ألف», «١٫٣ ألف»); the noun after a scale word is singular.
+const sp = (s: string) => s.replace(/\u00a0/g, ' ');
+const COUNTS = [1, 2, 3, 10, 11, 100, 1000, 1300, 2000, 2500, 3000, 8000, 11000, 1_000_000, 2_000_000, 3_000_000, 15_000_000];
+
+test('formatCompact: Arabic scale words agree with the number shown; millions are «{n} م» (owner 2026-11-21)', () => {
+  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), ['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألفًا', '١ م', '٢ م', '٣ م', '١٥ م']);
+  assert.equal(sp(f.formatCompact('ar', 1050)), 'ألف');
+  assert.equal(sp(f.formatCompact('ar', 2999)), '٢٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 10_000)), '١٠ آلاف');
+  assert.equal(sp(f.formatCompact('ar', 10_999)), '١٠٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 999_999)), '٩٩٩٫٩ ألف');
+  assert.equal(sp(f.formatCompact('ar', 1_000_000_000)), 'مليار');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000_000)), 'ملياران');
+  assert.equal(sp(f.formatCompact('ar', 3_000_000_000)), '٣ مليارات');
+  assert.equal(sp(f.formatCompact('ar', 4_500_000_000)), '٤٫٥ مليار');
+  assert.equal(f.formatCompact('ar', 0), '٠');
+});
+
+test('formatCompact beforeNoun: the dual is the construct form, never after a digit', () => {
+  assert.equal(f.formatCompact('ar', 2000, 1, { beforeNoun: true }), 'ألفا');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000, 1, { beforeNoun: true })), '٢ م');
+  assert.equal(f.formatCompact('ar', 2_000_000_000, 1, { beforeNoun: true }), 'مليارا');
+  assert.equal(f.formatCompact('ar', 1000, 1, { beforeNoun: true }), 'ألف');
+  assert.equal(sp(f.formatCompact('ar', 2500, 1, { beforeNoun: true })), '٢٫٥ ألف');
+  assert.equal(f.formatCompact('en', 2000, 1, { beforeNoun: true }), '2K');
+});
+
+test('standalone 11–99 thousands take the accusative; before a noun the singular (owner 2026-11-21, Android #51, Desktop #69)', () => {
+  const alone = (n: number) => sp(f.formatCompact('ar', n));
+  const noun = (n: number) => sp(f.formatCompact('ar', n, 1, { beforeNoun: true }));
+  // Stat cards and chart ticks: no noun follows
+  assert.equal(alone(12_000), '١٢ ألفًا');
+  assert.equal(alone(120_000), '١٢٠ ألفًا');
+  assert.equal(alone(100_000), '١٠٠ ألف');
+  assert.equal(alone(11_500), '١١٫٥ ألف');
+  assert.equal(alone(12_000_000_000), '١٢ مليارًا');
+  assert.equal(alone(99_000), '٩٩ ألفًا');
+  assert.equal(alone(200_000), '٢٠٠ ألف');
+  assert.equal(alone(111_000), '١١١ ألفًا');
+  assert.equal(alone(10_000), '١٠ آلاف');
+  assert.equal(alone(25_000_000_000), '٢٥ مليارًا');
+  assert.equal(alone(6_500_000_000), '٦٫٥ مليار');
+  // Before a noun: «١٢ ألف مشاهدة»
+  assert.equal(noun(12_000), '١٢ ألف');
+  assert.equal(noun(120_000), '١٢٠ ألف');
+  assert.equal(noun(100_000), '١٠٠ ألف');
+  assert.equal(noun(11_500), '١١٫٥ ألف');
+  assert.equal(noun(12_000_000_000), '١٢ مليار');
+  // Millions stay «{n} م» either way
+  assert.equal(alone(12_000_000), '١٢ م');
+  assert.equal(noun(12_000_000), '١٢ م');
+  // English is unchanged
+  assert.deepEqual([12_000, 120_000, 100_000, 11_500, 12_000_000_000].map((n) => f.formatCompact('en', n)), ['12K', '120K', '100K', '11.5K', '12B']);
+});
+
+test('meta separator: the Arabic comma between values, English keeps its mark (owner 2026-11-21)', () => {
+  assert.equal(f.metaSeparator('ar'), '، ');
+  assert.equal(f.metaSeparator('en'), ' • ');
+  assert.equal(f.metaSeparator('en', '·'), ' · ');
+  assert.equal(f.metaMark('ar'), '،');
+  assert.equal(f.metaMark('en', '·'), '·');
+  assert.equal(f.metaSeparator('ar-SA'), '، ');
+  assert.equal(f.joinMeta('ar', ['الأمة الآن', '٣ م مشاهدة']), 'الأمة الآن، ٣ م مشاهدة');
+  assert.equal(f.joinMeta('ar', ['عام', null, '', false, '١٢ ألف مشاهدة']), 'عام، ١٢ ألف مشاهدة');
+  assert.equal(f.joinMeta('en', ['Public', '12K views']), 'Public • 12K views');
+  assert.doesNotMatch(f.joinMeta('ar', ['أ', 'ب', 'ج']), /[•·]/);
+});
+
+test('tick labels (no noun) use the same scale words', () => {
+  const ticks = [500, 1000, 1500, 2000, 3000, 2_000_000];
+  assert.deepEqual(ticks.map((n) => sp(f.formatCompact('ar', n))), ['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', '٢ م']);
+  assert.deepEqual(ticks.map((n) => f.formatCompact('en', n)), ['500', '1K', '1.5K', '2K', '3K', '2M']);
+});
+
+test('formatCompact: English keeps its K/M suffixes', () => {
+  assert.deepEqual(COUNTS.map((n) => f.formatCompact('en', n)), ['1', '2', '3', '10', '11', '100', '1K', '1.3K', '2K', '2.5K', '3K', '8K', '11K', '1M', '2M', '3M', '15M']);
+});
+
+// #1666: a number before a noun agrees with it through an ICU plural select.
+const VIEWS_AR = '{count, plural, zero {لا توجد مشاهدات} one {مشاهدة واحدة} two {مشاهدتان} few {# مشاهدات} many {# مشاهدة} other {# مشاهدة}}';
+const VIEWS_EN = '{count, plural, one {# view} other {# views}}';
+
+test('fillTemplate plural selects follow the CLDR category of the count', () => {
+  assert.deepEqual([0, 1, 2, 3, 10, 11, 100, 1520].map((count) => f.fillTemplate('ar', VIEWS_AR, { count })), [
+    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١٥٢٠ مشاهدة',
+  ]);
+  assert.deepEqual([0, 1, 2, 3, 10, 11, 100].map((count) => f.fillTemplate('en', VIEWS_EN, { count })), [
+    '0 views', '1 view', '2 views', '3 views', '10 views', '11 views', '100 views',
+  ]);
+});
+
+test('fillTemplate plural: text around it, other placeholders inside, formatted and compact text', () => {
+  const t = 'Found {count, plural, one {# result} other {# results}} for "{query}"';
+  assert.equal(f.fillTemplate('en', t, { count: 1, query: 'q' }), 'Found 1 result for "q"');
+  assert.equal(f.fillTemplate('ar', '{n, plural, few {# أيام في {place}} other {# يومًا في {place}}}', { n: 3, place: 'X' }), '٣ أيام في X');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '٣' }), '٣ مشاهدات');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '١٬٢٣٤' }), '١٬٢٣٤ مشاهدة');
+  assert.equal(f.fillTemplate('ar', VIEWS_AR, { count: '١٫٣ ألف' }), '١٫٣ ألف مشاهدة');
+  assert.equal(f.fillTemplate('en', '{a, plural, one {# like} other {# likes}} · {b, plural, one {# comment} other {# comments}}', { a: 1, b: 2 }), '1 like · 2 comments');
+  assert.equal(f.fillTemplate('en', 'last {#14} days, {count, plural, one {# time} other {# times}}', { count: 1 }), 'last 14 days, 1 time');
+  assert.equal(f.fillTemplate('en', VIEWS_EN), '{count} views');
+});
+
+test('formatCompact: English cuts like Arabic, so both show the same number', () => {
+  const cases: Array<[number, string, string]> = [
+    [33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'],
+    [12_000, '12K', '١٢ ألفًا'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ م'], [15_000_000, '15M', '١٥ م'], [1_000_000, '1M', '١ م'], [4_887, '4.8K', '٤٫٨ ألف'],
+  ];
+  for (const [n, en, ar] of cases) {
+    assert.equal(f.formatCompact('en', n), en, `en ${n}`);
+    assert.equal(sp(f.formatCompact('ar', n)), ar, `ar ${n}`);
+  }
+  assert.equal(f.formatCompact('en', 1_999_999_999), '1.9B');
+  assert.equal(f.formatCompact('en', -2_999), '-2.9K');
+  assert.equal(f.formatCompact('en', 999), '999');
+});
+

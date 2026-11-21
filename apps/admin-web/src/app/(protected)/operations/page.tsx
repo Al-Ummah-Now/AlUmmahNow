@@ -12,6 +12,7 @@ import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 import { logger } from '@/lib/logger';
 import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
 import { SpendSection } from './SpendSection';
+import { Sep } from '@/components/Sep';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,7 +64,7 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         <thead>
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t(`operations.charts.${spec.label}`)} · {t('operations.resources.today')}</th>
+            <th scope="col" className="p-2 text-end font-medium">{t(`operations.charts.${spec.label}`)}<Sep />{t('operations.resources.today')}</th>
             <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.last7')}</th>
             <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.monthCost')}</th>
           </tr>
@@ -178,7 +179,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                 <ul className="mb-2 space-y-1">
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
-                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span> · {a.rule_id} ·{' '}
+                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span><Sep />{a.rule_id}<Sep />
                       <span className="text-fg-muted">{t('operations.alerts.opened', { time: f.time(a.opened_at) })}</span>
                     </li>
                   ))}

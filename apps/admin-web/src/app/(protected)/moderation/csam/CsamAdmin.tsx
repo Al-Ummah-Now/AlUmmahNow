@@ -15,6 +15,7 @@ import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { generateCsamWebhookSecret, setCsamRetentionDays, submitCsamIntake, type CsamIntakeResult } from '@/lib/api/csam';
 import { NumberField } from '@/components/forms/NumberField';
+import { Sep } from '@/components/Sep';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 
@@ -87,7 +88,7 @@ export function IntakeForm() {
                 {result.cases.map((c) => (
                   <li key={c.id}>
                     <Link className={`${linkClass} break-all`} href={`/moderation/csam/${encodeURIComponent(c.id)}`}><bdi dir="ltr">{c.matchedUrl}</bdi></Link>
-                    {c.status === 'unmapped' && <span className="text-danger-fg"> · {t('csamPage.intake.unmapped')}</span>}
+                    {c.status === 'unmapped' && <span className="text-danger-fg"><Sep />{t('csamPage.intake.unmapped')}</span>}
                   </li>
                 ))}
               </ul>

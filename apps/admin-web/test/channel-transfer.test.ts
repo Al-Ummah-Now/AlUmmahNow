@@ -51,7 +51,7 @@ describe('transfer search results as Autocomplete items', () => {
     const item = transferItem(user('usr_1', { displayName: 'Amina', userName: 'amina', channelCount: 2, channelRole: 'editor' }), tEn);
     assert.deepEqual(
       { kind: item.kind, id: item.id, label: item.label, secondary: item.secondary, meta: item.meta, disabled: item.disabled },
-      { kind: 'user', id: 'usr_1', label: 'Amina', secondary: 'usr_1@example.com', meta: 'Owns 2 channels · Channel editor here', disabled: false },
+      { kind: 'user', id: 'usr_1', label: 'Amina', secondary: 'usr_1@example.com', meta: 'Owns 2 channels • Channel editor here', disabled: false },
     );
     assert.equal(transferItem(user('usr_2', { isBanned: true }), tEn).disabled, true);
     assert.equal(transferItem(user('usr_3', { email: null }), tAr).secondary?.includes(tAr('channels.pickerNoEmail')), true);
@@ -78,7 +78,7 @@ describe('transfer text', () => {
   it('shows channel count, role on the channel and bans', () => {
     assert.equal(userMeta(user('a'), tEn), 'Owns no channels');
     assert.equal(userMeta(user('a', { channelCount: 1 }), tEn), 'Owns 1 channel');
-    assert.equal(userMeta(user('a', { channelCount: 3, channelRole: 'editor' }), tEn), 'Owns 3 channels · Channel editor here');
+    assert.equal(userMeta(user('a', { channelCount: 3, channelRole: 'editor' }), tEn), 'Owns 3 channels • Channel editor here');
     assert.match(userMeta(user('a', { isBanned: true }), tEn), /Banned/);
     assert.match(userMeta(user('a', { channelRole: 'moderator' }), tAr), /مشرف/);
     // No @handle for users (handles belong to channels): an unnamed user is called by their email

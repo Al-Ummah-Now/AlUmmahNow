@@ -12,7 +12,7 @@
 
 'use client';
 
-import { formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate } from '@al-ummah/shared-types';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLiveStreams } from '@/hooks/useLiveStreams';
@@ -127,10 +127,8 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
  * Format stream count with proper pluralization
  */
 function formatStreamCount(count: number, t: ReturnType<typeof useLanguage>['t']): string {
-  const baseText = t.live?.showingStreamsCount || 'Showing {count} live stream';
-  const text = baseText.replace('{count}', formatNumber('en', count));
-  // Add 's' for plural in English
-  return count !== 1 ? text + 's' : text;
+  // The catalogue's plural select picks "stream"/"streams"
+  return fillTemplate('en', t.live?.showingStreamsCount || '{count, plural, one {Showing # live stream} other {Showing # live streams}}', { count });
 }
 
 /**

@@ -3,7 +3,7 @@
  * the server's raw text. Creator tiers answer with a `code` (and `retryAfter`
  * for a limit); everything else falls back to the caller's generic message.
  */
-import { CREATOR_ERROR_CODES, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, formatNumber } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, formatNumber, fillTemplate } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
 export interface RefusedCall {
@@ -15,9 +15,9 @@ export interface RefusedCall {
 /** "23 minutes", "1 hour", "2 hours" (rounded up to whole minutes, then hours from 90 minutes). */
 export function formatWait(t: Pick<AppTranslations, 'creator'>, seconds: number, lang = 'en'): string {
   const minutes = Math.max(1, Math.ceil(seconds / 60));
-  if (minutes < 90) return minutes === 1 ? t.creator.minute : t.creator.minutes.replace('{count}', formatNumber(lang, minutes));
+  if (minutes < 90) return minutes === 1 ? t.creator.minute : fillTemplate(lang, t.creator.minutes, { count: minutes });
   const hours = Math.ceil(minutes / 60);
-  return hours === 1 ? t.creator.hour : t.creator.hours.replace('{count}', formatNumber(lang, hours));
+  return hours === 1 ? t.creator.hour : fillTemplate(lang, t.creator.hours, { count: hours });
 }
 
 /** The friendly message for a refused call, or null when it is not a creator-tier refusal. */

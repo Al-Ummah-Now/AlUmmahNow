@@ -4,7 +4,7 @@ import React from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { SubtitleCue } from '@/lib/api/subtitles-types';
 import { formatSubtitleTime } from '@/lib/api/subtitle-utils';
-import { formatNumber } from '@al-ummah/shared-types';
+import { formatNumber, fillTemplate } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 
 interface SubtitlePreviewProps {
@@ -170,7 +170,7 @@ export default function SubtitlePreview({
           text-center
           py-2
         ">
-          {t.subtitle?.moreCues?.replace('{count}', formatNumber(lang, cues.length - 5)) ||
+          {(t.subtitle?.moreCues ? fillTemplate(lang, t.subtitle.moreCues, { count: cues.length - 5 }) : '') ||
             `+${formatNumber(lang, cues.length - 5)} more cues`}
         </p>
       )}

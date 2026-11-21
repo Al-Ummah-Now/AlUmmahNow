@@ -61,7 +61,7 @@ export const UPLOAD_STATUS_EN: UploadStatusTranslations = {
   viewVideo: 'View video',
   editVideo: 'Edit Video',
   uploadAnother: 'Upload another video',
-  row: { processing: 'Uploaded · Processing', ready: 'Ready', failed: "Couldn’t be processed" },
+  row: { processing: 'Uploaded • Processing', ready: 'Ready', failed: "Couldn’t be processed" },
   batchKeepOpen:
     "Keep this page open until all uploads finish. Processing continues on our side after that, and we’ll notify you when each video is ready.",
   batchProcessing: "All uploads finished. We’re processing your videos and will notify you when each one is ready.",

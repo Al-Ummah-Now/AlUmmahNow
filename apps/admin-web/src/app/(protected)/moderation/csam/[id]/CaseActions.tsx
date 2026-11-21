@@ -9,7 +9,7 @@
  */
 import { useId, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useConfirm, useContentAction } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
@@ -21,6 +21,8 @@ import { NCMEC_CYBERTIPLINE_URL, csamDownloadHref, csamFactsText, validReportId,
 import { DateTimeField } from '@/components/DateField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 const STEPS = ['open', 'type', 'fields', 'files', 'submit', 'record'] as const;
 
@@ -88,7 +90,7 @@ export function ReportChecklist({ caseId, rows, reported, canDownload, files }: 
 }
 
 export function ReportedForm({ caseId, reportId, reportedAt, timeFixed }: { caseId: string; reportId: string | null; reportedAt: string | null; timeFixed: boolean }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const id = useId();
   const { run, busy, error, message } = useContentAction();
   const [invalid, setInvalid] = useState(false);
@@ -114,7 +116,7 @@ export function ReportedForm({ caseId, reportId, reportedAt, timeFixed }: { case
       <p className="text-sm text-fg-muted mb-3">{t(timeFixed ? 'csamPage.reported.fixedNote' : 'csamPage.reported.note')}</p>
       {reportedAt && reportId && (
         <p className="text-sm text-fg mb-3" data-testid="csam-reported-current">
-          {t('csamPage.reported.current', { id: reportId, date: formatDate(reportedAt, locale, true) })}
+          {fillNodes(t('csamPage.reported.current', { id: reportId }), { date: <LocalTime value={reportedAt} withTime /> })}
         </p>
       )}
       <form onSubmit={submit} className="grid grid-cols-1 gap-3 max-w-xl sm:grid-cols-2">

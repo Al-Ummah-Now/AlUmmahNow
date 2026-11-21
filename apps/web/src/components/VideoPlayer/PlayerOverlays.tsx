@@ -14,7 +14,7 @@
  * once. Focus moves to Play now only when it was on the page body or inside this player, so a viewer
  * typing elsewhere on the page keeps their place.
  */
-import { formatNumber } from '@al-ummah/shared-types';
+import { fillTemplate } from '@al-ummah/shared-types';
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { ListRestart, Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-react';
 import type { EndSuggestion, UpNext } from '@/lib/video/player-ui';
@@ -228,7 +228,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
       {moreRow}
       {/* Announced once, not every second */}
       <p className="vjs-control-text" role="status" aria-live="polite">
-        {counting ? t.chrome.autoAdvance.replace('{seconds}', formatNumber(dir === 'rtl' ? 'ar' : 'en', autoAdvanceSeconds)) : ''}
+        {counting ? fillTemplate(dir === 'rtl' ? 'ar' : 'en', t.chrome.autoAdvance, { seconds: autoAdvanceSeconds }) : ''}
       </p>
     </div>
   );

@@ -1,10 +1,11 @@
 import { getIndexStatus } from '@/lib/api/admin';
 import type { IndexStats } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const thClass = 'text-start px-4 sm:px-6 py-3 text-fg-muted font-medium whitespace-nowrap';
@@ -69,7 +70,7 @@ export default async function IndicesPage() {
                       <td className="px-4 sm:px-6 py-4 font-mono text-sm text-fg" dir="ltr">{index.name}</td>
                       <td className="px-4 sm:px-6 py-4 text-fg">{formatNumber(index.count, locale)}</td>
                       <td className="px-4 sm:px-6 py-4 text-fg-muted text-sm whitespace-nowrap">
-                        <time dateTime={index.lastUpdated}>{formatDate(index.lastUpdated, locale, true)}</time>
+                        <LocalTime value={index.lastUpdated} withTime />
                       </td>
                       <td className="px-4 sm:px-6 py-4">
                         <span

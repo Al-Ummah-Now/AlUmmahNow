@@ -12,6 +12,7 @@ import { ContactFilterBar } from './ContactFilterBar';
 import { ContactInbox } from './ContactInbox';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { CONTACT_PAGE_SIZE, contactHref, hasContactFilters, parseContactFilters, type ContactViewId } from './filters';
+import { Sep } from '@/components/Sep';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,7 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
           {t('contact.subtitle')}
           {data && (
             <span data-testid="contact-total" data-total={data.total}>
-              {' · '}
+              <Sep />
               {formatCount(data.total, 'message', locale)}
             </span>
           )}

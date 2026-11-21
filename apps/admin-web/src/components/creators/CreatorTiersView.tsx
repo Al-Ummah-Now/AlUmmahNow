@@ -1,7 +1,7 @@
 import Link from '@/components/AppLink';
 import { CREATOR_TIER_IDS, DEFAULT_TIER_ID, type AdminAuditEntry, type CreatorTiersList  } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
-import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
+import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TierEditor, type TierActions } from './TierEditor';
 import { TierRankList } from './TierRankList';
@@ -11,6 +11,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { tierLabel } from '@/lib/creator-tiers';
 
+import { LocalTime } from '@/components/LocalTime';
 const FIELD_LABEL: Record<string, MessageKey> = {
   name: 'creators.tierName',
   unlimited: 'creators.tierUnlimited',
@@ -98,7 +99,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
                     : (() => { const tier = list?.items.find((x) => `content:creator-tier:${x.id}` === entry.key); return tier ? tierLabel(tier, locale) : null; })() ?? entry.key.replace('content:creator-tier:', '')}
                 </span>{' '}
                 <span className="text-fg">{auditSummary(entry, t, list, locale)}</span>{' '}
-                <span className="text-fg-muted">{fillNodes(t('creators.historyBy', { date: formatDate(entry.createdAt, locale, true) }), { actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
+                <span className="text-fg-muted">{fillNodes(t('creators.historyBy'), { date: <LocalTime value={entry.createdAt} withTime />, actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
               </li>
             ))}
           </ul>

@@ -3,7 +3,7 @@ import { ADMIN_CHANNEL_SORTS } from '@al-ummah/shared-types';
 import { listChannels } from '@/lib/api/content';
 import type { AdminChannelRow, AdminPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatCount, formatDate, formatNumber } from '@/i18n/translate';
+import { formatCount, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { Chip, EmptyState, MetaLine, Notice, PageHeader, Pager, cardTable, tdClass, thClass, wideOnly } from '@/components/content/parts';
@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { getNames } from '@/lib/api/audit';
 import { adminUserName } from '@/lib/user-name';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const YES_NO = ['yes', 'no'] as const;
@@ -124,8 +125,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                             testId="channel-meta"
                             parts={[
                               ch.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(ch.ownerId)}`} className={linkClass}>{ownerName(ch)}</Link> : null,
-                              formatCount(ch.subscribers, 'subscriber', locale),
-                              formatCount(ch.views, 'view', locale),
+                              formatCount(ch.subscribers, 'subscriber', locale, { compact: true }),
+                              formatCount(ch.views, 'view', locale, { compact: true }),
                             ]}
                           />
                         </div>
@@ -159,7 +160,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                     <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.subscribers, locale)}</td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.views, locale)}</td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
-                      {ch.createdAt ? <time dateTime={ch.createdAt}>{formatDate(ch.createdAt, locale)}</time> : t('content.none')}
+                      {ch.createdAt ? <LocalTime value={ch.createdAt} /> : t('content.none')}
                     </td>
                   </tr>
                 ))}

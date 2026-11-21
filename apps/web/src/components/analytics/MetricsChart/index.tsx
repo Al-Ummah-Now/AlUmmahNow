@@ -103,7 +103,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
               <div
                 className="bg-purple-500 dark:bg-purple-400 rounded-t w-full min-h-[2px]"
                 style={{ height: scale(metric.watchTime || 0, maxWatchTime, 100) }}
-                title={`${dayLabel(metric.date)}: ${d.minutesCount.replace('{count}', fmt(minutes(metric.watchTime)))}`}
+                title={`${dayLabel(metric.date)}: ${fillTemplate(locale, d.minutesCount, { count: minutes(metric.watchTime) })}`}
               />
             </div>
           ))}

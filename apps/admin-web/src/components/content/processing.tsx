@@ -9,12 +9,13 @@
  * failed is red with the reason in a tooltip reachable by keyboard and screen
  * reader (aria-describedby on a focusable chip, plus title for the mouse).
  */
-import { numberFormat, sanitizeRungs, sortByResolution, type AdminLiveEvent, type R2RungState } from '@al-ummah/shared-types';
+import { numberFormat, sanitizeRungs, sortByResolution, type AdminLiveEvent, type R2RungState, metaSeparator } from '@al-ummah/shared-types';
 import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import type { AdminVideoR2 } from '@/lib/api/content-types';
 import type { Translator } from '@/i18n/translate';
 import { deliveryFormats } from '@/app/(protected)/delivery/format';
 import { ISSUE_LABEL } from '@/app/(protected)/processing/labels';
+import { Sep } from '@/components/Sep';
 
 export { sortByResolution };
 
@@ -228,9 +229,9 @@ export function ResolutionChip({ chip, t, locale, idPrefix }: { chip: Resolution
       {chip.state === 'done' ? (
         <span className="sr-only">{state}</span>
       ) : (
-        <span>· {state}</span>
+        <span><Sep />{state}</span>
       )}
-      {extras.length > 0 && <span className="opacity-90">· {extras.join(' · ')}</span>}
+      {extras.length > 0 && <span className="opacity-90"><Sep />{extras.join(metaSeparator(locale))}</span>}
     </>
   );
   const data = { 'data-resolution': chip.name, 'data-state': chip.state, 'data-testid': 'resolution-chip' };

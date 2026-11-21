@@ -17,6 +17,7 @@ import { findingCategoryLabel, findingSourceLabel } from '@/lib/review-labels';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { Select } from '@/components/select/Select';
+import { Sep } from '@/components/Sep';
 
 const SPEEDS = [1, 1.5, 2, 3];
 const NSFW = new Set(['sexual', 'gore', 'disturbing', 'sexual_explicit_language', 'S12', 'minor_present']);
@@ -118,8 +119,8 @@ export function ReviewWorkspace({ detail, media }: Props) {
                 <p className="mt-1 text-sm text-fg-muted" data-testid="review-audio-track">
                   <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-fg">{t('review.audioTrack')}</span>
                   <bdi dir="auto" lang={subject.track.language}>{subject.track.label}</bdi>
-                  {' · '}
-                  {trackLanguage && <>{trackLanguage}{' · '}</>}
+                  <Sep />
+                  {trackLanguage && <>{trackLanguage}<Sep /></>}
                   {translateDynamic(t, 'review.audioKind', subject.track.kind)}
                 </p>
               )}
@@ -183,7 +184,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
                       )}
                     </div>
                     <p className="text-xs text-fg-muted">
-                      {findingCategoryLabel(t, f.category)} · {formatFixed(locale, f.score, 2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}
+                      {findingCategoryLabel(t, f.category)}<Sep />{formatFixed(locale, f.score, 2)} {f.at_ms !== null ? <><Sep />{flagButton(f)}</> : null}
                     </p>
                   </li>
                 );
@@ -199,7 +200,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
               {transcript.map((f) => (
                 <li key={f.id} className="rounded bg-surface-2 p-3">
                   <p className="mb-1 text-xs text-fg-muted">
-                    {flagButton(f)} · {findingCategoryLabel(t, f.category)} · {formatFixed(locale, f.score, 2)} {f.quran_ref ? `· ${t('review.quranRef', { ref: f.quran_ref })}` : ''}
+                    {flagButton(f)}<Sep />{findingCategoryLabel(t, f.category)}<Sep />{formatFixed(locale, f.score, 2)} {f.quran_ref ? <><Sep />{t('review.quranRef', { ref: f.quran_ref })}</> : null}
                   </p>
                   {f.quran_ref ? null : <p dir="auto" className="whitespace-pre-wrap text-fg">{f.text}</p>}
                 </li>
@@ -213,7 +214,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
           <p dir="auto" className="whitespace-pre-wrap text-fg">{subject?.description}</p>
           {metadata.length > 0 && (
             <ul className="mt-3 space-y-1 text-sm text-fg-muted">
-              {metadata.map((f) => <li key={f.id}>{findingCategoryLabel(t, f.category)} · {formatFixed(locale, f.score, 2)} {f.rationale ? `· ${f.rationale}` : ''}</li>)}
+              {metadata.map((f) => <li key={f.id}>{findingCategoryLabel(t, f.category)}<Sep />{formatFixed(locale, f.score, 2)} {f.rationale ? <><Sep />{f.rationale}</> : null}</li>)}
             </ul>
           )}
         </section>
@@ -227,7 +228,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
           ) : (
             <ul className="space-y-1 text-sm text-fg">
               {findings.slice(0, 12).map((f) => (
-                <li key={f.id}>{findingSourceLabel(t, f.source)} · {findingCategoryLabel(t, f.category)} · {formatFixed(locale, f.score, 2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}</li>
+                <li key={f.id}>{findingSourceLabel(t, f.source)}<Sep />{findingCategoryLabel(t, f.category)}<Sep />{formatFixed(locale, f.score, 2)} {f.at_ms !== null ? <><Sep />{flagButton(f)}</> : null}</li>
               ))}
             </ul>
           )}

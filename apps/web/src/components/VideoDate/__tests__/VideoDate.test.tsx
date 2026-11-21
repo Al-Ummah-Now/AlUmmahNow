@@ -63,7 +63,7 @@ describe('VideoDate', () => {
 describe('views and the watch page line', () => {
   it('the compact count has the exact count as its tooltip', () => {
     render(<ViewCount count={1234} lang="ar" />);
-    expect(screen.getByText(/مشاهدة/)).toHaveAttribute('title', '١٬٢٣٤ مشاهدة');
+    expect(screen.getByText(/مشاهدة/)).toHaveAttribute('title', '١٢٣٤ مشاهدة');
   });
 
   it('the watch summary: short line, exact count and labelled date on hover/focus and for screen readers', () => {
@@ -73,9 +73,9 @@ describe('views and the watch page line', () => {
     expect(summary.querySelector('[data-meta-sep]')?.textContent).toBe('، ');
     expect(summary.textContent).not.toMatch(/[•·]/);
     expect(summary).toHaveAttribute('aria-describedby', 'tip');
-    expect(summary.getAttribute('data-tip')).toMatch(/^١٬٢٣٤ مشاهدة، نُشر في /);
+    expect(summary.getAttribute('data-tip')).toMatch(/^١٢٣٤ مشاهدة، نُشر في /);
     expect(document.getElementById('tip')?.textContent).toBe(summary.getAttribute('data-tip'));
-    expect(screen.getByTestId('watch-published')).toHaveTextContent(/^١٬٢٣٤ مشاهدة، نُشر في /);
+    expect(screen.getByTestId('watch-published')).toHaveTextContent(/^١٢٣٤ مشاهدة، نُشر في /);
   });
 
   it('a video moved from YouTube says when it was first published there (en and ar)', () => {

@@ -158,7 +158,8 @@ test.describe('restore legacy profile fields', () => {
     await page.reload();
     const run = page.locator(`[data-testid="legacy-jobs"] tr[data-job-id="${job!.id}"]`);
     await expect(run).toHaveAttribute('data-status', 'succeeded');
-    await expect(run.getByTestId('legacy-job-result')).toContainText('profiles filled');
+    // "1 profile filled" / "2 profiles filled": the noun agrees with the count (#1666)
+    await expect(run.getByTestId('legacy-job-result')).toContainText(/\bprofiles? filled/);
   });
 
   test('LEG-03 a second dry run has nothing left to fill for it (idempotent)', async ({ page }) => {
