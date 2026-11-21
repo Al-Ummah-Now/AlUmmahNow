@@ -259,5 +259,8 @@ describe('empty source values', () => {
     expect(out['__proto__']).toEqual({ en: 'b' });
     expect(({} as Record<string, unknown>).en).toBeUndefined();
     expect(Object.prototype).not.toHaveProperty('en');
+    // Plain objects: a Next server action refuses null-prototype ones
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(out['constructor'])).toBe(Object.prototype);
   });
 });
