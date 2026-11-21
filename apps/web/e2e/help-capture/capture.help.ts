@@ -13,7 +13,7 @@
  * Names are fixed (exactNames), never run-tagged, because they show in the pictures. They are
  * generic on purpose: no real person or channel.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1630,6 +1630,21 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
       await page.context().addInitScript(CLIP_LEAK_WATCH);
       await page.evaluate(CLIP_LEAK_WATCH);
       await page.screenshot({ path: join(CLIPS, `${id}.${lang}.${mode}.png`) });
+      // A black frame marks the cut in the video itself: the recorder only writes frames when the page
+      // paints, so wall-clock time drifts from video time and the menu warm-up showed in the clip's
+      // first second (AUDIT-2 2026-11-21). The time is only the fallback
+      await page.evaluate(() => new Promise<void>((done) => {
+        const cut = document.createElement('div');
+        cut.id = 'help-clip-cut';
+        cut.style.cssText = 'position:fixed;inset:0;background:#000;z-index:2147483647';
+        document.documentElement.append(cut);
+        requestAnimationFrame(() => requestAnimationFrame(() => done()));
+      }));
+      await page.waitForTimeout(400);
+      await page.evaluate(() => new Promise<void>((done) => {
+        document.getElementById('help-clip-cut')?.remove();
+        requestAnimationFrame(() => requestAnimationFrame(() => done()));
+      }));
       offset = (Date.now() - started) / 1000;
       await act(page, async () => { await page.screenshot({ path: join(CLIPS, `${id}.${lang}.${mode}.png`) }); });
       await page.waitForTimeout(1200);
@@ -1640,6 +1655,11 @@ async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, 
       await context.close();
     }
     const raw = readdirSync(dir).find((f) => f.endsWith('.webm'))!;
+    // The cut: just after the last black stretch (the page's own dark theme is never pure black)
+    const probe = spawnSync('ffmpeg', ['-hide_banner', '-i', join(dir, raw), '-vf', 'blackdetect=d=0.1:pic_th=0.98:pix_th=0.02', '-an', '-f', 'null', '-'], { encoding: 'utf8' });
+    const ends = [...(probe.stderr ?? '').matchAll(/black_end:\s*([\d.]+)/g)].map((m) => Number(m[1]));
+    if (ends.length) offset = ends[ends.length - 1] + 0.05;
+    else console.log(`help clip ${id}.${lang}.${mode}: no cut frame found, trimmed by time (${offset.toFixed(2)} s)`);
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', offset.toFixed(2), '-t', String(seconds), '-i', join(dir, raw), '-an', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1', join(CLIPS, `${id}.${lang}.${mode}.webm`)]);
     const png = join(CLIPS, `${id}.${lang}.${mode}.png`);
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-c:v', 'libwebp', '-quality', '80', join(CLIPS, `${id}.${lang}.${mode}.webp`)]);
