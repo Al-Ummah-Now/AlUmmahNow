@@ -5,11 +5,12 @@
  */
 import type { AdminNames } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { type MessageKey, type Translator } from '@/i18n/translate';
 import { MonoId } from '@/components/content/parts';
 import { actionLabel, detailKeyLabel, detailText, detailViews, itemView, paymentsLine, personView, settingLabel, splitTemplate, type AuditTierNames } from './audit-model';
 import { ItemName, PersonName } from './Named';
 
+import { LocalTime } from '@/components/LocalTime';
 export interface AuditEntryLike {
   id: string;
   action: string;
@@ -120,7 +121,7 @@ export function AuditEntryList({ entries, names, t, locale, showTarget = false, 
             <span>{t('auditLog.by')}</span>
             <PersonName person={personView(e.actorId, names, t, e.actorEmail ?? null)} testId="audit-actor" />
             <span aria-hidden="true">•</span>
-            <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time>
+            <LocalTime value={e.createdAt} withTime />
           </p>
         </li>
       ))}

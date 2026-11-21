@@ -2,7 +2,7 @@ import { ADMIN_TIER_REQUEST_FILTERS, type AdminTierRequestRow, type AdminTierReq
 import Link from '@/components/AppLink';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, translateDynamic, type Translator } from '@/i18n/translate';
+import { formatNumber, translateDynamic, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { approveTierRequest, declineTierRequest, getTierRequestSettings, listTierRequests, setTierRequestsAllowed, type TierRequestSettings } from '@/lib/api/tier-requests';
 import { AllowRequestsSwitch } from '@/components/tier-requests/AllowRequestsSwitch';
@@ -14,6 +14,8 @@ import { TierRequestActions } from '@/components/tier-requests/TierRequestAction
 import { logger } from '@/lib/logger';
 import { tierLabel } from '@/lib/creator-tiers';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 /** Status rail colour on each card: waiting, given, refused, taken back. */
@@ -160,10 +162,10 @@ function RequestCard({ row, t, locale, canDecide }: { row: AdminTierRequestRow; 
           <span className={`self-start sm:self-end rounded px-2 py-0.5 font-medium ${STATUS_CHIP[row.status]}`} data-testid="tier-request-status">
             {translateDynamic(t, 'tierRequests.status', row.status)}
           </span>
-          <time dateTime={row.createdAt}>{t('tierRequests.requested', { date: formatDate(row.createdAt, locale, true) })}</time>
+          <span>{fillNodes(t('tierRequests.requested'), { date: <LocalTime value={row.createdAt} withTime /> })}</span>
           {row.decidedAt && (
             <time dateTime={row.decidedAt}>
-              {t('tierRequests.decided', { status: translateDynamic(t, 'tierRequests.status', row.status), date: formatDate(row.decidedAt, locale, true) })}
+              {fillNodes(t('tierRequests.decided', { status: translateDynamic(t, 'tierRequests.status', row.status) }), { date: <LocalTime value={row.decidedAt} withTime /> })}
             </time>
           )}
         </div>

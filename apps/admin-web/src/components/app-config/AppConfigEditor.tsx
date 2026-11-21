@@ -13,7 +13,6 @@ import { useRouter } from 'next/navigation';
 import { sameAppConfigDocument as sameDocument, type AppConfigDocumentKey } from '@al-ummah/shared-types';
 import { getAppConfigDocument, saveAppConfigDocument, type AppConfigHistoryEntry } from '@/lib/api/appConfig';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import {
@@ -32,6 +31,8 @@ import { PriorityTabs } from '@/components/PriorityTabs';
 import { VersionList } from './VersionList';
 import { DryRun } from './DryRun';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const KEYS: AppConfigDocumentKey[] = ['flags', 'config', 'versions'];
 
 interface Props {
@@ -42,7 +43,7 @@ interface Props {
 type Notice = { tone: 'ok' | 'error' | 'conflict'; text: string } | null;
 
 export function AppConfigEditor({ initial, history }: Props) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const [tab, setTab] = useState<AppConfigDocumentKey>('flags');
@@ -231,18 +232,14 @@ export function AppConfigEditor({ initial, history }: Props) {
               <ul className="space-y-0.5 text-sm text-fg-muted">
                 {history[tab].map((h) => (
                   <li key={h.id} data-testid="app-config-history-entry">
-                    {t('appConfig.historyEntry', { date: formatDate(h.createdAt, locale, true), actor: '\u0000' })
-                      .split('\u0000')
-                      .flatMap((part, i) =>
-                        i === 0
-                          ? [part]
-                          : [
-                              <a key={h.id} href={`/users/${encodeURIComponent(h.actorId)}`} className="text-link hover:text-link-hover underline-offset-2 hover:underline" title={h.actorId}>
-                                <bdi>{h.actorName ?? t('reviewAlerts.unknownUser')}</bdi>
-                              </a>,
-                              part,
-                            ],
-                      )}
+                    {fillNodes(t('appConfig.historyEntry'), {
+                      date: <LocalTime value={h.createdAt} withTime />,
+                      actor: (
+                        <a href={`/users/${encodeURIComponent(h.actorId)}`} className="text-link hover:text-link-hover underline-offset-2 hover:underline" title={h.actorId}>
+                          {h.actorName ?? t('reviewAlerts.unknownUser')}
+                        </a>
+                      ),
+                    })}
                   </li>
                 ))}
               </ul>

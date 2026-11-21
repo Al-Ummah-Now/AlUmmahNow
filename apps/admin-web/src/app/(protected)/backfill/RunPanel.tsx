@@ -16,7 +16,6 @@ import {
   saveBackfillSettings,
 } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
 import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -28,10 +27,11 @@ import { useNames } from '@/components/audit/useNames';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 const POLL_MS = 5000;
 
 export function RunPanel({ initial }: { initial: BackfillRun }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const f = useFormats();
   const { confirm, dialog } = useConfirm();
   const [run, setRun] = useState(initial);
@@ -178,7 +178,7 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
               {t('mediaBackfill.runTitle')} <span className="font-mono text-base text-fg-muted" dir="ltr">{run.id}</span>
             </h2>
             <p className="text-sm text-fg-muted mt-1">
-              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t, names) })} • {formatDate(run.createdAt, locale, true)}
+              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t, names) })} • <LocalTime value={run.createdAt} withTime />
             </p>
           </div>
           <Chip tone={RUN_TONE[run.status]} large testId="backfill-run-status">{t(RUN_STATUS_LABEL[run.status])}</Chip>

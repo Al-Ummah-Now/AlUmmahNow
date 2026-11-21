@@ -9,7 +9,7 @@
 import { useId, useState } from 'react';
 import { INCIDENT_IMPACTS, INCIDENT_STATUSES, MAINTENANCE_STATUSES, STATUS_COMPONENTS, STATUS_TEXT_LIMITS } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { createIncident, deleteIncident, postIncidentUpdate, purgeIncident, restoreIncident } from '@/lib/api/status';
@@ -17,6 +17,8 @@ import type { StatusIncident } from '@/lib/api/status-types';
 import { DateTimeField } from '@/components/DateField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 type Kind = 'incident' | 'maintenance';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 
@@ -209,7 +211,7 @@ export function IncidentCard({ incident, open }: { incident: StatusIncident; ope
           </p>
           <p className="text-sm text-fg-muted">{t('statusPage.affected', { list: names.join(locale === 'ar' ? '، ' : ', ') })}</p>
           {incident.kind === 'maintenance' && incident.endsAt && (
-            <p className="text-sm text-fg-muted">{t('statusPage.window', { from: formatDate(incident.startsAt, locale, true), to: formatDate(incident.endsAt, locale, true) })}</p>
+            <p className="text-sm text-fg-muted">{fillNodes(t('statusPage.window'), { from: <LocalTime value={incident.startsAt} withTime />, to: <LocalTime value={incident.endsAt} withTime /> })}</p>
           )}
         </div>
         <ConfirmButton
@@ -229,7 +231,7 @@ export function IncidentCard({ incident, open }: { incident: StatusIncident; ope
         {(incident.updates ?? []).map((u) => (
           <li key={u.id} className="border-s-2 border-border ps-3">
             <p className="text-sm text-fg-muted">
-              <strong className="text-fg">{t(`statusPage.statuses.${u.status}` as MessageKey)}</strong> • {formatDate(u.createdAt, locale, true)}
+              <strong className="text-fg">{t(`statusPage.statuses.${u.status}` as MessageKey)}</strong> • <LocalTime value={u.createdAt} withTime />
             </p>
             <p className="whitespace-pre-line text-fg" dir="auto">{locale === 'ar' ? u.bodyAr : u.bodyEn}</p>
           </li>
@@ -254,7 +256,7 @@ export function DeletedIncidents({ items }: { items: StatusIncident[] }) {
             <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3" data-testid="status-deleted-row" data-id={i.id}>
               <div>
                 <p className="font-medium text-fg" dir="auto">{title}</p>
-                {i.purgeAfter && <p className="text-sm text-fg-muted">{t('statusPage.purgeAfter', { date: formatDate(i.purgeAfter, locale) })}</p>}
+                {i.purgeAfter && <p className="text-sm text-fg-muted">{fillNodes(t('statusPage.purgeAfter'), { date: <LocalTime value={i.purgeAfter} /> })}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 <ConfirmButton

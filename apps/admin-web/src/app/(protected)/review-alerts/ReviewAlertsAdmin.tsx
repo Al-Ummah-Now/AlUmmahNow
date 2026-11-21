@@ -12,7 +12,7 @@ import {
   type StaffDeviceView,
 } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { ARABIC_INITIAL_STYLE, avatarInitial, isArabicInitial, resolveUrl } from '@/components/search/autocomplete-model';
 import { TimeField, TimeZoneField } from './fields';
@@ -38,6 +38,8 @@ import {
 import { parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 const check = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 // A checkbox row tall enough to tap (44 px)
 const checkRow = 'flex min-h-11 items-start gap-2 py-1';
@@ -101,7 +103,7 @@ export function ReviewAlertsAdmin({ view, timings }: { view: ReviewAlertsView; t
 }
 
 function RotaSettings({ view }: { view: ReviewAlertsView }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const { run } = useUndoableAction();
@@ -300,7 +302,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
         </fieldset>
 
         <p className="text-sm text-fg-muted" data-testid="review-alerts-last-changed">
-          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: actor?.label ?? (actor === null ? t('reviewAlerts.unknownUser') : '…') }) : t('reviewAlerts.neverChanged')}
+          {view.updatedAt ? fillNodes(t('reviewAlerts.lastChanged', { actor: actor?.label ?? (actor === null ? t('reviewAlerts.unknownUser') : '…') }), { date: <LocalTime value={view.updatedAt} withTime /> }) : t('reviewAlerts.neverChanged')}
         </p>
         {view.canManage ? (
           <button type="submit" className={primaryButtonClass} disabled={busy || !dirty} data-testid="review-alerts-save">
@@ -375,7 +377,7 @@ function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
             <tbody>
               {timings.map((d) => (
                 <tr key={d.day} className="border-t border-border">
-                  <th scope="row" className="text-start p-2 font-normal">{formatDate(d.day, locale)}</th>
+                  <th scope="row" className="text-start p-2 font-normal"><LocalTime value={d.day} /></th>
                   <td className="text-end p-2">{d.held}</td>
                   <td className="text-end p-2">{d.decided}</td>
                   {cols.map((c) => (
@@ -394,7 +396,7 @@ function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
 const APP_LABEL: Record<StaffDeviceView['app'], MessageKey> = { viewer: 'reviewAlerts.appViewer', studio: 'reviewAlerts.appStudio', admin: 'reviewAlerts.appAdmin' };
 
 function StaffDevices() {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const ids = useId();
   const [userId, setUserId] = useState('');
   const [devices, setDevices] = useState<StaffDeviceView[] | null>(null);
@@ -452,7 +454,7 @@ function StaffDevices() {
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                 <dt className="text-fg-muted">{t('reviewAlerts.deviceUpdated')}</dt>
-                <dd className="text-fg">{formatDate(new Date(d.updatedAt), locale, true)}</dd>
+                <dd className="text-fg"><LocalTime value={new Date(d.updatedAt)} withTime /></dd>
                 <dt className="text-fg-muted">{t('reviewAlerts.deviceToken')}</dt>
                 <dd className="font-mono text-fg"><bdi dir="ltr">{d.tokenHint}</bdi></dd>
               </dl>
@@ -492,7 +494,7 @@ function StaffDevices() {
                   <td className="p-2">{t(APP_LABEL[d.app] ?? 'reviewAlerts.appViewer')}</td>
                   <td className="p-2" dir="ltr">{d.platform}{d.appVersion ? ` • ${d.appVersion}` : ''}</td>
                   <td className="p-2 font-mono" dir="ltr">{d.tokenHint}</td>
-                  <td className="p-2">{formatDate(new Date(d.updatedAt), locale, true)}</td>
+                  <td className="p-2"><LocalTime value={new Date(d.updatedAt)} withTime /></td>
                   <td className="p-2">
                     <ConfirmButton
                       label={t('reviewAlerts.signOut')}

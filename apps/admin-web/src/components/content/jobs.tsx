@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation';
 import { retryJob } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, useContentAction } from './actions';
 import { Chip, SectionCard, smallButtonClass } from './parts';
@@ -21,6 +21,7 @@ import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
+import { LocalTime } from '@/components/LocalTime';
 /** How often a page with a running job re-reads it while the live socket is down. */
 const REFRESH_MS = 3000;
 
@@ -50,7 +51,7 @@ export function JobStatusChip({ job }: { job: Pick<AdminJob, 'status'> }) {
  * not read them: that is said plainly, never shown as "no jobs".
  */
 export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; permissions: AdminContentPermission[] }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   const active = !!jobs?.some(isActiveJob);
   useRefreshWhile(active);
@@ -71,7 +72,7 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
                 <JobStatusChip job={job} />
               </div>
               <p className="mt-1 text-xs text-fg-muted">
-                {formatDate(job.updatedAt, locale, true)}
+                <LocalTime value={job.updatedAt} withTime />
                 {job.attempts > 0 && <> • {t('jobs.attempts', { count: job.attempts })}</>}
               </p>
               {job.lastError && job.status !== 'succeeded' && (
@@ -117,7 +118,7 @@ export function FailedJobsBanner({ count }: { count: number }) {
 
 /** Jobs as a table (Jobs page, Errors page): job, item, status, attempts, last error, Retry. */
 export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: AdminJob[]; permissions: AdminContentPermission[]; testId?: string }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   useRefreshWhile(jobs.some(isActiveJob));
   const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
@@ -154,7 +155,7 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
                   {job.attempts > 0 && <span className="block text-xs text-fg-muted mt-1">{t('jobs.attempts', { count: job.attempts })}</span>}
                 </td>
                 <td className={`${td} ${wide} text-danger-fg break-words max-w-md`} dir="ltr">{job.status !== 'succeeded' ? job.lastError ?? '' : ''}</td>
-                <td className={`${td} ${wide} text-fg-muted whitespace-nowrap`}><time dateTime={job.updatedAt}>{formatDate(job.updatedAt, locale, true)}</time></td>
+                <td className={`${td} ${wide} text-fg-muted whitespace-nowrap`}><LocalTime value={job.updatedAt} withTime /></td>
                 <td className={td}>
                   {job.status === 'failed' && canRetryJob(job, permissions) && (
                     <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run(`retry:${job.id}`, () => retryJob(job.id), { success: t('jobs.retried') })} data-testid="job-retry">

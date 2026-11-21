@@ -20,6 +20,8 @@ import { DailyChart, type ChartUnit } from './DailyChart';
 import { deliveryFormats } from './format';
 import { applyQoeEvent, fiveMinuteBuckets, qoeMetric, windowTotals, type QoeMetric } from './qoe-view';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const QOE_POLL_MS = 30_000;
 
 const CHARTS: { metric: QoeMetric; title: MessageKey; unit: ChartUnit }[] = [
@@ -83,7 +85,7 @@ export function LiveQoe({ initial }: { initial: QoeLiveData | null }) {
   const labels = (title: string) => ({
     chart: t('mediaDelivery.qoeChartLabel', { title }),
     table: t('mediaDelivery.chartTable'),
-    day: t('mediaDelivery.colMinuteUtc'),
+    day: t('mediaDelivery.colMinute'),
     bunny: t('mediaDelivery.colBunny'),
     r2: t('mediaDelivery.colR2'),
     legendBunny: t('mediaDelivery.legendBunny'),
@@ -121,7 +123,7 @@ export function LiveQoe({ initial }: { initial: QoeLiveData | null }) {
             ))}
           </div>
           <p className="mt-3 text-xs text-fg-muted" data-testid="delivery-qoe-updated">
-            {t('mediaDelivery.qoeUpdated', { time: f.time(data.at.slice(0, 16)) })}
+            {fillNodes(t('mediaDelivery.qoeUpdated'), { time: <LocalTime value={data.at} clock /> })}
           </p>
           {stale && <p role="status" className="mt-1 text-sm text-warning-fg">{t('mediaDelivery.liveStale')}</p>}
         </>

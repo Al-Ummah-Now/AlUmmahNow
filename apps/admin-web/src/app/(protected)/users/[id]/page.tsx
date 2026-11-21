@@ -6,7 +6,7 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canManageBilling, canManageCreators, canReadBilling, normalizeRole } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { AuditCard } from '@/components/audit/AuditCard';
 import { BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid, smallButtonClass } from '@/components/content/parts';
@@ -20,6 +20,8 @@ import { UserActions } from './UserActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { adminUserName } from '@/lib/user-name';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 /** A videos user (api-videos profile). The Auth id is shown for reference only; nothing here changes the Auth account. */
@@ -78,14 +80,14 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
 
       {u.isBanned && u.ban && (
         <Notice tone="bad" testId="user-banned-banner">
-          <p>{t('users.bannedBanner', { date: formatDate(u.ban.bannedAt, locale, true) })}</p>
+          <p>{fillNodes(t('users.bannedBanner'), { date: <LocalTime value={u.ban.bannedAt} withTime /> })}</p>
           {u.ban.reason && <p className="text-sm mt-1" dir="auto">{t('users.banReason', { reason: u.ban.reason })}</p>}
         </Notice>
       )}
       {u.profileDeleted && <Notice testId="user-profile-deleted">{t('users.profileDeletedBanner')}</Notice>}
       {u.invite && u.invite.status !== 'active' && (
         <Notice testId="user-invite">
-          <p>{t('invites.userInvited', { date: u.createdAt ? formatDate(u.createdAt, locale) : '' })}</p>
+          <p>{fillNodes(t('invites.userInvited'), { date: u.createdAt ? <LocalTime value={u.createdAt} /> : '' })}</p>
           <Link href={`/users/invites?q=${encodeURIComponent(u.invite.id)}`} className={linkClass} data-testid="user-invite-manage">{t('invites.manage')}</Link>
         </Notice>
       )}
@@ -112,8 +114,8 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 <dd><MonoId value={u.id} max={60} /></dd>
               </div>
               <div><dt className="text-fg-muted">{t('users.timezone')}</dt><dd className="text-fg" dir="ltr">{u.timezone ?? t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('users.colCreated')}</dt><dd className="text-fg">{u.createdAt ? formatDate(u.createdAt, locale, true) : t('content.none')}</dd></div>
-              <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{u.updatedAt ? formatDate(u.updatedAt, locale, true) : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('users.colCreated')}</dt><dd className="text-fg">{u.createdAt ? <LocalTime value={u.createdAt} withTime /> : t('content.none')}</dd></div>
+              <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{u.updatedAt ? <LocalTime value={u.updatedAt} withTime /> : t('content.none')}</dd></div>
             </dl>
             {u.bio && <p className="mt-4 text-sm text-fg whitespace-pre-wrap break-words" dir="auto">{u.bio}</p>}
             <nav aria-label={t('users.contentNav')} className="mt-4 flex flex-wrap gap-2">

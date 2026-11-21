@@ -8,7 +8,7 @@
  */
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { smallButtonClass } from '@/components/content/parts';
@@ -16,6 +16,7 @@ import { addStatusWebhook, deleteStatusWebhook, removeStatusSubscriber, retrySta
 import type { StatusSubscriptions as Subs } from '@/lib/api/status-types';
 import { deliveryErrorKey } from './model';
 
+import { LocalTime } from '@/components/LocalTime';
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 const STATE_CLASS: Record<string, string> = { sent: 'text-success-fg', sunk: 'text-success-fg', failed: 'text-danger-fg', queued: 'text-fg-muted', skipped: 'text-fg-muted' };
 
@@ -53,7 +54,7 @@ function SecretBox({ secret }: { secret: string }) {
 }
 
 function Webhooks({ items }: { items: Subs['webhooks'] }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   const [secret, setSecret] = useState<string | null>(null);
   const deliveryErrorText = (error: string) => {
@@ -90,7 +91,7 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
                   {t('statusPage.subs.lastDelivery')}:{' '}
                   {w.last ? (
                     <>
-                      <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> • {formatDate(w.last.at, locale, true)}
+                      <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> • <LocalTime value={w.last.at} withTime />
                       {w.last.error && w.last.status === 'failed' && <> • <span data-testid="status-webhook-error">{deliveryErrorText(w.last.error)}</span></>}
                     </>
                   ) : (
@@ -185,7 +186,7 @@ function History({ items }: { items: Subs['notifications'] }) {
         {items.map((n) => (
           <li key={n.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
             <p className="font-medium text-fg" dir="auto">{titleOf(n)}</p>
-            <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} • {formatDate(n.createdAt, locale, true)}</p>
+            <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} • <LocalTime value={n.createdAt} withTime /></p>
             <dl className="mt-2 grid grid-cols-3 gap-2">
               <div><dt className="text-fg-muted">{t('statusPage.subs.recipients')}</dt><dd className="tabular-nums text-fg">{n.fannedOutAt ? formatNumber(n.recipients ?? 0, locale) : t('statusPage.subs.sending')}</dd></div>
               <div><dt className="text-fg-muted">{t('statusPage.subs.delivered')}</dt><dd className="tabular-nums text-fg">{formatNumber(n.sent, locale)}</dd></div>
@@ -218,7 +219,7 @@ function History({ items }: { items: Subs['notifications'] }) {
                   <span className="block text-fg" dir="auto">{title}</span>
                   <span className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)}</span>
                 </th>
-                <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(n.createdAt, locale, true)}</td>
+                <td className="p-2 whitespace-nowrap text-fg-muted"><LocalTime value={n.createdAt} withTime /></td>
                 <td className="p-2 text-end tabular-nums text-fg-muted">{n.fannedOutAt ? formatNumber(n.recipients ?? 0, locale) : t('statusPage.subs.sending')}</td>
                 <td className="p-2 text-end tabular-nums text-fg">
                   {formatNumber(n.sent, locale)}

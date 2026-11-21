@@ -6,12 +6,13 @@ import type { NotificationMenuOpenMode, NotificationPlatformSettings } from '@al
 import { DEFAULT_NOTIFICATION_MENU_OPEN } from '@al-ummah/shared-types';
 import { saveNotificationPlatformSettings } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
+import { LocalTime } from '@/components/LocalTime';
 const MODES: { value: NotificationMenuOpenMode; label: MessageKey; hint: MessageKey }[] = [
   { value: 'seen', label: 'platformSettings.menuOpenSeen', hint: 'platformSettings.menuOpenSeenHint' },
   { value: 'read', label: 'platformSettings.menuOpenRead', hint: 'platformSettings.menuOpenReadHint' },
@@ -27,7 +28,7 @@ interface HistoryEntry {
 
 /** "When the notification menu is opened": clear the badge only (default), or also mark the shown notifications read. */
 export function NotificationMenuSetting({ settings, history, canEdit }: { settings: NotificationPlatformSettings; history: HistoryEntry[]; canEdit: boolean }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const [mode, setMode] = useState<NotificationMenuOpenMode>(settings.menuOpen);
@@ -97,7 +98,7 @@ export function NotificationMenuSetting({ settings, history, canEdit }: { settin
 
         <p className="text-sm text-fg-muted" data-testid="notification-menu-last-changed">
           {settings.updatedAt
-            ? fillNodes(t('platformSettings.lastChanged', { date: formatDate(settings.updatedAt, locale, true) }), { actor: settings.updatedBy ? <UserName id={settings.updatedBy} showEmail={false} /> : '—' })
+            ? fillNodes(t('platformSettings.lastChanged'), { date: <LocalTime value={settings.updatedAt} withTime />, actor: settings.updatedBy ? <UserName id={settings.updatedBy} showEmail={false} /> : '—' })
             : t('platformSettings.neverChanged')}
         </p>
 
@@ -119,7 +120,7 @@ export function NotificationMenuSetting({ settings, history, canEdit }: { settin
         <ul className="space-y-1 text-sm text-fg-muted" data-testid="notification-menu-history">
           {history.map((h) => (
             <li key={h.id}>
-              {fillNodes(t('platformSettings.historyEntry', { date: formatDate(h.createdAt, locale, true), from: label(h.oldValue), to: label(h.newValue) }), { actor: <UserName id={h.actorId} showEmail={false} /> })}
+              {fillNodes(t('platformSettings.historyEntry', { from: label(h.oldValue), to: label(h.newValue) }), { date: <LocalTime value={h.createdAt} withTime />, actor: <UserName id={h.actorId} showEmail={false} /> })}
             </li>
           ))}
         </ul>

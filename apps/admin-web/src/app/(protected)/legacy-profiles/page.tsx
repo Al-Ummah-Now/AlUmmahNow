@@ -3,13 +3,13 @@ import { getLegacyRestorePlan, listAdminJobs } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageVideosUsers } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { JobRetry, LegacyRestoreRun, RefreshWhileActive } from '@/components/AdminJobActions';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import { logger } from '@/lib/logger';
 import { UserName } from '@/components/audit/UserName';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
@@ -24,7 +24,7 @@ const show = (value: unknown) => (typeof value === 'string' ? value.trim() : val
  * with their results; a failed run has Retry (it also shows on Errors).
  */
 export default async function LegacyProfilesPage() {
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
   const session = await getAdminSession();
   if (!canManageVideosUsers(session?.user.role)) {
     return <ErrorAlert testId="legacy-profiles-no-access">{t('legacyProfiles.noAccess')}</ErrorAlert>;
@@ -130,7 +130,7 @@ export default async function LegacyProfilesPage() {
                   const skipped = result?.skipped ?? [];
                   return (
                     <tr key={job.id} className="border-b border-border last:border-0" data-job-id={job.id} data-status={job.status}>
-                      <td className={tdClass}>{formatDate(job.createdAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={job.createdAt} withTime /></td>
                       <td className={tdClass}>
                         <div className="flex flex-wrap items-center gap-2">
                           <span data-testid="legacy-job-status">{t(JOB_STATUS_LABEL[job.status])}</span>

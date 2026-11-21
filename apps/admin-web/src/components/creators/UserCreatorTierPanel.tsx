@@ -1,7 +1,6 @@
 import { creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
 import { getUserCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { CreatorTierControl } from './CreatorTierControl';
@@ -9,6 +8,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { tierLabel } from '@/lib/creator-tiers';
 
+import { LocalTime } from '@/components/LocalTime';
 /** The user page's creator tier: the Tier selector, where it came from, and its history (audit log). */
 export async function UserCreatorTierPanel({ userId, userName, canManage }: { userId: string; userName?: string; canManage: boolean }) {
   const { t, locale } = await getI18n();
@@ -53,7 +53,7 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
               {current.audit.map((entry) => (
                 <li key={entry.id}>
                   <span className="text-fg">{t('creators.historyEntry', { from: nameOf(entry.previous?.tierId), to: nameOf(entry.details?.tierId) })}</span>{' '}
-                  <span className="text-fg-muted">{fillNodes(t('creators.historyBy', { date: formatDate(entry.createdAt, locale, true) }), { actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
+                  <span className="text-fg-muted">{fillNodes(t('creators.historyBy'), { date: <LocalTime value={entry.createdAt} withTime />, actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
                 </li>
               ))}
             </ul>

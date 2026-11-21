@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyQoeEvent, emptyQoeBucket, fiveMinuteBuckets, qoeMetric, windowTotals } from '../src/app/(protected)/delivery/qoe-view';
 import { deliveryFormats } from '../src/app/(protected)/delivery/format';
+import { formatMinute } from '../src/i18n/translate';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -65,10 +66,11 @@ describe('live playback view', () => {
     assert.equal(windowTotals(data.minutes).r2.plays, 2);
   });
 
-  it('times show in UTC with the locale digits; strings exist in both languages', () => {
-    assert.equal(deliveryFormats('en').time('2026-11-12T10:05'), '10:05');
+  it('times show in the viewer’s zone with the locale digits; strings exist in both languages', () => {
+    // The minute keys are UTC; the axis shows them in the viewer's zone (the shared admin formatter)
+    assert.equal(deliveryFormats('en').time('2026-11-12T10:05'), formatMinute(new Date('2026-11-12T10:05:00Z'), 'en'));
     assert.match(deliveryFormats('ar').time('2026-11-12T10:05'), /[٠-٩]/);
-    for (const key of ['qoeLiveTitle', 'qoeLiveIntro', 'qoeNowBunny', 'qoeNowR2', 'qoeChartPlays', 'qoeChartFallbacks', 'qoeChartLabel', 'colMinuteUtc', 'qoeEmpty', 'qoeUpdated', 'qoeUnavailable']) {
+    for (const key of ['qoeLiveTitle', 'qoeLiveIntro', 'qoeNowBunny', 'qoeNowR2', 'qoeChartPlays', 'qoeChartFallbacks', 'qoeChartLabel', 'colMinute', 'qoeEmpty', 'qoeUpdated', 'qoeUnavailable']) {
       assert.ok((en.mediaDelivery as Record<string, string>)[key], `en ${key}`);
       assert.ok((ar.mediaDelivery as Record<string, string>)[key], `ar ${key}`);
     }

@@ -245,7 +245,8 @@ describe('rendered components', () => {
       }),
     );
     // Who and when once (no "an admin • Admin" doubling)
-    assert.match(assigned, /Assigned by <bdi>Admin Name<\/bdi>, <bdi>Nov 8, 2026<\/bdi>/);
+    // The date is a <LocalTime> (local day, UTC on hover)
+    assert.match(assigned, /Assigned by <bdi>Admin Name<\/bdi>, <bdi><time [^>]*title="Nov 8, 2026, 12:00 AM UTC">Nov \d, 2026<\/time><\/bdi>/);
     assert.doesNotMatch(assigned, /<select/, 'read-only for moderators');
     // Only the admin's id stored and no name known (yet): "an admin", never the raw id
     const byId = render(

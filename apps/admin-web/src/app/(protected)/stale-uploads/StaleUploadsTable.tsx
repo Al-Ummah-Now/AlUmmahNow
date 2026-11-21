@@ -16,6 +16,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { formatUnit } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 const thClass = 'text-start px-3 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-3 py-3 align-top text-sm';
 
@@ -160,14 +161,14 @@ export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadIt
                   <td className={`${tdClass} tabular-nums`} title={createdAt(item) ? formatDate(createdAt(item)!, locale, true) : undefined}>
                     {formatAge(t, createdAt(item), now)}
                   </td>
-                  <td className={tdClass}>{activity ? formatDate(activity, locale, true) : t('staleUploads.unknown')}</td>
+                  <td className={tdClass}>{activity ? <LocalTime value={activity} withTime /> : t('staleUploads.unknown')}</td>
                   <td className={tdClass}>
                     <span className={`px-2 py-1 text-sm rounded font-medium whitespace-nowrap ${STATE_TONE[item.status]}`} data-testid="stale-state">
                       {t(STATE_LABEL[item.status])}
                     </span>
                     {item.reason && <div className="text-fg-muted text-xs mt-1 max-w-xs" dir="auto">{item.reason}</div>}
                     {item.status === 'checking' && item.nextCheckAt && (
-                      <div className="text-fg-subtle text-xs mt-1">{t('staleUploads.nextCheck', { date: formatDate(item.nextCheckAt, locale, true) })}</div>
+                      <div className="text-fg-subtle text-xs mt-1">{fillNodes(t('staleUploads.nextCheck'), { date: <LocalTime value={item.nextCheckAt} withTime /> })}</div>
                     )}
                     {item.status === 'kept' && item.keptBy && <div className="text-fg-subtle text-xs mt-1">{fillNodes(t('staleUploads.keptBy'), { actor: <UserName id={item.keptBy} showEmail={false} /> })}</div>}
                     {item.lastError && (

@@ -13,7 +13,7 @@ import Link from '@/components/AppLink';
 import type { ContactBulkChange, ContactMessage, ContactStatus } from '@/lib/api/types';
 import { bulkContactMessages, restoreContactMessages } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ContactStatusChip, ErrorAlert, fieldClass } from '@/components/ui';
 import { DataTable, type DataColumn } from '@/components/list/DataTable';
 import { BulkBar } from '@/components/list/BulkBar';
@@ -27,6 +27,7 @@ import { EmailText } from '@/components/EmailText';
 import { CONTACT_STATUSES, CONTACT_VIEWS, SEND_FAILED, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 const smallButton =
   'px-3 py-2 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
 
@@ -71,7 +72,7 @@ export function ContactInbox({ messages: serverMessages, filters, viewerId, canM
   );
   const showChange = (ids: string[], change: RowChange) =>
     setChanges((prev) => Object.fromEntries([...Object.entries(prev), ...ids.map((id) => [id, { ...prev[id], ...change }])]));
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const router = useRouter();
   const undoable = useUndoableAction();
   const tableRef = useRef<HTMLTableElement>(null);
@@ -264,7 +265,7 @@ export function ContactInbox({ messages: serverMessages, filters, viewerId, canM
       header: t('contact.colReceived'),
       cardLabel: t('contact.colReceived'),
       className: 'text-sm text-fg-muted md:whitespace-nowrap',
-      cell: (m) => <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>,
+      cell: (m) => <LocalTime value={m.created_at} withTime />,
     },
   ];
 

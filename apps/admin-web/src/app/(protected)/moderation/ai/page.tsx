@@ -2,12 +2,13 @@ import Link from '@/components/AppLink';
 import { getAiConfig, getAiUsage, listAiSignals } from '@/lib/api/admin';
 import type { AiConfigView, AiSignalList, AiUsageView } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
+import { formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { formatFixed, formatMoney } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 25;
@@ -164,7 +165,7 @@ export default async function AiModerationPage({ searchParams }: PageProps) {
                   <td className="px-4 py-3 text-fg-muted">{translateDynamic(t, 'aiSurface', s.surface)}</td>
                   <td className="px-4 py-3 text-fg-muted">{translateDynamic(t, 'aiReview', s.review_status)}</td>
                   <td className="px-4 py-3 text-fg-muted text-sm whitespace-nowrap">
-                    <time dateTime={s.created_at}>{formatDate(s.created_at, locale, true)}</time>
+                    <LocalTime value={s.created_at} withTime />
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/moderation/ai/${encodeURIComponent(s.id)}`} className={linkClass} aria-label={t('ai.viewSignal', { id: s.id.slice(0, 8) })}>

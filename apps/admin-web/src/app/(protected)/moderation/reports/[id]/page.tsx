@@ -4,11 +4,13 @@ import type { Report } from '@al-ummah/shared-types';
 import { getReport } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, StatusChip, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ReportActions } from './actions';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -17,7 +19,7 @@ interface PageProps {
 
 export default async function ReportDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
 
   let report: Report | null = null;
   let failed = false;
@@ -82,7 +84,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
                 <div>
                   <dt className="text-fg-muted text-sm">{t('report.created')}</dt>
                   <dd className="text-fg">
-                    <time dateTime={report.created_at}>{formatDate(report.created_at, locale, true)}</time>
+                    <LocalTime value={report.created_at} withTime />
                   </dd>
                 </div>
               </dl>
@@ -109,7 +111,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
                   </p>
                   {report.resolved_at && (
                     <p className="text-fg-subtle text-sm mt-1">
-                      {t('report.resolvedOn', { date: formatDate(report.resolved_at, locale, true) })}
+                      {fillNodes(t('report.resolvedOn'), { date: <LocalTime value={report.resolved_at} withTime /> })}
                     </p>
                   )}
                 </div>

@@ -4,10 +4,11 @@
  */
 import Link from '@/components/AppLink';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type Translator } from '@/i18n/translate';
+import { type Translator } from '@/i18n/translate';
 import type { ContentReport } from '@/lib/api/content-types';
 import { cardClass, linkClass } from '@/components/ui';
 
+import { LocalTime } from '@/components/LocalTime';
 export type ChipTone = 'neutral' | 'good' | 'info' | 'warn' | 'bad';
 
 const toneClasses: Record<ChipTone, string> = {
@@ -201,7 +202,7 @@ export function StatGrid({ stats }: { stats: { label: string; value: string; tes
   );
 }
 
-export function ReportsCard({ reports, t, locale }: { reports: ContentReport[]; t: Translator; locale: Locale }) {
+export function ReportsCard({ reports, t }: { reports: ContentReport[]; t: Translator; locale: Locale }) {
   return (
     <SectionCard title={t('content.reports')} testId="content-reports" id="content-reports-title">
       {reports.length === 0 ? (
@@ -216,7 +217,7 @@ export function ReportsCard({ reports, t, locale }: { reports: ContentReport[]; 
                 </p>
                 {r.description && <p className="text-fg-muted text-sm break-words" dir="auto">{r.description}</p>}
                 <p className="text-fg-subtle text-xs">
-                  <time dateTime={r.createdAt}>{formatDate(r.createdAt, locale, true)}</time>
+                  <LocalTime value={r.createdAt} withTime />
                 </p>
               </div>
               <Link href={`/moderation/reports/${encodeURIComponent(r.id)}`} className={`${linkClass} text-sm`}>

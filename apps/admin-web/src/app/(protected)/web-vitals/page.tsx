@@ -18,11 +18,13 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -194,7 +196,7 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
                 <p className="text-xs text-fg-muted mt-2">* {t('vitalsPage.few')}</p>
               </div>
             )}
-            <p className="text-xs text-fg-muted mt-3">{t('vitalsPage.generatedAt', { time: formatDate(summary.generatedAt, locale, true) })}</p>
+            <p className="text-xs text-fg-muted mt-3">{fillNodes(t('vitalsPage.generatedAt'), { time: <LocalTime value={summary.generatedAt} withTime /> })}</p>
           </section>
         </>
       )}

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import type { LiveComparison, LiveProviderId, LiveRoutingMode, LiveRoutingPatch, LiveRoutingSettings } from '@al-ummah/shared-types';
 import { dateTimeFormat, LIVE_ROUTING_MODES } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { Autocomplete } from '@/components/search/Autocomplete';
@@ -59,6 +59,7 @@ import { DateField } from '@/components/DateField';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
+import { LocalTime } from '@/components/LocalTime';
 interface Initial {
   view: LiveSettingsView | null;
   active: LiveSessionItem[];
@@ -576,7 +577,7 @@ function OverridesSection({
   refreshAudit: () => Promise<void>;
   onInvalid: (m: string) => void;
 }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const id = useId();
   const [channel, setChannel] = useState<{ id: string; label: string } | null>(null);
   const [provider, setProvider] = useState<LiveProviderId>('selfhosted');
@@ -677,7 +678,7 @@ function OverridesSection({
                   </td>
                   <td className="p-2">{providerName(o.provider)}</td>
                   <td className="p-2 text-fg-muted" dir="auto">{o.note ?? '—'}</td>
-                  <td className="p-2 text-fg-muted">{formatDate(o.updatedAt, locale, true)}</td>
+                  <td className="p-2 text-fg-muted"><LocalTime value={o.updatedAt} withTime /></td>
                   {canManage && (
                     <td className="p-2 text-end">
                       <button type="button" className={smallButton} disabled={locked} onClick={() => remove(o)} data-testid="live-override-remove">{t('live.overrides.remove')}</button>
@@ -722,7 +723,7 @@ function SessionsSection({
   setNotice: (m: string | null) => void;
   onError: (e: unknown) => void;
 }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const id = useId();
   const [show, setShow] = useState<'active' | 'recent'>(active.length ? 'active' : 'recent');
   const rows = show === 'active' ? active : recent;
@@ -754,7 +755,7 @@ function SessionsSection({
     });
   };
 
-  const time = (v: number | null | undefined) => (v ? formatDate(v, locale, true) : '—');
+  const time = (v: number | null | undefined) => (v ? <LocalTime value={v} withTime /> : '—');
 
   return (
     <section className={cardClass} aria-labelledby={`${id}-heading`} data-testid="live-sessions">
@@ -968,7 +969,7 @@ function ComparisonSection({ initial, range, providerName }: { initial: LiveComp
   );
 }
 
-function HistorySection({ audit, locale }: { audit: LiveAuditEntry[]; locale: string }) {
+function HistorySection({ audit }: { audit: LiveAuditEntry[]; locale: string }) {
   const { t } = useLanguage();
   const id = useId();
   const show = (v: unknown) => (v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
@@ -991,7 +992,7 @@ function HistorySection({ audit, locale }: { audit: LiveAuditEntry[]; locale: st
                 <div className="flex flex-wrap gap-x-3 text-fg">
                   <span className="font-medium">{actionLabel(entry.action)}</span>
                   {target.id && target.id !== 'routing' && <span className="text-fg-muted" dir="ltr">{target.id}</span>}
-                  <span className="text-fg-muted">{formatDate(entry.createdAt, locale as never, true)}</span>
+                  <span className="text-fg-muted"><LocalTime value={entry.createdAt} withTime /></span>
                   <span className="text-fg-muted"><UserName id={entry.actorId} showEmail={false} /></span>
                 </div>
                 <ul className="mt-1 space-y-0.5 text-xs text-fg-muted">

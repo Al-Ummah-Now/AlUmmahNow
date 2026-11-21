@@ -5,7 +5,7 @@ import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { Locale } from '@/i18n/config';
-import { formatDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
+import { translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { getCsamCaseLogSafe, getCsamCaseSafe } from '../load';
 import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, caseActions, csamDownloadHref, csamFactRows } from '../model';
@@ -13,6 +13,8 @@ import { AccessLog } from '../AccessLog';
 import { HoldForm, MapForm, ReportChecklist, ReportedForm, RetryButton } from './CaseActions';
 import { numberFormat } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
 export const dynamic = 'force-dynamic';
 
 const DOWNLOAD_ERRORS = new Set(['evidence_deleted', 'evidence_key_missing', 'not_found']);
@@ -48,7 +50,7 @@ export default async function CsamCasePage({ params, searchParams }: { params: P
           <span className={`inline-block rounded border px-2 py-0.5 text-sm font-medium ${CSAM_TONE_CLASS[CSAM_STATUS_TONE[c.status]]}`} data-testid="csam-case-status" data-status={c.status}>
             {t(`csamPage.statuses.${c.status}` as MessageKey)}
           </span>
-          <span className="text-sm text-fg-muted">{t('csamPage.detail.sourceDetected', { source: t(`csamPage.sources.${c.source}` as MessageKey), date: formatDate(c.detectedAt, locale, true) })}</span>
+          <span className="text-sm text-fg-muted">{fillNodes(t('csamPage.detail.sourceDetected', { source: t(`csamPage.sources.${c.source}` as MessageKey) }), { date: <LocalTime value={c.detectedAt} withTime /> })}</span>
         </p>
       </div>
 
@@ -92,7 +94,7 @@ function Row({ label, children, testId }: { label: string; children: React.React
   );
 }
 
-function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: Locale }) {
+function Takedown({ c, t }: { c: CsamCaseDetail; t: Translator; locale: Locale }) {
   const r = c.resolution;
   const freeze = c.freeze;
   const job = c.job;
@@ -144,14 +146,14 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
       </Row>
       {c.reportedAt && (
         <Row label={t('csamPage.detail.reported')} testId="csam-reported">
-          <bdi dir="ltr">{c.reportId}</bdi> • {formatDate(c.reportedAt, locale, true)}
+          <bdi dir="ltr">{c.reportId}</bdi> • <LocalTime value={c.reportedAt} withTime />
         </Row>
       )}
       <Row label={t('csamPage.detail.retainUntil')}>
         {c.evidenceDeletedAt
-          ? t('csamPage.detail.evidenceDeletedOn', { date: formatDate(c.evidenceDeletedAt, locale) })
+          ? fillNodes(t('csamPage.detail.evidenceDeletedOn'), { date: <LocalTime value={c.evidenceDeletedAt} /> })
           : c.retainUntil
-            ? formatDate(c.retainUntil, locale)
+            ? <LocalTime value={c.retainUntil} />
             : c.legalHold
               ? t('csamPage.detail.retainHold')
               : t('csamPage.detail.retainUntilReported')}
@@ -172,7 +174,7 @@ function bytes(n: number, locale: Locale): string {
 }
 
 function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: Locale }) {
-  if (c.evidenceDeletedAt) return <p className="text-fg-muted">{t('csamPage.detail.evidenceDeletedOn', { date: formatDate(c.evidenceDeletedAt, locale) })}</p>;
+  if (c.evidenceDeletedAt) return <p className="text-fg-muted">{fillNodes(t('csamPage.detail.evidenceDeletedOn'), { date: <LocalTime value={c.evidenceDeletedAt} /> })}</p>;
   if (!c.evidence) return <p className="text-fg-muted" data-testid="csam-evidence-none">{t('csamPage.evidence.none')}</p>;
   return (
     <>

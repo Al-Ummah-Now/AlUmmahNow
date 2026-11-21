@@ -4,13 +4,14 @@ import { getAiSignal } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import type { AiSignalDetail } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { SignalActions } from './actions';
 import { UserName } from '@/components/audit/UserName';
 import { formatFixed } from '@al-ummah/shared-types';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
@@ -106,7 +107,7 @@ export default async function AiSignalPage({ params }: PageProps) {
                 <dt className="text-fg-muted">{t('ai.promptVersion')}</dt>
                 <dd className="text-fg font-mono" dir="ltr">{s.prompt_version ?? '—'}</dd>
                 <dt className="text-fg-muted">{t('ai.created')}</dt>
-                <dd className="text-fg"><time dateTime={s.created_at}>{formatDate(s.created_at, locale, true)}</time></dd>
+                <dd className="text-fg"><LocalTime value={s.created_at} withTime /></dd>
                 <dt className="text-fg-muted">{t('ai.colReview')}</dt>
                 <dd className="text-fg" data-testid="ai-review-status">{translateDynamic(t, 'aiReview', s.review_status)}</dd>
               </dl>
@@ -120,7 +121,7 @@ export default async function AiSignalPage({ params }: PageProps) {
                 <ol className="space-y-2">
                   {detail.actions.map((a) => (
                     <li key={a.id} className="text-sm flex flex-wrap gap-x-3">
-                      <time className="text-fg-subtle" dateTime={a.created_at}>{formatDate(a.created_at, locale, true)}</time>
+                      <LocalTime value={a.created_at} withTime className="text-fg-subtle" />
                       <span className="text-fg">{translateDynamic(t, 'aiAction', a.action)}</span>
                       <span className="text-fg-muted">
                         {a.actor_type === 'ai' ? t('ai.actorAi') : t('ai.actorUser', { id: (a.actor_id ?? '').slice(0, 8) })}

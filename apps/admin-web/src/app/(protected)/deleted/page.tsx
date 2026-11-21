@@ -4,7 +4,7 @@ import { trashHref } from '@/lib/trash';
 import { getContentPermissions, listDeletions } from '@/lib/api/content';
 import type { AdminContentPermission, AdminDeletion, AdminDeletionKind, AdminDeletionPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { hrefWith, PAGE_SIZE, pickParams, type SearchParams } from '@/components/content/query';
@@ -13,6 +13,7 @@ import { DeletionActions } from './DeletionActions';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 
+import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 const KIND_LABEL: Record<AdminDeletionKind, MessageKey> = {
@@ -40,7 +41,7 @@ function itemHref(d: AdminDeletion): string | null {
 export default async function DeletedPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = pickParams(await searchParams, { kind: 'text', cursor: 'text' });
   const kind = (ADMIN_DELETION_KINDS as readonly string[]).includes(params.kind ?? '') ? (params.kind as AdminDeletionKind) : undefined;
-  const { t, locale } = await getI18n();
+  const { t } = await getI18n();
 
   let data: AdminDeletionPage | null = null;
   let permissions: AdminContentPermission[] = [];
@@ -85,7 +86,7 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
       </p>
       {data?.lastRun && (
         <p className="text-xs text-fg-subtle mb-4" data-testid="deleted-last-run">
-          {t('deleted.lastRun', { when: formatDate(data.lastRun.at, locale, true), purged: data.lastRun.purged, failed: data.lastRun.failed })}
+          {fillNodes(t('deleted.lastRun', { purged: data.lastRun.purged, failed: data.lastRun.failed }), { when: <LocalTime value={data.lastRun.at} withTime /> })}
         </p>
       )}
       {!data && <ErrorAlert testId="deleted-error">{t('content.loadFailed')}</ErrorAlert>}
@@ -116,14 +117,14 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
                       </span>
                       {d.reason && <span className="block text-sm text-fg-muted mt-1" dir="auto">{t('deleted.reason', { reason: d.reason })}</span>}
                       <span className="md:hidden block text-xs text-fg-muted mt-1">
-                        {fillNodes(t('deleted.byOn', { when: formatDate(d.deletedAt, locale, true) }), { who: <UserName id={d.deletedBy} showEmail={false} /> })}
+                        {fillNodes(t('deleted.byOn'), { when: <LocalTime value={d.deletedAt} withTime />, who: <UserName id={d.deletedBy} showEmail={false} /> })}
                       </span>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
                       <UserName id={d.deletedBy} showEmail={false} />
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
-                      <time dateTime={d.deletedAt}>{formatDate(d.deletedAt, locale, true)}</time>
+                      <LocalTime value={d.deletedAt} withTime />
                     </td>
                     <td className={`${tdClass} text-sm`}>
                       {d.status === 'deleted' && <Chip tone="info" testId="deleted-days-left">{t('deleted.daysLeft', { count: daysLeft })}</Chip>}
