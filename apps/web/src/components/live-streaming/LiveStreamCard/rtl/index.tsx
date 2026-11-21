@@ -19,6 +19,7 @@ import { ViewerCountRTL } from '../../ViewerCount/rtl';
 import { formatViewerCountArabic } from '@/lib/utils/number-format';
 import type { LiveStreamCardProps } from '../types';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 /**
  * Format relative time from date (Arabic)
  * Examples: "منذ ساعتين", "بدأ منذ 30 دقيقة"
@@ -268,7 +269,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
           {/* Metadata - RTL: flex-row-reverse (right-to-left flow) */}
           <div className="flex flex-row-reverse items-center gap-1.5 text-[10px] md:text-xs text-gray-500 dark:text-gray-500 justify-end">
             {relativeTime && <span className="truncate">{relativeTime}</span>}
-            {stream.category && relativeTime && <span aria-hidden="true">•</span>}
+            {stream.category && relativeTime && <MetaSep lang="ar" gap="0.375rem" />}
             {stream.category && (
               <>
                 <span className="truncate">{stream.category}</span>

@@ -121,7 +121,8 @@ test.describe('Audio menu', () => {
     await expect(menu).toHaveAttribute('data-panel', 'audio');
     const options = menu.getByRole('menuitemradio');
     await expect(options.nth(0)).toHaveAttribute('aria-checked', 'true');
-    await expect(options.nth(1)).toHaveText(/English · مدبلج/);
+    // Arabic joins a meta line with «،», never a dot that reads as «٠» (lib/i18n/meta-separator.ts)
+    await expect(options.nth(1)).toHaveText(/English، مدبلج/);
     expect(await labelDirections(options)).toEqual(['rtl', 'rtl']);
     await shot(page, player, `${info.project.name}-audio-menu-ar`);
     const dub = options.nth(1);

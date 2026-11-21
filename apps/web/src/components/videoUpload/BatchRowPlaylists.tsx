@@ -11,6 +11,7 @@ import { PlaylistPicker } from './PlaylistPicker';
 import type { PlaylistWithVideos } from '@/lib/api/playlists';
 import type { NewPlaylistInput } from '@/lib/api/upload-playlists-client';
 
+import { joinMeta } from '@/lib/i18n/meta-separator';
 interface Props {
   rowId: string;
   playlists: PlaylistWithVideos[];
@@ -27,7 +28,7 @@ interface Props {
 const linkButton = 'text-xs font-medium text-[var(--fanous-color-link)] underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)] rounded';
 
 export function BatchRowPlaylists({ rowId, playlists, loading, failed, batch, override, committed, onOverride, onCreate }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const s = t.playlist.upload;
   const own = override !== undefined;
   const shown = committed ?? override ?? batch;
@@ -37,7 +38,7 @@ export function BatchRowPlaylists({ rowId, playlists, loading, failed, batch, ov
         id={`batch-playlists-${rowId}`}
         testId="batch-row-playlist-picker"
         compact
-        label={own || committed ? s.rowLabel : `${s.rowLabel} · ${s.sameAsBatch}`}
+        label={own || committed ? s.rowLabel : joinMeta(lang, [s.rowLabel, s.sameAsBatch], '·')}
         playlists={playlists}
         loading={loading}
         failed={failed}

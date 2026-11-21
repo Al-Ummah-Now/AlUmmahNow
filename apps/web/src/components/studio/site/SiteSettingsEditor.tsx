@@ -27,6 +27,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { previewSiteSettings, saveSiteSettings, uploadSiteImage } from '@/lib/studio/site-client';
 import type { StudioSite } from '@/lib/studio/site';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Props {
   locale: string;
   channelId: string;
@@ -135,11 +136,11 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
         <p className="text-sm">
           <span className="font-medium">{s.address}: </span>
           <span dir="ltr" className="font-mono" data-testid="studio-site-host">{saved.primaryHost}</span>
-          {' · '}
+          {metaSeparator(locale, '·')}
           <span data-testid="studio-site-status">{statusText}</span>
           {site.status === 'live' && (
             <>
-              {' · '}
+              {metaSeparator(locale, '·')}
               <a className="underline" href={`https://${saved.primaryHost}/${lang(locale)}/`} target="_blank" rel="noopener noreferrer">{s.open}</a>
             </>
           )}

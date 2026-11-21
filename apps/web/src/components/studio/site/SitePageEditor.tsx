@@ -29,6 +29,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { deleteSitePage, previewSiteSettings, restoreSitePage, saveSitePage, uploadSiteImage } from '@/lib/studio/site-client';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Props {
   locale: string;
   channelId: string;
@@ -239,7 +240,7 @@ export function SitePageEditor({ locale, channelId, siteLocales, initial }: Prop
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">{page.title[lang] || page.title.en || page.title.ar}</h1>
         <p className="text-sm">
-          <bdi dir="ltr" className="font-mono">/{page.slug}/</bdi> · <span data-testid="studio-site-page-status">{page.status === 'published' ? p.published : p.draft}</span>
+          <bdi dir="ltr" className="font-mono">/{page.slug}/</bdi>{metaSeparator(lang, '·')}<span data-testid="studio-site-page-status">{page.status === 'published' ? p.published : p.draft}</span>
         </p>
       </header>
 

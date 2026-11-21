@@ -22,6 +22,7 @@ import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocompl
 import { useLanguage } from '@/hooks/useLanguage';
 import { channelDisplayName, roleOn, type UploadChannelCandidate } from '@/lib/upload/upload-channel';
 
+import { joinMeta } from '@/lib/i18n/meta-separator';
 export interface UploadChannelPickerProps {
   channels: UploadChannelCandidate[];
   value: string | null;
@@ -60,7 +61,7 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
     const name = channelDisplayName(channel, lang);
     const role = roleOn(channel, userId);
     const roleLabel = role && role !== 'owner' ? t.channelRoles.roles[role] : '';
-    const subtitle = [channel.handle ? `@${channel.handle}` : '', roleLabel].filter(Boolean).join(' · ');
+    const subtitle = joinMeta(lang, [channel.handle ? `@${channel.handle}` : '', roleLabel], '·');
     return {
       id: channel.id,
       label: name,

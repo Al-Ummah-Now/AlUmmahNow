@@ -13,6 +13,7 @@ import { reportError } from '@/lib/errors/reporter';
 import { addAudioTrack, detectAudioStreams, updateAudioTrack, type AudioTracksView, type StudioAudioTrack } from '@/lib/api/audio-tracks';
 import { addLimitMessage, fileProblem, languageName, maxFileSize, streamText } from './audio-track-model';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 export type AudioTrackDialogResult = { type: 'added'; track: StudioAudioTrack; file?: File } | { type: 'saved'; track: StudioAudioTrack };
 
 export interface AudioTrackDialogProps {
@@ -133,7 +134,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
   const langOptions = AUDIO_TRACK_LANGUAGES.map((l) => (
     <option key={l.code} value={l.code}>
       {languageName(l.code, lang)}
-      {languageName(l.code, lang) !== l.name ? ` · ${l.name}` : ''}
+      {languageName(l.code, lang) !== l.name ? `${metaSeparator(lang, '·')}${l.name}` : ''}
     </option>
   ));
 

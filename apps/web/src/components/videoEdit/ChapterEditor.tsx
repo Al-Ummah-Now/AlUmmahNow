@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Chapter } from '@/lib/api/chapters';
 import { formatClock } from '@al-ummah/shared-types';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface ChapterEditorProps {
   videoId: string;
   videoDuration: number;
@@ -419,7 +420,7 @@ export default function ChapterEditor({
               {/* Duration Preview */}
               <div className="text-xs text-gray-600 dark:text-gray-400">
                 {t.video.videoDuration}: {formatTimestamp(chapter.endTime - chapter.startTime, lang)}
-                {' • '}
+                {metaSeparator(lang)}
                 {formatTimestamp(chapter.startTime, lang)} - {formatTimestamp(chapter.endTime, lang)}
               </div>
             </div>

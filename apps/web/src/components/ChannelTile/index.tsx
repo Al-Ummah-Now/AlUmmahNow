@@ -11,6 +11,7 @@ import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
 import { channelPath } from '@/lib/channel-url';
 import { formatSubscribers, formatVideoCount } from '@/lib/format/videoMeta';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 interface ChannelTileProps {
   channel: ChannelSummary;
   /** 'card' for grids, 'compact' for horizontal section rows */
@@ -65,7 +66,7 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
         {/* Each part stays whole; a narrow card breaks the line only at the dot (#1669 audit) */}
         <p className="flex flex-wrap items-center justify-center gap-x-1 text-xs text-gray-600 dark:text-gray-400 mt-1">
           <span className="whitespace-nowrap">{subscribers}</span>
-          <span aria-hidden="true">•</span>
+          <MetaSep lang={lang} gap="0.25rem" />
           <span className="whitespace-nowrap">{videos}</span>
         </p>
         {variant === 'card' && description && (

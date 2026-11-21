@@ -24,6 +24,8 @@ import { fill } from '@/components/playlists/text';
 import { DIVIDE, MUTED, NOTICE, TEXT } from '@/components/playlists/styles';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 
+import { MetaSep } from '@/components/ui/MetaSep';
+import { joinMeta } from '@/lib/i18n/meta-separator';
 interface PlaylistManagerProps {
   channelId: string;
 }
@@ -162,15 +164,15 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                   <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`} data-testid="playlist-details">
                     <span>{formatVideoCount(count, lang)}</span>
                     <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <span aria-hidden="true" className="me-1">•</span>
+                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
                       {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
                       {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
                     </span>
                     <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="playlist-sort-summary">
-                      <span aria-hidden="true" className="me-1">•</span>
+                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
                       <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
                       {sort.sortMode === 'auto'
-                        ? `${fieldLabel(sort.sortField, t)} · ${directionLabels(sort.sortField, t)[sort.sortDirection]}`
+                        ? joinMeta(lang, [fieldLabel(sort.sortField, t), directionLabels(sort.sortField, t)[sort.sortDirection]], '·')
                         : p.sortManual}
                     </span>
                   </p>

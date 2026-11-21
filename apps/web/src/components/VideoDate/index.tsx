@@ -4,6 +4,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { RelativeDate } from '@/components/RelativeDate';
 import { formatAbsoluteDate, formatAbsoluteDateTime, formatViews, formatViewsExact, publishedDateOf, type MetaLang } from '@/lib/format/videoMeta';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
+import { MetaSep } from '@/components/ui/MetaSep';
 export interface DatedVideo {
   isLive?: boolean | null;
   /** Premiere fields (shared-types VideoObject): its date is the premiere's */
@@ -64,27 +66,25 @@ function labelledDate(video: DatedVideo, lang: MetaLang, labels: Record<string, 
   return (labels?.published ?? '{date}').replace('{date}', formatAbsoluteDateTime(publishedDateOf(video), lang));
 }
 
-const SEP = ' • ';
-
 /**
  * The watch page's collapsed description line, YouTube style: "6 views • 1 day ago". Hovering it,
  * or focusing it with the keyboard, shows the exact count and what the date is
- * («1,234 مشاهدة • نُشر في 12 نوفمبر 2026، 06:32 م»); screen readers get that text through
+ * («1,234 مشاهدة، نُشر في 12 نوفمبر 2026، 06:32 م»); screen readers get that text through
  * aria-describedby.
  */
 export function WatchMetaSummary({ video, views, lang, describedById }: { video: DatedVideo; views: number | string | null | undefined; lang: MetaLang; describedById: string }) {
   const { t } = useLanguage();
   const labels = t.video?.dateLabel as Record<string, string> | undefined;
   const origin = youtubeOriginDate(video);
-  const tip = `${formatViewsExact(views, lang)}${SEP}${labelledDate(video, lang, labels)}${origin ? `${SEP}${fromYoutubeText(origin, lang, labels)}` : ''}`;
+  const tip = `${formatViewsExact(views, lang)}${metaSeparator(lang)}${labelledDate(video, lang, labels)}${origin ? `${metaSeparator(lang)}${fromYoutubeText(origin, lang, labels)}` : ''}`;
   return (
     <summary title={tip} data-tip={tip} aria-describedby={describedById}>
       <span>{formatViews(views, lang)}</span>
-      <span aria-hidden="true">•</span>
+      <MetaSep lang={lang} gap="6px" />
       <VideoDate video={video} lang={lang} />
       {origin && (
         <>
-          <span aria-hidden="true">•</span>
+          <MetaSep lang={lang} gap="6px" />
           <span className="watch-origin" data-testid="watch-origin-short">{labels?.fromYoutubeShort ?? 'Originally on YouTube'}</span>
         </>
       )}
@@ -106,7 +106,7 @@ export function WatchMetaDetail({ video, views, lang }: { video: DatedVideo; vie
   return (
     <>
       <p className="watch-desc-date" data-testid="watch-published">
-        {formatViewsExact(views, lang)}{SEP}{labelledDate(video, lang, labels)}
+        {formatViewsExact(views, lang)}{metaSeparator(lang)}{labelledDate(video, lang, labels)}
       </p>
       {origin && (
         <p className="watch-desc-origin" data-testid="watch-origin">

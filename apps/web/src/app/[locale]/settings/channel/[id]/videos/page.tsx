@@ -27,6 +27,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import '@/theme/playlist-tools.css';
 import { publishedDateOf } from '@/lib/format/videoMeta';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
 type SortBy = 'date' | 'views' | 'title';
@@ -442,7 +443,7 @@ export default function ChannelVideosPage() {
                   </div>
                   <div className="mb-3 flex items-center gap-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     <span>{formatViews(video.views, lang)}</span>
-                    <span aria-hidden="true">•</span>
+                    <MetaSep lang={lang} gap="0.5rem" />
                     <span>{formatDate(video.dateCreated)}</span>
                   </div>
 

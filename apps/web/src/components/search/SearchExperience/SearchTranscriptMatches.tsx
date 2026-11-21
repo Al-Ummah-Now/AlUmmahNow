@@ -16,6 +16,7 @@ import { removeUnwantedChars } from '@/lib/utility';
 import { channelLabel } from '@/lib/channel-name';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 
+import { MetaSep } from '@/components/ui/MetaSep';
 /** `M:SS` or `H:MM:SS` from milliseconds (0:00 at the start). */
 export function passageTime(ms: number, lang = 'en'): string {
   return formatClock(lang, Math.max(0, Math.floor(ms / 1000)));
@@ -72,7 +73,7 @@ export function SearchTranscriptMatches({ matches, query }: { matches: SearchTra
                   <p dir="auto" className="line-clamp-2 text-sm font-semibold text-foreground">{title}</p>
                   <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                     <span className="shrink-0">{fill(t.search.saidAt, { time })}</span>
-                    <span aria-hidden="true">·</span>
+                    <MetaSep lang={lang} en="·" gap="0.25rem" />
                     <span dir="auto" className="truncate">
                       {channelLabel({ channelName: m.channel?.name ?? m.video.channelName ?? '', channelNameLocalized: m.channel?.nameLocalized ?? m.video.channelNameLocalized }, lang)}
                     </span>

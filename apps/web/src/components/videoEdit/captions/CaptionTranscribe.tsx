@@ -18,6 +18,7 @@ import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts-client';
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 export interface CaptionMinutes {
   usage: CaptionMinutesUsage;
   minutesNeeded: number | null;
@@ -168,7 +169,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
             : over > 0
               ? fill(t.meterOver, { used: usage.monthUsed + over, limit: usage.monthLimit ?? 0, over })
               : fill(t.meter, { used: usage.monthUsed, limit: usage.monthLimit ?? 0, date: resets })}
-          {!usage.unlimited && usage.packsRemaining > 0 && <span className="text-muted-foreground"> · {fill(t.meterPacks, { count: usage.packsRemaining })}</span>}
+          {!usage.unlimited && usage.packsRemaining > 0 && <span className="text-muted-foreground">{metaSeparator(lang, '·')}{fill(t.meterPacks, { count: usage.packsRemaining })}</span>}
         </p>
         {!usage.unlimited && usage.monthLimit ? (
           <div

@@ -10,6 +10,7 @@ import { keyOfMatch, toFileMatch } from '@/lib/youtube-import/takeout';
 import { freeFiles, reviewGroup, shortFileName, type ReviewGroup } from '@/lib/youtube-import/wizard';
 import { num, useFill, StepHeading, Thumb } from './parts';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface Props {
   items: YtImportItem[];
   files: TakeoutFile[];
@@ -95,7 +96,7 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
                           <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-review-file-meta">
                             {/* Each part stays whole: a narrow line moves the zip name down, never breaks it */}
                             <bdi className="whitespace-nowrap">{formatSize(chosen.size, locale)}</bdi>
-                            {chosen.zipName ? <> · <bdi className="whitespace-nowrap" title={chosen.zipName}>{fitName(chosen.zipName, 30)}</bdi></> : null}
+                            {chosen.zipName ? <>{metaSeparator(locale, '·')}<bdi className="whitespace-nowrap" title={chosen.zipName}>{fitName(chosen.zipName, 30)}</bdi></> : null}
                           </p>
                         )}
                       </div>

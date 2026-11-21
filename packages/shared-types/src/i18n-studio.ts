@@ -893,10 +893,10 @@ export const STUDIO_AR: StudioTranslations = {
     statusLabel: 'الحالة',
     statuses: { published: 'منشور', scheduled: 'مجدول', drafts: 'مسودات', processing: 'قيد المعالجة', in_review: 'قيد المراجعة', not_approved: 'لم تتم الموافقة', failed: 'فشل' },
     review: {
-      checking: 'قيد المراجعة · عادةً خلال {minutes} دقائق',
-      held: 'سيراجعه أحد المراجعين · نحو {minutes} دقيقة',
+      checking: 'قيد المراجعة، عادةً خلال {minutes} دقائق',
+      held: 'سيراجعه أحد المراجعين، نحو {minutes} دقيقة',
       heldNoTime: 'سيراجعه أحد المراجعين',
-      appealed: 'أُرسل الاعتراض · سيراجعه مراجع آخر',
+      appealed: 'أُرسل الاعتراض، سيراجعه مراجع آخر',
       rejected: 'لم تتم الموافقة: {reason}',
       appealUsed: 'بُتّ في الاعتراض',
       reasons: {
@@ -1058,7 +1058,7 @@ export const STUDIO_AR: StudioTranslations = {
     quota: {
       hoursUsedBody: 'بثثت {used} من أصل {hours} ساعة هذا الشهر، وتتجدد في اليوم الأول من الشهر.',
       pendingDeletionBody: 'حسابك قيد الحذف، لذا لا يمكنك البث المباشر.',
-      usage: 'استُخدمت {used} من {hours} ساعة بث هذا الشهر · حتى {minutes} دقيقة لكل بث',
+      usage: 'استُخدمت {used} من {hours} ساعة بث هذا الشهر، حتى {minutes} دقيقة لكل بث',
     },
     goLive: {
       back: 'العودة إلى البثوث المباشرة',

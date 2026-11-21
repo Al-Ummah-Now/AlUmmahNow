@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { CommunityPost, formatPercent } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 
+import { metaSeparator } from '@/lib/i18n/meta-separator';
 interface QuizPostProps {
   post: CommunityPost;
   isRTL?: boolean;
@@ -199,7 +200,7 @@ export default function QuizPost({ post, isRTL = false }: QuizPostProps) {
         'text-sm text-gray-500 dark:text-gray-400',
         isRTL && 'text-right'
       )}>
-        {totalAttempts} {isRTL ? 'محاولة' : totalAttempts === 1 ? 'attempt' : 'attempts'} • {' '}
+        {totalAttempts} {isRTL ? 'محاولة' : totalAttempts === 1 ? 'attempt' : 'attempts'}{metaSeparator(isRTL ? 'ar' : 'en')}
         {formatPercent(isRTL ? 'ar' : 'en', successRate / 100)} {isRTL ? 'نسبة النجاح' : 'success rate'}
       </div>
     </div>
