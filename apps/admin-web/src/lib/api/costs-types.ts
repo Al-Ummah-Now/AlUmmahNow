@@ -96,6 +96,17 @@ export interface CostsDashboard {
   canManage: boolean;
   connections: CostCredentialView[];
   me: CostSubscription;
+  /** DeepL this month (AUN-CAPTIONS DEEPL-KEY); absent from an admin-api that predates it */
+  deepl?: CostDeepl;
+}
+
+export interface CostDeepl {
+  keySet: boolean;
+  plan: 'free' | 'pro' | null;
+  characters: number;
+  calls: number;
+  costUsd: number;
+  reported: { characterCount: number; characterLimit: number | null; at: string } | null;
 }
 
 /** What admin-api returns after a save or a test (lib/costs.ts TestResult). */

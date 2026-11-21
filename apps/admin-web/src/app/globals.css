@@ -398,6 +398,8 @@ html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 .cost-pill {
   display: inline-flex;
   align-items: center;
+  /* A long "data as of" line wraps inside the pill instead of pushing a phone page sideways */
+  min-width: 0;
   gap: 0.375rem;
   border: 1px solid var(--border);
   border-radius: 999px;

@@ -5,9 +5,9 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType, captionDraftKey, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
+import { MessageType, captionDraftKey, renderCaptionVtt, sealServiceCredential, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
-import { finishJob, requestTranslationJob, type CaptionJobsEnv } from '../src/lib/captions/jobs';
+import { deeplKeySource, finishJob, requestTranslationJob, type CaptionJobsEnv } from '../src/lib/captions/jobs';
 import { captionSubject, eraseCaptionMinutes, readUsage } from '../src/lib/captions/minutes';
 import { QF_AYAT_PER_TRACK, fillServedTrack } from '../src/lib/captions/drafts';
 import { editionFor } from '../src/lib/quran/translations';
@@ -129,6 +129,41 @@ describe('transcript translation jobs', () => {
 		const again = await translate(asEnv);
 		assert.ok('job' in again && again.existing && again.job.id === out.job.id);
 		assert.equal(await remaining(), 7);
+	});
+
+	it('DeepL only when an admin turned it on and a key is set: the admin’s sealed key first, else a bound AI_KEY_DEEPL (DEEPL-KEY)', async () => {
+		// On, but no key anywhere: Workers AI
+		const off = await setup(10);
+		off.env.global_settings.objects['captions/settings.json'] = JSON.stringify({ translation: { deepl: true } });
+		await translate(off.asEnv);
+		assert.equal(off.env.queue.sent[0]!.payload.provider, 'workers-ai');
+
+		// The key a super admin set on Caption settings (sealed under INTERNAL_API_KEY in SEARCH_DB)
+		const sealedEnv = await setup(10);
+		const master = 'internal-api-key-for-tests-0123456789';
+		const sealed = await sealServiceCredential('deepl', '0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b:fx', master);
+		await sealedEnv.d1
+			.prepare("INSERT INTO service_credentials (provider, ciphertext, iv, key_id, last4, plan, updated_by, updated_at) VALUES ('deepl', ?, ?, ?, ?, 'free', 'super-1', ?)")
+			.bind(sealed.ciphertext, sealed.iv, sealed.key_id, sealed.last4, NOV.toISOString())
+			.run();
+		sealedEnv.env.global_settings.objects['captions/settings.json'] = JSON.stringify({ translation: { deepl: true } });
+		const withAdmin = { ...sealedEnv.env, INTERNAL_API_KEY: master } as unknown as CaptionJobsEnv;
+		assert.equal(await deeplKeySource(withAdmin), 'admin');
+		await translate(withAdmin);
+		assert.equal(sealedEnv.env.queue.sent[0]!.payload.provider, 'deepl');
+		assert.equal(sealedEnv.env.queue.sent[0]!.payload.model, 'deepl-pro');
+		// A rotated INTERNAL_API_KEY cannot open it: no key, so Workers AI
+		assert.equal(await deeplKeySource({ ...sealedEnv.env, INTERNAL_API_KEY: 'rotated-internal-key-000000' } as unknown as CaptionJobsEnv), null);
+
+		// The older deployment secret still works when no admin key is set
+		const bound = await setup(10);
+		bound.env.global_settings.objects['captions/settings.json'] = JSON.stringify({ translation: { deepl: true, deeplLanguages: ['en'] } });
+		const withBinding = { ...bound.env, AI_KEY_DEEPL: { get: async () => 'bound-deepl-key-0000000000' } } as unknown as CaptionJobsEnv;
+		assert.equal(await deeplKeySource(withBinding), 'binding');
+		await translate(withBinding);
+		assert.equal(bound.env.queue.sent[0]!.payload.provider, 'deepl');
+		await translate(withBinding, { language: 'fr' });
+		assert.equal(bound.env.queue.sent[1]!.payload.provider, 'workers-ai', 'only the listed DeepL languages');
 	});
 
 	it('the minutes are charged when it ends, and come back when it fails', async () => {

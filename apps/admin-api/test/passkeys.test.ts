@@ -182,6 +182,8 @@ describe('step-up routes', () => {
       'POST /api/trash/:kind/:id/purge',
       'POST /api/status/incidents/:id/purge',
       'POST /api/invites/:id/purge',
+      'PUT /api/content/captions/deepl-key',
+      'DELETE /api/content/captions/deepl-key',
     ]) assert.ok(paths.includes(p), p);
   });
 

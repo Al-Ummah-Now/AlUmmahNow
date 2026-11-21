@@ -12,7 +12,10 @@
  *   the master itself. `key_id` on the row records which master sealed it ('ck1' or 'ik1'); a row
  *   that no longer opens (the master was rotated) reads as "set again", never as a crash.
  * - The admin only ever sees `last4`, who set it and when, and the last connection test.
+ *
+ * The AES-GCM/HKDF helpers live in service-credentials.ts (also used for the DeepL key).
  */
+import { credentialLast4, openSecretValue, sealSecretValue } from './service-credentials';
 
 export const COST_PROVIDERS = ['cloudflare', 'bunny', 'resend'] as const;
 export type CostProvider = (typeof COST_PROVIDERS)[number];
@@ -53,9 +56,6 @@ export interface CostCredentialRow {
   test_detail: string | null;
 }
 
-const SALT = new TextEncoder().encode('al-ummah-cost-credentials');
-const INFO = new TextEncoder().encode('cost-credentials:aes-gcm:v1');
-
 export interface CostKeySource {
   COST_CREDENTIALS_KEY?: string | null;
   INTERNAL_API_KEY?: string | null;
@@ -68,24 +68,6 @@ export function costMasterSecret(src: CostKeySource): { id: 'ck1' | 'ik1'; secre
   return null;
 }
 
-async function deriveKey(secret: string): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'HKDF', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: SALT, info: INFO }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-}
-
-const toB64 = (bytes: Uint8Array) => {
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
-};
-const fromB64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
-
-/** The last four characters shown back to the admin (shorter values show nothing). */
-export function credentialLast4(value: string): string {
-  const v = value.trim();
-  return v.length >= 12 ? v.slice(-4) : '';
-}
-
 export class CostCredentialError extends Error {}
 
 export async function sealCostCredential(
@@ -95,25 +77,14 @@ export async function sealCostCredential(
 ): Promise<{ ciphertext: string; iv: string; key_id: string; last4: string }> {
   const master = costMasterSecret(src);
   if (!master) throw new CostCredentialError('No key to encrypt credentials with (INTERNAL_API_KEY is not bound)');
-  const key = await deriveKey(master.secret);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(provider) }, key, new TextEncoder().encode(value.trim()));
-  return { ciphertext: toB64(new Uint8Array(sealed)), iv: toB64(iv), key_id: master.id, last4: credentialLast4(value) };
+  return { ...(await sealSecretValue(provider, value, master)), last4: credentialLast4(value) };
 }
 
 /** The stored value, or null when it cannot be opened (missing master, rotated master, tampered row). */
 export async function openCostCredential(row: Pick<CostCredentialRow, 'provider' | 'ciphertext' | 'iv' | 'key_id'>, src: CostKeySource): Promise<string | null> {
   const ck = src.COST_CREDENTIALS_KEY && src.COST_CREDENTIALS_KEY.length >= 16 ? src.COST_CREDENTIALS_KEY : null;
   const ik = src.INTERNAL_API_KEY && src.INTERNAL_API_KEY.length >= 16 ? src.INTERNAL_API_KEY : null;
-  const secret = row.key_id === 'ck1' ? ck : row.key_id === 'ik1' ? ik : null;
-  if (!secret) return null;
-  try {
-    const key = await deriveKey(secret);
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(row.iv), additionalData: new TextEncoder().encode(row.provider) }, key, fromB64(row.ciphertext));
-    return new TextDecoder().decode(plain);
-  } catch {
-    return null;
-  }
+  return openSecretValue(row.provider, row, row.key_id === 'ck1' ? ck : row.key_id === 'ik1' ? ik : null);
 }
 
 /** Basic shape check before saving; returns an error message or null. Values are never echoed. */

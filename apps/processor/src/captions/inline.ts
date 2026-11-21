@@ -39,7 +39,7 @@ import { USD_PER_NEURON, neuronsFor } from '../moderation/pricing';
 import { recordUsage } from '../moderation/usage';
 import { loadQuranIndex } from '../quran/review-matcher';
 import { ProviderError, type Usage } from '../review/provider';
-import { translatorFor, type Translator, type TranslatorEnv } from './translator';
+import { DeeplError, flagDeeplFailure, translatorFor, withoutDeepl, type Translator, type TranslatorEnv } from './translator';
 import { translateAdminFieldsWithBudget } from './admin-fields';
 
 export const INLINE_FEATURE = 'inline_translate';
@@ -102,14 +102,23 @@ export async function translateItems(
   let model = 'none';
   if (toTranslate.length) {
     const primary = deps.translator ?? (await translatorFor(env, req.provider));
-    const fallback = primary.provider === 'deepl' ? await translatorFor({ ...env, AI_KEY_DEEPL: '' }, 'workers-ai') : primary;
+    const fallback = primary.provider === 'deepl' ? await translatorFor(withoutDeepl(env), 'workers-ai') : primary;
     const attempts: Array<[Translator, string]> = [
       [primary, INLINE_TRANSLATE_MODELS.primary],
       [fallback, INLINE_TRANSLATE_MODELS.fallback],
     ];
     let last = 'no_attempt';
     for (const [t, m] of attempts) {
-      const answer = await t.translate({ items: toTranslate, context: [] }, req.from, req.to, ctx, m, usage);
+      let answer: unknown[] | null;
+      try {
+        answer = await t.translate({ items: toTranslate, context: [] }, req.from, req.to, ctx, m, usage);
+      } catch (error) {
+        // DeepL refused (wrong key, characters used up, outage): flag the admin, go on with Workers AI
+        if (!(error instanceof DeeplError)) throw error;
+        flagDeeplFailure(env, undefined, logger, error, { surface: 'inline' });
+        last = `deepl_${error.code}`;
+        continue;
+      }
       const checked = checkTranslatedBatch(toTranslate, answer, req.to);
       if (checked.ok) {
         texts = checked.texts;

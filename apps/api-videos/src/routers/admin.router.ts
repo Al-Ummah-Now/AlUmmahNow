@@ -42,7 +42,7 @@ import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorInfo } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
-import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs';
+import { deeplKeySource, readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs';
 import { listTranslationEditions } from '../lib/quran/translations';
 import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
@@ -627,9 +627,10 @@ app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) =>
 );
 
 // Captions & translation settings (AUN-CAPTIONS §10, O2, O4, O5, O6, O7); admin-api audits each change
-const deeplKeyBound = async (c: Context<Env>) => {
-	const v = (c.env as { AI_KEY_DEEPL?: string | { get(): Promise<string> } }).AI_KEY_DEEPL;
-	return !!v && !!(typeof v === 'string' ? v : await v.get().catch(() => ''));
+// DeepL: the key a super admin set on Caption settings (sealed, SEARCH_DB), else a bound AI_KEY_DEEPL secret
+const deeplState = async (c: Context<Env>) => {
+	const source = await deeplKeySource(c.env as never);
+	return { deeplKeyBound: source !== null, deeplKeySource: source };
 };
 app.get('/captions/settings', async (c) => {
 	const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
@@ -638,9 +639,9 @@ app.get('/captions/settings', async (c) => {
 		platformEditions(searchDb(c)),
 		searchDb(c).prepare('SELECT kind, COUNT(*) AS requests, SUM(items) AS items, SUM(cached) AS cached FROM translation_audit WHERE at >= ? GROUP BY kind').bind(since).all<{ kind: string; requests: number; items: number; cached: number }>(),
 	]);
-	return ok(c, { settings, deeplKeyBound: await deeplKeyBound(c), editions, translations30d: translations.results ?? [] });
+	return ok(c, { settings, ...(await deeplState(c)), editions, translations30d: translations.results ?? [] });
 });
-app.put('/captions/settings', async (c) => ok(c, { settings: await writeCaptionSettings(c.env as never, await body(c)), deeplKeyBound: await deeplKeyBound(c) }));
+app.put('/captions/settings', async (c) => ok(c, { settings: await writeCaptionSettings(c.env as never, await body(c)), ...(await deeplState(c)) }));
 app.get('/captions/quran-translations/editions', async (c) => {
 	const lang = (c.req.query('language') ?? '').toLowerCase();
 	if (!/^[a-z]{2,3}$/.test(lang)) throw new admin.AdminError(400, 'invalid_language', 'a language code is required');

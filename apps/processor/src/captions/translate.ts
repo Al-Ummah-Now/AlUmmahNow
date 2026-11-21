@@ -45,7 +45,7 @@ import { USD_PER_NEURON, neuronsFor } from '../moderation/pricing';
 import { recordUsage } from '../moderation/usage';
 import { ProviderError, type Usage } from '../review/provider';
 import { CAPTIONS_FEATURE, CAPTION_JOB_LAST_ATTEMPT, BUDGET_WAIT_SECONDS, jobRetryDelaySeconds, captionJobNeedsActionKey } from './job';
-import { translatorFor, type Translator, type TranslatorEnv } from './translator';
+import { DeeplError, flagDeeplFailure, translatorFor, withoutDeepl, type Translator, type TranslatorEnv } from './translator';
 
 interface StoredObject {
   text(): Promise<string>;
@@ -112,7 +112,6 @@ export function isCaptionTranslatePayload(p: unknown): p is CaptionTranslatePayl
 export const captionTranslateMessage = (payload: CaptionTranslatePayload, now = Date.now()) => ({ id: crypto.randomUUID(), type: MessageType.CaptionTranslate, payload, timestamp: now });
 
 class Stopped extends Error {}
-const withoutDeepl = (env: CaptionTranslateEnv): TranslatorEnv => ({ ...env, AI_KEY_DEEPL: '' });
 class Retryable extends Error {}
 
 async function secret(value: ErrorReporterEnv['INTERNAL_API_KEY']): Promise<string> {
@@ -155,6 +154,8 @@ export async function readSource(subtitles: Bucket, p: Pick<CaptionTranslatePayl
 
 export interface TranslateDeps {
   translator?: Translator;
+  /** Test hook: the Workers AI translator DeepL falls back to */
+  fallback?: Translator;
   now?: () => number;
 }
 
@@ -174,18 +175,32 @@ async function translateBatch(
   translator: Translator,
   usage: Usage[],
   logger: Logger,
+  ctx?: ExecutionContextLike,
+  fallbackOverride?: Translator,
 ): Promise<{ texts: Map<string, string>; model: string; provider: string }> {
-  const ctx = { ...(p.context?.title ? { title: p.context.title } : {}), ...(p.context?.channel ? { channel: p.context.channel } : {}) };
+  const prompt = { ...(p.context?.title ? { title: p.context.title } : {}), ...(p.context?.channel ? { channel: p.context.channel } : {}) };
   const attempts: Array<{ t: Translator; model: string }> = [
     { t: translator, model: p.model },
     { t: translator, model: p.model },
   ];
   // DeepL falls back to Workers AI; Workers AI to its fallback model
-  const fallback = translator.provider === 'deepl' ? await translatorFor(withoutDeepl(env), 'workers-ai') : translator;
+  const fallback = translator.provider === 'deepl' ? (fallbackOverride ?? (await translatorFor(withoutDeepl(env), 'workers-ai'))) : translator;
   attempts.push({ t: fallback, model: p.fallbackModel });
   let last = 'no_attempt';
+  let deeplDown = false;
   for (const a of attempts) {
-    const answer = await a.t.translate(batch, p.sourceLanguage, p.language, ctx, a.model, usage);
+    if (deeplDown && a.t.provider === 'deepl') continue;
+    let answer: unknown[] | null;
+    try {
+      answer = await a.t.translate(batch, p.sourceLanguage, p.language, prompt, a.model, usage);
+    } catch (error) {
+      // DeepL refused (wrong key, characters used up, outage): flag the admin, go on with Workers AI
+      if (!(error instanceof DeeplError)) throw error;
+      flagDeeplFailure(env, ctx, logger, error, { jobId: p.jobId });
+      deeplDown = true;
+      last = `deepl_${error.code}`;
+      continue;
+    }
     const checked = checkTranslatedBatch(batch.items, answer, p.language);
     if (checked.ok) return { texts: checked.texts, model: a.model, provider: a.t.provider };
     last = (checked as Extract<typeof checked, { ok: false }>).reason;
@@ -236,7 +251,7 @@ export async function runTranslateStep(env: CaptionTranslateEnv, p: CaptionTrans
     const usage: Usage[] = [];
     let result: Awaited<ReturnType<typeof translateBatch>>;
     try {
-      result = await translateBatch(env, p, batch, deps.translator ?? (await translatorFor(env, p.provider)), usage, logger);
+      result = await translateBatch(env, p, batch, deps.translator ?? (await translatorFor(env, p.provider)), usage, logger, ctx, deps.fallback);
     } finally {
       let spent = 0;
       for (const u of usage) {

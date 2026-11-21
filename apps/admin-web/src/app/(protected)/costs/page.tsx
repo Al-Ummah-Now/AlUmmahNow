@@ -11,6 +11,7 @@ import { opsFormats } from '../operations/model';
 import { BudgetSection, CollectorFailures, CostsHeader, EnvsPanel, MoversSection, ProductsPanel, TokenNotice, TrendPanel } from './sections';
 import { CostThresholds, MyCostAlerts } from './CostAlertForms';
 import { CostConnections } from './CostConnections';
+import { DeeplPanel } from './DeeplPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,7 @@ export default async function CostsPage() {
             <div className="min-w-0 min-[1800px]:col-span-2"><EnvsPanel d={d} t={t} f={f} /></div>
           </div>
           <TrendPanel d={d} t={t} f={f} locale={locale} />
+          <DeeplPanel d={d} t={t} f={f} />
           <MoversSection d={d} t={t} locale={locale} />
           <div className={`grid grid-cols-1 gap-6 ${d.canManage ? 'xl:grid-cols-5' : ''}`}>
             <div className={`min-w-0 ${d.canManage ? 'xl:col-span-2' : 'max-w-2xl'}`}>

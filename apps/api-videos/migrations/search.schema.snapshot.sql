@@ -50,6 +50,7 @@
 --   apps/api-videos/migrations/search/0068_discovery_ranking.sql
 --   apps/api-videos/migrations/search/0069_index_repairs.sql
 --   apps/api-videos/migrations/search/0070_list_indexes.sql
+--   apps/api-videos/migrations/search/0071_service_credentials.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -154,6 +155,7 @@ CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
 CREATE TABLE 'search_videos_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_videos_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_videos_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+CREATE TABLE service_credentials (provider TEXT PRIMARY KEY CHECK (provider IN ('deepl')), ciphertext TEXT NOT NULL, iv TEXT NOT NULL, key_id TEXT NOT NULL, last4 TEXT NOT NULL, plan TEXT, updated_by TEXT NOT NULL, updated_by_name TEXT, updated_at TEXT NOT NULL, test_ok INTEGER, test_code TEXT, test_detail TEXT, test_at TEXT);
 CREATE TABLE social_accounts (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, remote_id TEXT NOT NULL, handle TEXT NOT NULL DEFAULT '', display_name TEXT NOT NULL DEFAULT '', instance TEXT, language TEXT NOT NULL DEFAULT 'en', status TEXT NOT NULL DEFAULT 'active', status_reason TEXT, token_ciphertext TEXT, token_expires_at INTEGER, refresh_lease_until INTEGER, connected_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (channel_id, network, remote_id));
 CREATE TABLE social_audit (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, actor_id TEXT NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT, created_at INTEGER NOT NULL);
 CREATE TABLE social_deliveries (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, account_id TEXT NOT NULL, network TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, entity_title TEXT, format TEXT NOT NULL, include_link INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, remote_id TEXT, remote_url TEXT, cost_micros INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, sent_at INTEGER, UNIQUE (account_id, event, entity_id));

@@ -18,6 +18,11 @@
  *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
  *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
+ * - DeepL (api.deepl.com, api-free.deepl.com): /v2/usage and /v2/translate for the Caption settings
+ *   DeepL key (AUN-CAPTIONS DEEPL-KEY). A key containing FAKE_DEEPL_REFUSED is refused (403), one
+ *   containing FAKE_DEEPL_QUOTA has its characters used up; any other key is accepted with
+ *   FAKE_DEEPL_USAGE. A Free key (':fx') on the Pro host, or a Pro key on the Free host, is refused,
+ *   as DeepL does. Nothing is ever sent to DeepL.
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
  *
@@ -300,6 +305,26 @@ async function images(request: Request, url: URL): Promise<Response> {
   return new Response(request.method === 'HEAD' ? null : hit.body, { status: 200, headers: { 'content-type': hit.type, 'access-control-allow-origin': '*' } });
 }
 
+/** Markers in a fake DeepL key (see the header). */
+export const FAKE_DEEPL_REFUSED = 'e2erefused';
+export const FAKE_DEEPL_QUOTA = 'e2equota';
+export const FAKE_DEEPL_USAGE = { characterCount: 1234, freeLimit: 500_000, proLimit: 1_000_000 } as const;
+
+function deepl(request: Request, url: URL): Response {
+  const key = (request.headers.get('authorization') ?? '').replace(/^DeepL-Auth-Key\s+/, '');
+  const free = key.endsWith(':fx');
+  if (!key || key.includes(FAKE_DEEPL_REFUSED) || free !== (url.hostname === 'api-free.deepl.com')) return json({ message: 'Forbidden' }, 403);
+  const limit = free ? FAKE_DEEPL_USAGE.freeLimit : FAKE_DEEPL_USAGE.proLimit;
+  if (url.pathname === '/v2/usage' && request.method === 'GET') {
+    return json({ character_count: key.includes(FAKE_DEEPL_QUOTA) ? limit : FAKE_DEEPL_USAGE.characterCount, character_limit: limit });
+  }
+  if (url.pathname === '/v2/translate' && request.method === 'POST') {
+    if (key.includes(FAKE_DEEPL_QUOTA)) return json({ message: 'Quota exceeded' }, 456);
+    return json({ translations: [] });
+  }
+  return json({ message: 'Not found (fake DeepL)' }, 404);
+}
+
 async function resend(request: Request): Promise<Response> {
   const body = await request.json().catch(() => ({}));
   const id = crypto.randomUUID();
@@ -467,6 +492,8 @@ export function registerFakes(): void {
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
+  FAKES.set('api.deepl.com', deepl);
+  FAKES.set('api-free.deepl.com', deepl);
   FAKES.set('api.cloudflare.com', cloudflareApi);
   FAKES.set(FAKE_WEBHOOK_HOST, webhookReceiver);
   FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));

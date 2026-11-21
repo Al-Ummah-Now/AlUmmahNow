@@ -162,3 +162,21 @@ describe('fake media pipeline (R2 transcode + media host)', () => {
     assert.equal((await fakeTranscode(VID, 'ready')).status, 409);
   });
 });
+
+describe('fake DeepL (Caption settings DeepL key)', () => {
+  before(() => registerFakes());
+  const usage = (key: string, host = key.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com') =>
+    call(`https://${host}/v2/usage`, { headers: { authorization: `DeepL-Auth-Key ${key}` } });
+
+  it('answers /v2/usage per plan, refuses marked keys and the wrong host, and never reaches DeepL', async () => {
+    const { FAKE_DEEPL_QUOTA, FAKE_DEEPL_REFUSED, FAKE_DEEPL_USAGE } = await import('../fake-external.ts');
+    const before = refused.length;
+    assert.deepEqual(await (await usage('11111111-2222-3333-4444-555555555555:fx')).json(), { character_count: FAKE_DEEPL_USAGE.characterCount, character_limit: FAKE_DEEPL_USAGE.freeLimit });
+    assert.deepEqual(await (await usage('11111111-2222-3333-4444-555555555555')).json(), { character_count: FAKE_DEEPL_USAGE.characterCount, character_limit: FAKE_DEEPL_USAGE.proLimit });
+    assert.equal((await usage(`${FAKE_DEEPL_REFUSED}-2222-3333-4444-555555555555`)).status, 403);
+    assert.equal((await usage('11111111-2222-3333-4444-555555555555:fx', 'api.deepl.com')).status, 403);
+    const full = (await (await usage(`${FAKE_DEEPL_QUOTA}-2222-3333-4444-555555555555`)).json()) as { character_count: number; character_limit: number };
+    assert.equal(full.character_count, full.character_limit);
+    assert.equal(refused.length, before);
+  });
+});

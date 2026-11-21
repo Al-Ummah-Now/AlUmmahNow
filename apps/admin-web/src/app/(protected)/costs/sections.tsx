@@ -57,7 +57,7 @@ export function CostsHeader({ d, t, f, now }: Common & { d: CostsDashboard | nul
           <p className="mt-1 text-fg-muted">{t('costs.subtitle')}</p>
         </div>
         {age && (
-          <p className="cost-pill shrink-0" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
+          <p className="cost-pill max-w-full" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
             <span aria-hidden="true" className={`cost-dot ${age.stale ? 'text-warning-fg' : 'text-success-fg'}`} />
             <span className="tabular-nums">{age.never ? t('costs.dataNever') : age.stale ? t('costs.dataStale', { time: f.time(d!.dataAsOf!) }) : t('costs.dataAsOf', { time: f.time(d!.dataAsOf!) })}</span>
           </p>

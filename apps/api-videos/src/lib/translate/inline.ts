@@ -20,7 +20,7 @@ import {
 	type VideoObject,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import { readCaptionSettings, translationProviderFor, type CaptionJobsEnv, type CaptionSettings } from '../captions/jobs';
+import { deeplUsable, readCaptionSettings, translationProviderFor, type CaptionJobsEnv, type CaptionSettings } from '../captions/jobs';
 
 export interface InlineTranslateEnv extends CaptionJobsEnv {
 	PROCESSOR?: { fetch(input: RequestInfo, init?: RequestInit): Promise<Response> };
@@ -58,12 +58,6 @@ export async function sha256Hex(text: string): Promise<string> {
 
 /** The day's share of the monthly inline budget (the processor refuses past it). */
 export const dailyInlineBudgetUsd = (settings: CaptionSettings) => Math.round((settings.inline.monthlyBudgetUsd / 30) * 10_000) / 10_000;
-
-async function deeplBound(env: CaptionJobsEnv): Promise<boolean> {
-	const v = env.AI_KEY_DEEPL as string | { get(): Promise<string> } | undefined;
-	if (!v) return false;
-	return !!(typeof v === 'string' ? v : await v.get().catch(() => ''));
-}
 
 // ---------------------------------------------------------------------------
 // Edge cache (Workers caches.default; absent under node tests)
@@ -228,7 +222,7 @@ export async function translateInline(env: InlineTranslateEnv, input: InlineTran
 	validateInline(input);
 	const settings = await readCaptionSettings(env);
 	if (!settings.inline.enabled) throw new TranslateHttpError(503, 'translation_paused');
-	const provider = translationProviderFor(settings, input.to, await deeplBound(env));
+	const provider = translationProviderFor(settings, input.to, await deeplUsable(env, settings));
 
 	// Empty texts come back empty; the rest from the cache, then the model
 	const texts = input.items.filter((i) => i.text.trim());

@@ -19,6 +19,9 @@ import {
   ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
+  deeplLast4,
+  deeplPlanOf,
+  validateDeeplKey,
   type AdminDeletionKind,
   type AdminDeletionPage,
   contentPermissionsFor,
@@ -73,6 +76,7 @@ import { dropAudit, readAudit, setAuditPrevious, setAuditSubject, writeAudit, ty
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
+import { deeplKeyView, removeDeeplKey, saveDeeplKey, testDeeplKey } from '../lib/deepl-key';
 import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
@@ -873,14 +877,83 @@ app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) => {
  * Reads for every admin; changes need creators:manage and are audited with the previous values.
  */
 const CAPTION_LANG = /^[a-z]{2,3}$/;
-type CaptionSettingsView = { settings: Record<string, unknown>; editions: Array<{ language: string; id: number; name: string }> };
+type CaptionSettingsView = { settings: Record<string, unknown>; editions: Array<{ language: string; id: number; name: string }>; deeplKeySource?: 'admin' | 'binding' | null };
+
+/** The DeepL key's state (never the key); api-videos says whether a deployment AI_KEY_DEEPL secret is the one in use. */
+const deeplEnv = (c: C, current?: CaptionSettingsView) => ({ ...c.env, deeplBound: current?.deeplKeySource === 'binding' });
 
 app.get('/captions/settings', async (c) => {
   const [current, audit] = await Promise.all([
     videos<CaptionSettingsView>(c, '/captions/settings'),
     readAudit(c.env.REPORTS_DB, { kind: 'captions-settings', id: 'settings', limit: 20 }),
   ]);
-  return ok(c, { ...current, audit });
+  const deeplKey = await deeplKeyView(deeplEnv(c, current)).catch((error) => {
+    logger.warn('[Captions] DeepL key state unavailable', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  });
+  return ok(c, { ...current, deeplKey, audit });
+});
+
+/**
+ * The DeepL API key (AUN-CAPTIONS DEEPL-KEY): super admins only. Write-only: the key is sealed into
+ * SEARCH_DB service_credentials (lib/deepl-key.ts) and never returned; the page sees last4, the plan
+ * (Free for ':fx' keys), who set it and when, and the last /v2/usage test. Every change is audited
+ * under captions-settings/deepl-key with the last four characters only.
+ */
+function needSuperAdmin(c: C) {
+  if (!isSuperAdmin(auth(c)?.roles)) throw new Forbidden('creators:manage');
+}
+const deeplActor = (c: C) => {
+  const p = auth(c)?.payload ?? {};
+  const name = [p.name, p.display_name, p.displayName, p.properties?.name].find((v) => typeof v === 'string' && v.trim()) as string | undefined;
+  return { id: actorOf(c), name: name?.trim().slice(0, 120) ?? auth(c)?.email ?? null };
+};
+const DEEPL_KEY_ERRORS: Record<NonNullable<ReturnType<typeof validateDeeplKey>>, string> = {
+  not_text: 'The key must be text',
+  length: 'That does not look like a DeepL key (20–200 characters)',
+  spaces: 'A key has no spaces or line breaks',
+  shape: 'That does not look like a DeepL key',
+};
+const deeplUnavailable = (c: C) => c.json({ success: false, code: 'not_configured', error: 'The DeepL key cannot be stored here (SEARCH_DB is not bound)' }, 503);
+
+app.get('/captions/deepl-key', async (c) => {
+  if (!c.env.SEARCH_DB) return deeplUnavailable(c);
+  const current = await videos<CaptionSettingsView>(c, '/captions/settings');
+  return ok(c, { deeplKey: await deeplKeyView(deeplEnv(c, current)) });
+});
+
+app.put('/captions/deepl-key', async (c) => {
+  needSuperAdmin(c);
+  if (!c.env.SEARCH_DB) return deeplUnavailable(c);
+  const value = (await body(c)).value;
+  const problem = validateDeeplKey(value);
+  if (problem) return c.json({ success: false, code: 'invalid_key', reason: problem, error: DEEPL_KEY_ERRORS[problem] }, 400);
+  const before = await deeplKeyView(c.env);
+  const plan = deeplPlanOf(String(value));
+  const last4 = deeplLast4(String(value));
+  // Audited first with last4 and plan only; a failed save drops the row again
+  const out = await audited(c, { kind: 'captions-settings', id: 'deepl-key', action: before.set ? 'deepl-key-replace' : 'deepl-key-set', details: { last4, plan }, ...(before.set ? { previous: { last4: before.last4, plan: before.plan } } : {}) }, () =>
+    saveDeeplKey(c.env, String(value), deeplActor(c)));
+  return ok(c, { deeplKey: out.view, test: out.test });
+});
+
+app.post('/captions/deepl-key/test', async (c) => {
+  needSuperAdmin(c);
+  if (!c.env.SEARCH_DB) return deeplUnavailable(c);
+  const out = await testDeeplKey(c.env, deeplActor(c));
+  if (!out) return c.json({ success: false, code: 'not_set', error: 'No DeepL key is set' }, 404);
+  await writeAudit(c.env.REPORTS_DB, { kind: 'captions-settings', id: 'deepl-key', action: 'deepl-key-test', actorId: actorOf(c), details: { last4: out.last4, ok: out.test.ok, code: out.test.code } });
+  return ok(c, { deeplKey: out.view, test: out.test });
+});
+
+app.delete('/captions/deepl-key', async (c) => {
+  needSuperAdmin(c);
+  if (!c.env.SEARCH_DB) return deeplUnavailable(c);
+  const before = await deeplKeyView(c.env);
+  if (!before.set) return c.json({ success: false, code: 'not_set', error: 'No DeepL key is set' }, 404);
+  await audited(c, { kind: 'captions-settings', id: 'deepl-key', action: 'deepl-key-remove', details: { last4: before.last4 }, previous: { last4: before.last4, plan: before.plan } }, () => removeDeeplKey(c.env, deeplActor(c)));
+  const current = await videos<CaptionSettingsView>(c, '/captions/settings');
+  return ok(c, { deeplKey: await deeplKeyView(deeplEnv(c, current)) });
 });
 
 app.put('/captions/settings', async (c) => {
