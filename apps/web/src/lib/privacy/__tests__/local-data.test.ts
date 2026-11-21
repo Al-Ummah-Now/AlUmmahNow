@@ -51,6 +51,66 @@ describe('on-device watch progress', () => {
     expect(localStorage.getItem(`${ENCRYPTED_KEY_PREFIX}watchProgress`)).not.toBeNull();
   });
 
+  // #1696: React Strict Mode runs the player's load effect twice at once. The first read took the
+  // legacy entry off the device and the second, finding neither it nor the not-yet-written
+  // encrypted copy, answered null, so the saved position was never resumed.
+  it('two reads at once during the legacy migration both get the migrated progress', async () => {
+    localStorage.setItem('watchProgress', JSON.stringify({ old: progress('old') }));
+    const [first, second] = await Promise.all([
+      WatchHistoryService.getLocal('old'),
+      WatchHistoryService.getLocal('old'),
+    ]);
+    expect(first).toMatchObject({ videoId: 'old', currentTime: 10 });
+    expect(second).toMatchObject({ videoId: 'old', currentTime: 10 });
+    expect(localStorage.getItem('watchProgress')).toBeNull();
+    await expect(WatchHistoryService.getLocal('old')).resolves.toMatchObject({ videoId: 'old' });
+  });
+
+  it('a save and a clear at once both apply: neither overwrites the other with a stale copy', async () => {
+    await WatchHistoryService.saveLocal(progress('a'));
+    await Promise.all([
+      WatchHistoryService.saveLocal(progress('b')),
+      WatchHistoryService.clearProgress('a'),
+    ]);
+    await expect(WatchHistoryService.getLocal('a')).resolves.toBeNull();
+    await expect(WatchHistoryService.getLocal('b')).resolves.toMatchObject({ videoId: 'b' });
+  });
+
+  it('clearLocal also clears what a save already under way writes', async () => {
+    const save = WatchHistoryService.saveLocal(progress('late'));
+    WatchHistoryService.clearLocal();
+    await save;
+    await expect(WatchHistoryService.getLocal('late')).resolves.toBeNull();
+    expect(localStorage.getItem(`${ENCRYPTED_KEY_PREFIX}watchProgress`)).toBeNull();
+  });
+
+  it('a sync removes what it sent and keeps an entry saved again on the device meanwhile', async () => {
+    await WatchHistoryService.saveLocal(progress('sent'));
+    await WatchHistoryService.saveLocal(progress('again', 5000));
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => {
+      // While the API call is in flight the viewer watches 'again' a bit more on this device
+      await WatchHistoryService.saveLocal({ ...progress('again'), currentTime: 30 });
+      return { ok: true, status: 200, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    try {
+      await expect(WatchHistoryService.syncLocalToAPI('token')).resolves.toEqual({ synced: 2, failed: 0 });
+    } finally {
+      global.fetch = originalFetch;
+    }
+    await expect(WatchHistoryService.getLocal('sent')).resolves.toBeNull();
+    await expect(WatchHistoryService.getLocal('again')).resolves.toMatchObject({ currentTime: 30 });
+  });
+
+  it('keeps the legacy entry on the device until the encrypted copy is written', async () => {
+    localStorage.setItem('watchProgress', JSON.stringify({ old: progress('old') }));
+    const read = WatchHistoryService.getLocal('old');
+    // The migration is under way (encryption is asynchronous): the plaintext is still there
+    expect(localStorage.getItem('watchProgress')).not.toBeNull();
+    await expect(read).resolves.toMatchObject({ videoId: 'old' });
+    expect(localStorage.getItem('watchProgress')).toBeNull();
+  });
+
   it('applies retention: drops expired entries and caps the count', () => {
     const stored: Record<string, WatchProgress> = {
       fresh: progress('fresh'),
