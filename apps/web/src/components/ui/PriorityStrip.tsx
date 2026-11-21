@@ -153,7 +153,9 @@ export function PriorityStrip<T extends PriorityItem>({
       {hasMenu && (
         // The row's own gap before More (fitItems counts it)
         <div className={`shrink-0 ${measuring ? 'invisible' : ''}`} style={widths?.gap ? { marginInlineStart: widths.gap } : undefined}>
-          <DropdownMenu open={open && !measuring} onOpenChange={setOpen}>
+          {/* Not modal: a modal menu locks the page scroll, which removes the scrollbar, widens the
+              strip, fits every item and so unmounts More and its open menu */}
+          <DropdownMenu open={open && !measuring} onOpenChange={setOpen} modal={false}>
             <DropdownMenuTrigger asChild>
               <button
                 ref={moreRef}
