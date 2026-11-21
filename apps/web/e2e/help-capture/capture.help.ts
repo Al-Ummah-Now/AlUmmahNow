@@ -882,17 +882,11 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
           // only cuts letters when its content really overflows it (more than 3 px of layout past
           // it), not when the font's box (ascent and descent, taller in Arabic) pokes past
           const scrolls = /auto|scroll/.test(cs.overflowY);
-          const over = Math.max(abox.y - box.y, box.y + box.h - (abox.y + abox.h));
-          // For a clipping box, the letters' ink (canvas metrics for this font), not the font's box
-          const ink = (() => {
-            const ctx = document.createElement('canvas').getContext('2d');
-            if (!ctx) return box;
-            const ecs = getComputedStyle(el);
-            ctx.font = `${ecs.fontStyle} ${ecs.fontWeight} ${ecs.fontSize} ${ecs.fontFamily}`;
-            const m = ctx.measureText((node.textContent ?? '').trim());
-            const top = box.y + (m.fontBoundingBoxAscent - m.actualBoundingBoxAscent) + (box.h - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2;
-            return { ...box, y: top, h: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent };
-          })();
+          // The line box for a scrolling list (it cuts at its edge); the letters' ink (box, already
+          // measured by __help.ink) for a clipping box. Measuring the ink again here moved the box a
+          // second time: the Arabic phone menu's address read as cut though it fits
+          const over = Math.max(abox.y - b.top, b.bottom - (abox.y + abox.h));
+          const ink = box;
           const clips = scrolls ? over > 0 : ink.y < abox.y - 0.5 || ink.y + ink.h > abox.y + abox.h + 0.5;
           if (hit(box, abox) && !contains(abox, box) && cs.overflowY !== 'visible' && clips) { out.push(`text ${box.what} is cut by its list's edge`); break; }
         }
