@@ -32,6 +32,7 @@ import {
 } from '@al-ummah/shared-types';
 import { isOwnershipComplete, type OwnershipEnv, byKey } from '../search/ownership';
 import { startOwnershipRebuild } from '../search/ownershipRebuild';
+import type { JobQueue } from './jobs';
 import { subscriberCounts } from '../subscription-store';
 import { bansFor } from './bans';
 import { logger } from '../logger';

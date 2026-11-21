@@ -271,8 +271,8 @@ describe('admin lists (ownership index)', () => {
 });
 
 describe('admin lists never wait for an index pass', () => {
-	it('answers at once from the indexed rows, flagged incomplete, and passes the index after the response', async () => {
-		const { db, env, app } = await setup({
+	it('answers at once from the indexed rows, flagged incomplete, and queues the index rebuild job', async () => {
+		const { db, env, app, jobs } = await setup({
 			profiles: { [OWNER]: profile(OWNER) },
 			channels: { ch1: channel('ch1', { name: 'Tafsir Circle', handle: 'tafsir' }) },
 		});
@@ -287,8 +287,9 @@ describe('admin lists never wait for an index pass', () => {
 		const first = await list();
 		assert.deepEqual(first.items.map((c: any) => c.id), ['ch1'], 'listed from the rows already indexed');
 		assert.equal(first.indexComplete, false);
-		assert.ok(later.length > 0, 'the index pass runs after the response');
+		assert.ok(jobs.pending.length > 0, 'the rebuild job is queued; no pass runs in or after the request');
 		await Promise.all(later.splice(0));
+		await jobs.drain(env);
 		assert.equal((await list()).indexComplete, true);
 	});
 });
