@@ -75,14 +75,14 @@ export function PriorityStrip<T extends PriorityItem>({
   const [open, setOpen] = useState(false);
   /** Natural widths of every item and of More, measured with all items in the row */
   const [widths, setWidths] = useState<{ items: number[]; more: number; gap: number } | null>(null);
-  const [visible, setVisible] = useState<number[] | null>(null);
+  /** The holder's inner width (the observer updates it; it does not depend on which item is current) */
+  const [available, setAvailable] = useState<number | null>(null);
   const signature = items.map((i) => `${i.id}\u0000${i.label}`).join('\u0001');
   const current = items.findIndex((i) => i.current);
 
   // A new set of items (or labels): show them all, hidden, and measure again
   useIsomorphicLayoutEffect(() => {
     setWidths(null);
-    setVisible(null);
   }, [signature]);
 
   useIsomorphicLayoutEffect(() => {
@@ -94,38 +94,41 @@ export function PriorityStrip<T extends PriorityItem>({
     // Again whenever the widths are reset (new labels, fonts in)
   }, [widths, signature]);
 
-  const recompute = useCallback(() => {
+  const measureAvailable = useCallback(() => {
     const holder = holderRef.current;
-    if (!holder || !widths) return;
+    if (!holder) return;
     const style = getComputedStyle(holder);
-    const available = holder.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
-    const next = fitItems(widths.items, widths.gap, available, widths.more, current);
-    setVisible((prev) => (prev && prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next));
-  }, [widths, current]);
+    setAvailable(holder.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
+  }, []);
 
-  useIsomorphicLayoutEffect(recompute, [recompute]);
+  useIsomorphicLayoutEffect(measureAvailable, [measureAvailable, widths]);
 
   useEffect(() => {
     const holder = holderRef.current;
     if (!holder || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => recompute());
+    const observer = new ResizeObserver(() => measureAvailable());
     observer.observe(holder);
     return () => observer.disconnect();
-  }, [recompute]);
+  }, [measureAvailable]);
 
   // Web fonts change the widths: measure again once they are in
   useEffect(() => {
     let live = true;
     document.fonts?.ready.then(() => {
-      if (live) {
-        setWidths(null);
-        setVisible(null);
-      }
+      if (live) setWidths(null);
     });
     return () => {
       live = false;
     };
   }, []);
+
+  // Which items are in the row, worked out on every render from the current item, so a change of
+  // current item (a click, or a navigation in a transition) is always reflected; nothing kept in
+  // state can hold an older choice
+  const visible = useMemo(
+    () => (widths && available !== null ? fitItems(widths.items, widths.gap, available, widths.more, current) : null),
+    [widths, available, current],
+  );
 
   const measuring = visible === null;
   const shown = useMemo(() => (visible ? new Set(visible) : null), [visible]);

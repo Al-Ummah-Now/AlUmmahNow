@@ -40,9 +40,10 @@ const staticProblems = (page: Page): Promise<string[]> =>
     document.body.appendChild(probe);
     const token = getComputedStyle(probe).color;
     probe.remove();
-    const rows = new Set([...document.querySelectorAll('.tab-item')].filter((e) => e.getClientRects().length).map((e) => e.parentElement!));
+    // A row's "More" button (.tab-more, #1669) is styled like a tab but is not one of the row's tabs
+    const rows = new Set([...document.querySelectorAll('.tab-item:not(.tab-more)')].filter((e) => e.getClientRects().length).map((e) => e.parentElement!));
     rows.forEach((r) => {
-      const tabs = [...r.querySelectorAll(':scope > .tab-item')];
+      const tabs = [...r.querySelectorAll(':scope > .tab-item:not(.tab-more)')];
       const active = tabs.filter((t) => t.matches(sel));
       if (active.length !== 1) out.push(`selected count ${active.length}`);
       active.forEach((t) => {

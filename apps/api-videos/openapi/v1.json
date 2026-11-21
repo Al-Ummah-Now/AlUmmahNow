@@ -12434,7 +12434,7 @@
           "Channels"
         ],
         "summary": "Get channel tabs configuration",
-        "description": "Retrieves the tabs configuration for a channel including visibility, order, and default tab. Returns ephemeral default if none exists (not persisted).",
+        "description": "Retrieves the tabs configuration for a channel including visibility, order, and default tab, plus `counts`: public items per content tab (indexed reads), so the page can hide empty tabs from visitors. Returns ephemeral default if none exists (not persisted).",
         "operationId": "get_ChannelTabsFetch",
         "parameters": [
           {
@@ -12544,6 +12544,38 @@
                     "dateModified": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "videos": {
+                          "type": "integer"
+                        },
+                        "shorts": {
+                          "type": "integer"
+                        },
+                        "live": {
+                          "type": "integer"
+                        },
+                        "playlists": {
+                          "type": "integer"
+                        },
+                        "community": {
+                          "type": "integer"
+                        },
+                        "channels": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "videos",
+                        "shorts",
+                        "live",
+                        "playlists",
+                        "community",
+                        "channels"
+                      ],
+                      "description": "Read only: public items per tab (GET). The page hides empty Shorts, Live, Playlists, Community and Channels tabs from visitors; absent when the counts could not be read"
                     }
                   },
                   "required": [
@@ -12761,6 +12793,38 @@
                             "dateModified": {
                               "type": "string",
                               "format": "date-time"
+                            },
+                            "counts": {
+                              "type": "object",
+                              "properties": {
+                                "videos": {
+                                  "type": "integer"
+                                },
+                                "shorts": {
+                                  "type": "integer"
+                                },
+                                "live": {
+                                  "type": "integer"
+                                },
+                                "playlists": {
+                                  "type": "integer"
+                                },
+                                "community": {
+                                  "type": "integer"
+                                },
+                                "channels": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "videos",
+                                "shorts",
+                                "live",
+                                "playlists",
+                                "community",
+                                "channels"
+                              ],
+                              "description": "Read only: public items per tab (GET). The page hides empty Shorts, Live, Playlists, Community and Channels tabs from visitors; absent when the counts could not be read"
                             }
                           },
                           "required": [

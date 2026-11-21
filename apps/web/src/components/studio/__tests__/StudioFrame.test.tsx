@@ -13,7 +13,7 @@ jest.mock('next/image', () => ({ __esModule: true, default: (props: { alt: strin
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: mockT, lang: 'en', isRTL: false }) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { id: 'u1', channels: [] }, switchToChannel: jest.fn() }) }));
 
-const mockT = { studio: STUDIO_EN };
+const mockT = { studio: STUDIO_EN, common: { moreTabs: 'More', moreTabsMenu: 'More tabs' } };
 const channel = { id: 'c1', name: 'My channel', handle: 'mine' };
 
 function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features: StudioFeatures = { live: true, upload: true }) {
