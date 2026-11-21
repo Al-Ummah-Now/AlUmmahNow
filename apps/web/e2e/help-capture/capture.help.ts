@@ -1912,6 +1912,9 @@ test.only('review 1726: watch line, header and Related on the fixture', async ({
     try {
       await settle(page, `/video/${videoId}`, lang);
       await page.waitForTimeout(1500);
+      // The phone player's one-time gesture tip covers the frame
+      await page.locator('.vjs-gesture-hint-close').first().click({ timeout: 2000 }).catch(() => undefined);
+      await page.waitForTimeout(400);
       await page.screenshot({ path: join(out, `watch-top.${lang}.${device}.dark.png`) });
       const rel = page.locator('.related-videos:visible').first();
       if (await rel.count()) {
