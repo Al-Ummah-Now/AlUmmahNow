@@ -51,6 +51,9 @@ import { HeaderSignIn } from '@/components/Header/HeaderParts';
 
 type MenuView = 'main' | 'channels';
 
+/** The name slot while no name is known yet: a text-sized bar (the shared .sk shimmer) */
+const NAME_SKELETON = { display: 'inline-block', inlineSize: '7em', blockSize: '0.85em', verticalAlign: 'middle' } as const;
+
 const MENU_FOCUSABLE = '[role="menuitem"], [role="menuitemradio"]';
 
 export function UnifiedNavigation() {
@@ -306,6 +309,7 @@ export function UnifiedNavigation() {
   const displayName = knownName;
   const otherAccounts = accounts.filter((a) => !a.isActive);
   const initial = identityInitial(displayName);
+  const nameLoading = !channel && !displayName;
   const channelInitial = channel ? (getChannelName(channel.name, channel.nameLocalized)[0]?.toUpperCase() ?? '?') : initial;
   const avatar = (src: string | undefined | null, letter: string, size = '') =>
     src ? (
@@ -345,7 +349,16 @@ export function UnifiedNavigation() {
         {/* The identity you act as (owner rule 8): the active channel's logo (or its letter) and its
             name, never your picture or name under a channel; your own picture and name when Personal */}
         {channel ? avatar(channel.avatarUrl, channelInitial) : avatar(getUserAvatar(), initial)}
-        <span className="aun-acct-name nav-trigger-name" dir="auto" data-testid="nav-trigger-name" data-identity={channel ? 'channel' : 'personal'}>
+        {/* No name known yet (an account switch before its profile arrives): a skeleton keeps the
+            pill's width, never the email (#1673) */}
+        <span
+          className={`aun-acct-name nav-trigger-name${nameLoading ? ' sk' : ''}`}
+          style={nameLoading ? NAME_SKELETON : undefined}
+          dir="auto"
+          data-testid="nav-trigger-name"
+          data-identity={channel ? 'channel' : 'personal'}
+          data-loading={nameLoading || undefined}
+        >
           {channel ? getChannelName(channel.name, channel.nameLocalized) : displayName}
         </span>
         <span className="sr-only">{t.navigation.navigationMenu}</span>
@@ -375,7 +388,7 @@ export function UnifiedNavigation() {
               >
                 {avatar(getUserAvatar(), initial, 'aun-avatar--lg')}
                 <span className="aun-menu-who-text">
-                  <span className="aun-menu-who-name" dir="auto" data-testid="nav-user-name">{displayName}</span>
+                  <span className={`aun-menu-who-name${displayName ? '' : ' sk'}`} style={displayName ? undefined : NAME_SKELETON} dir="auto" data-testid="nav-user-name">{displayName}</span>
                   <EmailText email={user.email} className="aun-menu-who-sub" />
                 </span>
               </Link>
