@@ -199,9 +199,9 @@ describe('ViewerCount RTL Component', () => {
     it('handles very large numbers', () => {
       renderWithRTL(<ViewerCountRTL count={1000000} />);
       const status = screen.getByRole('status');
-      // Exactly one million is the word alone, no digit (owner rule 2026-11-20)
-      expect(status.textContent).toContain('مليون');
-      expect(status.textContent).not.toMatch(/[0-9]/);
+      // Millions are always the digit and «م» (owner rule 2026-11-21)
+      expect(status.textContent?.replace(/\u00a0/g, ' ')).toContain('١ م');
+      expect(status.textContent).not.toMatch(/[0-9]|مليون/);
     });
   });
 

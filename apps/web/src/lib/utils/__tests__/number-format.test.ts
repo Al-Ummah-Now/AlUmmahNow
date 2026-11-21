@@ -105,8 +105,8 @@ describe('compact counts: Arabic scale-word agreement', () => {
   const ticks = [500, 1000, 1500, 2000, 3000, 2_000_000];
 
   it('ar', () => {
-    expect(counts.map((n) => sp(formatViewerCountArabic(n, 'compact')))).toEqual(['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', 'مليون', 'مليونان', '٣ ملايين', '١٥ مليون']);
-    expect(ticks.map((n) => sp(formatViewerCountArabic(n, 'compact')))).toEqual(['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', 'مليونان']);
+    expect(counts.map((n) => sp(formatViewerCountArabic(n, 'compact')))).toEqual(['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', '١ م', '٢ م', '٣ م', '١٥ م']);
+    expect(ticks.map((n) => sp(formatViewerCountArabic(n, 'compact')))).toEqual(['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', '٢ م']);
   });
 
   it('en', () => {

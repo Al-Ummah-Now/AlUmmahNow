@@ -14,7 +14,7 @@ describe('admin formatCount', () => {
     assert.equal(formatCount(14, 'like', 'ar'), `١٤${nb}إعجابًا`);
     assert.equal(formatCount(2, 'like', 'ar'), 'إعجابان');
     assert.equal(formatCount(114, 'video', 'ar'), `١١٤${nb}مرئيًا`);
-    assert.equal(formatCount(1520, 'like', 'ar'), `١\u202f٥٢٠${nb}إعجابًا`);
+    assert.equal(formatCount(1520, 'like', 'ar'), `١٥٢٠${nb}إعجابًا`);
   });
   it('English', () => {
     assert.equal(formatCount(6, 'view', 'en'), `6${nb}views`);

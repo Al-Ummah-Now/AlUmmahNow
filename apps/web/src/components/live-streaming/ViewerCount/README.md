@@ -112,7 +112,7 @@ The component uses `Intl.NumberFormat` for locale-aware formatting:
 - Full: 1,234 | 1,500,000 | 2,340,000,000
 
 **Arabic (RTL)**
-- Compact: ١٫٢ ألف | ١٫٥ مليون
+- Compact: ١٫٢ ألف | ١٫٥ م
 - Full: ١٢٣٤ | ١٥٠٠٠٠٠
 
 ## Styling

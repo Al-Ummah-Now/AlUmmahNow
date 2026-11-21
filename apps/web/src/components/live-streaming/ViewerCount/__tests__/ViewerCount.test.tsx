@@ -278,7 +278,7 @@ describe('ViewerCount Component', () => {
       renderWithProviders(
         <ViewerCount count={999999999} />
       );
-      // Cut, not rounded (owner 2026-11-20): the same number as Arabic «٩٩٩٫٩ مليون»
+      // Cut, not rounded (owner 2026-11-20): the same number as Arabic «٩٩٩٫٩ م»
       expect(screen.getByText('999.9M')).toBeInTheDocument();
     });
 

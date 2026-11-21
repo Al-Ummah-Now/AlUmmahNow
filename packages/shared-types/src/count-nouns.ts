@@ -6,7 +6,7 @@
  * («مشاهدة واحدة», «مشاهدتان»), 3–10 take the plural, 11–99 the accusative singular, 100+ the
  * genitive singular. A compact count of 1,000 or more takes the singular noun after its scale
  * word, and exactly one or two has no digit: «ألف مشاهدة», «ألفا مشاهدة», «٣ آلاف مشاهدة»,
- * «١٫٣ ألف مشاهدة», «١٫٢ مليون مشاهدة» (owner's final rule 2026-11-20; see formatCompact). Zero is a phrase («لا توجد تعليقات»), never «٠ تعليق».
+ * «١٫٣ ألف مشاهدة», «١٫٢ م مشاهدة» (owner's rule 2026-11-20, millions as «م» 2026-11-21; see formatCompact). Zero is a phrase («لا توجد تعليقات»), never «٠ تعليق».
  * Every noun has its dual («تعليقان», «مساران صوتيان»). apps/web's videoMeta and admin-web's
  * formatCount both call this; add a noun here rather than writing another helper.
  */
@@ -52,7 +52,7 @@ const EN: Record<CountNoun, { zero: string; one: string; other: string }> = {
   reply: { zero: 'No replies', one: 'reply', other: 'replies' },
 };
 
-/** True when a compact number carries a scale word («٤٨٫٢ ألف», «١٫٢ مليون»): any character that is not a digit, a separator or a direction mark. */
+/** True when a compact number carries a scale word («٤٨٫٢ ألف», «١٫٢ م»): any character that is not a digit, a separator or a direction mark. */
 export function hasScaleWord(shown: string): boolean {
   return /[^\d٠-٩٫٬.,\s‏؜]/.test(shown);
 }

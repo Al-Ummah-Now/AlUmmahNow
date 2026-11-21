@@ -32,7 +32,7 @@ export function formatViewerCount(
   const safeCount = Math.max(0, Number(count) || 0);
 
   // Compact goes through the shared formatter so Arabic scale words agree (owner rule 2026-11-20):
-  // «١٫٣ ألف», «٢ ألفان», «٨ آلاف», «٣ ملايين».
+  // «١٫٣ ألف», «ألفان», «٨ آلاف», «١٫٢ م».
   if (format === 'compact') return formatCompact(locale, safeCount);
   return formatNumber(locale, safeCount, { maximumFractionDigits: 0 });
 }

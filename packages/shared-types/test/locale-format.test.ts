@@ -138,8 +138,8 @@ test('dates and times use a plain space on every runtime (WebKit writes U+00A0 b
 const sp = (s: string) => s.replace(/\u00a0/g, ' ');
 const COUNTS = [1, 2, 3, 10, 11, 100, 1000, 1300, 2000, 2500, 3000, 8000, 11000, 1_000_000, 2_000_000, 3_000_000, 15_000_000];
 
-test('formatCompact: Arabic scale words agree with the number shown', () => {
-  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), ['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', 'مليون', 'مليونان', '٣ ملايين', '١٥ مليون']);
+test('formatCompact: Arabic scale words agree with the number shown; millions are «{n} م» (owner 2026-11-21)', () => {
+  assert.deepEqual(COUNTS.map((n) => sp(f.formatCompact('ar', n))), ['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', '١ م', '٢ م', '٣ م', '١٥ م']);
   assert.equal(sp(f.formatCompact('ar', 1050)), 'ألف');
   assert.equal(sp(f.formatCompact('ar', 2999)), '٢٫٩ ألف');
   assert.equal(sp(f.formatCompact('ar', 10_000)), '١٠ آلاف');
@@ -154,7 +154,7 @@ test('formatCompact: Arabic scale words agree with the number shown', () => {
 
 test('formatCompact beforeNoun: the dual is the construct form, never after a digit', () => {
   assert.equal(f.formatCompact('ar', 2000, 1, { beforeNoun: true }), 'ألفا');
-  assert.equal(f.formatCompact('ar', 2_000_000, 1, { beforeNoun: true }), 'مليونا');
+  assert.equal(sp(f.formatCompact('ar', 2_000_000, 1, { beforeNoun: true })), '٢ م');
   assert.equal(f.formatCompact('ar', 2_000_000_000, 1, { beforeNoun: true }), 'مليارا');
   assert.equal(f.formatCompact('ar', 1000, 1, { beforeNoun: true }), 'ألف');
   assert.equal(sp(f.formatCompact('ar', 2500, 1, { beforeNoun: true })), '٢٫٥ ألف');
@@ -163,7 +163,7 @@ test('formatCompact beforeNoun: the dual is the construct form, never after a di
 
 test('tick labels (no noun) use the same scale words', () => {
   const ticks = [500, 1000, 1500, 2000, 3000, 2_000_000];
-  assert.deepEqual(ticks.map((n) => sp(f.formatCompact('ar', n))), ['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', 'مليونان']);
+  assert.deepEqual(ticks.map((n) => sp(f.formatCompact('ar', n))), ['٥٠٠', 'ألف', '١٫٥ ألف', 'ألفان', '٣ آلاف', '٢ م']);
   assert.deepEqual(ticks.map((n) => f.formatCompact('en', n)), ['500', '1K', '1.5K', '2K', '3K', '2M']);
 });
 
@@ -199,7 +199,7 @@ test('fillTemplate plural: text around it, other placeholders inside, formatted 
 test('formatCompact: English cuts like Arabic, so both show the same number', () => {
   const cases: Array<[number, string, string]> = [
     [33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'],
-    [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ مليون'], [15_000_000, '15M', '١٥ مليون'],
+    [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ م'], [15_000_000, '15M', '١٥ م'], [1_000_000, '1M', '١ م'], [4_887, '4.8K', '٤٫٨ ألف'],
   ];
   for (const [n, en, ar] of cases) {
     assert.equal(f.formatCompact('en', n), en, `en ${n}`);

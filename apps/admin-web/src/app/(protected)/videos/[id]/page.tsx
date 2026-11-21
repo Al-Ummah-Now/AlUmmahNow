@@ -4,7 +4,7 @@ import { getContentPermissions, getVideo, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob, VideoDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
-import { formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatStat, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { AuditCard } from '@/components/audit/AuditCard';
 import { BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid, statusTone } from '@/components/content/parts';
@@ -152,10 +152,10 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
           <SectionCard title={t('videos.detailsTitle')} id="video-details">
             <StatGrid
               stats={[
-                { label: t('videos.views'), value: formatNumber(v.views, locale) },
-                { label: t('videos.likes'), value: formatNumber(v.likeCount, locale) },
-                { label: t('videos.comments'), value: formatNumber(v.commentCount, locale) },
-                { label: t('content.reports'), value: formatNumber(v.openReports, locale) },
+                { label: t('videos.views'), value: formatStat(v.views, locale) },
+                { label: t('videos.likes'), value: formatStat(v.likeCount, locale) },
+                { label: t('videos.comments'), value: formatStat(v.commentCount, locale) },
+                { label: t('content.reports'), value: formatStat(v.openReports, locale) },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">

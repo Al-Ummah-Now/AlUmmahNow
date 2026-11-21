@@ -163,7 +163,7 @@ describe('VideoAnalytics', () => {
     view();
     const stats = await screen.findAllByTestId('studio-stat');
     expect(stats[0]).toHaveTextContent('12');
-    expect(stats[0]).toHaveTextContent(text.lifetimeViews.replace('{count}', '1,500'));
+    expect(stats[0]).toHaveTextContent(text.lifetimeViews.replace('{count}', '1.5K'));
     expect(stats[3]).toHaveTextContent('2');
     const chart = screen.getByTestId('studio-video-views');
     expect(within(chart).getAllByTestId('chart-y-tick').length).toBeGreaterThan(1);

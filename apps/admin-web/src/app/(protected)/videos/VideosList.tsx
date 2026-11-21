@@ -246,7 +246,7 @@ export function VideosList() {
               <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words">
                 <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
               </span>
-              <span className="block @6xl:hidden text-xs text-fg-muted">{formatCount(v.views, 'view', locale)}</span>
+              <span className="block @6xl:hidden text-xs text-fg-muted">{formatCount(v.views, 'view', locale, { compact: true })}</span>
             </div>
           </div>
         );

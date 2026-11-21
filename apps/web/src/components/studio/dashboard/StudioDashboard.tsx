@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Image from 'next/image';
 import { Film } from 'lucide-react';
 import Link from '@/components/common/AppLink';
-import { formatWatchTime, watchTimeUnit, type StudioComment, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent, formatCountNoun } from '@al-ummah/shared-types';
+import { formatCompact, formatWatchTime, watchTimeUnit, type StudioComment, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent, formatCountNoun } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -296,7 +296,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
               <div className="min-w-0 text-sm">
                 <Link href={editHref(latest)} dir="auto" className="block truncate font-medium text-foreground hover:underline">{studioVideoTitle(latest, locale)}</Link>
                 <p className="mt-1 text-muted-foreground">
-                  {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view'), likes: formatCountNoun(locale, latest.likesCount, 'like'), comments: formatCountNoun(locale, latest.commentsCount, 'comment') })}
+                  {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view', { compact: true }), likes: formatCountNoun(locale, latest.likesCount, 'like', { compact: true }), comments: formatCountNoun(locale, latest.commentsCount, 'comment', { compact: true }) })}
                 </p>
                 {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime) })}</p>}
               </div>
@@ -347,12 +347,12 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           <Card title={text.totals.title} testId="studio-dash-totals">
             {overview && totals ? (
               <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div><dt className="text-muted-foreground">{text.totals.views}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{number.format(overview.totalViews)}</dd></div>
-                <div><dt className="text-muted-foreground">{text.totals.subscribers}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{number.format(overview.totalSubscribers)}</dd></div>
-                <div><dt className="text-muted-foreground">{text.totals.videos}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{totalVideos === null ? '–' : number.format(totalVideos)}</dd></div>
+                <div><dt className="text-muted-foreground">{text.totals.views}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{formatCompact(locale, overview.totalViews)}</dd></div>
+                <div><dt className="text-muted-foreground">{text.totals.subscribers}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{formatCompact(locale, overview.totalSubscribers)}</dd></div>
+                <div><dt className="text-muted-foreground">{text.totals.videos}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{totalVideos === null ? '–' : formatCompact(locale, totalVideos)}</dd></div>
                 <div>
                   <dt className="text-muted-foreground">{fillTemplate(locale, text.totals.last28, { days: RECENT_DAYS })}</dt>
-                  <dd className="text-lg font-semibold tabular-nums text-foreground">{number.format(totals.views)}</dd>
+                  <dd className="text-lg font-semibold tabular-nums text-foreground">{formatCompact(locale, totals.views)}</dd>
                   {change !== null && <dd className="text-xs text-muted-foreground">{t.studio.analytics.change.replace('{change}', formatPercent(locale, change / 100, { signDisplay: 'exceptZero' }))}</dd>}
                 </div>
               </dl>

@@ -125,8 +125,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                             testId="channel-meta"
                             parts={[
                               ch.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(ch.ownerId)}`} className={linkClass}>{ownerName(ch)}</Link> : null,
-                              formatCount(ch.subscribers, 'subscriber', locale),
-                              formatCount(ch.views, 'view', locale),
+                              formatCount(ch.subscribers, 'subscriber', locale, { compact: true }),
+                              formatCount(ch.views, 'view', locale, { compact: true }),
                             ]}
                           />
                         </div>

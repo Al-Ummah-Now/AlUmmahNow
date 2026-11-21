@@ -210,7 +210,7 @@ describe('#1666: counts built in code', () => {
 });
 
 describe('compact counts: English cuts like Arabic (same number in both languages)', () => {
-  const cases: Array<[number, string, string]> = [[33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'], [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ مليون'], [15_000_000, '15M', '١٥ مليون']];
+  const cases: Array<[number, string, string]> = [[33_600, '33.6K', '٣٣٫٦ ألف'], [20_600, '20.6K', '٢٠٫٦ ألف'], [1_299, '1.2K', '١٫٢ ألف'], [2_999, '2.9K', '٢٫٩ ألف'], [12_000, '12K', '١٢ ألف'], [999_999, '999.9K', '٩٩٩٫٩ ألف'], [1_250_000, '1.2M', '١٫٢ م'], [15_000_000, '15M', '١٥ م']];
 
   it.each(cases)('%d → %s / %s', (n, en, ar) => {
     expect(formatCompact('en', n)).toBe(en);

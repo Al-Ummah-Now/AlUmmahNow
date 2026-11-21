@@ -84,7 +84,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {channel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {formatCountNoun(lang, channel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
+              {formatCountNoun(lang, channel.subscribersCount, 'subscriber', { zeroAsNumber: true, compact: true })}
             </span>
           )}
         </div>
@@ -121,7 +121,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {currentChannel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {formatCountNoun(lang, currentChannel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
+              {formatCountNoun(lang, currentChannel.subscribersCount, 'subscriber', { zeroAsNumber: true, compact: true })}
             </span>
           )}
         </div>
@@ -182,7 +182,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     </span>
                     {channel.subscribersCount !== undefined && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatCountNoun(lang, channel.subscribersCount, 'subscriber', { zeroAsNumber: true })}
+                        {formatCountNoun(lang, channel.subscribersCount, 'subscriber', { zeroAsNumber: true, compact: true })}
                       </span>
                     )}
                   </div>

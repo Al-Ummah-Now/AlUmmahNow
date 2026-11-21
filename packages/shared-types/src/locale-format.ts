@@ -60,7 +60,7 @@ function cached<T>(kind: string, locale: FormatLocale, options: object | undefin
  * the decimal mark «٫» is the only mark inside one: «٤٨٨٧», «١٢٣٤٫٥», «٥٠٦٢٫٦ س». ICU's Arabic
  * thousands mark U+066C «٬» is drawn in the same comma shape as «٫» by most Arabic UI fonts
  * (Plex, Noto Kufi, Amiri), so «١٥٬٤١٩٫٩» read as 15,419,9; a space group was tried and dropped
- * too. English keeps its grouping: "4,887". Large counts are shown compact anyway («١٫٢ مليون»).
+ * too. English keeps its grouping: "4,887". Counts from 1,000 on are shown compact («٤٫٨ ألف», «١٫٢ م»).
  */
 const ARABIC_NO_GROUPING = { useGrouping: false } as const;
 
@@ -133,21 +133,24 @@ export function formatFixed(locale: FormatLocale, value: number, digits: number,
 }
 
 /**
- * Arabic scale words with their agreement (owner's final rule, 2026-11-20, identical on Android,
- * Apple, Desktop and web). The number shown is cut (not rounded) to one decimal, then:
- * - exactly 1: the word alone, no digit: «ألف», «مليون», «مليار»;
+ * Arabic scale words (owner's rule 2026-11-20, millions changed 2026-11-21; the same on Android,
+ * Apple, Desktop and web). The number shown is cut (not rounded) to one decimal, then for
+ * thousands and billions:
+ * - exactly 1: the word alone, no digit: «ألف», «مليار»;
  * - exactly 2: the dual alone, no digit: «ألفان» on its own, the construct form «ألفا» before a
  *   noun («ألفا مشاهدة»); a digit is never followed by the dual;
- * - whole 3–10: the plural: «٣ آلاف», «٣ ملايين», «٣ مليارات»;
+ * - whole 3–10: the plural: «٣ آلاف», «٣ مليارات»;
  * - 11+ and every decimal: the singular: «١١ ألف», «١٫٣ ألف», «٢٫٥ ألف».
- * ICU gets this wrong («٢ ألف», «١٠ ألف», «٣ مليون») and differs between runtimes, so Arabic
- * compact numbers are built here.
+ * Millions are always the digit and «م»: «١ م», «٢ م», «١٫٢ م», «١٥ م» (the words «مليون /
+ * مليونا / ملايين» are gone). ICU gets the words wrong («٢ ألف», «١٠ ألف», «٣ مليون») and differs
+ * between runtimes, so Arabic compact numbers are built here.
  */
-const AR_SCALES = [
+type ArabicScale = { size: number; abbreviation?: string; one: string; dual: string; construct: string; few: string };
+const AR_SCALES: readonly ArabicScale[] = [
   { size: 1e9, one: 'مليار', dual: 'ملياران', construct: 'مليارا', few: 'مليارات' },
-  { size: 1e6, one: 'مليون', dual: 'مليونان', construct: 'مليونا', few: 'ملايين' },
+  { size: 1e6, abbreviation: 'م', one: 'م', dual: 'م', construct: 'م', few: 'م' },
   { size: 1e3, one: 'ألف', dual: 'ألفان', construct: 'ألفا', few: 'آلاف' },
-] as const;
+];
 
 /** `value` cut (not rounded) to `digits` decimals: 1.39 -> 1.3, 2.999 -> 2.9. */
 function truncate(value: number, digits: number): number {
@@ -163,10 +166,11 @@ function formatCompactArabic(value: number, maximumFractionDigits: number, befor
   if (!scale) return formatNumber('ar', sign * truncate(abs, maximumFractionDigits), { maximumFractionDigits });
   const shown = truncate(abs / scale.size, maximumFractionDigits);
   const whole = Number.isInteger(shown);
+  // U+00A0 between the number and its scale word, as Intl writes it: they never break apart.
+  if (scale.abbreviation) return `${formatNumber('ar', sign * shown, { maximumFractionDigits })}\u00a0${scale.abbreviation}`;
   if (sign > 0 && whole && shown === 1) return scale.one;
   if (sign > 0 && whole && shown === 2) return beforeNoun ? scale.construct : scale.dual;
   const word = whole && shown >= 3 && shown <= 10 ? scale.few : scale.one;
-  // U+00A0 between the number and its scale word, as Intl writes it: they never break apart.
   return `${formatNumber('ar', sign * shown, { maximumFractionDigits })}\u00a0${word}`;
 }
 
@@ -189,8 +193,8 @@ function truncateCompact(value: number, maximumFractionDigits: number): number {
 /**
  * 4200 -> "4.2K" / «٤٫٢ ألف». Every language cuts to `maximumFractionDigits` decimals (owner
  * 2026-11-20, as Android and Apple do): 1,299 is "1.2K" and «١٫٢ ألف», never "1.3K". Arabic also
- * makes the scale word agree with the number shown: «ألف», «ألفان», «٣ آلاف», «١٫٣ ألف»,
- * «مليون»; with `beforeNoun`, exactly two is «ألفا»/«مليونا»/«مليارا». English keeps K/M/B.
+ * makes the scale word agree with the number shown: «ألف», «ألفان», «٣ آلاف», «١٫٣ ألف»; with
+ * `beforeNoun`, exactly two is «ألفا»/«مليارا»; millions are «١ م», «١٫٢ م». English keeps K/M/B.
  */
 export function formatCompact(locale: FormatLocale, value: number, maximumFractionDigits = 1, options: CompactOptions = {}): string {
   if (isArabicLocale(locale)) return formatCompactArabic(value, maximumFractionDigits, options.beforeNoun === true);

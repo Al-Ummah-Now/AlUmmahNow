@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
-import { formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
+import { formatCompact, formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
 import { StatCard, TrafficSources, ViewerOrigins } from './parts';
@@ -145,13 +145,14 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
             </div>
           ) : (
             <>
+              {/* Tiles are compact from 1,000 on, cut not rounded (owner 2026-11-21); watch time and the table stay exact */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-                <StatCard locale={locale} label={text.metrics.views} value={number.format(totals.views)} change={changePercent(totals.views, before?.views)} />
+                <StatCard locale={locale} label={text.metrics.views} value={formatCompact(locale, totals.views)} change={changePercent(totals.views, before?.views)} />
                 <StatCard locale={locale} label={text.metrics.watchTime} value={formatWatchTime(locale, watchTimeUnit(totals.watchTime))(totals.watchTime)} change={changePercent(totals.watchTime, before?.watchTime)} />
                 <StatCard locale={locale} label={text.metrics.avgViewDuration} value={duration(totals.avgViewDuration)} change={changePercent(totals.avgViewDuration, before?.avgViewDuration)} />
-                <StatCard locale={locale} label={text.metrics.likes} value={number.format(totals.likes)} change={changePercent(totals.likes, before?.likes)} />
-                <StatCard locale={locale} label={text.metrics.comments} value={number.format(totals.comments)} change={changePercent(totals.comments, before?.comments)} />
-                <StatCard locale={locale} label={text.metrics.subscribers} value={number.format(totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
+                <StatCard locale={locale} label={text.metrics.likes} value={formatCompact(locale, totals.likes)} change={changePercent(totals.likes, before?.likes)} />
+                <StatCard locale={locale} label={text.metrics.comments} value={formatCompact(locale, totals.comments)} change={changePercent(totals.comments, before?.comments)} />
+                <StatCard locale={locale} label={text.metrics.subscribers} value={formatCompact(locale, totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
               </div>
 
               <section>

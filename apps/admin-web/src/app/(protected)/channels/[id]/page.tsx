@@ -4,7 +4,7 @@ import { getChannel, getContentPermissions } from '@/lib/api/content';
 import type { AdminContentPermission, ChannelDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
-import { formatNumber } from '@/i18n/translate';
+import { formatStat } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { AuditCard } from '@/components/audit/AuditCard';
 import { BackLink, Chip, MonoId, Notice, ReportsCard, StatGrid, smallButtonClass } from '@/components/content/parts';
@@ -97,10 +97,10 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <section className={cardClass} aria-label={t('channels.statVideos')}>
             <StatGrid
               stats={[
-                { label: t('channels.statVideos'), value: formatNumber(ch.stats.videos, locale), testId: 'stat-videos', href: videosHref, linkTestId: 'stat-videos-link' },
-                { label: t('channels.statSubscribers'), value: formatNumber(ch.stats.subscribers, locale) },
-                { label: t('channels.statViews'), value: formatNumber(ch.stats.views, locale) },
-                { label: t('channels.statPlaylists'), value: formatNumber(ch.stats.playlists, locale), href: playlistsHref, linkTestId: 'stat-playlists-link' },
+                { label: t('channels.statVideos'), value: formatStat(ch.stats.videos, locale), testId: 'stat-videos', href: videosHref, linkTestId: 'stat-videos-link' },
+                { label: t('channels.statSubscribers'), value: formatStat(ch.stats.subscribers, locale) },
+                { label: t('channels.statViews'), value: formatStat(ch.stats.views, locale) },
+                { label: t('channels.statPlaylists'), value: formatStat(ch.stats.playlists, locale), href: playlistsHref, linkTestId: 'stat-playlists-link' },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
