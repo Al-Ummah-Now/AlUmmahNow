@@ -18,6 +18,10 @@ import { target } from './release/targets';
  *
  * Own data: a creator with five public videos (ownPublicVideos), deleted afterwards. The ranking run
  * writes only the ranked lists, which every run rewrites.
+ *
+ * Every worker that runs this file starts its own ranking run once its videos exist (beforeAll), so a
+ * test never depends on DSC-01 running first in the same shard: without a run, Explore's Trending
+ * falls back to the unranked list, which holds this file's fresh public videos.
  */
 const INTERNAL_KEY = 'local-stack-internal-key';
 
@@ -94,8 +98,14 @@ async function expectRailsMatchLabels(page: Page, lang: 'en' | 'ar') {
 test.describe('Discovery rails', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
+  test.beforeAll(async ({}, testInfo) => {
+    testInfo.setTimeout(180_000);
+    await rankNow();
+  });
+
   test('DSC-01 a ranking run finishes and test accounts never rank', async () => {
     test.setTimeout(180_000);
+    // A second run in the same worker: runs are repeatable and still leave test accounts out
     await rankNow();
     const ownIds = new Set(own.videos().map((v) => v.id));
     for (const language of ['en', 'ar'] as const) {
