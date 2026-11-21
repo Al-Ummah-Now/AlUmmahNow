@@ -284,20 +284,27 @@ async function openMenuOverBlank(page: Page, view: 'main' | 'channels'): Promise
       range.selectNodeContents(n);
       for (const r of range.getClientRects()) add(r);
     }
-    document.querySelectorAll('img, svg, button, input, a[href]').forEach((el) => { if (!skip(el)) add(el.getBoundingClientRect()); });
+    document.querySelectorAll('img, svg, input').forEach((el) => { if (!skip(el)) add(el.getBoundingClientRect()); });
     // Under the menu (and 24 px either side) only: the desktop rail's labels are beside it, not under it
     const under = spans.filter((sp) => sp.r > l - 24 && sp.l < right + 24);
+    // The offset with the most blank page around the foot (the smaller of the room above and below
+    // it, up to 24 px): a phone's Library has no 44 px gap, so the best one, not the first perfect one
     const max = Math.min(600, document.documentElement.scrollHeight - innerHeight);
+    let best = { s: 0, room: -1 };
     for (let s = 0; s <= max; s++) {
-      const lo = foot + s - 24;
-      const hi = foot + s + 20;
-      if (under.some((sp) => sp.b > lo && sp.t < hi)) continue;
       if (spans.some((sp) => sp.t < s + head && sp.b > s + head)) continue;
-      return s;
+      const f = foot + s;
+      if (under.some((sp) => sp.t < f && sp.b > f)) continue;
+      const above = Math.min(24, f - Math.max(-Infinity, ...under.filter((sp) => sp.b <= f).map((sp) => sp.b)));
+      const below = Math.min(24, Math.min(Infinity, ...under.filter((sp) => sp.t >= f).map((sp) => sp.t)) - f);
+      const room = Math.min(above, below);
+      if (room > best.room) best = { s, room };
+      if (room >= 24) break;
     }
-    return 0;
+    return best;
   }, { foot: box.y + box.height, head, l: box.x, r: box.x + box.width });
-  await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), offset);
+  console.log(`help menu over blank: scrolled ${offset.s} px, ${offset.room} px clear around the menu's foot`);
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: 'instant' }), offset.s);
   return openMenu(page, view, true);
 }
 
