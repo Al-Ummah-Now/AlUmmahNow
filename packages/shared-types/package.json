@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "typescript": "5.9.3",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.2"
   },
   "publishConfig": {
     "access": "restricted"

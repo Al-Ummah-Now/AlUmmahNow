@@ -21,7 +21,7 @@
     "@al-ummah/shared-types": "workspace:*",
     "hono": "^4.13.19",
     "jose": "5.9.6",
-    "ws": "^8.18.3",
+    "ws": "^8.23.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
