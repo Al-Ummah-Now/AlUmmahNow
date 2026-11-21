@@ -123,17 +123,23 @@ test.describe('costs (super admin)', () => {
   test('COSTS-03 a malformed key is refused before anything is sent', async ({ page }) => {
     await skipUnlessReady();
     await page.goto('/costs#connections');
+    // Watch for the typed keys themselves, in any request's URL or body. Not for "a POST to /costs":
+    // every server action on the page posts there, and the layout's live Contact badge re-reads its
+    // count that way whenever a contact message changes (28-contact-inbox runs beside this spec)
+    const resendKey = 'not-a-resend-key-but-long-enough';
+    const bunnyKey = 'short-bunny';
     const sent: string[] = [];
     page.on('request', (r) => {
-      if (r.method() === 'POST' && r.url().includes('/costs')) sent.push(r.url());
+      const carried = `${r.url()}\n${r.postData() ?? ''}`;
+      if (carried.includes(resendKey) || carried.includes(bunnyKey)) sent.push(`${r.method()} ${r.url()}`);
     });
-    await page.getByTestId('costs-connection-resend-input').fill('not-a-resend-key-but-long-enough');
+    await page.getByTestId('costs-connection-resend-input').fill(resendKey);
     await page.getByTestId('costs-connection-resend-save').click();
     await expect(page.getByTestId('costs-connection-resend-key-error')).toHaveText('Resend keys start with re_.');
-    await page.getByTestId('costs-connection-bunny-input').fill('short');
+    await page.getByTestId('costs-connection-bunny-input').fill(bunnyKey);
     await page.getByTestId('costs-connection-bunny-save').click();
     await expect(page.getByTestId('costs-connection-bunny-key-error')).toContainText('20 to 400 characters');
-    expect(sent, 'no server action ran').toEqual([]);
+    expect(sent, 'no malformed key left the browser').toEqual([]);
     const after = await dashboard();
     expect(after.result!.connections.find((c) => c.provider === 'resend')?.set).toBe(original!.connections.find((c) => c.provider === 'resend')?.set);
   });
