@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { ENCODE_LADDER, PREBUILT_LIMITS } from '@al-ummah/shared-types';
-import adminImportRouter, { parseNewChannel } from '../src/routers/adminImport.router';
+import adminImportRouter, { parseNewChannel, parseNewItem } from '../src/routers/adminImport.router';
 import { sqliteD1 } from './d1-sqlite';
 
 const ADMIN = 'usr_' + 'a'.repeat(32);
@@ -128,5 +128,118 @@ describe('/api/admin/import', () => {
     assert.equal(calls.length, 0);
     assert.deepEqual(parseNewChannel({ name: 'A', handle: ' ', description: 'd' }), { ok: true, value: { name: 'A', description: 'd' } });
     assert.equal(parseNewChannel({ name: 'A', handle: 5 }).ok, false);
+  });
+});
+
+describe('/api/admin/import batches and items (TA-5)', () => {
+  const SHA = 'f'.repeat(64);
+  const FILE = { sha256: SHA, fileName: 'lesson-01.mp4', fileSize: 4096, mimeType: 'video/mp4', title: 'Lesson 1', fingerprint: { name: 'lesson-01.mp4', size: 4096, lastModified: 1, hash: 'c'.repeat(64) } };
+
+  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean } = {}) {
+    const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
+    let n = 0;
+    const videos = new Map<string, string>();
+    const env = {
+      REPORTS_DB: sqliteD1(),
+      INTERNAL_API_KEY: 'k',
+      VIDEOS: {
+        async fetch(input: string, init?: RequestInit) {
+          const url = new URL(input);
+          const method = init?.method ?? 'GET';
+          const body = init?.body ? JSON.parse(String(init.body)) : null;
+          calls.push({ path: url.pathname, method, body, actor: new Headers(init?.headers).get('X-Admin-Actor') });
+          const json = (status: number, payload: unknown) => new Response(JSON.stringify(payload), { status });
+          if (url.pathname.startsWith('/internal/admin/channels/')) {
+            return opts.noChannel ? json(404, { success: false, code: 'channel_not_found', error: 'No such channel' }) : json(200, { success: true, result: { id: 'ch1' } });
+          }
+          if (url.pathname === '/internal/admin/import/initiate') {
+            if (opts.refuseInitiate) return json(409, { success: false, code: 'channel_suspended', error: 'The channel is suspended' });
+            const key = body.fingerprint?.hash ?? String(++n);
+            const reused = videos.has(key);
+            if (!reused) videos.set(key, `vid-${videos.size + 1}`);
+            return json(200, { success: true, result: { videoId: videos.get(key), tusSessionId: `sess-${++n}`, chunkSize: 1, resumable: true, reused } });
+          }
+          return json(404, { success: false, code: 'not_found', error: url.pathname });
+        },
+      },
+    };
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, email: 'staff@example.com', roles: ['Admin'] } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const req = async (path: string, init?: RequestInit) => {
+      const res = await app.request(path, init, env as never);
+      return { status: res.status, body: (await res.json()) as any };
+    };
+    const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, new_value FROM site_settings_log ORDER BY created_at').all<any>()).results ?? [];
+    return { req, calls, audit };
+  }
+
+  it('a batch for a channel, then a file: the normal upload for the channel, audited under the video', async () => {
+    const h = importSetup();
+    const made = await h.req('/api/admin/import/batches', post({ channelId: 'ch1', name: 'Archive 2019' }));
+    assert.equal(made.status, 201);
+    const batchId = made.body.result.batch.id;
+    const res = await h.req(`/api/admin/import/batches/${batchId}/items`, post({ ...FILE, description: 'd', ignored: 'x' }));
+    assert.equal(res.status, 201);
+    assert.equal(res.body.result.item.videoId, 'vid-1');
+    assert.equal(res.body.result.upload.tusSessionId.startsWith('sess-'), true);
+    const initiate = h.calls.find((x) => x.path === '/internal/admin/import/initiate')!;
+    assert.equal(initiate.actor, ADMIN);
+    assert.deepEqual(Object.keys(initiate.body).sort(), ['channelId', 'description', 'fileSize', 'fingerprint', 'mimeType', 'title']);
+    assert.equal(initiate.body.channelId, 'ch1');
+    const keys = (await h.audit()).map((r: any) => r.key).sort();
+    assert.deepEqual(keys, [`content:import:batch:${batchId}`, 'content:import:vid-1'].sort());
+    const detail = await h.req(`/api/admin/import/batches/${batchId}`);
+    assert.equal(detail.body.result.items.length, 1);
+    assert.equal(detail.body.result.items[0].state, 'initiated');
+  });
+
+  it('the same file again resumes its video, and once uploaded is refused as already imported (any batch)', async () => {
+    const h = importSetup();
+    const b1 = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    const first = await h.req(`/api/admin/import/batches/${b1}/items`, post(FILE));
+    const again = await h.req(`/api/admin/import/batches/${b1}/items`, post({ ...FILE, sha256: SHA.toUpperCase() }));
+    assert.equal(again.status, 200);
+    assert.equal(again.body.result.item.id, first.body.result.item.id);
+    assert.equal(again.body.result.upload.reused, true);
+    assert.equal((await h.req(`/api/admin/import/items/${first.body.result.item.id}/uploaded`, post({}))).body.result.item.state, 'uploaded');
+    const b2 = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    const dup = await h.req(`/api/admin/import/batches/${b2}/items`, post(FILE));
+    assert.equal(dup.status, 409);
+    assert.equal(dup.body.code, 'already_imported');
+    assert.equal(dup.body.item.videoId, 'vid-1');
+    assert.equal(h.calls.filter((x) => x.path === '/internal/admin/import/initiate').length, 2, 'never initiated a third time');
+    // A failed mark cannot undo an upload
+    assert.equal((await h.req(`/api/admin/import/items/${first.body.result.item.id}/failed`, post({ error: 'x' }))).status, 409);
+    const list = await h.req('/api/admin/import/batches?channelId=ch1');
+    assert.deepEqual(list.body.result.batches.map((b: any) => b.counts), [{}, { uploaded: 1 }]);
+  });
+
+  it('a refused initiate leaves the item failed with the reason and no audit row for it', async () => {
+    const h = importSetup({ refuseInitiate: true });
+    const b = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    const res = await h.req(`/api/admin/import/batches/${b}/items`, post(FILE));
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, 'channel_suspended');
+    const [item] = (await h.req(`/api/admin/import/batches/${b}`)).body.result.items;
+    assert.equal(item.state, 'failed');
+    assert.match(item.error, /suspended/);
+    assert.equal((await h.audit()).length, 1, 'only the batch');
+  });
+
+  it('validates batches and files, and a batch needs an existing channel', async () => {
+    const h = importSetup({ noChannel: true });
+    assert.equal((await h.req('/api/admin/import/batches', post({}))).status, 400);
+    assert.equal((await h.req('/api/admin/import/batches', post({ channelId: 'nope' }))).status, 404);
+    assert.equal((await h.req('/api/admin/import/batches/none/items', post(FILE))).status, 404);
+    assert.equal((await h.req('/api/admin/import/items/none/uploaded', post({}))).status, 404);
+    assert.equal(parseNewItem({ ...FILE, sha256: 'abc' }).ok, false);
+    assert.equal(parseNewItem({ ...FILE, fileSize: 1.5 }).ok, false);
+    assert.equal(parseNewItem({ ...FILE, mimeType: 'image/png' }).ok, false);
+    assert.equal(parseNewItem({ ...FILE, title: ' ' }).ok, false);
+    assert.equal(parseNewItem(FILE).ok, true);
   });
 });

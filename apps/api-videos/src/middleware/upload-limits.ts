@@ -32,6 +32,9 @@
  * a valid import item (confirmYoutubeImportItem); until then it counts like
  * any upload. The tier gate always applies.
  *
+ * An admin import's TUS create (wiki TOOLS-ADMIN TA-5) skips the gate: the session was opened by
+ * /internal/admin/import/initiate after admin-api checked imports:manage (isAdminImportTusCreate).
+ *
  * UPLOAD_RATE_LIMIT="off" (and development/preview by default) stops counting
  * the limits; the tier gate itself applies everywhere.
  */
@@ -158,6 +161,23 @@ async function tusCreateChannelOwner(c: Context, userId: string): Promise<string
   return memberMayActAs(channelRoleOf(channel, userId), 'POST', c.req.path) ? channel.userId : null;
 }
 
+/**
+ * True for the TUS create of a session an admin import opened (wiki TOOLS-ADMIN TA-5): admin-api
+ * checked imports:manage and audited the initiate (/internal/admin/import/initiate), so the tier gate
+ * and its counters do not apply. Only the session's own user (the importing admin) gets this; sessions
+ * are written by the server only.
+ */
+export async function isAdminImportTusCreate(c: Context, userId: string): Promise<boolean> {
+  if (c.req.method !== 'POST' || c.req.path !== '/api/videos/tus') return false;
+  const sessionId = tusSessionIdOf(c.req.header('Upload-Metadata'));
+  const kv = c.env?.TUS_SESSIONS as KVNamespace | undefined;
+  if (!sessionId || !kv) return false;
+  const raw = await kv.get(getTusSessionKey(sessionId));
+  if (!raw) return false;
+  const session = JSON.parse(raw) as Partial<TusProxySession>;
+  return session.adminImport === true && session.userId === userId;
+}
+
 /** The tier that applies to this request (the channel owner's for a channel upload). */
 export async function creatorOf(c: Context): Promise<ResolvedCreator> {
   const userId = c.get('userId') as string;
@@ -221,6 +241,12 @@ function creatorUploadMiddleware(options: GateOptions) {
     if (!db) {
       logger.error('[Uploads] SEARCH_DB is not configured; refusing the upload');
       return unavailable(c);
+    }
+    try {
+      if (!options.sessions && (await isAdminImportTusCreate(c, userId))) return next();
+    } catch (error) {
+      // Unreadable session: fall through to the normal gate
+      logger.warn('[Uploads] Admin import session check failed', { userId, error: error instanceof Error ? error.message : String(error) });
     }
 
     let creator: ResolvedCreator;

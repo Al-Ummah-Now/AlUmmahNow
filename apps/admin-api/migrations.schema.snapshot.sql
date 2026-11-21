@@ -38,6 +38,7 @@
 --   apps/admin-api/migrations/0043_creator_invites_tier.sql
 --   apps/admin-api/migrations/0044_creator_invites_tier_and_video.sql
 --   apps/admin-api/migrations/0045_invite_wording_link_flow.sql
+--   apps/admin-api/migrations/0046_admin_import_batches.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -67,6 +68,8 @@ CREATE TABLE error_hourly (group_id TEXT NOT NULL, hour TEXT NOT NULL, occurrenc
 CREATE TABLE error_rate (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL);
 CREATE TABLE error_refs (ref TEXT PRIMARY KEY, group_id TEXT NOT NULL, event_id TEXT, created_at TEXT NOT NULL);
 CREATE TABLE error_releases (environment TEXT NOT NULL, app TEXT NOT NULL, release TEXT NOT NULL, first_seen TEXT NOT NULL, PRIMARY KEY (environment, app, release));
+CREATE TABLE import_batches (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, name TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE import_items (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL, channel_id TEXT NOT NULL, sha256 TEXT NOT NULL, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, video_id TEXT, state TEXT NOT NULL DEFAULT 'initiated', error TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);
@@ -140,6 +143,10 @@ CREATE INDEX idx_error_hourly_hour ON error_hourly (hour);
 CREATE INDEX idx_error_rate_expires ON error_rate (expires_at);
 CREATE INDEX idx_error_refs_created ON error_refs (created_at);
 CREATE INDEX idx_error_refs_group ON error_refs (group_id);
+CREATE INDEX idx_import_batches_channel ON import_batches (channel_id, created_at);
+CREATE INDEX idx_import_batches_created ON import_batches (created_at);
+CREATE INDEX idx_import_items_batch ON import_items (batch_id, created_at);
+CREATE UNIQUE INDEX idx_import_items_file ON import_items (channel_id, sha256);
 CREATE INDEX idx_modact_created ON moderation_actions(created_at DESC);
 CREATE INDEX idx_modact_signal ON moderation_actions(signal_id);
 CREATE INDEX idx_modact_subject ON moderation_actions(subject_type, subject_id);

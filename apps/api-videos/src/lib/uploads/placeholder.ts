@@ -94,7 +94,7 @@ export interface IssuedSession {
 /** A new TUS proxy session for `video` (and, when reused, its earlier upload). */
 export async function issueTusSession(
 	kv: KVNamespace,
-	opts: { libraryId: number; bunnyKey: string; userId: string; channelId: string; videoId: string; video?: PlaceholderRecord | null },
+	opts: { libraryId: number; bunnyKey: string; userId: string; channelId: string; videoId: string; video?: PlaceholderRecord | null; adminImport?: boolean },
 ): Promise<IssuedSession> {
 	const tusConfig = await generateTUSConfig(opts.libraryId, opts.bunnyKey, opts.videoId, 1);
 	const tusSessionId = await createTusProxySession(kv, {
@@ -102,6 +102,7 @@ export async function issueTusSession(
 		userId: opts.userId,
 		channelId: opts.channelId,
 		tusConfig,
+		...(opts.adminImport ? { adminImport: true } : {}),
 	});
 	const durable = opts.video?.tusUpload;
 	// Same file (the fingerprint includes its size), so the earlier Bunny upload
