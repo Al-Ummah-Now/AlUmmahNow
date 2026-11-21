@@ -90,6 +90,32 @@ describe('account menu: Acting as', () => {
     expect(within(trigger).getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'personal');
   });
 
+  // Ported from #1656 (help pictures r5), which hit the same remount: one fix, here
+  it('keeps your name in the header across a remount (a switch read your email until the profile came back)', async () => {
+    const { fetchProfile } = jest.requireMock('@/lib/api/profiles-client') as { fetchProfile: jest.Mock };
+    user = { id: 'u-remount', email: 'amina@test.local', displayName: '', channel: null, channels: [] };
+    fetchProfile.mockImplementationOnce((_u: unknown, set: (p: unknown) => void) => { set({ id: 'u-remount', displayName: 'Amina Yusuf' }); return Promise.resolve(true); });
+    const { unmount } = render(<UnifiedNavigation />);
+    await waitFor(() => expect(screen.getByTestId('nav-trigger-name')).toHaveTextContent('Amina Yusuf'));
+    unmount();
+    // The profile has not come back yet on the second mount
+    fetchProfile.mockImplementationOnce(() => new Promise(() => undefined));
+    render(<UnifiedNavigation />);
+    expect(screen.getByTestId('nav-trigger-name')).toHaveTextContent('Amina Yusuf');
+    expect(screen.getByTestId('nav-trigger-name')).not.toHaveTextContent('amina@test.local');
+  });
+
+  it('never shows another account the remembered name, nor its own email (a skeleton until its name loads)', () => {
+    const { fetchProfile } = jest.requireMock('@/lib/api/profiles-client') as { fetchProfile: jest.Mock };
+    fetchProfile.mockImplementationOnce(() => new Promise(() => undefined));
+    user = { id: 'u-other', email: 'other@test.local', displayName: 'other@test.local', channel: null, channels: [] };
+    render(<UnifiedNavigation />);
+    const name = screen.getByTestId('nav-trigger-name');
+    expect(name).not.toHaveTextContent('Amina Yusuf');
+    expect(name).not.toHaveTextContent('other@test.local');
+    expect(name).toHaveClass('sk');
+  });
+
   it('names you by the name already known for the account, never the email or an @handle (#1673)', async () => {
     user = { id: 'u1', email: 'amina@test.local', displayName: 'amina@test.local', userName: 'amina_handle', channel: null, channels: [] };
     render(<UnifiedNavigation />);
