@@ -532,9 +532,11 @@ export function UnifiedNavigation() {
                 <span className="aun-menu-label" id="nav-apps-label">{t.navigation.appsSection}</span>
                 {otherApps.map((app) => (
                   <a key={app.id} href={app.href} className="aun-menu-item" role="menuitem" data-app={app.id}>
-                    {/* The app's own favicon, a separate static file (never inlined in the CSS), loaded when the menu shows it */}
+                    {/* The app's own favicon, a separate static file (never inlined in the CSS). Eager and
+                        decoded with the menu: the menu mounts when it opens (and again when you switch who you
+                        act as), and a lazy icon drew a frame late, an empty slot beside "Website" (AUDIT-2 2026-11-21) */}
                     {/* eslint-disable-next-line @next/next/no-img-element -- a fixed 96px icon; next/image would add an optimiser round trip */}
-                    <img className="aun-app-icon" data-app={app.id} src={`/aun-nav/icons/${app.id}.webp`} width={32} height={32} alt="" loading="lazy" decoding="async" />
+                    <img className="aun-app-icon" data-app={app.id} src={`/aun-nav/icons/${app.id}.webp`} width={32} height={32} alt="" />
                     <span className="aun-menu-text">{appLabel[app.id]}</span>
                   </a>
                 ))}
