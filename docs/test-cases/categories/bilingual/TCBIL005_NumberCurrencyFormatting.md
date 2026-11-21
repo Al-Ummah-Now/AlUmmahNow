@@ -8,7 +8,7 @@
 **Estimated Duration**: 12 minutes  
 **Author**: Test Automation Team  
 **Date Created**: 2025-11-18  
-**Last Updated**: 2025-11-18  
+**Last Updated**: 2026-11-21 (owner decision: Arabic numbers are never grouped)  
 
 ## Test Overview
 
@@ -42,12 +42,12 @@ curl http://127.0.0.1:8686/api/localization/currency
     {
       "value": 1234567,
       "englishExpected": "1,234,567",
-      "arabicExpected": "١٬٢٣٤٬٥٦٧"
+      "arabicExpected": "١٢٣٤٥٦٧"
     },
     {
       "value": 1234.56,
       "englishExpected": "1,234.56",
-      "arabicExpected": "١٬٢٣٤٫٥٦"
+      "arabicExpected": "١٢٣٤٫٥٦"
     },
     {
       "value": 0.99,
@@ -66,7 +66,7 @@ curl http://127.0.0.1:8686/api/localization/currency
       "value": 1500,
       "currency": "SAR",
       "englishExpected": "SAR 1,500",
-      "arabicExpected": "١٬٥٠٠ ريال"
+      "arabicExpected": "١٥٠٠ ريال"
     }
   ],
   "percentageTests": [
@@ -217,8 +217,8 @@ curl http://127.0.0.1:8686/api/localization/currency
 
 ### Arabic Number Formatting
 - Uses Arabic numerals (٠-٩)
-- Thousand separators are Arabic commas (١٬٢٣٤)
-- Decimal separator is Arabic comma (١٫٢٣)
+- No thousands separator at all (owner 2026-11-21, replacing 2026-11-15's «٬»): «٤٨٨٧», «١٢٣٤٫٥». «٬» and the decimal «٫» look alike in most Arabic UI fonts, so «١٥٬٤١٩٫٩» read as 15,419,9
+- Decimal separator is the Arabic decimal mark «٫» (١٫٢٣), the only mark inside an Arabic number
 - Large numbers use Arabic abbreviations
 - Currency names follow amounts (٩٩ دولار)
 
@@ -316,11 +316,8 @@ test.describe('TC-BIL-005: Number and Currency Formatting', () => {
       const hasArabicNumerals = /[٠-٩]/.test(viewText || '');
       expect(hasArabicNumerals).toBeTruthy();
       
-      // Check for Arabic thousand separators
-      if (viewText && /[٠-٩]{4,}/.test(viewText)) {
-        const hasArabicSeparator = viewText.includes('٬');
-        expect(hasArabicSeparator).toBeTruthy();
-      }
+      // Arabic numbers are never grouped: no «٬» and no space between digits
+      expect(viewText).not.toMatch(/[٠-٩][٬\u202f\u00a0 ][٠-٩]/);
       
       // Check for Arabic abbreviations
       const hasArabicAbbreviation = /[أكمب]/.test(viewText || '');
