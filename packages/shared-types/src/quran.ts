@@ -72,8 +72,12 @@ export function quranAyahLabel(r: QuranRange): string {
   return r.from.ayah === r.to.ayah ? `${r.from.surah}:${r.from.ayah}` : `${r.from.surah}:${r.from.ayah}–${r.to.ayah}`;
 }
 
-/** Attribution wherever Quran text is shown (§9.4). */
-export const QURAN_ATTRIBUTION = { en: 'Quran text: Quran Foundation (quran.com)', ar: 'نص القرآن: مؤسسة القرآن (quran.com)' } as const;
+/**
+ * Attribution wherever Quran text is shown (QF 2026-11-21, spec §9.5): QF's own wording, with the
+ * translation edition named next to any translation. The Arabic line has an LRM after the URL so its
+ * slash stays with it in right-to-left text.
+ */
+export const QURAN_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
 
 /**
  * Quran Foundation's own attribution wording (QF 2026-11-21), written inside every file that
