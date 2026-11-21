@@ -724,7 +724,7 @@ Refs: [Content Sync, Content available for offline sync](https://api-docs.quran.
 | CMS translation flags | quran.com links only | Compliant |
 | api-videos QF client | scopes were `content.quran.read content.translations.read content.metadata.read`; 429 returned null with no backoff | **Fixed:** only the two display scopes; a 429 stops calls from the isolate until `Retry-After` (seconds or HTTP date), or bounded exponential backoff with jitter |
 | Processor QF client | 429 → queue retry, but `Retry-After` as an HTTP date was ignored and the 30-minute cap cut a longer one short | **Fixed:** both forms read; a longer `Retry-After` is honoured up to the queue's 12 h limit |
-| Attribution | "Quran text: Quran Foundation (quran.com)" in Studio only; none in the player or native apps | **Fix in review** (attribution PR, held for the owner's screenshots): QF's wording, en + ar, everywhere Quran text appears |
+| Attribution | "Quran text: Quran Foundation (quran.com)" in Studio only; none in the player or native apps | **Fixed** (#1722): every served cue with Quran text or a translation ends with QF's attribution line (en, or ar right to left), so the web player, native apps and embeds all show it; Studio's span card uses the same wording |
 
 No stored data violated the terms. Captions have stored references since the first caption-drafts PR, so no cleanup job is needed.
 
