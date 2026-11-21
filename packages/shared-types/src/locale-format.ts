@@ -409,7 +409,7 @@ function pluralOptions(body: string): Record<string, string> {
   return options;
 }
 
-/** A plural param as a number: numbers as they are, formatted text («١ ٢٣٤», «١٬٢٣٤», "1,234") parsed, anything else NaN. */
+/** A plural param as a number: numbers as they are, formatted text («١٢٣٤», or older «١٬٢٣٤» / «١ ٢٣٤», "1,234") parsed, anything else NaN. */
 function pluralValue(value: string | number | null | undefined): number {
   if (typeof value === 'number') return value;
   if (value === null || value === undefined) return Number.NaN;

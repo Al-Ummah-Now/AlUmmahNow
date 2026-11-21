@@ -231,7 +231,7 @@ describe('ViewerCount RTL Component', () => {
     it('renders in full format when specified', () => {
       renderWithRTL(<ViewerCountRTL count={1234} format="full" />);
       const status = screen.getByRole('status');
-      // Full format should show: ١ ٢٣٤
+      // Full format should show: ١٢٣٤ (never grouped)
       expect(status.textContent).toMatch(/[٠-٩]/);
     });
   });

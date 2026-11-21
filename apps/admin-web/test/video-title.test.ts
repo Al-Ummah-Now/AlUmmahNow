@@ -65,9 +65,9 @@ describe('DataTable column widths', () => {
 
 describe('phone card meta lines and numbers', () => {
   it('isolates every part so an Arabic name never reorders a number or a date, and skips empty parts', () => {
-    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['قناة الدروس', null, '١٢\u202f٨٤٠ مشاهدة', '', false] } as never));
+    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['قناة الدروس', null, '١٢٨٤٠ مشاهدة', '', false] } as never));
     const parts = html.match(/<span class="relative min-w-0 ps-\[1em\]"><span aria-hidden="true" class="absolute start-0 w-\[1em\] text-center">•<\/span><bdi>([^<]*)<\/bdi><\/span>/g) ?? [];
-    assert.deepEqual(parts.map((p) => p.replace(/.*<bdi>|<\/bdi>.*/g, '')), ['قناة الدروس', '١٢\u202f٨٤٠ مشاهدة']);
+    assert.deepEqual(parts.map((p) => p.replace(/.*<bdi>|<\/bdi>.*/g, '')), ['قناة الدروس', '١٢٨٤٠ مشاهدة']);
   });
   it('a wrapped line never leaves a separator dangling: each separator sits in a gutter the clipped line cuts off at a line edge', () => {
     const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['a', 'b'] } as never));

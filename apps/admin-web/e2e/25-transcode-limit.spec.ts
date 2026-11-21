@@ -124,8 +124,8 @@ test.describe('max concurrent transcodes', () => {
       const max = section.getByTestId('delivery-limit-max');
       const error = section.getByTestId('delivery-limit-error');
       const cases = [
-        { min: '2', max: '3372', field: max, text: 'الحد الأقصى: أدخل عددًا صحيحًا من ١ إلى ٣\u202f٣٧١.' },
-        { min: '0', max: '4', field: min, text: 'الحد الأدنى: أدخل عددًا صحيحًا من ١ إلى ٣\u202f٣٧١.' },
+        { min: '2', max: '3372', field: max, text: 'الحد الأقصى: أدخل عددًا صحيحًا من ١ إلى ٣٣٧١.' },
+        { min: '0', max: '4', field: min, text: 'الحد الأدنى: أدخل عددًا صحيحًا من ١ إلى ٣٣٧١.' },
         { min: '6', max: '3', field: min, text: 'لا يمكن أن يزيد الحد الأدنى على الحد الأقصى.' },
       ];
       for (const c of cases) {
