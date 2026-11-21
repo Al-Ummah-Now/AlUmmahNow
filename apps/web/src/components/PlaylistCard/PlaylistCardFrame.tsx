@@ -49,7 +49,7 @@ export function PlaylistCardFrame({ href, cover, countLabel, title, meta, action
         <div className="plc-stack">
           <span className="plc-sheet plc-sheet-2" aria-hidden="true" />
           <span className="plc-sheet plc-sheet-1" aria-hidden="true" />
-          <div className="plc-cover">{cover(overlay)}</div>
+          <div className="plc-cover" data-progress={pct !== null && pct > 0 ? '' : undefined}>{cover(overlay)}</div>
         </div>
         <div className="plc-body">
           <h3 className="plc-title">{title}</h3>

@@ -18,7 +18,7 @@ import { PlaylistCardFrame } from '@/components/PlaylistCard/PlaylistCardFrame';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { WatchHistoryService, entryTitle, type WatchHistoryItem } from '@/services/api/watch-history';
-import { formatVideoCount, metaSeparator } from '@/lib/format/videoMeta';
+import { formatVideoCount, keepNumbersWithUnits, metaSeparator } from '@/lib/format/videoMeta';
 import { removeUnwantedChars } from '@/lib/utility';
 import { logger } from '@/lib/logger-client';
 import '@/theme/home-rails.css';
@@ -61,7 +61,7 @@ export function ContinueWatchingShelf() {
   const { top, total } = state;
   const title = removeUnwantedChars(entryTitle(top, lang));
   const percent = Math.max(0, Math.min(100, Math.round(top.percentageWatched || 0)));
-  const watched = t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent));
+  const watched = keepNumbersWithUnits(t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent)));
 
   return (
     <section aria-label={t.library.continueWatching} data-testid="continue-watching" data-video-id={top.videoId} className="hcw">
@@ -80,7 +80,7 @@ export function ContinueWatchingShelf() {
           <p className="plc-meta" data-testid="continue-watching-meta">
             <strong dir="auto">{title}</strong>
             {metaSeparator(lang)}
-            {watched}
+            <span className="whitespace-nowrap">{watched}</span>
           </p>
         }
         action={
