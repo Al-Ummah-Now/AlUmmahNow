@@ -75,8 +75,11 @@
 }
 .aun-acct-name {
   min-width: 0;
-  /* a long name (or the email, when there is no name) never pushes the header apart */
-  max-width: 12rem;
+  /* One width whatever the name: switching who you act as ("Community Corner" and "Amina Yusuf")
+     never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px); a longer name ends
+     in an ellipsis, and never pushes the header apart */
+  inline-size: 9rem;
+  text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
