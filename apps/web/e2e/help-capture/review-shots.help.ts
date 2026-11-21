@@ -319,7 +319,22 @@ async function shoot(page: Page, dir: string, file: string, lang: Lang): Promise
   await page.mouse.move(1, 1);
   await page.waitForTimeout(300);
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  if (sideways > 0) problems.push(`${dir}/${file}: page scrolls sideways by ${sideways}px`);
+  if (sideways > 0) {
+    // Which elements stick out of the window (the innermost ones), to find the cause
+    const wide = await page.evaluate(() => {
+      const w = document.documentElement.clientWidth;
+      const out: string[] = [];
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+        const r = el.getBoundingClientRect();
+        if (!r.width || (r.left >= -1 && r.right <= w + 1)) continue;
+        if (Array.from(el.children).some((c) => { const cr = c.getBoundingClientRect(); return cr.width && (cr.left < -1 || cr.right > w + 1); })) continue;
+        out.push(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className).slice(0, 80)} [${el.getAttribute('data-testid') ?? ''}] ${Math.round(r.left)}..${Math.round(r.right)}`);
+        if (out.length >= 6) break;
+      }
+      return out;
+    });
+    problems.push(`${dir}/${file}: page scrolls sideways by ${sideways}px: ${wide.join(' | ')}`);
+  }
   strips[`${dir}/${file}`] = await tabsAndChipsInView(page);
   if (lang === 'ar') {
     const found = await page.evaluate(() => {
