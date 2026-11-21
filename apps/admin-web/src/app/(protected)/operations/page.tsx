@@ -11,7 +11,8 @@ import type { Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 import { logger } from '@/lib/logger';
-import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
+import { Sep } from '@/components/Sep';
+import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, worstBacklog, type OpsFormats } from './model';
 import { getCostDatabases } from '@/lib/api/costs';
 import type { CostDatabases } from '@/lib/api/costs-types';
 import { DatabaseCapacityGauge } from '@/components/capacity/DatabaseCapacityGauge';
@@ -44,14 +45,17 @@ function Tile({ label, value, sub, testId }: { label: string; value: string; sub
 }
 
 function Tiles({ o, t, f }: { o: OpsOverview; t: Translator; f: OpsFormats }) {
-  const pct = (v: number | null) => (v === null ? t('operations.tiles.none') : f.percent(v));
+  // Same precision now and before, so 0.60% and 0.63% compare at a glance
+  const pct = (v: number | null) => (v === null ? t('operations.tiles.none') : f.rate(v));
+  // An empty backlog is nothing, wherever it is: no queue name next to a zero
+  const worst = worstBacklog(o.queues.worst);
   return (
     <dl className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="ops-tiles">
       <Tile label={t('operations.tiles.requests')} value={f.count(o.workers.requests)} sub={t('operations.tiles.before', { value: f.count(o.workers.requestsBefore) })} testId="ops-tile-requests" />
       <Tile label={t('operations.tiles.errorRate')} value={pct(o.workers.errorRate)} sub={t('operations.tiles.before', { value: pct(o.workers.errorRateBefore) })} testId="ops-tile-error-rate" />
       <Tile label={t('operations.tiles.cpuP99')} value={o.workers.cpuP99 === null ? t('operations.tiles.none') : f.us(o.workers.cpuP99)} testId="ops-tile-cpu" />
       <Tile label={t('operations.tiles.d1Latency')} value={o.d1.latencyP99 === null ? t('operations.tiles.none') : f.ms(o.d1.latencyP99)} testId="ops-tile-d1" />
-      <Tile label={t('operations.tiles.worstQueue')} value={o.queues.worst ? f.count(o.queues.worst.backlog) : t('operations.tiles.none')} sub={o.queues.worst?.name} testId="ops-tile-queue" />
+      <Tile label={t('operations.tiles.worstQueue')} value={worst ? f.count(worst.backlog) : t('operations.tiles.none')} sub={worst?.name} testId="ops-tile-queue" />
       <Tile label={t('operations.tiles.dlq')} value={f.count(o.queues.dlqMessages)} testId="ops-tile-dlq" />
     </dl>
   );
@@ -82,7 +86,7 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
                 </th>
                 <td className="p-2 text-end tabular-nums">{fmt(r.metrics[spec.metric])}</td>
                 <td className="p-2 text-end">
-                  <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(t('costs.listSep'))} role="img">
+                  <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(t('common.sep'))} role="img">
                     {r.spark.values.map((v, i) => (
                       <span key={r.spark.days[i]} className="w-1.5 bg-accent" style={{ height: `${max > 0 && v ? Math.max(8, (v / max) * 100) : 4}%`, opacity: v ? 1 : 0.3 }} />
                     ))}
@@ -184,7 +188,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                 <ul className="mb-2 space-y-1">
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
-                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span> • {a.rule_id} •{' '}
+                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span><Sep />{a.rule_id}<Sep />
                       <span className="text-fg-muted">{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime /> })}</span>
                     </li>
                   ))}

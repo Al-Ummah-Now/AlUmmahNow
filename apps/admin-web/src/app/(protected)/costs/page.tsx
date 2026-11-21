@@ -88,7 +88,7 @@ export default async function CostsPage() {
               </div>
             )}
           </div>
-          {d.canManage && <CostConnections connections={d.connections} />}
+          {d.canManage && <CostConnections connections={d.connections} releaseInUse={d.collector.tokenSource === 'release'} />}
         </>
       )}
     </div>

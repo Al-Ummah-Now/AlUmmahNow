@@ -377,6 +377,45 @@ export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCo
   return out.filter((l) => l.mtd > 0 || l.projected > 0 || l.last7 > 0 || l.prev7 > 0 || l.product === 'plan').sort((a, b) => b.mtd - a.mtd);
 }
 
+/** The Cloudflare invoice lines each Cloudflare product is made of. */
+const PRODUCT_METERS: Partial<Record<CostProduct, readonly string[]>> = {
+  workers: ['workers_requests', 'workers_cpu_ms', 'logs_events', 'logpush_requests'],
+  d1: ['d1_rows_read', 'd1_rows_written', 'd1_storage_gb'],
+  r2: ['r2_class_a', 'r2_class_b', 'r2_storage_gb'],
+  kv: ['kv_reads', 'kv_writes', 'kv_lists', 'kv_deletes', 'kv_storage_gb'],
+  durable_objects: ['do_requests', 'do_gb_seconds', 'do_storage_reads', 'do_storage_writes'],
+  queues: ['queues_operations'],
+};
+
+/**
+ * Each Cloudflare product's month to date as the sum of its lines at cents, the figures the
+ * Cloudflare panel shows (the per-resource rows give the same total before rounding). Others keep
+ * their own figure.
+ */
+export function withCloudflareLines(products: ProductLine[], lines: { key: string; listCost: number }[]): ProductLine[] {
+  return products
+    .map((p) => {
+      const keys = PRODUCT_METERS[p.product];
+      if (!keys) return p;
+      const fromLines = lines.filter((l) => keys.includes(l.key));
+      return fromLines.length ? { ...p, mtd: round2(fromLines.reduce((sum, l) => sum + l.listCost, 0)) } : p;
+    })
+    .sort((a, b) => b.mtd - a.mtd);
+}
+
+/**
+ * Parts rounded to cents that must add up to a displayed total: the cent or two rounding leaves
+ * goes to the largest part (largest-remainder style), so the page never shows parts ≠ total.
+ */
+export function balanceTo(parts: Record<string, number>, total: number): Record<string, number> {
+  const out = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, round2(v)]));
+  const diff = round2(round2(total) - Object.values(out).reduce((sum, v) => sum + v, 0));
+  if (diff === 0 || Math.abs(diff) > 0.05) return out;
+  const largest = Object.entries(out).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (largest) out[largest] = round2(out[largest]! + diff);
+  return out;
+}
+
 /** Month to date per environment; account-wide costs (Bunny, Workers AI, Resend, the plan) under 'account'. */
 export function envLines(resourceDays: ResourceDay[], productDays: { day: string; env: string; product: string; cost: number }[], extras: { bunny: DayCost[]; ai: DayCost[]; resend: DayCost[]; containers: DayCost[]; sources: { containers: string } }, now: Date, fixedMtd = 0): Record<string, number> {
   const monthStart = `${now.toISOString().slice(0, 7)}-01`;
@@ -522,46 +561,52 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
   const from = back14 < since ? back14 : since;
   const [resourceDays, productDays] = await Promise.all([loadResourceDays(env, from), loadProductDays(env, from)]);
   const { budget, billed, fixed, extras, meterDays } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
-  const products = productLines(resourceDays, extras, now, fixed);
+  // Cloudflare as the page shows it: each invoice line at cents. The list tile and each Cloudflare
+  // product are sums of these same rounded lines, so every displayed total adds up to the cent
+  const cfLines = billed.mtd.lines
+    .map((l) => ({
+      key: l.key,
+      used: l.used,
+      included: l.included,
+      billable: l.billable,
+      cost: l.cost,
+      listCost: round2(l.listCost),
+      projectedCost: billed.projected.lines.find((p) => p.key === l.key)?.cost ?? 0,
+      source: CF_METERS[l.key].source,
+      billed: (CF_METERS[l.key] as { billed?: boolean }).billed !== false,
+    }))
+    .filter((l) => l.used > 0 || l.source === 'none');
+  const products = withCloudflareLines(productLines(resourceDays, extras, now, fixed), cfLines);
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
   const idle = billIdle(idleProjection(resourceDays, extras, now, fixed.projected), idleBilledCloudflare(meterDays, now));
   // A fixed cost's day: its month's share for that one day, when it is active then
   const fixedDaily = (day: string) => fixed.items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
   const trend = trendBySource(resourceDays, extras, fixedDaily, now);
   const openAlerts = (await env.COSTS_DB!.prepare('SELECT key, value, opened_at FROM ops_cost_alerts ORDER BY opened_at DESC').all<{ key: string; value: number; opened_at: string }>().catch(() => ({ results: [] }))).results ?? [];
-  const lastRun = await env.COSTS_DB!
-    .prepare("SELECT finished_at FROM collector_runs WHERE kind = 'hourly' AND status IN ('ok', 'partial') ORDER BY started_at DESC LIMIT 1")
-    .first<{ finished_at: string | null }>()
-    .catch(() => null);
+  // Data as of the last collection that brought Cloudflare's figures: a run Cloudflare refused
+  // (even one that finished "partial" with the other sources) adds none, so it doesn't move the date
+  const recentRuns = (await env.COSTS_DB!
+    .prepare("SELECT status, detail, finished_at FROM collector_runs WHERE kind = 'hourly' AND status IN ('ok', 'partial') ORDER BY started_at DESC LIMIT 48")
+    .all<{ status: string; detail: string | null; finished_at: string | null }>()
+    .catch(() => ({ results: [] }))).results ?? [];
+  const lastRun = recentRuns.find((r) => analyticsFromRun(r).state !== 'refused') ?? null;
   const nonCloudflareLinear = projectMonth(sumByDay([...extras.bunny, ...extras.containers, ...extras.ai, ...extras.resend]), now).linear;
   return {
     budget,
     // Linear: the month so far scaled to the whole month; trailing: the last 7 full days carried forward (drives alerts)
     forecast: { linear: round2(nonCloudflareLinear + billed.linear.total + PLAN_BASE_USD + fixed.projected), trailing: budget.projected },
     products,
-    envs: envLines(resourceDays, productDays, extras, now, fixed.mtd),
+    envs: balanceTo(envLines(resourceDays, productDays, extras, now, fixed.mtd), products.reduce((sum, p) => sum + p.mtd, 0)),
     movers: topMovers(resourceDays, products, now),
     spikes: spikes.slice(0, 10),
     // The daily total (every source), and the same days per env and source for the stacked chart
     trend: { days: trend.days, values: trend.days.map((_, i) => round2(trend.series.reduce((s, x) => s + x.values[i]!, 0))), series: trend.series },
     // Cloudflare at list price against what it bills after the account's included usage
     cloudflare: {
-      billedMtd: billed.mtd.total,
-      billedProjected: billed.projected.total,
-      listMtd: billed.mtd.listTotal,
-      lines: billed.mtd.lines
-        .map((l) => ({
-          key: l.key,
-          used: l.used,
-          included: l.included,
-          billable: l.billable,
-          cost: l.cost,
-          listCost: Math.round(l.listCost * 100) / 100,
-          projectedCost: billed.projected.lines.find((p) => p.key === l.key)?.cost ?? 0,
-          source: CF_METERS[l.key].source,
-          billed: (CF_METERS[l.key] as { billed?: boolean }).billed !== false,
-        }))
-        .filter((l) => l.used > 0 || l.source === 'none'),
+      billedMtd: round2(cfLines.reduce((sum, l) => sum + l.cost, 0)),
+      billedProjected: round2(cfLines.reduce((sum, l) => sum + l.projectedCost, 0)),
+      listMtd: round2(cfLines.reduce((sum, l) => sum + l.listCost, 0)),
+      lines: cfLines,
     },
     fixed: { items: fixed.items, mtd: fixed.mtd, projected: fixed.projected },
     idle,

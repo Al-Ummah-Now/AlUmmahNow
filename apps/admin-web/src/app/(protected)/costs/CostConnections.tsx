@@ -15,7 +15,7 @@ import { smallButtonClass } from '@/components/content/parts';
 import { fieldClass } from '@/components/ui';
 import { removeCostCredential, saveCostCredential, testCostCredential } from '@/lib/api/costs';
 import type { CostTestResult } from '@/lib/api/costs-types';
-import { credentialState, keyProblem, missingListings, testCodeOf, type CredentialState, type KeyProblem } from './model';
+import { connectionActions, connectionStatus, credentialState, keyProblem, missingListings, testCodeOf, type CredentialState, type KeyProblem } from './model';
 import { FeedbackLine, useCostAction } from './useCostAction';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
@@ -41,7 +41,7 @@ function ProviderMark({ provider }: { provider: CostProvider }) {
   );
 }
 
-function ConnectionCard({ view }: { view: CostCredentialView }) {
+function ConnectionCard({ view, releaseInUse = false }: { view: CostCredentialView; releaseInUse?: boolean }) {
   const { t, locale } = useLanguage();
   const ids = useId();
   const p = view.provider;
@@ -77,8 +77,8 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
     if (out) setFresh(out.test);
   }
 
-  const statusText =
-    state === 'unset' ? t('costs.connections.status.unset') : state === 'unreadable' ? t('costs.connections.status.unreadable') : view.last4 ? t('costs.connections.status.set', { last4: view.last4 }) : t('costs.connections.status.setPlain');
+  const status = connectionStatus(p, state, view.last4, releaseInUse);
+  const statusText = status === 'set' ? t('costs.connections.status.set', { last4: view.last4 ?? '' }) : t(`costs.connections.status.${status}`);
   // Who set it, by name (never the raw id): the stored name, else the names lookup
   const who: React.ReactNode = view.updatedByName || (view.updatedBy ? <UserName id={view.updatedBy} showEmail={false} /> : null);
 
@@ -164,24 +164,27 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
           >
             {busy === 'save' ? t('content.working') : t('costs.connections.save')}
           </button>
-          <button type="button" className={`${smallButtonClass} min-h-10`} disabled={busy !== null || !view.set} onClick={retest} data-testid={`costs-connection-${p}-test`}>
-            {busy === 'test' ? t('content.working') : t('costs.connections.test')}
-          </button>
-          <ConfirmButton
-            label={t('costs.connections.remove')}
-            title={t('costs.connections.removeTitle', { provider: name })}
-            body={t('costs.connections.removeBody', { provider: name })}
-            confirmLabel={t('costs.connections.remove')}
-            danger
-            disabled={!view.set}
-            busy={busy === 'remove'}
-            buttonClassName="min-h-10"
-            testId={`costs-connection-${p}-remove`}
-            onConfirm={async () => {
-              const out = await run('remove', () => removeCostCredential(p), () => t('costs.connections.removed'));
-              if (out) setFresh(null);
-            }}
-          />
+          {connectionActions(state) && (
+            <>
+              <button type="button" className={`${smallButtonClass} min-h-10`} disabled={busy !== null} onClick={retest} data-testid={`costs-connection-${p}-test`}>
+                {busy === 'test' ? t('content.working') : t('costs.connections.test')}
+              </button>
+              <ConfirmButton
+                label={t('costs.connections.remove')}
+                title={t('costs.connections.removeTitle', { provider: name })}
+                body={t('costs.connections.removeBody', { provider: name })}
+                confirmLabel={t('costs.connections.remove')}
+                danger
+                busy={busy === 'remove'}
+                buttonClassName="min-h-10"
+                testId={`costs-connection-${p}-remove`}
+                onConfirm={async () => {
+                  const out = await run('remove', () => removeCostCredential(p), () => t('costs.connections.removed'));
+                  if (out) setFresh(null);
+                }}
+              />
+            </>
+          )}
         </div>
         <FeedbackLine feedback={feedback} testId={`costs-connection-${p}-feedback`} />
       </div>
@@ -189,7 +192,7 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
   );
 }
 
-export function CostConnections({ connections }: { connections: CostCredentialView[] }) {
+export function CostConnections({ connections, releaseInUse = false }: { connections: CostCredentialView[]; releaseInUse?: boolean }) {
   const { t } = useLanguage();
   const views = PROVIDERS.map((p) => connections.find((c) => c.provider === p) ?? { provider: p, set: false, last4: null, updatedBy: null, updatedByName: null, updatedAt: null, test: null });
   return (
@@ -197,7 +200,7 @@ export function CostConnections({ connections }: { connections: CostCredentialVi
       <h2 id="costs-connections-title" className="text-lg font-semibold text-fg">{t('costs.connections.title')}</h2>
       <p className="mb-4 mt-1 max-w-3xl text-sm text-fg-muted">{t('costs.connections.note')}</p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {views.map((v) => <ConnectionCard key={v.provider} view={v} />)}
+        {views.map((v) => <ConnectionCard key={v.provider} view={v} releaseInUse={releaseInUse} />)}
       </div>
     </section>
   );

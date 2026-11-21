@@ -125,9 +125,12 @@ test.describe('costs (super admin)', () => {
       const card = page.getByTestId(`costs-connection-${c.provider}`);
       await expect(card).toHaveAttribute('data-state', c.set ? /^(set|unreadable)$/ : 'unset');
       if (!c.set) {
-        await expect(page.getByTestId(`costs-connection-${c.provider}-status`)).toHaveText('Not set');
-        await expect(page.getByTestId(`costs-connection-${c.provider}-remove`)).toBeDisabled();
-        await expect(page.getByTestId(`costs-connection-${c.provider}-test`)).toBeDisabled();
+        // Cloudflare with no key here still reads data when the collector uses the shared release token
+        const viaRelease = c.provider === 'cloudflare' && d.collector.tokenSource === 'release';
+        await expect(page.getByTestId(`costs-connection-${c.provider}-status`)).toHaveText(viaRelease ? 'Not set here: the collector uses the shared release token' : 'Not set');
+        // Nothing to test or remove until a key is added
+        await expect(page.getByTestId(`costs-connection-${c.provider}-remove`)).toHaveCount(0);
+        await expect(page.getByTestId(`costs-connection-${c.provider}-test`)).toHaveCount(0);
       }
     }
     // A key field is never pre-filled and never remembered by the browser

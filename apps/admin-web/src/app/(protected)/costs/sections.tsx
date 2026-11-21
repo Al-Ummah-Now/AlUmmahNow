@@ -14,6 +14,7 @@ import { COST_TREND_KEYS, type CostBudgetPart, type CostEnvKey, type CostMover, 
 import { budgetMeter, dailyBudget, idleStatus, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
 import { moneyFormat } from '@al-ummah/shared-types';
+import { Sep } from '@/components/Sep';
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
 
@@ -80,11 +81,14 @@ export function signedUsd(locale: string): (v: number) => string {
 }
 
 function percentList(levels: readonly number[], f: OpsFormats, t: Translator): string {
-  return levels.map((l) => f.percent(l)).join(t('costs.listSep'));
+  return levels.map((l) => f.percent(l)).join(t('common.sep'));
 }
 
 export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; now: Date }) {
   const age = d ? dataAge(d.dataAsOf, now) : null;
+  // Cloudflare refusing the token makes the data late however recent the last good run was
+  const refused = d?.collector.analytics?.state === 'refused';
+  const warn = !!age && (age.stale || refused);
   return (
     <header className="cost-hero p-5 sm:p-6" data-testid="costs-header">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -93,9 +97,13 @@ export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; 
           <p className="mt-1 text-fg-muted">{t('costs.subtitle')}</p>
         </div>
         {age && (
-          <p className="cost-pill min-w-0 max-w-full" data-tone={age.stale ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={age.stale ? 'true' : 'false'}>
-            <span aria-hidden="true" className={`cost-dot ${age.stale ? 'text-warning-fg' : 'text-success-fg'}`} />
-            <span className="min-w-0 break-words tabular-nums">{age.never ? t('costs.dataNever') : fillNodes(t(age.stale ? 'costs.dataStale' : 'costs.dataAsOf'), { time: <LocalTime value={d!.dataAsOf!} withTime /> })}</span>
+          <p className="cost-pill min-w-0 max-w-full" data-tone={warn ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={warn ? 'true' : 'false'}>
+            <span aria-hidden="true" className={`cost-dot ${warn ? 'text-warning-fg' : 'text-success-fg'}`} />
+            <span className="min-w-0 break-words tabular-nums">
+              {age.never
+                ? t('costs.dataNever')
+                : fillNodes(t(refused ? 'costs.dataRefused' : age.stale ? 'costs.dataStale' : 'costs.dataAsOf'), { time: <LocalTime value={d!.dataAsOf!} withTime className="whitespace-nowrap" /> })}
+            </span>
           </p>
         )}
       </div>
@@ -200,7 +208,7 @@ function RefusedNotice({ d, t, check }: { d: CostsDashboard; t: Translator; chec
           ),
         })}
       </p>
-      <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood ? fillNodes(t('costs.token.refusedSince'), { time: <LocalTime value={lastGood} withTime /> }) : t('costs.token.refusedNever')}</p>
+      <p className="mt-1 max-w-3xl text-sm text-fg">{lastGood ? fillNodes(t('costs.token.refusedSince'), { time: <LocalTime value={lastGood} withTime className="whitespace-nowrap" /> }) : t('costs.token.refusedNever')}</p>
       <div className="mt-3 flex flex-wrap items-start gap-3">
         {d.canManage ? (
           <>
@@ -263,8 +271,9 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
   const idle = idleStatus(d.idle);
   const idleByEnv = (['production', 'stage', 'qa'] as const)
     .filter((e) => (d.idle.byEnv[e] ?? 0) > 0)
-    .map((e) => `${t(`costs.envs.${e}`)} ${f.usd(d.idle.byEnv[e] ?? 0)}`)
-    .join(t('costs.listSep'));
+    // Each name stays on the line of its amount
+    .map((e) => `${t(`costs.envs.${e}`)} ${f.usd(d.idle.byEnv[e] ?? 0)}`.replace(/ /g, '\u00a0'))
+    .join(t('common.sep'));
   return (
     <section className="cost-panel p-5 sm:p-6" aria-labelledby="costs-budget-title" data-testid="costs-budget">
       <h2 id="costs-budget-title" className={sectionTitle}>{t('costs.budget.title')}</h2>
@@ -627,7 +636,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
                       <bdi className="block break-words font-medium text-fg">{label}</bdi>
-                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi> • {envLabel(t, m.env)}</span>
+                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep locale={locale} />{envLabel(t, m.env)}</span>
                     </th>
                     <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}
