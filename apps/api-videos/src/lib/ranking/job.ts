@@ -60,6 +60,8 @@ export const RAIL_IDS = ['trending:day', 'trending:week', 'trending:month', 'pop
 export type RailId = (typeof RAIL_IDS)[number];
 /** Rails also built per category. */
 export const CATEGORY_RAILS: readonly RailId[] = ['top', 'new', 'trending:week'];
+/** Rails also built for one content language only (Explore's language filter on /api/trending) */
+export const ONLY_LANGUAGE_RAILS: readonly RailId[] = ['trending:day', 'trending:week', 'trending:month'];
 
 /** Admin pin targets (discovery_pins.rail) → the rails they apply to. */
 export const PIN_RAILS = ['featured', 'trending', 'popular', 'new', 'explore'] as const;
@@ -282,6 +284,12 @@ export function buildAllRails(inputs: RankInputs, pins: readonly PinRow[]): Buil
 		const base = { limit: RAIL_LIMIT, excludeShorts: true, pins: pinsFor(pins, rail, null) };
 		out.push({ rail, scope: '', result: build(inputs, rail, base) });
 		for (const language of RAIL_LANGUAGES) out.push({ rail, scope: `lang:${language}`, result: build(inputs, rail, { ...base, language }) });
+	}
+	// Explore's content-language filter: Trending of one language only (scope 'only:<lang>')
+	for (const rail of ONLY_LANGUAGE_RAILS) {
+		for (const language of RAIL_LANGUAGES) {
+			out.push({ rail, scope: `only:${language}`, result: build(inputs, rail, { limit: CATEGORY_RAIL_LIMIT, excludeShorts: true, onlyLanguage: language, language, pins: pinsFor(pins, rail, null) }) });
+		}
 	}
 	const categories = [...new Set(inputs.videos.map((v) => v.category).filter((c): c is string => !!c))].sort();
 	for (const category of categories) {

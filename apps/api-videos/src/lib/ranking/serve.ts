@@ -68,9 +68,13 @@ export function decodeRailCursor(cursor: string | null | undefined): number {
 
 export const encodeRailCursor = (position: number) => `p:${position}`;
 
-/** Pure: the scope to read for a request (a category wins; else the viewer's language when it has rails). */
-export function railScope(options: { category?: string | null; language?: string | null }): string {
+/**
+ * Pure: the scope to read for a request: a category wins; `onlyLanguage` is a content-language
+ * filter (only that language's videos); `language` is the viewer's language (ranks its videos higher).
+ */
+export function railScope(options: { category?: string | null; language?: string | null; onlyLanguage?: string | null }): string {
 	if (options.category) return `cat:${options.category}`;
+	if (options.onlyLanguage === 'ar' || options.onlyLanguage === 'en') return `only:${options.onlyLanguage}`;
 	if (options.language === 'ar' || options.language === 'en') return `lang:${options.language}`;
 	return '';
 }

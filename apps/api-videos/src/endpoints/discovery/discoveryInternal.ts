@@ -12,7 +12,7 @@ import { logger } from '../../lib/logger';
 import { DISCOVERY_NEEDS_ACTION_KEY, RAIL_IDS, discoveryJobs, readLastRun, startDiscoveryRank, type DiscoveryEnv, type RailId } from '../../lib/ranking/job';
 import { railPage } from '../../lib/ranking/serve';
 
-const SCOPE = /^(|lang:(ar|en)|cat:[a-z0-9_-]{1,64})$/;
+const SCOPE = /^(|lang:(ar|en)|only:(ar|en)|cat:[a-z0-9_-]{1,64})$/;
 
 export function createDiscoveryInternalRouter() {
 	const app = new Hono<{ Bindings: DiscoveryEnv & { videos: R2Bucket; channels?: R2Bucket } }>();
