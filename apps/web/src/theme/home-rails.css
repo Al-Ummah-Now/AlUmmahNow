@@ -1,0 +1,67 @@
+/* Home page ranked rails (components/home/HomeRails.tsx, wiki E07 "Discovery ranking").
+   Depth is each theme's own (materials.css): the heading badge is the theme's primary material (Fawanees
+   gold with its glow, Nahas hammered copper, Zujaj glass, Lantern flame), the rule fades from the theme's
+   primary, and the page buttons are its raised material. Cards are the shared .video-card. */
+
+.hr-stack{display:flex;flex-direction:column;gap:clamp(22px,2.6vw,36px);margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-xl)}
+.hr{position:relative;min-width:0}
+
+/* Heading row: badge, title, a rule that fades from the theme's primary, "See all" */
+.hr-head{display:flex;align-items:center;gap:12px;margin-block-end:10px;min-width:0}
+.hr-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-md,10px);
+  background:var(--m-primary,var(--fanous-color-primary));color:var(--fanous-color-on-primary);box-shadow:var(--m-primary-edge,none)}
+.hr-badge svg{width:18px;height:18px}
+.hr-title{margin:0;min-width:0;font-size:20px;font-weight:700;line-height:1.3;color:var(--fanous-color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[lang=ar] .hr-title{line-height:1.6}
+.hr-rule{flex:1 1 24px;min-width:24px;height:1px;background:linear-gradient(var(--to-end,to right),color-mix(in srgb,var(--fanous-color-primary) 55%,transparent),transparent 85%)}
+.hr-all{flex:none;display:inline-flex;align-items:center;gap:2px;height:32px;padding-inline:12px 8px;border-radius:var(--r-pill,999px);
+  font-size:14px;font-weight:600;white-space:nowrap;color:var(--fanous-color-link);
+  background:color-mix(in srgb,var(--fanous-color-primary) 9%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 32%,transparent);
+  transition:background-color .15s,box-shadow .15s}
+.hr-all svg{width:16px;height:16px;transition:transform .2s}
+[dir=rtl] .hr-all svg{transform:scaleX(-1)}
+@media(hover:hover){
+  .hr-all:hover{background:var(--m-hover,color-mix(in srgb,var(--fanous-color-primary) 16%,transparent));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 55%,transparent)}
+  .hr-all:hover svg{transform:translateX(2px)}
+  [dir=rtl] .hr-all:hover svg{transform:scaleX(-1) translateX(2px)}
+}
+.hr-all:focus-visible,.hr-nav:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+
+/* The rail: one row that scrolls sideways and snaps to a card. About four and a third cards on a wide
+   screen, so the next one peeks in and says there is more. */
+.hr-track{position:relative}
+.hr-list{list-style:none;margin:0;padding:8px 2px 12px;display:grid;grid-auto-flow:column;
+  grid-auto-columns:clamp(232px,calc((100% - 4 * 16px) / 4.3),340px);gap:16px;
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline:2px;overscroll-behavior-x:contain;scrollbar-width:none}
+.hr-list::-webkit-scrollbar{display:none}
+.hr-list>li{min-width:0;scroll-snap-align:start}
+/* The edge the rail can still scroll to fades out */
+.hr-track[data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),#000 calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),#000 calc(100% - 56px),transparent)}
+.hr-track[data-more-start] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px);mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px)}
+.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(var(--to-end,to right),transparent,#000 56px,#000 calc(100% - 56px),transparent)}
+
+/* Page buttons (pointer devices): the theme's raised material, centred on the thumbnails */
+.hr-nav{position:absolute;z-index:2;inset-block-start:calc(8px + 8px + 96px);transform:translateY(-50%);
+  display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:50%;cursor:pointer;
+  color:var(--fanous-color-text-primary);background:var(--m-raised,var(--fanous-color-surface-raised));
+  box-shadow:var(--m-raised-edge,0 6px 18px -6px rgb(0 0 0/.45));-webkit-backdrop-filter:var(--m-blur,none);backdrop-filter:var(--m-blur,none);
+  transition:opacity .2s,transform .2s}
+.hr-nav svg{width:22px;height:22px}
+[dir=rtl] .hr-nav svg{transform:scaleX(-1)}
+.hr-nav[data-side=start]{inset-inline-start:-10px}
+.hr-nav[data-side=end]{inset-inline-end:-10px}
+.hr-nav:disabled{opacity:0;pointer-events:none}
+@media(hover:hover){.hr-nav:hover{transform:translateY(-50%) scale(1.07)}}
+
+/* Phones and touch: swipe, with the next card peeking in; no buttons */
+@media(hover:none),(max-width:639px){.hr-nav{display:none}}
+@media(max-width:639px){
+  .hr-list{grid-auto-columns:80%;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
+  .hr-track[data-more-end] .hr-list,.hr-track[data-more-start] .hr-list,.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:none;mask-image:none}
+  /* A long category name wraps to a second line instead of losing its end */
+  .hr-title{font-size:18px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .hr-rule{display:none}
+  .hr-all{margin-inline-start:auto}
+}
+@media(prefers-reduced-motion:reduce){.hr-all,.hr-all svg,.hr-nav{transition:none}}

@@ -7,6 +7,17 @@ import { logger } from '@/lib/logger-server';
 const baseUrl = getApiUrl();
 
 /**
+ * What a ranked section is showing right now (wiki E07 "Discovery ranking"): `label` is the heading
+ * key (with no viewer signal yet Trending reads new_this_week and Popular reads featured).
+ */
+export interface SectionRailInfo {
+  mode: string;
+  label: string;
+  signalItems: number;
+  computedAt: string;
+}
+
+/**
  * Response types for section endpoints
  */
 export interface VideoSectionResponse {
@@ -29,6 +40,7 @@ export interface PopularVideosMetadata {
     lastUpdated: string;
     period: 'all' | 'monthly' | 'weekly' | 'daily';
     fromIndex: boolean;
+    rail?: SectionRailInfo;
   };
 }
 
@@ -53,6 +65,7 @@ export interface TrendingVideosResponse {
     lastCalculated: string;
     nextUpdate: string;
     fromIndex: boolean;
+    rail?: SectionRailInfo;
   };
 }
 

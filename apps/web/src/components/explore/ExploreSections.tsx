@@ -5,7 +5,7 @@
  * Rails scroll horizontally on small screens; spacing uses logical properties.
  */
 
-import { formatDate } from '@al-ummah/shared-types';
+import { formatDate, railHeading } from '@al-ummah/shared-types';
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import {
@@ -112,11 +112,20 @@ function EmptyNote({ children }: { children: React.ReactNode }) {
   return <p className="rounded-lg bg-gray-50 dark:bg-gray-900 p-4 text-sm text-gray-500 dark:text-gray-400">{children}</p>;
 }
 
-export function TrendingSection({ videos, fallback }: { videos: VideoObject[]; fallback: boolean }) {
+/**
+ * Trending's heading is what the ranked list is right now (wiki E07): with no viewer signal yet it reads
+ * "New this week", never "Trending". The search fallback (no ranked list) reads "Popular this month".
+ */
+export function trendingTitle(t: { explore: { trending: string; popularFallback: string }; rails: Parameters<typeof railHeading>[0] }, fallback: boolean, label?: string | null): string {
+  if (fallback) return t.explore.popularFallback;
+  return railHeading(t.rails, label) ?? t.explore.trending;
+}
+
+export function TrendingSection({ videos, fallback, label }: { videos: VideoObject[]; fallback: boolean; label?: string | null }) {
   const { t } = useLanguage();
   return (
-    <section aria-labelledby="explore-trending" data-testid="explore-trending">
-      <SectionHeader id="explore-trending" icon={Flame} title={fallback ? t.explore.popularFallback : t.explore.trending} />
+    <section aria-labelledby="explore-trending" data-testid="explore-trending" data-label={label ?? undefined}>
+      <SectionHeader id="explore-trending" icon={Flame} title={trendingTitle(t, fallback, label)} />
       {videos.length === 0 ? (
         <EmptyNote>{t.explore.noTrending}</EmptyNote>
       ) : (

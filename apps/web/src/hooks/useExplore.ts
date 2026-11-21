@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ExploreResponse, VideoObject } from '@al-ummah/shared-types';
 import { getExploreData, searchContent } from '@/lib/api/search';
-import { getTrendingVideos } from '@/lib/api/videos';
+import { getTrendingRail } from '@/lib/api/videos';
 import { searchVideoToVideoObject } from '@/lib/search/mappers';
 import { logger } from '@/lib/logger-client';
 
@@ -22,6 +22,8 @@ type Load<T> = { status: 'loading' } | { status: 'error' } | { status: 'ready'; 
 export interface TrendingData {
   videos: VideoObject[];
   fallback: boolean;
+  /** What the ranked list is right now (wiki E07): trending_this_week, or new_this_week with no viewer signal */
+  label: string | null;
 }
 
 export function useExplore() {
@@ -37,16 +39,16 @@ export function useExplore() {
   const loadTrending = useCallback(async () => {
     setTrending({ status: 'loading' });
     try {
-      const videos = await getTrendingVideos('week', undefined, 12, language);
+      const { videos, label } = await getTrendingRail('week', language, 12);
       if (videos.length > 0) {
-        setTrending({ status: 'ready', data: { videos, fallback: false } });
+        setTrending({ status: 'ready', data: { videos, fallback: false, label } });
         return;
       }
       const popular = await searchContent({ type: 'video', sort: 'popular', date: 'month', language, limit: 12 });
       const fallbackVideos = popular.ok
         ? popular.data.results.flatMap(item => (item.type === 'video' ? [searchVideoToVideoObject(item.video, item.channel?.name)] : []))
         : [];
-      setTrending({ status: 'ready', data: { videos: fallbackVideos, fallback: true } });
+      setTrending({ status: 'ready', data: { videos: fallbackVideos, fallback: true, label: null } });
     } catch (error) {
       logger.warn('[Explore] Trending failed', { error, language });
       setTrending({ status: 'error' });
