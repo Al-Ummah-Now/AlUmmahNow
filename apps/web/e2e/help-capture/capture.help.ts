@@ -215,15 +215,16 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // No consent banner over the pictures (optional tracking declined); the tour stays away by
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
-  await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
   // Images may be cached (the local stack sends no-store): the account menu remounts when you switch
   // who you act as, and its app icons were refetched, blank for a frame of the clip (AUDIT-2
-  // 2026-11-21). Registered first, so the thumbnail route below still answers /thumb/
+  // 2026-11-21). Registered before every other route: the last registered answers first, so the demo
+  // CDN and /thumb/ routes still serve their pictures (registered after them, it showed test bars)
   await context.route('**/*', async (route) => {
     if (route.request().resourceType() !== 'image') return route.fallback();
     const res = await route.fetch();
     return route.fulfill({ response: res, headers: { ...res.headers(), 'cache-control': 'public, max-age=3600' } });
   });
+  await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
   await context.route((url) => url.pathname.startsWith('/thumb/'), serveThumb);
   // No view beacons: each capture visit counted as a view, so the watch page read "No views" in one
   // picture and "1 view" in its Light/Dark twin (r5 check)
@@ -624,12 +625,17 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         return Math.min(min, Math.max(dx, dy));
       }, Infinity);
       const gMax = Math.min(GAP, Math.floor((near - 4 - CLEAR) / 2));
-      const barClash = (b: Box) => straddlesBar(grow(b, 2));
+      // A bar the open menu is drawn over ends at the menu's top for its rows: the Arabic desktop
+      // account row starts 3 px inside the header's strip, under nothing (the menu covers the
+      // header's line), and went number-only while the English row, inset, was outlined
+      const myBars = (window as unknown as { __help: { barsFor: (e: Element, b: Box[]) => Box[] } }).__help.barsFor(target, bars);
+      const myStraddle = (b: Box) => myBars.some((bar) => hit(b, bar) && !contains(bar, b));
+      const barClash = (b: Box) => myStraddle(grow(b, 2));
       let o = outline(gMax);
       for (let g = gMax; g >= gMax - 16 && (crowded(o).length || barClash(o)); g--) o = outline(g);
-      bare.push(crowded(o).length > 0 || straddlesBar(grow(o, 2)));
+      bare.push(crowded(o).length > 0 || myStraddle(grow(o, 2)));
       // Why it went number-only, in the run's notes (AUDIT-2: an outline in English, none in Arabic)
-      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...bars.filter((bar) => hit(grow(o, 2), bar) && !contains(bar, grow(o, 2))).map((bar) => `a bar ${Math.round(bar.y)}+${Math.round(bar.h)} (outline ${Math.round(o.y)}+${Math.round(o.h)}, target ${Math.round(r.top)}+${Math.round(r.height)})`)].slice(0, 3).join(' | ') : '');
+      bareWhy.push(bare[bare.length - 1] ? [...crowded(o).map((c) => `${c.what ?? 'a box'} ${Math.round(c.x)},${Math.round(c.y)} ${Math.round(c.w)}x${Math.round(c.h)}`), ...myBars.filter((bar) => hit(grow(o, 2), bar) && !contains(bar, grow(o, 2))).map((bar) => `a bar ${Math.round(bar.y)}+${Math.round(bar.h)} (outline ${Math.round(o.y)}+${Math.round(o.h)}, target ${Math.round(r.top)}+${Math.round(r.height)})`)].slice(0, 3).join(' | ') : '');
       rings.push(o);
       radii.push(parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0);
     }
@@ -937,14 +943,16 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       { x: o.x - 2, y: o.y - 2, w: o.w + 4, h: 6 }, { x: o.x - 2, y: o.y + o.h - 4, w: o.w + 4, h: 6 },
       { x: o.x - 2, y: o.y - 2, w: 6, h: o.h + 4 }, { x: o.x + o.w - 4, y: o.y - 2, w: 6, h: o.h + 4 },
     ];
-    const straddlesBar = (b: Box) => bars.some((bar) => hit(b, bar) && !contains(bar, b));
+    const straddlesBar = (b: Box, list: Box[] = bars) => list.some((bar) => hit(b, bar) && !contains(bar, b));
+    const barsHere = (el: Element) => (window as unknown as { __help: { barsFor: (e: Element, b: Box[]) => Box[] } }).__help.barsFor(el, bars);
     for (const v of nums) {
       if (!contains(frame, v)) out.push(`number ${v.what} is cut by the picture's edge`);
       // A number-only marker has no outline: its own control stands in for it
       const target = document.querySelector(`[data-help-target="${v.what}"]`);
       const own = ringOf(v.what) ?? (target ? fromRect(target.getBoundingClientRect()) : undefined);
-      const home = own && bars.find((bar) => contains(bar, grow(own, 2)));
-      if (straddlesBar(v) && !(home && bars.every((bar) => bar === home || !hit(v, bar)))) out.push(`number ${v.what} sits on the header or tab bar's edge`);
+      const tBars = target ? barsHere(target) : bars;
+      const home = own && tBars.find((bar) => contains(bar, grow(own, 2)));
+      if (tBars.some((bar) => hit(v, bar) && !contains(bar, v)) && !(home && tBars.every((bar) => bar === home || !hit(v, bar)))) out.push(`number ${v.what} sits on the header or tab bar's edge`);
       const t = texts.find((x) => hit(grow(v, CLEAR), x));
       if (t) out.push(`number ${v.what} is within ${CLEAR} px of ${t.what}`);
       // Its own control's pictures: never on them; anything else: CLEAR px away (audit r4: 2 within 3 px
@@ -974,7 +982,8 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
     for (const o of rings) {
       const outer = grow(o, 2);
       if (!contains(frame, outer)) out.push(`outline ${o.what} is cut by the picture's edge`);
-      if (straddlesBar(outer)) out.push(`outline ${o.what} runs under the header or tab bar`);
+      const oTarget = document.querySelector(`[data-help-target="${o.what}"]`);
+      if (straddlesBar(outer, oTarget ? barsHere(oTarget) : bars)) out.push(`outline ${o.what} runs under the header or tab bar`);
       const t = texts.find((x) => hit(x, grow(outer, CLEAR)) && !contains(grow(o, -(4 + CLEAR)), x));
       if (t) out.push(`outline ${o.what} is within ${CLEAR} px of ${t.what}`);
       const p = pictures.find((x) => hit(x, outer) && !contains(grow(o, -4), x) && !ownOf(o, x));
@@ -1117,7 +1126,21 @@ const PAGE_HELPERS = `(() => {
     const bottom = Math.min(b.bottom, baseline + m.actualBoundingBoxDescent + 1);
     return bottom - top > 1 ? new DOMRect(b.left, top, b.width, bottom - top) : b;
   };
-  window.__help = { overlays, visible, cards, isCard, pictureSel, ink };
+  // The bars as seen from an element in the open menu: a bar the menu is drawn over ends at the
+  // menu's top (the Arabic desktop account row starts 3 px inside the header's strip, under nothing:
+  // the menu covers the header's line). Bars are { x, y, w, h } boxes
+  const barsFor = (el, bars) => {
+    const menu = el && el.closest('[data-testid="nav-menu"]');
+    if (!menu) return bars;
+    const mt = menu.getBoundingClientRect().top;
+    const r = el.getBoundingClientRect();
+    return bars.map((bar) => {
+      if (!(bar.y < mt && bar.y + bar.h > mt)) return bar;
+      const at = document.elementFromPoint(r.left + r.width / 2, Math.min(bar.y + bar.h, r.bottom) - 1);
+      return at && menu.contains(at) ? Object.assign({}, bar, { h: mt - bar.y }) : bar;
+    });
+  };
+  window.__help = { overlays, visible, cards, isCard, pictureSel, ink, barsFor };
 })()`;
 
 /** Fails when a run account, run handle or run address is anywhere a reader can see (pictures and clips) */
@@ -1153,6 +1176,11 @@ const CLIP_LEAK_WATCH = `(() => {
  * address or handle the moment it renders, before the next frame is painted
  */
 const CLIP_SCRUB = `(() => {
+  // Menu images load at once: the app icons are loading="lazy", so a menu that just mounted (it
+  // remounts when you switch who you act as) drew them a frame late, empty slots in the clip (AUDIT-2
+  // 2026-11-21: Website and Your profile)
+  const eager = (root) => { if (root.querySelectorAll) root.querySelectorAll('img[loading="lazy"]').forEach((img) => { img.loading = 'eager'; img.decoding = 'sync'; }); };
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) { if (n.tagName === 'IMG' && n.loading === 'lazy') { n.loading = 'eager'; n.decoding = 'sync'; } eager(n); } }))).observe(document, { childList: true, subtree: true });
   const fix = (root) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
