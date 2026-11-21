@@ -325,20 +325,22 @@ export function rowApplies(row: RenameRow): boolean {
 
 /** New titles to write, per subject id and language (rows that apply only). */
 export function renamedTitles(rows: readonly RenameRow[]): Record<string, Partial<Record<TitleLanguage, string>>> {
-  // Ids come from the client's selection. The map stays a plain object (it
-  // is passed to a Next server action, which refuses null-prototype objects),
-  // and each id becomes an own property via defineProperty, so an id like
-  // '__proto__' is an ordinary key and never reaches Object.prototype
+  // Ids come from the client's selection. Titles are grouped in a Map (no
+  // object lookup by id), then each id is added to a plain object with
+  // defineProperty: the result is a plain object (it is passed to a Next
+  // server action, which refuses null-prototype objects) and an id like
+  // '__proto__' is an ordinary own key that never reaches Object.prototype
   // (CodeQL js/prototype-polluting-assignment).
-  const out: Record<string, Partial<Record<TitleLanguage, string>>> = {};
+  const byId = new Map<string, Partial<Record<TitleLanguage, string>>>();
   for (const row of rows) {
-    if (!rowApplies(row)) continue;
-    let titles = Object.prototype.hasOwnProperty.call(out, row.id) ? out[row.id] : undefined;
-    if (!titles) {
-      titles = {};
-      Object.defineProperty(out, row.id, { value: titles, enumerable: true, writable: true, configurable: true });
-    }
-    if (row.language === 'en' || row.language === 'ar') titles[row.language] = row.after;
+    if (!rowApplies(row) || (row.language !== 'en' && row.language !== 'ar')) continue;
+    const titles = byId.get(row.id) ?? {};
+    titles[row.language] = row.after;
+    byId.set(row.id, titles);
+  }
+  const out: Record<string, Partial<Record<TitleLanguage, string>>> = {};
+  for (const [id, titles] of byId) {
+    Object.defineProperty(out, id, { value: titles, enumerable: true, writable: true, configurable: true });
   }
   return out;
 }
