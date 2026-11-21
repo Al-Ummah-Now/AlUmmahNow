@@ -11,7 +11,8 @@ import {
   Film,
   Newspaper,
   GalleryHorizontal,
-  Link2
+  Link2,
+  type LucideIcon
 } from 'lucide-react';
 
 interface PostTypeSelectorProps {
@@ -22,7 +23,7 @@ interface PostTypeSelectorProps {
 
 interface PostTypeCard {
   type: PostType;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   label: {
     en: string;
     ar: string;
@@ -91,6 +92,12 @@ const POST_TYPES: PostTypeCard[] = [
   }
 ];
 
+/**
+ * The nine post kinds as tiles (owner review): one column of rows on a phone, three columns from
+ * 640px, so the rows are always full (3 × 3) and no slot is empty. Each tile is a row, icon at the
+ * start and the name with its description beside it; descriptions wrap to a second line and are
+ * never cut or ellipsised.
+ */
 export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelectorProps) {
   const isRTL = locale === 'ar';
 
@@ -98,13 +105,9 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
     <div
       role="radiogroup"
       aria-label={isRTL ? 'نوع المنشور' : 'Post type'}
-      className="
-      grid
-      grid-cols-2          /* Mobile: 2 columns */
-      sm:grid-cols-3       /* 3 a row from tablet up: the selector sits in the form's two-thirds column, where 5 a row wrapped every word (9 kinds: 3 rows) */
-      gap-3                /* Mobile: compact gaps */
-      md:gap-4             /* Desktop: larger gaps */
-    ">
+      className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+      data-testid="post-type-grid"
+    >
       {POST_TYPES.map((postType) => {
         const Icon = postType.icon;
         const isSelected = selected === postType.type;
@@ -114,19 +117,9 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
         return (
           <Card
             key={postType.type}
-            className={`
-              cursor-pointer
-              transition-all
-              p-4                /* Mobile: standard padding */
-              md:p-6             /* Desktop: more padding */
-              hover:shadow-lg
-              hover:border-primary/50
-              active:scale-[0.98]  /* Mobile: tap feedback */
-              ${isSelected
-                ? 'border-primary border-2 bg-primary/5 shadow-md'
-                : 'border-border hover:bg-muted/50'
-              }
-            `}
+            className={`flex cursor-pointer items-start gap-3 p-3 text-start transition-colors md:p-4 active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)] ${
+              isSelected ? 'border-2 border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'
+            }`}
             onClick={() => onSelect(postType.type)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -139,50 +132,15 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
             tabIndex={0}
             data-post-type={postType.type}
           >
-            <div className="
-              flex
-              flex-col
-              items-center
-              gap-2              /* Mobile: compact spacing */
-              md:gap-3           /* Desktop: more spacing */
-              text-center
-            ">
-              {/* A fixed circle centred over the label. No comments in this class string: the old
-                  "icon container" note put Tailwind's `container` (width: 100%) on it, a full-width pill */}
-              <div className={`
-                grid place-items-center shrink-0 self-center
-                w-11 h-11 md:w-14 md:h-14
-                rounded-full
-                ${isSelected
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
-                }
-              `}>
-                <Icon className="
-                  w-5 h-5        /* Mobile: smaller icons */
-                  md:w-6 md:h-6  /* Desktop: larger icons */
-                " />
-              </div>
-
-              <div className="space-y-1">
-                <h3 className={`
-                  font-semibold
-                  text-sm        /* Mobile: smaller text */
-                  md:text-base   /* Desktop: normal text */
-                  ${isSelected ? 'text-primary' : 'text-foreground'}
-                `}>
-                  {label}
-                </h3>
-                <p className="
-                  [text-wrap:balance]
-                  text-xs        /* Mobile: extra small */
-                  md:text-sm     /* Desktop: small */
-                  text-muted-foreground
-                ">
-                  {description}
-                </p>
-              </div>
-            </div>
+            <span
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1 space-y-0.5">
+              <span className={`block text-sm font-semibold md:text-base ${isSelected ? 'text-primary' : 'text-foreground'}`}>{label}</span>
+              <span className="block text-xs leading-snug text-muted-foreground md:text-sm" data-testid="post-type-description">{description}</span>
+            </span>
           </Card>
         );
       })}

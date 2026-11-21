@@ -124,11 +124,24 @@ async function openNewPost(page: Page, locale: 'en' | 'ar' = 'en') {
 }
 
 /** Selects a post type card (retried: the first click can land before hydration) */
-/** The composer's date and time fields, from a `YYYY-MM-DDTHH:mm` local time. */
+/**
+ * Picks a `YYYY-MM-DDTHH:mm` local time in the composer: the day in the localized calendar (by its
+ * full English name), then the time from the 15-minute list (rounded down to its step).
+ */
 async function fillSchedule(page: Page, local: string) {
   const [date, time] = local.split('T');
-  await page.getByTestId('post-schedule-date').fill(date);
-  await page.getByTestId('post-schedule-time').fill(time);
+  const [y, m, d] = date.split('-').map(Number);
+  const dayName = new Intl.DateTimeFormat('en-u-nu-latn', { timeZone: 'UTC', dateStyle: 'full' }).format(new Date(Date.UTC(y, m - 1, d)));
+  const calendar = page.getByTestId('post-schedule-date-calendar');
+  if (!(await calendar.isVisible())) await page.getByTestId('post-schedule-date-button').click();
+  const day = calendar.getByRole('button', { name: dayName, exact: true });
+  for (let i = 0; i < 2 && !(await day.isVisible()); i++) await page.getByTestId('post-schedule-date-next').click();
+  await day.click();
+  await expect(calendar).toBeHidden();
+  const [hh, mm] = time.split(':').map(Number);
+  const slot = `${String(hh).padStart(2, '0')}:${String(mm - (mm % 15)).padStart(2, '0')}`;
+  await page.getByTestId('post-schedule-time').click();
+  await page.getByTestId(`post-schedule-time-${slot}`).click();
 }
 
 async function selectType(page: Page, type: string) {
@@ -198,7 +211,9 @@ test.describe('Post manager', () => {
     try {
       await openNewPost(page);
       await expect(page.getByRole('heading', { level: 2, name: 'New post' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
+      // Publish is never a dead disabled pill: without a type it says what is missing
+      await page.getByRole('button', { name: 'Publish' }).click();
+      await expect(page.getByTestId('new-post-type-error')).toHaveText('Select a post type');
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 
       await selectType(page, 'text');
@@ -320,7 +335,9 @@ test.describe('Post manager', () => {
       await fillStable(page.getByLabel('Content'), `${marker} for later`);
       await page.getByTestId('post-schedule-later').check();
       await expect(page.getByTestId('post-publish')).toHaveText('Schedule');
-      await expect(page.getByTestId('post-schedule-timezone')).toContainText('Time zone:');
+      // The zone by a friendly name with its offset, never the raw id; changeable through search
+      await expect(page.getByTestId('post-schedule-timezone')).toContainText('(GMT');
+      await expect(page.getByTestId('post-schedule-timezone')).not.toContainText('/');
       // Too soon is refused in the composer
       await fillSchedule(page, localIn(60_000));
       await page.getByTestId('post-publish').click();
@@ -414,6 +431,14 @@ test.describe('Post manager', () => {
     await expect(page.getByText('وقت النشر')).toBeVisible();
     await page.getByTestId('post-schedule-later').check();
     await expect(page.getByTestId('post-publish')).toHaveText('جدولة');
+    // Arabic date, time and zone: Arabic-Indic digits, no browser date or time field
+    await expect(page.locator('input[type="date"], input[type="time"]')).toHaveCount(0);
+    await page.getByTestId('post-schedule-date-button').click();
+    await expect(page.getByTestId('post-schedule-date-calendar').getByRole('grid')).toContainText('١٥');
+    await expect(page.getByTestId('post-schedule-timezone')).toContainText('GMT');
+    await expect(page.getByTestId('post-schedule-timezone')).not.toContainText(/[0-9]/);
+    await expect(page.getByTestId('community-post-allow')).toHaveAttribute('role', 'switch');
+    await expect(page.getByTestId('community-post-allow')).toHaveAccessibleName('السماح بالتعليقات');
   });
 
   test('COMM-006 Arabic post editor is RTL and translated', async ({ page }) => {

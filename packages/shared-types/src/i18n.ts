@@ -1770,6 +1770,15 @@ export interface AppTranslations {
     /** The time field of a post's scheduled time */
     scheduleTime: string;
     scheduleTimezone: string;
+    /** The localized date picker and time zone picker (owner review) */
+    pickDate: string;
+    pickTime: string;
+    previousMonth: string;
+    nextMonth: string;
+    changeTimezone: string;
+    searchTimezone: string;
+    timezoneLabel: string;
+    allowComments: string;
     scheduleRequired: string;
     scheduleTooSoon: string;
     scheduleTooFar: string;
