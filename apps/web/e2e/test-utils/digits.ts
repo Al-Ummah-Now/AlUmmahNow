@@ -14,9 +14,9 @@ export function digit(locale: PageLocale): string {
   return isArabic(locale) ? '[٠-٩]' : '[0-9]';
 }
 
-/** A whole or decimal number with grouping, as a regex source: «١٬٢٣٤٫٥» (ar), "1,234.5" (en). */
+/** A whole or decimal number with grouping, as a regex source: «١ ٢٣٤٫٥» (ar, grouped with a narrow no-break space; «٬» still accepted), "1,234.5" (en). */
 export function numberSource(locale: PageLocale): string {
-  return isArabic(locale) ? '[٠-٩]+(?:[٬٫][٠-٩]+)*' : '[0-9]+(?:[,.][0-9]+)*';
+  return isArabic(locale) ? '[٠-٩]+(?:[٬\u202f٫][٠-٩]+)*' : '[0-9]+(?:[,.][0-9]+)*';
 }
 
 /**

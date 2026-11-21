@@ -47,7 +47,7 @@ export function formatViewerCount(
  *
  * @example
  * formatViewerCountArabic(1234, 'compact') // "١٫٢ ألف"
- * formatViewerCountArabic(1234, 'full')    // "١٬٢٣٤"
+ * formatViewerCountArabic(1234, 'full')    // "١ ٢٣٤"
  */
 export function formatViewerCountArabic(
   count: number,

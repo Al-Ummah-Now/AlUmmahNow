@@ -48,7 +48,11 @@ test('every Arabic formatter writes ٠–٩ and no 0–9', () => {
     assert.doesNotMatch(text, ASCII_DIGIT, `0–9 in Arabic output «${text}»`);
     assert.match(text, /[٠-٩]/, `no ٠–٩ in «${text}»`);
   }
-  assert.equal(f.formatInteger('ar', 5400), '٥٬٤٠٠');
+  // Arabic groups with a narrow no-break space (U+202F), so the decimal mark ٫ is the only mark in a number:
+  // «١٥٬٤١٩٫٩» read as 15,419,9 (the two marks look alike); «١٥ ٤١٩٫٩» cannot be misread
+  assert.equal(f.formatInteger('ar', 5400), '٥\u202f٤٠٠');
+  assert.equal(f.numberFormat('ar', { maximumFractionDigits: 1 }).format(15419.9), '١٥\u202f٤١٩٫٩');
+  assert.equal(f.numberFormat('ar').formatToParts(15419).find((p) => p.type === 'group')?.value, '\u202f');
   assert.equal(f.formatClock('ar', 3725), '١:٠٢:٠٥');
   assert.equal(f.fillTemplate('ar', 'آخر {days} أيام', { days: 7 }), 'آخر ٧ أيام');
 });
@@ -83,6 +87,7 @@ test('typed numbers accept both digit systems', () => {
   assert.equal(f.parseDigits('۱۲'), '12');
   assert.equal(f.parseDigits('+٩٦٦ ٥٠'), '+966 50');
   assert.equal(f.parseLocaleNumber('١٬٢٣٤٫٥'), 1234.5);
+  assert.equal(f.parseLocaleNumber('١\u202f٢٣٤٫٥'), 1234.5);
   assert.equal(f.parseLocaleNumber('1,234.5'), 1234.5);
   assert.ok(Number.isNaN(f.parseLocaleNumber('')));
   assert.equal(f.localizeDigits('en', '2026-11'), '2026-11');
@@ -161,7 +166,7 @@ const VIEWS_EN = '{count, plural, one {# view} other {# views}}';
 
 test('fillTemplate plural selects follow the CLDR category of the count', () => {
   assert.deepEqual([0, 1, 2, 3, 10, 11, 100, 1520].map((count) => f.fillTemplate('ar', VIEWS_AR, { count })), [
-    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١٬٥٢٠ مشاهدة',
+    'لا توجد مشاهدات', 'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١٠ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '١\u202f٥٢٠ مشاهدة',
   ]);
   assert.deepEqual([0, 1, 2, 3, 10, 11, 100].map((count) => f.fillTemplate('en', VIEWS_EN, { count })), [
     '0 views', '1 view', '2 views', '3 views', '10 views', '11 views', '100 views',

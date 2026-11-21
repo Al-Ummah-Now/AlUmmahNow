@@ -55,9 +55,29 @@ function cached<T>(kind: string, locale: FormatLocale, options: object | undefin
   return value;
 }
 
-/** A cached Intl.NumberFormat with the locale's digits pinned. */
+/**
+ * The Arabic thousands mark. ICU writes U+066C «٬», which most Arabic fonts (Plex, Noto Kufi,
+ * Amiri) draw in the same comma shape as the decimal mark U+066B «٫», so «١٥٬٤١٩٫٩» read as
+ * 15,419,9. Arabic groups with a narrow no-break space instead (the SI / ISO 80000 grouping), so
+ * the decimal «٫» is the only mark inside an Arabic number: «١٥ ٤١٩٫٩», «٥٦ ١٩٩», «١٫٢ مليون».
+ * U+202F never breaks a line and is a number separator for bidi, so the number stays one run.
+ */
+export const ARABIC_GROUP_SEPARATOR = '\u202f';
+const ARABIC_GROUP = /\u066c/g;
+
+/** Intl.NumberFormat whose Arabic output groups with {@link ARABIC_GROUP_SEPARATOR}. */
+class ArabicNumberFormat extends Intl.NumberFormat {
+  override format(value: number | bigint): string {
+    return super.format(value).replace(ARABIC_GROUP, ARABIC_GROUP_SEPARATOR);
+  }
+  override formatToParts(value?: number | bigint): Intl.NumberFormatPart[] {
+    return super.formatToParts(value).map((part) => (part.type === 'group' ? { ...part, value: ARABIC_GROUP_SEPARATOR } : part));
+  }
+}
+
+/** A cached Intl.NumberFormat with the locale's digits pinned (Arabic grouped with a narrow space). */
 export function numberFormat(locale: FormatLocale, options?: Intl.NumberFormatOptions): Intl.NumberFormat {
-  return cached('n', locale, options, (tag) => new Intl.NumberFormat(tag, options));
+  return cached('n', locale, options, (tag) => (isArabicLocale(tag) ? new ArabicNumberFormat(tag, options) : new Intl.NumberFormat(tag, options)));
 }
 
 /**
@@ -101,7 +121,7 @@ export function pluralCategory(locale: FormatLocale, count: number): Intl.LDMLPl
   return pluralRules(locale).select(count);
 }
 
-/** 1234.5 -> "1,234.5" / «١٬٢٣٤٫٥». Non-finite values become 0. */
+/** 1234.5 -> "1,234.5" / «١ ٢٣٤٫٥» (narrow no-break space). Non-finite values become 0. */
 /** "A, B and C" / «A وB وC»: names joined in the locale's words (twin of AlUmmahNowAuth packages/ui formatList). */
 export function formatList(locale: FormatLocale, items: readonly string[], type: 'conjunction' | 'disjunction' = 'conjunction'): string {
   // Intl.ListFormat is ES2021; this package's lib is older, so it is typed here. `disjunction`: "A, B or C" / «A أو B أو C»
@@ -113,7 +133,7 @@ export function formatNumber(locale: FormatLocale, value: number, options?: Intl
   return numberFormat(locale, options).format(Number.isFinite(value) ? value : 0);
 }
 
-/** A whole number with grouping: 5400 -> "5,400" / «٥٬٤٠٠». */
+/** A whole number with grouping: 5400 -> "5,400" / «٥ ٤٠٠» (narrow no-break space). */
 export function formatInteger(locale: FormatLocale, value: number): string {
   return formatNumber(locale, Math.round(Number.isFinite(value) ? value : 0), { maximumFractionDigits: 0 });
 }
@@ -339,14 +359,15 @@ export function localizeDigits(locale: FormatLocale, text: string | number): str
 
 /**
  * Typed text with ٠–٩ (and Persian ۰–۹) turned into 0–9, the Arabic decimal mark «٫» into "."
- * and the Arabic thousands mark «٬» dropped. Use on every typed number before parsing.
+ * and the thousands marks dropped (Arabic «٬» and the narrow no-break space Arabic groups with).
+ * Use on every typed number before parsing.
  */
 export function parseDigits(text: string): string {
   return String(text ?? '')
     .replace(/[٠-٩]/g, (d) => String(EASTERN.indexOf(d)))
     .replace(/[۰-۹]/g, (d) => String(PERSIAN.indexOf(d)))
     .replace(/٫/g, '.')
-    .replace(/٬/g, '');
+    .replace(/[٬\u202f]/g, '');
 }
 
 /** A typed number in either digit system; NaN when it isn't one. */
@@ -395,7 +416,7 @@ function pluralOptions(body: string): Record<string, string> {
   return options;
 }
 
-/** A plural param as a number: numbers as they are, formatted text («١٬٢٣٤», "1,234") parsed, anything else NaN. */
+/** A plural param as a number: numbers as they are, formatted text («١ ٢٣٤», «١٬٢٣٤», "1,234") parsed, anything else NaN. */
 function pluralValue(value: string | number | null | undefined): number {
   if (typeof value === 'number') return value;
   if (value === null || value === undefined) return Number.NaN;

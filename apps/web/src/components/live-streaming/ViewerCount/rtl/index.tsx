@@ -27,7 +27,7 @@ import type { ViewerCountProps } from '../types';
  *
  * Features:
  * - Eastern Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩)
- * - Compact (١٫٢ ألف) and full (١٬٢٣٤) formatting
+ * - Compact (١٫٢ ألف) and full (١ ٢٣٤) formatting
  * - Reversed layout (icon on right)
  * - Arabic "يشاهدون" label
  * - Same accessibility and performance as LTR variant

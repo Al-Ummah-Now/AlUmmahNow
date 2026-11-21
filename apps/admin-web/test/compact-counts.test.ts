@@ -12,7 +12,8 @@ import { opsFormats } from '../src/app/(protected)/operations/model';
 import { visitFormats } from '../src/lib/site-visits';
 import { formatCount } from '../src/i18n/translate';
 
-const sp = (s: string) => s.replace(/[\u00a0\u202f]/g, ' ').replace(/[\u200e\u200f\u061c]/g, '');
+// No-break spaces (the noun joiner) read as spaces; the Arabic grouping space U+202F is kept, it is the point
+const sp = (s: string) => s.replace(/\u00a0/g, ' ').replace(/[\u200e\u200f\u061c]/g, '');
 const COUNTS = [1, 2, 3, 10, 11, 100, 1000, 1300, 2000, 2500, 3000, 8000, 11000, 1_000_000, 2_000_000, 3_000_000, 15_000_000];
 const AR = ['١', '٢', '٣', '١٠', '١١', '١٠٠', 'ألف', '١٫٣ ألف', 'ألفان', '٢٫٥ ألف', '٣ آلاف', '٨ آلاف', '١١ ألف', 'مليون', 'مليونان', '٣ ملايين', '١٥ مليون'];
 const EN = ['1', '2', '3', '10', '11', '100', '1K', '1.3K', '2K', '2.5K', '3K', '8K', '11K', '1M', '2M', '3M', '15M'];
@@ -50,7 +51,7 @@ describe('admin compact counts', () => {
 
   it('admin formatCount (exact counts) keeps the CLDR plural', () => {
     assert.deepEqual([1, 2, 3, 11, 100, 2000].map((n) => sp(formatCount(n, 'view', 'ar'))), [
-      'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '٢٬٠٠٠ مشاهدة',
+      'مشاهدة واحدة', 'مشاهدتان', '٣ مشاهدات', '١١ مشاهدة', '١٠٠ مشاهدة', '٢\u202f٠٠٠ مشاهدة',
     ]);
   });
 });

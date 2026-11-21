@@ -30,7 +30,7 @@ describe('tier cards', () => {
 
   it('speaks Arabic with Arabic digits and the admin\'s Arabic names, falling back to English ones', () => {
     const ar = tierFeatures(creator, AR_TRANSLATIONS.upgrade, 'ar');
-    expect(ar[1].text).toBe('رفع حتى ٢٬٠٠٠ مرئي يوميًا');
+    expect(ar[1].text).toBe('رفع حتى ٢\u202f٠٠٠ مرئي يوميًا');
     expect(ar[2].text).toBe('إنشاء حتى ٣ قنوات');
     expect(tierName(creator, 'ar')).toBe('صانع محتوى');
     expect(tierName(unlimited, 'ar')).toBe('Unlimited');

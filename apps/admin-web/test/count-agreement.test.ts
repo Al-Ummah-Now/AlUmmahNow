@@ -92,7 +92,7 @@ function wording(lang: 'ar' | 'en', key: string, n: number): string {
   const params: Record<string, string | number> = {};
   for (const name of pluralVars(template)) params[name] = n;
   const t = lang === 'ar' ? tAr : tEn;
-  return sp(t(key as never, params)).replace(/[0-9٠-٩٬,]+/g, '#');
+  return sp(t(key as never, params)).replace(/[0-9٠-٩٬\u202f,]+/g, '#');
 }
 
 describe('#1666: every admin count agrees with its noun', () => {

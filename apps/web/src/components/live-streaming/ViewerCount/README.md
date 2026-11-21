@@ -113,7 +113,7 @@ The component uses `Intl.NumberFormat` for locale-aware formatting:
 
 **Arabic (RTL)**
 - Compact: ١٫٢ ألف | ١٫٥ مليون
-- Full: ١٬٢٣٤ | ١٬٥٠٠٬٠٠٠
+- Full: ١ ٢٣٤ | ١ ٥٠٠ ٠٠٠
 
 ## Styling
 
@@ -145,7 +145,7 @@ The component uses `Intl.NumberFormat` for locale-aware formatting:
 
 ### Screen Reader Announcements
 - English: "1,234 viewers watching now"
-- Arabic: "١٬٢٣٤ مشاهدون يشاهدون الآن"
+- Arabic: "١ ٢٣٤ مشاهدون يشاهدون الآن"
 - Zero viewers: "No viewers watching now" / "لا يوجد مشاهدون الآن"
 - Loading: "Loading viewer count" / "جارٍ تحميل عدد المشاهدين"
 

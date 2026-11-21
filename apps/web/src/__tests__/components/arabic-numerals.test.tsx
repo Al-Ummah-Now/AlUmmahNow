@@ -125,6 +125,6 @@ describe('Arabic numbers use ٠–٩', () => {
     for (const el of [latest, totals, tasks, next]) {
       expect(visibleText(el)).not.toMatch(ASCII_DIGIT);
     }
-    expect(visibleText(latest)).toMatch(/٥٬٤٠٠/);
+    expect(visibleText(latest)).toMatch(/٥\u202f٤٠٠/);
   });
 });

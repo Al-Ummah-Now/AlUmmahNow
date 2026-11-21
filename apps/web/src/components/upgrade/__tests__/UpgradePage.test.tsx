@@ -213,7 +213,7 @@ describe('Upgrade page', () => {
     expect(screen.getByTestId('tier-request-reason')).toHaveTextContent('نحتاج رابط قناتك');
     expect(screen.getByTestId('tier-card-creator')).toHaveTextContent('صانع محتوى');
     expect(screen.getByTestId('tier-creator-request')).toBeEnabled();
-    expect(screen.getByTestId('tier-creator-uploads')).toHaveTextContent('٢٬٠٠٠');
+    expect(screen.getByTestId('tier-creator-uploads')).toHaveTextContent('٢\u202f٠٠٠', { normalizeWhitespace: false });
   });
 
   it('withdraws a pending request after the in-app confirm', async () => {
