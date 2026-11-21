@@ -12,8 +12,11 @@ import { AdminApiError } from './errors';
 export const ANALYTICS_REASONS = ['auth', 'rate_limited', 'query', 'upstream', 'unreachable', 'bad_response'] as const;
 export type AnalyticsReason = (typeof ANALYTICS_REASONS)[number] | 'unknown';
 
-/** Names the reasons quote, shown as code: the token's Secrets Store name and the permission it needs */
-export const ANALYTICS_CODES = ['media-cdn-api-token', 'Account → Account Analytics → Read'];
+/**
+ * Names the panel states quote, shown as isolated left-to-right code so Arabic text around them (a «و»
+ * before one) stays in order: the token's Secrets Store name, the permission it needs, the bindings
+ */
+export const ANALYTICS_CODES = ['media-cdn-api-token', 'Account → Account Analytics → Read', 'CF_ANALYTICS_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'admin-api'];
 
 export type AnalyticsLoadProblem =
   | { kind: 'not_configured' }

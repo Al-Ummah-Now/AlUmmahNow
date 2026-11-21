@@ -38,6 +38,9 @@ describe('panel state copy', () => {
     'analyticsPanel.reference',
     'analyticsPanel.openErrors',
     'analyticsPanel.flagged',
+    'analyticsPanel.envs.production',
+    'analyticsPanel.envs.stage',
+    'analyticsPanel.envs.qa',
     ...[...ANALYTICS_REASONS, 'unknown'].map((r) => `analyticsPanel.reasons.${r}` as MessageKey),
     'vitalsPage.notConfiguredTitle',
     'vitalsPage.unavailableTitle',
@@ -93,6 +96,20 @@ describe('panel state copy', () => {
     // The secret's name and the permission never break across lines and stay left to right in Arabic
     assert.match(html, /<code dir="ltr" class="font-mono text-fg whitespace-nowrap">media-cdn-api-token<\/code>/);
     assert.match(html, /<code dir="ltr" class="font-mono text-fg whitespace-nowrap">Account → Account Analytics → Read<\/code>/);
+  });
+
+  it('Arabic copy keeps Latin names isolated: environments in Arabic, bindings as left-to-right code', () => {
+    const t = createTranslator('ar');
+    assert.equal(t('analyticsPanel.envs.production'), 'الإنتاج');
+    assert.doesNotMatch(t('vitalsPage.emptyNonProduction'), /[A-Za-z]/);
+    const html = renderToStaticMarkup(
+      React.createElement(PanelState, { tone: 'setup', testId: 'vitals-not-configured', title: t('vitalsPage.notConfiguredTitle'), body: t('vitalsPage.notConfigured'), codes: ANALYTICS_CODES }),
+    );
+    for (const name of ['CF_ANALYTICS_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'admin-api']) {
+      assert.match(html, new RegExp(`<code dir="ltr" class="font-mono text-fg whitespace-nowrap">${name}</code>`), name);
+    }
+    // «و» stays outside the isolated name it joins
+    assert.match(html, /و <code dir="ltr"[^>]*>CLOUDFLARE_ACCOUNT_ID<\/code>/);
   });
 
   it('renders the empty state as a status, not an alert', () => {

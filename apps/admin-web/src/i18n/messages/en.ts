@@ -2777,6 +2777,8 @@ const en = {
     next: 'Next',
   },
   analyticsPanel: {
+    /** The environment select's options (Web vitals and Abuse) */
+    envs: { production: 'Production', stage: 'Stage', qa: 'QA' },
     retry: 'Try again',
     reference: 'Reference',
     openErrors: 'Open it on the Errors page',

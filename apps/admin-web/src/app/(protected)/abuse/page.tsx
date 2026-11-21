@@ -60,7 +60,7 @@ export default async function AbusePage({ searchParams }: PageProps) {
           {t('abusePage.environment')}
           <Select name="env" defaultValue={env} className={fieldClass} data-testid="abuse-env">
             {ABUSE_ENVS.map((e) => (
-              <option key={e} value={e}>{e}</option>
+              <option key={e} value={e}>{t(`analyticsPanel.envs.${e}` as MessageKey)}</option>
             ))}
           </Select>
         </label>
@@ -76,7 +76,7 @@ export default async function AbusePage({ searchParams }: PageProps) {
       </form>
 
       {problem?.kind === 'not_configured' && (
-        <PanelState tone="setup" testId="abuse-not-configured" title={t('abusePage.notConfiguredTitle')} body={t('abusePage.notConfigured')} action={{ label: t('analyticsPanel.retry'), href: retryHref }} />
+        <PanelState tone="setup" testId="abuse-not-configured" title={t('abusePage.notConfiguredTitle')} body={t('abusePage.notConfigured')} codes={ANALYTICS_CODES} action={{ label: t('analyticsPanel.retry'), href: retryHref }} />
       )}
       {problem?.kind === 'unavailable' && (
         <PanelState

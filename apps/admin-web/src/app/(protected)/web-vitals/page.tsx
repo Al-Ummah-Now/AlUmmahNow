@@ -106,7 +106,7 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
           {t('vitalsPage.environment')}
           <Select name="env" defaultValue={env} className={fieldClass} data-testid="vitals-env">
             {VITALS_ENVS.map((e) => (
-              <option key={e} value={e}>{e}</option>
+              <option key={e} value={e}>{t(`analyticsPanel.envs.${e}` as MessageKey)}</option>
             ))}
           </Select>
         </label>
@@ -130,7 +130,7 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
       </form>
 
       {problem?.kind === 'not_configured' && (
-        <PanelState tone="setup" testId="vitals-not-configured" title={t('vitalsPage.notConfiguredTitle')} body={t('vitalsPage.notConfigured')} action={{ label: t('analyticsPanel.retry'), href: href() }} />
+        <PanelState tone="setup" testId="vitals-not-configured" title={t('vitalsPage.notConfiguredTitle')} body={t('vitalsPage.notConfigured')} codes={ANALYTICS_CODES} action={{ label: t('analyticsPanel.retry'), href: href() }} />
       )}
       {problem?.kind === 'unavailable' && (
         <PanelState
