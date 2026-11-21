@@ -113,6 +113,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/81-public-profile.spec.ts': { placement: 'local', reason: 'public profile (29.5): handle + switches in settings, reached from a comment author link, noindex (meta + X-Robots-Tag), not in search, 301, ar, 404; own video, comment and run account' },
   'apps/web/e2e/82-tabs-in-viewport.spec.ts': { placement: 'local', reason: 'tab and chip strips are one row with a More menu, current item in the row, nothing cut, empty channel tabs hidden from visitors (#1669); 360/390 px, en and ar; own creator' },
   'apps/web/e2e/80-home-signin-banner.spec.ts': { placement: 'local', reason: 'home sign-in banner: signed out sees it (en, ar), signed in never gets it in the HTML, dismissal persists with no flash, Sign in starts the issuer flow' },
+  'apps/web/e2e/81-discovery-rails.spec.ts': { placement: 'local', reason: 'discovery ranking (wiki E07): a Run now ranking job finishes; test accounts never rank; home rails headed by their current label (cold start New this week), no repeats, See all, en/ar, phone, axe; Explore Trending heading follows the label' },
   'apps/web/e2e/31-video-player.spec.ts': { placement: 'local', reason: 'player controls/error screen; needs H.264 HLS fixture with renditions, captions, chapters' },
   'apps/web/e2e/32-comments.spec.ts': { placement: 'local', reason: 'comment post/delete and sign-in redirect on a lecture' },
   'apps/web/e2e/33-watch-history.spec.ts': { placement: 'local', reason: 'watch history records and lists via API' },

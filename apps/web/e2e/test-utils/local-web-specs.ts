@@ -38,6 +38,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '80-studio-social.spec.ts',
   '81-public-profile.spec.ts',
   '80-home-signin-banner.spec.ts',
+  '81-discovery-rails.spec.ts',
   '32-comments.spec.ts',
   '33-watch-history.spec.ts',
   '60-home-videos.spec.ts',
