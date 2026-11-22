@@ -636,7 +636,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                     <th scope="row" className="px-3 py-2 text-start font-normal">
                       {/* A resource name is one token: it never breaks at its hyphens. On a phone the
                           change goes under it, so the Arabic amounts («دولار أمريكي») don't squeeze it */}
-                      <bdi className="block whitespace-nowrap font-medium text-fg">{label}</bdi>
+                      <span className="block whitespace-nowrap text-start font-medium text-fg"><bdi>{label}</bdi></span>
                       <span className="block text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep locale={locale} />{envLabel(t, m.env)}</span>
                       <span className={`mt-1 flex flex-wrap items-baseline gap-x-3 tabular-nums sm:hidden ${DIRECTION_TEXT[dir]}`} data-testid="costs-mover-change-phone">
                         <span className="whitespace-nowrap"><span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}</span>

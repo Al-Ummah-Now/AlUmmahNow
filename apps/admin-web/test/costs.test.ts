@@ -596,7 +596,7 @@ describe('costs audit fixes, round 5 (AUDIT-2 2026-11-21)', () => {
     const mover = { id: 'd1:qa', label: 'al-ummah-now-reports-qa', product: 'd1' as const, env: 'qa', last7: 1, prev7: 20.79, change: -19.79, monthlyImpact: -84.81 };
     const html = renderToStaticMarkup(React.createElement(sections.MoversSection as React.FC, { d: freshDashboard({ movers: { up: [], down: [mover] } }), t: createTranslator('ar'), locale: 'ar' } as never) as never);
     // A name never breaks at its hyphens, on any width (round 6: Arabic phone)
-    assert.match(html, /<bdi class="block whitespace-nowrap font-medium text-fg">al-ummah-now-reports-qa<\/bdi>/);
+    assert.match(html, /<span class="block whitespace-nowrap text-start font-medium text-fg"><bdi>al-ummah-now-reports-qa<\/bdi><\/span>/);
     // On a phone the change sits under the name, not in a column beside it
     assert.ok(html.includes('data-testid="costs-mover-change-phone"'));
     assert.equal((html.match(/شهريًا/g) ?? []).length, 1, 'only the phone line repeats «شهريًا»');
