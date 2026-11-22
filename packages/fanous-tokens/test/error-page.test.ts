@@ -51,6 +51,8 @@ test('the card has its own buttons (UNIFY): one gold, height and shape in every 
 test('titles take the page font and bodies wrap in balanced lines (no lone last word)', () => {
   assert.match(rules, /\.ep-title\{[^}]*font-family:inherit[^}]*text-wrap:balance/);
   assert.match(rules, /\.ep-body\{[^}]*text-wrap:balance/);
+  // each sentence is an inline block: a line never ends on the next sentence's first words
+  assert.match(rules, /\.ep-s\{display:inline-block\}/);
 });
 
 test('the videos site and admin use this file itself, not a copy', () => {

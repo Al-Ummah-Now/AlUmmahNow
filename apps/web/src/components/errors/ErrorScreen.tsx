@@ -2,10 +2,11 @@
 
 // The error-page family's card (vendored as is by www, sites, Auth and the CMS)
 import '../../../../../packages/fanous-tokens/errors/aun-error-page.css';
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   ERROR_KIND_STATUS,
   ERROR_PAGE_ICONS,
+  errorBodySentences,
   errorCodeLabel,
   errorKindIcon,
   errorPageTitle,
@@ -99,7 +100,7 @@ function HeadBlock({ head, locale }: { head: Head; locale: string }) {
         {status ? <p className="ep-code" suppressHydrationWarning>{errorCodeLabel(locale, status)}</p> : null}
         <h1 className="ep-title" id={`ep-title-${status ?? head.kind}`} suppressHydrationWarning>{head.title}</h1>
       </div>
-      <p className="ep-body" suppressHydrationWarning>{head.body}</p>
+      <p className="ep-body" suppressHydrationWarning>{errorBodySentences(head.body).map((s, i) => <Fragment key={i}>{i ? ' ' : null}<span className="ep-s">{s}</span></Fragment>)}</p>
     </div>
   );
 }

@@ -11,7 +11,7 @@
  * line, badge, title and words, and the tab title, so the page says "This was removed" (wiki
  * guides/error-pages.md). The card has one heading block, so the page keeps one h1.
  */
-import { ERROR_PAGE_ICONS, errorCodeLabel, errorPageTitle, errorScreenStrings } from '@al-ummah/shared-types';
+import { ERROR_PAGE_ICONS, errorBodyHtml, errorCodeLabel, errorPageTitle, errorScreenStrings } from '@al-ummah/shared-types';
 import { ERROR_ROBOTS } from './error-robots';
 
 const GONE_PATH = /^\/[a-z]{2}\/(video|shorts|playlist|channels)\/([A-Za-z0-9_-]{1,128})\/?$/;
@@ -82,7 +82,7 @@ export function asGonePage(response: Response, locale: 'en' | 'ar'): Response {
     })
     .on('.ep-head .ep-code', { element: (el) => el.setInnerContent(errorCodeLabel(locale, 410)) })
     .on('.ep-head .ep-title', { element: (el) => el.setInnerContent(gone.title) })
-    .on('.ep-head .ep-body', { element: (el) => el.setInnerContent(gone.body) })
+    .on('.ep-head .ep-body', { element: (el) => el.setInnerContent(errorBodyHtml(gone.body), { html: true }) })
     .on('title', { element: (el) => el.setInnerContent(errorPageTitle(locale, gone.title)) });
   if (nonce) {
     rewriter = rewriter.on('head', { element: (el) => el.prepend(`<script nonce="${nonce}">window.${HTTP_STATUS_GLOBAL}=410</script>`, { html: true }) });

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorCodeLabel, errorKindIcon, errorPageTitle, errorScreenStrings, type ErrorPageIcon, type FriendlyErrorKind } from '@al-ummah/shared-types';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorBodySentences, errorCodeLabel, errorKindIcon, errorPageTitle, errorScreenStrings, type ErrorPageIcon, type FriendlyErrorKind } from '@al-ummah/shared-types';
 import { boundaryOutcome, handleBoundaryError } from '@/lib/errors/boundary';
 import { reportError } from '@/lib/errors/reporter';
 import { recoverFromVersionSkew } from '@/lib/version-skew';
@@ -89,7 +89,7 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
             {status ? <p className="ep-code">{errorCodeLabel(locale, status)}</p> : null}
             <h1 className="ep-title" id="ep-title">{copy.title}</h1>
           </div>
-          <p className="ep-body">{copy.body}</p>
+          <p className="ep-body">{errorBodySentences(copy.body).map((s, i) => <Fragment key={i}>{i ? ' ' : null}<span className="ep-s">{s}</span></Fragment>)}</p>
         </div>
         {reference && <ReferenceBox reference={reference} label={s.reference} hint={s.referenceHint} copyLabel={s.copy} copiedLabel={s.copied} />}
         <footer className="ep-foot">

@@ -165,3 +165,18 @@ export function errorKindIcon(kind: FriendlyErrorKind): ErrorPageIcon {
   if (kind === 'notFound' || kind === 'gone' || kind === 'offline' || kind === 'update' || kind === 'session') return kind;
   return 'alert';
 }
+
+/**
+ * A body's sentences, each drawn as its own `.ep-s` (an inline block): two sentences share a line
+ * only when both fit, so no line ends on the first words of the next one («… الصفحة. ربما» /
+ * “… a problem. Try” with “again” below). A sentence ends at . ! ? or ؟ before a space.
+ */
+export function errorBodySentences(body: string): string[] {
+  return body.split(/(?<=[.!?؟])\s+(?=\S)/u).filter(Boolean);
+}
+
+/** The body as HTML: each sentence in a `<span class="ep-s">`, the text escaped. */
+export function errorBodyHtml(body: string): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return errorBodySentences(body).map((s) => `<span class="ep-s">${esc(s)}</span>`).join(' ');
+}

@@ -79,7 +79,8 @@ describe('asGonePage (the error card switches to its 410 words)', () => {
       `.ep-head .ep-badge svg text ${ERROR_PAGE_ICONS.gone}`,
       '.ep-head .ep-code text خطأ ٤١٠',
       '.ep-head .ep-title text حُذف هذا المحتوى',
-      '.ep-head .ep-body text لم يعد موجودًا على الأمة الآن. ابحث عن شيء آخر أو انتقل إلى الصفحة\u00a0الرئيسية.',
+      // one span a sentence, so the second never starts at the end of the first one's line
+      '.ep-head .ep-body text <span class="ep-s">لم يعد موجودًا على الأمة الآن.</span> <span class="ep-s">ابحث عن شيء آخر أو انتقل إلى الصفحة\u00a0الرئيسية.</span>',
       'title text حُذف هذا المحتوى | الأمة الآن',
       // the card reads it after Next renders the tree again in the browser (ErrorScreen)
       'head prepend <script nonce="abc123=">window.__aunHttpStatus=410</script>',
