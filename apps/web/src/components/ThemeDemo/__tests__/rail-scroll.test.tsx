@@ -51,6 +51,26 @@ describe('side rail scroll hint', () => {
     expect(list).not.toHaveAttribute('data-more-below');
   });
 
+  it('measures again when the web font arrives: a tail cut for the fallback font never stays (AUDIT-2, #1630)', () => {
+    const listeners: Record<string, () => void> = {};
+    const fonts = { addEventListener: (t: string, f: () => void) => { listeners[t] = f; }, removeEventListener: jest.fn(), ready: new Promise<void>(() => {}) };
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+    try {
+      render(<List />);
+      const list = screen.getByTestId('list');
+      size(list, 0, 700, 900);
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      expect(list).toHaveAttribute('data-more-below');
+      // The web font set the labels tighter: everything fits now
+      size(list, 0, 700, 700);
+      act(() => { listeners.loadingdone?.(); });
+      expect(list).not.toHaveAttribute('data-more-below');
+      expect(list.style.getPropertyValue('--nv-tail')).toBe('');
+    } finally {
+      delete (document as { fonts?: unknown }).fonts;
+    }
+  });
+
   it('system.css: the edge strip below the list shades only while more is below, never over the list; thin scrollbar on hover/focus', () => {
     const css = readFileSync(join(__dirname, '../../../theme/system.css'), 'utf8');
     // Outside the scroll box: its own 14px strip with a line, shadow and chevron, only when the list before it is marked
