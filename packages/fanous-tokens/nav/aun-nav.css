@@ -483,6 +483,16 @@
   line-height: 1.35;
   text-align: start;
 }
+/* On the lantern street (Fawanees; html.fanous-street, set by street/fanous-street.js in every app
+   whose theme draws it) a menu is solid: the street never shows through a surface (owner
+   2026-11-22, superseding the 2026-11-16 frosted panel for that theme). The menu colour at full
+   strength over an opaque Canvas, so it is never see-through even if --aun-menu-bg fails; no blur. */
+html.fanous-street .aun-menu {
+  background-color: Canvas;
+  background-image: linear-gradient(var(--aun-menu-bg), var(--aun-menu-bg));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .aun-menu[hidden] {
   display: none;
 }

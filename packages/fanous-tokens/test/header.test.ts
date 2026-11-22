@@ -176,3 +176,17 @@ test('the account name has one width, so switching who you act as never moves th
   assert.match(name, /text-overflow: ellipsis;/);
   assert.match(name, /white-space: nowrap;/);
 });
+
+test('on the lantern street a menu is solid: the street never shows through it (owner 2026-11-22)', () => {
+  const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');
+  const at = css.indexOf('html.fanous-street .aun-menu {');
+  assert.ok(at >= 0, 'html.fanous-street .aun-menu rule');
+  const rule = css.slice(at, css.indexOf('}', at));
+  // an opaque colour under the menu colour at full strength, and no blur of what is behind
+  assert.match(rule, /background-color: Canvas;/);
+  assert.match(rule, /background-image: linear-gradient\(var\(--aun-menu-bg\), var\(--aun-menu-bg\)\);/);
+  assert.match(rule, /-webkit-backdrop-filter: none;/);
+  assert.match(rule, /\n  backdrop-filter: none;/);
+  // it comes after the frosted default, so it wins at equal or higher specificity
+  assert.ok(at > css.indexOf('backdrop-filter: var(--aun-glass-blur'), 'after the glass default');
+});

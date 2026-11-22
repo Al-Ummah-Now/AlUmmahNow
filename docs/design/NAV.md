@@ -312,6 +312,11 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 `light-dark()`, which follows the page's `color-scheme`, so every app sets `color-scheme` per mode
 (`light` / `dark`, or `light dark` when it follows the system).
 
+The panel is frosted (the menu colour at 80% over Canvas, with a blur) except on the lantern
+street: when the theme draws the street (`html.fanous-street`, Fawanees), the menu is solid, the
+menu colour at full strength over an opaque Canvas and no blur, so the street never shows through it
+(owner 2026-11-22: surfaces on the street are solid).
+
 | Property | Light mode | Dark mode |
 |---|---|---|
 | Background | `--fanous-color-background` | `--fanous-c-menu-bg` |
