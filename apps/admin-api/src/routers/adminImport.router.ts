@@ -434,10 +434,13 @@ app.post('/items/:id/failed', async (c) => {
 
 /** What the app may report: its own failures, never a Worker's kinds or a needs-action item. */
 export const TOOLS_ERROR_KINDS = ['unhandled', 'rejection', 'fetch', 'upload', 'caught'] as const;
+/** An app event may fold at most this many repeats into one report (as browser reports, ErrorsIngest.ts) */
+const TOOLS_MAX_COUNT = 50;
 
 /**
  * The app's events as the Errors page stores them: app `tools`, the signed-in account from the token,
- * a reference when the app sent none, no needs-action item, and "test" only outside production.
+ * a reference when the app sent none, no needs-action item, at most 50 repeats, no origin or "shown" claim,
+ * and "test" only outside production.
  */
 export function toolsErrorEvents(raw: unknown[], vouched: { userId: string; environment: string }): ErrorEventInput[] {
   const out: ErrorEventInput[] = [];
@@ -449,9 +452,13 @@ export function toolsErrorEvents(raw: unknown[], vouched: { userId: string; envi
     const { action: _action, userId: _userId, environment: _environment, workerVersion: _worker, ...rest } = given;
     const event = scrubEvent({ ...rest, app: 'tools', ref });
     if (!event) continue;
-    const { test, ...kept } = event;
+    // Like a browser report: the repeat count is capped, and where it came from is never the app's claim
+    const { test, shown: _shown, count, context, ...kept } = event;
+    const { origin: _origin, ...ownContext } = context ?? {};
     out.push({
       ...kept,
+      count: Math.max(1, Math.min(TOOLS_MAX_COUNT, Math.floor(count ?? 1))),
+      ...(Object.keys(ownContext).length ? { context: ownContext } : {}),
       ...(ERROR_USER_ID.test(vouched.userId) ? { userId: vouched.userId } : {}),
       ...(test && vouched.environment !== 'production' ? { test: true } : {}),
     });

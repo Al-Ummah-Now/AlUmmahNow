@@ -388,6 +388,13 @@ describe('/api/admin/import/errors (TA-11)', () => {
     assert.equal(events[0].action, undefined);
   });
 
+  it('caps the repeat count and drops the app\'s origin and "shown" claims', () => {
+    const [e] = toolsErrorEvents([event({ count: 9999, shown: true, context: { origin: { source: 'search' }, ids: { videoId: 'vid12345' } } })], { userId: ADMIN, environment: 'qa' });
+    assert.equal(e.count, 50);
+    assert.equal(e.shown, undefined);
+    assert.equal((e.context as any)?.origin, undefined);
+  });
+
   it('honours "test" outside production only', () => {
     assert.equal(toolsErrorEvents([event({ test: true })], { userId: ADMIN, environment: 'production' })[0].test, undefined);
     assert.equal(toolsErrorEvents([event({ test: true })], { userId: ADMIN, environment: 'qa' })[0].test, true);
