@@ -23,7 +23,8 @@ jest.mock('@/hooks/useLanguage', () => ({
 jest.mock('nuqs', () => ({ useQueryState: () => [null, jest.fn()] }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: null }), useOptionalAuth: () => ({ user: null }) }));
 jest.mock('@/components/home/SignInBanner', () => ({ SignInBanner: () => null }));
-jest.mock('@/components/history/ContinueWatchingShelf', () => ({ ContinueWatchingShelf: () => null }));
+jest.mock('@/components/home/LibraryRow', () => ({ LibraryRow: () => null }));
+jest.mock('@/lib/api/discovery-home', () => ({ getHomeRails: jest.fn(() => Promise.resolve([])) }));
 jest.mock('@/components/common/AppLink', () => ({
   __esModule: true,
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
