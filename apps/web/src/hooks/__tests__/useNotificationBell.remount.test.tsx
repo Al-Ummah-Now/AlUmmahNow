@@ -34,7 +34,7 @@ describe('useNotificationBell across a refresh', () => {
   });
 
   it('keeps the badge through a render with no user', async () => {
-    const hook = renderHook(({ id }: { id?: string }) => useNotificationBell(id), { initialProps: { id: 'u2' } });
+    const hook = renderHook(({ id }: { id?: string }) => useNotificationBell(id), { initialProps: { id: 'u2' as string | undefined } });
     await answer(3);
     hook.rerender({ id: undefined });
     expect(hook.result.current.unseenCount).toBe(0);
