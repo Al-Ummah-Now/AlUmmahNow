@@ -303,7 +303,13 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                 <p className="mt-1 text-muted-foreground">
                   {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view', CARD_COUNT), likes: formatCountNoun(locale, latest.likesCount, 'like', CARD_COUNT), comments: formatCountNoun(locale, latest.commentsCount, 'comment', CARD_COUNT) })}
                 </p>
-                {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: keepTogether(formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime)) })}</p>}
+                {/* Two deliberate lines in every language: the label, then the value (never a value wrapped alone) */}
+                {latestWatchTime !== null && (
+                  <p className="mt-1 text-muted-foreground">
+                    <span className="block">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS })}</span>
+                    <span className="block font-medium tabular-nums text-foreground">{keepTogether(formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime))}</span>
+                  </p>
+                )}
               </div>
             </div>
           </Card>
