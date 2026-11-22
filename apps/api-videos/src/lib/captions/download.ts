@@ -8,9 +8,15 @@ import { QF_ATTRIBUTION, type QuranTranslationEdition } from '@al-ummah/shared-t
 
 export type SubtitleDownloadFormat = 'vtt' | 'srt';
 
-/** The lines naming the source: QF's attribution (en and ar) and the edition the verse text is from. */
+/**
+ * The lines naming the source: QF's attribution and the edition the verse text is from, each in
+ * English and Arabic (an edition keeps its own name in both).
+ */
 export function quranAttributionLines(edition: QuranTranslationEdition | null): string[] {
-	return [QF_ATTRIBUTION.en, QF_ATTRIBUTION.ar, edition ? `Translation: ${edition.name}` : 'Quran text: Uthmani (Hafs)'];
+	const source = edition
+		? [`Translation: ${edition.name}`, `الترجمة: ${edition.name}`]
+		: ['Quran text: Uthmani (Hafs)', 'نص القرآن: الرسم العثماني (حفص)'];
+	return [QF_ATTRIBUTION.en, QF_ATTRIBUTION.ar, ...source];
 }
 
 /** A NOTE block right after the WEBVTT header (players ignore NOTE blocks). */

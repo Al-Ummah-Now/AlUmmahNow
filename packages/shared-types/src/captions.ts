@@ -436,12 +436,15 @@ export function quranCueText(text: string, surahName: string, range: string, lan
 
 /**
  * The official translation of an accepted span as a translated cue shows it, with the edition name
- * (O7) and the reference: “text” (Saheeh International · Āl ʿImrān 3:166–167). Never trimmed.
+ * (O7) and the reference: “text” (Saheeh International · Āl ʿImrān 3:166–167). Never trimmed, never
+ * altered: when the translation quotes speech itself (Say, "He is Allah…), the outer marks are single
+ * (‘…’) so the edition's own double quotes nest inside them instead of reading as a second pair.
  */
 export function quranTranslationCueText(text: string, edition: string, surahName: string, range: string): string {
   const r = parseQuranRange(range);
   const label = r ? quranAyahLabel(r) : range;
-  return `“${escapeVtt(text)}” (${escapeVtt(edition)} · ${escapeVtt(surahName)} ${label})`;
+  const [open, close] = /["“”]/.test(text) ? ['‘', '’'] : ['“', '”'];
+  return `${open}${escapeVtt(text)}${close} (${escapeVtt(edition)} · ${escapeVtt(surahName)} ${label})`;
 }
 
 /**
