@@ -271,7 +271,7 @@ export function LibraryRow() {
         <span className="hr-badge" aria-hidden="true">
           <LibraryIcon />
         </span>
-        <h2 id={headingId} className="hr-title">
+        <h2 id={headingId} className="hr-title street-plate">
           {heading}
         </h2>
         <span className="hr-rule" aria-hidden="true" />
