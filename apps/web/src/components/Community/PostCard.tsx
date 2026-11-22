@@ -133,7 +133,7 @@ export default function PostCard({
         {/* Channel Info and Timestamp */}
         <div className={cn('flex-1 min-w-0', isRTL && 'text-right')}>
           <div className={cn('flex items-center gap-2')}>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+            <h3 className="min-w-0 font-semibold text-gray-900 dark:text-gray-100 [overflow-wrap:break-word] [text-wrap:balance]">
               {channelLabel(post, locale)}
             </h3>
             {post.pinned && (

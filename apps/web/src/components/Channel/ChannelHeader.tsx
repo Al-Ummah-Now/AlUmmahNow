@@ -19,6 +19,7 @@ import { formatVideoCount } from '@/lib/format/videoMeta';
 import { formatSubscribers } from '@/lib/format/videoMeta';
 
 import { MetaSep } from '@/components/ui/MetaSep';
+import { clip } from '@/lib/format/clip';
 interface ChannelHeaderProps {
   channel: Channel;
   locale: string;
@@ -191,8 +192,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             )}
 
             {displayDescription && (
-              <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 mb-4">
-                {displayDescription}
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 [text-wrap:pretty]" dir="auto" title={displayDescription}>
+                {clip(displayDescription, 160)}
               </p>
             )}
 
