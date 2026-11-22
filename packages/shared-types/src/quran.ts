@@ -79,12 +79,8 @@ export function quranAyahLabel(r: QuranRange): string {
  */
 export const QURAN_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
 
-/**
- * Quran Foundation's own attribution wording (QF 2026-11-21), written inside every file that
- * carries Quran text (a downloaded subtitle file's NOTE). The Arabic line has an LRM after the URL
- * so its slash stays with it in right-to-left text.
- */
-export const QF_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
+/** The same wording, written inside every file that carries Quran text (a downloaded subtitle file's NOTE). */
+export const QF_ATTRIBUTION = QURAN_ATTRIBUTION;
 
 // ---------------------------------------------------------------------------
 // The synced copy (private media bucket, prefix `quran/`; written by the processor's Content Sync job)
