@@ -77,11 +77,21 @@ export function decodeEntities(s: string): string {
 	});
 }
 
+/** Longest HTML read from one item (a post is far shorter), and the script/style passes over it. */
+const HTML_MAX_CHARS = 200_000;
+const SCRIPT_PASSES = 5;
+
 /** HTML (a feed's description, a Mastodon status) as plain text: paragraphs and line breaks kept. */
 export function htmlToText(html: string): string {
-	let text = html.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
-	// Until nothing changes, so a block hidden inside another ("<scr<script>…</script>ipt>") goes too
-	for (let before = ''; before !== text; ) {
+	let text = html.slice(0, HTML_MAX_CHARS).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+	// Repeated, so a block hidden inside another ("<scr<script>…</script>ipt>") goes too; a few passes at most, and
+	// whatever still opens a block after them is dropped to the end
+	for (let pass = 0, before = ''; before !== text; pass++) {
+		if (pass === SCRIPT_PASSES) {
+			const open = text.search(/<(script|style)\b/i);
+			if (open >= 0) text = text.slice(0, open);
+			break;
+		}
 		before = text;
 		text = text.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '');
 	}

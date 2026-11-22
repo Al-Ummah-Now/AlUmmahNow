@@ -197,6 +197,9 @@ describe('parsing feeds', () => {
 		// A block hidden inside another and a stray "<" never come through; escaped ones are text
 		assert.equal(htmlToText('a<scr<script>x</script>ipt>alert(1)</script>b'), 'ab');
 		assert.equal(htmlToText('1 < 2 &lt;3'), '1 2 <3');
+		// Nesting deeper than the passes: everything from the block left over is dropped
+		const deep = 'a' + '<script>'.repeat(20) + 'x' + '</script>'.repeat(20) + 'b';
+		assert.ok(!htmlToText(deep).includes('x'));
 	});
 });
 
