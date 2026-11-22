@@ -54,10 +54,12 @@ the same elements as JSX and their tests compare the result with the builders.
   in videos web and the admins, so every header lines up.
 - **One typeface** in every header, set by the contract whatever the page uses: system-ui
   (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro, then system-ui so Latin inside an Arabic header matches English (`--aun-header-font-ar`).
-  The header's controls (buttons, summaries and inputs: the account button and its name, the menu items, the
-  search field) use the theme's body font where the theme has one (Nahas: Source Serif 4, Arabic
-  Amiri; Zujaj: Inter, Arabic Noto Kufi Arabic), as videos always did; Fawanees and Lantern keep the
-  header typeface.
+  The header's controls (buttons, summaries and inputs: the account button and its name, the
+  search field) and the menus' text (every `.aun-menu-item`, link or button, and the account menu's
+  name line `.aun-menu-who-name`, wherever the menu is rendered) use the theme's body font where the
+  theme has one (Nahas: Source Serif 4, Arabic Amiri; Zujaj: Inter, Arabic Noto Kufi Arabic); Fawanees
+  and Lantern keep the header typeface. One menu font in every app (orchestrator ruling 2026-11-22):
+  before it, menu links kept the header typeface while menu buttons took the body font.
 
 **Theme** (owner ruling 2026-11-22, UNIFY: one source for every app). Each built-in theme's header
 look is generated from its theme package (`packages/theme-packages/themes/<id>/theme.json`) into
@@ -70,7 +72,7 @@ read the same values from the stylesheet they already vendor:
 |---|---|---|
 | `--aun-header-band` | `components.header.style.background` | `{material.*}` written out, so apps without the videos materials paint the same band |
 | `--aun-header-edge` | `components.header.style.edge` | the bar's `box-shadow` |
-| `html[data-theme=<id>] .aun-header button, summary, input, select, textarea` | `typography.body` | Latin stack; `:lang(ar)` gets the Arabic stack |
+| `html[data-theme=<id>] .aun-header button, summary, input, select, textarea` and `html[data-theme=<id>] .aun-menu-item, .aun-menu-who-name` | `typography.body` | Latin stack; `:lang(ar)` gets the Arabic stack |
 
 The variables are set on `html[data-theme='<id>']` (the default theme also on `html:not([data-theme])`),
 so every app marks its theme on `<html>`. A built-in theme's header has no light-only style (the
