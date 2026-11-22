@@ -61,7 +61,7 @@ html[lang=ar] .hx-title{line-height:1.6}
 .hx-results-note{font-weight:400;font-size:13px;color:var(--fanous-color-text-secondary)}
 .hx-day+.hx-day{margin-block-start:20px}
 .hx-day-h{margin:0 0 8px;font-size:18px;font-weight:700;color:var(--fanous-color-text-primary)}
-.hx-rows{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.hx-rows{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
 .hx-row{display:flex;align-items:flex-start;gap:16px;padding:8px;border-radius:var(--r-lg,14px)}
 @media(hover:hover){.hx-row:hover{background:var(--m-hover,color-mix(in srgb,var(--fanous-color-text-primary) 6%,transparent))}}
 .hx-row-thumb{flex:0 0 200px;border-radius:var(--r-md,10px);overflow:hidden}

@@ -38,7 +38,7 @@ html[lang=ar] .lbl-title{line-height:1.5}
 .lbl-main{min-width:0}
 .lbl-empty,.lbl-status{padding:32px 8px;color:var(--fanous-color-text-secondary)}
 .lbl-error{color:var(--fanous-color-error-text)}
-.lbl-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.lbl-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
 .lbl-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:var(--r-lg,14px)}
 @media(hover:hover){.lbl-row:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 6%,transparent)}}
 .lbl-index{flex:0 0 28px;text-align:center;font-size:14px;color:var(--fanous-color-text-secondary);font-variant-numeric:tabular-nums}
