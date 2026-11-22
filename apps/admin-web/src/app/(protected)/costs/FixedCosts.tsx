@@ -50,6 +50,8 @@ export function FixedCosts({ items, mtd, projected, canManage, now }: { items: F
   const { t, locale } = useLanguage();
   const f = opsFormats(locale);
   const ids = useId();
+  // The billing month, as the server counts the month to date (UTC, like every provider's invoice):
+  // a key that matches each item's "this month" share to the tile above, never a time shown to anyone
   const month = new Date(now).toISOString().slice(0, 7);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(() => emptyForm(now));
