@@ -51456,6 +51456,13 @@
                                 "type": "number",
                                 "description": "A machine translation: the source draft version translated"
                               },
+                              "sourceTrack": {
+                                "type": "string",
+                                "enum": [
+                                  "published"
+                                ],
+                                "description": "A machine translation of the source language's published track, which had no draft (TA-20); no sourceVersion then"
+                              },
                               "publishedVersion": {
                                 "type": "number"
                               },
@@ -51781,6 +51788,13 @@
                           "type": "number",
                           "description": "A machine translation: the source draft version translated"
                         },
+                        "sourceTrack": {
+                          "type": "string",
+                          "enum": [
+                            "published"
+                          ],
+                          "description": "A machine translation of the source language's published track, which had no draft (TA-20); no sourceVersion then"
+                        },
                         "publishedVersion": {
                           "type": "number"
                         },
@@ -52019,6 +52033,13 @@
                         "sourceVersion": {
                           "type": "number",
                           "description": "A machine translation: the source draft version translated"
+                        },
+                        "sourceTrack": {
+                          "type": "string",
+                          "enum": [
+                            "published"
+                          ],
+                          "description": "A machine translation of the source language's published track, which had no draft (TA-20); no sourceVersion then"
                         },
                         "publishedVersion": {
                           "type": "number"
@@ -52576,6 +52597,13 @@
                               "type": "number",
                               "description": "A machine translation: the source draft version translated"
                             },
+                            "sourceTrack": {
+                              "type": "string",
+                              "enum": [
+                                "published"
+                              ],
+                              "description": "A machine translation of the source language's published track, which had no draft (TA-20); no sourceVersion then"
+                            },
                             "publishedVersion": {
                               "type": "number"
                             },
@@ -53117,7 +53145,19 @@
                                   "number",
                                   "null"
                                 ],
-                                "description": "translate: the source draft version translated"
+                                "description": "translate: the source draft version translated (the published track's version when `source` is `published`)"
+                              },
+                              "source": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "draft",
+                                  "published",
+                                  null
+                                ],
+                                "description": "translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe"
                               },
                               "replace": {
                                 "type": "boolean",
@@ -53207,6 +53247,7 @@
                               "language",
                               "sourceLanguage",
                               "sourceVersion",
+                              "source",
                               "replace",
                               "status",
                               "progress",
@@ -53396,7 +53437,19 @@
                                 "number",
                                 "null"
                               ],
-                              "description": "translate: the source draft version translated"
+                              "description": "translate: the source draft version translated (the published track's version when `source` is `published`)"
+                            },
+                            "source": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "draft",
+                                "published",
+                                null
+                              ],
+                              "description": "translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe"
                             },
                             "replace": {
                               "type": "boolean",
@@ -53486,6 +53539,7 @@
                             "language",
                             "sourceLanguage",
                             "sourceVersion",
+                            "source",
                             "replace",
                             "status",
                             "progress",
@@ -53568,7 +53622,19 @@
                                 "number",
                                 "null"
                               ],
-                              "description": "translate: the source draft version translated"
+                              "description": "translate: the source draft version translated (the published track's version when `source` is `published`)"
+                            },
+                            "source": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "draft",
+                                "published",
+                                null
+                              ],
+                              "description": "translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe"
                             },
                             "replace": {
                               "type": "boolean",
@@ -53658,6 +53724,7 @@
                             "language",
                             "sourceLanguage",
                             "sourceVersion",
+                            "source",
                             "replace",
                             "status",
                             "progress",
@@ -54040,7 +54107,19 @@
                                 "number",
                                 "null"
                               ],
-                              "description": "translate: the source draft version translated"
+                              "description": "translate: the source draft version translated (the published track's version when `source` is `published`)"
+                            },
+                            "source": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "draft",
+                                "published",
+                                null
+                              ],
+                              "description": "translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe"
                             },
                             "replace": {
                               "type": "boolean",
@@ -54130,6 +54209,7 @@
                             "language",
                             "sourceLanguage",
                             "sourceVersion",
+                            "source",
                             "replace",
                             "status",
                             "progress",
@@ -54472,7 +54552,7 @@
           "Captions"
         ],
         "summary": "Translate a caption draft into other languages",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts one background job per target language over the source draft as it is now (the creator's corrected text). Quran is never machine-translated: Quran spans stay references and the player shows the official translation of the channel's edition. Each language reserves `ceil(duration in minutes)` caption minutes; 402 `upgrade_required` refuses the whole request (nothing starts). 409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing`; 503 `translation_paused` while an admin has it switched off.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts one background job per target language over the source draft as it is now (the creator's corrected text). With no draft in the source language, the source is its published track (captions imported or uploaded as a file), copied when the job starts; each job's `source` says which. The result is always a machine-translated draft the creator reviews and publishes. Quran is never machine-translated: Quran spans stay references and the player shows the official translation of the channel's edition. Each language reserves `ceil(duration in minutes)` caption minutes; 402 `upgrade_required` refuses the whole request (nothing starts). 409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing` when the language has neither a draft nor a published track; 503 `translation_paused` while an admin has it switched off.",
         "operationId": "post_CaptionTranslateCreate",
         "parameters": [
           {
@@ -54494,7 +54574,7 @@
                 "properties": {
                   "sourceLanguage": {
                     "type": "string",
-                    "description": "The source draft language"
+                    "description": "The source language: its draft, or its published track when it has no draft"
                   },
                   "languages": {
                     "type": "array",
@@ -54568,7 +54648,19 @@
                                   "number",
                                   "null"
                                 ],
-                                "description": "translate: the source draft version translated"
+                                "description": "translate: the source draft version translated (the published track's version when `source` is `published`)"
+                              },
+                              "source": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "draft",
+                                  "published",
+                                  null
+                                ],
+                                "description": "translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe"
                               },
                               "replace": {
                                 "type": "boolean",
@@ -54658,6 +54750,7 @@
                               "language",
                               "sourceLanguage",
                               "sourceVersion",
+                              "source",
                               "replace",
                               "status",
                               "progress",
@@ -54781,7 +54874,7 @@
             }
           },
           "404": {
-            "description": "Video or source draft not found",
+            "description": "Video not found, or `source_missing`: no draft and no published track in the source language",
             "content": {
               "application/json": {
                 "schema": {
@@ -54806,7 +54899,7 @@
             }
           },
           "409": {
-            "description": "`draft_exists` or `source_is_translation`",
+            "description": "`draft_exists`, or `source_is_translation` (the source draft or published track is itself a machine translation)",
             "content": {
               "application/json": {
                 "schema": {

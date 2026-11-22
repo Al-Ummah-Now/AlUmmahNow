@@ -63,6 +63,11 @@ export interface CaptionDraft {
   /** The draft version last published, and when */
   publishedVersion?: number;
   publishedAt?: string;
+  /**
+   * Translations made from the language's PUBLISHED track because it had no draft (TA-20: an
+   * imported sidecar, an uploaded file). `sourceVersion` is then absent: there is no source draft.
+   */
+  sourceTrack?: 'published';
 }
 
 export const CAPTION_LIMITS = {
@@ -493,6 +498,64 @@ export async function fillCaptionQuranMarkers(
     })
     .join('')
     .replace(MARK_CHARS, '');
+}
+
+const VTT_TIME = /^(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/;
+function vttMs(value: string): number | null {
+  const m = VTT_TIME.exec(value.trim());
+  if (!m) return null;
+  return ((Number(m[1] ?? 0) * 60 + Number(m[2])) * 60 + Number(m[3])) * 1000 + Number(m[4]!.padEnd(3, '0'));
+}
+const VTT_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', nbsp: ' ', lrm: '', rlm: '', quot: '"', apos: "'" };
+/** A published cue's speech as plain text: no tags, entities decoded, no direction marks, one line. */
+function vttSpeech(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(amp|lt|gt|nbsp|lrm|rlm|quot|apos);/g, (_, e: string) => VTT_ENTITIES[e]!)
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(MARK_CHARS, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CAPTION_LIMITS.textChars);
+}
+
+/**
+ * The cues of a PUBLISHED track's stored WebVTT (TA-20: translating a language that has no draft,
+ * such as an imported sidecar). Each Quran marker of a track published from a draft becomes a Quran
+ * segment again, a reference only: `accepted` for an accepted span (text or translation marker), a
+ * `review` suggestion for a reference marker. Header, NOTE, STYLE and REGION blocks, tags, entities
+ * and direction marks are dropped; cues without speech or Quran are skipped. Ids are `c1`, `c2`, …
+ */
+export function captionCuesFromVtt(vtt: string): CaptionCue[] {
+  const cues: CaptionCue[] = [];
+  const blocks = vtt.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split(/\n[ \t]*\n+/);
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    if (/^(WEBVTT|NOTE|STYLE|REGION)\b/.test(lines[0]!.trim())) continue;
+    const at = lines.findIndex((l) => l.includes('-->'));
+    if (at < 0) continue;
+    const [from, to] = lines[at]!.split('-->');
+    const startMs = vttMs(from ?? '');
+    const endMs = vttMs((to ?? '').trim().split(/\s+/)[0] ?? '');
+    if (startMs === null || endMs === null || endMs <= startMs || startMs >= CAPTION_LIMITS.maxMs) continue;
+    const body = lines.slice(at + 1).join('\n');
+    const segments: CaptionSegment[] = [];
+    let last = 0;
+    const speech = (raw: string) => {
+      const text = vttSpeech(raw);
+      if (text) segments.push({ type: 'speech', text });
+    };
+    for (const m of body.matchAll(MARKER)) {
+      speech(body.slice(last, m.index));
+      last = m.index! + m[0].length;
+      if (parseQuranRange(m[2]!)) segments.push({ type: 'quran', range: m[2]!, status: m[1] === 'r' ? 'review' : 'accepted' });
+    }
+    speech(body.slice(last));
+    if (!segments.length) continue;
+    const end = Math.min(endMs, startMs + CAPTION_LIMITS.cueMaxMs, CAPTION_LIMITS.maxMs);
+    cues.push({ id: `c${cues.length + 1}`, startMs, endMs: end, segments: segments.slice(0, CAPTION_LIMITS.segmentsPerCue) });
+  }
+  return cues;
 }
 
 /** The ranges of a track's markers, per mode (the serving side fetches what it needs). */

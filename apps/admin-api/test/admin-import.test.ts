@@ -396,10 +396,16 @@ describe('/api/admin/import/items/:id/transcript and /translations (TA-7)', () =
     const res = await send('it1/transcript', transcript);
     assert.equal(res.status, 202);
     assert.deepEqual(calls[0], { path: '/internal/admin/import/videos/vid-1/captions/ar/transcript', body: { segments: transcript.segments, engine: transcript.engine } });
-    answer = () => new Response(JSON.stringify({ success: true, result: { results: [{ language: 'en', jobId: 'j1', status: 'queued', existing: false }] } }), { status: 200 });
+    // TA-20: a sidecar published with no draft is the source; which one was used passes through per result
+    const results = [
+      { language: 'en', jobId: 'j1', status: 'queued', existing: false, source: 'published' },
+      { language: 'fr', error: 'source_missing' },
+    ];
+    answer = () => new Response(JSON.stringify({ success: true, result: { results } }), { status: 200 });
     const tr = await send('it1/translations', { sourceLanguage: 'ar', languages: ['en'] });
     assert.equal(tr.status, 200);
     assert.equal(tr.body.result.results[0].jobId, 'j1');
+    assert.deepEqual(tr.body.result.results, results);
     assert.equal(calls[1]!.path, '/internal/admin/import/videos/vid-1/translations');
     const rows = (await db.prepare("SELECT new_value FROM site_settings_log ORDER BY rowid").all<any>()).results ?? [];
     assert.deepEqual(JSON.parse(rows[0].new_value).details, { itemId: 'it1', language: 'ar', segments: 2 });

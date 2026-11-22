@@ -7,7 +7,8 @@
  *   GET  /api/videos/:videoId/captions/jobs                  recent jobs of the video
  *   POST /api/videos/:videoId/captions/jobs/:jobId/cancel    cancel; the minutes come back
  *   GET  /api/videos/:videoId/captions/minutes               caption minutes left for this video's channel
- *   POST /api/videos/:videoId/captions/translations          { sourceLanguage, languages[], replace? } translate a draft (§5.7)
+ *   POST /api/videos/:videoId/captions/translations          { sourceLanguage, languages[], replace? } translate a draft (§5.7),
+ *                                                            or the published track when the language has no draft (TA-20)
  *
  * Owner or a channel role with `video.edit`. Minutes come from the channel
  * owner's creator tier and admin grants (lib/captions/minutes.ts); 402
@@ -15,7 +16,7 @@
  */
 import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
-import { CAPTION_JOB_ERRORS, CAPTION_JOB_KINDS, CAPTION_JOB_STATUSES, CAPTION_MINUTES_ENTITLEMENT, captionMinutesCanStart, captionMinutesFor } from '@al-ummah/shared-types';
+import { CAPTION_JOB_ERRORS, CAPTION_JOB_KINDS, CAPTION_JOB_STATUSES, CAPTION_TRANSLATION_SOURCES, CAPTION_MINUTES_ENTITLEMENT, captionMinutesCanStart, captionMinutesFor } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { SubtitleService } from '../../lib/subtitles';
@@ -32,7 +33,11 @@ const Job = z.object({
 	kind: z.enum(CAPTION_JOB_KINDS).describe('transcribe: speech to a draft; translate: a draft into another language'),
 	language: z.string().describe("The draft's language (spoken, or the translation's target)"),
 	sourceLanguage: z.string().nullable().describe('translate: the source draft'),
-	sourceVersion: z.number().nullable().describe('translate: the source draft version translated'),
+	sourceVersion: z.number().nullable().describe('translate: the source draft version translated (the published track\'s version when `source` is `published`)'),
+	source: z
+		.enum(CAPTION_TRANSLATION_SOURCES)
+		.nullable()
+		.describe('translate: `draft` when the source language had a caption draft (it wins), `published` when its published track was translated instead (an imported or uploaded file); null for transcribe'),
 	replace: z.boolean().describe('Replaces the existing draft of the language when it ends'),
 	status: z.enum(CAPTION_JOB_STATUSES),
 	progress: z.object({ done: z.number(), total: z.number() }).nullable().describe('Audio chunks transcribed'),
@@ -236,16 +241,18 @@ export class CaptionTranslateCreate extends AuthenticatedRoute {
 			summary: 'Translate a caption draft into other languages',
 			description:
 				'Starts one background job per target language over the source draft as it is now (the creator\'s corrected text). ' +
+				'With no draft in the source language, the source is its published track (captions imported or uploaded as a file), copied when the job starts; each job\'s `source` says which. ' +
+				'The result is always a machine-translated draft the creator reviews and publishes. ' +
 				'Quran is never machine-translated: Quran spans stay references and the player shows the official translation of the channel\'s edition. ' +
 				'Each language reserves `ceil(duration in minutes)` caption minutes; 402 `upgrade_required` refuses the whole request (nothing starts). ' +
-				'409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing`; 503 `translation_paused` while an admin has it switched off.',
+				'409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing` when the language has neither a draft nor a published track; 503 `translation_paused` while an admin has it switched off.',
 			request: {
 				params: videoParams,
 				body: {
 					content: {
 						'application/json': {
 							schema: z.object({
-								sourceLanguage: Str({ description: 'The source draft language' }),
+								sourceLanguage: Str({ description: 'The source language: its draft, or its published track when it has no draft' }),
 								languages: z.array(z.string()).min(1).max(MAX_TRANSLATION_TARGETS),
 								replace: z.boolean().optional(),
 							}),
@@ -258,8 +265,8 @@ export class CaptionTranslateCreate extends AuthenticatedRoute {
 				'400': { description: 'Unsupported or same language', content: Err },
 				'402': { description: 'Not enough caption minutes', content: Err },
 				'403': { description: 'Not allowed', content: Err },
-				'404': { description: 'Video or source draft not found', content: Err },
-				'409': { description: '`draft_exists` or `source_is_translation`', content: Err },
+				'404': { description: 'Video not found, or `source_missing`: no draft and no published track in the source language', content: Err },
+				'409': { description: '`draft_exists`, or `source_is_translation` (the source draft or published track is itself a machine translation)', content: Err },
 				'503': { description: 'Translation is paused or could not start; nothing was charged', content: Err },
 			},
 		},

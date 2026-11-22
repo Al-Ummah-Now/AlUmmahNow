@@ -30,6 +30,10 @@ import {
 	type CaptionJobPayload,
 	type CaptionJobStatus,
 	type CaptionMinutesUsage,
+	type CaptionTranslationSource,
+	type SubtitleMetadata,
+	captionCuesFromVtt,
+	captionPublishedSourceKey,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type VideoObject,
@@ -45,6 +49,7 @@ export const POSTPROCESSING_STALE_MS = 90 * 60_000;
 
 interface Bucket {
 	get(key: string): Promise<{ text(): Promise<string> } | null>;
+	put?(key: string, value: string, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
 	head?(key: string): Promise<unknown>;
 	list?(options: { prefix: string; cursor?: string }): Promise<{ objects: Array<{ key: string }>; truncated: boolean; cursor?: string }>;
 	delete?(keys: string | string[]): Promise<void>;
@@ -188,6 +193,8 @@ interface JobRow {
 	language: string;
 	source_language: string | null;
 	source_version: number | null;
+	/** translate: 'published' when the source is the published track (TA-20, search migration 0072); NULL = the draft */
+	source_kind?: string | null;
 	replace_draft: number;
 	provider: string;
 	model: string;
@@ -215,6 +222,7 @@ const toJob = (r: JobRow): CaptionJob => ({
 	language: r.language,
 	sourceLanguage: r.source_language ?? null,
 	sourceVersion: r.source_version === null || r.source_version === undefined ? null : Number(r.source_version),
+	source: r.kind === 'translate' ? (r.source_kind === 'published' ? 'published' : 'draft') : null,
 	replace: Number(r.replace_draft) === 1,
 	provider: r.provider,
 	model: r.model,
@@ -307,6 +315,7 @@ function translateMessage(job: CaptionJob, video: VideoObject, settings: Caption
 			videoId: job.videoId,
 			sourceLanguage: job.sourceLanguage!,
 			sourceVersion: job.sourceVersion!,
+			source: job.source === 'published' ? 'published' : 'draft',
 			language: job.language,
 			replace: job.replace,
 			requestedBy: job.requestedBy,
@@ -322,9 +331,21 @@ function translateMessage(job: CaptionJob, video: VideoObject, settings: Caption
 	};
 }
 
-async function dispatch(env: CaptionJobsEnv, job: CaptionJob, video: VideoObject, now: Date): Promise<CaptionJobStatus> {
+/**
+ * A translate job from a published track (TA-20) works on a copy of it in its work prefix, so a
+ * track replaced while the job runs changes nothing. `vtt` is the copy the request read; a Retry
+ * (the work was cleared when the job failed) reads the track again.
+ */
+async function snapshotPublishedSource(env: CaptionJobsEnv, job: CaptionJob, vtt?: string): Promise<void> {
+	const text = vtt ?? (await readPublishedSource(env, job.videoId, job.sourceLanguage!)).vtt;
+	if (!env.MEDIA_PRIVATE?.put) throw new CaptionJobHttpError(503, 'queue_unavailable');
+	await env.MEDIA_PRIVATE.put(captionPublishedSourceKey(job.id), text, { httpMetadata: { contentType: 'text/vtt' } });
+}
+
+async function dispatch(env: CaptionJobsEnv, job: CaptionJob, video: VideoObject, now: Date, publishedVtt?: string): Promise<CaptionJobStatus> {
 	if (job.kind === 'translate') {
 		if (!env.queue) throw new CaptionJobHttpError(503, 'queue_unavailable');
+		if (job.source === 'published') await snapshotPublishedSource(env, job, publishedVtt);
 		await env.queue.send(translateMessage(job, video, await readCaptionSettings(env), now));
 		await setStatus(env, job.id, { status: 'queued' }, now);
 		return 'queued';
@@ -403,7 +424,8 @@ export async function requestCaptionJob(
 
 /**
  * A creator asks for a translation of a caption draft (§5.7; access already checked). The input is
- * the source draft as it is now (the creator's corrected text), recorded as `sourceVersion`. One
+ * the source draft as it is now (the creator's corrected text), recorded as `sourceVersion`; with no
+ * draft in that language, its published track (TA-20, resolveTranslationSource). One
  * caption minute per video-minute per target language. Asking again while a job of the same
  * source and target runs returns that job.
  */
@@ -425,9 +447,7 @@ export async function requestTranslationJob(
 	if (input.sourceLanguage === input.language) throw new CaptionJobHttpError(400, 'same_language');
 	const settings = await readCaptionSettings(env);
 	if (!settings.translation.enabled) throw new CaptionJobHttpError(503, 'translation_paused');
-	const source = await readJsonDraft(env, video.id, input.sourceLanguage);
-	if (!source || !source.cues.length) throw new CaptionJobHttpError(404, 'source_missing');
-	if (source.kind !== 'source') throw new CaptionJobHttpError(409, 'source_is_translation');
+	const source = await resolveTranslationSource(env, video.id, input.sourceLanguage);
 	const provider = translationProviderFor(settings, input.language, !!env.AI_KEY_DEEPL);
 	const key = await sha256(`${video.id}|translate|${input.language}|${provider}|${input.sourceLanguage}`);
 	const active = await db(env)
@@ -454,10 +474,28 @@ export async function requestTranslationJob(
 	const model = provider === 'deepl' ? 'deepl-pro' : settings.translation.model;
 	const inserted = await db(env)
 		.prepare(
-			`INSERT OR IGNORE INTO caption_jobs (id, idempotency_key, video_id, channel_id, subject_id, requested_by, kind, language, source_language, source_version, replace_draft, provider, model, status, minutes_reserved, waived, attempts, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, 'translate', ?, ?, ?, ?, ?, ?, 'queued', ?, ?, 1, ?, ?)`,
+			`INSERT OR IGNORE INTO caption_jobs (id, idempotency_key, video_id, channel_id, subject_id, requested_by, kind, language, source_language, source_version, source_kind, replace_draft, provider, model, status, minutes_reserved, waived, attempts, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, 'translate', ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, 1, ?, ?)`,
 		)
-		.bind(jobId, key, video.id, video.channelId ?? null, subject.subjectId, input.userId, input.language, input.sourceLanguage, source.version, input.replace ? 1 : 0, provider, model, minutes, input.waive ? 1 : 0, at, at)
+		.bind(
+			jobId,
+			key,
+			video.id,
+			video.channelId ?? null,
+			subject.subjectId,
+			input.userId,
+			input.language,
+			input.sourceLanguage,
+			source.version,
+			source.source === 'published' ? 'published' : null,
+			input.replace ? 1 : 0,
+			provider,
+			model,
+			minutes,
+			input.waive ? 1 : 0,
+			at,
+			at,
+		)
 		.run();
 	if ((inserted.meta?.changes ?? 0) === 0) {
 		await releaseMinutes(db(env), jobId, now);
@@ -466,8 +504,9 @@ export async function requestTranslationJob(
 		throw new CaptionJobHttpError(409, 'try_again');
 	}
 	const job = (await readJob(env, jobId))!;
+	logger.debug('[CaptionJobs] Translate job created', { jobId, videoId: video.id, from: input.sourceLanguage, to: input.language, source: source.source });
 	try {
-		const status = await dispatch(env, job, video, now);
+		const status = await dispatch(env, job, video, now, source.source === 'published' ? source.vtt : undefined);
 		return { job: { ...job, status }, existing: false };
 	} catch (error) {
 		await releaseMinutes(db(env), jobId, now);
@@ -475,6 +514,44 @@ export async function requestTranslationJob(
 		logger.error('[CaptionJobs] Could not send the translate job', { jobId, videoId: video.id, error: error instanceof Error ? error.message : String(error) });
 		throw error instanceof CaptionJobHttpError ? error : new CaptionJobHttpError(503, 'queue_unavailable');
 	}
+}
+
+/** What a translate job of `language` reads (TA-20); `version` is the draft's, or the published track's (1 when it has none). */
+export type TranslationSource = { source: 'draft'; version: number } | { source: 'published'; version: number; vtt: string };
+
+/**
+ * The source of a translation of `language` (TA-20). The language's draft wins when it has cues (a
+ * translated draft is 409 `source_is_translation`); otherwise its published track: an imported
+ * sidecar or an uploaded file, or a track published from a draft since deleted (its Quran markers
+ * become references again). 404 `source_missing` only when neither has anything to translate.
+ */
+export async function resolveTranslationSource(env: CaptionJobsEnv, videoId: string, language: string): Promise<TranslationSource> {
+	const draft = await readJsonDraft(env, videoId, language);
+	if (draft && draft.cues?.length) {
+		if (draft.kind !== 'source') throw new CaptionJobHttpError(409, 'source_is_translation');
+		return { source: 'draft', version: draft.version };
+	}
+	const published = await readPublishedSource(env, videoId, language);
+	return { source: 'published', version: published.version, vtt: published.vtt };
+}
+
+/** The language's published track as stored (WebVTT, Quran as markers); 404 `source_missing`, 409 when it is a machine translation. */
+async function readPublishedSource(env: CaptionJobsEnv, videoId: string, language: string): Promise<{ vtt: string; version: number }> {
+	const meta = await env.subtitles?.get(`${videoId}/metadata.json`);
+	let tracks: SubtitleMetadata['tracks'] = [];
+	try {
+		tracks = meta ? ((JSON.parse(await meta.text()) as SubtitleMetadata).tracks ?? []) : [];
+	} catch {
+		tracks = [];
+	}
+	const track = tracks.find((t) => t.language === language);
+	if (!track || (track.status && track.status !== 'ready')) throw new CaptionJobHttpError(404, 'source_missing');
+	if (track.machineTranslation) throw new CaptionJobHttpError(409, 'source_is_translation');
+	const file = await env.subtitles?.get(`${videoId}/${language}.vtt`);
+	const vtt = file ? await file.text() : '';
+	if (!captionCuesFromVtt(vtt).length) throw new CaptionJobHttpError(404, 'source_missing');
+	const version = Number.isInteger(track.version) && track.version! >= 1 ? track.version! : 1;
+	return { vtt, version };
 }
 
 async function readJsonDraft(env: CaptionJobsEnv, videoId: string, language: string): Promise<CaptionDraft | null> {
@@ -648,7 +725,9 @@ export async function retryJob(env: CaptionJobsEnv, jobId: string, video: VideoO
 	try {
 		await dispatch(env, job, video, now);
 	} catch (error) {
-		await setStatus(env, jobId, { status: 'failed', error: 'failed', finished: true }, now);
+		// A published source gone meanwhile fails the retry as source_missing (the creator's to fix)
+		const missing = error instanceof CaptionJobHttpError && error.code === 'source_missing';
+		await setStatus(env, jobId, { status: 'failed', error: missing ? 'source_missing' : 'failed', finished: true }, now);
 		throw error;
 	}
 	return (await readJob(env, jobId))!;

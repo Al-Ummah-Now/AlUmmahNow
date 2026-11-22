@@ -6,10 +6,22 @@
 jest.mock('../moderation/budget', () => ({ reserveBudget: jest.fn(async () => true), settleBudget: jest.fn(async () => undefined) }));
 jest.mock('../moderation/usage', () => ({ recordUsage: jest.fn(async () => 10) }));
 
-import { MessageType, captionDraftKey, captionDraftVersionKey, captionTranslateWorkKey, type CaptionDraft, type CaptionTranslatePayload } from '@al-ummah/shared-types';
+import {
+  MessageType,
+  QuranIndex,
+  captionDraftKey,
+  captionDraftVersionKey,
+  captionPublishedSourceKey,
+  captionSourceWorkKey,
+  captionTranslateWorkKey,
+  renderCaptionVtt,
+  type CaptionDraft,
+  type CaptionTranslatePayload,
+} from '@al-ummah/shared-types';
+import { miniQuranRows } from './fixtures/quran-mini';
 import { reserveBudget } from '../moderation/budget';
 import { BUDGET_WAIT_SECONDS, CAPTION_JOB_LAST_ATTEMPT } from '../captions/job';
-import { isCaptionTranslatePayload, processCaptionTranslateMessages, readSource } from '../captions/translate';
+import { isCaptionTranslatePayload, processCaptionTranslateMessages, readPublishedSource, readSource } from '../captions/translate';
 import { DeepLTranslator, FixtureTranslator, WorkersAiTranslator, translatorFor, type Translator } from '../captions/translator';
 
 const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), job: jest.fn() } as never;
@@ -230,6 +242,107 @@ describe('caption translate consumer', () => {
     expect(isCaptionTranslatePayload(payload({ language: 'ar' }))).toBe(false);
     expect(isCaptionTranslatePayload(payload({ model: 'https://evil' }))).toBe(false);
     expect(isCaptionTranslatePayload(payload({ sourceVersion: 0 }))).toBe(false);
+    expect(isCaptionTranslatePayload(payload({ source: 'published' }))).toBe(true);
+    expect(isCaptionTranslatePayload(payload({ source: 'draft' }))).toBe(true);
+    expect(isCaptionTranslatePayload(payload({ source: 'elsewhere' as never }))).toBe(false);
+  });
+});
+
+describe('translating a published track (TA-20)', () => {
+  const index = new QuranIndex(QuranIndex.build(miniQuranRows(), 'v-test', new Date().toISOString()));
+  /** An imported sidecar as stored: speech, then Al-Ikhlas recited in full (no markers: it is a file). */
+  const SIDECAR = ['WEBVTT', '', '1', '00:00:00.000 --> 00:00:04.000', '‏قال الشيخ في درس اليوم كلامًا طيبًا', '', '2', '00:00:04.000 --> 00:00:12.000', '‏قل هو الله أحد الله الصمد لم يلد ولم يولد ولم يكن له كفوا أحد', ''].join('\n');
+  const QURAN_WORDS = /قل هو الله|الصمد|يولد|كفوا/;
+
+  function published(vtt: string) {
+    const s = setup();
+    s.subtitles.store.delete(captionDraftKey('v1', 'ar'));
+    s.media.set(captionPublishedSourceKey(JOB), vtt);
+    return s;
+  }
+  const recording = () => {
+    const seen: string[] = [];
+    const t: Translator = { provider: 'workers-ai', async translate(batch, _f, _t, _c, model, usage) {
+      usage.push({ model, inputUnits: 1, outputUnits: 1 });
+      seen.push(...batch.items.map((i) => i.text), ...batch.context.map((i) => i.text));
+      return good(batch.items);
+    } };
+    return { t, seen };
+  };
+  async function run(s: ReturnType<typeof setup>, translator: Translator, quranIndex: () => Promise<QuranIndex | null> = async () => index) {
+    let m = message(payload({ source: 'published', sourceVersion: 1 }));
+    for (let i = 0; i < 5; i++) {
+      await processCaptionTranslateMessages([m], s.env, undefined, logger, { translator, quranIndex });
+      const next = s.sent.at(-1);
+      if (!next || next.message.payload.nextBatch <= (m.body.payload as CaptionTranslatePayload).nextBatch) return m;
+      m = message(next.message.payload);
+    }
+    return m;
+  }
+
+  it('a sidecar: the Quran matcher finds the recitation, which stays a reference and never reaches the model', async () => {
+    const s = published(SIDECAR);
+    const { t, seen } = recording();
+    await run(s, t);
+    const draft = s.subtitles.read<CaptionDraft>(captionDraftKey('v1', 'en'))!;
+    expect(draft).toMatchObject({ kind: 'translation', origin: 'translation', sourceLanguage: 'ar', sourceTrack: 'published', edited: false, machine: { provider: 'workers-ai' } });
+    expect(draft.sourceVersion).toBeUndefined();
+    const quran = draft.cues.flatMap((c) => c.segments).filter((x) => x.type === 'quran');
+    expect(quran).toEqual([expect.objectContaining({ type: 'quran', range: expect.stringMatching(/^112:1:1-112:4:\d+$/) })]);
+    expect(seen.join(' ')).not.toMatch(QURAN_WORDS);
+    expect(seen.join(' ')).toContain('قال الشيخ');
+    expect(JSON.stringify(draft)).not.toMatch(QURAN_WORDS);
+    expect(s.calls.at(-1)).toEqual({ path: `/internal/captions/jobs/${JOB}/finish`, body: { outcome: 'ready', minutesUsed: 0 } });
+    // The sidecar is never touched: no draft is made in its language
+    expect(s.subtitles.read(captionDraftKey('v1', 'ar'))).toBeNull();
+    expect(s.media.read(captionSourceWorkKey(JOB))).toBeNull();
+  });
+
+  it('a track published from a draft keeps its Quran spans as references, without the matcher', async () => {
+    const s = published(renderCaptionVtt(source(2)));
+    const { t, seen } = recording();
+    const noIndex = jest.fn(async () => null);
+    await run(s, t, noIndex);
+    expect(noIndex).not.toHaveBeenCalled();
+    const draft = s.subtitles.read<CaptionDraft>(captionDraftKey('v1', 'en'))!;
+    expect(draft.cues.flatMap((c) => c.segments).filter((x) => x.type === 'quran')).toEqual([
+      { type: 'quran', range: '112:1:1-112:4:5', status: 'review' },
+      { type: 'quran', range: '1:1:1-1:1:4', status: 'review' },
+    ]);
+    expect(seen.join(' ')).not.toMatch(QURAN_WORDS);
+  });
+
+  it('every batch reads the same cues: the processor writes them once', async () => {
+    const s = published(SIDECAR);
+    const first = await readPublishedSource(s.media, payload({ source: 'published', sourceVersion: 1 }), async () => index, Date.now());
+    s.media.set(captionPublishedSourceKey(JOB), 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nchanged\n');
+    const again = await readPublishedSource(s.media, payload({ source: 'published', sourceVersion: 1 }), async () => null, Date.now());
+    expect(again).toEqual(first);
+    expect(first!.cues.some((c) => c.segments.some((x) => x.type === 'quran'))).toBe(true);
+  });
+
+  it('no fresh Quran copy: retried, never translated as speech', async () => {
+    const s = published(SIDECAR);
+    const { t, seen } = recording();
+    const m = message(payload({ source: 'published', sourceVersion: 1 }));
+    await processCaptionTranslateMessages([m], s.env, undefined, logger, { translator: t, quranIndex: async () => null });
+    expect(m.retry).toHaveBeenCalled();
+    expect(seen).toEqual([]);
+  });
+
+  it('the copy gone: source_missing', async () => {
+    const s = setup();
+    await processCaptionTranslateMessages([message(payload({ source: 'published', sourceVersion: 1 }))], s.env, undefined, logger, { translator: new FixtureTranslator(), quranIndex: async () => index });
+    expect(s.calls.at(-1)!.body).toEqual({ outcome: 'failed', error: 'source_missing' });
+  });
+
+  it('the last attempt flags the admin with the source in the item', async () => {
+    const s = published(SIDECAR);
+    const broken: Translator = { provider: 'workers-ai', translate: async () => { throw new Error('capacity'); } };
+    await processCaptionTranslateMessages([message(payload({ source: 'published', sourceVersion: 1 }), CAPTION_JOB_LAST_ATTEMPT)], s.env, undefined, logger, { translator: broken, quranIndex: async () => index });
+    const report = JSON.parse(String((globalThis.fetch as jest.Mock).mock.calls.at(-1)[1].body));
+    expect(report.events[0].action).toMatchObject({ key: `caption-job:${JOB}`, retry: { path: '/internal/captions/jobs/retry', body: { jobId: JOB } } });
+    expect(JSON.stringify(report.events[0])).toContain('published');
   });
 });
 

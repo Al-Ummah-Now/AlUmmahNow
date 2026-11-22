@@ -28,6 +28,13 @@ export const CAPTION_JOB_ERRORS = ['audio_unavailable', 'transcription_failed', 
 export type CaptionJobError = (typeof CAPTION_JOB_ERRORS)[number];
 
 export const CAPTION_JOB_KINDS = ['transcribe', 'translate'] as const;
+
+/**
+ * What a translate job reads (TA-20): the language's caption `draft` when it has one (it wins), else
+ * its `published` track (an imported sidecar or an uploaded file), snapshotted when the job starts.
+ */
+export const CAPTION_TRANSLATION_SOURCES = ['draft', 'published'] as const;
+export type CaptionTranslationSource = (typeof CAPTION_TRANSLATION_SOURCES)[number];
 export type CaptionJobKind = (typeof CAPTION_JOB_KINDS)[number];
 
 export interface CaptionJob {
@@ -44,6 +51,8 @@ export interface CaptionJob {
   /** translate: the source draft's language and the version translated (the creator's corrected text) */
   sourceLanguage: string | null;
   sourceVersion: number | null;
+  /** translate: whether the source was the language's draft or its published track (TA-20); null for transcribe */
+  source: CaptionTranslationSource | null;
   /** Replace a draft that exists in that language */
   replace: boolean;
   provider: string;
@@ -85,6 +94,10 @@ export const CAPTION_WORK_PREFIX = 'captions-work/';
 export const captionWorkPrefix = (jobId: string) => `${CAPTION_WORK_PREFIX}${jobId}/`;
 /** The job's partial transcript, so a retry or the next delivery resumes where it stopped. */
 export const captionWorkTranscriptKey = (jobId: string) => `${captionWorkPrefix(jobId)}transcript.json`;
+/** A translate job's copy of the published track it translates (TA-20), written when the job is sent. */
+export const captionPublishedSourceKey = (jobId: string) => `${captionWorkPrefix(jobId)}published.vtt`;
+/** That copy as source cues (Quran found), written once by the processor so every batch reads the same cues. */
+export const captionSourceWorkKey = (jobId: string) => `${captionWorkPrefix(jobId)}source.json`;
 
 /**
  * api-videos → media (TRANSCODE_QUEUE): extract a video's audio only, as 16 kHz
