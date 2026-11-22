@@ -19,6 +19,8 @@ html[lang=ar] .hx-h1{line-height:1.5}
 
 /* Thumbnail parts, shared by cards and rows */
 .hx-progress{background:color-mix(in srgb,var(--fanous-color-text-primary) 30%,transparent)}
+/* Light themes: the track is light, so it shows over dark thumbnails too (a dark track vanished there) */
+html:not(.dark) .hx-progress{background:color-mix(in srgb,var(--fanous-color-background) 70%,transparent)}
 .hx-progress>span{background:var(--fanous-color-primary)}
 .hx-duration{position:absolute;inset-block-end:12px;inset-inline-end:6px;padding:1px 5px;border-radius:4px;font-size:12px;font-weight:600;line-height:1.5;color:var(--fanous-color-text-primary);background:color-mix(in srgb,var(--fanous-color-background) 86%,transparent)}
 
@@ -32,7 +34,7 @@ html[lang=ar] .hx-h1{line-height:1.5}
 .hx-card{position:relative;min-width:0}
 .hx-link{display:flex;flex-direction:column;height:100%;color:var(--fanous-color-text-primary)}
 .hx-body{display:flex;flex-direction:column;gap:2px;padding:10px 4px 4px;min-width:0}
-.hx-title{margin:0;font-size:15px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.hx-title{margin:0;overflow-wrap:anywhere;font-size:15px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 html[lang=ar] .hx-title{line-height:1.6}
 .hx-channel{font-size:13px;color:var(--fanous-color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hx-meta{margin:0;font-size:13px;color:var(--fanous-color-text-secondary)}
@@ -49,7 +51,7 @@ html[lang=ar] .hx-title{line-height:1.6}
 @media(prefers-reduced-motion:reduce){.hx-remove{transition:none}}
 
 /* The whole history: the list and its side column, capped so nothing sits in dead space */
-.hx-layout{display:grid;gap:24px;max-width:1120px;margin-inline:auto}
+.hx-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;max-width:1120px;margin-inline:auto}
 @media(min-width:1024px){.hx-layout{grid-template-columns:minmax(0,1fr) 300px;gap:40px;align-items:start}.hx-side{position:sticky;inset-block-start:88px}}
 /* Below 1024px the tools come right after the page title, above the list */
 @media(max-width:1023px){.hx-main{display:contents}.hx-main-head{order:-2;margin-block-end:0}.hx-side{order:-1}}
@@ -64,7 +66,7 @@ html[lang=ar] .hx-title{line-height:1.6}
 @media(hover:hover){.hx-row:hover{background:var(--m-hover,color-mix(in srgb,var(--fanous-color-text-primary) 6%,transparent))}}
 .hx-row-thumb{flex:0 0 200px;border-radius:var(--r-md,10px);overflow:hidden}
 .hx-row-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.hx-row-title{font-size:16px;font-weight:600;line-height:1.4;color:var(--fanous-color-text-primary)}
+.hx-row-title{overflow-wrap:anywhere;font-size:16px;font-weight:600;line-height:1.4;color:var(--fanous-color-text-primary)}
 html[lang=ar] .hx-row-title{line-height:1.6}
 .hx-row-title:hover,.hx-row-channel:is(a):hover{text-decoration:underline}
 .hx-row-channel{display:inline-flex;align-items:center;min-block-size:24px;font-size:14px;color:var(--fanous-color-text-secondary);align-self:flex-start}
