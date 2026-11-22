@@ -84,7 +84,7 @@ export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedC
   }
 
   async function remove(c: FixedCost) {
-    const ok = await confirm({ title: t('costs.fixed.removeTitle', { name: c.name }), body: t('costs.fixed.removeBody'), confirmLabel: t('costs.fixed.remove'), danger: true, testId: 'costs-fixed-remove-dialog' });
+    const ok = await confirm({ title: t('costs.fixed.removeTitle', { name: c.name }), body: t('costs.fixed.removeBody'), confirmLabel: t('costs.fixed.remove'), danger: true, testId: 'costs-fixed-remove' });
     if (!ok) return;
     const done = await run('remove', () => removeFixedCost(c.id), () => t('costs.fixed.removed', { name: c.name }));
     if (done && editing === c.id) reset();
