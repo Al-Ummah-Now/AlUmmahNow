@@ -58,7 +58,6 @@
   "apps/web/src/components/Header/HeaderSearch.tsx": 3,
   "apps/web/src/components/ImageCropDialog/index.tsx": 8,
   "apps/web/src/components/NotFoundPage/index.tsx": 24,
-  "apps/web/src/components/PlaylistCover/index.tsx": 2,
   "apps/web/src/components/PlaylistGrid/index.tsx": 12,
   "apps/web/src/components/PlaylistView/index.tsx": 58,
   "apps/web/src/components/ProfileGuard/index.tsx": 15,
