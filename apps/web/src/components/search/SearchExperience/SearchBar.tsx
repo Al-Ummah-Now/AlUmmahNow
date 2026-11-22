@@ -67,7 +67,7 @@ export function SearchBar({
   useEffect(() => setReady(true), []);
   const header = variant === 'header';
   const a = t.autocomplete;
-  // The popup renders beside the form: the header's .ah-search pill clips and restyles its children
+  // The popup renders beside the form: the header's pill (.aun-search) clips its children
   const [popupHost, setPopupHost] = useState<HTMLDivElement | null>(null);
 
   const groups = useMemo(() => [
@@ -141,10 +141,10 @@ export function SearchBar({
           event.preventDefault();
           onSubmit();
         }}
-        className={header ? 'ah-search flex h-9 items-stretch rounded-full border border-white/30' : 'flex items-stretch'}
+        className={header ? 'ah-search aun-search' : 'flex items-stretch'}
       >
         <Autocomplete
-          className="flex-1 min-w-0"
+          className={header ? 'aun-search-field' : 'flex-1 min-w-0'}
           value={value}
           onValueChange={onChange}
           onSelect={choose}
@@ -175,7 +175,7 @@ export function SearchBar({
             'data-ready': ready ? 'true' : undefined,
           } as React.InputHTMLAttributes<HTMLInputElement>}
           inputClassName={header
-            ? 'h-full w-full rounded-s-full bg-transparent ps-4 pe-9 text-sm text-white placeholder:text-white/60 focus:outline-none'
+            ? 'aun-search-input'
             : 'w-full h-11 ps-10 pe-10 rounded-s-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-search-cancel-button]:hidden'}
         >
           {!header && <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" aria-hidden="true" />}
@@ -188,9 +188,9 @@ export function SearchBar({
               }}
               aria-label={t.search.clear}
               data-testid={header ? 'header-search-clear' : 'search-input-clear'}
-              className={`absolute end-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${header ? 'text-white/80 hover:bg-white/10' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={header ? 'aun-search-clear' : 'absolute end-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'}
             >
-              <X className="h-4 w-4" aria-hidden="true" />
+              <X className={header ? undefined : 'h-4 w-4'} aria-hidden="true" />
             </button>
           )}
         </Autocomplete>
@@ -198,9 +198,9 @@ export function SearchBar({
           type="submit"
           aria-label={t.search.searchButton}
           data-testid={header ? 'header-search-submit' : 'search-submit'}
-          className={header ? 'grid w-11 place-items-center rounded-e-full border-s border-white/30 text-white hover:bg-white/10' : "h-11 px-5 rounded-e-full bg-gray-800 text-white hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"}
+          className={header ? 'aun-search-submit' : "h-11 px-5 rounded-e-full bg-gray-800 text-white hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"}
         >
-          {header ? <Search className="h-[18px] w-[18px]" aria-hidden="true" /> : t.search.searchButton}
+          {header ? <Search aria-hidden="true" /> : t.search.searchButton}
         </button>
       </form>
       <div ref={setPopupHost} />

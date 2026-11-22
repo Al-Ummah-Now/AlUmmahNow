@@ -195,16 +195,30 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
               </ol>
             </nav>
           )}
+          {/* The shared header search (aun-nav.css "header search"): here a launcher for the ⌘K palette, the same
+              pill as the videos search box; below 1024px the same icon button as every app */}
+          <div className="aun-search-slot">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              data-testid="command-open"
+              aria-keyshortcuts="Meta+K Control+K"
+              className="aun-search aun-search-launch"
+            >
+              <span className="aun-search-input">{t('palette.placeholder')}</span>
+              <kbd aria-hidden="true" className="aun-search-kbd" dir="ltr">⌘K</kbd>
+              <span className="aun-search-submit" aria-hidden="true"><Icon name="search" /></span>
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            data-testid="command-open"
-            aria-keyshortcuts="Meta+K Control+K"
-            className={`ms-auto flex h-10 shrink-0 items-center gap-2.5 rounded-full border border-nav-search-border px-3 text-sm text-nav-search-placeholder hover:bg-nav-hover hover:text-nav-search-text max-xl:w-10 max-xl:justify-center max-xl:px-0 xl:min-w-48 xl:max-w-[26rem] xl:flex-[1_1_0%] xl:bg-nav-search-bg ${focusRing}`}
+            data-testid="command-open-icon"
+            aria-label={t('palette.placeholder')}
+            title={t('palette.placeholder')}
+            className="aun-icon-btn aun-search-open"
           >
-            <Icon name="search" className="size-[18px]" />
-            <span className="flex-1 truncate text-start max-xl:sr-only">{t('palette.placeholder')}</span>
-            <kbd aria-hidden="true" className="rounded border [font-family:inherit] border-nav-search-border px-1.5 text-[11px] max-xl:hidden" dir="ltr">⌘K</kbd>
+            <Icon name="search" />
           </button>
         </div>
         <div className="aun-header-tools">

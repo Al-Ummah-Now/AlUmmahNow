@@ -10,12 +10,17 @@
  *    anchor (the popup's offsetParent) than below, opens it upwards; either way caps its height to
  *    the room on that side (the popup scrolls inside, so give it overflow-y: auto). Never a minimum
  *    height: a floor is what pushed a picker past a landscape phone's bottom (WebKit, 844×390);
+ *  - hangs a fixed sheet (the phone account menu) 4px under its `.aun-header`, wherever the bar is
+ *    (a banner above it pushes it down);
  *  - measures against the visual viewport where there is one (an on-screen keyboard shrinks it).
+ * coverBar() places the other kind of sheet, the header search below 1024px, over its bar.
  * While a popup is fitted it is re-fitted when its own size changes (results arriving after it opened:
  * measuring only at open let a picker grow past the edge) and on resize or orientation change.
  * Popups placed by a positioning library (Radix collision handling) do not need it.
  */
 const GUTTER = 8;
+/** A phone sheet's gap under the bar (aun-nav.css: var(--fanous-spacing-xs)). */
+const SHEET_GAP = 4;
 const fitted = new Set();
 const observers = new Map();
 let listening = false;
@@ -82,12 +87,19 @@ export function fitToViewport(el) {
   const dx = r.left < vp.left + GUTTER ? vp.left + GUTTER - r.left : r.right > vp.right - GUTTER ? vp.right - GUTTER - r.right : 0;
 
   let dy = 0;
-  const below = Math.floor(vp.bottom - GUTTER - Math.max(r.top, vp.top + GUTTER));
+  // A fixed sheet (the phone account menu) hangs 4px under its bar wherever the bar is: its CSS top
+  // knows only the bar's height, and a banner above the header (the CMS theme preview, passkey) pushes
+  // the bar down, so the sheet covered it (AUDIT-2, CMS #154).
+  const sheet = getComputedStyle(el).position === 'fixed';
+  const bar = sheet ? el.closest?.('.aun-header') : null;
+  if (bar) dy = Math.max(bar.getBoundingClientRect().bottom, vp.top) + SHEET_GAP - r.top;
+  const top = r.top + dy;
+  const below = Math.floor(vp.bottom - GUTTER - Math.max(top, vp.top + GUTTER));
   let cap = r.height > below ? below : null;
   if (cap !== null) {
     // Not enough room below: open upwards when the anchor (the positioned box it hangs from) has
     // more room above it. A fixed popup (a phone sheet) has no anchor to flip around.
-    const anchor = getComputedStyle(el).position === 'fixed' ? null : el.offsetParent;
+    const anchor = sheet ? null : el.offsetParent;
     if (anchor && anchor !== document.body && anchor !== document.documentElement) {
       const a = anchor.getBoundingClientRect();
       const gap = Math.max(0, r.top - a.bottom);
@@ -108,4 +120,30 @@ export function releaseFit(el) {
   if (!el) return;
   fitted.delete(el);
   stopObserving(el);
+}
+
+/**
+ * The header search's sheet (aun-nav.css "header search", below 1024px) covers its `.aun-header`: its CSS
+ * top is 0, so a banner above the bar (the CMS theme preview, passkey) would be covered instead of the bar.
+ * Call when the sheet opens; it follows the bar on scroll and resize until the returned function runs (on
+ * close).
+ * @param {HTMLElement | null | undefined} el
+ * @returns {() => void}
+ */
+export function coverBar(el) {
+  const bar = el?.closest?.('.aun-header');
+  if (!el || !bar) return () => {};
+  const place = () => {
+    el.style.removeProperty('translate');
+    const dy = Math.round(Math.max(bar.getBoundingClientRect().top, 0) - el.getBoundingClientRect().top);
+    if (dy) el.style.translate = `0px ${dy}px`;
+  };
+  place();
+  window.addEventListener('scroll', place, { passive: true });
+  window.addEventListener('resize', place);
+  return () => {
+    window.removeEventListener('scroll', place);
+    window.removeEventListener('resize', place);
+    el.style.removeProperty('translate');
+  };
 }
