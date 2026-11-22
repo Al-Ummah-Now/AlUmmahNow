@@ -6,6 +6,7 @@ import { ArrowLeft, Search } from 'lucide-react';
 import { SearchBar } from '@/components/search/SearchExperience/SearchBar';
 import { useLanguage } from '@/hooks/useLanguage';
 import { HEADER_PATHS } from '@/lib/navigation/destinations';
+import { coverBar } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import {
   addSearchHistory,
   clearSearchHistory,
@@ -50,9 +51,19 @@ function HeaderSearchInner() {
   useEffect(() => {
     const el = slot.current;
     if (!el) return;
-    const onToggle = (event: Event) => setSheetOpen((event as ToggleEvent).newState === 'open');
+    // the sheet starts where the bar starts (a banner above the bar stays visible; NAV.md "Search")
+    let release = () => {};
+    const onToggle = (event: Event) => {
+      const isOpen = (event as ToggleEvent).newState === 'open';
+      release();
+      release = isOpen ? coverBar(el) : () => {};
+      setSheetOpen(isOpen);
+    };
     el.addEventListener('toggle', onToggle);
-    return () => el.removeEventListener('toggle', onToggle);
+    return () => {
+      el.removeEventListener('toggle', onToggle);
+      release();
+    };
   }, []);
 
   const open = (next: URLSearchParams) => {

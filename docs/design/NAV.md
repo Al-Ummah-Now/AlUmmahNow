@@ -183,7 +183,8 @@ One search control in every app whose header searches (videos web, videos admin,
 `.aun-header-primary`. Classes in `aun-nav.css` ("header search"); markup from
 `nav/header.js` `searchHtml({ lang, action, name, value, placeholder, id })`, which needs no script.
 React renders the same elements (videos web: `HeaderSearch`, checked against the builder by
-`HeaderSearch.test.tsx`). Auth (profile, admin) and the scholar sites have no header search.
+`HeaderSearch.test.tsx`); the CMS renders them around its suggestions (checked by its
+`admin-shell.test.ts`). Auth (profile, admin) and the scholar sites have no header search.
 
 ```
 button.aun-icon-btn.aun-search-open[popovertarget=<id>]          the icon, below 1024px
@@ -201,7 +202,7 @@ div.aun-search-slot#<id>[popover=auto]
 | Focus | Inside the pill: border and a 1px inset ring in `--fanous-c-upload-focus` (2px of the focus colour) |
 | Field | Padding 16px start, 8px end; 15px; `--fanous-c-nav-search-text`, placeholder `--fanous-c-nav-search-placeholder`; the browser's clear button hidden (an app adds `.aun-search-clear`, 28px, `--fanous-c-nav-icon`) |
 | Submit | The end segment: 52px, 1px divider (`--fanous-c-nav-search-border`) at its start, 20px search icon in `--fanous-c-nav-icon`, hover `--fanous-c-nav-hover` |
-| Below 1024px | The slot leaves the bar; `.aun-search-open` (the 40px icon button) sits at the end of the primary area. It opens the slot as a sheet over the bar: the bar's height and material (`--aun-header-band`), 8px side padding, 4px gap, a 36px back arrow (mirrored in Arabic), then the pill. Escape or the back arrow closes it (videos: Escape first clears typed text) |
+| Below 1024px | The slot leaves the bar; `.aun-search-open` (the 40px icon button) sits at the end of the primary area. It opens the slot as a sheet over the bar: the bar's height and material (`--aun-header-band`), 8px side padding, 4px gap, a 36px back arrow (mirrored in Arabic), then the pill. Escape or the back arrow closes it (videos: Escape first clears typed text). On open, `nav/menu-fit.js` `coverBar(sheet)` starts the sheet where the bar starts, so a banner above the bar (the CMS theme preview, passkey) stays visible; it follows the bar on scroll until its release runs on close |
 | Launcher | An app whose search opens a palette (videos admin ⌘K) renders the pill as a button: `button.aun-search.aun-search-launch` > `span.aun-search-input` (the placeholder) + `kbd.aun-search-kbd` + `span.aun-search-submit`; below 1024px the same `.aun-search-open` icon opens the palette |
 
 The placeholder is the app's own (what it searches); the field's name, the icon button and the back

@@ -41,7 +41,7 @@ function stubPopup(box: Box, opts: { vw?: number; vh?: number; anchor?: Box; pos
   return { el: el as unknown as HTMLElement, style };
 }
 
-const { fitToViewport } = await import('../nav/menu-fit.js');
+const { coverBar, fitToViewport } = await import('../nav/menu-fit.js');
 
 test('a menu past the start edge slides in to the 8px gutter', () => {
   const { el, style } = stubPopup({ left: -262, top: 60, width: 336, height: 200 });
@@ -111,5 +111,47 @@ test('a phone sheet hangs 4px under its bar when a banner pushes the bar down (A
 test('a phone sheet under a bar at the top stays where its CSS put it', () => {
   const { el, style } = stubPopup({ left: 8, top: 60, width: 359, height: 300 }, { position: 'fixed', bar: { left: 0, top: 0, width: 375, height: 56 } });
   fitToViewport(el);
+  assert.equal(style.translate, undefined);
+});
+
+/** The search sheet (fixed, CSS top 0) inside a bar whose top a banner moved; listeners recorded. */
+function stubSheet(bar: { top: number }) {
+  const style: Record<string, string> = {};
+  const listeners: Record<string, Set<() => void>> = {};
+  const el = {
+    closest: (sel: string) => (sel === '.aun-header' ? { getBoundingClientRect: () => rect({ left: 0, top: bar.top, width: 375, height: 56 }) } : null),
+    getBoundingClientRect: () => rect({ left: 0, top: 0, width: 375, height: 56 }),
+    style: { removeProperty: (k: string) => delete style[k], set translate(v: string) { style.translate = v; } },
+  };
+  Object.assign(globalThis, {
+    window: {
+      addEventListener: (type: string, fn: () => void) => (listeners[type] ??= new Set()).add(fn),
+      removeEventListener: (type: string, fn: () => void) => listeners[type]?.delete(fn),
+    },
+  });
+  const fire = (type: string) => listeners[type]?.forEach((fn) => fn());
+  return { el: el as unknown as HTMLElement, style, fire, listeners };
+}
+
+test('the search sheet covers its bar under a banner, and follows it on scroll until it closes (CMS #154)', () => {
+  const bar = { top: 66 };
+  const { el, style, fire, listeners } = stubSheet(bar);
+  const release = coverBar(el);
+  assert.equal(style.translate, '0px 66px');
+  // the page scrolls: the banner leaves, the sticky bar reaches the top, the sheet follows
+  bar.top = 20;
+  fire('scroll');
+  assert.equal(style.translate, '0px 20px');
+  bar.top = -10;
+  fire('scroll');
+  assert.equal(style.translate, undefined, 'never above the viewport');
+  release();
+  assert.equal(listeners.scroll.size + listeners.resize.size, 0);
+  assert.equal(style.translate, undefined);
+});
+
+test('the search sheet under a bar at the top stays where its CSS put it', () => {
+  const { el, style } = stubSheet({ top: 0 });
+  coverBar(el)();
   assert.equal(style.translate, undefined);
 });

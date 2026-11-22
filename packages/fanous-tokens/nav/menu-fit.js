@@ -13,6 +13,7 @@
  *  - hangs a fixed sheet (the phone account menu) 4px under its `.aun-header`, wherever the bar is
  *    (a banner above it pushes it down);
  *  - measures against the visual viewport where there is one (an on-screen keyboard shrinks it).
+ * coverBar() places the other kind of sheet, the header search below 1024px, over its bar.
  * While a popup is fitted it is re-fitted when its own size changes (results arriving after it opened:
  * measuring only at open let a picker grow past the edge) and on resize or orientation change.
  * Popups placed by a positioning library (Radix collision handling) do not need it.
@@ -119,4 +120,30 @@ export function releaseFit(el) {
   if (!el) return;
   fitted.delete(el);
   stopObserving(el);
+}
+
+/**
+ * The header search's sheet (aun-nav.css "header search", below 1024px) covers its `.aun-header`: its CSS
+ * top is 0, so a banner above the bar (the CMS theme preview, passkey) would be covered instead of the bar.
+ * Call when the sheet opens; it follows the bar on scroll and resize until the returned function runs (on
+ * close).
+ * @param {HTMLElement | null | undefined} el
+ * @returns {() => void}
+ */
+export function coverBar(el) {
+  const bar = el?.closest?.('.aun-header');
+  if (!el || !bar) return () => {};
+  const place = () => {
+    el.style.removeProperty('translate');
+    const dy = Math.round(Math.max(bar.getBoundingClientRect().top, 0) - el.getBoundingClientRect().top);
+    if (dy) el.style.translate = `0px ${dy}px`;
+  };
+  place();
+  window.addEventListener('scroll', place, { passive: true });
+  window.addEventListener('resize', place);
+  return () => {
+    window.removeEventListener('scroll', place);
+    window.removeEventListener('resize', place);
+    el.style.removeProperty('translate');
+  };
 }
