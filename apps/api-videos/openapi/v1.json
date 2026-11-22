@@ -56434,6 +56434,114 @@
         }
       }
     },
+    "/api/v1/videos/{videoId}/subtitles/{language}/download": {
+      "get": {
+        "tags": [
+          "Subtitles"
+        ],
+        "summary": "Download a subtitle track as a file",
+        "description": "One video, one language, as an attachment (WebVTT or SubRip). Quran verse text is filled at download time from the Quran Foundation copy, unaltered, with the attribution and edition inside the file. Never cached or stored.",
+        "operationId": "get_SubtitlesDownload",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 language code (e.g., en, ar, ur)"
+            },
+            "required": true,
+            "description": "ISO 639-1 language code (e.g., en, ar, ur)",
+            "name": "language",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "vtt",
+                "srt"
+              ],
+              "default": "vtt",
+              "description": "File format"
+            },
+            "required": false,
+            "description": "File format",
+            "name": "format",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subtitle file (attachment)",
+            "content": {
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/x-subrip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No track in this language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{videoId}/translated-metadata": {
       "get": {
         "tags": [

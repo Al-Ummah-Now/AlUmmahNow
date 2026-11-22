@@ -68,6 +68,21 @@ function snapshotRecords(opts: { breakVerse?: string } = {}) {
   return records;
 }
 
+/**
+ * The fake `mushafs:4` snapshot: one mushaf_word per word row, linked by word_id, carrying the
+ * word's Uthmani text (pause marks are rows of their own, not part of a word). `glyph` gives
+ * font-glyph codes instead, as an old docs example showed.
+ */
+function mushafRecords(opts: { glyph?: boolean } = {}) {
+  const records: Array<Record<string, unknown>> = [{ record_type: 'mushaf', id: 4, name: 'Uthmani Hafs', pages_count: 604 }];
+  for (const r of snapshotRecords()) {
+    if (r.record_type !== 'word' || r.char_type_name !== 'word') continue;
+    records.push({ record_type: 'mushaf_word', id: 1000 + Number(r.id), mushaf_id: 4, word_id: r.id, char_type_name: 'word', text: opts.glyph ? String.fromCharCode(0xfc41 + Number(r.id)) : r.text_imlaei, page_number: 1, line_number: 1 });
+  }
+  records.push({ record_type: 'mushaf_word', id: 99_999, mushaf_id: 4, word_id: 99_999, char_type_name: 'end', text: '١' });
+  return records;
+}
+
 /** A body streamed in 37-byte chunks: records, strings and multi-byte letters split across reads. */
 function chunked(text: string, size = 37): ReadableStream<Uint8Array> {
   const bytes = new TextEncoder().encode(text);
@@ -90,6 +105,8 @@ interface FakeQf {
   expireTokenOnce: boolean;
   status?: number;
   breakVerse?: string;
+  /** mushafs:4 snapshot: rows (default), 404 (not published here), or glyph codes */
+  mushaf?: 'rows' | 404 | 'glyph';
 }
 
 function fakeQf(init: Partial<FakeQf> = {}): FakeQf {
@@ -116,7 +133,7 @@ function fakeQf(init: Partial<FakeQf> = {}): FakeQf {
       return Response.json({ error: { code: 'rate_limited' } }, { status: qf.status, headers: { 'retry-after': '120' } });
     }
     if (url.pathname === '/content/api/v4/resources/sync') {
-      expect(url.searchParams.get('resources') ?? 'quran_core:1').toBe('quran_core:1');
+      expect(url.searchParams.get('resources') ?? 'quran_core:1;mushafs:4').toBe('quran_core:1;mushafs:4');
       if (url.searchParams.get('bootstrap') === 'true') {
         qf.calls.push('bootstrap');
         return Response.json({ sync: { has_more: true, next_page_url: '/api/v4/resources/sync?cursor=PAGE2', mutations: [{ sequence: 1, type: 'RESOURCE_CREATE', resource_group: 'quran_core', resource_id: 1, snapshot_url: '/api/v4/resources/snapshots/quran_core/1' }] } });
@@ -135,6 +152,12 @@ function fakeQf(init: Partial<FakeQf> = {}): FakeQf {
     if (url.pathname === '/content/api/v4/resources/snapshots/quran_core/1') {
       qf.calls.push('snapshot');
       const body = JSON.stringify({ resource_group: 'quran_core', resource_id: 1, resource_content_id: null, schema_version: 1, sync_sequence: 9, records: snapshotRecords({ breakVerse: qf.breakVerse }) });
+      return new Response(chunked(body));
+    }
+    if (url.pathname === '/content/api/v4/resources/snapshots/mushafs/4') {
+      qf.calls.push('mushaf');
+      if (qf.mushaf === 404) return Response.json({ error: { code: 'snapshot_not_found' } }, { status: 404 });
+      const body = JSON.stringify({ resource_group: 'mushafs', resource_id: 4, schema_version: 1, sync_sequence: 9, records: mushafRecords({ glyph: qf.mushaf === 'glyph' }) });
       return new Response(chunked(body));
     }
     throw new Error(`Unexpected QF call ${url.pathname}`);
@@ -181,11 +204,12 @@ describe('the Uthmani words', () => {
 });
 
 describe('two-part words (QF writes بَعْدَ مَا and إِلْ يَاسِينَ as one word)', () => {
-  const collect = (verse: string, imlaei: string[]) => {
+  const collect = (verse: string, imlaei: string[], mushaf?: string[]) => {
     const c = new QuranCoreCollector();
     c.add({ record_type: 'chapter', chapter_number: 37, name_simple: 'As-Saffat', name_arabic: 'الصافات', verses_count: 1 });
     c.add({ record_type: 'verse', verse_key: '37:1', text_uthmani: verse });
-    imlaei.forEach((w, i) => c.add({ record_type: 'word', char_type_name: 'word', location: `37:1:${i + 1}`, position: i + 1, text_imlaei: w }));
+    imlaei.forEach((w, i) => c.add({ record_type: 'word', id: 500 + i, char_type_name: 'word', location: `37:1:${i + 1}`, position: i + 1, text_imlaei: w }));
+    mushaf?.forEach((text, i) => c.add({ record_type: 'mushaf_word', mushaf_id: 4, word_id: 500 + i, char_type_name: 'word', text }));
     return c.build('v1', '2026-11-16T00:00:00Z', { complete: false });
   };
 
@@ -212,6 +236,22 @@ describe('two-part words (QF writes بَعْدَ مَا and إِلْ يَاسِ�
     expect(index.locs.filter((l) => l.word === 1)).toHaveLength(2);
   });
 
+  it('the mushafs:4 word text decides the spans where the Imla\'i parts cannot (word_id)', () => {
+    // Imla'i "يا أيها" (two parts, one Uthmani word) and "إلياسين" (one part, two Uthmani tokens)
+    // add up by chance, so the Imla'i spans cut this verse in the wrong places
+    const verse = 'يَٰٓأَيُّهَا سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ ۚ';
+    const imlaei = ['يا أيها', 'سَلَامٌ', 'عَلَى', 'إلياسين'];
+    expect(collect(verse, imlaei).surahs[0]!.ayat[0]!.words[0]).toBe('يَٰٓأَيُّهَا سَلَٰمٌ');
+    const built = collect(verse, imlaei, ['يَٰٓأَيُّهَا', 'سَلَٰمٌ', 'عَلَىٰٓ', 'إِلْ يَاسِينَ']);
+    expect(built.surahs[0]!.ayat[0]!.words).toEqual(['يَٰٓأَيُّهَا', 'سَلَٰمٌ', 'عَلَىٰٓ', 'إِلْ يَاسِينَ ۚ']);
+    expect(built.surahs[0]!.ayat[0]!.words.join(' ')).toBe(verse);
+  });
+
+  it('mushaf words that differ from the verse text are not used (never a guess)', () => {
+    const built = collect('سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ', ['سَلَامٌ', 'عَلَى', 'إِلْ يَاسِينَ'], ['سَلَٰمٌ', 'عَلَىٰ', 'إِلْ يَاسِينَ']);
+    expect(built.surahs[0]!.ayat[0]!.words).toEqual(['سَلَٰمٌ', 'عَلَىٰٓ', 'إِلْ يَاسِينَ']);
+  });
+
   it('tokens that still do not add up fail the build, never guessed', () => {
     expect(() => collect('سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ زائد', ['سَلَامٌ', 'عَلَى', 'إِلْ يَاسِينَ'])).toThrow('1 verse(s) failed the check');
   });
@@ -222,7 +262,7 @@ describe('Content Sync', () => {
     const e = env();
     const qf = fakeQf();
     const result = await runQuranSync(e, { reason: 'cron' }, deps(qf));
-    expect(qf.calls).toEqual(['token', 'bootstrap', 'page2', 'snapshot']);
+    expect(qf.calls).toEqual(['token', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
     expect(result.status).toBe('rebuilt');
     const current = e.REVIEW_MEDIA.read<QuranCurrent>(QURAN_CURRENT_KEY);
     expect(current).toEqual(expect.objectContaining({ version: '20261113T034100Z', syncedAt: '2026-11-13T03:41:00.000Z', surahs: 6 }));
@@ -241,6 +281,49 @@ describe('Content Sync', () => {
     const [m] = matchQuran(index, asr('قل هو الله احد الله الصمد لم يلد ولم يولد'));
     expect(formatQuranRange(m!.range)).toBe('112:1:1-112:3:4');
     expect(m!.class).toBe('confirmed');
+  });
+
+  it('cuts verses by their mushafs:4 words (word_id); the mushaf text is not stored a second time', async () => {
+    const e = env();
+    const info = jest.fn();
+    const warn = jest.fn();
+    await runQuranSync(e, { reason: 'cron' }, { ...deps(fakeQf()), logger: { ...(logger as object), info, warn } as never });
+    const counts = info.mock.calls.find((c) => c[0] === '[Quran] Copy rebuilt from QF')![1].counts;
+    const verses = Object.values(MINI_QURAN).reduce((n, a) => n + a.length, 0);
+    expect(counts).toEqual(expect.objectContaining({ versesByMushaf: verses, versesByImlaei: 0 }));
+    expect(warn).not.toHaveBeenCalled();
+    // Only the surah files, the index and the two pointers: no mushaf copy
+    expect([...e.REVIEW_MEDIA.store.keys()].every((k) => /^quran\/(text\/[^/]+\/\d+\.json|index\/[^/]+\.json|current\.json|state\.json)$/.test(k))).toBe(true);
+    const { version } = e.REVIEW_MEDIA.read<QuranCurrent>(QURAN_CURRENT_KEY);
+    expect(e.REVIEW_MEDIA.read<QuranSurahFile>(quranTextKey(version, 55)).ayat[6]!.words).toEqual(['والسماء', 'رفعها ۚ', 'ووضع', 'الميزان']);
+  });
+
+  it.each([
+    ['not published here (404)', 404 as const],
+    ['font-glyph codes instead of Uthmani text', 'glyph' as const],
+  ])('mushafs:4 %s: verses are cut by their Imla\'i words, as before', async (_label, mushaf) => {
+    const e = env();
+    const info = jest.fn();
+    const warn = jest.fn();
+    const qf = fakeQf({ mushaf });
+    expect((await runQuranSync(e, { reason: 'cron' }, { ...deps(qf), logger: { ...(logger as object), info, warn } as never })).status).toBe('rebuilt');
+    const counts = info.mock.calls.find((c) => c[0] === '[Quran] Copy rebuilt from QF')![1].counts;
+    expect(counts.versesByMushaf).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    const { version } = e.REVIEW_MEDIA.read<QuranCurrent>(QURAN_CURRENT_KEY);
+    const r55 = e.REVIEW_MEDIA.read<QuranSurahFile>(quranTextKey(version, 55));
+    expect(r55.ayat[6]!.words).toEqual(['والسماء', 'رفعها ۚ', 'ووضع', 'الميزان']);
+  });
+
+  it('a mushafs:4 change rebuilds the copy; not another mushaf', async () => {
+    const e = env();
+    await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
+    const qf = fakeQf({ changes: [{ type: 'ROW_UPDATE', resource_group: 'mushafs', resource_id: 4, record_type: 'mushaf_word', record_key: '1001' }] });
+    expect((await runQuranSync(e, { reason: 'cron' }, deps(qf, new Date('2026-11-14T03:41:00.000Z')))).status).toBe('rebuilt');
+    expect(qf.calls).toEqual(['token', 'sync TOKEN-1', 'snapshot', 'mushaf']);
+    // Another mushaf (mushafs:1) is not ours
+    const other = fakeQf({ changes: [{ type: 'ROW_UPDATE', resource_group: 'mushafs', resource_id: 1 }] });
+    expect((await runQuranSync(e, { reason: 'cron' }, deps(other, new Date('2026-11-15T03:41:00.000Z')))).status).toBe('unchanged');
   });
 
   it('the passage of a matched range is the official text (whole ayat verbatim, partial ayat by word)', async () => {
@@ -285,7 +368,7 @@ describe('Content Sync', () => {
     await runQuranSync(e, { reason: 'cron' }, deps(fakeQf()));
     const qf = fakeQf({ resyncRequired: true, expireTokenOnce: true });
     expect((await runQuranSync(e, { reason: 'cron' }, deps(qf))).status).toBe('rebuilt');
-    expect(qf.calls).toEqual(['token', '401 /content/api/v4/resources/sync', 'token', 'sync TOKEN-1', 'bootstrap', 'page2', 'snapshot']);
+    expect(qf.calls).toEqual(['token', '401 /content/api/v4/resources/sync', 'token', 'sync TOKEN-1', 'bootstrap', 'page2', 'snapshot', 'mushaf']);
   });
 
   it('never calls the real QF from a test', () => {

@@ -41,6 +41,7 @@ import { VideoChaptersUpdate } from '../endpoints/video/chaptersUpdate';
 import { SubtitlesUpload } from '../endpoints/video/subtitlesUpload';
 import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
+import { SubtitlesDownload } from '../endpoints/video/subtitlesDownload';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
 import { VideoTranslatedMetadataGet } from '../endpoints/translate/translate';
@@ -172,6 +173,9 @@ videoRouter.get('/:videoId/subtitles', SubtitlesList);
 
 // Get specific subtitle track (public)
 videoRouter.get('/:videoId/subtitles/:language', SubtitlesGet);
+
+// Download a subtitle track as a file, Quran text filled at download time (public)
+videoRouter.get('/:videoId/subtitles/:language/download', SubtitlesDownload);
 
 // Upload subtitle track (authenticated)
 videoRouter.post('/:videoId/subtitles', SubtitlesUpload);

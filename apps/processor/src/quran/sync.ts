@@ -2,7 +2,8 @@
  * Quran Foundation Content Sync (AUN-CAPTIONS mode A, docs/specs/TRANSCRIPTION-TRANSLATION.md §5.5).
  *
  * Daily (cron) and on an admin's Retry, a QuranContentSync message on the videos queue:
- * 1. asks QF what changed in `quran_core:1` since our sync token (bootstrap the first time, or when
+ * 1. asks QF what changed in `quran_core:1` and `mushafs:4` (Uthmani Hafs: each word's Uthmani
+ *    text, used to cut verses into words) since our sync token (bootstrap the first time, or when
  *    QF answers `resync_required`);
  * 2. on any change (or no copy yet) streams the snapshot and builds a new version of the text and
  *    the matcher's index under `quran/` in the private media bucket, then switches
@@ -13,6 +14,10 @@
  * on the Errors page with Replay). A failure no retry fixes (not configured, a verse failing the
  * check) flags the admin at once with a Retry button (`POST /internal/quran/sync`).
  * A copy not synced for 7 days is deleted by the daily check and never served.
+ *
+ * NOT FOR MACHINE LEARNING (QF Developer Terms, Must NOT item 4; QF 2026-11-22): the copy and the
+ * matcher's index exist for captions and the review matcher. Never export them, or any QF text, as
+ * training, fine-tuning or evaluation data for a machine-learning or AI model.
  */
 import type { Logger } from '@al-ummah/logger';
 import {
@@ -56,8 +61,10 @@ export interface QuranSyncState {
   versions?: string[];
 }
 
-const RESOURCE = 'quran_core:1';
+/** Resource groups, `;`-separated and percent-encoded in the query (QF Content Sync docs) */
+const RESOURCES = 'quran_core:1%3Bmushafs:4';
 const SNAPSHOT_PATH = '/api/v4/resources/snapshots/quran_core/1';
+const MUSHAF_SNAPSHOT_PATH = '/api/v4/resources/snapshots/mushafs/4';
 export const QURAN_SYNC_MAX_RETRIES = 3;
 export const QURAN_SYNC_NEEDS_ACTION_KEY = 'quran-sync';
 export const QURAN_STALE_NEEDS_ACTION_KEY = 'quran-stale';
@@ -90,9 +97,12 @@ function apiPath(link: string): string {
   return `${path}${url.search}`;
 }
 
+const isCore = (m: Mutation) => m.resource_group === 'quran_core' && Number(m.resource_id) === 1;
+const isMushaf = (m: Mutation) => m.resource_group === 'mushafs' && Number(m.resource_id) === 4;
+
 /** Pages through QF's change feed; returns the relevant mutations and the final token. */
 async function readChanges(client: QfClient, token: string | undefined): Promise<{ relevant: Mutation[]; nextToken: string | null }> {
-  const first = token ? `/api/v4/resources/sync?sync_token=${encodeURIComponent(token)}&resources=${RESOURCE}&per_page=100` : `/api/v4/resources/sync?bootstrap=true&resources=${RESOURCE}&per_page=100`;
+  const first = token ? `/api/v4/resources/sync?sync_token=${encodeURIComponent(token)}&resources=${RESOURCES}&per_page=100` : `/api/v4/resources/sync?bootstrap=true&resources=${RESOURCES}&per_page=100`;
   const relevant: Mutation[] = [];
   let path: string | null = first;
   let nextToken: string | null = null;
@@ -101,7 +111,7 @@ async function readChanges(client: QfClient, token: string | undefined): Promise
     const page: SyncPage = await client.getJson<SyncPage>(path);
     const sync = page.sync ?? {};
     for (const m of sync.mutations ?? []) {
-      if (m.resource_group === 'quran_core' && Number(m.resource_id) === 1 && m.type !== 'RESOURCE_UPDATE') relevant.push(m);
+      if (m.type !== 'RESOURCE_UPDATE' && (isCore(m) || isMushaf(m))) relevant.push(m);
     }
     if (sync.has_more && sync.next_page_url) path = apiPath(sync.next_page_url);
     else {
@@ -159,19 +169,33 @@ export async function runQuranSync(
     bootstrap = true;
     changes = await readChanges(client, undefined);
   }
-  const removed = changes.relevant.some((m) => m.type === 'RESOURCE_DELETE') && !changes.relevant.some((m) => m.type === 'RESOURCE_CREATE');
+  const core = changes.relevant.filter(isCore);
+  const removed = core.some((m) => m.type === 'RESOURCE_DELETE') && !core.some((m) => m.type === 'RESOURCE_CREATE');
   if (removed) throw new QuranBuildError('QF removed quran_core:1 (RESOURCE_DELETE)');
 
   const rebuild = !!payload.rebuild || bootstrap || changes.relevant.length > 0 || !current;
   const syncedAt = now.toISOString();
   let result: QuranSyncResult;
   if (rebuild) {
-    const snapshotPath = apiPath(changes.relevant.find((m) => m.snapshot_url)?.snapshot_url ?? SNAPSHOT_PATH);
-    const res = await client.get(snapshotPath);
-    if (!res.body) throw new QfError('QF snapshot had no body', res.status, true, 'empty');
     const collector = new QuranCoreCollector();
-    const { envelope } = await streamSnapshotRecords(res.body, (r) => collector.add(r));
-    if (envelope.schema_version !== undefined && envelope.schema_version !== 1) throw new QuranBuildError(`Unsupported QF snapshot schema_version ${String(envelope.schema_version)}`);
+    const read = async (path: string) => {
+      const res = await client.get(path);
+      if (!res.body) throw new QfError('QF snapshot had no body', res.status, true, 'empty');
+      const { envelope } = await streamSnapshotRecords(res.body, (r) => collector.add(r));
+      if (envelope.schema_version !== undefined && envelope.schema_version !== 1) throw new QuranBuildError(`Unsupported QF snapshot schema_version ${String(envelope.schema_version)}`);
+    };
+    await read(apiPath(core.find((m) => m.snapshot_url)?.snapshot_url ?? SNAPSHOT_PATH));
+    const mushafRemoved = changes.relevant.some((m) => isMushaf(m) && m.type === 'RESOURCE_DELETE');
+    if (!mushafRemoved) {
+      try {
+        await read(apiPath(changes.relevant.find((m) => isMushaf(m) && m.snapshot_url)?.snapshot_url ?? MUSHAF_SNAPSHOT_PATH));
+      } catch (error) {
+        // Not published here (404): verses are cut by their Imla'i words, as before. Throttling,
+        // 5xx and a broken snapshot still fail the run and retry
+        if (!(error instanceof QfError) || error.status !== 404) throw error;
+        deps.logger.warn('[Quran] mushafs:4 snapshot not available; cutting verses by Imla\'i words', { status: error.status, code: error.code });
+      }
+    }
     const version = versionId(now);
     const built = collector.build(version, syncedAt, deps.complete === false ? { complete: false } : {});
     const put = { httpMetadata: { contentType: 'application/json; charset=utf-8' } };
@@ -184,6 +208,9 @@ export async function runQuranSync(
     if (stale.length) await deleteVersions(bucket, stale);
     state.versions = keep.slice(0, 2);
     result = { status: 'rebuilt', version, words: next.words };
+    if (collector.counts.mushafWord && collector.counts.versesByImlaei) {
+      deps.logger.warn('[Quran] Some verses were not cut by their mushaf words', { versesByMushaf: collector.counts.versesByMushaf, versesByImlaei: collector.counts.versesByImlaei });
+    }
     deps.logger.info('[Quran] Copy rebuilt from QF', { version, surahs: next.surahs, words: next.words, changes: changes.relevant.length, bootstrap, counts: collector.counts });
   } else {
     await bucket.put(QURAN_CURRENT_KEY, json({ ...current!, syncedAt }), { httpMetadata: { contentType: 'application/json; charset=utf-8' } });

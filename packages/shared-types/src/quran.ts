@@ -9,6 +9,11 @@
  *
  * The matcher is a port of the research prototype (docs/research/transcription-2026-11/quran_zero.py:
  * detect2 + resolve + classify2), measured at 0 wrong ayat and 0 extra words on 20 clips (R§8).
+ *
+ * NOT FOR MACHINE LEARNING (QF Developer Terms, Must NOT item 4; QF 2026-11-22): the index is a QF
+ * Derived Material allowed for runtime matching only. It, the synced text and any QF word timings
+ * must never be used to train, fine-tune or evaluate a machine-learning or AI model (ASR included):
+ * no datasets, no eval sets, no ground truth. Tests and evals use synthetic fixtures.
  */
 
 // ---------------------------------------------------------------------------
@@ -69,6 +74,13 @@ export function quranAyahLabel(r: QuranRange): string {
 
 /** Attribution wherever Quran text is shown (§9.4). */
 export const QURAN_ATTRIBUTION = { en: 'Quran text: Quran Foundation (quran.com)', ar: 'نص القرآن: مؤسسة القرآن (quran.com)' } as const;
+
+/**
+ * Quran Foundation's own attribution wording (QF 2026-11-21), written inside every file that
+ * carries Quran text (a downloaded subtitle file's NOTE). The Arabic line has an LRM after the URL
+ * so its slash stays with it in right-to-left text.
+ */
+export const QF_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
 
 // ---------------------------------------------------------------------------
 // The synced copy (private media bucket, prefix `quran/`; written by the processor's Content Sync job)
@@ -204,7 +216,10 @@ export const unpackQuranLocation = (n: number): QuranLocation => ({ surah: Math.
 
 const N = 3;
 
-/** The in-memory index: words, locations and the 3-gram seed map. */
+/**
+ * The in-memory index: words, locations and the 3-gram seed map. Runtime matching only: never a
+ * training, fine-tuning or evaluation set for an ML/AI model (QF terms, see the file header).
+ */
 export class QuranIndex {
   readonly words: string[];
   readonly locs: QuranLocation[];

@@ -7,6 +7,11 @@
  * normalisation (a word slipped into a recitation, or a near-match, is checked as ordinary speech); a mere suggestion does not, so a flagged recitation the matcher
  * is unsure of still goes to a person (fail safe). With no fresh copy of the Quran text (not synced
  * yet, or over 7 days old) the matcher returns no spans, as before.
+ *
+ * NOT FOR MACHINE LEARNING (QF Developer Terms, Must NOT item 4; QF 2026-11-22): the index loaded
+ * here serves this matcher at runtime only. Never feed it, the synced text or matcher output built
+ * from them into training, fine-tuning or evaluation of an ML/AI model (the review classifier and
+ * ASR included). Tests use the synthetic fixtures in src/__tests__/fixtures.
  */
 import { QURAN_CURRENT_KEY, QuranIndex, formatQuranRange, matchQuran, quranCopyFresh, quranIndexKey, type AsrWord, type QuranCurrent, type QuranIndexFile } from '@al-ummah/shared-types';
 import type { QuranMatcher, QuranSpan } from '../review/pipeline';
