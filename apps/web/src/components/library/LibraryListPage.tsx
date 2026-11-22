@@ -245,7 +245,7 @@ export function LibraryListPage({ kind, dir }: Props) {
               <MetaParts
                 lang={lang}
                 parts={[
-                  { key: 'private', node: <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5" aria-hidden="true" />{t.playlist.privateLabel}</span> },
+                  { key: 'private', node: <span className="whitespace-nowrap"><Lock className="lbl-lock" aria-hidden="true" />{t.playlist.privateLabel}</span> },
                   ...(total > 0 ? [{ key: 'count', keep: true, node: formatVideoCount(total, lang) }] : []),
                 ]}
               />
