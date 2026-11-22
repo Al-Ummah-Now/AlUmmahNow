@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/AppLink';
 import { formatBytes, intlLocale, isArabicLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import type { MessageKey } from '@/i18n/translate';
+import { translateDynamic, type MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { LocalTime } from '@/components/LocalTime';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
@@ -64,17 +64,27 @@ function Sidecars({ status, permissions, action, onCancelAsk }: { status: AdminI
       {attach.lastError && attach.status !== 'succeeded' && <JobErrorText error={attach.lastError} testId="import-attach-error" />}
       {attach.warnings.length > 0 && (
         <ul className="text-xs text-warning-fg space-y-0.5" data-testid="import-sidecar-warnings">
-          {attach.warnings.map((w) => (
-            <li key={w}>
-              {fillNodes(t('imports.skipped'), {
-                reason: (
-                  <code dir="ltr" className="font-mono">
-                    {w}
-                  </code>
-                ),
-              })}
-            </li>
-          ))}
+          {attach.warnings.map((w) => {
+            // A known code is a sentence; anything else says a part was left out, with what was sent under Technical details
+            const words = translateDynamic(t, 'imports.warningText', w);
+            return (
+              <li key={w} data-warning={w}>
+                {words !== w ? (
+                  words
+                ) : (
+                  <>
+                    {t('imports.skippedOther')}
+                    <details className="mt-0.5 text-fg-muted">
+                      <summary className="cursor-pointer select-none hover:text-fg">{t('jobs.technical')}</summary>
+                      <code dir="ltr" className="block mt-1 font-mono whitespace-pre-wrap text-start">
+                        {w}
+                      </code>
+                    </details>
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,7 +154,8 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
               return (
                 <tr key={item.id} id={`item-${item.id}`} className={`${cardTable.row} scroll-mt-24 ${marked === item.id ? 'bg-surface-hover outline-2 outline-solid -outline-offset-2 outline-focus' : ''}`} data-testid="import-item" data-item-id={item.id} data-state={item.state} data-marked={marked === item.id ? 'true' : undefined}>
                   <td className={`${cardTable.cell} md:min-w-56`}>
-                    <span className="block font-medium text-fg break-words" dir="auto">
+                    {/* A file name stays whole: one line, an ellipsis when the column is narrow, the full name on hover */}
+                    <span className="block max-w-72 font-medium text-fg truncate" dir="auto" title={item.fileName}>
                       {item.fileName}
                     </span>
                     <span className="block text-xs text-fg-muted mt-0.5">
@@ -177,7 +188,7 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
                       <span className="text-sm text-fg-muted">{t('imports.videoGone')}</span>
                     ) : (
                       <>
-                        <Link href={`/videos/${encodeURIComponent(item.videoId)}`} className={`${linkClass} block font-medium break-words`} dir="auto">
+                        <Link href={`/videos/${encodeURIComponent(item.videoId)}`} className={`${linkClass} block font-medium break-words [text-wrap:balance]`} dir="auto">
                           {status.video.title || item.fileName}
                         </Link>
                         {status.video.processingStatus && (

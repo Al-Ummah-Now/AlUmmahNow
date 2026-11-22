@@ -1,6 +1,5 @@
 import Link from '@/components/AppLink';
-import { LocalTime } from '@/components/LocalTime';
-import { formatLocalTime } from '@/lib/local-time';
+import { LocalHour, LocalTime, LocalZoneName } from '@/components/LocalTime';
 import { notFound } from 'next/navigation';
 import { getErrorGroup } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
@@ -8,11 +7,11 @@ import type { ErrorActivity, ErrorEvent, ErrorGroupDetail } from '@/lib/api/erro
 import { getAdminSession } from '@/lib/auth';
 import { canManageErrors, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatHour, formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
+import { formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { ErrorStatusChip, HourlyChart, TestChip, errorTitle } from '../ui';
+import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName } from '../ui';
 import { countryName, sourceLabel } from '../origin';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
 import { ErrorGroupActions } from './ErrorGroupActions';
@@ -87,11 +86,16 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
             {t('errorsPage.culprit')}: <code className="font-mono text-fg" dir="ltr">{group.culprit}</code>
           </p>
         )}
+        {errorType(group) && (
+          <p className="mt-1 text-sm text-fg-muted" data-testid="error-group-type">
+            {t('errorsPage.errorType')}: <code className="font-mono text-fg" dir="ltr">{errorType(group)}</code>
+          </p>
+        )}
       </div>
 
       <dl className={`${cardClass} grid grid-cols-2 md:grid-cols-4 gap-4 text-sm`}>
-        <Fact label={t('errorsPage.app')} value={group.app} mono />
-        <Fact label={t('errorsPage.environment')} value={group.environment} mono />
+        <Fact label={t('errorsPage.app')} value={appName(t, group.app)} />
+        <Fact label={t('errorsPage.environment')} value={environmentName(t, group.environment)} />
         <Fact label={t('errorsPage.occurrences')} value={formatNumber(group.occurrences, locale)} />
         <Fact label={t('errorsPage.usersAffected')} value={formatNumber(group.users, locale)} />
         <Fact label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} />} />
@@ -163,11 +167,11 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           <HourlyChart
             hours={hourly}
             label={t('errorsPage.timeline')}
-            barTitle={(h) => t('errorsPage.timelineHour', { hour: formatLocalTime(hourDate(h.hour), locale, 'UTC')?.text ?? h.hour, count: formatNumber(h.occurrences, locale) })}
+            barTitle={(h) => fillNodes(t('errorsPage.timelineHour'), { hour: <LocalTime value={hourDate(h.hour).toISOString()} />, count: formatNumber(h.occurrences, locale) })}
             locale={locale}
-            hourLabel={(hour) => formatHour(hour, locale)}
+            hourLabel={(hour) => <LocalHour value={hourDate(hour).toISOString()} />}
             tableLabel={t('errorsPage.timelineTable')}
-            hourHeading={t('errorsPage.timelineHourHeading')}
+            hourHeading={fillNodes(t('errorsPage.timelineHourHeading'), { zone: <LocalZoneName /> })}
             countHeading={t('errorsPage.colOccurrences')}
             emptyText={t('errorsPage.timelineEmpty')}
           />
@@ -191,7 +195,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
               <tbody className="divide-y divide-border">
                 {releases.map((r) => (
                   <tr key={r.release}>
-                    <td className="px-3 py-2 font-mono" dir="ltr">{r.release}</td>
+                    <td className="px-3 py-2 font-mono whitespace-nowrap" dir="ltr">{r.release}</td>
                     <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.occurrences, locale)}</td>
                     <td className="px-3 py-2 text-fg-muted"><LocalTime value={r.last_seen} /></td>
                   </tr>
@@ -307,7 +311,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
   if (template && template !== e.route) facts.push([t('errorsPage.routeTemplate'), code(template)]);
   if (e.status) facts.push([t('errorsPage.statusCode'), formatNumber(e.status, locale)]);
   facts.push(
-    [t('errorsPage.environment'), e.environment ? code(e.environment) : '—'],
+    [t('errorsPage.environment'), e.environment ? environmentName(t, e.environment) : '—'],
     [t('errorsPage.worker'), ctx?.worker ? code(ctx.worker) : '—'],
     [t('errorsPage.release'), e.release ? code(e.release) : '—'],
     [t('errorsPage.workerVersion'), e.worker_version ? code(e.worker_version) : '—'],
@@ -362,7 +366,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
     ]);
   }
   if (ctx?.origin) facts.push(...originFacts(ctx.origin, t, locale));
-  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ?? '—'], [t('errorsPage.theme'), e.theme ?? '—']);
+  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ? languageName(e.locale, locale) : '—'], [t('errorsPage.theme'), e.theme ?? '—']);
   const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
     <li className={`border rounded p-4 ${highlighted ? 'border-accent ring-1 ring-accent' : 'border-border'}`} data-testid="error-sample" data-ref={e.ref}>
@@ -404,12 +408,18 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
         <div className="mt-4">
           <h3 className="text-sm font-medium text-fg mb-2">{t('errorsPage.extra')}</h3>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs" data-testid="error-sample-extra">
-            {extra.map(([k, v]) => (
-              <div key={k} className="flex gap-2 min-w-0">
-                <dt className="text-fg-muted font-mono" dir="ltr">{k}</dt>
-                <dd className="text-fg break-all font-mono" dir="ltr">{v}</dd>
-              </div>
-            ))}
+            {extra.map(([k, v]) => {
+              // Known keys in words, and the import step too; an unknown key stays as sent
+              const label = translateDynamic(t, 'errorsPage.extraKeys', k);
+              const known = label !== k;
+              const step = k === 'step' ? translateDynamic(t, 'errorsPage.importSteps', v) : v;
+              return (
+                <div key={k} className="flex gap-2 min-w-0">
+                  <dt className={`text-fg-muted ${known ? '' : 'font-mono'}`} dir={known ? 'auto' : 'ltr'}>{label}</dt>
+                  <dd className={`text-fg break-all ${step !== v ? '' : 'font-mono'}`} dir={step !== v ? 'auto' : 'ltr'}>{step}</dd>
+                </div>
+              );
+            })}
           </dl>
           {importVideo && (
             <Link href={`/imports?video=${encodeURIComponent(importVideo)}`} className={`${linkClass} inline-block mt-2 text-sm`} data-testid="error-sample-import">

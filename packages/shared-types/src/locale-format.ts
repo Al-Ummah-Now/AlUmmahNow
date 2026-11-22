@@ -166,7 +166,8 @@ const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte', 'pet
 export function formatBytes(locale: FormatLocale, bytes: number, options?: Intl.NumberFormatOptions): string {
   let value = Math.max(0, Number.isFinite(bytes) ? bytes : 0);
   let index = 0;
-  while (value >= 1024 && index < BYTE_UNITS.length - 1) {
+  // From 1000 of a unit the next one up: 1000 MB reads "1 GB" (0.98 rounds to 1), never "1,000 MB"
+  while (value >= 1000 && index < BYTE_UNITS.length - 1) {
     value /= 1024;
     index += 1;
   }

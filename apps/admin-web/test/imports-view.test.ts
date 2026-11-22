@@ -31,11 +31,11 @@ describe('times in the admin (local zone, UTC on hover)', () => {
 
   it('formats the time in the zone with its label, and the same moment in UTC', () => {
     const en1 = formatLocalTime(AT, 'en', 'America/New_York')!;
-    assert.match(en1.text, /Nov 22, 2026.*2:20 PM EST$/);
-    assert.match(en1.utc, /7:20 PM UTC$/);
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20 PM EST$/);
+    assert.match(en1.text, /Nov\s22,\s2026.*2:20\sPM\sEST$/);
+    assert.match(en1.utc, /7:20\sPM\sUTC$/);
+    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20\sPM\sEST$/);
     // Logs: steps seconds apart stay apart
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d PM EST$/);
+    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d\sPM\sEST$/);
     assert.match(formatLocalTime(AT, 'ar', 'Asia/Riyadh', { seconds: true })!.text, /١٠:٢٠:[٠-٩]{2}/);
     const ar1 = formatLocalTime(AT, 'ar', 'Asia/Riyadh')!;
     assert.match(ar1.text, /١٠:٢٠/);
@@ -44,11 +44,22 @@ describe('times in the admin (local zone, UTC on hover)', () => {
     assert.equal(formatLocalTime('not a date', 'en', 'UTC'), null);
   });
 
+  it('breaks only between the date and the time: the date, the time and its zone stay whole', () => {
+    const spaces = (s: string) => [...s].filter((c) => /\s/.test(c) && c !== '\u00A0').length;
+    assert.equal(spaces(formatLocalTime(AT, 'en', 'America/New_York')!.text), 1);
+    assert.equal(spaces(formatLocalTime(AT, 'ar', 'America/New_York')!.text), 1);
+    assert.equal(spaces(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text), 0);
+  });
+
   it('says a wait in words, rounded down', () => {
     assert.equal(formatDuration(10, 'en'), '10 seconds');
     assert.equal(formatDuration(300, 'en'), '5 minutes');
     assert.equal(formatDuration(43200, 'en'), '12 hours');
-    assert.equal(formatDuration(90, 'en'), '1 minute');
+    assert.equal(formatDuration(90, 'en'), '1 minute 30 seconds');
+    assert.equal(formatDuration(80, 'en'), '1 minute 20 seconds', 'a retry wait is never understated');
+    assert.equal(formatDuration(160, 'en'), '2 minutes 40 seconds');
+    assert.equal(formatDuration(7500, 'en'), '2 hours 5 minutes');
+    assert.match(formatDuration(80, 'ar'), / و/);
     assert.match(formatDuration(300, 'ar'), /^٥ /);
     assert.doesNotMatch(formatDuration(43200, 'ar'), LATIN_DIGIT);
   });
