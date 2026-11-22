@@ -29,7 +29,7 @@ const ENV_ORDER: OpsEnv[] = ['production', 'stage', 'qa'];
 const TABS: readonly OpsKind[] = OPS_KINDS;
 
 function pillClass(active: boolean) {
-  return `block rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+  return `block whitespace-nowrap rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
     active ? 'bg-accent text-on-accent font-medium' : 'border border-border text-fg hover:bg-surface-hover'
   }`;
 }
@@ -73,7 +73,7 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
             <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) })}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.last7')}</th>
+            <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{t('operations.resources.last7')}</th>
           </tr>
         </thead>
         <tbody>
