@@ -674,4 +674,106 @@ app.post('/errors', async (c) => {
   return c.json({ success: true, result: { accepted: events.length, rateLimited } }, 202);
 });
 
+// ---------------------------------------------------------------------------
+// Social import sources (TA-9): super admins only (import_sources:manage). api-videos keeps the
+// sources and runs the sync job (/internal/admin/import/sources, lib/importSources/*); every change
+// is audited here under content:import-source:<id>, the owner's recorded permission included.
+// ---------------------------------------------------------------------------
+
+const sources = new Hono<Env>();
+sources.use('*', async (c, next) => {
+  if (!hasPermission(normalizeRoles(auth(c)?.roles), 'import_sources:manage')) {
+    logger.warn('[AdminImport] Import sources refused', { userId: actorOf(c), path: c.req.path });
+    return fail(c, 403, 'forbidden', 'The import_sources:manage permission is required');
+  }
+  return next();
+});
+const SOURCE_ID = /^isrc_[0-9a-f]{32}$/;
+const sourcePath = (c: C) => {
+  const id = c.req.param('id') ?? '';
+  return SOURCE_ID.test(id) ? `/import/sources/${id}` : null;
+};
+/** Writes the audit row first; drops it when api-videos refuses (nothing changed). */
+async function auditedSource<T>(c: C, subject: string, action: string, details: Record<string, unknown>, call: () => Promise<T>): Promise<T> {
+  const db = c.env.REPORTS_DB;
+  const auditId = await writeAudit(db, { kind: 'import-source', id: subject, action, actorId: actorOf(c), details });
+  try {
+    return await call();
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
+}
+
+sources.get('/', async (c) => {
+  const channelId = c.req.query('channelId');
+  return c.json({ success: true, result: await videos(c, `/import/sources${channelId ? `?channelId=${encodeURIComponent(channelId.slice(0, 200))}` : ''}`) });
+});
+sources.get('/channels/:channelId/connections', async (c) =>
+  c.json({ success: true, result: await videos(c, `/import/sources/channels/${encodeURIComponent(c.req.param('channelId').slice(0, 200))}/connections`) }),
+);
+sources.post('/', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(c, 400, 'invalid_request', 'A JSON object is required');
+  const permission = body.permission as { by?: unknown; note?: unknown } | undefined;
+  // The id exists once api-videos made the source: the row is written first, then pointed at it
+  const db = c.env.REPORTS_DB;
+  const auditId = await writeAudit(db, {
+    kind: 'import-source',
+    id: 'pending',
+    action: 'source:create',
+    actorId: actorOf(c),
+    details: {
+      channelId: String(body.channelId ?? '').slice(0, 200),
+      network: String(body.network ?? '').slice(0, 20),
+      address: String(body.address ?? '').slice(0, 500),
+      schedule: String(body.schedule ?? 'manual').slice(0, 20),
+      ...(permission ? { permissionBy: String(permission.by ?? '').slice(0, 200), permissionNote: String(permission.note ?? '').slice(0, 1000) } : {}),
+    },
+  });
+  try {
+    const result = await videos<{ source: { id: string; auth: string } }>(c, '/import/sources', { method: 'POST', json: body });
+    await setAuditSubject(db, auditId, 'import-source', result.source.id).catch((e) => logger.warn('[AdminImport] Could not point the audit row at the source', { auditId, error: String(e) }));
+    return c.json({ success: true, result }, 201);
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
+});
+sources.get('/:id', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  return c.json({ success: true, result: await videos(c, path) });
+});
+sources.get('/:id/items', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const q = new URLSearchParams();
+  const state = c.req.query('state');
+  const limit = c.req.query('limit');
+  if (state) q.set('state', state.slice(0, 20));
+  if (limit) q.set('limit', limit.slice(0, 4));
+  return c.json({ success: true, result: await videos(c, `${path}/items${q.size ? `?${q}` : ''}`) });
+});
+sources.patch('/:id', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(c, 400, 'invalid_request', 'A JSON object is required');
+  const details = Object.fromEntries(['label', 'schedule', 'enabled'].filter((k) => k in body).map((k) => [k, body[k]]));
+  return c.json({ success: true, result: await auditedSource(c, c.req.param('id'), 'source:update', details, () => videos(c, path, { method: 'PATCH', json: body })) });
+});
+sources.delete('/:id', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  return c.json({ success: true, result: await auditedSource(c, c.req.param('id'), 'source:delete', {}, () => videos(c, path, { method: 'DELETE' })) });
+});
+sources.post('/:id/sync', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const result = await auditedSource(c, c.req.param('id'), 'source:sync', {}, () => videos<{ jobId: string; status: string }>(c, `${path}/sync`, { method: 'POST' }));
+  return c.json({ success: true, result }, 202);
+});
+app.route('/sources', sources);
+
 export default app;

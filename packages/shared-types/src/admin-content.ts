@@ -581,6 +581,12 @@ export const ADMIN_JOB_KINDS = [
   // Admin Tools import (wiki TOOLS-ADMIN TA-6): a file's sidecars (captions, chapters, thumbnail, playlist, publish date) onto its video
   'import.attach',
   /**
+   * Social import (wiki TOOLS-ADMIN TA-9; api-videos lib/importSources/job.ts): read one source's new
+   * items, then post them on the channel in resumable steps. Idempotent: an item is recorded once
+   * (source + item id) with the post and video it produced. Target the channel; params name the source.
+   */
+  'import.source-sync',
+  /**
    * Take a CSAM match down (api-videos lib/csam/contain.ts, docs/specs/CSAM-RESPONSE.md):
    * encrypted evidence copy, then every copy purged (R2, originals, Bunny, images, CDN), then the
    * uploader banned. Resumable phases in params; the last failure flags the admin. Target the
@@ -719,6 +725,8 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'search.rebuild-ownership': ['videos:manage'],
   'playlist.add-videos': ['videos:manage'],
   'import.attach': ['videos:manage'],
+  // admin-api also requires a super admin (import_sources:manage is super admin only)
+  'import.source-sync': ['videos:manage'],
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
   'images.index-owners': ['users:manage'],

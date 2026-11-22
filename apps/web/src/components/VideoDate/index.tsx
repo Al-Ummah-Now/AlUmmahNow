@@ -15,14 +15,54 @@ export interface DatedVideo {
   dateCreated?: string | Date | null;
   scheduledPublishDate?: string | null;
   scheduledPublishStatus?: string | null;
-  /** Brought from YouTube by its creator (wiki AUN-YT-IMPORT) */
-  importedFrom?: { platform?: string; publishedAt?: string | null } | null;
+  /** Brought from YouTube by its creator (wiki AUN-YT-IMPORT), or from a social source (TOOLS-ADMIN TA-9) */
+  importedFrom?: ImportOriginFields | null;
+}
+
+/** Where an imported video or post first came out: YouTube's publishedAt, a social source's postedAt and url. */
+export interface ImportOriginFields {
+  platform?: string;
+  publishedAt?: string | null;
+  postedAt?: string | null;
+  url?: string | null;
 }
 
 /** The YouTube publish date of an imported video, or null. */
 export function youtubeOriginDate(video: DatedVideo): string | null {
   const at = video.importedFrom?.platform === 'youtube' ? video.importedFrom.publishedAt : null;
   return at && Number.isFinite(Date.parse(at)) ? at : null;
+}
+
+const SOURCE_NETWORKS = ['rss', 'bluesky', 'mastodon', 'telegram'] as const;
+export type SourceNetwork = (typeof SOURCE_NETWORKS)[number];
+
+/** A social source's origin (network, first posted, the original's https link), or null. */
+export function sourceOrigin(from: ImportOriginFields | null | undefined): { network: SourceNetwork; at: string; url: string | null } | null {
+  const network = SOURCE_NETWORKS.find((n) => n === from?.platform);
+  const at = from?.postedAt;
+  if (!network || !at || !Number.isFinite(Date.parse(at))) return null;
+  // Only a web link is ever rendered as one
+  const url = from?.url && /^https:\/\//i.test(from.url) ? from.url : null;
+  return { network, at, url };
+}
+
+type DateLabels = Record<string, string | Record<string, string>> | undefined;
+const text = (labels: DateLabels, key: string, fallback: string) => (typeof labels?.[key] === 'string' ? (labels[key] as string) : fallback);
+
+/** "Originally posted on Mastodon on 10 November 2026" (the date only, as for YouTube). */
+export function fromSourceText(origin: { network: SourceNetwork; at: string }, lang: MetaLang, labels: DateLabels): string {
+  return text(labels, 'fromSource', 'Originally posted on {network} on {date}').replace('{network}', sourceNetworkName(origin.network, labels)).replace('{date}', formatAbsoluteDate(origin.at, lang));
+}
+
+/** "Originally on Mastodon" */
+export function fromSourceShortText(origin: { network: SourceNetwork }, labels: DateLabels): string {
+  return text(labels, 'fromSourceShort', 'Originally on {network}').replace('{network}', sourceNetworkName(origin.network, labels));
+}
+
+function sourceNetworkName(network: SourceNetwork, labels: DateLabels): string {
+  const names = labels?.sourceNetworks;
+  const fallback: Record<SourceNetwork, string> = { rss: 'their website', bluesky: 'Bluesky', mastodon: 'Mastodon', telegram: 'Telegram' };
+  return (typeof names === 'object' && names?.[network]) || fallback[network];
 }
 
 /** Scheduled and not out yet. */
@@ -74,18 +114,20 @@ function labelledDate(video: DatedVideo, lang: MetaLang, labels: Record<string, 
  */
 export function WatchMetaSummary({ video, views, lang, describedById }: { video: DatedVideo; views: number | string | null | undefined; lang: MetaLang; describedById: string }) {
   const { t } = useLanguage();
-  const labels = t.video?.dateLabel as Record<string, string> | undefined;
+  const labels = t.video?.dateLabel as unknown as Record<string, string> | undefined;
   const origin = youtubeOriginDate(video);
-  const tip = `${formatViewsExact(views, lang)}${metaSeparator(lang)}${labelledDate(video, lang, labels)}${origin ? `${metaSeparator(lang)}${fromYoutubeText(origin, lang, labels)}` : ''}`;
+  const social = origin ? null : sourceOrigin(video.importedFrom);
+  const originText = origin ? fromYoutubeText(origin, lang, labels) : social ? fromSourceText(social, lang, labels) : null;
+  const tip = `${formatViewsExact(views, lang)}${metaSeparator(lang)}${labelledDate(video, lang, labels)}${originText ? `${metaSeparator(lang)}${originText}` : ''}`;
   return (
     <summary title={tip} data-tip={tip} aria-describedby={describedById}>
       <span>{formatViews(views, lang)}</span>
       <MetaSep lang={lang} gap="6px" />
       <VideoDate video={video} lang={lang} />
-      {origin && (
+      {(origin || social) && (
         <>
           <MetaSep lang={lang} gap="6px" />
-          <span className="watch-origin" data-testid="watch-origin-short">{labels?.fromYoutubeShort ?? 'Originally on YouTube'}</span>
+          <span className="watch-origin" data-testid="watch-origin-short">{origin ? (labels?.fromYoutubeShort ?? 'Originally on YouTube') : fromSourceShortText(social!, labels)}</span>
         </>
       )}
       <span id={describedById} hidden>{tip}</span>
@@ -101,8 +143,9 @@ function fromYoutubeText(at: string, lang: MetaLang, labels: Record<string, stri
 /** The expanded description's first line: the full count and what the date is, exact; an imported video says where it first came out. */
 export function WatchMetaDetail({ video, views, lang }: { video: DatedVideo; views: number | string | null | undefined; lang: MetaLang }) {
   const { t } = useLanguage();
-  const labels = t.video?.dateLabel as Record<string, string> | undefined;
+  const labels = t.video?.dateLabel as unknown as Record<string, string> | undefined;
   const origin = youtubeOriginDate(video);
+  const social = origin ? null : sourceOrigin(video.importedFrom);
   return (
     <>
       <p className="watch-desc-date" data-testid="watch-published">
@@ -111,6 +154,17 @@ export function WatchMetaDetail({ video, views, lang }: { video: DatedVideo; vie
       {origin && (
         <p className="watch-desc-origin" data-testid="watch-origin">
           {fromYoutubeText(origin, lang, labels)}
+        </p>
+      )}
+      {social && (
+        <p className="watch-desc-origin" data-testid="watch-origin">
+          {social.url ? (
+            <a href={social.url} target="_blank" rel="noopener noreferrer nofollow ugc" className="hover:underline focus-visible:underline">
+              {fromSourceText(social, lang, labels)}
+            </a>
+          ) : (
+            fromSourceText(social, lang, labels)
+          )}
         </p>
       )}
     </>

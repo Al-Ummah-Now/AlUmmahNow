@@ -601,3 +601,85 @@ describe('/api/admin/import/errors (TA-11)', () => {
     assert.ok(limited, 'a flood of reports is cut off within the minute');
   });
 });
+
+describe('/api/admin/import/sources (TA-9)', () => {
+  const SOURCE = 'isrc_' + 'c'.repeat(32);
+  function sources(roles: string[], refuse?: { status: number; code: string }) {
+    const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
+    const env = {
+      REPORTS_DB: sqliteD1(),
+      INTERNAL_API_KEY: 'k',
+      VIDEOS: {
+        async fetch(input: string, init?: RequestInit) {
+          const url = new URL(input);
+          const method = init?.method ?? 'GET';
+          calls.push({ path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : null, actor: new Headers(init?.headers).get('X-Admin-Actor') });
+          const json = (status: number, payload: unknown) => new Response(JSON.stringify(payload), { status });
+          if (refuse) return json(refuse.status, { success: false, code: refuse.code, error: 'refused' });
+          if (method === 'POST' && url.pathname.endsWith('/sync')) return json(202, { success: true, result: { jobId: 'job-1', status: 'queued' } });
+          if (method === 'POST') return json(201, { success: true, result: { source: { id: SOURCE, auth: 'recorded' } } });
+          return json(200, { success: true, result: { sources: [], source: { id: SOURCE }, items: [], deleted: true } });
+        },
+      },
+    };
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, email: 'staff@example.com', roles } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
+    const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, new_value, actor_id FROM site_settings_log').all<any>()).results ?? [];
+    return { req, calls, audit };
+  }
+  const create = { channelId: 'ch1', network: 'rss', address: 'https://feeds.example.org/a.xml', schedule: 'daily', permission: { by: 'The scholar', note: 'Email of 2026-11-20' } };
+
+  it('is for super admins only: an admin is refused before api-videos is called', async () => {
+    const { req, calls } = sources(['Admin']);
+    for (const [path, init] of [['/api/admin/import/sources'], ['/api/admin/import/sources', post(create)], [`/api/admin/import/sources/${SOURCE}/sync`, { method: 'POST' }]] as const) {
+      const res = await req(path, init);
+      assert.equal(res.status, 403, path);
+    }
+    assert.equal(calls.length, 0);
+  });
+
+  it('adds a source with an audit row pointed at it, naming who gave permission', async () => {
+    const { req, calls, audit } = sources(['Super Admin']);
+    const res = await req('/api/admin/import/sources', post(create));
+    assert.equal(res.status, 201);
+    assert.deepEqual([calls[0]!.path, calls[0]!.method, calls[0]!.actor, calls[0]!.body], ['/internal/admin/import/sources', 'POST', ADMIN, create]);
+    const [row] = await audit();
+    assert.ok(String(row.key).includes(SOURCE), 'pointed at the new source');
+    assert.equal(row.actor_id, ADMIN);
+    const value = JSON.parse(row.new_value);
+    assert.equal(JSON.stringify(value).includes('The scholar'), true, 'the permission is in the audit');
+  });
+
+  it('drops the audit row when api-videos refuses', async () => {
+    const { req, audit } = sources(['Super Admin'], { status: 403, code: 'permission_required' });
+    const res = await req('/api/admin/import/sources', post({ ...create, permission: undefined }));
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).code, 'permission_required');
+    assert.deepEqual(await audit(), []);
+  });
+
+  it('forwards sync, update, delete and items for a well-formed id only, each audited', async () => {
+    const { req, calls, audit } = sources(['Super Admin']);
+    const sync = await req(`/api/admin/import/sources/${SOURCE}/sync`, { method: 'POST' });
+    assert.equal(sync.status, 202);
+    assert.equal((await sync.json()).result.jobId, 'job-1');
+    await req(`/api/admin/import/sources/${SOURCE}`, { method: 'PATCH', body: JSON.stringify({ enabled: false }), headers: { 'Content-Type': 'application/json' } });
+    await req(`/api/admin/import/sources/${SOURCE}`, { method: 'DELETE' });
+    await req(`/api/admin/import/sources/${SOURCE}/items?state=posted&limit=50`);
+    assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+      `POST /internal/admin/import/sources/${SOURCE}/sync`,
+      `PATCH /internal/admin/import/sources/${SOURCE}`,
+      `DELETE /internal/admin/import/sources/${SOURCE}`,
+      `GET /internal/admin/import/sources/${SOURCE}/items?state=posted&limit=50`,
+    ]);
+    assert.equal((await audit()).length, 3);
+    const bad = await req('/api/admin/import/sources/..%2Fbatches/sync', { method: 'POST' });
+    assert.equal(bad.status, 404);
+    assert.equal(calls.length, 4);
+  });
+});

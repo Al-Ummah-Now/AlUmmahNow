@@ -58,7 +58,9 @@ export type ContentKind =
   /** Creator support: a country rule (id = ISO country code) */
   | 'support-country'
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
-  | 'import';
+  | 'import'
+  /** A social import source (id = source id; wiki TOOLS-ADMIN TA-9): added, changed, synced, removed. */
+  | 'import-source';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

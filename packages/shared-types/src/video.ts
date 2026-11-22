@@ -124,7 +124,7 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   publishedViaSchedule?: boolean;       // True if published via scheduler
 
   /** Brought from YouTube by its creator (wiki AUN-YT-IMPORT): the watch page says "Originally published on YouTube" */
-  importedFrom?: import('./youtube-import').ImportedFrom;
+  importedFrom?: import('./youtube-import').ImportedFrom | import('./import-sources').SourceImportedFrom;
 
   // Premiere fields (future enhancement)
   isPremiered?: boolean;

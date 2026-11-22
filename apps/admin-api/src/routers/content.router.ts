@@ -992,6 +992,11 @@ app.post('/creators/tier', async (c) => {
 
 /** A CSAM takedown job names the case and the matched URL: only super admins see its details. */
 const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
+/**
+ * Kinds only a super admin may run again: CSAM takedowns, and social import syncs (their sources are
+ * managed with import_sources:manage, a super admin permission; wiki TOOLS-ADMIN TA-9).
+ */
+const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync']);
 function redactJob(c: C, job: AdminJob): AdminJob {
   if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
   return {
@@ -1003,10 +1008,10 @@ function redactJob(c: C, job: AdminJob): AdminJob {
   };
 }
 
-/** The job, for an action on it: refuses CSAM jobs to anyone but a super admin, then needs the kind's own permissions. */
+/** The job, for an action on it: refuses CSAM jobs and social import syncs to anyone but a super admin, then needs the kind's own permissions. */
 async function jobForAction(c: C, jobId: string): Promise<AdminJob | Response> {
   const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(jobId)}`);
-  if (CSAM_JOB_KINDS.has(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return c.json({ success: false, code: 'forbidden', error: 'Super admins only' }, 403);
+  if (SUPER_ADMIN_JOB_KINDS.has(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return c.json({ success: false, code: 'forbidden', error: 'Super admins only' }, 403);
   for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
   return job;
 }

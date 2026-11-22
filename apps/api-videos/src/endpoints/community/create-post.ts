@@ -1,4 +1,3 @@
-import { rememberPostLocation } from '../../lib/community-posts';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import {
@@ -12,15 +11,12 @@ import {
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateCreatePost } from '../../validation/community-posts';
-import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
+import { rethrowBusy } from '../../lib/r2Repo';
+import { writeCommunityPost } from '../../lib/community/writePost';
 import { getChannelObject } from './post-comment-helpers';
-import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
-import { imageGate, queueImageScan } from '../../lib/review/images';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
-import { markScheduled } from '../../lib/scheduled-posts';
 import { can, channelRoleOf, parsePostFields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
@@ -273,45 +269,8 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         channelVerified: channel.isVerified || false
       };
 
-      // Pre-publication review of post images (VR16): the whole post waits for the check
-      const imageUrls = [...(body.images ?? []).map((img: { url?: string }) => img.url), ...((post as { poll?: { options?: Array<{ image?: { url?: string } | string }> } }).poll?.options ?? []).map((o) => (typeof o.image === 'string' ? o.image : o.image?.url))].filter((u): u is string => typeof u === 'string' && /^https:\/\//.test(u));
-      const gate = imageUrls.length ? await imageGate(c.env as never) : null;
-      const reviewId = crypto.randomUUID();
-      if (gate?.holds) (post as { review?: unknown }).review = { status: 'checking', reviewId, timing: 'pre', since: new Date().toISOString() };
-
-      // Save to R2
-      const postKey = `posts/${channelId}/${post.id}.json`;
-      await c.env.community_posts.put(postKey, JSON.stringify(post));
-      // Its permalink finds it by id alone (lib/community-posts.ts)
-      await rememberPostLocation(c.env.community_posts, post.id, channelId);
-
-      // Update channel index
-      await this.updateChannelIndex(c, channelId, post.id);
-
-      // A scheduled post goes live from the every-minute cron (lib/scheduled-posts.ts, #1218)
-      if (post.status === PostStatus.SCHEDULED && post.scheduledAt) {
-        await markScheduled(c.env.community_posts, channelId, post.id, post.scheduledAt);
-      }
-
-      if (gate?.scans) {
-        await queueImageScan(c.env as never, gate, { subject: 'post', subjectId: `${channelId}/${post.id}`, reviewId, ownerId, channelId, images: imageUrls.slice(0, 10), text: communityPostScanText(post) });
-      }
-
-      // Send to processor queue for notifications (if published; a post held for review is announced when it clears)
-      if (post.status === PostStatus.PUBLISHED && !gate?.holds) {
-        const queue = new Queue(c.env.queue);
-        await queue.send(MessageType.CommunityPostCreated, {
-          postId: post.id,
-          channelId: channelId,
-          actor: {
-            userId,
-            channelId: userChannelId,
-          },
-          timestamp: post.createdAt
-        });
-      }
-
-      scanInBackground(c, { surface: 'community_post', event: 'create', subjectId: post.id, authorId: userId, channelId, text: communityPostScanText(post) });
+      // Stored with the same checks as an imported post (lib/community/writePost.ts)
+      await writeCommunityPost(c as never, post, { userId, channelId: userChannelId });
 
       return c.json({ success: true, post });
     } catch (error) {
@@ -319,20 +278,6 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       logger.error('Error creating community post:', error);
       return c.json({ error: 'Failed to create post' }, 500);
     }
-  }
-
-  private async updateChannelIndex(c: any, channelId: string, postId: string) {
-    type PostIndex = { postIds: string[]; lastUpdated: string };
-    // Conditional write: posts created at the same time must not drop each other from the index
-    await new R2Repository<PostIndex>(c.env.community_posts).updateObject(
-      `posts/${channelId}/index.json`,
-      (index) => {
-        // Add to beginning (newest first); keep max 1000 post IDs in index
-        index.postIds = [postId, ...index.postIds.filter((id) => id !== postId)].slice(0, 1000);
-        index.lastUpdated = new Date().toISOString();
-      },
-      { initial: () => ({ postIds: [], lastUpdated: new Date().toISOString() }) },
-    );
   }
 }
 function isPlatformImage(url: string, host: ((h: string) => boolean) | undefined): boolean {

@@ -744,6 +744,12 @@ export interface AppTranslations {
       fromYoutube: string;
       /** Its short label beside the date */
       fromYoutubeShort: string;
+      /** A video or post brought from a social source (wiki TOOLS-ADMIN TA-9): "Originally posted on {network} on {date}" */
+      fromSource: string;
+      /** Its short label beside the date: "Originally on {network}" */
+      fromSourceShort: string;
+      /** The source's name in those lines (rss: the creator's own site) */
+      sourceNetworks: { rss: string; bluesky: string; mastodon: string; telegram: string };
     };
     videoSingular: string;
     uploadVideo: string;

@@ -67,6 +67,7 @@ import { runIndexRepairStep, type RepairJobEnv } from '../search/repairs';
 import { runSearchReconcileStep, type SearchReconcileEnv } from '../search/backfill';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import { runImportAttach, type AttachEnv } from './importAttach';
+import { runSourceSync, type SourceSyncEnv } from '../importSources/job';
 import {
 	channelVideoStats,
 	contentIds,
@@ -1710,6 +1711,7 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
 	// Admin Tools import: a file's sidecars onto its video (lib/admin/importAttach.ts, wiki TOOLS-ADMIN TA-6)
 	'import.attach': (env, job) => runImportAttach(env as AttachEnv, job),
+	'import.source-sync': (env, job) => runSourceSync(env as SourceSyncEnv, job),
 	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
 	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
 	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),

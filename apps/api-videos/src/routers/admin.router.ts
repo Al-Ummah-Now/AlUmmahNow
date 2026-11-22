@@ -56,6 +56,7 @@ import { enqueueNotification, type NotificationsEnv } from '../lib/notifications
 import { InitiateBodySchema, initiateUpload, type InitiateBody } from '../endpoints/video/uploadInitiate';
 import { loadChannelRecord } from '../lib/channelAccess';
 import { IMPORT_ATTACH_JOB_KIND, stageImportSidecars, validateSidecars, type AttachEnv } from '../lib/admin/importAttach';
+import importSourcesRouter from './importSources.router';
 import { getJob as getAdminJob, retryJob as retryAdminJob } from '../lib/admin/jobs';
 import { importStatus, type ImportStatusEnv } from '../lib/admin/importStatus';
 import { OnDeviceSegmentSchema, submitOnDeviceTranscript } from '../endpoints/captions/captionDrafts';
@@ -450,6 +451,8 @@ const ImportStatusBody = z.object({
 		.max(ADMIN_IMPORT_PAGE_SIZE),
 });
 app.post('/import/status', async (c) => ok(c, { items: await importStatus(c.env as unknown as ImportStatusEnv, parse(ImportStatusBody, await body(c)).items) }));
+// Social import sources (wiki TOOLS-ADMIN TA-9): routers/importSources.router.ts
+app.route('/import/sources', importSourcesRouter as never);
 // The Errors page's Retry on an attach job that gave up (admin-api lib/errors-actions.ts)
 app.post('/import/attach/retry', async (c) => {
 	const { jobId } = parse(z.object({ jobId: z.string().min(1).max(64) }), await body(c));

@@ -17,6 +17,9 @@ import { mastodonAuthorizeUrl, mastodonExchange, mastodonRegisterApp, mastodonRe
 import { blueskyFinish, blueskyRevoke, blueskyStart, normalizeHandle, resolveBluesky, type BlueskyPending } from './adapters/bluesky';
 import { tgCall, tgGetMe, tgSetWebhook } from './adapters/telegram';
 import { logger } from '../logger';
+import { recordTelegramPost, type TgChannelPost } from '../importSources/telegram';
+import { readSource } from '../importSources/store';
+import { startSourceSync } from '../importSources/job';
 
 const OAUTH_TTL_MS = 10 * 60_000;
 const TELEGRAM_CODE_TTL_MS = 30 * 60_000;
@@ -279,6 +282,21 @@ export function telegramCode(): string {
 	return `AUN-${chars.slice(0, 4)}-${chars.slice(4)}`;
 }
 
+/** Records an imported channel's post and queues its sync; a failure is logged (Telegram never resends). */
+async function importTelegramPost(env: SocialEnv, post: TgChannelPost): Promise<number> {
+	try {
+		const queued = await recordTelegramPost(env, post);
+		for (const sourceId of queued) {
+			const source = await readSource(env, sourceId);
+			if (source) await startSourceSync(env as never, source, source.created_by, 'post');
+		}
+		return queued.length;
+	} catch (error) {
+		logger.error('[Social] Telegram post not imported', { chatId: post.chat?.id, error: error instanceof Error ? error.message : String(error) });
+		return 0;
+	}
+}
+
 const CODE_IN_TEXT = /\bAUN-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}\b/;
 
 /** The Telegram webhook (registered once per bot and URL; the secret header proves a call is Telegram's). */
@@ -315,7 +333,7 @@ interface TgUpdate {
  * A Telegram update. A post containing a pending code connects that chat to the channel that asked for it (after
  * checking that the bot may post there); the bot losing its admin rights marks the chat's connections revoked.
  */
-export async function handleTelegramUpdate(env: SocialEnv, update: TgUpdate, f: typeof fetch = fetch): Promise<{ connected?: string; revoked?: number }> {
+export async function handleTelegramUpdate(env: SocialEnv, update: TgUpdate, f: typeof fetch = fetch): Promise<{ connected?: string; revoked?: number; imported?: number }> {
 	const creds = await readCredentials(env, 'telegram');
 	if (!creds?.botToken) return {};
 	const db = socialDb(env);
@@ -335,6 +353,8 @@ export async function handleTelegramUpdate(env: SocialEnv, update: TgUpdate, f: 
 
 	const msg = update.channel_post ?? update.message;
 	const code = msg?.text?.match(CODE_IN_TEXT)?.[0];
+	// A channel post of a chat a social import reads (wiki TOOLS-ADMIN TA-9): recorded, then posted by a sync job
+	if (update.channel_post && !code) return { imported: await importTelegramPost(env, update.channel_post as TgChannelPost) };
 	if (!msg || !code) return {};
 	const pending = await takePending(env, code, 'telegram');
 	if (!pending) return {};
