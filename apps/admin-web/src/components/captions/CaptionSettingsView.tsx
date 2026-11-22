@@ -171,6 +171,20 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
                   <span id={`${ids}-viewer-hint`} className="block text-sm text-fg-muted">{t('captionSettings.viewerTitlesHint')}</span>
                 </span>
               </label>
+              <label className="mt-4 flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className={checkbox}
+                  checked={form.viewerDownload.enabled}
+                  onChange={(e) => setForm((f) => ({ ...f, viewerDownload: { enabled: e.target.checked } }))}
+                  aria-describedby={`${ids}-viewer-download-hint`}
+                  data-testid="viewer-download-enabled"
+                />
+                <span>
+                  <span className="block text-fg">{t('captionSettings.viewerDownload')}</span>
+                  <span id={`${ids}-viewer-download-hint`} className="block text-sm text-fg-muted">{t('captionSettings.viewerDownloadHint')}</span>
+                </span>
+              </label>
             </div>
           </section>
         </fieldset>

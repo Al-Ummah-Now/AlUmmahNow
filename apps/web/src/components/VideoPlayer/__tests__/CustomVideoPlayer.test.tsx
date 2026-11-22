@@ -99,7 +99,12 @@ jest.mock('@/lib/video/fallback-strategy', () => ({
 
 // Mock ErrorDisplay
 // The settings panel has its own tests and needs a full Video.js player
-jest.mock('../SettingsMenu', () => ({ SettingsMenu: () => null }));
+const mockSettingsMenu = jest.fn((_props: { captionDownloadUrl?: (language: string) => string | null }) => null);
+jest.mock('../SettingsMenu', () => ({ SettingsMenu: (props: { captionDownloadUrl?: (language: string) => string | null }) => mockSettingsMenu(props) }));
+
+// The features answer (useFeatures fetches it; here it is set per test)
+let mockFeatures: Record<string, boolean> = {};
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }) }));
 
 jest.mock('../ErrorDisplay', () => ({
   ErrorDisplay: ({ error }: { error: VideoError }) => (
@@ -134,6 +139,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mockFeatures = {};
 
     // Configure the mocked module exports here (kept out of the hoisted jest.mock
     // factories to avoid a TDZ error referencing module-scope consts).
@@ -594,6 +600,28 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       rerender(<CustomVideoPlayer {...defaultProps} textTracks={tracks.slice(0, 1)} />);
       await waitFor(() => expect(removeRemoteTextTrack).toHaveBeenCalledTimes(2));
       expect(addRemoteTextTrack).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('Caption download (viewerCaptionDownload)', () => {
+    const tracks = [{ kind: 'subtitles' as const, src: 'https://api.test/api/videos/v1/subtitles/en', srclang: 'en', label: 'English', default: false }];
+    const lastDownloadProp = () => {
+      const calls = mockSettingsMenu.mock.calls;
+      return calls[calls.length - 1]?.[0].captionDownloadUrl;
+    };
+
+    it('off (the default): the settings menu gets no download link, so it has no Download row', async () => {
+      render(<CustomVideoPlayer {...defaultProps} textTracks={tracks} />);
+      await waitFor(() => expect(mockSettingsMenu).toHaveBeenCalled());
+      expect(lastDownloadProp()).toBeUndefined();
+    });
+
+    it('on: the settings menu gets the shown track\'s download link', async () => {
+      mockFeatures = { viewerCaptionDownload: true };
+      render(<CustomVideoPlayer {...defaultProps} textTracks={tracks} />);
+      await waitFor(() => expect(lastDownloadProp()).toBeDefined());
+      expect(lastDownloadProp()?.('en')).toContain('/subtitles/en/download');
+      expect(lastDownloadProp()?.('fr')).toBeNull();
     });
   });
 });

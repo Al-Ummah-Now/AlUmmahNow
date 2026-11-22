@@ -151,6 +151,11 @@ export function captionTranslateConfigured(env: FeaturesEnv, settings: CaptionSe
 	return !!(env.SEARCH_DB && env.queue) && settings.translation.enabled && settings.monthlyBudgetUsd > 0;
 }
 
+/** Viewers may download captions from the player: switched on by an admin (off by default). */
+export function viewerCaptionDownloadConfigured(settings: CaptionSettings): boolean {
+	return settings.viewerDownload.enabled;
+}
+
 /** The Translate button: switched on, the processor bound, a daily allowance and a budget. */
 export function inlineTranslateConfigured(env: FeaturesEnv, settings: CaptionSettings): boolean {
 	return !!env.PROCESSOR && settings.inline.enabled && settings.inline.dailyItems > 0 && settings.inline.monthlyBudgetUsd > 0;
@@ -280,6 +285,7 @@ export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channe
 	const features: UserFeatures = {
 		...NO_FEATURES,
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
+		viewerCaptionDownload: viewerCaptionDownloadConfigured(settings),
 		quranText,
 	};
 	const userId = who.userId ?? null;

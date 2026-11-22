@@ -14,6 +14,8 @@ export interface CaptionSettings {
   translation: { enabled: boolean; model: string; fallbackModel: string; deepl: boolean; deeplLanguages: string[] };
   inline: { enabled: boolean; dailyItems: number; monthlyBudgetUsd: number };
   viewerTitles: { enabled: boolean };
+  /** Viewers may download captions from the player; off by default (owner decision 2026-11-22) */
+  viewerDownload: { enabled: boolean };
 }
 
 export interface QuranEdition {

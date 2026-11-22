@@ -85,6 +85,11 @@ describe('caption jobs', () => {
 		assert.equal(read.model, '@cf/openai/whisper-large-v3-turbo');
 		assert.deepEqual(read.viewerTitles, { enabled: true }, 'viewer-side titles are on (O6); an admin can pause them');
 		assert.equal(read.translation.deepl, false, 'DeepL is off by default');
+		assert.deepEqual(read.viewerDownload, { enabled: false }, 'viewer caption download is off (owner decision 2026-11-22)');
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ viewerDownload: { enabled: true } });
+		assert.deepEqual((await readCaptionSettings(asEnv)).viewerDownload, { enabled: true });
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ viewerDownload: { enabled: 'yes' } });
+		assert.deepEqual((await readCaptionSettings(asEnv)).viewerDownload, { enabled: false }, 'a bad value keeps the default');
 		assert.deepEqual(read.inline, { enabled: true, dailyItems: 100, monthlyBudgetUsd: 2 });
 		assert.equal((await readCaptionSettings({ ...asEnv, ENVIRONMENT: 'production' })).inline.monthlyBudgetUsd, 20);
 	});

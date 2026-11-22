@@ -34,6 +34,12 @@ export const USER_FEATURE_KEYS = [
   'inlineTranslate',
   /** Viewer-side translated titles are on for the whole site (admin) */
   'viewerTranslatedTitles',
+  /**
+   * Viewers may download a video's captions from the player (admin; off by default, owner decision
+   * 2026-11-22). Off: the player shows no Download row, and the download API serves only the video's
+   * owner, its channel's caption editors and admins (Studio)
+   */
+  'viewerCaptionDownload',
   /** Quran Foundation translation editions can be loaded (credentials bound) */
   'quranEditions',
   /** Our Quran Foundation copy of the official text is synced and fresh (quran/current.json) */

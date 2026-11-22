@@ -5,6 +5,11 @@
  * Content Sync copy, a translated track from the channel's edition), unaltered, with Quran
  * Foundation's attribution and the edition in a NOTE block (VTT) or a first zero-length cue (SRT).
  * One video per file; the filled file is never stored (no-store, built per request).
+ *
+ * Who gets it: first the video's own read rule (lib/videoReadAccess.ts). Then viewer downloads are an
+ * admin switch (viewerCaptionDownload), off by default (owner decision 2026-11-22): while it is off,
+ * only admins and the video's team with video.edit (owner, channel owner/admin/editor) get the file,
+ * for Studio; anyone else gets 404 feature_off, before the track is looked up.
  */
 import { z } from 'zod';
 import { captionMarkerRanges } from '@al-ummah/shared-types';
@@ -15,6 +20,11 @@ import { editionFor } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, type AppContext } from '../../base';
 import { loadVideoRecord, videoReadAccess, VIDEO_NOT_FOUND } from '../../lib/videoReadAccess';
+import { readCaptionSettings } from '../../lib/captions/jobs';
+import { featureOff, viewerCaptionDownloadConfigured } from '../../lib/features';
+import { canOnVideo, type AccessVideo } from '../../lib/channelAccess';
+import { isAdminRole } from '../../lib/public-access';
+import { getAuthContext } from '../../middleware/auth';
 
 const errorBody = z.object({ success: z.boolean(), error: z.string() });
 
@@ -35,7 +45,7 @@ export class SubtitlesDownload extends OptionalAuthRoute {
 		},
 		responses: {
 			'200': { description: 'The subtitle file (attachment)', content: { 'text/vtt': { schema: z.string() }, 'application/x-subrip': { schema: z.string() } } },
-			'404': { description: 'No track in this language', content: { 'application/json': { schema: errorBody } } },
+			'404': { description: 'No track in this language, a video hidden from the caller, or (code feature_off) viewer downloads are off and the caller is not on the video\'s team or an admin', content: { 'application/json': { schema: errorBody } } },
 			'500': { description: 'Internal server error', content: { 'application/json': { schema: errorBody } } },
 		},
 	};
@@ -46,8 +56,15 @@ export class SubtitlesDownload extends OptionalAuthRoute {
 			const { videoId, language } = params;
 			const format = ((query.format as string) || 'vtt') as SubtitleDownloadFormat;
 			// The video's own read rule (GET /api/videos/:id): hidden from this viewer → the same 404
-			const video = await loadVideoRecord<{ channelId?: string; userId?: string }>(c.env as never, videoId);
-			if (!(await videoReadAccess(c.env, video as never, this.getUserId(c)))) return c.json(VIDEO_NOT_FOUND, 404);
+			const video = await loadVideoRecord<AccessVideo & { channelId?: string }>(c.env as never, videoId);
+			const userId = this.getUserId(c);
+			if (!(await videoReadAccess(c.env, video as never, userId))) return c.json(VIDEO_NOT_FOUND, 404);
+			// Viewer downloads off (the default): only admins and the video's team (Studio)
+			if (!viewerCaptionDownloadConfigured(await readCaptionSettings(c.env as never))) {
+				const roles = getAuthContext(c)?.payload?.roles as string[] | undefined;
+				const allowed = !!userId && (isAdminRole(roles) || (!!video && (await canOnVideo(c.env as never, video, userId, 'video.edit'))));
+				if (!allowed) return featureOff(c);
+			}
 			const track = await c.env.subtitles.get(`${videoId}/${language}.vtt`);
 			if (!track) return c.json({ success: false, error: `Subtitle not found for language: ${language}` }, 404);
 

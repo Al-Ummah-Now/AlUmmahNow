@@ -86,6 +86,7 @@ const PHONE_TAB_BAR_ROOM = 56 + 16;
 import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, PIN_MEDIA_QUERY, nextMini, nextPinned } from '@/lib/video/mini-player';
 import { applyBuiltInIcons } from '@/lib/video/components';
 import { captionDownloadHref } from '@/lib/video/subtitle-tracks';
+import { useFeatures } from '@/hooks/useFeatures';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
 import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
@@ -534,6 +535,8 @@ export default function CustomVideoPlayer({
     }
   }, [playerReady, textTracks, videoId]);
 
+  // Viewer caption download is an admin switch, off by default (owner decision 2026-11-22): off, the menu has no Download row
+  const { features } = useFeatures();
   /** The shown caption language's download link (our API's tracks only). */
   const captionDownloadUrl = useCallback(
     (language: string) => {
@@ -1413,7 +1416,7 @@ export default function CustomVideoPlayer({
       </div>
 
       {playerReady && playerRef.current && (
-        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} captionDownloadUrl={captionDownloadUrl} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
+        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} captionDownloadUrl={features.viewerCaptionDownload ? captionDownloadUrl : undefined} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
       )}
       {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} lang={lang} />}
 

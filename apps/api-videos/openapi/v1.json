@@ -56515,7 +56515,7 @@
             }
           },
           "404": {
-            "description": "No track in this language",
+            "description": "No track in this language, a video hidden from the caller, or (code feature_off) viewer downloads are off and the caller is not on the video's team or an admin",
             "content": {
               "application/json": {
                 "schema": {

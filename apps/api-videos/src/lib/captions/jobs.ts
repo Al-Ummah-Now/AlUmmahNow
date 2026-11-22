@@ -102,6 +102,11 @@ export interface CaptionSettings {
 	};
 	/** Viewer-side translated titles (§5.9, O6 / P4): an admin setting, on by default; the owner's answer is a toggle */
 	viewerTitles: { enabled: boolean };
+	/**
+	 * Viewers download captions from the player (QF 2026-11-22 allows it). Off by default: the owner
+	 * decided 2026-11-22 not to offer it yet; owners, caption editors and admins still download in Studio.
+	 */
+	viewerDownload: { enabled: boolean };
 }
 
 const MODEL_ID = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
@@ -115,6 +120,7 @@ export function defaultCaptionSettings(env: Pick<CaptionJobsEnv, 'ENVIRONMENT'>)
 		inline: { enabled: true, dailyItems: INLINE_TRANSLATE_DEFAULT_DAILY_ITEMS, monthlyBudgetUsd: env.ENVIRONMENT === 'production' ? 20 : 2 },
 		// P4/O6 pending the owner: on by default, labelled, each channel can opt out; the admin setting turns it off site-wide
 		viewerTitles: { enabled: true },
+		viewerDownload: { enabled: false },
 	};
 }
 
@@ -124,6 +130,7 @@ export function cleanCaptionSettings(raw: unknown, base: CaptionSettings): Capti
 	const tr = (r.translation && typeof r.translation === 'object' ? r.translation : {}) as Partial<CaptionSettings['translation']>;
 	const inl = (r.inline && typeof r.inline === 'object' ? r.inline : {}) as Partial<CaptionSettings['inline']>;
 	const vt = (r.viewerTitles && typeof r.viewerTitles === 'object' ? r.viewerTitles : {}) as Partial<CaptionSettings['viewerTitles']>;
+	const vd = (r.viewerDownload && typeof r.viewerDownload === 'object' ? r.viewerDownload : {}) as Partial<CaptionSettings['viewerDownload']>;
 	return {
 		monthlyBudgetUsd: typeof r.monthlyBudgetUsd === 'number' && r.monthlyBudgetUsd >= 0 && r.monthlyBudgetUsd <= 500 ? r.monthlyBudgetUsd : base.monthlyBudgetUsd,
 		model: typeof r.model === 'string' && MODEL_ID.test(r.model) ? r.model : base.model,
@@ -140,6 +147,7 @@ export function cleanCaptionSettings(raw: unknown, base: CaptionSettings): Capti
 			monthlyBudgetUsd: typeof inl.monthlyBudgetUsd === 'number' && inl.monthlyBudgetUsd >= 0 && inl.monthlyBudgetUsd <= 200 ? inl.monthlyBudgetUsd : base.inline.monthlyBudgetUsd,
 		},
 		viewerTitles: { enabled: typeof vt.enabled === 'boolean' ? vt.enabled : base.viewerTitles.enabled },
+		viewerDownload: { enabled: typeof vd.enabled === 'boolean' ? vd.enabled : base.viewerDownload.enabled },
 	};
 }
 
