@@ -69,12 +69,12 @@ export function JobActionButtons({ job, permissions, action, onCancelAsk }: { jo
   return (
     <div className="flex flex-wrap gap-2 justify-end">
       {canRetryStatus(job) && (
-        <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run(`retry:${job.id}`, () => retryJob(job.id), { success: t('jobs.retried') })} data-testid="job-retry">
+        <button type="button" className={`${smallButtonClass} whitespace-nowrap`} disabled={!!busy} onClick={() => run(`retry:${job.id}`, () => retryJob(job.id), { success: t('jobs.retried') })} data-testid="job-retry">
           {busy === `retry:${job.id}` ? t('content.working') : t('jobs.retry')}
         </button>
       )}
       {canCancelStatus(job) && (
-        <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => onCancelAsk(job)} data-testid="job-cancel">
+        <button type="button" className={`${smallButtonClass} whitespace-nowrap`} disabled={!!busy} onClick={() => onCancelAsk(job)} data-testid="job-cancel">
           {busy === `cancel:${job.id}` ? t('content.working') : t('jobs.cancel')}
         </button>
       )}
