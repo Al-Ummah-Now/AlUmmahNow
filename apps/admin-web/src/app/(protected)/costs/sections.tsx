@@ -12,7 +12,7 @@ import { linkClass } from '@/components/ui';
 import { StackedBarChart } from '@/components/charts/StackedBarChart';
 import { COST_TREND_KEYS, type CostBudgetPart, type CostEnvKey, type CostMover, type CostsDashboard, type CostTrendKey } from '@/lib/api/costs-types';
 import { budgetMeter, dailyBudget, idleStatus, type MeterTone, type OpsFormats } from '../operations/model';
-import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
+import { dataAge, listJoin, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
 import { moneyFormat } from '@al-ummah/shared-types';
 import { Sep } from '@/components/Sep';
 import { LocalTime } from '@/components/LocalTime';
@@ -81,7 +81,7 @@ export function signedUsd(locale: string): (v: number) => string {
 }
 
 function percentList(levels: readonly number[], f: OpsFormats, t: Translator): string {
-  return levels.map((l) => f.percent(l)).join(t('common.sep'));
+  return listJoin(levels.map((l) => f.percent(l)), t('common.sep'));
 }
 
 export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; now: Date }) {
@@ -97,7 +97,7 @@ export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; 
           <p className="mt-1 text-fg-muted">{t('costs.subtitle')}</p>
         </div>
         {age && (
-          <p className="cost-pill min-w-0 max-w-full" data-tone={warn ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={warn ? 'true' : 'false'}>
+          <p className="cost-pill cost-pill-wrap min-w-0 max-w-full" data-tone={warn ? 'warn' : 'good'} data-testid="costs-data-age" data-stale={warn ? 'true' : 'false'}>
             <span aria-hidden="true" className={`cost-dot ${warn ? 'text-warning-fg' : 'text-success-fg'}`} />
             <span className="min-w-0 break-words tabular-nums">
               {age.never
@@ -272,8 +272,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
   const idleByEnv = (['production', 'stage', 'qa'] as const)
     .filter((e) => (d.idle.byEnv[e] ?? 0) > 0)
     // Each name stays on the line of its amount
-    .map((e) => `${t(`costs.envs.${e}`)} ${f.usd(d.idle.byEnv[e] ?? 0)}`.replace(/ /g, '\u00a0'))
-    .join(t('common.sep'));
+    .map((e) => `${t(`costs.envs.${e}`)} ${f.usd(d.idle.byEnv[e] ?? 0)}`.replace(/ /g, '\u00a0'));
   return (
     <section className="cost-panel p-5 sm:p-6" aria-labelledby="costs-budget-title" data-testid="costs-budget">
       <h2 id="costs-budget-title" className={sectionTitle}>{t('costs.budget.title')}</h2>
@@ -365,7 +364,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                 {idle.under ? t('costs.budget.idleUnder', { target: f.usd(d.idle.targetUsd) }) : t('costs.budget.idleOver', { target: f.usd(d.idle.targetUsd), over: f.usd(idle.overBy) })}
               </span>
               <span className="block" data-testid="costs-idle-parts">
-                {t('costs.budget.idleCloudflare', { value: f.usd(d.idle.parts.cloudflare ?? 0), envs: idleByEnv || '—' })}
+                {t('costs.budget.idleCloudflare', { value: f.usd(d.idle.parts.cloudflare ?? 0), envs: listJoin(idleByEnv, t('common.sep')) || '—' })}
               </span>
             </>
           }
@@ -399,7 +398,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                 return (
                   <li key={a.key} className="cost-tile flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm" data-testid="costs-alert" data-kind={kind}>
                     <span className="inline-flex items-center gap-2 text-fg">
-                      <span aria-hidden="true" className={`cost-dot ${kind === 'spike' ? 'text-warning-fg' : 'text-danger-fg'}`} />
+                      <span aria-hidden="true" className={`cost-dot cost-dot-first-line ${kind === 'spike' ? 'text-warning-fg' : 'text-danger-fg'}`} />
                       <bdi>{alertText(d, a.key, t, f)}</bdi>
                     </span>
                     <span className="text-xs text-fg-muted tabular-nums">{fillNodes(t('costs.budget.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
@@ -624,7 +623,7 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
             <thead>
               <tr className="text-fg-muted">
                 <th scope="col" className={`${th} text-start`}>{t('costs.movers.name')}</th>
-                <th scope="col" className={`${th} text-end`}>{t('costs.movers.change')}</th>
+                <th scope="col" className={`${th} hidden text-end sm:table-cell`}>{t('costs.movers.change')}</th>
                 <th scope="col" className={`${th} hidden text-end sm:table-cell`}>{t('costs.movers.impact')}</th>
               </tr>
             </thead>
@@ -635,12 +634,17 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                 return (
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
-                      <bdi className="block break-words font-medium text-fg sm:whitespace-nowrap">{label}</bdi>
-                      <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep locale={locale} />{envLabel(t, m.env)}</span>
+                      {/* A resource name is one token: it never breaks at its hyphens. On a phone the
+                          change goes under it, so the Arabic amounts («دولار أمريكي») don't squeeze it */}
+                      <bdi className="block whitespace-nowrap font-medium text-fg">{label}</bdi>
+                      <span className="block text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep locale={locale} />{envLabel(t, m.env)}</span>
+                      <span className={`mt-1 flex flex-wrap items-baseline gap-x-3 tabular-nums sm:hidden ${DIRECTION_TEXT[dir]}`} data-testid="costs-mover-change-phone">
+                        <span className="whitespace-nowrap"><span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}</span>
+                        <span className="whitespace-nowrap text-xs text-fg-muted">{t('costs.movers.perMonth', { value: signed(m.monthlyImpact) })}</span>
+                      </span>
                     </th>
-                    <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
+                    <td className={`hidden px-3 py-2 text-end tabular-nums whitespace-nowrap sm:table-cell ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}
-                      <span className="block text-xs text-fg-muted sm:hidden">{t('costs.movers.perMonth', { value: signed(m.monthlyImpact) })}</span>
                     </td>
                     <td className="hidden px-3 py-2 text-end text-fg-muted tabular-nums whitespace-nowrap sm:table-cell">{signed(m.monthlyImpact)}</td>
                   </tr>

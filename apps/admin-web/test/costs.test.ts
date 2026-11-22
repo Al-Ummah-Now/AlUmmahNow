@@ -357,7 +357,7 @@ describe('costs sections render', () => {
     assert.ok(cf.includes('110.4M') && cf.includes('50M'), 'usage (110.46M) and allowance as compact counts, cut not rounded');
     const budget = render(h(sections.BudgetSection, { d, t, f }));
     assert.match(budget, /data-testid="costs-idle-status"[^>]*>\$162\.25 over the \$50\.00 target/);
-    assert.ok(budget.includes('Production\u00a0$62.25 • QA\u00a0$150.00'), 'each env name stays with its amount');
+    assert.ok(budget.includes('Production\u00a0$62.25 •\u00a0QA\u00a0$150.00'), 'each env name stays with its amount');
     const budgetAr = render(h(sections.BudgetSection, { d, t: createTranslator('ar'), f: opsFormats('ar') }));
     assert.ok(budgetAr.includes('، '), 'Arabic joins the env list with «،»');
     assert.ok(!budgetAr.includes(' · '));
@@ -387,12 +387,12 @@ describe('costs sections render', () => {
     const check = React.createElement('button', { 'data-testid': 'costs-token-check' }, 'Check again');
     const html = render(React.createElement(sections.TokenNotice as React.FC, { d, t, f, check } as never));
     assert.match(html, /data-kind="refused"/);
-    assert.ok(html.includes('Account\u00a0Analytics\u00a0Read'), 'the permission name never breaks');
+    assert.ok(html.includes('Account\u00a0Analytics:\u00a0Read'), 'the permission name never breaks');
     assert.ok(html.includes('missing, not zero'));
     assert.ok(html.includes('costs-token-check'));
     assert.ok(html.includes('#connections'));
     const ar = render(React.createElement(sections.TokenNotice as React.FC, { d: { ...d, canManage: false }, t: createTranslator('ar'), f: opsFormats('ar'), check } as never));
-    assert.ok(ar.includes('Account\u00a0Analytics\u00a0Read'));
+    assert.ok(ar.includes('Account\u00a0Analytics:\u00a0Read'));
     assert.ok(!ar.includes('costs-token-check'));
   });
 
@@ -595,12 +595,33 @@ describe('costs audit fixes, round 5 (AUDIT-2 2026-11-21)', () => {
   it('Top movers show the monthly impact as an amount under its "Monthly impact" heading', () => {
     const mover = { id: 'd1:qa', label: 'al-ummah-now-reports-qa', product: 'd1' as const, env: 'qa', last7: 1, prev7: 20.79, change: -19.79, monthlyImpact: -84.81 };
     const html = renderToStaticMarkup(React.createElement(sections.MoversSection as React.FC, { d: freshDashboard({ movers: { up: [], down: [mover] } }), t: createTranslator('ar'), locale: 'ar' } as never) as never);
-    assert.ok(html.includes('sm:whitespace-nowrap'), 'names stay whole on wider screens');
+    // A name never breaks at its hyphens, on any width (round 6: Arabic phone)
+    assert.match(html, /<bdi class="block whitespace-nowrap font-medium text-fg">al-ummah-now-reports-qa<\/bdi>/);
+    // On a phone the change sits under the name, not in a column beside it
+    assert.ok(html.includes('data-testid="costs-mover-change-phone"'));
     assert.equal((html.match(/شهريًا/g) ?? []).length, 1, 'only the phone line repeats «شهريًا»');
   });
 
   it('the daily chart says its days are UTC days', () => {
     assert.ok(createTranslator('en')('costs.breakdown.trendNote').includes('UTC days'));
     assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('غرينتش'));
+  });
+});
+
+describe('AUDIT-2 round 6', () => {
+  it('a wrapped English list leads each item with its bullet; Arabic keeps the comma after the item', async () => {
+    const { listJoin } = await import('../src/app/(protected)/costs/model');
+    const en = listJoin(['Production $38.20', 'Stage $0.98', 'QA $0.41'], createTranslator('en')('common.sep'));
+    assert.equal(en, 'Production $38.20 • Stage $0.98 • QA $0.41');
+    // The only break opportunity is before a bullet, never after it
+    assert.ok(!/• /.test(en));
+    assert.equal(listJoin(['أ', 'ب'], createTranslator('ar')('common.sep')), 'أ، ب');
+  });
+
+  it('Arabic percent labels use «٪», and the Account Analytics permission reads with its colon in both languages', () => {
+    const ar = createTranslator('ar');
+    assert.ok(ar('costs.thresholds.budgetLevels').includes('٪') && !ar('costs.thresholds.budgetLevels').includes('%'));
+    assert.match(ar('costs.token.permission'), /Account Analytics: Read/);
+    assert.match(createTranslator('en')('costs.token.permission'), /Account Analytics: Read/);
   });
 });

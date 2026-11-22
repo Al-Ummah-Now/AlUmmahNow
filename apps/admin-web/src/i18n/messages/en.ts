@@ -4375,7 +4375,7 @@ const en = {
       missingAdmin: 'The collector has no Cloudflare token, so every figure here stays at zero. A super admin has to set one under Connections on this page.',
       missingAction: 'Set the Cloudflare token',
       release: 'The collector is using the release token until a read-only Cloudflare token is set under Connections.',
-      permission: 'Account\u00a0Analytics\u00a0Read',
+      permission: 'Account\u00a0Analytics:\u00a0Read',
       refusedTitle: 'Cloudflare refuses the collector’s token: Cloudflare costs are missing, not zero',
       refusedSharedToken: 'The shared token the collector uses lacks the {permission} permission, so Cloudflare answers every analytics read with “not authorized”. Add {permission} to that token in the Cloudflare dashboard, or set a read-only token with {permission} under Connections.',
       refusedAdminToken: 'The Cloudflare token set under Connections lacks the {permission} permission, so Cloudflare answers every analytics read with “not authorized”. Add {permission} to it in the Cloudflare dashboard, or replace it under Connections.',
