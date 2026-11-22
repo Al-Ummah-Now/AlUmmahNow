@@ -33,7 +33,7 @@ export default function LinkPost({ post }: { post: CommunityPost }) {
         <span className="p-3 space-y-1 min-w-0 text-start">
           <span className="block text-xs text-[var(--fanous-color-text-muted)]" dir={l.siteName ? "auto" : "ltr"} data-testid="community-link-site">{l.siteName || hostOf(l.url)}</span>
           <span className="block font-semibold text-[var(--fanous-color-text-primary)] break-words [text-wrap:balance]">{l.title || l.url}</span>
-          {l.description ? <span className="block text-sm text-[var(--fanous-color-text-secondary)] line-clamp-2 break-words">{l.description}</span> : null}
+          {l.description ? <span className="block text-sm text-[var(--fanous-color-text-secondary)] line-clamp-2 break-words [text-wrap:balance]">{l.description}</span> : null}
           <span className="sr-only">({t.community.opensOutside})</span>
         </span>
       </a>
