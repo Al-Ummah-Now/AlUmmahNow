@@ -56606,6 +56606,17 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 200,
+              "description": "Search: entries whose title (any language) or channel name holds every word; the newest 200 entries are searched"
+            },
+            "required": false,
+            "description": "Search: entries whose title (any language) or channel name holds every word; the newest 200 entries are searched",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "newest",
                 "oldest",
@@ -56719,6 +56730,10 @@
                     },
                     "cursor": {
                       "type": "string"
+                    },
+                    "searched": {
+                      "type": "number",
+                      "description": "With q: how many of the newest entries were searched (at most 200)"
                     }
                   },
                   "required": [

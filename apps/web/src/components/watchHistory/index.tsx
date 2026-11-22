@@ -96,8 +96,10 @@ export function ContinueCard({ entry, lang, t, onRemove }: EntryProps) {
           <h3 className="hx-title" dir="auto">{keepLastWordsTogether(title)}</h3>
           {entry.channelName && <span className="hx-channel" dir="auto">{channelLabel(entry, lang)}</span>}
           <p className="hx-meta">
+            {/* Two-column phone cards: one part per line, so a separator never starts a line */}
             <MetaParts
               lang={lang}
+              stack="phone"
               parts={[
                 { key: 'progress', keep: true, node: progressText(entry, lang, t) },
                 { key: 'when', keep: true, node: <span title={formatAbsoluteDate(entry.lastWatchedAt, lang)}>{keepNumbersWithUnits(watchedOn)}</span> },
