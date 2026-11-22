@@ -228,7 +228,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         ) : (
           <ul className="space-y-4" data-testid="error-samples">
             {events.map((e) => (
-              <Sample key={e.id} event={e} t={t} locale={locale} highlighted={e.ref === highlight} />
+              <Sample key={e.id} event={e} app={group.app} t={t} locale={locale} highlighted={e.ref === highlight} />
             ))}
           </ul>
         )}
@@ -290,10 +290,12 @@ function parseExtra(json: string | null | undefined): [string, string][] {
 
 const ID_SAFE = /^[A-Za-z0-9_-]{1,64}$/;
 
-function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Translator; locale: Locale; highlighted: boolean }) {
+function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; app: string; t: Translator; locale: Locale; highlighted: boolean }) {
   const user = e.user_id && USER_ID.test(e.user_id) ? e.user_id : null;
   const ctx = parseContext(e.context_json);
   const extra = parseExtra(e.extra_json);
+  // An Admin Tools report about an imported file (TA-11 reporter: extra.videoId): its file in Imports (TA-8)
+  const importVideo = app === 'tools' ? extra.find(([k, v]) => k === 'videoId' && ID_SAFE.test(v))?.[1] ?? null : null;
   const template = e.route ? normalizeRoute(e.route) : '';
   const code = (v: string) => <code dir="ltr">{v}</code>;
   const facts: [string, React.ReactNode][] = [
@@ -407,6 +409,11 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
               </div>
             ))}
           </dl>
+          {importVideo && (
+            <Link href={`/imports?video=${encodeURIComponent(importVideo)}`} className={`${linkClass} inline-block mt-2 text-sm`} data-testid="error-sample-import">
+              {t('errorsPage.openImport')}
+            </Link>
+          )}
         </div>
       )}
     </li>

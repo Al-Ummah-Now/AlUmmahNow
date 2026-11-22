@@ -2,7 +2,8 @@
  * Pure helpers for admin jobs (no React, no server actions), shared by the
  * jobs UI and its tests.
  */
-import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type AdminJob } from '@al-ummah/shared-types';
+import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type AdminJob, type AdminJobLogEntry } from '@al-ummah/shared-types';
+import type { MessageKey } from '@/i18n/translate';
 import type { ChipTone } from './parts';
 
 const ACTIVE = new Set(['queued', 'running', 'retrying']);
@@ -13,7 +14,42 @@ export function jobTone(status: AdminJob['status']): ChipTone {
   if (status === 'failed') return 'bad';
   if (status === 'retrying') return 'warn';
   if (status === 'succeeded') return 'good';
+  if (status === 'cancelled') return 'neutral';
   return 'info';
+}
+
+/** Retry: a failed job, or one an admin cancelled. */
+export const canRetryStatus = (job: Pick<AdminJob, 'status'>) => job.status === 'failed' || job.status === 'cancelled';
+/** Cancel: a job that has not finished. */
+export const canCancelStatus = (job: Pick<AdminJob, 'status'>) => ACTIVE.has(job.status);
+
+/**
+ * A job's error in plain words: what kind of problem it was, from the raw message the job stored. The
+ * raw message stays available as the technical detail. Ordered from the most specific pattern.
+ */
+const ERROR_WORDS: Array<[RegExp, MessageKey]> = [
+  [/^hidden$/, 'jobs.errorWords.hidden'],
+  [/could not queue the job/i, 'jobs.errorWords.queue'],
+  [/no handler for/i, 'jobs.errorWords.noHandler'],
+  [/is not bound|binding/i, 'jobs.errorWords.binding'],
+  [/time(d)? ?out|timeout|deadline|ETIMEDOUT/i, 'jobs.errorWords.timeout'],
+  [/bunny/i, 'jobs.errorWords.bunny'],
+  [/\b(401|403)\b|forbidden|unauthori[sz]ed|permission|denied/i, 'jobs.errorWords.denied'],
+  [/not found|\b404\b|no such|missing|gone|deleted/i, 'jobs.errorWords.notFound'],
+  [/\bD1\b|sqlite|database|constraint/i, 'jobs.errorWords.database'],
+  [/\bR2\b|bucket|object storage/i, 'jobs.errorWords.storage'],
+  [/fetch failed|network|ECONN|socket|\b5\d\d\b|unavailable|bad gateway|internal (server )?error/i, 'jobs.errorWords.service'],
+];
+
+export function jobErrorWords(error: string): MessageKey {
+  for (const [pattern, key] of ERROR_WORDS) if (pattern.test(error)) return key;
+  return 'jobs.errorWords.other';
+}
+
+/** The message key of a job log line (placeholders: attempt, max, wait). */
+export function logLineKey(entry: Pick<AdminJobLogEntry, 'event' | 'retried'>): MessageKey {
+  if (entry.event === 'queued') return entry.retried ? 'jobs.log.retried' : 'jobs.log.queued';
+  return `jobs.log.${entry.event}` as MessageKey;
 }
 
 /** Retrying re-runs the action, so it needs that action's permissions. */

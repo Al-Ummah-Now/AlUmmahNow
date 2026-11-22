@@ -228,3 +228,8 @@ export async function getJobCounts(): Promise<JobCounts> {
 export async function retryJob(id: string): Promise<ActionResult<AdminJob>> {
   return toResult(() => fetchAdmin<AdminJob>(`${BASE}/jobs/${enc(id)}/retry`, json('POST')));
 }
+
+/** Stops a job that has not finished (a running step finishes first); Retry starts it again. */
+export async function cancelJob(id: string): Promise<ActionResult<AdminJob>> {
+  return toResult(() => fetchAdmin<AdminJob>(`${BASE}/jobs/${enc(id)}/cancel`, json('POST')));
+}
