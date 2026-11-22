@@ -70,7 +70,7 @@ async function resendCode(email: string, after: number): Promise<string> {
 async function password(page: Page) {
   await page.fill('input[name="email"]:not([type="hidden"])', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  await page.click('button[data-component="button"]:not([type="button"])', { noWaitAfter: true });
+  await page.click('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])', { noWaitAfter: true });
 }
 
 /** Every main-frame navigation request with its time since the test started (redirect hops included). */
@@ -105,10 +105,10 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await page.fill('input[name="password"]', PASSWORD);
   await page.fill('input[name="repeat"]', PASSWORD);
   const sentAfter = Date.now();
-  await page.click('button[data-component="button"]:not([type="button"])');
+  await page.click('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])');
   await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20000 });
   await page.fill('input[name="code"]', await resendCode(EMAIL, sentAfter));
-  await page.click('button[data-component="button"]:not([type="button"])');
+  await page.click('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])');
   await expect(page).toHaveURL(new RegExp(`^${esc(H.web)}/en(/|\\?|$)`), { timeout: 30000 });
   const token = await page.evaluate(async () => (await (await fetch('/api/auth/token')).json()) as { accessToken?: string });
   expect(token.accessToken, 'web session has an access token').toBeTruthy();

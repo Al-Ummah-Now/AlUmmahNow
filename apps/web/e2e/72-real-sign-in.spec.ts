@@ -40,7 +40,7 @@ async function signIn(page: Page): Promise<void> {
   await page.waitForSelector('input[name="email"]:not([type="hidden"])', { timeout: 30000 });
   await page.fill('input[name="email"]:not([type="hidden"])', email as string);
   await fillSecret(page.locator('input[name="password"]'), password());
-  await page.locator('button[data-component="button"]:not([type="button"])').click();
+  await page.locator('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])').click();
   await page.waitForURL((url: URL) => !url.pathname.startsWith('/password') && !url.pathname.startsWith('/api/'), { timeout: 45000 });
   await page.waitForLoadState('load');
 }
