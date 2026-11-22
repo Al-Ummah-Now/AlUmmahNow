@@ -295,3 +295,12 @@ export const ruleInputOf = (r: CapacityRule) => String(isPercentMetric(r.metric)
 export function localDate(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/**
+ * Items of a list that may wrap, joined with the locale's separator (`common.sep`). English
+ * " • " becomes " • ", so a wrapped line starts with its bullet and none dangles at a line's
+ * end; the Arabic comma stays with the item before it («أ، ب») and the line breaks after it.
+ */
+export function listJoin(items: readonly string[], sep: string): string {
+  return items.join(sep.trim() === '•' ? ' • ' : sep);
+}

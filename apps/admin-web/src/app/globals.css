@@ -463,6 +463,18 @@ html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav)
   font-size: 0.8125rem;
 }
 
+/* A pill whose text can run to several lines: the dot stays on the first line, the corners soften */
+.cost-pill-wrap {
+  align-items: flex-start;
+  border-radius: 1rem;
+}
+
+.cost-pill-wrap > .cost-dot,
+.cost-dot-first-line {
+  align-self: flex-start;
+  margin-top: calc((1lh - 0.5rem) / 2);
+}
+
 .cost-pill[data-tone='warn'] {
   border-color: var(--warning-fg);
   color: var(--fg);
