@@ -415,8 +415,8 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
               const step = k === 'step' ? translateDynamic(t, 'errorsPage.importSteps', v) : v;
               return (
                 <div key={k} className="min-w-0">
-                  <dt className={`text-fg-muted ${known ? '' : 'font-mono'}`} dir={known ? 'auto' : 'ltr'}>{label}</dt>
-                  <dd className={`text-fg break-all ${step !== v ? '' : 'font-mono'}`} dir={step !== v ? 'auto' : 'ltr'}>{step}</dd>
+                  <dt className={`text-fg-muted ${known ? '' : 'font-mono'}`} dir={known ? undefined : 'ltr'} style={{ textAlign: pageStart(locale) }}>{label}</dt>
+                  <dd className={`text-fg break-all ${step !== v ? '' : 'font-mono'}`} dir={step !== v ? undefined : 'ltr'} style={{ textAlign: pageStart(locale) }}>{step}</dd>
                 </div>
               );
             })}
