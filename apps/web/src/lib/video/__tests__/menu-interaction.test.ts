@@ -183,6 +183,21 @@ describe('setupClickOnlyMenus', () => {
     expect(player.userActive()).toBe(false);
   });
 
+  it('leaves the open settings menu its class when its gear says expanded', async () => {
+    // SettingsMenu adds the class itself, then marks its gear expanded; that attribute change must not take it away
+    const gear = document.createElement('button');
+    gear.className = 'vjs-fanous-settings';
+    player.controlBar.el().appendChild(gear);
+    player.el().classList.add(MENU_OPEN_CLASS);
+    gear.setAttribute('aria-expanded', 'true');
+    await Promise.resolve();
+    expect(player.hasClass(MENU_OPEN_CLASS)).toBe(true);
+    player.el().classList.remove(MENU_OPEN_CLASS);
+    gear.setAttribute('aria-expanded', 'false');
+    await Promise.resolve();
+    expect(player.hasClass(MENU_OPEN_CLASS)).toBe(false);
+  });
+
   it('closes the menu if the player is made inactive anyway', () => {
     fire(button, 'click');
     player.userActive(false);

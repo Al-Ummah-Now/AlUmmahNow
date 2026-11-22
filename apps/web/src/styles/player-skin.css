@@ -1354,9 +1354,33 @@
 
 .vjs-fanous-menu .vjs-fanous-mi-back {
   margin-bottom: 4px;
+  /* A border, not an inset shadow: the shadow left hairlines down the row's sides */
+  border-bottom: 1px solid var(--fanous-player-track);
   border-radius: 8px 8px 0 0;
-  box-shadow: inset 0 -1px 0 var(--fanous-player-track);
   font-weight: 600;
+}
+
+/*
+  A submenu that scrolls (a phone-width frame) keeps its back row pinned at the top: the rows
+  scroll under it, so the panel's top edge never shows a sliver of a row scrolled off (an Arabic
+  row's dots peeking in). The bar reaches over the panel's 6px padding above and beside the row
+  and paints the panel's own background, sized to the panel (--vjs-fanous-menu-h, set by
+  SettingsMenu) so its gradient lines up with the panel's. The row keeps its own hover, press,
+  focus ring and separator on top.
+*/
+.vjs-fanous-layer.vjs-fanous-menu .vjs-fanous-mi-back-bar {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  margin: -6px -6px 4px;
+  padding: 6px 6px 0;
+  background: var(--fanous-player-menu);
+  background-repeat: no-repeat;
+  background-size: 100% var(--vjs-fanous-menu-h, 100%);
+}
+
+.vjs-fanous-layer.vjs-fanous-menu .vjs-fanous-mi-back-bar .vjs-fanous-mi-back {
+  margin-bottom: 0;
 }
 
 .vjs-fanous-menu .vjs-fanous-mi-check {
