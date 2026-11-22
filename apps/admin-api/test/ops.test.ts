@@ -287,6 +287,16 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     assert.equal(billed.parts.cloudflare, 1);
   });
 
+  it('trend: a finished day of the plan keeps its cents whichever day the 31-day window opens on', () => {
+    const at = (iso: string) => trendBySource([], { bunny: [], containers: [], ai: [], resend: [] }, () => 8.25 / 30, new Date(iso));
+    const a = at('2026-11-21T21:40:00Z');
+    const b = at('2026-11-22T00:30:00Z');
+    for (const key of ['plan', 'fixed'] as const) {
+      const cell = (t: typeof a, day: string) => t.series.find((x) => x.key === key)!.values[t.days.indexOf(day)];
+      for (const day of ['2026-10-23', '2026-10-27', '2026-10-31', '2026-11-05']) assert.equal(cell(a, day), cell(b, day), `${key} ${day}`);
+    }
+  });
+
   it('trend: carries the Workers plan and fixed costs per day, today only its elapsed part', () => {
     const tr = trendBySource([rd(1, 'worker:videos-qa', 2)], { bunny: [], containers: [], ai: [], resend: [] }, () => 0.3, now);
     const plan = tr.series.find((x) => x.key === 'plan')!.values;
