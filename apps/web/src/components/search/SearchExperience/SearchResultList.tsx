@@ -51,7 +51,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           </p>
         </div>
       </div>
-      <p dir="auto" className="text-sm text-gray-800 dark:text-gray-100 line-clamp-4 whitespace-pre-line">{post.content}</p>
+      <p dir="auto" className="text-sm text-gray-800 dark:text-gray-100 line-clamp-4 whitespace-pre-line text-balance">{post.content}</p>
       {post.imageUrl && (
         <div className="relative aspect-video overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800">
           <Image src={resolveUrl(post.imageUrl)} alt="" fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover" />
