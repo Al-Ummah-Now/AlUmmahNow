@@ -57,5 +57,7 @@ describe('Library cards on the shared surface (#1634)', () => {
   it('a saved post takes its own text direction (an Arabic post on the English page)', () => {
     render(<SavedPostCard post={{ id: 'p2', channelId: 'ch2', channelName: 'Evening Adhkar Circle', content: 'تبدأ سلسلتنا الجديدة يوم الجمعة.' } as never} />);
     expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveAttribute('dir', 'auto');
+    // Balanced lines, so the post never ends on one lone word ("… with your / family.")
+    expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveClass('[text-wrap:balance]');
   });
 });
