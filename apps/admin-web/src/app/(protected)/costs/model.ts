@@ -364,3 +364,9 @@ export function localTrend(days: readonly string[], series: readonly { key: stri
     utcDays,
   };
 }
+
+/** Whether today's bar also holds a UTC day dated after it (the evening west of UTC), which the chart's note then says. */
+export function todayHoldsNextUtcDay(t: Pick<LocalTrend, 'days' | 'utcDays'>): boolean {
+  const last = t.days.length - 1;
+  return last >= 0 && (t.utcDays[last] ?? []).some((d) => d > t.days[last]!);
+}

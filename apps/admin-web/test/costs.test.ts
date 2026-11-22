@@ -676,14 +676,34 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
   });
 
   it('each segment\'s title names the UTC days its bar holds', () => {
+    const t = createTranslator('en');
     const days = utcDays('2026-11-22');
     const html = renderToStaticMarkup(
       React.createElement(TrendChartModule.TrendChart, {
         days, series: sourceOf(days).map((s) => ({ ...s, label: s.key, color: 'red' })), now: Date.parse('2026-11-22T00:30:00Z'), locale: 'en', title: 'Daily spend',
-        labels: { chart: 'c', table: 't', day: 'd', total: 'x', empty: 'e' }, utcNote: createTranslator('en')('costs.breakdown.utcDays'), testId: 'costs-trend',
+        labels: { chart: 'c', table: 't', day: 'd', total: 'x', empty: 'e' }, testId: 'costs-trend',
+        text: { note: t('costs.breakdown.trendNote'), noteToday: t('costs.breakdown.trendNoteToday'), utcLabel: t('costs.breakdown.utcDays'), detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }) },
       }),
     );
-    // Server render: UTC days, each bar its own UTC day
-    assert.match(html, /Nov 22 • production: \$22\.00 \(by UTC day: Nov 22\)/);
+    // Server render: UTC days, each bar its own UTC day, in the hover titles and the table
+    assert.match(html, /Nov 22 • production: \$22\.00 \(By UTC day: Nov 22\)/);
+    assert.match(html, /<th scope="col"[^>]*>By UTC day<\/th>/);
+    // A phone has no hover: the chosen bar (today's until one is tapped) is written out under the chart
+    assert.match(html, /data-testid="costs-trend-detail" data-day="2026-11-22">Nov 22: \$22\.17 \(By UTC day: Nov 22\)</);
+    assert.ok(html.includes('Tap or hover a bar'));
+    // The "next UTC day" sentence only when it is true: not on UTC days
+    assert.ok(!html.includes(t('costs.breakdown.trendNoteToday')));
+    // Day labels are centred on their bars
+    assert.ok(!/data-tick="[^"]+"[^>]*text-anchor="(start|end)"/.test(html) && !/text-anchor="(start|end)"[^>]*data-tick/.test(html));
+  });
+
+  it('the note adds "today also holds the next UTC day" only when it does', async () => {
+    const { localTrend, todayHoldsNextUtcDay } = await import('../src/app/(protected)/costs/model');
+    const days = utcDays('2026-11-22');
+    assert.equal(todayHoldsNextUtcDay(localTrend(days, sourceOf(days), Date.parse('2026-11-22T00:30:00Z'), 'America/New_York')), true, '7:30 pm in New York');
+    assert.equal(todayHoldsNextUtcDay(localTrend(utcDays('2026-11-21'), sourceOf(utcDays('2026-11-21')), Date.parse('2026-11-21T21:40:00Z'), 'America/New_York')), false, '4:40 pm in New York');
+    assert.equal(todayHoldsNextUtcDay(localTrend(utcDays('2026-11-21'), sourceOf(utcDays('2026-11-21')), Date.parse('2026-11-21T20:30:00Z'), 'Asia/Kolkata')), false, '+5:30');
+    assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('المس العمود أو مرّر المؤشر فوقه'));
+    assert.ok(createTranslator('ar')('costs.breakdown.trendNote').startsWith('تُظهر كل بيئة إنفاقها على Cloudflare'));
   });
 });

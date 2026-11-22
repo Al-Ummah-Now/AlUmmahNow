@@ -602,10 +602,15 @@ export function TrendPanel({ d, t, f, locale, now = Date.now() }: Common & { d: 
         axisUnit={t('costs.breakdown.axisUnit')}
         reference={daily !== null ? { value: daily, label: t('costs.breakdown.dailyBudget', { value: f.usd(daily) }) } : undefined}
         labels={{ chart: t('costs.breakdown.trendTitle'), table: t('costs.breakdown.table'), day: t('costs.breakdown.day'), total: t('costs.breakdown.total'), empty: t('costs.breakdown.empty30') }}
-        utcNote={t('costs.breakdown.utcDays')}
+        text={{
+          note: t('costs.breakdown.trendNote'),
+          noteToday: t('costs.breakdown.trendNoteToday'),
+          utcLabel: t('costs.breakdown.utcDays'),
+          // Filled in the browser with the bar chosen there
+          detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }),
+        }}
         testId="costs-trend"
       />
-      <p className="mt-2 text-xs text-fg-muted">{t('costs.breakdown.trendNote')}</p>
     </section>
   );
 }

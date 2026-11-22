@@ -279,6 +279,14 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     assert.deepEqual(billIdle({ ...listed, byEnv: {}, parts: { ...listed.parts, cloudflare: 0 } } as never, 0).byEnv, {});
   });
 
+  it('idle per environment adds up to the idle Cloudflare part to the cent (AUDIT-2 round 9)', () => {
+    const idle = { monthlyUsd: 3, targetUsd: 50, byEnv: { production: 1, stage: 1, qa: 1 }, parts: { cloudflare: 3, bunny: 0, containers: 0, ai: 0, plan: 0, fixed: 0 }, top: [], days: [] };
+    const billed = billIdle(idle as never, 1);
+    // Rounded one by one each would be 0.33 (0.99 in all); split in cents they are 0.34 + 0.33 + 0.33
+    assert.equal(Math.round(Object.values(billed.byEnv).reduce((a, b) => a + b, 0) * 100), 100);
+    assert.equal(billed.parts.cloudflare, 1);
+  });
+
   it('trend: carries the Workers plan and fixed costs per day, today only its elapsed part', () => {
     const tr = trendBySource([rd(1, 'worker:videos-qa', 2)], { bunny: [], containers: [], ai: [], resend: [] }, () => 0.3, now);
     const plan = tr.series.find((x) => x.key === 'plan')!.values;

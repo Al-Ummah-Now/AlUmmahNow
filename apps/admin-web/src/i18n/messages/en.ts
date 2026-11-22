@@ -4470,8 +4470,10 @@ const en = {
       reconcile: 'Total at list price {list}, less Cloudflare’s included usage {included}, is {billed}: the month to date the budget counts.',
       trendKeys: { production: 'Production', stage: 'Stage', qa: 'QA', bunny: 'Bunny', containers: 'Transcoding', ai: 'Workers AI', resend: 'Resend', plan: 'Workers plan', fixed: 'Fixed and other' },
       axisUnit: 'USD',
-      trendNote: 'Each environment is its Cloudflare spend at list price; the other sources as billed or estimated. Days follow your time zone, ending today. Cloudflare, Bunny, Resend and the other sources report by UTC day: each bar holds the UTC day of its date, and today’s bar also holds the UTC day that has already begun. Hover a bar to see which.',
-      utcDays: 'by UTC day: {days}',
+      trendNote: 'Each environment shows its Cloudflare spend at list price; the other sources as billed or estimated. Days follow your time zone, ending today. Cloudflare, Bunny, Resend and the other sources report by UTC day, so each bar holds the UTC day of its date. Tap or hover a bar to see its UTC days.',
+      trendNoteToday: 'Today’s bar also holds the next UTC day, which has already begun.',
+      utcDays: 'By UTC day',
+      trendDetail: '{day}: {total} (By UTC day: {utc})',
     },
     products: {
       workers: 'Workers',

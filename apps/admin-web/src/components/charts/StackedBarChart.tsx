@@ -32,8 +32,13 @@ export interface StackedBarChartProps {
    * name on every tick crowds and clips the axis in Arabic.
    */
   axisUnit?: string;
-  /** Appended to each segment's hover title for that day (e.g. which UTC days the bar holds). */
+  /** Appended to each segment's hover title for that day as "(dayNoteLabel: note)" (e.g. which UTC days the bar holds). */
   dayNote?: (index: number) => string | undefined;
+  /** The table column for `dayNote`, so the note is in the text alternative too. */
+  dayNoteLabel?: string;
+  /** A bar chosen by tap or click (hover titles don't exist on touch screens); drawn outlined. */
+  selected?: number;
+  onSelect?: (index: number) => void;
   testId: string;
 }
 
@@ -56,7 +61,7 @@ const TOP = 12;
 const UNIT_TOP = 32;
 const BOTTOM = 26;
 
-export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, testId }: StackedBarChartProps) {
+export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, dayNoteLabel, selected, onSelect, testId }: StackedBarChartProps) {
   const rtl = /^ar\b/.test(locale);
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
@@ -83,7 +88,8 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
         key={g.w}
         viewBox={`0 0 ${g.w} ${g.h}`}
         className={`h-auto w-full text-fg-muted ${g.className}`}
-        style={{ direction: 'ltr' }}
+        // Day labels are centred on their bars, so the end ones may reach into the panel's padding
+        style={{ direction: 'ltr', overflow: 'visible' }}
         role="img"
         aria-label={labels.chart}
         data-geometry={main ? 'desktop' : 'phone'}
@@ -106,7 +112,17 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
             let base = 0;
             const note = dayNote?.(i);
             return (
-              <g key={day} data-testid={tid(`${testId}-bar`)} data-day={main ? day : undefined} data-total={main ? totals[i].toFixed(2) : undefined}>
+              <g
+                key={day}
+                data-testid={tid(`${testId}-bar`)}
+                data-day={main ? day : undefined}
+                data-total={main ? totals[i].toFixed(2) : undefined}
+                data-selected={main && selected === i ? 'true' : undefined}
+                onClick={onSelect ? () => onSelect(i) : undefined}
+                style={onSelect ? { cursor: 'pointer' } : undefined}
+              >
+                {/* The whole column is the tap target, not just the (maybe tiny) bar */}
+                {onSelect && <rect x={x(i) - (slot - barW) / 2} y={top0} width={slot} height={g.h - top0 - BOTTOM} fill="transparent" />}
                 {series.map((s) => {
                   const v = s.values[i] ?? 0;
                   if (v <= 0) return null;
@@ -115,10 +131,13 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                   const y1 = y(base);
                   return (
                     <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
-                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}${note ? ` (${note})` : ''}`}</title>
+                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}${note ? ` (${dayNoteLabel ? `${dayNoteLabel}: ` : ''}${note})` : ''}`}</title>
                     </rect>
                   );
                 })}
+                {selected === i && totals[i] > 0 && (
+                  <rect x={x(i) - 1.5} y={y(totals[i]) - 1.5} width={barW + 3} height={y(0) - y(totals[i]) + 3} fill="none" style={{ stroke: 'var(--fg)' }} strokeWidth="1.5" rx="1.5" pointerEvents="none" />
+                )}
               </g>
             );
           })}
@@ -129,14 +148,15 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
             </line>
           </g>
         )}
-        {ticksAt.map((i, order) => (
+        {ticksAt.map((i) => (
           <text
             key={days[i]}
             x={x(i) + barW / 2}
             y={g.h - 8}
             fontSize="11"
             fill="currentColor"
-            textAnchor={order === 0 ? (rtl ? 'end' : 'start') : order === ticksAt.length - 1 ? (rtl ? 'start' : 'end') : 'middle'}
+            data-tick={main ? days[i] : undefined}
+            textAnchor="middle"
           >
             {dayLabel(days[i])}
           </text>
@@ -183,6 +203,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                   <th key={s.key} scope="col" className="p-1 text-end font-medium">{s.label}</th>
                 ))}
                 <th scope="col" className="p-1 text-end font-medium">{labels.total}</th>
+                {dayNote && dayNoteLabel && <th scope="col" className="p-1 text-end font-medium">{dayNoteLabel}</th>}
               </tr>
             </thead>
             <tbody>
@@ -193,6 +214,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                     <td key={s.key} className="p-1 text-end tabular-nums">{format(s.values[i] ?? 0)}</td>
                   ))}
                   <td className="p-1 text-end tabular-nums font-medium">{format(totals[i])}</td>
+                  {dayNote && dayNoteLabel && <td className="p-1 text-end">{dayNote(i) ?? ''}</td>}
                 </tr>
               ))}
             </tbody>

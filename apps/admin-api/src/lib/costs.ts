@@ -41,6 +41,8 @@ import {
   type DayCost,
   type ResourceDay,
 } from './opsCost';
+import { apportionCents } from './opsCost';
+export { apportionCents };
 import { idleBilledCloudflare } from './cfBilling';
 import { CF_METERS, fixedCostMonthShare } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
@@ -420,27 +422,6 @@ export function withCloudflareLines(products: ProductLine[], lines: { key: strin
     .sort((a, b) => b.mtd - a.mtd);
 }
 
-/** Splits `totalCents` over `weights` by largest remainder: whole cents that add up exactly. */
-export function apportionCents(totalCents: number, weights: Map<string, number>): Map<string, number> {
-  const out = new Map<string, number>();
-  const sum = [...weights.values()].reduce((a, b) => a + Math.max(0, b), 0);
-  if (weights.size === 0) return out;
-  if (sum <= 0) {
-    // Nothing to weigh by: an even split, any leftover cent to the first
-    const keys = [...weights.keys()];
-    keys.forEach((k, i) => out.set(k, Math.floor(totalCents / keys.length) + (i < totalCents % keys.length ? 1 : 0)));
-    return out;
-  }
-  const exact = [...weights].map(([k, w]) => ({ k, v: (Math.max(0, w) / sum) * totalCents }));
-  for (const e of exact) out.set(e.k, Math.floor(e.v));
-  let left = totalCents - [...out.values()].reduce((a, b) => a + b, 0);
-  for (const e of [...exact].sort((a, b) => b.v - Math.floor(b.v) - (a.v - Math.floor(a.v)) || b.v - a.v)) {
-    if (left <= 0) break;
-    out.set(e.k, out.get(e.k)! + 1);
-    left--;
-  }
-  return out;
-}
 
 /**
  * Each resource's month to date in cents, as the page shows it: every Cloudflare product's total
