@@ -409,13 +409,15 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
           </div>
         </div>
 
-        <div className={`hidden lg:block ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4 overflow-auto`} data-testid="watch-secondary">
+        {/* Not a scroll box either (it has no height of its own, so overflow-auto only clipped): the
+            clip cut the related card's glow at the column's top and outer edge (re-audit 7) */}
+        <div className={`hidden lg:block min-w-0 ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4`} data-testid="watch-secondary">
           {renderPane('side')}
           {renderRelated("t_")}
         </div>
       </div>
 
-      <div className="block lg:hidden w-full mt-4 px-4 overflow-auto" data-testid="watch-secondary-below">
+      <div className="block lg:hidden w-full min-w-0 mt-4 px-4" data-testid="watch-secondary-below">
         {renderRelated("b_")}
       </div>
     </main>
