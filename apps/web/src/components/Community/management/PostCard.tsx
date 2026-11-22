@@ -161,8 +161,11 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
 
         {/* Two lines, ended by an ellipsis at the text's own end: the shared fade (clamp-2) fades the box's
             last 3em, which is empty when line 2 breaks early, so the cut never showed (AUDIT-2). It lines up with
-            the page (text-left, text-right under <html dir="rtl">), not its own script's side */}
-        <p className="line-clamp-2 text-left text-sm [overflow-wrap:anywhere] md:text-base [html[dir=rtl]_&]:text-right" dir="auto" data-testid="managed-post-text">
+            the page (text-left, text-right under <html dir="rtl">), not its own script's side. Chromium draws
+            the ellipsis of a line aligned away from its own end just past the box, where overflow:hidden cut
+            it (an English post in the Arabic Studio showed no "…"); 1em of inline padding, given back by a
+            negative margin, leaves it room without moving the text */}
+        <p className="-mx-[1em] line-clamp-2 px-[1em] text-left text-sm [overflow-wrap:anywhere] md:text-base [html[dir=rtl]_&]:text-right" dir="auto" data-testid="managed-post-text">
           {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
         </p>
 

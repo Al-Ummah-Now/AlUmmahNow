@@ -8,6 +8,7 @@
  * parts are always 0–9.
  */
 import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
+import { ZONE_PLACES_AR } from './zone-places-ar';
 
 /** The viewer's own zone (UTC when the browser does not say). */
 export function browserZone(): string {
@@ -100,15 +101,19 @@ export function zoneName(zone: string, locale: string, at = new Date()): string 
 /**
  * The zone's place in the page's language: English takes it from the zone id ("Buenos Aires"); Arabic
  * from CLDR's location name («توقيت نيويورك» → «نيويورك», a one-zone country by its country name:
- * «مصر»). Null when CLDR has only an offset for it.
+ * «مصر»). Null when CLDR has only an offset for it. Arabic reads a table generated from full ICU
+ * (zone-places-ar.ts): browsers ship trimmed ICU data, and Chromium answered «توقيت New York», so an
+ * Arabic row showed a Latin city (AUDIT-2). The browser's own name is used only for a zone the table
+ * lacks, and never when it holds a Latin letter.
  */
 export function zonePlace(zone: string, locale: string, at = new Date()): string | null {
   if (locale !== 'ar') return zoneCity(zone);
+  if (Object.prototype.hasOwnProperty.call(ZONE_PLACES_AR, zone)) return ZONE_PLACES_AR[zone];
   try {
     const part = dateTimeFormat('ar', { timeZone: zone, timeZoneName: 'shortGeneric' })
       .formatToParts(at)
       .find((p) => p.type === 'timeZoneName')?.value;
-    if (!part || /(GMT|UTC|غرينتش|[0-9٠-٩])/.test(part)) return null;
+    if (!part || /(GMT|UTC|غرينتش|[0-9٠-٩A-Za-z])/.test(part)) return null;
     return part.replace(/^توقيت\s+/, '').trim() || null;
   } catch {
     return null;
