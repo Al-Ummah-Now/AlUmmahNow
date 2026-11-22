@@ -697,6 +697,23 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
     assert.ok(!/data-tick="[^"]+"[^>]*text-anchor="(start|end)"/.test(html) && !/text-anchor="(start|end)"[^>]*data-tick/.test(html));
   });
 
+  it('the table shows plain amounts under one currency caption, unwrapped, so its columns fit in Arabic', () => {
+    const t = createTranslator('ar');
+    const days = utcDays('2026-11-22');
+    const html = renderToStaticMarkup(
+      React.createElement(TrendChartModule.TrendChart, {
+        days, series: sourceOf(days).map((s) => ({ ...s, label: s.key, color: 'red' })), now: Date.parse('2026-11-22T00:30:00Z'), locale: 'ar', title: 'x',
+        labels: { chart: 'c', table: 't', day: 'd', total: 'x', empty: 'e', tableUnit: t('costs.breakdown.tableUnit') }, testId: 'costs-trend',
+        text: { note: '', noteToday: '', utcLabel: t('costs.breakdown.utcDays'), utcOne: t('costs.breakdown.utcDayOne', { days: '{days}' }), utcTwo: t('costs.breakdown.utcDayTwo', { days: '{days}' }), utcMany: t('costs.breakdown.utcDayMany', { days: '{days}' }), utcSep: t('costs.breakdown.utcDaySep'), detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }) },
+      }),
+    );
+    const table = html.slice(html.indexOf('<table'), html.indexOf('</table>'));
+    assert.match(table, /<table class="[^"]*whitespace-nowrap/);
+    assert.ok(table.includes('المبالغ بالدولار الأمريكي.'));
+    assert.ok(!table.slice(table.indexOf('<tbody')).includes('دولار'), 'no currency word in the cells');
+    assert.ok(table.includes('٢٢٫٠٠'), 'Arabic digits and decimal sign, never grouped');
+  });
+
   it('a bar holding two UTC days says so in the plural (the dual in Arabic), comma-joined, each date unbroken', async () => {
     const { utcDaysPhrase } = await import('../src/app/(protected)/costs/model');
     const textOf = (locale: 'en' | 'ar') => {

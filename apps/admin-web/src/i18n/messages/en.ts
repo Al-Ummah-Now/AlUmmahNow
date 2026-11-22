@@ -4472,6 +4472,7 @@ const en = {
       axisUnit: 'USD',
       trendNote: 'Each environment shows its Cloudflare spend at list price; the other sources as billed or estimated. Days follow your time zone, ending today. Cloudflare, Bunny, Resend and the other sources report by UTC day, so each bar holds the UTC day of its date. Tap or hover a bar to see its UTC days.',
       trendNoteToday: 'Today’s bar also holds the next UTC day, which has already begun.',
+      tableUnit: 'Amounts in US dollars.',
       utcDays: 'UTC days',
       utcDayOne: 'UTC day: {days}',
       utcDayTwo: 'UTC days: {days}',
