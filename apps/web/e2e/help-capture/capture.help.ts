@@ -2174,7 +2174,30 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
       const menu = await openMenu(page, 'channels');
       // The picker itself, header and menu (rows' columns)
       const mb = (await menu.boundingBox())!;
-      await page.screenshot({ path: join(dir, `${name}.0-picker.png`), clip: { x: 0, y: 0, width: vw, height: Math.min(page.viewportSize()!.height, Math.ceil(mb.y + mb.height) + 12) } });
+      // Ends on a clear band at least 4 px under the menu: no text or icon cut or within 4 px of the edge
+      // (AUDIT-2 2026-11-22: the rail's next item and the channel name were sliced)
+      const pickerBottom = await page.evaluate((from) => {
+        const items: Array<{ top: number; bottom: number }> = [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+          if (!t.textContent?.trim()) continue;
+          const el = t.parentElement;
+          if (!el || el.closest('[data-testid="nav-menu"]')) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || cs.opacity === '0') continue;
+          const range = document.createRange();
+          range.selectNodeContents(t);
+          for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) items.push({ top: r.top, bottom: r.bottom });
+        }
+        for (const el of document.querySelectorAll('svg, img, input, button, select, textarea')) {
+          if (el.closest('[data-testid="nav-menu"]')) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width > 1 && r.height > 1 && r.height < 160) items.push({ top: r.top, bottom: r.bottom });
+        }
+        for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!items.some((it) => it.top < y && it.bottom > y - 4)) return y;
+        return innerHeight;
+      }, mb.y + mb.height);
+      await page.screenshot({ path: join(dir, `${name}.0-picker.png`), clip: { x: 0, y: 0, width: vw, height: pickerBottom } });
       await menu.getByTestId('nav-channel-option-none').click();
       for (let i = 0; i < 12; i++) {
         const s = await state();
