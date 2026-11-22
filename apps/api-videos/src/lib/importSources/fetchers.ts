@@ -93,6 +93,21 @@ function withoutBlocks(text: string): string {
 	return kept + text.slice(from);
 }
 
+/**
+ * Every tag ("<…>") cut out in one walk, and a "<" with no ">" after it dropped: the result holds no "<" at all,
+ * so nothing in it can open an element (only escaped ones, &lt;, become text later).
+ */
+function withoutTags(text: string): string {
+	let kept = '';
+	let from = 0;
+	for (let open = text.indexOf('<'); open >= 0; open = text.indexOf('<', from)) {
+		kept += text.slice(from, open);
+		const close = text.indexOf('>', open + 1);
+		from = close < 0 ? open + 1 : close + 1;
+	}
+	return kept + text.slice(from);
+}
+
 /** HTML (a feed's description, a Mastodon status) as plain text: paragraphs and line breaks kept. */
 export function htmlToText(html: string): string {
 	let text = html.slice(0, HTML_MAX_CHARS).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
@@ -107,12 +122,7 @@ export function htmlToText(html: string): string {
 		before = text;
 		text = withoutBlocks(text);
 	}
-	text = text
-		.replace(/<br\s*\/?>/gi, '\n')
-		.replace(/<\/(p|div|li|h[1-6]|blockquote)\s*>/gi, '\n\n')
-		.replace(/<[^>]*>/g, '')
-		// A stray "<" left over goes too: only escaped ones (&lt;) become text
-		.replace(/</g, '');
+	text = withoutTags(text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6]|blockquote)\s*>/gi, '\n\n'));
 	return decodeEntities(text)
 		.replace(/[ \t\f\v ]+/g, ' ')
 		.replace(/ *\n */g, '\n')
