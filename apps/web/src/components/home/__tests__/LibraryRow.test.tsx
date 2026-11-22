@@ -84,7 +84,7 @@ describe('LibraryRow: Continue watching card (#242, owner 2026-11-21)', () => {
   it('is one card: the newest unfinished video on the cover, the count, its progress, links to the list and to resume', async () => {
     render(<LibraryRow />);
     const card = await screen.findByTestId('continue-watching-card');
-    expect(service.list).toHaveBeenCalledWith({ limit: 4, completed: false });
+    expect(service.list).toHaveBeenCalledWith({ limit: 3, completed: false });
     expect(screen.getAllByTestId('continue-watching-card')).toHaveLength(1);
     expect(screen.queryByTestId('continue-watching-video')).toBeNull();
 
@@ -216,9 +216,9 @@ describe('LibraryRow: Your library row with Watch later and Liked videos (owner 
     expect(screen.getByTestId('home-library-all')).toHaveAttribute('href', '/en/library');
     const items = [...row.querySelectorAll('.hlib-list > li')].map((li) => li.getAttribute('data-testid'));
     expect(items).toEqual(['continue-watching', 'home-library-watch-later', 'home-library-liked']);
-    // Each list asks for its cover's video and the next three (a wide card's Up next)
-    expect(library.watchLater).toHaveBeenCalledWith({ limit: 4 });
-    expect(library.liked).toHaveBeenCalledWith({ limit: 4 });
+    // Each list asks for its cover's video and the next two (a lone card's Up next)
+    expect(library.watchLater).toHaveBeenCalledWith({ limit: 3 });
+    expect(library.liked).toHaveBeenCalledWith({ limit: 3 });
   });
 
   it('Watch later: opens the list, counts it, and Play all starts its first video at its stored index', async () => {
@@ -253,7 +253,7 @@ describe('LibraryRow: Your library row with Watch later and Liked videos (owner 
     expect(play).toHaveTextContent('تشغيل الكل');
   });
 
-  it('lists the next videos of each list under "Up next" (shown when the card is wide)', async () => {
+  it('lists the next videos of each list under "Up next" (shown when a card has the row to itself)', async () => {
     library.watchLater.mockResolvedValue(watchLaterPage([video('w1'), video('w2', { channelNameLocalized: { en: 'Seerah' } }), video('w3')], 3, ['w1', 'w2', 'w3']));
     service.list.mockResolvedValue({ entries: [entry('a', 40), entry('b', 72)], total: 2, hasMore: false });
     render(<LibraryRow />);
