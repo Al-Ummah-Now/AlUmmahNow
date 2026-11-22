@@ -148,6 +148,13 @@ test.describe('Discovery rails', () => {
     const heading = (await section.getByRole('heading', { level: 2 }).innerText()).trim();
     if (label) expect(heading).toMatch(HEADINGS[label].en);
     else expect(heading).toMatch(/^(Trending|Popular this month)$/);
+    if (heading === 'Popular this month') {
+      // No ranked list: Explore shows the search fallback (hooks/useExplore.ts). That is search, not ranking, so
+      // test accounts' videos may be in it; on a stack whose only public videos are test accounts' (this file's
+      // own), the ranked list is rightly empty and this is what shows
+      return;
+    }
+    // The ranked list never holds test accounts' videos
     const ownIds = new Set(own.videos().map((v) => v.id));
     const ids = await section.getByTestId('video-card').evaluateAll((els) => els.map((e) => e.getAttribute('data-video-id') ?? ''));
     expect(ids.filter((id) => ownIds.has(id))).toEqual([]);
