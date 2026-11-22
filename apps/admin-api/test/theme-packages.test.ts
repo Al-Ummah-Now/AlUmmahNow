@@ -360,6 +360,28 @@ describe('theme art (the sign-in banner\'s, imagery.headerGraphic)', () => {
     assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM error_actions WHERE item_key LIKE 'theme-art:%'").get()!.n, 0);
   });
 
+  it('a version published with the art but before the shared header part gets the header part on its first read, once', async () => {
+    const { call, bucket } = setup();
+    await publishCopy(call);
+    const at = 'themes/eid-lights/1.0.0/';
+    const published = new TextDecoder().decode(bucket.objects.get(`${at}theme.css`)!.bytes);
+    const nav = published.indexOf("html[data-theme='eid-lights']{--aun-header-band:");
+    assert.ok(nav > 0, 'publishing writes the header part');
+    const withArtOnly = published.slice(0, nav);
+    assert.ok(withArtOnly.includes('--fanous-header-graphic:') && !withArtOnly.includes('--aun-header-band:'));
+    bucket.objects.set(`${at}theme.css`, { bytes: new TextEncoder().encode(withArtOnly), contentType: 'text/css; charset=utf-8' });
+    const art = bucket.objects.get(`${at}art/dark.svg`)!.bytes;
+
+    const css = await (await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES)).text();
+    assert.ok(css.startsWith(withArtOnly.trimEnd()), 'the stored CSS is kept as it was, the header part added after it');
+    assert.equal(css.split('--fanous-header-graphic: url(').length, withArtOnly.split('--fanous-header-graphic: url(').length, 'the art is not added twice');
+    assert.ok(css.includes("html[data-theme='eid-lights']{--aun-header-band:") && css.includes('--aun-header-edge:'));
+    assert.doesNotMatch(css.slice(withArtOnly.length), /var\(--m-/, 'the header part stands alone: no videos materials');
+    assert.equal(bucket.objects.get(`${at}art/dark.svg`)!.bytes, art, 'the art files are not rewritten');
+    assert.equal(new TextDecoder().decode(bucket.objects.get(`${at}theme.css`)!.bytes), css, 'written back');
+    assert.equal(await (await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES)).text(), css);
+  });
+
   it('when the art cannot be built: served without it on a short cache, the admin flagged, Retry builds it', async () => {
     const { call, bucket, db, sqlite } = setup();
     await publishCopy(call);

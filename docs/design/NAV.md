@@ -44,13 +44,45 @@ the same elements as JSX and their tests compare the result with the builders.
 **Bar** (`.aun-header`; `.aun-header-row` inside it only when an app's markup wraps the groups):
 - 4rem (64px) tall; 3.5rem (56px) below 640px, the 1px bottom border included, with or without a
   `.aun-header-row` inside (the row is the height less the border). Sticky at the top.
-- Background `--aun-header-bg` (an app's header material) else `--fanous-c-nav-bg`; 1px bottom
-  border `--fanous-c-nav-border`; text `--fanous-c-nav-text`.
+- **Band**: the theme's header material, the same in every app (see **Theme** below), painted on
+  the bar's own layer (`.aun-header::before`) over the shared chrome blur (`--aun-glass-blur` of
+  `surfaces/aun-surfaces.css`, `blur(20px) saturate(1.6)` where an app does not load it); else
+  `--fanous-c-nav-bg`. `--aun-header-bg` overrides it only for a page outside the themes: no Al
+  Ummah Now app sets it. 1px bottom border `--fanous-c-nav-border`; text `--fanous-c-nav-text`.
 - **Full width in every app.** The bar's groups are never centred in a max width: the brand is
   16px from the screen's edge (12px on phones) in www, scholar sites, status and profile exactly as
   in videos web and the admins, so every header lines up.
 - **One typeface** in every header, set by the contract whatever the page uses: system-ui
   (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro, then system-ui so Latin inside an Arabic header matches English (`--aun-header-font-ar`).
+  The header's controls (buttons and inputs: the account button and its name, the menu items, the
+  search field) use the theme's body font where the theme has one (Nahas: Source Serif 4, Arabic
+  Amiri; Zujaj: Inter, Arabic Noto Kufi Arabic), as videos always did; Fawanees and Lantern keep the
+  header typeface.
+
+**Theme** (owner ruling 2026-11-22, UNIFY: one source for every app). Each built-in theme's header
+look is generated from its theme package (`packages/theme-packages/themes/<id>/theme.json`) into
+`aun-nav.css` between the `BEGIN theme header` / `END theme header` markers, by
+`pnpm --filter @al-ummah/theme-packages themes:build` (`themes:check` fails when it is stale). So
+videos, the videos admin, status, Auth profile and admin, the CMS admin, www and the scholar sites
+read the same values from the stylesheet they already vendor:
+
+| Variable / rule | From the package | Notes |
+|---|---|---|
+| `--aun-header-band` | `components.header.style.background` | `{material.*}` written out, so apps without the videos materials paint the same band |
+| `--aun-header-edge` | `components.header.style.edge` | the bar's `box-shadow` |
+| `html[data-theme=<id>] .aun-header button, input, select, textarea` | `typography.body` | Latin stack; `:lang(ar)` gets the Arabic stack |
+
+The variables are set on `html[data-theme='<id>']` (the default theme also on `html:not([data-theme])`),
+so every app marks its theme on `<html>`. A built-in theme's header has no light-only style (the
+build refuses one): apps mark light and dark differently. Uploaded themes compile the same block into
+their published `theme.css` (`compilePackage().nav`; versions published before it get it on their
+first read, like the art).
+
+**Fonts**: `nav/aun-nav-fonts.css` declares the faces those stacks name, from `nav/fonts/*.woff2`,
+which every app serves at `/aun-nav/fonts/` (no other host, so `font-src 'self'` covers it). They are
+the videos app's own files byte for byte (`apps/web/public/fonts`, `font-faces.css`, which videos
+keeps); the videos admin serves a copy in `public/aun-nav/fonts`. `test/nav-theme.test.ts` checks
+the block, the faces and the copies.
 - **One line on every screen.** The bar never wraps to a second row (`flex-wrap: nowrap`); when
   room runs out the brand is the one group that shrinks, and its wordmark (a long scholar site
   name too) ends in an ellipsis; below 400px it is hidden and the logo stays. Sites whose own links sit in
@@ -73,8 +105,8 @@ pages, a scholar site whose platform mark is "none") have no route to www; that 
 
 **Scholar sites keep their own theme colours** (owner, 2026-11-15). The header's layout, sizes and
 controls are the same as every app's; its colours come from the site's admin-chosen theme through the
-nav tokens (`--fanous-c-nav-*`, `--aun-header-bg`), so a Nahas site has Nahas's dark header. No app
-CSS overrides the header colours.
+nav tokens (`--fanous-c-nav-*`) and the theme header block (`--aun-header-band`), so a Nahas site has
+Nahas's dark header and band. No app CSS overrides the header colours or band.
 
 | # | Slot | Class | Notes |
 |---|---|---|---|

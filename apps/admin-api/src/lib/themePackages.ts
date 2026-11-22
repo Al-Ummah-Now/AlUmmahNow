@@ -98,6 +98,8 @@ const CSS_TYPE = 'text/css; charset=utf-8';
 export const ART_PATH = /^art\/(light|dark)\.svg$/;
 /** theme.css carries the art part (compile.ts artCss) once this is in it */
 export const ART_MARKER = '--fanous-header-graphic:';
+/** theme.css carries the shared header part (compile.ts navCss: band, edge, control font) once this is in it */
+export const NAV_MARKER = '--aun-header-band:';
 
 /**
  * A version's CSS with its art: the art is compiled from the package's own SVG with the theme's colours
@@ -111,7 +113,7 @@ export function compileVersion(theme: ThemePackage, id: string, version: string,
     svgText,
     artUrl: (mode, svg) => { art[`art/${mode}.svg`] = svg; return publicAssetUrl(id, version)(`art/${mode}.svg`); },
   });
-  return { css: compiled.css, artCss: compiled.art, art };
+  return { css: compiled.css, artCss: compiled.art, navCss: compiled.nav, art };
 }
 
 export class ThemeStore {
@@ -202,33 +204,38 @@ export class ThemeStore {
   }
 
   /**
-   * A published version's theme.css. Versions published before the art part existed have none: it is
-   * built here, from the version's own theme.json and SVG files, on the first read, and written back
-   * (art files first, then the CSS), so every later read is a plain file read. Idempotent: two reads at
-   * once write the same bytes, and a CSS that has the art is never touched. If building fails the stored
-   * CSS is served as it is (the banner shows no art), `art` says so (the caller flags the admin), and the
-   * next read or the admin's Retry tries again.
+   * A published version's theme.css. Versions published before the art part, or before the shared
+   * header part (the band, edge and control font aun-nav.css reads), existed lack it: each missing
+   * part is built here, from the version's own theme.json and SVG files, on the first read, and written
+   * back (art files first, then the CSS), so every later read is a plain file read. Idempotent: two reads
+   * at once write the same bytes, and a CSS that has both parts is never touched. If building fails the
+   * stored CSS is served as it is (the banner shows no art, the header its plain nav colour), `art` says
+   * so (the caller flags the admin), and the next read or the admin's Retry tries again.
    */
   async publishedCss(id: string, version: string): Promise<{ css: string; etag: string; art: 'present' | 'added' | 'failed'; error?: string } | null> {
     const at = prefix(id, version);
     const obj = await this.bucket.get(`${at}theme.css`);
     if (!obj) return null;
     const stored = await obj.text();
-    if (stored.includes(ART_MARKER)) return { css: stored, etag: obj.httpEtag, art: 'present' };
+    const hasArt = stored.includes(ART_MARKER);
+    const hasNav = stored.includes(NAV_MARKER);
+    if (hasArt && hasNav) return { css: stored, etag: obj.httpEtag, art: 'present' };
     try {
       const json = await this.bucket.get(`${at}theme.json`);
       if (!json) throw new Error('theme.json is missing');
       const theme = (await json.json()) as ThemePackage;
       const svgs: Record<string, string> = {};
-      for (const path of artSvgPaths(theme)) {
-        const file = ASSET_PATH.test(path) ? await this.bucket.get(`${at}${path}`) : null;
-        if (file) svgs[path] = await file.text();
+      if (!hasArt) {
+        for (const path of artSvgPaths(theme)) {
+          const file = ASSET_PATH.test(path) ? await this.bucket.get(`${at}${path}`) : null;
+          if (file) svgs[path] = await file.text();
+        }
       }
-      const { artCss, art } = compileVersion(theme, id, version, (path) => svgs[path]);
-      for (const [path, svg] of Object.entries(art)) await this.bucket.put(`${at}${path}`, bytesOf(svg), { httpMetadata: { contentType: 'image/svg+xml', cacheControl: IMMUTABLE_FILE } });
-      const css = `${stored.replace(/\n*$/, '\n')}${artCss}`;
+      const { artCss, navCss, art } = compileVersion(theme, id, version, (path) => svgs[path]);
+      if (!hasArt) for (const [path, svg] of Object.entries(art)) await this.bucket.put(`${at}${path}`, bytesOf(svg), { httpMetadata: { contentType: 'image/svg+xml', cacheControl: IMMUTABLE_FILE } });
+      const css = `${stored.replace(/\n*$/, '\n')}${hasArt ? '' : artCss}${hasNav ? '' : navCss}`;
       const put = await this.bucket.put(`${at}theme.css`, bytesOf(css), { httpMetadata: { contentType: CSS_TYPE, cacheControl: IMMUTABLE_FILE } });
-      logger.info('[Themes] Added the art to a version published before it existed', { id, version, files: Object.keys(art) });
+      logger.info('[Themes] Added the parts a version published before them lacked', { id, version, art: !hasArt, header: !hasNav, files: hasArt ? [] : Object.keys(art) });
       return { css, etag: put?.httpEtag ?? obj.httpEtag, art: 'added' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
