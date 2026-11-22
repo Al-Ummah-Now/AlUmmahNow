@@ -614,3 +614,7 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
    alone on their last line, in every theme (AUDIT-2 2026-11-22). Balanced, not "pretty": Chrome's pretty leaves a
    two-line title's last word alone ("The migration to / Madinah"); balance evens the lines out */
 .video-card :is(h2,h3,strong),[data-testid=watch-history-page] a.line-clamp-2,[data-testid=library-list-item] p.line-clamp-2,.lbl-row-title,.hlib-next-title,.plc-title{text-wrap:balance}
+/* The home empty state's line (#1631): balanced, so the Arabic phone card doesn't end line 1 on «وإلى» and leave
+   «في «استكشف».» short on line 3 (AUDIT-2 review), and held to a reading measure, so on a 1280 desktop it isn't one
+   1,180px line across the card */
+[data-testid=home-empty] p{text-wrap:balance;max-inline-size:60ch}
