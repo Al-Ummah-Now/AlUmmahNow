@@ -84,15 +84,12 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
       {resources.map((r) => (
         <li key={r.id} className="py-2.5" data-testid="ops-resource-card">
           <span className="block font-medium text-fg"><TruncatedName name={r.name} testId="ops-resource-card-name" /></span>
-          <div className="mt-1 flex items-end justify-between gap-3">
-            <p className="text-fg-muted">
-              <span className="block text-xs">{metricLabel}</span>
-              <span className="tabular-nums text-fg">{fmt(r.metrics[spec.metric])}</span>
-            </p>
-            <div className="text-end">
-              <span className="block text-xs text-fg-muted">{t('operations.resources.last7')}</span>
-              {spark(r)}
-            </div>
+          {/* Two rows: both labels on one line, then the value and the week, bottom-aligned (AUDIT-2 round 16) */}
+          <div className="mt-1 grid grid-cols-[1fr_auto] items-end gap-x-3">
+            <span className="text-xs text-fg-muted">{metricLabel}</span>
+            <span className="text-end text-xs text-fg-muted">{t('operations.resources.last7')}</span>
+            <span className="tabular-nums leading-6 text-fg">{fmt(r.metrics[spec.metric])}</span>
+            <span className="flex justify-end">{spark(r)}</span>
           </div>
         </li>
       ))}
