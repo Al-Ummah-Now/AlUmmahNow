@@ -131,6 +131,7 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     audioKinds: { original: 'Original', dub: 'Dubbed', commentary: 'Commentary', description: 'Audio description' },
     shortcuts: 'Keyboard shortcuts',
     captionStyle: 'Caption style',
+    downloadCaptions: 'Download captions',
     live: 'Live',
     goToLive: 'Go to live',
     behind: '{time} behind',

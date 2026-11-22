@@ -165,6 +165,8 @@ export interface VideoPlayerTranslations {
     audioKinds: { original: string; dub: string; commentary: string; description: string };
     shortcuts: string;
     captionStyle: string;
+    /** Downloads the shown caption track as a file (QF 2026-11-22: one video per file) */
+    downloadCaptions: string;
     live: string;
     goToLive: string;
     /** "{time} behind" */

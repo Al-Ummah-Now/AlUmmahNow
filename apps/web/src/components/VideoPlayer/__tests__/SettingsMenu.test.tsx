@@ -21,8 +21,8 @@ function fakePlayer({ live = false, tracked }: { live?: boolean; tracked?: boole
     { selectedIndex: 1, on: jest.fn(), off: jest.fn() },
   );
   const text = [
-    { kind: 'subtitles', label: 'English', mode: 'disabled' },
-    { kind: 'subtitles', label: 'العربية', mode: 'disabled' },
+    { kind: 'subtitles', label: 'English', language: 'en', mode: 'disabled' },
+    { kind: 'subtitles', label: 'العربية', language: 'ar', mode: 'disabled' },
   ];
   const classes = new Set<string>();
   const styleOpen = jest.fn();
@@ -130,6 +130,30 @@ describe('SettingsMenu', () => {
     fireEvent.click(document.querySelector('[data-row="extra"]')!);
     expect(f.styleOpen).toHaveBeenCalled();
     expect(screen.queryByTestId('player-settings-menu')).toBeNull();
+  });
+
+  it('offers the shown caption track as a download (one language per file); none with captions off or no URL', () => {
+    const f = fakePlayer();
+    const url = jest.fn((l: string) => (l === 'ar' ? `https://api.test/api/videos/v1/subtitles/${l}/download` : null));
+    render(<SettingsMenu player={f.player as unknown as Player} lang="ar" captionDownloadUrl={url} onShowShortcuts={jest.fn()} />);
+    openMenu(f);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).toEqual(['back', 'off', '0', '1', 'extra']);
+    fireEvent.click(document.querySelector('[data-row="1"]')!);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).toEqual(['back', 'off', '0', '1', 'extra', 'download']);
+    const link = screen.getByTestId('player-download-captions');
+    expect(link).toHaveAttribute('href', 'https://api.test/api/videos/v1/subtitles/ar/download');
+    expect(link).toHaveAttribute('download');
+    expect(link).toHaveTextContent('تنزيل الترجمة');
+    fireEvent.click(link);
+    expect(screen.queryByTestId('player-settings-menu')).toBeNull();
+    // English has no download URL here: no row
+    openMenu(f);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    fireEvent.click(document.querySelector('[data-row="0"]')!);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).not.toContain('download');
   });
 
   it('hides speed for live streams', () => {

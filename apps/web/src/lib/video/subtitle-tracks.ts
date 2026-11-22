@@ -61,3 +61,13 @@ export function toPlayerTextTracks(
       } satisfies PlayerTextTrack;
     });
 }
+
+/**
+ * The download URL of a track served by our API (`…/api/videos/:id/subtitles/:lang`): the same
+ * path plus `/download`, which fills Quran text at download time with the attribution inside the
+ * file (QF 2026-11-22). Null for a track served from anywhere else.
+ */
+export function captionDownloadHref(src: string): string | null {
+  const m = /^(.*\/api\/(?:v1\/)?videos\/[^/?#]+\/subtitles\/[^/?#]+)(?:[?#].*)?$/.exec(src);
+  return m ? `${m[1]}/download` : null;
+}

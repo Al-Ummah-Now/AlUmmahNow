@@ -85,6 +85,7 @@ import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
 const PHONE_TAB_BAR_ROOM = 56 + 16;
 import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, PIN_MEDIA_QUERY, nextMini, nextPinned } from '@/lib/video/mini-player';
 import { applyBuiltInIcons } from '@/lib/video/components';
+import { captionDownloadHref } from '@/lib/video/subtitle-tracks';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
 import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
@@ -532,6 +533,15 @@ export default function CustomVideoPlayer({
       });
     }
   }, [playerReady, textTracks, videoId]);
+
+  /** The shown caption language's download link (our API's tracks only). */
+  const captionDownloadUrl = useCallback(
+    (language: string) => {
+      const track = (textTracks || []).find((t) => t.srclang === language);
+      return track ? captionDownloadHref(track.src) : null;
+    },
+    [textTracks]
+  );
 
   /**
    * Handle retry button click
@@ -1403,7 +1413,7 @@ export default function CustomVideoPlayer({
       </div>
 
       {playerReady && playerRef.current && (
-        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
+        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} captionDownloadUrl={captionDownloadUrl} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
       )}
       {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} lang={lang} />}
 

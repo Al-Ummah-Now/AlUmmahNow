@@ -1,4 +1,4 @@
-import { getSubtitleLabel, toPlayerTextTracks } from '../subtitle-tracks';
+import { captionDownloadHref, getSubtitleLabel, toPlayerTextTracks } from '../subtitle-tracks';
 
 const opts = { apiUrl: 'https://api.example.com/', videoId: 'vid 1', uiLocale: 'en' };
 
@@ -55,5 +55,15 @@ describe('subtitle-tracks', () => {
       { language: 'fr', url: '/x/fr', status: 'ready', machineTranslation: true, sourceLanguage: 'en' },
     ], { ...opts, machineLabel: 'machine translation' });
     expect(tracks.map((t) => t.label)).toEqual(['English', 'French (machine translation)']);
+  });
+});
+
+describe('captionDownloadHref', () => {
+  it('adds /download to a track served by our API, before any query', () => {
+    expect(captionDownloadHref('https://videos.api.test/api/videos/v%201/subtitles/ar')).toBe('https://videos.api.test/api/videos/v%201/subtitles/ar/download');
+    expect(captionDownloadHref('https://videos.api.test/api/v1/videos/v1/subtitles/en?format=vtt')).toBe('https://videos.api.test/api/v1/videos/v1/subtitles/en/download');
+  });
+  it('none for a track served elsewhere', () => {
+    expect(captionDownloadHref('https://cdn.test/captions/v1/en.vtt')).toBeNull();
   });
 });

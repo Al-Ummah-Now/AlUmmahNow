@@ -99,6 +99,11 @@ export function currentCaptionId(tracks: ArrayLike<TextTrackLike> | null | undef
   return i >= 0 ? String(i) : OFF;
 }
 
+/** The language of the caption track being shown, or null when captions are off. */
+export function currentCaptionLanguage(tracks: ArrayLike<TextTrackLike> | null | undefined): string | null {
+  return captionTracks(tracks).find((t) => t.mode === 'showing')?.language || null;
+}
+
 export function selectCaption(tracks: ArrayLike<TextTrackLike> | null | undefined, id: string): void {
   captionTracks(tracks).forEach((t, i) => {
     t.mode = String(i) === id ? 'showing' : 'disabled';
