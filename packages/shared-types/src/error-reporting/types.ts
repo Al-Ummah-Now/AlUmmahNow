@@ -8,8 +8,8 @@
  */
 import type { ErrorContext } from './context';
 
-/** Apps that report errors (admin "App" filter). */
-export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'short-links', 'auth', 'status'] as const;
+/** Apps that report errors (admin "App" filter). `tools` is Admin Tools, the desktop import app (POST /api/admin/import/errors). */
+export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'short-links', 'auth', 'status', 'tools'] as const;
 export type ErrorApp = (typeof ERROR_APPS)[number];
 
 /**

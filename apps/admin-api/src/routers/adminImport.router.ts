@@ -41,9 +41,32 @@
  *   POST /items/:id/translations  { sourceLanguage, languages[], replace? } (TA-7) → { results[] }: a caption
  *                                 job per language from the source draft, no caption minutes. Audited per video.
  *   POST /items/:id/failed        { error } the app gave up on the file → { item }
+ *
+ * Error reports (TA-11). The app has no browser proxy holding the internal key, so it reports here with
+ * its own token; the events land on the Errors page under the app `tools`:
+ *
+ *   POST /errors                  { events: [{ kind, ref?, message, name?, stack?, route?, method?, status?,
+ *                                 release?, locale?, occurredAt?, count?, extra? }] } (at most 20, 64 KB) →
+ *                                 202 { accepted, rateLimited }. The account is the token's, never the body's;
+ *                                 no Retry actions, no "test" in production; the same per-client minute limit as
+ *                                 browser reports. Queued like every report (ERRORS_QUEUE, retried, then its DLQ).
  */
 import { Hono, type Context } from 'hono';
-import { ENCODE_LADDER, PREBUILT_LIMITS, contentPermissionsFor, hasContentPermission } from '@al-ummah/shared-types';
+import {
+  ENCODE_LADDER,
+  ERROR_LIMITS,
+  ERROR_REF_PATTERN,
+  PREBUILT_LIMITS,
+  USER_ID as ERROR_USER_ID,
+  contentPermissionsFor,
+  hasContentPermission,
+  newErrorRef,
+  scrubEvent,
+  type ErrorEventInput,
+} from '@al-ummah/shared-types';
+import { enqueueIngest } from '../endpoints/errors/ErrorsIngest';
+import { allowClientEvents } from '../lib/errors-store';
+import { hashIp } from '../lib/contact';
 import { hasPermission, normalizeRoles, permissionsFor } from '../lib/roles';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, setAuditSubject, writeAudit } from '../lib/content/audit';
@@ -403,6 +426,66 @@ app.post('/items/:id/failed', async (c) => {
   const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
   const error = typeof b.error === 'string' && b.error.trim() ? b.error.trim().slice(0, 1000) : 'The app could not upload this file';
   return setItemState(c, 'failed', error);
+});
+
+// ---------------------------------------------------------------------------
+// Error reports from the app (TA-11)
+// ---------------------------------------------------------------------------
+
+/** What the app may report: its own failures, never a Worker's kinds or a needs-action item. */
+export const TOOLS_ERROR_KINDS = ['unhandled', 'rejection', 'fetch', 'upload', 'caught'] as const;
+
+/**
+ * The app's events as the Errors page stores them: app `tools`, the signed-in account from the token,
+ * a reference when the app sent none, no needs-action item, and "test" only outside production.
+ */
+export function toolsErrorEvents(raw: unknown[], vouched: { userId: string; environment: string }): ErrorEventInput[] {
+  const out: ErrorEventInput[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
+    const given = r as Record<string, unknown>;
+    if (!(TOOLS_ERROR_KINDS as readonly unknown[]).includes(given.kind)) continue;
+    const ref = typeof given.ref === 'string' && ERROR_REF_PATTERN.test(given.ref) ? given.ref : newErrorRef();
+    const { action: _action, userId: _userId, environment: _environment, workerVersion: _worker, ...rest } = given;
+    const event = scrubEvent({ ...rest, app: 'tools', ref });
+    if (!event) continue;
+    const { test, ...kept } = event;
+    out.push({
+      ...kept,
+      ...(ERROR_USER_ID.test(vouched.userId) ? { userId: vouched.userId } : {}),
+      ...(test && vouched.environment !== 'production' ? { test: true } : {}),
+    });
+  }
+  return out;
+}
+
+app.post('/errors', async (c) => {
+  const text = await c.req.text();
+  if (text.length > ERROR_LIMITS.maxBodyBytes) return c.json({ success: false, code: 'too_large', error: 'At most 64 KB of reports at once' }, 413);
+  let body: { events?: unknown };
+  try {
+    body = JSON.parse(text) as typeof body;
+  } catch {
+    return fail(c, 400, 'invalid_request', 'A JSON object is required');
+  }
+  const raw = Array.isArray(body?.events) ? body.events : [];
+  if (raw.length > ERROR_LIMITS.maxEventsPerBatch) return c.json({ success: false, code: 'too_many_events', error: `At most ${ERROR_LIMITS.maxEventsPerBatch} reports at once` }, 413);
+  let events = toolsErrorEvents(raw, { userId: actorOf(c), environment: c.env.ENVIRONMENT || 'development' });
+  if (!events.length) return fail(c, 400, 'invalid_request', 'No valid reports');
+  const key = typeof c.env.INTERNAL_API_KEY === 'string' ? c.env.INTERNAL_API_KEY : ((await c.env.INTERNAL_API_KEY?.get().catch(() => '')) ?? '');
+  // The browser reports' per-client minute limit, counted per account (a keyed hash: no id in the rate table)
+  const rateKey = (await hashIp(`tools:${actorOf(c)}`, key)).slice(0, 24);
+  const allowed = await allowClientEvents(c.env.REPORTS_DB, rateKey, events.length, new Date());
+  const rateLimited = events.length - allowed;
+  events = events.slice(0, allowed);
+  if (!events.length) return c.json({ success: false, code: 'rate_limited', error: 'Too many reports; try again in a minute' }, 429, { 'Retry-After': '60' });
+  try {
+    await enqueueIngest(c.env, { v: 1, events, resolved: [], trustedRetry: false, userAgent: c.req.header('User-Agent')?.slice(0, 512), receivedAt: new Date().toISOString() });
+  } catch (error) {
+    logger.error('[AdminImport] Could not queue the app\'s error reports', { events: events.length, error: error instanceof Error ? error.message : String(error) });
+    return c.json({ success: false, code: 'ingest_failed', error: 'Reports could not be queued; try again' }, 503, { 'Retry-After': '30' });
+  }
+  return c.json({ success: true, result: { accepted: events.length, rateLimited } }, 202);
 });
 
 export default app;
