@@ -55,3 +55,13 @@ html[data-theme='fawanees'] .hr-all { background: color-mix(in srgb, var(--fanou
 html[data-theme='fawanees']:not(.dark) .plc-link.video-card { background: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important; }
 html[data-theme='fawanees'].dark .plc-link.video-card { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; }
 html[data-theme='fawanees'] .plc-badge { background: var(--fanous-color-background); }
+
+/* The history pages (theme/history.css) and Watch later / Liked (theme/library-list.css): every card, the
+   day-grouped list, its side column and the playlist panel and list sit on solid surfaces blended over
+   the page, so the street never shows through them (owner, 2026-11-22) */
+html[data-theme='fawanees']:not(.dark) :is(.hx-link.video-card, .hx-days, .hx-side, .lbl-list, .lbl-panel, .hx-toast, .hx-remove) { background: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important; }
+html[data-theme='fawanees'].dark :is(.hx-link.video-card, .hx-days, .hx-side, .lbl-list, .lbl-panel, .hx-toast, .hx-remove) { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; }
+html[data-theme='fawanees'] .lbl-panel { background-image: linear-gradient(180deg, color-mix(in srgb, var(--fanous-color-primary) 18%, transparent), transparent 70%) !important; }
+html[data-theme='fawanees'] :is(.hx-days, .hx-side, .lbl-list) { padding: 12px; border-radius: var(--r-xl, 20px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fanous-color-primary-sheen) 12%, transparent); }
+html[data-theme='fawanees'] :is(.hx-head, .hx-main-head, .hx-results) { padding: 10px 14px; border-radius: var(--r-lg, 14px); background: var(--fanous-color-background); }
+html[data-theme='fawanees'] :is(.lbl-btn-secondary, .lbl-more, .hx-notice) { background: var(--fanous-color-background); }

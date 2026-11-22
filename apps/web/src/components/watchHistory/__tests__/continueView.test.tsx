@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 let mockLang: 'en' | 'ar' = 'en';
 jest.mock('@/hooks/useLanguage', () => ({
@@ -30,7 +30,6 @@ jest.mock('@/services/api/watch-history', () => ({
 
 import { WatchHistoryService } from '@/services/api/watch-history';
 import WatchHistoryPage from '..';
-import WatchHistoryPageRTL from '../rtl';
 
 const service = WatchHistoryService as jest.Mocked<typeof WatchHistoryService>;
 
@@ -69,7 +68,7 @@ describe('History page: Continue watching view (?view=continue)', () => {
 
   it('in Arabic, right to left', async () => {
     mockLang = 'ar';
-    render(<WatchHistoryPageRTL view="continue" />);
+    render(<WatchHistoryPage view="continue" />);
     expect(await screen.findByRole('heading', { level: 1, name: 'متابعة المشاهدة' })).toBeInTheDocument();
     expect(screen.getByTestId('watch-history-page')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByTestId('watch-history-view-switch')).toHaveAttribute('href', '/ar/history');
@@ -92,7 +91,7 @@ describe('History rows: meta separator', () => {
 
   it('joins the Arabic meta with «،», never • (a dot reads as «٠»)', async () => {
     mockLang = 'ar';
-    render(<WatchHistoryPageRTL />);
+    render(<WatchHistoryPage />);
     const row = (await screen.findByText(/تمت مشاهدة\s٢٠٪/)).closest('p')!;
     // «،» on one line (sm and up); on phones the parts stack and the separator is hidden
     expect(row.textContent).toContain('،');
@@ -109,5 +108,87 @@ describe('History rows: meta separator', () => {
     const bar = screen.getByTestId('watch-history-progress');
     expect(bar.className).toContain('rounded-full');
     expect((bar.firstChild as HTMLElement).style.inlineSize).toBe('20%');
+  });
+});
+
+describe('Continue watching: a grid of cards with remove and undo', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useRealTimers();
+    mockLang = 'en';
+    service.getPaused.mockResolvedValue(false);
+    service.remove.mockResolvedValue(true);
+    service.list.mockResolvedValue({ entries: [entry('a'), entry('b')], total: 2, hasMore: false });
+  });
+
+  it('shows each video as a card in a grid, with Pause in the header row', async () => {
+    render(<WatchHistoryPage view="continue" />);
+    const grid = await screen.findByTestId('continue-grid');
+    expect(within(grid).getAllByTestId('history-card')).toHaveLength(2);
+    const card = within(grid).getAllByTestId('history-card')[0];
+    expect(within(card).getByRole('heading', { level: 3, name: 'Talk a' })).toBeInTheDocument();
+    expect(card).toHaveTextContent(/20%\swatched/);
+    expect(await screen.findByTestId('watch-history-pause')).toBeInTheDocument();
+    expect(screen.getByTestId('watch-history-pause').closest('header')).toBe(screen.getByRole('heading', { level: 1 }).closest('header'));
+  });
+
+  it('removes from the card at once, and Undo brings it back without deleting anything', async () => {
+    jest.useFakeTimers();
+    render(<WatchHistoryPage view="continue" />);
+    await act(async () => { await Promise.resolve(); });
+    const remove = await screen.findByRole('button', { name: 'Remove “Talk a” from watch history' });
+    fireEvent.click(remove);
+    expect(screen.queryByRole('heading', { level: 3, name: 'Talk a' })).toBeNull();
+    expect(screen.getByTestId('history-undo-toast')).toHaveTextContent('Removed from watch history');
+    fireEvent.click(screen.getByTestId('history-undo'));
+    expect(screen.getByRole('heading', { level: 3, name: 'Talk a' })).toBeInTheDocument();
+    act(() => { jest.advanceTimersByTime(10_000); });
+    expect(service.remove).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it('deletes for good once the undo time is over', async () => {
+    jest.useFakeTimers();
+    render(<WatchHistoryPage view="continue" />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove “Talk b” from watch history' }));
+    await act(async () => { jest.advanceTimersByTime(6000); });
+    expect(service.remove).toHaveBeenCalledWith('b');
+    expect(screen.queryByTestId('history-undo-toast')).toBeNull();
+    jest.useRealTimers();
+  });
+});
+
+describe('The whole history: grouped by day, searchable', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockLang = 'en';
+    service.getPaused.mockResolvedValue(false);
+  });
+
+  it('groups by day under headings, with × at the end of each row', async () => {
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 86_400_000);
+    service.list.mockResolvedValue({
+      entries: [{ ...entry('a'), lastWatchedAt: now.toISOString() }, { ...entry('b'), lastWatchedAt: yesterday.toISOString() }],
+      total: 2, hasMore: false,
+    });
+    render(<WatchHistoryPage />);
+    expect(await screen.findByRole('heading', { level: 2, name: 'Today' })).toBeInTheDocument();
+    const day = screen.getByRole('region', { name: 'Yesterday' });
+    const row = within(day).getByRole('listitem');
+    expect(row.lastElementChild).toHaveAttribute('aria-label', 'Remove “Talk b” from watch history');
+  });
+
+  it('searches the history from the side column and says when nothing matches', async () => {
+    service.list.mockResolvedValue({ entries: [entry('a')], total: 1, hasMore: false });
+    render(<WatchHistoryPage />);
+    const search = await screen.findByRole('searchbox', { name: 'Search watch history' });
+    service.list.mockResolvedValue({ entries: [], total: 0, hasMore: false, searched: 1 });
+    fireEvent.change(search, { target: { value: 'madinah' } });
+    fireEvent.submit(search.closest('form')!);
+    await waitFor(() => expect(service.list).toHaveBeenLastCalledWith({ limit: 20, completed: undefined, q: 'madinah' }));
+    expect(await screen.findByText('No videos in your history match “madinah”.')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Manage history' })).toContainElement(search);
   });
 });

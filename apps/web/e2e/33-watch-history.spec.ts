@@ -65,11 +65,11 @@ test.describe('watch history - signed in', () => {
     for (const v of videos) await remove(request, v.id);
   });
 
-  for (const [locale, percent, removeLabel] of [
-    ['en', /40%\swatched/, 'Remove from history'],
-    ['ar', /تمت مشاهدة\s٤٠٪/, 'إزالة من السجل'],
+  for (const [locale, percent, removeLabel, undoLabel] of [
+    ['en', /40%\swatched/, (title: string) => `Remove “${title}” from watch history`, 'Undo'],
+    ['ar', /تمت مشاهدة\s٤٠٪/, (title: string) => `إزالة «${title}» من سجل المشاهدة`, 'تراجع'],
   ] as const) {
-    test(`HIST-002 lists a watched video with progress, links to it, and removes it (${locale})`, async ({ page, request }) => {
+    test(`HIST-002 lists a watched video with progress, links to it, and removes it with undo (${locale})`, async ({ page, request }) => {
       const video = videos[0];
       await record(request, video, 0.4);
       await page.goto(`/${locale}/history`);
@@ -80,8 +80,21 @@ test.describe('watch history - signed in', () => {
       await expect(entry).toContainText(percent);
       await expect(entry.getByRole('link', { name: video.title })).toHaveAttribute('href', `/${locale}/video/${video.id}`);
 
-      await entry.getByRole('button', { name: removeLabel }).click();
+      // Remove hides the row at once and offers Undo, which brings it back with nothing deleted
+      const removeButton = () => entry.getByRole('button', { name: removeLabel(video.title) });
+      await removeButton().click();
       await expect(entry).toHaveCount(0);
+      await page.getByTestId('history-undo-toast').getByRole('button', { name: undoLabel }).click();
+      await expect(entry).toBeVisible();
+
+      // Removed again and left alone, it is deleted once the undo time is over
+      const deleted = page.waitForResponse(
+        (res) => res.request().method() === 'DELETE' && res.url().includes(`/api/watch-history/${video.id}`),
+        { timeout: 15_000 },
+      );
+      await removeButton().click();
+      await expect(entry).toHaveCount(0);
+      expect((await deleted).ok()).toBe(true);
 
       // Gone on the server too
       await page.reload();

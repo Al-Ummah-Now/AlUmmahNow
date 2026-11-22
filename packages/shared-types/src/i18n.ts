@@ -2564,6 +2564,18 @@ export interface AppTranslations {
     allHistory: string;
     /** Continue watching view with nothing left to continue */
     continueEmpty: string;
+    today: string;
+    yesterday: string;
+    searchLabel: string;
+    searchSubmit: string;
+    searchClear: string;
+    searchResultsFor: string;
+    searchNoResults: string;
+    searchWindow: string;
+    manage: string;
+    removed: string;
+    undo: string;
+    removeTitled: string;
   };
 
   settings?: {

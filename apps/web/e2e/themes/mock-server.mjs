@@ -20,6 +20,17 @@ const video = (i) => ({
   likesCount: 3, dislikesCount: 0, commentsCount: 2, isPublic: true, isLive: i === 3, width: 1920, height: 1080, status: 'ready',
 });
 const VIDEOS = Array.from({ length: 12 }, (_, i) => video(i + 1));
+// Watch history across days (today, yesterday, this week, older): the Continue watching grid and the
+// day-grouped history list
+const HISTORY = VIDEOS.slice(0, 10).map((v, i) => {
+  const watched = iso([1, 5, 26, 30, 52, 75, 100, 130, 200, 400][i]);
+  const percent = i === 3 ? 100 : [38, 72, 12, 0, 55, 90, 25, 64, 47, 81][i];
+  return {
+    id: `h${i}`, userId: USER, videoId: v.id, videoTitle: v.title, videoThumbnail: v.thumbnailUrl, videoDuration: v.duration,
+    channelId: v.channelId, channelName: v.channelName, firstWatchedAt: watched, lastWatchedAt: watched, watchCount: 1,
+    progress: Math.round((v.duration * percent) / 100), completed: percent === 100, percentageWatched: percent,
+  };
+});
 const PROFILE = { id: USER, userId: USER, email: 'sweep@example.test', firstName: 'Theme', lastName: 'Sweep', displayName: 'Theme Sweep', dateCreated: iso(1000) };
 // The sweep user's own channel: the channel page and the Studio pages (owner role) render it
 const CHANNEL = {
@@ -116,6 +127,9 @@ function answer(path) {
   if (path === '/api/channels/c1/content/summary') return { success: true, result: { counts: { published: 9, scheduled: 1, drafts: 1, processing: 1, failed: 0 } } };
   if (/^\/api\/videos\/[^/]+\/comments$/.test(path)) return { success: true, result: { comments: COMMENTS, nextCursor: null, total: COMMENTS.length, sort: 'newest', commentSettings: 'on' } };
   if (/^\/api\/videos\/[^/]+$/.test(path)) return { ...VIDEOS[0], id: path.split('/').pop() };
+  if (path === '/api/watch-history/settings') return { paused: false };
+  if (path === '/api/watch-history') return { entries: HISTORY, total: HISTORY.length, hasMore: false };
+  if (/^\/api\/library\/(watch-later|liked)$/.test(path)) return { success: true, result: { items: VIDEOS.slice(0, 8), nextCursor: null, total: 8, videoIds: VIDEOS.slice(0, 8).map((v) => v.id) } };
   if (/videos|search|history|feed|library|watch-later|liked|trending|explore|recommend/.test(path)) return { cursor: '', limit: 12, data: VIDEOS, items: VIDEOS, videos: VIDEOS, success: true, result: { items: VIDEOS, videos: VIDEOS, nextCursor: null } };
   if (/channels/.test(path)) return { success: true, data: [], result: [], items: [], channels: [] };
   return { success: true, data: [], result: [], items: [] };

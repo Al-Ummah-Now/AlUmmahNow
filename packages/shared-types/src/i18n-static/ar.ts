@@ -2287,6 +2287,18 @@ export const AR_TRANSLATIONS: AppTranslations = {
     continueSubtitle: 'مرئيات بدأتها ولم تُكملها، الأحدث أولًا',
     allHistory: 'السجل كاملًا',
     continueEmpty: 'لا شيء لمتابعته. تظهر هنا المرئيات التي تبدأها ولا تُكملها.',
+    today: 'اليوم',
+    yesterday: 'أمس',
+    searchLabel: 'البحث في سجل المشاهدة',
+    searchSubmit: 'بحث',
+    searchClear: 'مسح البحث',
+    searchResultsFor: 'نتائج البحث عن «{query}»',
+    searchNoResults: 'لا توجد في سجلك مرئيات تطابق «{query}».',
+    searchWindow: 'شمل البحث أحدث {count} من المرئيات في سجلك.',
+    manage: 'إدارة السجل',
+    removed: 'أُزيل من سجل المشاهدة',
+    undo: 'تراجع',
+    removeTitled: 'إزالة «{title}» من سجل المشاهدة',
   },
 
   live: {

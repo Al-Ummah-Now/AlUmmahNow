@@ -127,6 +127,38 @@ for (const lang of LANGS) {
   });
 }
 
+// The history pages and Watch later / Liked: their cards, the day-grouped list, its side column and the
+// playlist panel are solid in Fawanees (owner 2026-11-22: "no street showing through")
+for (const lang of LANGS) {
+  test(`street library pages ${lang}: no see-through cards, lists or panels`, async ({ page, context, baseURL }) => {
+    test.setTimeout(240_000);
+    await signIn(context, baseURL!);
+    await mockApi(page);
+    const problems: string[] = [];
+    for (const [path, ready] of [
+      ['/history?view=continue', 'history-card'],
+      ['/history', 'watch-history-search'],
+      ['/library/watch-later', 'library-panel'],
+      ['/library/liked', 'library-panel'],
+    ] as const) {
+      await open(page, `/${lang}${path}`);
+      await expect(page.getByTestId(ready).first()).toBeVisible({ timeout: 30_000 });
+      for (const mode of MODES) {
+        await applyTheme(page, 'fawanees', mode);
+        await settle(page);
+        const maxY = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+        for (const depth of DEPTHS.filter((d) => d <= maxY)) {
+          await page.evaluate((y) => window.scrollTo(0, y), depth);
+          await page.waitForTimeout(300);
+          for (const s of await seeThrough(page)) problems.push(`${path} ${mode} @${depth}px see-through: ${s}`);
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
+}
+
 test('street: only Fawanees has it', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!);
