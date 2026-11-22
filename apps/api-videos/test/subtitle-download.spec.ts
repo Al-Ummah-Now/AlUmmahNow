@@ -29,6 +29,12 @@ describe('subtitle downloads', () => {
 		assert.equal(vttToSrt(vtt), '1\n00:00:01,500 --> 00:00:03,250\nفي الأولى\nسطر ثانٍ\n\n2\n01:02:03,004 --> 01:02:04,000\n<i>two</i>\n');
 	});
 
+	it('leaves no tag behind, even one split by another', () => {
+		const srt = vttToSrt('WEBVTT\n\n00:00.000 --> 00:01.000\na<<c>script>b <scr<c>ipt>c <b>d</b>\n');
+		assert.doesNotMatch(srt, /<(?!\/?b>)/);
+		assert.match(srt, /<b>d<\/b>/);
+	});
+
 	it('an SRT keeps the attribution in a first zero-length cue; a VTT in a NOTE', () => {
 		const vtt = 'WEBVTT\n\n00:00.000 --> 00:01.000\n“[fixture translation 20 of 112:1]”\n';
 		const srt = subtitleDownload(vtt, 'srt', { edition });
