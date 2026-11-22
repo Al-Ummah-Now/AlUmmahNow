@@ -416,7 +416,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     handlePlaceholder: 'yourhandle',
     handleChecking: 'Checking availability…',
     handleAvailable: '@{handle} is available',
-    handleCurrent: 'This is your current handle',
+    handleCurrent: 'This is your current handle.',
     handleTaken: 'This handle is already taken',
     handleReserved: 'This handle is reserved',
     handleTooShort: 'Handles need at least 3 characters',

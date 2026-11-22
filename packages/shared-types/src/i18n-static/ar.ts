@@ -416,7 +416,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     handlePlaceholder: 'yourhandle',
     handleChecking: 'جارٍ التحقق من التوفر…',
     handleAvailable: '@{handle} متاح',
-    handleCurrent: 'هذا هو معرّفك الحالي',
+    handleCurrent: 'هذا هو معرّفك الحالي.',
     handleTaken: 'هذا المعرّف مستخدم بالفعل',
     handleReserved: 'هذا المعرّف محجوز',
     handleTooShort: 'يجب أن يتكون المعرّف من ٣ أحرف على الأقل',
