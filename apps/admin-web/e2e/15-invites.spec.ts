@@ -166,6 +166,14 @@ test.describe('invite creators', () => {
         await expect(page.locator('input[type="password"]')).toHaveCount(0);
         await shot(page, testInfo, '6-passkey-offer');
         await page.locator('[data-page="passkey"] button[data-action="skip"]').click();
+        // An account with no password: Skip shows "No passkey yet" and Continue (AlUmmahNowAuth
+        // 0bd4fa0); an issuer before that goes on at Skip
+        const done = page.locator('[data-page="passkey"] button[data-action="done"]');
+        await expect(done.or(page.getByTestId('invite-welcome'))).toBeVisible({ timeout: 30_000 });
+        if (await done.isVisible()) {
+          await shot(page, testInfo, '6b-no-passkey-yet');
+          await done.click();
+        }
       }
       // Lands where the work is: the Studio of the invited channel, with the first-run welcome
       await expect(page).toHaveURL(new RegExp(`^${escapeRe(WEB_APP_URL)}/en/studio/${escapeRe(state.channelId!)}/dashboard\\?welcome=invite`), { timeout: 30_000 });
