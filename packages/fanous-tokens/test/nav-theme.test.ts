@@ -40,10 +40,14 @@ test('the bar paints the band on its own layer, the shared blur behind it, an ap
   assert.match(before, /z-index: -1;/);
 });
 
-test('a theme with a body font puts it on the header controls, Arabic first on Arabic pages', () => {
+test('a theme with a body font puts it on the header controls and the menu text, Arabic first on Arabic pages', () => {
   for (const id of THEMES) {
     const body = theme(id).typography.body as { latin: string[]; arabic: string[] } | undefined;
-    const sel = (suffix = '') => ['button', 'summary', 'input', 'select', 'textarea'].map((el) => `html[data-theme='${id}'] .aun-header ${el}${suffix}`).join(',');
+    // the header's controls, then every menu item and the menu's name line wherever the menu is rendered
+    const sel = (suffix = '') => [
+      ...['button', 'summary', 'input', 'select', 'textarea'].map((el) => `html[data-theme='${id}'] .aun-header ${el}${suffix}`),
+      ...['.aun-menu-item', '.aun-menu-who-name'].map((c) => `html[data-theme='${id}'] ${c}${suffix}`),
+    ].join(',');
     if (!body) {
       assert.ok(!block.includes(`html[data-theme='${id}'] .aun-header`), `${id} has no body font: its controls keep the header's`);
       continue;
