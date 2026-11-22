@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fixedCostMonthShare, fixedCostsForMonth, parseFixedCostInput } from '../src/cost-fixed.ts';
+import { fixedCostMonthShare, fixedCostsForMonth, parseFixedCostInput, accruedMonthCents, centsByDay, fixedCostsDay } from '../src/cost-fixed.ts';
 
 const apple = { amountUsd: 99, period: 'yearly' as const, startDate: '2026-01-10', endDate: null };
 const linear = { amountUsd: 10, period: 'monthly' as const, startDate: '2026-11-16', endDate: null };
@@ -38,4 +38,29 @@ test('input is validated and cleaned', () => {
   assert.equal((parseFixedCostInput({ name: 'x', amountUsd: 1, period: 'weekly', startDate: '2026-01-01' }) as { field: string }).field, 'period');
   assert.equal((parseFixedCostInput({ name: 'x', amountUsd: 1, period: 'monthly', startDate: '2026-02-30' }) as { field: string }).field, 'startDate');
   assert.equal((parseFixedCostInput({ name: 'x', amountUsd: 1, period: 'monthly', startDate: '2026-02-01', endDate: '2026-01-01' }) as { field: string }).field, 'endDate');
+});
+
+test('cents per day without drift: a steady day is not rounded up every day, and the month is its exact total', () => {
+  const days = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+  const cells = centsByDay(days.map((d) => [d, 8.25 / 30] as const));
+  assert.equal([...cells.values()].reduce((a, b) => a + b, 0), 825);
+  assert.ok([...cells.values()].every((c) => c === 27 || c === 28));
+  // A later day arriving never changes an earlier one, and each month starts afresh
+  const first20 = centsByDay(days.slice(0, 20).map((d) => [d, 8.25 / 30] as const));
+  for (const [d, c] of first20) assert.equal(cells.get(d), c);
+  const two = centsByDay([['2026-10-31', 0.004], ['2026-11-01', 0.004]]);
+  assert.deepEqual([...two.values()], [0, 0]);
+});
+
+test('a month to date by days only grows through the day, and equals the exact month rounded once', () => {
+  const items = [{ amountUsd: 99, period: 'yearly' as const, startDate: '2026-01-10', endDate: null }, { amountUsd: 10, period: 'monthly' as const, startDate: '2026-11-16', endDate: null }];
+  let prev = 0;
+  for (let m = 0; m < 1440; m += 7) {
+    const now = new Date(Date.parse('2026-11-21T00:00:00Z') + m * 60_000);
+    const cents = accruedMonthCents((d) => fixedCostsDay(items, d), now);
+    assert.ok(cents >= prev, `stepped back at ${now.toISOString()}`);
+    prev = cents;
+  }
+  const noon = new Date('2026-11-21T12:00:00Z');
+  assert.equal(accruedMonthCents((d) => fixedCostsDay(items, d), noon), Math.round(((8.25 * 20.5) / 30 + (10 * 5.5) / 30) * 100));
 });

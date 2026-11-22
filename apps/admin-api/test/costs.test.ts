@@ -422,9 +422,15 @@ describe('Cloudflare billed estimate (COST-GAPS)', () => {
     assert.equal(d.idle.parts.fixed, 8.25);
     assert.equal(d.drivers[0]!.id, 'worker:al-ummah-now-production');
     assert.deepEqual(d.trend.series.map((x) => x.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai', 'resend', 'plan', 'fixed']);
-    // Today (12:00 UTC) carries half its $0.28 daily share, so the month's days sum to its month to date
-    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-2), 0.28);
-    assert.equal(d.trend.series.find((x) => x.key === 'fixed')!.values.at(-1), 0.14);
+    // A day is its $0.275 share at the cent without drift (27¢ or 28¢); today (12:00 UTC) carries half.
+    // The month's days add up to the fixed month to date exactly
+    const fixedSeries = d.trend.series.find((x) => x.key === 'fixed')!;
+    assert.ok([0.27, 0.28].includes(fixedSeries.values.at(-2)!));
+    assert.ok([0.13, 0.14].includes(fixedSeries.values.at(-1)!));
+    const month = d.trend.days.at(-1)!.slice(0, 7);
+    assert.equal(Math.round(fixedSeries.values.reduce((sum, v, i) => sum + (d.trend.days[i]!.startsWith(month) ? v : 0), 0) * 100), Math.round(d.fixed.mtd * 100));
+    const planSeries = d.trend.series.find((x) => x.key === 'plan')!;
+    assert.equal(Math.round(planSeries.values.reduce((sum, v, i) => sum + (d.trend.days[i]!.startsWith(month) ? v : 0), 0) * 100), Math.round(d.budget.parts.plan.mtd * 100));
   });
 });
 

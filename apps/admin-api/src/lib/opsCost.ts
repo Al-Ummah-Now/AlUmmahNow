@@ -12,13 +12,18 @@
  *   Plan        the Workers Paid subscription, PLAN_BASE_USD a month whatever the usage
  * The pure functions below are what the tests cover; loaders and the alert job follow them.
  */
-import { COST_ALERT_DEFAULTS, newErrorRef, parseCostAlertSettings, scrubEvent, type CostAlertSettings, type ErrorEventInput } from '@al-ummah/shared-types';
+import { accruedMonthCents, centsByDay, COST_ALERT_DEFAULTS, dayElapsed, newErrorRef, parseCostAlertSettings, scrubEvent, type CostAlertSettings, type ErrorEventInput } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import type { D1Database } from './types';
 
 /** The idle target the projected idle cost is shown against. */
 export const IDLE_TARGET_USD = 50;
 export const PLAN_BASE_USD = 5;
+
+/** The plan's month to date: its fee spread per UTC day, each day at the cent, as the daily chart draws it. */
+export function planMtd(now: Date): number {
+  return accruedMonthCents((day) => PLAN_BASE_USD / new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate(), now) / 100;
+}
 /** Containers standard-4: vCPU + GiB + GB disk per instance-second (same as api-videos media costs). */
 export const CONTAINER_USD_PER_SECOND = 4 * 0.00002 + 12 * 0.0000025 + 20 * 0.00000007;
 /** Days of history the idle projection and the spike baseline look at. */
@@ -105,8 +110,7 @@ export function budgetStatus(
   }
   if (overrides.cloudflare) parts.cloudflare = { mtd: round2(overrides.cloudflare.mtd), projected: round2(overrides.cloudflare.projected) };
   parts.fixed = { mtd: round2(overrides.fixed?.mtd ?? 0), projected: round2(overrides.fixed?.projected ?? 0) };
-  const p = projectMonth([], now);
-  parts.plan = { mtd: round2((PLAN_BASE_USD * p.daysElapsed) / p.daysInMonth), projected: PLAN_BASE_USD };
+  parts.plan = { mtd: planMtd(now), projected: PLAN_BASE_USD };
   const mtd = round2(Object.values(parts).reduce((s, x) => s + x.mtd, 0));
   const projected = round2(Object.values(parts).reduce((s, x) => s + x.projected, 0));
   const hasCap = capUsd !== null && Number.isFinite(capUsd) && capUsd > 0;
@@ -336,8 +340,12 @@ export function trendBySource(
   // Monthly fees accrue by the minute, like the month to date: today carries only its elapsed part,
   // so a month's days sum to its month-to-date figure
   const today = days[days.length - 1]!;
-  const elapsed = (now.getTime() - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
-  const share = (d: string, perDay: number) => perDay * (d === today ? elapsed : 1);
+  // The cells the plan's and the fixed costs' month to date sum (accruedMonthCents): per day without
+  // drift, today for its elapsed part
+  const accrued = (perDay: (d: string) => number) => {
+    const cells = centsByDay(days.map((d) => [d, perDay(d) * dayElapsed(d, now)] as const));
+    return days.map((d) => (cells.get(d) ?? 0) / 100);
+  };
   const daysIn = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate();
   return {
     days,
@@ -350,8 +358,8 @@ export function trendBySource(
       { key: 'containers' as const, values: series(fromList(extras.containers)) },
       { key: 'ai' as const, values: series(fromList(extras.ai)) },
       { key: 'resend' as const, values: series(fromList(extras.resend)) },
-      { key: 'plan' as const, values: days.map((d) => round2(share(d, PLAN_BASE_USD / daysIn(d)))) },
-      { key: 'fixed' as const, values: days.map((d) => round2(share(d, fixedDaily(d)))) },
+      { key: 'plan' as const, values: accrued((d) => PLAN_BASE_USD / daysIn(d)) },
+      { key: 'fixed' as const, values: accrued(fixedDaily) },
     ],
   };
 }

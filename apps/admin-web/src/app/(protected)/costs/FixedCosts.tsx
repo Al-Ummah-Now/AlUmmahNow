@@ -37,22 +37,25 @@ interface Form {
   note: string;
 }
 
-const today = () => localDate();
-const emptyForm = (): Form => ({ name: '', amount: '', period: 'monthly', startDate: today(), endDate: '', note: '' });
+const emptyForm = (now: number): Form => ({ name: '', amount: '', period: 'monthly', startDate: localDate(new Date(now)), endDate: '', note: '' });
 const formOf = (c: FixedCost): Form => ({ name: c.name, amount: String(c.amountUsd), period: c.period, startDate: c.startDate, endDate: c.endDate ?? '', note: c.note ?? '' });
 /** Eastern Arabic digits and the Arabic decimal separator typed into the amount. */
 const amountOf = (text: string) => Number(text.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace('٫', '.').replace(/[,\s]/g, ''));
 
-export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedCost[]; mtd: number; projected: number; canManage: boolean }) {
+/**
+ * `now` is the page's clock (ms), the instant its figures are for: a new cost starts on that
+ * instant's date on the viewer's calendar, the same day the figures above call today.
+ */
+export function FixedCosts({ items, mtd, projected, canManage, now }: { items: FixedCost[]; mtd: number; projected: number; canManage: boolean; now: number }) {
   const { t, locale } = useLanguage();
   const f = opsFormats(locale);
   const ids = useId();
-  const month = new Date().toISOString().slice(0, 7);
+  const month = new Date(now).toISOString().slice(0, 7);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState<Form>(emptyForm);
+  const [form, setForm] = useState<Form>(() => emptyForm(now));
   // The server renders in UTC: once in the browser, start a new cost on the viewer's own date
   useEffect(() => {
-    setForm((cur) => (editing === null && !cur.name && !cur.amount ? { ...cur, startDate: localDate() } : cur));
+    setForm((cur) => (editing === null && !cur.name && !cur.amount ? { ...cur, startDate: localDate(new Date(now)) } : cur));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
@@ -67,7 +70,7 @@ export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedC
   };
   const reset = () => {
     setEditing(null);
-    setForm(emptyForm());
+    setForm(emptyForm(now));
     setErrors({});
   };
 
