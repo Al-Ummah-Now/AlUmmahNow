@@ -16,7 +16,9 @@ import { authorizeSource, normalizeAddress } from '../src/lib/importSources/auth
 import { recordTelegramPost, telegramItem } from '../src/lib/importSources/telegram';
 import { insertSource, listItems, readSource, SourceError } from '../src/lib/importSources/store';
 import { resolveSourceUrl } from '../src/lib/importSources/media';
-import { queueDueSources, runSourceSync, startSourceSync } from '../src/lib/importSources/job';
+import { onSourceSyncFailed, queueDueSources, runSourceSync, startSourceSync } from '../src/lib/importSources/job';
+import { codedReason, sourceErrorFromPreview } from '../src/lib/importSources/errors';
+import { PreviewError } from '../src/lib/link-preview';
 import { matchTakeoutFile, normalizeTitle, type MatchRecord } from '../src/lib/importSources/takeout';
 import { getJobWithLog } from '../src/lib/admin/jobs';
 import { planEvent } from '../src/lib/social/deliver';
@@ -697,4 +699,55 @@ describe('YouTube Takeout files', () => {
 		assert.deepEqual([item!.state, item!.videoId, item!.postId], ['posted', videoId, post!.id]);
 		assert.equal((await getJobWithLog(env as never, said.body.result.jobId))!.status, 'succeeded');
 	});
+});
+
+describe('why a sync failed, in codes the apps translate', () => {
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	it('collapses fetch refusals to stable codes, with the detail after the colon', () => {
+		const coded = (code: ConstructorParameters<typeof PreviewError>[0], status?: number) => codedReason(new PreviewError(code, status), 'sync_failed');
+		assert.equal(coded('unreachable', 503), 'source_unreachable: The source could not be read (http_503)');
+		assert.equal(coded('unreachable', 429), 'source_unreachable: The source could not be read (http_429)');
+		assert.equal(coded('unreachable'), 'source_unreachable: The source could not be read (no_answer)', 'no answer or a timeout');
+		assert.equal(coded('too_many_redirects'), 'source_unreachable: The source could not be read (too_many_redirects)');
+		assert.equal(coded('blocked'), 'source_unreachable: The source could not be read (private_address)');
+		assert.equal(coded('unreachable', 404), 'source_not_found: The source was not found (http_404)');
+		assert.equal(coded('unreachable', 410), 'source_not_found: The source was not found (http_410)');
+		assert.equal(coded('unreachable', 401), 'source_forbidden: The source refused access (http_401)');
+		assert.equal(coded('unreachable', 403), 'source_forbidden: The source refused access (http_403)');
+		assert.equal(coded('unreachable', 400), "source_bad_response: The source gave an answer the sync can't use (http_400)");
+		assert.equal(coded('too_large'), "source_bad_response: The source gave an answer the sync can't use (too_large)");
+		assert.equal(sourceErrorFromPreview(new PreviewError('unreachable', 502)).code, 'source_unreachable');
+	});
+
+	it('keeps a SourceError code, wraps plain errors, and never codes a reason twice', () => {
+		assert.equal(codedReason(new SourceError(409, 'channel_unavailable', 'The channel is deleted or suspended'), 'sync_failed'), 'channel_unavailable: The channel is deleted or suspended');
+		assert.equal(codedReason(new SourceError(502, 'source_not_a_feed', 'The address is not an RSS or Atom feed'), 'sync_failed'), 'source_not_a_feed: The address is not an RSS or Atom feed');
+		assert.equal(codedReason(new Error('The image could not be stored'), 'sync_failed'), 'sync_failed: The image could not be stored');
+		assert.equal(codedReason(new Error('D1 is busy'), 'takeout_failed'), 'takeout_failed: D1 is busy');
+		assert.equal(codedReason(new Error('upload_incomplete: the video v1 has not finished uploading'), 'takeout_failed'), 'upload_incomplete: the video v1 has not finished uploading');
+		assert.equal(codedReason('boom', 'sync_failed'), 'sync_failed: boom');
+	});
+
+	for (const [label, answer, expected] of [
+		['a 503', () => new Response('down', { status: 503 }), 'source_unreachable: The source could not be read (http_503)'],
+		['a 404', () => new Response('gone', { status: 404 }), 'source_not_found: The source was not found (http_404)'],
+		['a page that is not a feed', () => new Response('<html><body>hi</body></html>', { headers: { 'content-type': 'text/html' } }), 'source_not_a_feed: The address is not an RSS or Atom feed'],
+	] as const) {
+		it(`stores ${label} on the job and the source as "<code>: <detail>"`, async () => {
+			stubNetwork((url) => (url === FEED ? answer() : null));
+			const { env } = harness();
+			const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'daily', createdBy: ADMIN });
+			const job = await startSourceSync(env as never, source, ADMIN);
+			await drainJobs(env as never);
+			const failed = await getJobWithLog(env as never, job.id);
+			assert.equal(failed!.status, 'failed');
+			assert.equal(failed!.lastError, expected);
+			assert.equal(failed!.log!.at(-1)!.error, expected, 'the log line too');
+			await onSourceSyncFailed(env as never, failed!, failed!.lastError!);
+			assert.equal((await readSource(env, source.id))!.last_error, expected);
+		});
+	}
 });

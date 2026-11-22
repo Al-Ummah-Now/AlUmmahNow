@@ -15,6 +15,7 @@
  */
 import { IMPORT_MAX_VIDEO_BYTES, type ImportItemKind, type ImportItemNote, type ImportSourceNetwork } from '@al-ummah/shared-types';
 import { checkUrl, readLimited, safeFetch, PreviewError } from '../link-preview';
+import { sourceErrorFromPreview } from './errors';
 import { BSKY_RESOLVER } from '../social/adapters/bluesky';
 import { SourceError } from './store';
 
@@ -150,7 +151,7 @@ async function getText(url: string, accept: string, max: number, f: typeof fetch
 		const res = await safeFetch(url, accept, f);
 		return new TextDecoder().decode(await readLimited(res, max, true));
 	} catch (error) {
-		if (error instanceof PreviewError) throw new SourceError(502, `source_${error.code}`, `The source could not be read (${error.code})`);
+		if (error instanceof PreviewError) throw sourceErrorFromPreview(error);
 		throw error;
 	}
 }
