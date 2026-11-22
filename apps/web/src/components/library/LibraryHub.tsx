@@ -6,6 +6,7 @@ import { Bookmark, Clock, History, ListVideo, ThumbsUp, Library as LibraryIcon }
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
+import { formatInteger } from '@al-ummah/shared-types';
 import { LibraryService, type SavedPost } from '@/services/api/library';
 import { WatchHistoryService } from '@/services/api/watch-history';
 import { listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
@@ -50,7 +51,7 @@ interface SectionProps<T> {
 }
 
 function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, keyOf, grid = true }: SectionProps<T>) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const texts = t.library;
   const headingId = `library-${id}-heading`;
   return (
@@ -60,7 +61,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
           <span aria-hidden="true" className="text-[var(--fanous-color-accent)]">{icon}</span>
           {title}
           {typeof state.total === 'number' && state.total > 0 && (
-            <span className="text-sm font-normal text-gray-500">({state.total})</span>
+            <span className="text-sm font-normal text-gray-500">({formatInteger(lang, state.total)})</span>
           )}
         </h2>
         {seeAllHref && typeof state.total === 'number' && state.total > 0 && (
