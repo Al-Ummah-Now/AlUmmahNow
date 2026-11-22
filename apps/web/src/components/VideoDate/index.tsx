@@ -121,14 +121,15 @@ export function WatchMetaSummary({ video, views, lang, describedById }: { video:
   const tip = `${formatViewsExact(views, lang)}${metaSeparator(lang)}${labelledDate(video, lang, labels)}${originText ? `${metaSeparator(lang)}${originText}` : ''}`;
   return (
     <summary title={tip} data-tip={tip} aria-describedby={describedById}>
-      <span>{formatViews(views, lang)}</span>
-      <MetaSep lang={lang} gap="6px" />
-      <VideoDate video={video} lang={lang} />
+      {/* Each part keeps its separator after it and never breaks inside, so a narrow screen wraps whole
+          parts and the separator ends the line («،» stays with the word before it) */}
+      <span className="watch-meta-part">{formatViews(views, lang)}<MetaSep lang={lang} gap="6px" /></span>
+      <span className="watch-meta-part">
+        <VideoDate video={video} lang={lang} />
+        {(origin || social) && <MetaSep lang={lang} gap="6px" />}
+      </span>
       {(origin || social) && (
-        <>
-          <MetaSep lang={lang} gap="6px" />
-          <span className="watch-origin" data-testid="watch-origin-short">{origin ? (labels?.fromYoutubeShort ?? 'Originally on YouTube') : fromSourceShortText(social!, labels)}</span>
-        </>
+        <span className="watch-meta-part watch-origin" data-testid="watch-origin-short">{origin ? (labels?.fromYoutubeShort ?? 'Originally on YouTube') : fromSourceShortText(social!, labels)}</span>
       )}
       <span id={describedById} hidden>{tip}</span>
     </summary>
