@@ -10,7 +10,7 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { Player } from 'video.js';
-import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
+import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Download, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
 import { getPlayerUi, setAutoplayNext } from '@/lib/video/player-ui';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
 import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
@@ -22,6 +22,7 @@ import {
   captionOptions,
   currentAudioId,
   currentCaptionId,
+  currentCaptionLanguage,
   currentQualityId,
   menuKeyAction,
   moveIndex,
@@ -102,9 +103,14 @@ export interface SettingsMenuProps {
   onShowShortcuts: () => void;
   /** The API's audio tracks (wiki AUN-MULTI-AUDIO), in the package master's order: labels and the saved choice */
   audioTracks?: AudioTrackView[];
+  /**
+   * The download URL of a caption language (the API fills Quran text at download time, with the
+   * attribution inside the file; QF 2026-11-22). Without it the captions panel offers no download.
+   */
+  captionDownloadUrl?: (language: string) => string | null;
 }
 
-export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: SettingsMenuProps) {
+export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, captionDownloadUrl }: SettingsMenuProps) {
   const p = player as unknown as PlayerApi;
   const { t, dir } = useVideoPlayerI18n(lang);
   const [open, setOpen] = useState(false);
@@ -264,6 +270,9 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
   const text = p.textTracks?.();
   const captions = captionOptions(text, t.chrome.off);
   const captionId = currentCaptionId(text);
+  // The shown track only: one video, one language per file
+  const shownLanguage = currentCaptionLanguage(text);
+  const downloadHref = shownLanguage && captionDownloadUrl ? captionDownloadUrl(shownLanguage) : null;
   const playerAudio = p.audioTracks?.();
   const audioMeta = playerAudio ? matchTracks(playerAudio, audioTracks) : [];
   // In the creator's order (the API's), whatever order the engine lists them in (Safari's own HLS
@@ -309,7 +318,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
     go('root', from);
   };
 
-  const sub = (title: string, options: MenuOption[], current: string, apply: (id: string) => void, extra?: { label: string; run: () => void }) => (
+  const sub = (title: string, options: MenuOption[], current: string, apply: (id: string) => void, extra?: { label: string; run: () => void }, download?: { label: string; href: string }) => (
     <>
       <button type="button" role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-back" data-row="back" tabIndex={-1} onClick={() => go('root', panel)}>
         <span className="vjs-fanous-mi-icon" aria-hidden="true">{dir === 'rtl' ? <ChevronRight /> : <ChevronLeft />}</span>
@@ -340,6 +349,13 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
           <span className="vjs-fanous-mi-icon" aria-hidden="true"><Type /></span>
           <span className="vjs-fanous-mi-label">{extra.label}</span>
         </button>
+      )}
+      {download && (
+        // An attachment: the browser saves it and the page stays
+        <a role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-extra" data-row="download" data-testid="player-download-captions" tabIndex={-1} href={download.href} download onClick={() => close(false)}>
+          <span className="vjs-fanous-mi-icon" aria-hidden="true"><Download /></span>
+          <span className="vjs-fanous-mi-label">{download.label}</span>
+        </a>
       )}
     </>
   );
@@ -414,7 +430,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
         )}
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}
         {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal, lang), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
-        {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined)}
+        {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined, downloadHref ? { label: t.chrome.downloadCaptions, href: downloadHref } : undefined)}
         {panel === 'audio' && sub(t.chrome.audioTrack, audio, audioId, chooseAudio)}
       </div>
     </div>,
