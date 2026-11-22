@@ -153,14 +153,14 @@ export default function PostCard({
                     href={origin.url}
                     target="_blank"
                     rel="noopener noreferrer nofollow ugc"
-                    className="hover:underline focus-visible:underline focus-visible:outline-none"
+                    className="whitespace-nowrap hover:underline focus-visible:underline focus-visible:outline-none"
                     title={fromSourceText(origin, lang, dateLabels)}
                     data-testid="post-origin"
                   >
                     {fromSourceShortText(origin, dateLabels)}
                   </a>
                 ) : (
-                  <span title={fromSourceText(origin, lang, dateLabels)} data-testid="post-origin">
+                  <span className="whitespace-nowrap" title={fromSourceText(origin, lang, dateLabels)} data-testid="post-origin">
                     {fromSourceShortText(origin, dateLabels)}
                   </span>
                 )}
@@ -184,7 +184,8 @@ export default function PostCard({
       </div>
 
       {/* Post Content */}
-      <div className="p-4">
+      {/* Text in the other script starts at the page's start edge, like the rest of the card (theme/system.css) */}
+      <div className="p-4 aun-start-text">
         {renderPostContent()}
       </div>
 

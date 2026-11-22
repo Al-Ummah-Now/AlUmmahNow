@@ -2,6 +2,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { RelativeDate } from '@/components/RelativeDate';
+import type { ReactNode } from 'react';
 import { formatAbsoluteDate, formatAbsoluteDateTime, formatViews, formatViewsExact, publishedDateOf, type MetaLang } from '@/lib/format/videoMeta';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
@@ -51,7 +52,12 @@ const text = (labels: DateLabels, key: string, fallback: string) => (typeof labe
 
 /** "Originally posted on Mastodon on 10 November 2026" (the date only, as for YouTube). */
 export function fromSourceText(origin: { network: SourceNetwork; at: string }, lang: MetaLang, labels: DateLabels): string {
-  return text(labels, 'fromSource', 'Originally posted on {network} on {date}').replace('{network}', sourceNetworkName(origin.network, labels)).replace('{date}', formatAbsoluteDate(origin.at, lang));
+  return fromSourceTemplate(origin, labels).replace('{date}', formatAbsoluteDate(origin.at, lang));
+}
+
+/** "Originally posted on Mastodon on {date}": the network filled in, the date still to come. */
+function fromSourceTemplate(origin: { network: SourceNetwork }, labels: DateLabels): string {
+  return text(labels, 'fromSource', 'Originally posted on {network} on {date}').replace('{network}', sourceNetworkName(origin.network, labels));
 }
 
 /** "Originally on Mastodon" */
@@ -101,9 +107,28 @@ export function ViewCount({ count, lang }: { count: number | string | null | und
 
 /** What the video's date is, with the exact value: «نُشر في …», «عُرض لأول مرة في …», «مجدول في …». */
 function labelledDate(video: DatedVideo, lang: MetaLang, labels: Record<string, string> | undefined): string {
-  if (isScheduledAhead(video)) return (labels?.scheduled ?? '{date}').replace('{date}', formatAbsoluteDateTime(video.scheduledPublishDate, lang));
-  if (video.isPremiered && video.premiereDate) return (labels?.premiered ?? '{date}').replace('{date}', formatAbsoluteDateTime(video.premiereDate, lang));
-  return (labels?.published ?? '{date}').replace('{date}', formatAbsoluteDateTime(publishedDateOf(video), lang));
+  const [template, date] = labelledDateParts(video, lang, labels);
+  return template.replace('{date}', date);
+}
+
+/** The template ("Published on {date}") and the exact date it takes. */
+function labelledDateParts(video: DatedVideo, lang: MetaLang, labels: Record<string, string> | undefined): [string, string] {
+  if (isScheduledAhead(video)) return [labels?.scheduled ?? '{date}', formatAbsoluteDateTime(video.scheduledPublishDate, lang)];
+  if (video.isPremiered && video.premiereDate) return [labels?.premiered ?? '{date}', formatAbsoluteDateTime(video.premiereDate, lang)];
+  return [labels?.published ?? '{date}', formatAbsoluteDateTime(publishedDateOf(video), lang)];
+}
+
+/** A template with its date kept on one line: a narrow screen wraps before the date, never inside it. */
+function wholeDate(template: string, date: string): ReactNode {
+  const at = template.indexOf('{date}');
+  if (at < 0) return template;
+  return (
+    <>
+      {template.slice(0, at)}
+      <span className="whitespace-nowrap">{date}</span>
+      {template.slice(at + '{date}'.length)}
+    </>
+  );
 }
 
 /**
@@ -126,7 +151,7 @@ export function WatchMetaSummary({ video, views, lang, describedById }: { video:
       <span className="watch-meta-part">{formatViews(views, lang)}<MetaSep lang={lang} gap="6px" /></span>
       <span className="watch-meta-part">
         <VideoDate video={video} lang={lang} />
-        {(origin || social) && <MetaSep lang={lang} gap="6px" />}
+        {(origin || social) && <MetaSep lang={lang} gap="6px" className="watch-origin-sep" />}
       </span>
       {(origin || social) && (
         <span className="watch-meta-part watch-origin" data-testid="watch-origin-short">{origin ? (labels?.fromYoutubeShort ?? 'Originally on YouTube') : fromSourceShortText(social!, labels)}</span>
@@ -150,21 +175,21 @@ export function WatchMetaDetail({ video, views, lang }: { video: DatedVideo; vie
   return (
     <>
       <p className="watch-desc-date" data-testid="watch-published">
-        {formatViewsExact(views, lang)}{metaSeparator(lang)}{labelledDate(video, lang, labels)}
+        {formatViewsExact(views, lang)}{metaSeparator(lang)}{wholeDate(...labelledDateParts(video, lang, labels))}
       </p>
       {origin && (
         <p className="watch-desc-origin" data-testid="watch-origin">
-          {fromYoutubeText(origin, lang, labels)}
+          {wholeDate(labels?.fromYoutube ?? 'Originally published on YouTube on {date}', formatAbsoluteDate(origin, lang))}
         </p>
       )}
       {social && (
         <p className="watch-desc-origin" data-testid="watch-origin">
           {social.url ? (
             <a href={social.url} target="_blank" rel="noopener noreferrer nofollow ugc" className="hover:underline focus-visible:underline">
-              {fromSourceText(social, lang, labels)}
+              {wholeDate(fromSourceTemplate(social, labels), formatAbsoluteDate(social.at, lang))}
             </a>
           ) : (
-            fromSourceText(social, lang, labels)
+            wholeDate(fromSourceTemplate(social, labels), formatAbsoluteDate(social.at, lang))
           )}
         </p>
       )}

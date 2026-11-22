@@ -346,7 +346,7 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-actions[data-fit=tight]{gap:6px}.watch-actions[data-fit=tight] .wa-comments:not(#_){display:none}
 .watch-actions[data-fit=tight] [data-testid=video-like-button]:not(#_){padding-inline:10px}
 .watch-desc{width:100%;margin-block-start:12px;padding:10px 12px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--fanous-color-text-primary) 7%,transparent);font-size:14px;line-height:20px;color:var(--fanous-color-text-primary)}
-.watch-desc summary{cursor:pointer;font-weight:600;display:flex;flex-wrap:wrap;column-gap:6px;position:relative}.watch-desc summary>.watch-meta-part{display:inline-flex;align-items:baseline;column-gap:6px;white-space:nowrap}.watch-desc-date{color:var(--fanous-color-text-secondary)}
+.watch-desc summary{cursor:pointer;font-weight:600;display:flex;flex-wrap:wrap;column-gap:6px;position:relative}.watch-desc summary>.watch-meta-part{display:inline-flex;align-items:baseline;column-gap:6px;white-space:nowrap}details.watch-desc[open]>summary .watch-origin,details.watch-desc[open]>summary .watch-origin-sep{display:none}.watch-desc-date{color:var(--fanous-color-text-secondary)}
 /* Imported from YouTube (AUN-YT-IMPORT): a quiet origin label in the summary, the full sentence when expanded */
 .watch-desc .watch-origin{font-weight:500;color:var(--fanous-color-text-secondary)}.watch-desc .watch-desc-origin{margin-block-start:2px;color:var(--fanous-color-text-secondary);font-size:13px}
 /* The exact count and what the date is, while the summary has keyboard focus (hover shows its title) */
@@ -620,3 +620,6 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
    «في «استكشف».» short on line 3 (AUDIT-2 review), and held to a reading measure, so on a 1280 desktop it isn't one
    1,180px line across the card */
 [data-testid=home-empty] p{text-wrap:balance;max-inline-size:60ch}
+/* Text that takes its own direction (dir=auto: a post body, a description) still starts at the page's start edge:
+   English on an Arabic page sits at the right, Arabic on an English page at the left (AUDIT-2 2026-11-22) */
+.aun-start-text [dir="auto"]{text-align:match-parent}

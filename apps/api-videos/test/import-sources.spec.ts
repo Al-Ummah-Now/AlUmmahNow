@@ -153,9 +153,13 @@ describe('parsing feeds', () => {
 		const items = parseFeed(RSS, FEED);
 		assert.deepEqual(items.map((i) => i.itemId), ['post-4', 'post-3', 'post-2', 'post-1']);
 		const [internal, article, photos, reminder] = items;
-		assert.equal(reminder!.text, 'Friday reminder\n\nBe kind & patient.\n\nSecond line');
+		// A link post: the title is on its card, so the text is the summary alone (never the title twice)
+		assert.equal(reminder!.text, 'Be kind & patient.\n\nSecond line');
 		assert.equal(reminder!.url, 'https://example.org/p/1');
 		assert.equal(reminder!.link?.url, 'https://example.org/p/1', 'a plain item links to itself');
+		assert.equal(reminder!.link?.title, 'Friday reminder');
+		assert.equal(reminder!.link?.description, null);
+		assert.ok(photos!.text.startsWith(photos!.title ?? ''), 'a post with its own images keeps the title in its text');
 		assert.deepEqual(photos!.images, [{ url: 'https://cdn.example.org/a.png' }]);
 		assert.equal(photos!.link, null);
 		assert.equal(article!.postedAt, Date.parse('2026-11-12T09:00:00Z'));

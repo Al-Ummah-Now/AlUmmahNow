@@ -46,7 +46,7 @@ describe('post card permalink', () => {
     const ar = screen.getByTestId('post-origin');
     expect(ar.tagName).toBe('SPAN');
     expect(ar).toHaveTextContent('نُشر أولًا على تيليجرام');
-    expect(ar).toHaveAttribute('title', 'نُشر أول مرة على تيليجرام في ١٠ نوفمبر ٢٠٢٦');
+    expect(ar).toHaveAttribute('title', 'نُشر أولًا على تيليجرام في ١٠ نوفمبر ٢٠٢٦');
     unmountAr();
     render(<PostCard post={post} />);
     expect(screen.queryByTestId('post-origin')).toBeNull();
