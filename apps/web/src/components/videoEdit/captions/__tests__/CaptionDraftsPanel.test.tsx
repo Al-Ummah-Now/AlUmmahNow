@@ -136,5 +136,12 @@ describe('CaptionDraftsPanel: Download (QF 2026-11-22)', () => {
     const buttons = rows.map((r) => r.querySelector('[data-testid="caption-download"]'));
     expect(buttons.map((b) => b?.getAttribute('data-source'))).toEqual(['draft', 'draft']);
     expect(buttons.map((b) => b?.getAttribute('aria-label'))).toEqual(['Download captions (Arabic)', 'Download captions (English)']);
+
+    // One draft's formats open inside its own card; opening another closes the first
+    fireEvent.click(buttons[1]!);
+    expect(rows[1]).toContainElement(screen.getByTestId('caption-download-formats'));
+    fireEvent.click(buttons[0]!);
+    expect(screen.getAllByTestId('caption-download-formats')).toHaveLength(1);
+    expect(rows[0]).toContainElement(screen.getByTestId('caption-download-formats'));
   });
 });

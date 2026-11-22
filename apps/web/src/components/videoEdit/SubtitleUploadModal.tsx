@@ -90,7 +90,7 @@ export default function SubtitleUploadModal({
         setError(result.errors.join(', '));
       }
     } catch (_err) {
-      setError(t.subtitle?.validationFailed || 'Failed to validate subtitle file');
+      setError(t.subtitle?.validationFailed || 'Couldn’t check the caption file');
     } finally {
       setIsValidating(false);
     }
@@ -170,7 +170,7 @@ export default function SubtitleUploadModal({
           handleOpenChange(false);
         }, 1500);
       } else {
-        setError(result?.error?.message || t.subtitle?.uploadFailed || 'Failed to upload subtitle');
+        setError(result?.error?.message || t.subtitle?.uploadFailed || 'Couldn’t upload the captions');
       }
     } catch (_err) {
       setError(t.subtitle?.uploadError || 'An error occurred while uploading');
@@ -205,7 +205,7 @@ export default function SubtitleUploadModal({
             font-bold
             dark:text-white
           ">
-            {t.subtitle?.uploadSubtitle || 'Upload Subtitle'}
+            {t.subtitle?.uploadSubtitle || 'Upload captions'}
           </DialogTitle>
         </DialogHeader>
 
@@ -269,7 +269,7 @@ export default function SubtitleUploadModal({
               font-medium
               dark:text-white
             ">
-              {t.subtitle?.subtitleFile || 'Subtitle File'} *
+              {t.subtitle?.subtitleFile || 'Caption file'} *
             </Label>
 
             <div
@@ -295,7 +295,7 @@ export default function SubtitleUploadModal({
               onClick={() => fileInputRef.current?.click()}
               role="button"
               tabIndex={0}
-              aria-label={t.subtitle?.uploadFileArea || 'Upload subtitle file'}
+              aria-label={t.subtitle?.uploadFileArea || 'Upload a caption file'}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -310,7 +310,7 @@ export default function SubtitleUploadModal({
                 onChange={handleFileInputChange}
                 className="hidden"
                 disabled={isUploading}
-                aria-label={t.subtitle?.uploadFileArea || 'Upload subtitle file'}
+                aria-label={t.subtitle?.uploadFileArea || 'Upload a caption file'}
                 data-testid="subtitle-file-input"
               />
 
@@ -382,7 +382,7 @@ export default function SubtitleUploadModal({
           {isValidating && (
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{t.subtitle?.validating || 'Validating subtitle file...'}</span>
+              <span>{t.subtitle?.validating || 'Checking the caption file…'}</span>
             </div>
           )}
 
@@ -426,7 +426,7 @@ export default function SubtitleUploadModal({
                   cursor-pointer
                 "
               >
-                {t.subtitle?.setAsDefault || 'Set as default subtitle track'}
+                {t.subtitle?.setAsDefault || 'Make these the default captions'}
               </label>
             </div>
           )}
@@ -510,7 +510,7 @@ export default function SubtitleUploadModal({
                 dark:text-green-400
                 font-medium
               ">
-                {t.subtitle?.uploadSuccess || 'Subtitle uploaded successfully!'}
+                {t.subtitle?.uploadSuccess || 'Captions uploaded.'}
               </p>
             </div>
           )}

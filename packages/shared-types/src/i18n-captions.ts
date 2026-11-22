@@ -32,6 +32,8 @@ export interface CaptionsTranslations {
   download: {
     /** Same wording as the player's captions menu (#1735) */
     action: string;
+    /** Above the formats, once the button opened them */
+    choose: string;
     vtt: string;
     srt: string;
     failed: string;
@@ -301,6 +303,7 @@ export const CAPTIONS_EN: CaptionsTranslations = {
   reload: 'Reload',
   download: {
     action: 'Download captions',
+    choose: 'Choose a file format',
     vtt: 'WebVTT (.vtt)',
     srt: 'SubRip (.srt)',
     failed: "Couldn’t download the captions. Try again.",
@@ -527,6 +530,7 @@ export const CAPTIONS_AR: CaptionsTranslations = {
   reload: 'إعادة التحميل',
   download: {
     action: 'تنزيل الترجمة',
+    choose: 'اختر صيغة الملف',
     vtt: 'WebVTT (.vtt)',
     srt: 'SubRip (.srt)',
     failed: 'تعذّر تنزيل الترجمة. حاول مرة أخرى.',

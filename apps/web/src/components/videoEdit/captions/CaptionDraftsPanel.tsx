@@ -30,7 +30,7 @@ import {
   type CaptionJobView,
 } from '@/lib/api/caption-drafts-client';
 import CaptionDraftEditor from './CaptionDraftEditor';
-import CaptionDownloadMenu from './CaptionDownloadMenu';
+import { CaptionDownloadButton, CaptionDownloadFormats } from './CaptionDownloadMenu';
 import CaptionTranscribe, { visibleJobs, type CaptionMinutes } from './CaptionTranscribe';
 import CaptionTranslate, { TranslationJobs } from './CaptionTranslate';
 
@@ -59,6 +59,8 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   const [editing, setEditing] = useState<string | null>(null);
   /** The source draft whose Translate form is open */
   const [translating, setTranslating] = useState<string | null>(null);
+  /** The draft whose download formats are open (one at a time) */
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [claims, setClaims] = useState<CaptionClaim[]>([]);
   const [transcript, setTranscript] = useState(false);
   const [claimLang, setClaimLang] = useState('ar');
@@ -363,7 +365,14 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     <FilePenLine className="h-4 w-4" aria-hidden />
                     {tc.edit}
                   </button>
-                  <CaptionDownloadMenu videoId={videoId} language={d.language} languageLabel={label(d.language)} source="draft" t={tc.download} />
+                  <CaptionDownloadButton
+                    language={d.language}
+                    languageLabel={label(d.language)}
+                    source="draft"
+                    expanded={downloading === d.language}
+                    onToggle={() => setDownloading((cur) => (cur === d.language ? null : d.language))}
+                    t={tc.download}
+                  />
                   {d.kind === 'source' && translateMinutes && (
                     <button
                       type="button"
@@ -403,6 +412,9 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                 <div className="mt-3 border-t border-border pt-3">
                   <TranslationJobs videoId={videoId} lang={lang} jobs={jobs.filter((j) => j.sourceLanguage === d.language)} t={tc} label={label} confirm={confirm} reload={load} />
                 </div>
+              )}
+              {downloading === d.language && (
+                <CaptionDownloadFormats videoId={videoId} language={d.language} languageLabel={label(d.language)} source="draft" t={tc.download} onClose={() => setDownloading(null)} />
               )}
               {translating === d.language && translateMinutes && (
                 <CaptionTranslate
