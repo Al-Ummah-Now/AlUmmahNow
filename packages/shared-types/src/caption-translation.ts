@@ -39,6 +39,11 @@ export interface CaptionTranslatePayload {
   /** The source draft's language and the version to translate */
   sourceLanguage: string;
   sourceVersion: number;
+  /**
+   * `published` (TA-20): the language had no draft, so the source is the copy of its published track
+   * at `captions-work/<jobId>/published.vtt`. Absent or `draft`: the draft at `sourceVersion`.
+   */
+  source?: 'draft' | 'published';
   /** The target language (the new draft's language) */
   language: string;
   replace: boolean;

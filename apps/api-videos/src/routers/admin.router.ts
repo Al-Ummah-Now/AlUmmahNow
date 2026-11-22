@@ -363,6 +363,8 @@ app.post('/import/videos/:videoId/captions/:language/transcript', async (c) => {
 });
 // Admin Tools translations (TA-7) of the video's source draft: one caption job per language, no
 // caption minutes (an admin import). Quran stays references, rendered in the channel's edition.
+// With no draft in sourceLanguage the source is its published track, e.g. the sidecar captions the
+// importer just attached (TA-20); each result's `source` says which was used.
 const ImportTranslations = z.object({
 	sourceLanguage: z.string().min(2).max(12),
 	languages: z.array(z.string().min(2).max(12)).min(1).max(10),
@@ -373,13 +375,13 @@ app.post('/import/videos/:videoId/translations', async (c) => {
 	const video = await importVideo(c);
 	const input = parse(ImportTranslations, await body(c));
 	const sourceLanguage = captionLanguage(input.sourceLanguage);
-	const results: Array<{ language: string; jobId?: string; status?: string; existing?: boolean; error?: string }> = [];
+	const results: Array<{ language: string; jobId?: string; status?: string; existing?: boolean; source?: string | null; error?: string }> = [];
 	for (const language of [...new Set(input.languages)]) {
 		try {
 			captionLanguage(language);
 			const out = await requestTranslationJob(c.env as never, { video, userId: adminId, roles: null, sourceLanguage, language, replace: !!input.replace, waive: true });
 			// Waived jobs never meet the minutes check, so a refusal cannot come back here
-			if ('job' in out) results.push({ language, jobId: out.job.id, status: out.job.status, existing: out.existing });
+			if ('job' in out) results.push({ language, jobId: out.job.id, status: out.job.status, existing: out.existing, source: out.job.source });
 			else results.push({ language, error: out.refused });
 		} catch (error) {
 			if (error instanceof CaptionJobHttpError) results.push({ language, error: error.code });

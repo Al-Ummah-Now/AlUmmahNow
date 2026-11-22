@@ -55,6 +55,8 @@
  *                                 QF terms 2026-11-21). The on-device claim job drafts it. Audited per video.
  *   POST /items/:id/translations  { sourceLanguage, languages[], replace? } (TA-7) → { results[] }: a caption
  *                                 job per language from the source draft, no caption minutes. Audited per video.
+ *                                 With no draft in sourceLanguage the source is its published track (the
+ *                                 sidecar captions, TA-20); each result says `source: 'draft' | 'published'`.
  *   POST /items/:id/failed        { error } the app gave up on the file → { item }
  *
  * Renditions encoded on the admin's computer (TA-12), the D11 contract of desktop Studio for a video the

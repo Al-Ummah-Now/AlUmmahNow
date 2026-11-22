@@ -38,6 +38,8 @@ export interface CaptionDraftSummary {
 	/** A machine translation: the draft and version it was made from */
 	sourceLanguage?: string;
 	sourceVersion?: number;
+	/** Translated from the source language's published track (TA-20) */
+	sourceTrack?: 'published';
 	publishedVersion?: number;
 	publishedAt?: string;
 	/** A track of this language is live, and whether it is this draft's (not an upload) */
@@ -54,7 +56,9 @@ export function summariseDraft(draft: CaptionDraft, track: SubtitleTrack | undef
 		cues: draft.cues.length,
 		pendingQuran: pendingQuranSuggestions(draft.cues),
 		updatedAt: draft.updatedAt,
-		...(draft.kind === 'translation' && draft.sourceLanguage ? { sourceLanguage: draft.sourceLanguage, ...(draft.sourceVersion ? { sourceVersion: draft.sourceVersion } : {}) } : {}),
+		...(draft.kind === 'translation' && draft.sourceLanguage
+			? { sourceLanguage: draft.sourceLanguage, ...(draft.sourceVersion ? { sourceVersion: draft.sourceVersion } : {}), ...(draft.sourceTrack === 'published' ? { sourceTrack: 'published' as const } : {}) }
+			: {}),
 		...(draft.publishedVersion ? { publishedVersion: draft.publishedVersion, publishedAt: draft.publishedAt } : {}),
 		track: trackKind(track),
 	};

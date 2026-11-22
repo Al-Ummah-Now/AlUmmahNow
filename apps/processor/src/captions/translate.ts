@@ -5,8 +5,12 @@
  * `/internal/captions/jobs/:jobId/progress|finish`, like transcription (job.ts):
  *
  * 1. The source is the creator's draft at the version the job was asked for (the draft, or the
- *    copy kept when that version was published). Quran segments become ⟦Qn⟧ tokens: Quran is never
- *    machine-translated.
+ *    copy kept when that version was published). With no draft in that language (TA-20: captions
+ *    imported or uploaded as a file) it is the copy of the published track api-videos made when it
+ *    sent the job: its Quran markers become references again, and a track without any (a file) goes
+ *    through the Quran matcher first, so recitation is found and kept out of the model. Those cues
+ *    are written once (`captions-work/<jobId>/source.json`) so every batch reads the same ones.
+ *    Quran segments become ⟦Qn⟧ tokens: Quran is never machine-translated.
  * 2. One delivery translates ONE batch of cues (≤ 6,000 characters, previous 3 cues as context),
  *    keeps it in the partial output (`captions-work/<jobId>/translation.json`, written only over the
  *    copy it read) and sends the message on. The answer is checked; a failed check retries the
@@ -23,7 +27,13 @@ import type { Logger } from '@al-ummah/logger';
 import {
   MessageType,
   batchMaskedCues,
+  captionCuesFromTranscript,
+  captionCuesFromVtt,
   captionDraftKey,
+  captionPublishedSourceKey,
+  captionSourceWorkKey,
+  matchQuran,
+  transcriptWords,
   captionDraftVersionKey,
   captionTranslateWorkKey,
   captionWorkPrefix,
@@ -39,7 +49,9 @@ import {
   type D1Database,
   type ErrorReporterEnv,
   type ExecutionContextLike,
+  type QuranIndex,
 } from '@al-ummah/shared-types';
+import { loadQuranIndex } from '../quran/review-matcher';
 import { reserveBudget, settleBudget } from '../moderation/budget';
 import { USD_PER_NEURON, neuronsFor } from '../moderation/pricing';
 import { recordUsage } from '../moderation/usage';
@@ -95,6 +107,7 @@ export function isCaptionTranslatePayload(p: unknown): p is CaptionTranslatePayl
     x.language !== x.sourceLanguage &&
     Number.isInteger(x.sourceVersion) &&
     (x.sourceVersion as number) >= 1 &&
+    (x.source === undefined || x.source === 'draft' || x.source === 'published') &&
     Number.isInteger(x.nextBatch) &&
     (x.nextBatch as number) >= 0 &&
     typeof x.replace === 'boolean' &&
@@ -153,9 +166,60 @@ export async function readSource(subtitles: Bucket, p: Pick<CaptionTranslatePayl
   return kept ? (JSON.parse(await kept.text()) as CaptionDraft) : null;
 }
 
+/**
+ * The cues of the published track the job translates (TA-20): the processor's own copy when an
+ * earlier delivery made it, else the track api-videos copied, read once. A track with Quran markers
+ * was published from a draft (its spans were already found and reviewed); one without any is a file,
+ * so the Quran matcher runs over it and what it finds becomes references (suggestions the creator
+ * confirms). No fresh Quran copy: Retryable, never a translation of recitation. Null when the copy is gone.
+ */
+export async function readPublishedSource(
+  media: Bucket,
+  p: Pick<CaptionTranslatePayload, 'jobId' | 'videoId' | 'sourceLanguage' | 'sourceVersion' | 'requestedBy'>,
+  quranIndex: () => Promise<QuranIndex | null>,
+  now: number,
+): Promise<CaptionDraft | null> {
+  const workKey = captionSourceWorkKey(p.jobId);
+  const made = await media.get(workKey);
+  if (made) return JSON.parse(await made.text()) as CaptionDraft;
+  const copy = await media.get(captionPublishedSourceKey(p.jobId));
+  if (!copy) return null;
+  let cues = captionCuesFromVtt(await copy.text());
+  if (!cues.length) return null;
+  if (!cues.some((c) => c.segments.some((s) => s.type === 'quran'))) {
+    const index = await quranIndex();
+    if (!index) throw new Retryable('no fresh copy of the Quran text');
+    const segments = cues.map((c) => ({ startMs: c.startMs, endMs: c.endMs, text: c.segments.map((s) => (s.type === 'speech' ? s.text : '')).join(' ').trim() }));
+    cues = captionCuesFromTranscript(segments, matchQuran(index, transcriptWords(segments)));
+  }
+  const checked = validateCaptionCues(cues);
+  if (!checked.ok) throw new ProviderError(`published source failed validation: ${(checked as Extract<typeof checked, { ok: false }>).error}`, false);
+  const at = new Date(now).toISOString();
+  const draft: CaptionDraft = {
+    v: 1,
+    videoId: p.videoId,
+    language: p.sourceLanguage,
+    version: p.sourceVersion,
+    kind: 'source',
+    origin: 'transcription',
+    edited: true,
+    cues: (checked as Extract<typeof checked, { ok: true }>).cues,
+    createdAt: at,
+    updatedAt: at,
+    updatedBy: p.requestedBy,
+  };
+  // Written only when absent: a parallel delivery's cues win, and both then read those
+  const written = await media.put(workKey, JSON.stringify(draft), { httpMetadata: { contentType: 'application/json' }, onlyIf: { etagDoesNotMatch: '*' } });
+  if (written) return draft;
+  const winner = await media.get(workKey);
+  return winner ? (JSON.parse(await winner.text()) as CaptionDraft) : draft;
+}
+
 export interface TranslateDeps {
   translator?: Translator;
   now?: () => number;
+  /** The Quran matcher's index (tests); default: the fresh copy in the private media bucket */
+  quranIndex?: () => Promise<QuranIndex | null>;
 }
 
 type Outcome = { status: 'next' } | { status: 'waiting_budget' } | { status: 'stale' } | { status: 'ready'; cues: number } | { status: 'failed'; error: CaptionJobError };
@@ -201,8 +265,11 @@ export async function runTranslateStep(env: CaptionTranslateEnv, p: CaptionTrans
   if (!media || !subtitles) throw new Retryable('buckets not bound');
   const now = deps.now?.() ?? Date.now();
 
-  const source = await readSource(subtitles, p);
-  if (!source) return { status: 'failed', error: 'source_changed' };
+  const published = p.source === 'published';
+  const source = published
+    ? await readPublishedSource(media, p, deps.quranIndex ?? (() => loadQuranIndex(env.REVIEW_MEDIA, now)), now)
+    : await readSource(subtitles, p);
+  if (!source) return { status: 'failed', error: published ? 'source_missing' : 'source_changed' };
   const { masked, passthrough } = maskCues(source.cues);
   const batches = batchMaskedCues(masked);
 
@@ -268,7 +335,8 @@ export async function runTranslateStep(env: CaptionTranslateEnv, p: CaptionTrans
     version: 1,
     kind: 'translation',
     sourceLanguage: p.sourceLanguage,
-    sourceVersion: p.sourceVersion,
+    // From a published track there is no source draft version to compare with (TA-20)
+    ...(published ? { sourceTrack: 'published' as const } : { sourceVersion: p.sourceVersion }),
     origin: 'translation',
     edited: false,
     machine: { provider: partial?.provider ?? p.provider, model: partial?.model ?? p.model },
@@ -319,7 +387,7 @@ export async function processCaptionTranslateMessages(messages: CaptionTranslate
       } else if (outcome.status === 'ready') {
         await report(env, p.jobId, 'finish', { outcome: 'ready', minutesUsed: 0 });
         await clearWork(env, p.jobId).catch(() => undefined);
-        logger.job({ job: 'caption-translate', outcome: 'ok', jobId: p.jobId, videoId: p.videoId, from: p.sourceLanguage, to: p.language, cues: outcome.cues, durationMs: Date.now() - startedAt });
+        logger.job({ job: 'caption-translate', outcome: 'ok', jobId: p.jobId, videoId: p.videoId, from: p.sourceLanguage, to: p.language, source: p.source ?? 'draft', cues: outcome.cues, durationMs: Date.now() - startedAt });
       } else if (outcome.status === 'failed') {
         await report(env, p.jobId, 'finish', { outcome: 'failed', error: outcome.error });
         logger.job({ job: 'caption-translate', outcome: 'refused', jobId: p.jobId, videoId: p.videoId, reason: outcome.error, durationMs: Date.now() - startedAt });
@@ -358,7 +426,7 @@ export async function processCaptionTranslateMessages(messages: CaptionTranslate
         itemId: p.videoId,
         retry: { kind: 'service', service: 'api-videos', path: '/internal/captions/jobs/retry', body: { jobId: p.jobId } },
         retryLabel: 'Try again',
-        extra: { jobId: p.jobId, from: p.sourceLanguage, to: p.language, attempts },
+        extra: { jobId: p.jobId, from: p.sourceLanguage, to: p.language, source: p.source ?? 'draft', attempts },
       });
       message.ack();
     }
