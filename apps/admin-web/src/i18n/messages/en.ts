@@ -2664,7 +2664,7 @@ const en = {
       hash: 'Checking the file',
       encode: 'Encoding',
       upload: 'Upload',
-      attach: 'Adding the captions and extras',
+      attach: 'Adding the captions, chapters and thumbnail',
       transcribe: 'Transcription',
       suggest: 'Suggestions',
     },
