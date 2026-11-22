@@ -43,6 +43,12 @@ describe('StudioFrame', () => {
     expect(switcher).toHaveAccessibleName(`${STUDIO_EN.switcher.label}: My channel @mine`);
   });
 
+  it('pins the rail under the 4rem header and runs it to the bottom of the screen', () => {
+    frame('owner');
+    const aside = screen.getByTestId('studio-rail');
+    expect(aside).toHaveClass('sticky', 'top-16', 'h-[calc(100dvh-4rem)]');
+  });
+
   it('uploads to this channel', () => {
     frame('owner');
     expect(screen.getAllByTestId('studio-upload')[0]).toHaveAttribute('href', '/en/upload?channel=c1');
