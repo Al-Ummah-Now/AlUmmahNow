@@ -26,6 +26,8 @@
 .lbl-title{margin:0;overflow-wrap:anywhere;font-size:clamp(24px,2.4vw,30px);font-weight:700;line-height:1.25;color:var(--fanous-color-text-primary)}
 html[lang=ar] .lbl-title{line-height:1.5}
 .lbl-meta{margin:0;font-size:14px;color:var(--fanous-color-text-secondary)}
+/* An inline icon (not inline-flex, whose baseline is the icon's) so "Private" and the count share one baseline */
+.lbl-lock{display:inline-block;inline-size:14px;block-size:14px;margin-inline-end:4px;vertical-align:-2px}
 .lbl-actions{display:flex;flex-wrap:wrap;gap:10px;margin-block-start:8px}
 .lbl-btn{flex:1 1 140px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-block-size:40px;padding-inline:18px;border-radius:999px;font-size:15px;font-weight:700}
 .lbl-btn-primary{color:var(--fanous-color-on-primary);background:var(--fanous-color-primary)}

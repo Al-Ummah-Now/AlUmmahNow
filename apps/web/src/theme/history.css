@@ -22,7 +22,10 @@ html[lang=ar] .hx-h1{line-height:1.5}
 /* Light themes: the track is light, so it shows over dark thumbnails too (a dark track vanished there) */
 html:not(.dark) .hx-progress{background:color-mix(in srgb,var(--fanous-color-background) 70%,transparent)}
 .hx-progress>span{background:var(--fanous-color-primary)}
-.hx-duration{position:absolute;inset-block-end:12px;inset-inline-end:6px;padding:1px 5px;border-radius:4px;font-size:12px;font-weight:600;line-height:1.5;color:var(--fanous-color-text-primary);background:color-mix(in srgb,var(--fanous-color-background) 86%,transparent)}
+.hx-duration{position:absolute;inset-block-end:12px;right:6px;padding:1px 5px;border-radius:4px;font-size:12px;font-weight:600;line-height:1.5;color:var(--fanous-color-text-primary);background:color-mix(in srgb,var(--fanous-color-background) 86%,transparent)}
+/* The badge is dir=ltr for its digits, so a logical inset would resolve to the right even on Arabic pages: the corner
+   is set physically and mirrored from the page direction */
+[dir=rtl] .hx-duration{right:auto;left:6px}
 
 /* Continue watching: one header row, then the grid */
 .hx-wide{max-width:1760px;margin-inline:auto}
