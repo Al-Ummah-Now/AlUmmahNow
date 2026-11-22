@@ -20,6 +20,12 @@ export interface LibraryTranslations {
   emptyHistory: string;
   /** Home shelf of started, unfinished videos (#242) */
   continueWatching: string;
+  /** Heading of the home page's library row (Continue watching, Watch later, Liked videos) */
+  homeRow: string;
+  /** Accessible name of a library card's Play all link: "Play all in {list}" */
+  playAllIn: string;
+  /** A wide library card's list of the videos after its cover's one */
+  upNext: string;
   /** Accessible label of a tile's watched-progress bar */
   watchedPercent: string;
   emptyWatchLater: string;
@@ -190,6 +196,9 @@ export const LIBRARY_EN: LibraryTranslations = {
   seeAll: 'See all',
   emptyHistory: 'Videos you watch will appear here',
   continueWatching: 'Continue watching',
+  homeRow: 'Your library',
+  playAllIn: 'Play all in {list}',
+  upNext: 'Up next',
   watchedPercent: '{percent}% watched',
   emptyWatchLater: 'Save videos to watch later and they will appear here',
   emptyLiked: 'Videos you like will appear here',
@@ -233,6 +242,9 @@ export const LIBRARY_AR: LibraryTranslations = {
   seeAll: 'عرض الكل',
   emptyHistory: 'ستظهر هنا المرئيات التي تشاهدها',
   continueWatching: 'متابعة المشاهدة',
+  homeRow: 'مكتبتك',
+  playAllIn: 'تشغيل الكل في {list}',
+  upNext: 'التالي',
   watchedPercent: 'تمت مشاهدة {percent}٪',
   emptyWatchLater: 'احفظ المرئيات لمشاهدتها لاحقًا وستظهر هنا',
   emptyLiked: 'ستظهر هنا المرئيات التي تعجبك',

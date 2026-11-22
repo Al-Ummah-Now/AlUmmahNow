@@ -19,6 +19,8 @@ export interface PlaylistCardFrameProps {
   title: string;
   /** Lines under the title */
   meta?: React.ReactNode;
+  /** More content under the meta (the home library row's "Up next" list), part of the card's link */
+  extra?: React.ReactNode;
   /** A link of its own over the cover (Play all, Resume) */
   action?: React.ReactNode;
   /** 0–100: a progress bar along the cover's bottom edge (how far the top item was watched) */
@@ -29,7 +31,7 @@ export interface PlaylistCardFrameProps {
   ariaLabel?: string;
 }
 
-export function PlaylistCardFrame({ href, cover, countLabel, title, meta, action, progress, testId, className, ariaLabel }: PlaylistCardFrameProps) {
+export function PlaylistCardFrame({ href, cover, countLabel, title, meta, extra, action, progress, testId, className, ariaLabel }: PlaylistCardFrameProps) {
   const pct = progress === undefined ? null : Math.max(0, Math.min(100, progress));
   const overlay = (
     <>
@@ -54,6 +56,7 @@ export function PlaylistCardFrame({ href, cover, countLabel, title, meta, action
         <div className="plc-body">
           <h3 className="plc-title">{title}</h3>
           {meta}
+          {extra}
         </div>
       </Link>
       {action && <div className="plc-action">{action}</div>}

@@ -66,7 +66,53 @@ html[lang=ar] .hr-title{line-height:1.6}
 }
 @media(prefers-reduced-motion:reduce){.hr-all,.hr-all svg,.hr-nav{transition:none}}
 
-/* Continue watching (components/history/ContinueWatchingShelf.tsx): one playlist-style card as wide as
-   a rail card, above the hero */
-.hcw{inline-size:clamp(232px,calc((100% - 4 * 16px) / 4.3),340px);margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg)}
-@media(max-width:639px){.hcw{inline-size:80%}}
+/* Your library (components/home/LibraryRow.tsx): Continue watching, Watch later and Liked videos as
+   playlist-style cards under a rail heading. The row is a container, so its own width decides:
+   - three cards share the row once it is 760px wide; narrower, they swipe (two and a peek, then one
+     and a peek), like the rails on phones, never three cramped cards;
+   - one or two cards share the row from 560px; under that, two swipe and one takes the whole width;
+   - a card whose cell is at least 520px wide lays its cover beside the text, so one card on its own,
+     or two on a wide screen, fill the row at a larger size instead of a huge 16:9 cover. */
+.hlib{container-type:inline-size;min-width:0;margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg)}
+.hlib-list{list-style:none;margin:0;padding:8px 2px 4px;display:grid;gap:16px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.hlib-list[data-count="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.hlib-list[data-count="1"]{grid-template-columns:minmax(0,1fr)}
+.hlib-list>li{min-width:0;container-type:inline-size}
+@container (max-width:759px){
+  .hlib-list[data-count="3"]{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:44%;overflow-x:auto;overflow-y:hidden;
+    scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
+  .hlib-list[data-count="3"]>li{scroll-snap-align:start}
+}
+@container (max-width:559px){
+  .hlib-list[data-count="3"],.hlib-list[data-count="2"]{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:80%;overflow-x:auto;overflow-y:hidden;
+    scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
+  .hlib-list[data-count="2"]>li{scroll-snap-align:start}
+}
+.hlib-list::-webkit-scrollbar{display:none}
+/* A wide cell: the cover beside the text (the frame's own rules are beaten by specificity, see playlist-card.css) */
+@container (min-width:520px){
+  /* Top-aligned: the action over the cover sits at the frame's fixed offset from the card's top */
+  .hlib-list .plc .plc-link{flex-direction:row;align-items:flex-start}
+  .hlib-list .plc .plc-link .plc-stack.plc-stack{flex:0 0 clamp(240px,46%,440px);padding-block-end:var(--plc-pad)}
+  .hlib-list .plc .plc-link .plc-body.plc-body{flex:1 1 auto;padding-block:16px;padding-inline:12px 24px;gap:8px}
+  .hlib-list .plc-title{font-size:22px}
+  .hlib-list .plc-meta{font-size:15px}
+}
+/* A wide card's "Up next": the list's next videos (three when the card has the row to itself, two
+   beside another card), so a larger card shows more of the list rather than only a bigger cover */
+.hlib-next{display:none}
+@container (min-width:520px){
+  .hlib-next{display:block;margin-block-start:6px;padding-block-start:10px;border-block-start:1px solid color-mix(in srgb,var(--fanous-color-text-primary) 12%,transparent)}
+  .hlib-next-h{margin:0 0 8px;font-size:13px;font-weight:600;line-height:1.4;color:var(--fanous-color-text-secondary)}
+  .hlib-next ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .hlib-next li{display:flex;align-items:center;gap:12px;min-width:0}
+  .hlib-next-thumb{flex:none;inline-size:80px;border-radius:var(--r-sm,6px);overflow:hidden}
+  .hlib-next-text{display:flex;flex-direction:column;min-width:0}
+  .hlib-next-title{font-size:14px;font-weight:600;line-height:1.45;color:var(--fanous-color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hlib-next-detail{font-size:12px;line-height:1.45;color:var(--fanous-color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  html[lang=ar] .hlib-next-title,html[lang=ar] .hlib-next-detail{line-height:1.7}
+}
+@container (min-width:520px) and (max-width:759px){.hlib-next li:nth-child(n+3){display:none}}
+/* Narrow cells (three across on a tablet): a compact action pill, so it stays clear of the cover's art;
+   still a 24px target (WCAG 2.2 target size) in every theme's font */
+@container (max-width:279px){.hlib-list .plc-action>a{min-block-size:24px;padding:3px 10px;font-size:11px;gap:4px}.hlib-list .plc-action>a svg{width:12px;height:12px}}
