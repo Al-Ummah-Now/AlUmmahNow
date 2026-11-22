@@ -283,6 +283,7 @@ html.dark .aun-menu {
   h2,
   h3,
   h4,
+  td,
   .text-xs,
   .text-sm {
     text-wrap: pretty;

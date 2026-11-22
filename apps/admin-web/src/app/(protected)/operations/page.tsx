@@ -72,7 +72,7 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
         <thead>
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
-            <th scope="col" className="p-2 text-end font-medium">{t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) })}</th>
+            <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) })}</th>
             <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{t('operations.resources.last7')}</th>
           </tr>
         </thead>
