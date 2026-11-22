@@ -319,7 +319,7 @@ describe('costs sections render', () => {
       assert.match(html, /data-stale="true"/);
       assert.match(html, /data-testid="costs-alerts-empty"/);
       assert.match(html, /data-testid="costs-movers-up-empty"/);
-      assert.ok(html.includes(locale === 'ar' ? 'أضف رمز Cloudflare' : 'Set a Cloudflare token'));
+      assert.ok(html.includes(locale === 'ar' ? 'أضف رمز Cloudflare' : 'Set a\u00a0Cloudflare token'));
     });
   }
 
@@ -368,7 +368,7 @@ describe('costs sections render', () => {
   it('tells an admin who cannot manage that a super admin sets the token, without a button', () => {
     const t = createTranslator('en');
     const html = render(React.createElement(sections.TokenNotice as React.FC, { d: freshDashboard({ canManage: false }), t } as never));
-    assert.ok(html.includes('A super admin has to set one'));
+    assert.ok(html.includes('A\u00a0super admin has to set one'));
     assert.ok(!html.includes('costs-token-action'));
   });
 
@@ -591,7 +591,7 @@ describe('costs audit fixes, round 5 (AUDIT-2 2026-11-21)', () => {
     const { formatCount } = await import('../src/i18n/translate');
     const { compactNumber } = await import('@al-ummah/shared-types');
     assert.equal(createTranslator('ar')('costs.thresholds.plans.free', { emails: formatCount(3000, 'message', 'ar', { compact: true }) }).replace(/\u00a0/g, ' '), 'المجانية: ٣ آلاف رسالة شهريًا');
-    assert.equal(createTranslator('en')('costs.thresholds.plans.pro', { price: '$20.00', emails: `${compactNumber('en')(50000)} emails` }), 'Pro: $20.00 a month, 50K emails');
+    assert.equal(createTranslator('en')('costs.thresholds.plans.pro', { price: '$20.00', emails: `${compactNumber('en')(50000)} emails` }), 'Pro: $20.00 a\u00a0month, 50K emails');
   });
 
   it('Top movers show the monthly impact as an amount under its "Monthly impact" heading', () => {
@@ -690,7 +690,7 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
     assert.match(html, /<th scope="col"[^>]*>UTC days<\/th>/);
     // A phone has no hover: the chosen bar (today's until one is tapped) is written out under the chart
     assert.match(html, /data-testid="costs-trend-detail" data-day="2026-11-22">Nov 22: \$22\.17 \(UTC day: Nov 22\)</);
-    assert.ok(html.includes('Tap or hover a bar'));
+    assert.ok(html.includes('Tap or hover a\u00a0bar'));
     // The "next UTC day" sentence only when it is true: not on UTC days
     assert.ok(!html.includes(t('costs.breakdown.trendNoteToday')));
     // Day labels are centred on their bars
@@ -753,5 +753,29 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
     assert.equal(todayHoldsNextUtcDay(localTrend(utcDays('2026-11-21'), sourceOf(utcDays('2026-11-21')), Date.parse('2026-11-21T20:30:00Z'), 'Asia/Kolkata')), false, '+5:30');
     assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('المس العمود أو مرّر المؤشر فوقه'));
     assert.ok(createTranslator('ar')('costs.breakdown.trendNote').startsWith('تُظهر كل بيئة إنفاقها على Cloudflare'));
+  });
+});
+
+describe('AUDIT-2 round 14: line breaks', () => {
+  it('a jump alert keeps its resource name whole: an LTR isolate that never breaks at its hyphens', () => {
+    const d = freshDashboard({
+      alerts: [{ key: 'ops-cost:spike:production:w1', value: 3, opened_at: '2026-11-21T11:00:00Z' }],
+      spikes: [{ key: 'ops-cost:spike:production:w1', env: 'production', resourceId: 'w1', name: 'al-ummah-now-videos', day: '2026-11-21', cost: 3, baseline: 0.4 }],
+    });
+    for (const locale of ['en', 'ar'] as const) {
+      const html = renderToStaticMarkup(React.createElement(sections.AlertLine, { d, alertKey: d.alerts[0].key, t: createTranslator(locale), f: opsFormats(locale) } as never));
+      assert.match(html, /<span dir="ltr" class="whitespace-nowrap" data-testid="costs-alert-name">al-ummah-now-videos<\/span>/, locale);
+      assert.ok(html.includes(locale === 'ar' ? 'الإنتاج' : 'Production'), locale);
+    }
+  });
+
+  it('no English Costs or Operations string leaves a lone "a" at a line end, or splits New York', () => {
+    const strings: string[] = [];
+    const walk = (o: unknown) => { if (typeof o === 'string') strings.push(o); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
+    walk((en as Record<string, unknown>).costs);
+    walk((en as Record<string, unknown>).operations);
+    const loose = strings.filter((s) => /(^|[\s(])[Aa] [A-Za-z0-9{$]/.test(s) || /New York/.test(s));
+    assert.deepEqual(loose, []);
+    assert.equal(createTranslator('en')('costs.alerts.help.digest' as never, { day: 'Monday', hour: '9 AM' } as never).includes('New York'), true);
   });
 });

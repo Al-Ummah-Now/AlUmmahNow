@@ -251,6 +251,21 @@ function Stat({ label, value, sub, tone = 'ok', testId }: { label: string; value
   );
 }
 
+/** An alert line for the page: a resource name is an LTR isolate that never breaks at its hyphens. */
+export function AlertLine({ d, alertKey, t, f }: Common & { d: CostsDashboard; alertKey: string }) {
+  const a = parseAlertKey(alertKey);
+  if (a.type !== 'spike' || a.total) return <bdi>{alertText(d, alertKey, t, f)}</bdi>;
+  const name = d.spikes.find((s) => s.key === alertKey)?.name ?? a.resource;
+  return (
+    <span>
+      {fillNodes(t('costs.budget.alert.spikeResource'), {
+        name: <span dir="ltr" className="whitespace-nowrap" data-testid="costs-alert-name">{name}</span>,
+        env: envLabel(t, a.env),
+      })}
+    </span>
+  );
+}
+
 export function alertText(d: CostsDashboard, key: string, t: Translator, f: OpsFormats): string {
   const a = parseAlertKey(key);
   if (a.type === 'budget') return a.percent === 100 ? t('costs.budget.alert.budgetFull', { month: f.month(a.month) }) : t('costs.budget.alert.budget', { percent: f.percent(a.percent / 100), month: f.month(a.month) });
@@ -360,10 +375,10 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
           value={f.usd(d.idle.monthlyUsd)}
           sub={
             <>
-              <span className={`block ${idle.under ? 'text-success-fg' : 'text-danger-fg'}`} data-testid="costs-idle-status">
+              <span className={`block text-balance ${idle.under ? 'text-success-fg' : 'text-danger-fg'}`} data-testid="costs-idle-status">
                 {idle.under ? t('costs.budget.idleUnder', { target: f.usd(d.idle.targetUsd) }) : t('costs.budget.idleOver', { target: f.usd(d.idle.targetUsd), over: f.usd(idle.overBy) })}
               </span>
-              <span className="block" data-testid="costs-idle-parts">
+              <span className="block text-balance" data-testid="costs-idle-parts">
                 {t('costs.budget.idleCloudflare', { value: f.usd(d.idle.parts.cloudflare ?? 0), envs: listJoin(idleByEnv, t('common.sep')) || '—' })}
               </span>
             </>
@@ -399,7 +414,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                   <li key={a.key} className="cost-tile flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm" data-testid="costs-alert" data-kind={kind}>
                     <span className="inline-flex items-center gap-2 text-fg">
                       <span aria-hidden="true" className={`cost-dot cost-dot-first-line ${kind === 'spike' ? 'text-warning-fg' : 'text-danger-fg'}`} />
-                      <bdi>{alertText(d, a.key, t, f)}</bdi>
+                      <AlertLine d={d} alertKey={a.key} t={t} f={f} />
                     </span>
                     <span className="text-xs text-fg-muted tabular-nums">{fillNodes(t('costs.budget.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
                   </li>

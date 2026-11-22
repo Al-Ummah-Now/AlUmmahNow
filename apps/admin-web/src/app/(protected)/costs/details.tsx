@@ -101,7 +101,7 @@ export function CloudflarePanel({ d, t, f }: Common & { d: CostsDashboard }) {
                 <div><dt className="text-fg-muted">{t('costs.cloudflare.list')}</dt><dd className="text-fg tabular-nums">{f.usd(l.listCost)}</dd></div>
                 <div><dt className="text-fg-muted">{t('costs.cloudflare.projected')}</dt><dd className="text-fg tabular-nums">{f.usd(l.projectedCost)}</dd></div>
               </dl>
-              {note && <p className="mt-2 text-xs text-fg-muted">{note}</p>}
+              {note && <p className="mt-2 text-xs text-balance text-fg-muted">{note}</p>}
             </li>
           );
         })}
@@ -128,7 +128,7 @@ export function CloudflarePanel({ d, t, f }: Common & { d: CostsDashboard }) {
                 <tr key={l.key} className="border-t border-border" data-testid="costs-cf-line" data-meter={l.key} data-source={l.source}>
                   <th scope="row" className="px-3 py-2.5 text-start font-normal">
                     <span className="block font-medium text-fg"><bdi>{t(`costs.cloudflare.meters.${l.key}`)}</bdi></span>
-                    {note && <span className="block max-w-sm text-xs text-fg-muted">{note}</span>}
+                    {note && <span className="block max-w-sm text-xs text-balance text-fg-muted">{note}</span>}
                   </th>
                   <td className="px-3 py-2.5 text-end tabular-nums text-fg">{usage(l, l.used, t, f)}</td>
                   <td className="px-3 py-2.5 text-end">
