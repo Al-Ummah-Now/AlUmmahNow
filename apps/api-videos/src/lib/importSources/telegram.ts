@@ -10,6 +10,7 @@ import type { ImportItemNote } from '@al-ummah/shared-types';
 import { readCredentials, type SocialEnv } from '../social/platform';
 import { tgCall, TELEGRAM_API } from '../social/adapters/telegram';
 import { changes, sourceDb, sourcesFor, type SourceDbEnv } from './store';
+import { revokeSource, stillAuthorized } from './authorize';
 import type { FetchedItem } from './fetchers';
 import { itemKind } from './fetchers';
 
@@ -64,7 +65,12 @@ export function telegramItem(post: TgChannelPost): FetchedItem {
  * new pending item (the caller queues their sync). An album's later photos join its pending item.
  */
 export async function recordTelegramPost(env: SourceDbEnv, post: TgChannelPost, now = Date.now()): Promise<string[]> {
-	const sources = await sourcesFor(env, 'telegram', String(post.chat.id));
+	const sources = [];
+	for (const source of await sourcesFor(env, 'telegram', String(post.chat.id))) {
+		// The owner disconnected (or removed our bot): nothing more is imported
+		if (await stillAuthorized(env, source)) sources.push(source);
+		else await revokeSource(env, source.id, now);
+	}
 	if (!sources.length) return [];
 	const item = telegramItem(post);
 	const db = sourceDb(env);

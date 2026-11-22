@@ -13,6 +13,7 @@
  */
 import { IMPORT_POSTS_PER_STEP, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { createJob, getJob, type JobEnv, type JobOutcome } from '../admin/jobs';
+import { revokeSource, stillAuthorized } from './authorize';
 import { fetchSource, itemKind } from './fetchers';
 import { postItem, skipItem, type PostItemEnv } from './post';
 import {
@@ -94,6 +95,12 @@ export async function runSourceSync(env: SourceSyncEnv, job: AdminJob, f: typeof
 	const source = await readSource(env, params.sourceId);
 	const result = () => ({ sourceId: params.sourceId, fetched: params.fetched, posted: params.posted, skipped: params.skipped });
 	if (!source) return { done: true, result: { ...result(), skipped: 'source_deleted' } };
+	// A connected source stops when the owner's connection is gone (the source shows why; nothing is posted)
+	if (!(await stillAuthorized(env, source))) {
+		await revokeSource(env, source.id);
+		logger.info('[ImportSources] Source turned off: the connection is gone', { sourceId: source.id, network: source.network });
+		return { done: true, result: { ...result(), skipped: 'not_connected' } };
+	}
 
 	if (params.phase === 'fetch') {
 		await fetchPhase(env, source, params, f);

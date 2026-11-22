@@ -6,7 +6,7 @@
  * gives (SOC-1's one-time code), so a Telegram source is always a connected one.
  */
 import type { ImportSourceConnection, ImportSourceNetwork } from '@al-ummah/shared-types';
-import { sourceDb, SourceError, type SourceDbEnv } from './store';
+import { sourceDb, SourceError, type SourceDbEnv, type SourceRow } from './store';
 import { checkUrl } from '../link-preview';
 
 const BLUESKY_DID = /^did:(plc:[a-z2-7]{24}|web:[a-z0-9.-]+)$/;
@@ -135,4 +135,22 @@ export async function authorizeSource(
 	const note = input.permission?.note?.trim();
 	if (!by || !note) throw new SourceError(403, 'permission_required', "The owner hasn't connected this account: record whose written permission you have, and a note");
 	return { auth: 'recorded', socialAccountId: null, ytImportId: null, permission: { by: by.slice(0, 200), note: note.slice(0, 1000) }, label: null };
+}
+
+/** Shown on a source turned off because the owner's connection went away. */
+export const NOT_CONNECTED_ERROR = "not_connected: the owner's connection to this account was removed; the source is off until they connect it again";
+
+/**
+ * A connected source is authorized only while the owner's connection lasts: checked again at every use
+ * (each sync and each Telegram post), so a disconnect, a deleted account or our bot removed from the
+ * channel stops the imports at once. A recorded permission stands until a super admin removes it.
+ */
+export async function stillAuthorized(env: SourceDbEnv, source: Pick<SourceRow, 'channel_id' | 'network' | 'address' | 'auth_kind'>): Promise<boolean> {
+	if (source.auth_kind !== 'connected') return true;
+	return (await channelConnections(env, source.channel_id)).some((c) => c.network === source.network && c.address === source.address);
+}
+
+/** Turns a source whose connection went away off (no schedule), with the reason shown on it. */
+export async function revokeSource(env: SourceDbEnv, sourceId: string, now = Date.now()): Promise<void> {
+	await sourceDb(env).prepare('UPDATE import_sources SET enabled = 0, next_sync_at = NULL, last_error = ?, updated_at = ? WHERE id = ?').bind(NOT_CONNECTED_ERROR, now, sourceId).run();
 }

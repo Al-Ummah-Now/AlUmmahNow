@@ -289,6 +289,44 @@ describe('syncing a source', () => {
 	});
 });
 
+describe('a revoked connection', () => {
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	it('stops a connected source at its next sync or post, and keeps it off until the owner connects again', async () => {
+		stubNetwork(() => {
+			throw new Error('nothing is fetched for a revoked source');
+		});
+		const { env, db, posts, job } = harness();
+		await db.prepare(`INSERT INTO social_accounts (id, channel_id, network, remote_id, handle, display_name, instance, status, created_at, updated_at) VALUES ('acc1', 'ch1', 'mastodon', '42', 'scholar', 'S', 'https://social.example', 'active', 1, 1)`).run();
+		await db.prepare(`INSERT INTO social_accounts (id, channel_id, network, remote_id, handle, display_name, status, created_at, updated_at) VALUES ('tg1', 'ch1', 'telegram', '-1001234567', 'chan', 'TG', 'active', 1, 1)`).run();
+		const mastodon = await insertSource(env, { channelId: 'ch1', network: 'mastodon', address: 'scholar@social.example', label: 'M', auth: 'connected', socialAccountId: 'acc1', ytImportId: null, permission: null, schedule: 'hourly', createdBy: ADMIN });
+		const telegram = await insertSource(env, { channelId: 'ch1', network: 'telegram', address: '-1001234567', label: 'TG', auth: 'connected', socialAccountId: 'tg1', ytImportId: null, permission: null, schedule: 'manual', createdBy: ADMIN });
+		// The owner disconnects both
+		await db.prepare(`UPDATE social_accounts SET status = 'revoked'`).run();
+
+		const out = await runSourceSync(env as never, job({ sourceId: mastodon.id, phase: 'fetch' }));
+		assert.equal((out as { result: { skipped: unknown } }).result.skipped, 'not_connected');
+		const off = await readSource(env, mastodon.id);
+		assert.deepEqual([off!.enabled, off!.next_sync_at], [0, null]);
+		assert.match(off!.last_error!, /^not_connected/);
+		assert.deepEqual(await recordTelegramPost(env, { message_id: 1, date: 1763000000, chat: { id: -1001234567, type: 'channel' }, text: 'After disconnect' }), []);
+		assert.equal((await readSource(env, telegram.id))!.enabled, 0);
+		assert.deepEqual(await listItems(env, telegram.id), []);
+		assert.equal(posts().length, 0);
+
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const on = (id: string) => app.request(`/s/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled: true }), headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env);
+		const refused = await on(mastodon.id);
+		assert.deepEqual([refused.status, ((await refused.json()) as { code: string }).code], [409, 'not_connected']);
+		// Connected again: it can be turned back on
+		await db.prepare(`UPDATE social_accounts SET status = 'active' WHERE id = 'acc1'`).run();
+		assert.equal((await on(mastodon.id)).status, 200);
+	});
+});
+
 describe('Telegram', () => {
 	afterEach(() => {
 		globalThis.fetch = realFetch;
