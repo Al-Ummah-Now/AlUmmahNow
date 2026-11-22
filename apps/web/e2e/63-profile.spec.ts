@@ -155,7 +155,7 @@ test.describe('Profile - edit', () => {
 
   test('PROF-030 form is prefilled; email is read-only', async ({ page }) => {
     await openEditForm(page, original);
-    const email = page.locator('input[name="email"]');
+    const email = page.locator('input[name="email"]:not([type="hidden"])');
     await expect(email).toHaveValue(readAccount('none').email);
     await expect(email).toHaveAttribute('readonly', '');
   });

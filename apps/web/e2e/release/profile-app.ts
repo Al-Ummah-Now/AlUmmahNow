@@ -23,7 +23,7 @@ const landingSignIn = (page: Page) => visible(page, '#loggedOutView button:has-t
 /** Opens the signed-out profile app and gets to the auth server's sign-in. */
 export async function openProfileSignIn(page: Page): Promise<void> {
   await page.goto(target().profile);
-  await expect(landingSignIn(page).or(visible(page, 'input[name="email"]')).first()).toBeVisible({ timeout: 30000 });
+  await expect(landingSignIn(page).or(visible(page, 'input[name="email"]:not([type="hidden"])')).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn(page).isVisible()) await landingSignIn(page).click();
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
 }

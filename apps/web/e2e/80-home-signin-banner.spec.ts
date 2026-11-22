@@ -142,7 +142,7 @@ test.describe('Home sign-in banner - signed out', () => {
     await page.goto('/en');
     await banner(page).getByRole('button', { name: 'Sign in' }).click();
     // The issuer's sign-in form (the same flow as the header's Sign In)
-    await page.waitForSelector('input[name="email"]', { timeout: 30000 });
+    await page.waitForSelector('input[name="email"]:not([type="hidden"])', { timeout: 30000 });
     // Back to this home page in this language, not the referer's origin ("/", which the middleware
     // sends to the browser's preferred locale)
     const ret = (await context.cookies()).find((c) => c.name === 'auth_return');

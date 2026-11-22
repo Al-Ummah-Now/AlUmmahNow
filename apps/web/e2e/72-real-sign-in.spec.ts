@@ -34,11 +34,11 @@ async function signIn(page: Page): Promise<void> {
   // signed out, the header shows the solid Sign in button (no account menu); retried until hydrated
   const button = page.locator('[data-testid="header-sign-in"]:visible').first();
   await expect(async () => {
-    if (!(await page.locator('input[name="email"]').isVisible())) await button.click({ timeout: 5000 });
-    await expect(page.locator('input[name="email"]')).toBeVisible({ timeout: 10000 });
+    if (!(await page.locator('input[name="email"]:not([type="hidden"])').isVisible())) await button.click({ timeout: 5000 });
+    await expect(page.locator('input[name="email"]:not([type="hidden"])')).toBeVisible({ timeout: 10000 });
   }).toPass({ timeout: 45000 });
-  await page.waitForSelector('input[name="email"]', { timeout: 30000 });
-  await page.fill('input[name="email"]', email as string);
+  await page.waitForSelector('input[name="email"]:not([type="hidden"])', { timeout: 30000 });
+  await page.fill('input[name="email"]:not([type="hidden"])', email as string);
   await fillSecret(page.locator('input[name="password"]'), password());
   await page.locator('button[data-component="button"]:not([type="button"])').click();
   await page.waitForURL((url: URL) => !url.pathname.startsWith('/password') && !url.pathname.startsWith('/api/'), { timeout: 45000 });

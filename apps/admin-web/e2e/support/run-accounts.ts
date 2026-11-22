@@ -41,7 +41,7 @@ export async function registerSinkUser(browser: Browser, email: string, password
     await page.goto('/login');
     await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL));
     await page.click('a:has-text("Register")');
-    await page.locator('input[name="email"]').fill(email);
+    await page.locator('input[name="email"]:not([type="hidden"])').fill(email);
     await fillSecret(page.locator('input[name="password"]'), password);
     await fillSecret(page.locator('input[name="repeat"]'), password);
     await page.locator('button[data-component="button"]:not([type="button"])').click();

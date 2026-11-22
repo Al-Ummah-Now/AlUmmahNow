@@ -100,7 +100,7 @@ async function openInAuthAdmin(page: Page, authRequestId: string) {
   await page.goto(`${AUTH_ADMIN_URL}/moderation/${requestId}`);
   await page.waitForURL((url) => url.href.startsWith(AUTH_ADMIN_URL) || url.href.startsWith(OPENAUTH_URL), { timeout: 45_000 });
   if (page.url().startsWith(OPENAUTH_URL)) {
-    const email = page.locator('input[name="email"]');
+    const email = page.locator('input[name="email"]:not([type="hidden"])');
     if (await email.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await email.fill(accounts.admin.email);
       await fillSecret(page.locator('input[name="password"]'), accounts.admin.password);

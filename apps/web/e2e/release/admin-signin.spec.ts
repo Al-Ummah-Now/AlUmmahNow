@@ -50,7 +50,7 @@ test.describe('Release: admin-web access', () => {
       if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(`${((Date.now() - t0) / 1000).toFixed(1)}s ${r.method()} ${new URL(r.url()).origin}${new URL(r.url()).pathname}`);
     });
     await openAdminSignIn(page);
-    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="email"]:not([type="hidden"])', email);
     await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
     // The click must not own the whole cross-site redirect chain: wait for where it ends instead
     await page.click('button[data-component="button"]:not([type="button"])', { noWaitAfter: true });

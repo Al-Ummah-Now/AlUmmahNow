@@ -132,8 +132,8 @@ export async function extractSession(page: Page, cfg: Pick<AuthConfig, 'webUrl'>
  */
 export async function loginOnPage(page: Page, cfg: AuthConfig, email: string, password: string): Promise<LoginOutcome> {
   await gotoSignIn(page, cfg);
-  await page.waitForSelector('input[name="email"]', { timeout: 30000 });
-  await page.fill('input[name="email"]', email);
+  await page.waitForSelector('input[name="email"]:not([type="hidden"])', { timeout: 30000 });
+  await page.fill('input[name="email"]:not([type="hidden"])', email);
   await fillSecret(page.locator('input[name="password"]'), password);
   await submitForm(page);
   const step = await waitForAuthStep(page, cfg);
@@ -188,8 +188,8 @@ export async function resetPassword(
     await gotoSignIn(page, cfg);
     const forgot = await page.waitForSelector('a[href*="change"]', { timeout: 30000 });
     await forgot.click();
-    await page.waitForSelector('input[name="email"]', { timeout: 30000 });
-    await page.fill('input[name="email"]', email);
+    await page.waitForSelector('input[name="email"]:not([type="hidden"])', { timeout: 30000 });
+    await page.fill('input[name="email"]:not([type="hidden"])', email);
     await submitForm(page);
     for (let attempt = 1; ; attempt++) {
       await page.waitForSelector(CODE_INPUT_SELECTOR, { timeout: 30000 });
@@ -233,7 +233,7 @@ export async function registerAccount(
     const registerLink = await page.waitForSelector('a[href*="register"]', { timeout: 30000 });
     await registerLink.click();
     await page.waitForSelector('input[name="repeat"]', { timeout: 30000 });
-    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="email"]:not([type="hidden"])', email);
     await fillSecret(page.locator('input[name="password"]'), password);
     await fillSecret(page.locator('input[name="repeat"]'), password);
     await submitForm(page);

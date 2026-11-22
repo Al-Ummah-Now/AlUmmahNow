@@ -68,7 +68,7 @@ async function resendCode(email: string, after: number): Promise<string> {
  * it stopped. The caller's toHaveURL waits for where it ends, and `chain()` says how it got there.
  */
 async function password(page: Page) {
-  await page.fill('input[name="email"]', EMAIL);
+  await page.fill('input[name="email"]:not([type="hidden"])', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('button[data-component="button"]:not([type="button"])', { noWaitAfter: true });
 }
@@ -101,7 +101,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await page.goto(`${H.web}/en`);
   await headerSignIn(page);
   await page.click('a:has-text("Register")');
-  await page.fill('input[name="email"]', EMAIL);
+  await page.fill('input[name="email"]:not([type="hidden"])', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.fill('input[name="repeat"]', PASSWORD);
   const sentAfter = Date.now();
@@ -127,7 +127,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await page.goto(H.profile);
   // Only visible matches: the page keeps both views and hides one (strict mode counts hidden ones)
   const landingSignIn = page.locator('#loggedOutView button:has-text("Sign In")').filter({ visible: true });
-  await expect(landingSignIn.or(page.locator('input[name="email"]').filter({ visible: true })).first()).toBeVisible({ timeout: 30000 });
+  await expect(landingSignIn.or(page.locator('input[name="email"]:not([type="hidden"])').filter({ visible: true })).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn.isVisible()) await landingSignIn.click();
   await expect(page).toHaveURL(new RegExp(`^${esc(H.auth)}`), { timeout: 30000 });
   await password(page);

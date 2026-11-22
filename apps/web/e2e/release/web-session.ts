@@ -183,7 +183,7 @@ export async function submitEmailCode(page: Page, email: string, sentAfter: numb
  */
 export async function submitPasswordSignIn(page: Page, email: string, password: string = TEST_PASSWORD): Promise<void> {
   const auth = new URL(target().auth).origin;
-  const emailField = page.locator('input[name="email"]');
+  const emailField = page.locator('input[name="email"]:not([type="hidden"])');
   const passwordField = page.locator('input[name="password"]');
   for (let attempt = 1; ; attempt++) {
     await expect(emailField).toBeEditable({ timeout: 30000 });
@@ -212,7 +212,7 @@ export async function completeRegistration(page: Page, email: string): Promise<v
     if (!(await repeat.isVisible())) await register.click({ timeout: 10000 });
     await expect(repeat).toBeVisible({ timeout: 5000 });
   }).toPass({ timeout: 45000 });
-  await page.locator('input[name="email"]').fill(email);
+  await page.locator('input[name="email"]:not([type="hidden"])').fill(email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
   await fillSecret(repeat, TEST_PASSWORD);
   const sentAfter = Date.now();
