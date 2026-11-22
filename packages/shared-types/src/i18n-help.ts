@@ -136,7 +136,7 @@ export const HELP_EN: HelpTranslations = {
   title: 'Help',
   lead: 'How to watch, take part and share on Al Ummah Now, as yourself or as a channel.',
   searchLabel: 'Search Help',
-  searchPlaceholder: 'Search Help, e.g. "switch channel"',
+  searchPlaceholder: 'Search Help, e.g. “switch channel”',
   searchEmpty: 'Type to search every Help page',
   topicsHeading: 'Topics',
   onThisPage: 'On this page',
@@ -146,7 +146,7 @@ export const HELP_EN: HelpTranslations = {
   takeTourHint: 'A five-step tour of who you appear as on the site.',
   markersLabel: 'Numbered markers on the picture:',
   playClip: 'Play the clip',
-  whatsThis: "What's this?",
+  whatsThis: "What’s this?",
   topics: {
     start: {
       title: 'Getting started',

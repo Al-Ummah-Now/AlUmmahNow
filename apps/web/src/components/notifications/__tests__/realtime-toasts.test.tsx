@@ -67,7 +67,7 @@ describe('NotificationCenter toasts', () => {
     push(ready(1));
     const toast = screen.getByTestId('realtime-toast');
     expect(toast).toHaveTextContent('Video ready');
-    expect(toast).toHaveTextContent('Your video "Good Deeds 1" is ready to watch');
+    expect(toast).toHaveTextContent('Your video “Good Deeds 1” is ready to watch');
     expect(within(toast).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/en/video/v1');
   });
 

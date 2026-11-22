@@ -14,7 +14,7 @@ export const ABOUT_FALLBACK: Record<'en' | 'ar', CmsPage> = {
     body: [
       'Al Ummah Now is a platform where you can share videos, Shorts and community posts.',
       '',
-      "## What you'll find here",
+      "## What you’ll find here",
       '',
       '- Watch and share **videos and Shorts**.',
       '- Read **community posts** from the channels you subscribe to.',

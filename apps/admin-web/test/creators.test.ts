@@ -458,7 +458,7 @@ describe('hidden tiers (owner, 2026-11-19)', () => {
     assert.equal(tierToForm(SCHOLAR).hidden, true);
     assert.equal(tierToForm().hidden, false, 'a new tier is shown');
     assert.equal(tierActionMessage({ status: 409, code: 'default_tier_hidden' }), 'creators.errorDefaultHidden');
-    assert.match(tEn('creators.errorDefaultHidden'), /default tier can't be hidden/);
+    assert.match(tEn('creators.errorDefaultHidden'), /default tier can’t be hidden/);
     assert.match(tAr('creators.errorDefaultHidden'), /لا يمكن إخفاء الفئة الأساسية/);
   });
 });

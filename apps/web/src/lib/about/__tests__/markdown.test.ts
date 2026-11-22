@@ -7,7 +7,7 @@ describe('About markdown', () => {
   it("parses the owner's About copy: intro, two section headings, a five-item list with bold", () => {
     const blocks = parseMarkdown(ABOUT_FALLBACK.en.body, ctx);
     expect(blocks.map((b) => b.t)).toEqual(['p', 'h', 'ul', 'h', 'p']);
-    expect(blocks[1]).toEqual({ t: 'h', level: 2, c: [{ t: 'text', v: "What you'll find here" }] });
+    expect(blocks[1]).toEqual({ t: 'h', level: 2, c: [{ t: 'text', v: "What you’ll find here" }] });
     const list = blocks[2] as { t: 'ul'; items: unknown[][] };
     expect(list.items).toHaveLength(5);
     expect(list.items[0]).toEqual([{ t: 'text', v: 'Watch and share ' }, { t: 'strong', c: [{ t: 'text', v: 'videos and Shorts' }] }, { t: 'text', v: '.' }]);

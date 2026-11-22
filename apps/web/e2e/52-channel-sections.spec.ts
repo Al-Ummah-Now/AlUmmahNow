@@ -273,7 +273,7 @@ test.describe('Section manager', () => {
     // Featured playlists and featured channels need a title of their own
     await dialog.locator('[data-section-card="multiple_playlists"]').click();
     await dialog.getByTestId('section-form-submit').click();
-    await expect(dialog.getByRole('alert').filter({ hasText: 'Give this section a title, for example "Our scholars".' })).toBeVisible();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Give this section a title, for example “Our scholars”.' })).toBeVisible();
     await expect(dialog.getByRole('alert').filter({ hasText: 'Pick at least one.' })).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Back' }).click();

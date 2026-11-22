@@ -101,7 +101,7 @@ describe('BilingualPair', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
     });
-    expect(screen.getByRole('alert')).toHaveTextContent(/You've used today's translations\. More at \S/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/You’ve used today’s translations\. More at \S/);
     failure = new TranslateFailure('feature_off');
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
@@ -116,7 +116,7 @@ describe('BilingualPair', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
     });
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't translate. Try again.");
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn’t translate. Try again.");
     expect(screen.getByTestId('field-ar')).toHaveValue('');
   });
 

@@ -83,7 +83,7 @@ describe('PlaylistPicker', () => {
     fireEvent.click(screen.getByTestId('playlist-picker-create'));
     await waitFor(() => expect(screen.getByTestId('selected')).toHaveTextContent('p3,new1'));
     expect(onCreate).toHaveBeenCalledWith({ title: 'Ramadan 2026', description: 'Nightly reminders', isPublic: false });
-    expect(screen.getByTestId('playlist-picker-message')).toHaveTextContent('Created "Ramadan 2026" and selected it');
+    expect(screen.getByTestId('playlist-picker-message')).toHaveTextContent('Created “Ramadan 2026” and selected it');
     expect(screen.queryByTestId('playlist-picker-create-form')).toBeNull();
   });
 
@@ -146,8 +146,8 @@ describe('PlaylistAddNotices', () => {
   it("says which playlist an add is being retried for, in the uploader's words", () => {
     render(<PlaylistAddNotices playlists={LIST} notices={[{ playlistId: 'p1', kind: 'retrying', count: 2 }, { playlistId: 'p2', kind: 'failed', count: 1 }]} />);
     const notices = screen.getAllByTestId('playlist-add-notice');
-    expect(notices[0]).toHaveTextContent(`Couldn't add 2 videos to "Tafsir Juz Amma" yet; we'll retry.`);
-    expect(notices[1]).toHaveTextContent(`The video wasn't added to "Seerah". You can add it from the video's page.`);
+    expect(notices[0]).toHaveTextContent(`Couldn’t add 2 videos to “Tafsir Juz Amma” yet; we’ll retry.`);
+    expect(notices[1]).toHaveTextContent(`The video wasn’t added to “Seerah”. You can add it from the video’s page.`);
   });
 
   it('in Arabic', () => {

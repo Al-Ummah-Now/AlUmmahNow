@@ -16,7 +16,7 @@ import { listPageMetadata } from '@/lib/seo/structured-data';
 import { LivePageClient } from './LivePageClient';
 
 // Self-canonical with the en/ar pair and x-default (D-SEO-1); og:url on this site (wiki AUN-SEO #13)
-export const metadata: Metadata = listPageMetadata('en', '/live', 'Live Streams', "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.");
+export const metadata: Metadata = listPageMetadata('en', '/live', 'Live Streams', "Watch live streams from channels in the Al Ummah Now community, and see what’s coming up.");
 
 /**
  * Live Streams Page (Server Component)

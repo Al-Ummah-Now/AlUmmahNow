@@ -174,7 +174,7 @@ it('follows a background add started by the create form', async () => {
 it('a playlist that cannot be loaded: friendly error with Try again', async () => {
   (getPlaylistManageItems as jest.Mock).mockResolvedValueOnce({ ok: false, status: 500 }).mockResolvedValueOnce(page([item('a', 0)], null));
   render(<PlaylistEditor channelId="ch" playlistId="pl" />);
-  expect(await screen.findByTestId('playlist-editor-error')).toHaveTextContent("Could not load the playlist's videos");
+  expect(await screen.findByTestId('playlist-editor-error')).toHaveTextContent("Could not load the playlist’s videos");
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Try again' })); });
   expect(await screen.findByTestId('playlist-editor')).toBeInTheDocument();
 });

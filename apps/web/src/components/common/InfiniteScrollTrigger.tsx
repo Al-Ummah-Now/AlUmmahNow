@@ -108,7 +108,7 @@ export const InfiniteScrollTrigger = React.memo<InfiniteScrollTriggerProps>(
     onLoadMore,
     error = false,
     onRetry,
-    endMessage = "You've seen all streams",
+    endMessage = "You’ve seen all streams",
     loadingMessage = 'Loading more streams...',
     errorMessage = 'Failed to load more streams',
     className,

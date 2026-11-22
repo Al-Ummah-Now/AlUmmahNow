@@ -46,7 +46,7 @@ it('adds the videos to every chosen playlist and shows each result', async () =>
   expect(addVideosToPlaylist).toHaveBeenCalledWith('p2', ['a', 'b'], { channelId: 'ch' });
   const results = screen.getByTestId('add-to-playlist-results');
   expect(within(results).getByText('Added 2 videos to Tafsir.')).toBeInTheDocument();
-  expect(within(results).getByText("Couldn't add the videos to Fiqh. Please try again.")).toBeInTheDocument();
+  expect(within(results).getByText("Couldn’t add the videos to Fiqh. Please try again.")).toBeInTheDocument();
   // The option shows the playlist's count after the add (1 before, 3 now), and can't be chosen again
   expect(option('Tafsir')).toHaveTextContent('3 videos');
   expect(option('Tafsir')).toHaveAttribute('aria-disabled', 'true');

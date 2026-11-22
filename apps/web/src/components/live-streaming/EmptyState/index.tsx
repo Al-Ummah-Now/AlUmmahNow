@@ -62,7 +62,7 @@ const EMPTY_STATE_CONFIGS: Record<
   'error': {
     icon: AlertTriangle,
     title: 'Something went wrong',
-    message: "We couldn't load the streams. Please try again.",
+    message: "We couldn’t load the streams. Please try again.",
     iconColor: 'text-red-400 dark:text-red-600'
   }
 };
