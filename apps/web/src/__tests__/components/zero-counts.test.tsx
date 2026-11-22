@@ -38,6 +38,14 @@ beforeEach(() => {
 });
 
 describe('ChannelTile counts (#1628)', () => {
+  it('a long name gets two balanced lines before the ellipsis, not a one-line cut', () => {
+    tile(0);
+    const name = screen.getByText('Al-Fajr Reminders');
+    expect(name).toHaveClass('line-clamp-2', '[text-wrap:balance]');
+    expect(name).not.toHaveClass('truncate');
+    expect(name).toHaveAttribute('dir', 'auto');
+  });
+
   it.each([
     [0, 'لا يوجد مشتركون'],
     [1, 'مشترك واحد'],

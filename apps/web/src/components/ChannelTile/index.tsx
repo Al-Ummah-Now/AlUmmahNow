@@ -59,8 +59,9 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
       <div className="@container min-w-0 w-full">
         <h3 className="flex items-center justify-center gap-1 font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-          {/* dir=auto: a Latin name on an Arabic page still truncates at its own end ("Al-Fajr Remi…") */}
-          <span dir="auto" className="truncate">{name}</span>
+          {/* Up to two balanced lines before the ellipsis ("Al-Fajr / Reminders…", not "Al-Fajr Remind…").
+              dir=auto: a Latin name on an Arabic page still wraps and ends at its own end */}
+          <span dir="auto" className="line-clamp-2 min-w-0 break-normal [overflow-wrap:break-word] [text-wrap:balance]">{name}</span>
           {channel.isVerified && (
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
