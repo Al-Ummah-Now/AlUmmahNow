@@ -30,13 +30,14 @@ export interface LocalTime {
   utc: string;
 }
 
-/** A moment in `timeZone` (the admin's browser zone) with the zone label, and in UTC. */
-export function formatLocalTime(value: string | number | Date, locale: Locale, timeZone: string, opts: { date?: boolean } = {}): LocalTime | null {
+/** A moment in `timeZone` (the admin's browser zone) with the zone label, and in UTC. `seconds` for logs, where steps are seconds apart. */
+export function formatLocalTime(value: string | number | Date, locale: Locale, timeZone: string, opts: { date?: boolean; seconds?: boolean } = {}): LocalTime | null {
   const at = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(at.getTime())) return null;
   const withDate = opts.date !== false;
-  const local = dateTimeFormat(locale, { ...(withDate ? { dateStyle: 'medium' } : {}), timeStyle: 'short', timeZone }).format(at);
-  const utc = dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(at);
+  const timeStyle = opts.seconds ? 'medium' : 'short';
+  const local = dateTimeFormat(locale, { ...(withDate ? { dateStyle: 'medium' } : {}), timeStyle, timeZone }).format(at);
+  const utc = dateTimeFormat(locale, { dateStyle: 'medium', timeStyle, timeZone: 'UTC' }).format(at);
   return { text: `${local} ${zoneLabel(at, timeZone, locale)}`, utc: `${utc} ${zoneLabel(at, 'UTC', locale)}` };
 }
 

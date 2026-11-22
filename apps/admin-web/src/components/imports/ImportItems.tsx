@@ -6,14 +6,15 @@
  * job's attempts n/max, next try, error in plain words, Retry and Cancel), and each caption language.
  * A table from the md breakpoint, cards on a phone.
  */
+import { useEffect, useState } from 'react';
 import Link from '@/components/AppLink';
-import { formatBytes, intlLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
+import { formatBytes, intlLocale, isArabicLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { LocalTime } from '@/components/LocalTime';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
-import { Chip, MetaLine, cardTable, thClass, type ChipTone } from '@/components/content/parts';
+import { Chip, cardTable, thClass, type ChipTone } from '@/components/content/parts';
 import { fillNodes } from '@/components/audit/fill';
 import { JobStatusChip, useRefreshWhile } from '@/components/content/jobs';
 import { JobActionButtons, JobErrorText, JobTiming, useJobCancel } from '@/components/content/job-parts';
@@ -114,6 +115,14 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
   // Refresh while an attach job is still going
   useRefreshWhile(!!statuses && Object.values(statuses).some((s) => !!s.attach && isActiveJob(s.attach)));
   const dash = <span className="text-fg-subtle">—</span>;
+  // The file a link pointed at (#item-<id>, from the Errors page through ?video=): marked and scrolled to.
+  // Read on the client: :target does not match after a client-side redirect to a hash.
+  const [marked, setMarked] = useState<string | null>(null);
+  useEffect(() => {
+    const id = /^#item-([A-Za-z0-9_-]{1,200})$/.exec(window.location.hash)?.[1] ?? null;
+    setMarked(id);
+    if (id) document.getElementById(`item-${id}`)?.scrollIntoView({ block: 'start' });
+  }, []);
 
   return (
     <div>
@@ -133,12 +142,15 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
             {items.map((item) => {
               const status = statuses?.[item.id];
               return (
-                <tr key={item.id} id={`item-${item.id}`} className={`${cardTable.row} scroll-mt-24 target:ring-2 target:ring-focus`} data-testid="import-item" data-item-id={item.id} data-state={item.state}>
-                  <td className={cardTable.cell}>
-                    <span className="block font-medium text-fg break-all" dir="auto">
+                <tr key={item.id} id={`item-${item.id}`} className={`${cardTable.row} scroll-mt-24 ${marked === item.id ? 'bg-surface-hover outline-2 outline-solid -outline-offset-2 outline-focus' : ''}`} data-testid="import-item" data-item-id={item.id} data-state={item.state} data-marked={marked === item.id ? 'true' : undefined}>
+                  <td className={`${cardTable.cell} md:min-w-56`}>
+                    <span className="block font-medium text-fg break-words" dir="auto">
                       {item.fileName}
                     </span>
-                    <MetaLine className="block text-xs text-fg-muted mt-0.5" parts={[formatBytes(locale, item.fileSize), <LocalTime key="at" value={item.createdAt} />]} />
+                    <span className="block text-xs text-fg-muted mt-0.5">
+                      {/* File sizes stay exact; Arabic is never grouped and joins with «،» (number rule O38) */}
+                      {fillNodes(t('imports.fileMeta'), { size: formatBytes(locale, item.fileSize, isArabicLocale(locale) ? { useGrouping: false } : undefined), date: <LocalTime value={item.createdAt} /> })}
+                    </span>
                     <span className="block mt-1.5">
                       <Chip tone={STATE_TONE[item.state]} testId="import-item-state">
                         {t(`imports.states.${item.state}` as MessageKey)}

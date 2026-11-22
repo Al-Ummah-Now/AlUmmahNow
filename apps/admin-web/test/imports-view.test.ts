@@ -33,6 +33,9 @@ describe('times in the admin (local zone, UTC on hover)', () => {
     assert.match(en1.text, /Nov 22, 2026.*2:20 PM UTC−5$/);
     assert.match(en1.utc, /7:20 PM UTC$/);
     assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20 PM UTC−5$/);
+    // Logs: steps seconds apart stay apart
+    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d PM UTC−5$/);
+    assert.match(formatLocalTime(AT, 'ar', 'Asia/Riyadh', { seconds: true })!.text, /١٠:٢٠:[٠-٩]{2}/);
     const ar1 = formatLocalTime(AT, 'ar', 'Asia/Riyadh')!;
     assert.match(ar1.text, /١٠:٢٠/);
     assert.ok(ar1.text.endsWith('غرينتش+٣'));

@@ -2312,6 +2312,7 @@ const ar: Messages = {
     cancel: 'إلغاء المهمة',
     cancelled: 'أُلغيت المهمة. «إعادة المحاولة» تبدؤها من جديد.',
     cancelTitle: 'إلغاء هذه المهمة؟',
+    keepJob: 'إبقاء المهمة',
     cancelBody: 'لن يُنفَّذ منها شيء بعد الآن. الخطوة الجارية تكتمل أولًا. «إعادة المحاولة» تستأنفها من حيث توقفت.',
     showLog: 'السجل',
     hideLog: 'إخفاء السجل',
@@ -2375,6 +2376,8 @@ const ar: Messages = {
     videoNotImported: 'لا يوجد ملف مستورد لهذا المرئي.',
     allImports: 'كل عمليات الاستيراد',
     meta: 'إلى {channel}، بدأت {date}',
+    metaBy: 'إلى {channel}، بدأت {date}، بواسطة {actor}',
+    fileMeta: '{size}، {date}',
     counts: {
       uploaded: 'مرفوعة: {count}',
       initiated: 'قيد الرفع: {count}',

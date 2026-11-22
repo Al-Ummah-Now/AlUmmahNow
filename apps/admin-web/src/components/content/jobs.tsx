@@ -16,7 +16,7 @@ import { linkClass } from '@/components/ui';
 import { ActionFeedback, useContentAction } from './actions';
 import { Chip, SectionCard } from './parts';
 import { isActiveJob, jobTargetHref, jobTone } from './job-helpers';
-import { JobActionButtons, JobErrorText, JobLog, JobTiming, useJobCancel } from './job-parts';
+import { JobActionButtons, JobErrorText, JobLog, JobTiming, useJobCancel, useJobLog, type JobRef } from './job-parts';
 import { LocalTime } from '@/components/LocalTime';
 import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
 import { UserName } from '@/components/audit/UserName';
@@ -108,6 +108,55 @@ export function FailedJobsBanner({ count }: { count: number }) {
   );
 }
 
+const TH = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
+const TD = 'px-3 sm:px-4 py-3 align-top text-sm';
+const WIDE = 'hidden md:table-cell';
+
+/** One job; its log opens in a row of its own under it, across every column. */
+function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; permissions: AdminContentPermission[]; action: ReturnType<typeof useContentAction>; onCancelAsk: (job: JobRef) => void }) {
+  const { t } = useLanguage();
+  const log = useJobLog(job);
+  return (
+    <>
+      <tr className={log.open ? '' : 'border-b border-border last:border-0'} data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
+        <td className={TD}>
+          <span className="block font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
+          <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
+            {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
+          </Link>
+          <span className="block text-xs text-fg-subtle">{fillNodes(t('jobs.by'), { actor: <UserName id={job.actorId} showEmail={false} /> })}</span>
+          {job.lastError && job.status !== 'succeeded' && (
+            <div className="md:hidden mt-1">
+              <JobErrorText error={job.lastError} testId="job-error-narrow" />
+            </div>
+          )}
+          <div className="mt-2" data-testid="job-log">
+            {log.toggle}
+          </div>
+        </td>
+        <td className={TD}>
+          <JobStatusChip job={job} />
+          <JobTiming job={job} />
+        </td>
+        <td className={`${TD} ${WIDE} max-w-md`}>{job.lastError && job.status !== 'succeeded' ? <JobErrorText error={job.lastError} /> : null}</td>
+        <td className={`${TD} ${WIDE} text-fg-muted whitespace-nowrap`}>
+          <LocalTime value={job.updatedAt} />
+        </td>
+        <td className={TD}>
+          <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={onCancelAsk} />
+        </td>
+      </tr>
+      {log.panel && (
+        <tr className="border-b border-border last:border-0" data-testid="job-log-row">
+          <td colSpan={5} className="px-3 sm:px-4 pb-3">
+            {log.panel}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 /**
  * Jobs as a table (Jobs page, Errors page): job and item, status with attempts n/max and the next try,
  * the last error in plain words, when it changed, Retry and Cancel, and each job's log.
@@ -118,9 +167,8 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
   const { error, message } = action;
   const cancel = useJobCancel(action);
   useRefreshWhile(jobs.some(isActiveJob));
-  const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
-  const td = 'px-3 sm:px-4 py-3 align-top text-sm';
-  const wide = 'hidden md:table-cell';
+  const th = TH;
+  const wide = WIDE;
   return (
     <div>
       <ActionFeedback error={error} message={message} />
@@ -138,34 +186,7 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
           </thead>
           <tbody>
             {jobs.map((job) => (
-              <tr key={job.id} className="border-b border-border last:border-0" data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
-                <td className={td}>
-                  <span className="block font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
-                  <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
-                    {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
-                  </Link>
-                  <span className="block text-xs text-fg-subtle">{fillNodes(t('jobs.by'), { actor: <UserName id={job.actorId} showEmail={false} /> })}</span>
-                  {job.lastError && job.status !== 'succeeded' && (
-                    <div className="md:hidden mt-1">
-                      <JobErrorText error={job.lastError} testId="job-error-narrow" />
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    <JobLog job={job} />
-                  </div>
-                </td>
-                <td className={td}>
-                  <JobStatusChip job={job} />
-                  <JobTiming job={job} />
-                </td>
-                <td className={`${td} ${wide} max-w-md`}>{job.lastError && job.status !== 'succeeded' ? <JobErrorText error={job.lastError} /> : null}</td>
-                <td className={`${td} ${wide} text-fg-muted whitespace-nowrap`}>
-                  <LocalTime value={job.updatedAt} />
-                </td>
-                <td className={td}>
-                  <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={cancel.ask} />
-                </td>
-              </tr>
+              <JobRow key={job.id} job={job} permissions={permissions} action={action} onCancelAsk={cancel.ask} />
             ))}
           </tbody>
         </table>

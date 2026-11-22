@@ -88,6 +88,8 @@ export function ActionFeedback({ error, message, testId }: { error: string | nul
 }
 
 interface ConfirmDialogContent {
+  /** The dismiss button's words when "Cancel" would read like the action (e.g. Cancel job) */
+  cancelLabel?: string;
   title: string;
   body: string;
   confirmLabel: string;
@@ -136,7 +138,7 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
  * change by accident); the reason and type-to-confirm fields are one Tab away.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, reasonHint, reasonMaxLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, cancelLabel, withReason, reasonHint, reasonMaxLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -221,7 +223,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
         )}
         <div className="flex flex-wrap justify-end gap-2 pt-2">
           <button ref={cancelRef} type="button" className={smallButtonClass} onClick={cancel} data-testid={`${testId}-cancel`}>
-            {t('content.cancel')}
+            {cancelLabel ?? t('content.cancel')}
           </button>
           <button type="submit" className={danger ? dangerButtonClass : smallButtonClass} disabled={!ready} data-testid={`${testId}-confirm`}>
             {confirmLabel}

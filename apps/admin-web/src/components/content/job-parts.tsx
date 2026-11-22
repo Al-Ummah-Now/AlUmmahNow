@@ -98,6 +98,7 @@ export function useJobCancel(action: ContentAction) {
       title={t('jobs.cancelTitle')}
       body={t('jobs.cancelBody')}
       confirmLabel={t('jobs.cancel')}
+      cancelLabel={t('jobs.keepJob')}
       danger
       testId="job-cancel"
     />
@@ -114,7 +115,7 @@ function LogLine({ entry, max }: { entry: AdminJobLogEntry; max: number }) {
   });
   return (
     <li className="grid grid-cols-1 sm:grid-cols-[minmax(11rem,auto)_1fr] gap-x-4 gap-y-0.5 py-2 border-b border-border last:border-0" data-testid="job-log-line" data-event={entry.event}>
-      <LocalTime value={entry.at} className="text-xs text-fg-muted tabular-nums" />
+      <LocalTime value={entry.at} seconds className="text-xs text-fg-muted tabular-nums" />
       <div className="min-w-0">
         <p className="text-sm text-fg">{text}</p>
         {entry.error && <JobErrorText error={entry.error} testId="job-log-error" />}
@@ -123,8 +124,11 @@ function LogLine({ entry, max }: { entry: AdminJobLogEntry; max: number }) {
   );
 }
 
-/** "Log": what happened to the job, read when opened (the list does not carry it). */
-export function JobLog({ job }: { job: Pick<AdminJob, 'id' | 'maxAttempts' | 'updatedAt'> }) {
+/**
+ * "Log": what happened to the job, read when opened (the list does not carry it). The toggle and the
+ * panel are separate, so a table row can show the panel across all its columns.
+ */
+export function useJobLog(job: Pick<AdminJob, 'id' | 'maxAttempts' | 'updatedAt'>): { open: boolean; toggle: React.ReactNode; panel: React.ReactNode } {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<{ loading: boolean; log: AdminJobLogEntry[] | null; failed: boolean; at: string | null }>({ loading: false, log: null, failed: false, at: null });
@@ -136,43 +140,55 @@ export function JobLog({ job }: { job: Pick<AdminJob, 'id' | 'maxAttempts' | 'up
     else setState((s) => ({ ...s, loading: false, failed: true }));
   }
 
+  const panelId = `job-log-${job.id}`;
+  const toggle = (
+    <button
+      type="button"
+      className={`${linkClass} text-xs font-medium`}
+      aria-expanded={open}
+      aria-controls={open ? panelId : undefined}
+      onClick={() => {
+        const next = !open;
+        setOpen(next);
+        // Read again when the job changed since the last read
+        if (next && (state.log === null || state.at !== job.updatedAt)) void load();
+      }}
+      data-testid="job-log-toggle"
+    >
+      {open ? t('jobs.hideLog') : t('jobs.showLog')}
+    </button>
+  );
+  const panel = open ? (
+    <section id={panelId} className="rounded border border-border bg-surface-2 px-3" aria-label={t('jobs.logTitle')} data-testid="job-log-panel">
+      {state.loading && state.log === null && <p className="py-2 text-xs text-fg-muted">{t('jobs.logLoading')}</p>}
+      {state.failed && (
+        <p className="py-2 text-xs text-warning-fg" data-testid="job-log-failed">
+          {t('jobs.logFailed')}{' '}
+          <button type="button" className="underline" onClick={() => void load()}>
+            {t('jobs.retry')}
+          </button>
+        </p>
+      )}
+      {state.log && state.log.length === 0 && <p className="py-2 text-xs text-fg-muted">{t('jobs.logEmpty')}</p>}
+      {state.log && state.log.length > 0 && (
+        <ol>
+          {state.log.map((entry, i) => (
+            <LogLine key={`${entry.at}-${i}`} entry={entry} max={job.maxAttempts} />
+          ))}
+        </ol>
+      )}
+    </section>
+  ) : null;
+  return { open, toggle, panel };
+}
+
+/** The log's toggle with its panel right under it (cards and panels). */
+export function JobLog({ job }: { job: Pick<AdminJob, 'id' | 'maxAttempts' | 'updatedAt'> }) {
+  const { toggle, panel } = useJobLog(job);
   return (
     <div data-testid="job-log">
-      <button
-        type="button"
-        className={`${linkClass} text-xs font-medium`}
-        aria-expanded={open}
-        onClick={() => {
-          const next = !open;
-          setOpen(next);
-          // Read again when the job changed since the last read
-          if (next && (state.log === null || state.at !== job.updatedAt)) void load();
-        }}
-        data-testid="job-log-toggle"
-      >
-        {open ? t('jobs.hideLog') : t('jobs.showLog')}
-      </button>
-      {open && (
-        <section className="mt-2 rounded border border-border bg-surface-2 px-3" aria-label={t('jobs.logTitle')} data-testid="job-log-panel">
-          {state.loading && state.log === null && <p className="py-2 text-xs text-fg-muted">{t('jobs.logLoading')}</p>}
-          {state.failed && (
-            <p className="py-2 text-xs text-warning-fg" data-testid="job-log-failed">
-              {t('jobs.logFailed')}{' '}
-              <button type="button" className="underline" onClick={() => void load()}>
-                {t('jobs.retry')}
-              </button>
-            </p>
-          )}
-          {state.log && state.log.length === 0 && <p className="py-2 text-xs text-fg-muted">{t('jobs.logEmpty')}</p>}
-          {state.log && state.log.length > 0 && (
-            <ol>
-              {state.log.map((entry, i) => (
-                <LogLine key={`${entry.at}-${i}`} entry={entry} max={job.maxAttempts} />
-              ))}
-            </ol>
-          )}
-        </section>
-      )}
+      {toggle}
+      {panel && <div className="mt-2">{panel}</div>}
     </div>
   );
 }
