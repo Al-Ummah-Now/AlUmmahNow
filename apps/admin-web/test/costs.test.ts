@@ -807,4 +807,14 @@ describe('AUDIT-2 round 18: no street plates inside the Costs header card', () =
     const page = readFileSync(new URL('../src/app/(protected)/operations/page.tsx', import.meta.url), 'utf8');
     assert.match(page, /<p className="street-plate [^"]*" data-testid="ops-spend-link">/);
   });
+
+  it('no Arabic Costs or Operations string leaves «الـ» alone at a line end', () => {
+    const strings: string[] = [];
+    const walk = (o: unknown) => { if (typeof o === 'string') strings.push(o); else if (o && typeof o === 'object') Object.values(o).forEach(walk); };
+    walk((ar as Record<string, unknown>).costs);
+    walk((ar as Record<string, unknown>).operations);
+    // The article stays with its noun (U+00A0), Latin names included: «والـ Durable Objects»
+    assert.deepEqual(strings.filter((s) => /الـ\s/.test(s.replace(/الـ /g, ''))), []);
+    assert.ok(createTranslator('ar')('operations.subtitle' as never).includes('والـ Durable Objects'));
+  });
 });
