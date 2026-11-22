@@ -26,6 +26,9 @@ const ID = /^[A-Za-z0-9_-]{1,200}$/;
  * `?channel=` keeps one channel's; `?video=` (the Errors page's link) opens the batch page of the file
  * that video came from.
  */
+/** A column's name above its value inside a phone card (the table head is visually hidden there; screen readers already hear it). */
+const phoneLabel = 'md:hidden block text-xs text-fg-muted mb-0.5';
+
 export default async function ImportsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const raw = await searchParams;
   const params = pickParams(raw, { channel: 'text', video: 'text' });
@@ -94,7 +97,9 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
                       {fillNodes(t('imports.by'), { actor: <UserName id={b.createdBy} showEmail={false} /> })}
                     </span>
                   </td>
-                  <td className={cardTable.cell}>
+                  {/* On a phone the row is a card: the cells stack tight under the name, each with its column's label */}
+                  <td className={`${cardTable.cell} pt-0 md:pt-3`}>
+                    <span className={phoneLabel} aria-hidden="true">{t('imports.colChannel')}</span>
                     {b.channelName ? (
                       <Link href={`/imports?channel=${encodeURIComponent(b.channelId)}`} className={`${linkClass} break-words`}>
                         <bdi>{b.channelName}</bdi>
@@ -103,7 +108,8 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
                       <span className="text-sm text-fg-muted">{t('imports.channelGone')}</span>
                     )}
                   </td>
-                  <td className={cardTable.cell}>
+                  <td className={`${cardTable.cell} pt-0 md:pt-3`}>
+                    <span className={phoneLabel} aria-hidden="true">{t('imports.colFiles')}</span>
                     <ul className="flex flex-wrap gap-1.5">
                       {STATE_ORDER.filter((s) => (b.counts?.[s] ?? 0) > 0).map((s) => (
                         <li key={s} data-state={s}>
@@ -112,7 +118,8 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
                       ))}
                     </ul>
                   </td>
-                  <td className={`${cardTable.cell} text-sm text-fg-muted`}>
+                  <td className={`${cardTable.cell} pt-0 md:pt-3 text-sm text-fg-muted`}>
+                    <span className={phoneLabel} aria-hidden="true">{t('imports.colStarted')}</span>
                     <LocalTime value={b.createdAt} />
                   </td>
                 </tr>

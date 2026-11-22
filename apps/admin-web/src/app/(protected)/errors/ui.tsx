@@ -2,7 +2,7 @@
  * Presentational pieces of the Errors pages (server and client safe).
  */
 
-import { compactNumber, niceScale, numberFormat } from '@al-ummah/shared-types';
+import { compactNumber, localizeDigits, niceScale, numberFormat } from '@al-ummah/shared-types';
 import { translateDynamic, type Translator } from '@/i18n/translate';
 
 /** The error's message as its title; the type ("UploadError") is shown apart, as a technical detail (errorType). */
@@ -17,6 +17,17 @@ export function errorType(g: { name: string | null; message: string }): string |
 
 /** Which app reported it, in words ("Al Ummah Now Tools", «أدوات الأمة الآن»); an unknown one as it is. */
 export const appName = (t: Translator, app: string) => translateDynamic(t, 'errorsPage.apps', app);
+
+/**
+ * A browser or OS as the reader says it: "Windows 11" / «ويندوز ١١». The family name comes from the
+ * messages (unknown ones stay as written) and the version takes the locale's digits.
+ */
+export function platformName(t: Translator, locale: string, value: string): string {
+  const m = /^(.*?)\s*(\d[\d.]*)?$/.exec(value.trim());
+  const family = m?.[1] || value.trim();
+  const named = translateDynamic(t, 'errorsPage.platforms', family);
+  return m?.[2] ? `${named} ${localizeDigits(locale, m[2])}` : named;
+}
 
 /** The environment in words ("Production", «الإنتاج»). */
 export const environmentName = (t: Translator, environment: string) => translateDynamic(t, 'errorsPage.environments', environment);

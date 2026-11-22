@@ -70,3 +70,14 @@ describe('HourlyChart', () => {
     assert.equal(hourDate('2026-11-11T14').toISOString(), '2026-11-11T14:00:00.000Z');
   });
 });
+
+describe('platform names', () => {
+  it('names a browser or OS in the reader’s words and digits; unknown names stay as written', async () => {
+    const { platformName } = await import('../src/app/(protected)/errors/ui');
+    const { createTranslator } = await import('../src/i18n/translate');
+    assert.equal(platformName(createTranslator('ar'), 'ar', 'Windows 11'), 'ويندوز ١١');
+    assert.equal(platformName(createTranslator('ar'), 'ar', 'Chrome'), 'كروم');
+    assert.equal(platformName(createTranslator('en'), 'en', 'Windows 11'), 'Windows 11');
+    assert.equal(platformName(createTranslator('ar'), 'ar', 'Tizen'), 'Tizen');
+  });
+});
