@@ -138,7 +138,8 @@ function ThresholdField({ field, label, help, placeholder, value, error, onChang
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         data-step={step}
-        className={`${fieldClass} mt-1 w-full tabular-nums ${error ? 'border-danger-border' : ''}`}
+        // Digits keep their order (dir=ltr) but sit at the start of an Arabic form, as the levels list does
+        className={`${fieldClass} mt-1 w-full tabular-nums rtl:text-right ${error ? 'border-danger-border' : ''}`}
         data-testid={`costs-threshold-${field}`}
       />
       {help && <span id={`${id}-help`} className={helpClass}>{help}</span>}
