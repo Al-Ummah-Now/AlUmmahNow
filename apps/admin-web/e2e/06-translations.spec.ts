@@ -39,7 +39,7 @@ test.describe('translations editor', () => {
     await openEditor(page);
     await page.getByLabel('Search keys or values').fill('appName');
     await expect(page.getByTestId('translation-row')).toHaveCount(1);
-    await expect(page.getByTestId('translation-count')).toContainText('matching "appName"');
+    await expect(page.getByTestId('translation-count')).toContainText('matching “appName”');
     await page.getByLabel('Search keys or values').fill('zz-no-such-key-zz');
     await expect(page.getByText('No keys match your search')).toBeVisible();
   });

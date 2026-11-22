@@ -162,7 +162,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     render(<CaptionDraftsPanel videoId="v1" />);
     fireEvent.click(await screen.findByTestId('caption-transcribe-action'));
     fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }));
-    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("You've used all of this month's caption minutes. They reset on Dec 1.");
+    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("You’ve used all of this month’s caption minutes. They reset on Dec 1.");
     expect(screen.getByTestId('caption-minutes-short').querySelector('a')).toBeNull();
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     expect(screen.queryByTestId('caption-minutes-warning')).toBeNull();
@@ -171,7 +171,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
   it('a job that costs more than is left still starts, and the confirm says how far over it goes', async () => {
     setup({ minutes: { usage: usage({ monthUsed: 110, remaining: 10, warning: true }), minutesNeeded: 17 } });
     render(<CaptionDraftsPanel videoId="v1" />);
-    const overText = "This uses 17 minutes and you have 10 left. You'll go 7 minutes over, and that comes off next month's minutes.";
+    const overText = "This uses 17 minutes and you have 10 left. You’ll go 7 minutes over, and that comes off next month’s minutes.";
     expect(await screen.findByTestId('caption-transcribe-cost')).toHaveTextContent(overText);
     expect(screen.queryByTestId('caption-minutes-short')).toBeNull();
     fireEvent.click(screen.getByTestId('caption-transcribe-action'));
@@ -185,7 +185,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     const { unmount } = render(<CaptionDraftsPanel videoId="v1" />);
     expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 127 / 120 this month · 7 over');
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Caption minutes: 127 / 120 this month · 7 over');
-    expect(screen.getByTestId('caption-minutes-short')).toHaveTextContent("You're 7 minutes over this month's caption minutes.");
+    expect(screen.getByTestId('caption-minutes-short')).toHaveTextContent("You’re 7 minutes over this month’s caption minutes.");
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     unmount();
   });
@@ -262,7 +262,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     render(<CaptionDraftsPanel videoId="v1" />);
     fireEvent.click(await screen.findByTestId('caption-transcribe-action'));
     fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }));
-    expect(await screen.findByText("Couldn't start the transcription. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t start the transcription. Try again.")).toBeInTheDocument();
     expect(reportError).toHaveBeenCalled();
   });
 });

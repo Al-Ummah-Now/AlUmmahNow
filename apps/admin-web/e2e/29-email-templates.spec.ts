@@ -79,7 +79,7 @@ test.describe('email templates', () => {
     const frame = page.frameLocator('[data-testid="email-preview-frame"]');
     await page.getByTestId('email-preview-lang-en').click();
     await expect(frame.getByText(BUTTON_EN)).toBeVisible();
-    await expect(page.getByTestId('email-preview-subject')).toHaveText("You're invited to Al Ummah Now");
+    await expect(page.getByTestId('email-preview-subject')).toHaveText("You’re invited to Al Ummah Now");
     await page.getByTestId('email-preview-lang-ar').click();
     await page.getByTestId('email-preview-mode-dark').click();
     await page.getByTestId('email-preview-width-phone').click();

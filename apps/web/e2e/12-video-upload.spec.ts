@@ -56,7 +56,7 @@ test.describe('Video Upload Flow', () => {
     await expectUploadSuccess(page, 'Test Islamic Lecture');
     const ui = uploadUi(page);
     // Upload done, processing on the server: no watch link yet
-    await expect(ui.processingMessage).toContainText("We're processing your video");
+    await expect(ui.processingMessage).toContainText("We’re processing your video");
     await expect(ui.uploadAnother).toBeVisible();
     expect(tracker.videoIds.size).toBe(1);
 
@@ -80,7 +80,7 @@ test.describe('Video Upload Flow', () => {
     await expectUploadSuccess(page, title);
     await expect(page.getByTestId('upload-success-heading')).toHaveText('Upload complete');
     await expect(ui.processingMessage).toHaveText(
-      "We're processing your video. It will be available once processing finishes, and we'll notify you when it's ready.",
+      "We’re processing your video. It will be available once processing finishes, and we’ll notify you when it’s ready.",
     );
     await expect(ui.processingStatus).toHaveAttribute('aria-live', 'polite');
     await expect(page.getByText(/leave this page/i)).toHaveCount(0);
@@ -95,7 +95,7 @@ test.describe('Video Upload Flow', () => {
       if (uploadStatus !== 'ready' && uploadStatus !== 'failed') skipSlowEncode(`upload "${title}" still ${uploadStatus ?? 'processing'} after ${BUNNY_WAIT_MS / 1000} s`);
       await expect(ui.success, `not ready after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toHaveAttribute('data-phase', 'ready', { timeout: 1 });
     }
-    await expect(ui.processingStatus).toHaveText(`"${title}" is ready to watch`);
+    await expect(ui.processingStatus).toHaveText(`“${title}” is ready to watch`);
     await expect(ui.viewVideo).toHaveAttribute('href', `/en/video/${videoId}`);
 
     // The server stored the uploader's notification (works with the tab closed).
@@ -119,7 +119,7 @@ test.describe('Video Upload Flow', () => {
         .toBeTruthy();
 
       await page.goto('/en/notifications');
-      const item = page.getByTestId('notification-item').filter({ hasText: `Your video "${title}" is ready to watch` });
+      const item = page.getByTestId('notification-item').filter({ hasText: `Your video “${title}” is ready to watch` });
       await expect(item).toHaveCount(1);
       await expect(item.getByRole('link')).toHaveAttribute('href', `/en/video/${videoId}`);
     } finally {

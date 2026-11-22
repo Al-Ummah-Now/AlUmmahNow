@@ -275,7 +275,7 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   delete: 'Delete notification',
   seeAll: 'See all notifications',
   settings: 'Notification settings',
-  empty: "You're all caught up",
+  empty: "You’re all caught up",
   emptyUnread: 'No unread notifications',
   all: 'All',
   unread: 'Unread',

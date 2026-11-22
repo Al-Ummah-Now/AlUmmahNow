@@ -62,7 +62,7 @@ it('a failed job: our team is notified, Retry restarts the job', async () => {
 it('a request that failed: friendly words, the reference, and Retry re-sends the same ids', async () => {
   (addVideosToPlaylist as jest.Mock).mockResolvedValue({ ok: true, data: result({ added: 2 }) });
   render(<BulkAddNotice {...base} justCreated outcome={{ kind: 'request-failed', status: 503, ref: 'ref-1' }} />);
-  expect(screen.getByRole('alert')).toHaveTextContent("Tafsir was created, but its videos couldn't be added yet.");
+  expect(screen.getByRole('alert')).toHaveTextContent("Tafsir was created, but its videos couldn’t be added yet.");
   expect(screen.getByRole('alert')).toHaveTextContent('Reference: ref-1');
   await act(async () => { fireEvent.click(screen.getByTestId('bulk-add-retry')); });
   expect(addVideosToPlaylist).toHaveBeenCalledWith('pl', ['a', 'b'], { channelId: 'ch' });
@@ -71,7 +71,7 @@ it('a request that failed: friendly words, the reference, and Retry re-sends the
 
 it('forbidden: no Retry', () => {
   render(<BulkAddNotice {...base} outcome={{ kind: 'request-failed', status: 403 }} />);
-  expect(screen.getByRole('alert')).toHaveTextContent("You don't have permission to change Tafsir.");
+  expect(screen.getByRole('alert')).toHaveTextContent("You don’t have permission to change Tafsir.");
   expect(screen.queryByTestId('bulk-add-retry')).toBeNull();
 });
 

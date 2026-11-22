@@ -46,7 +46,7 @@ const item = (overrides: Partial<NotificationItem> = {}): NotificationItem => ({
 
 describe('notification rendering', () => {
   it('renders keys in the viewer language with params', () => {
-    expect(renderNotification(item(), EN_TRANSLATIONS)).toEqual({ title: 'New video', message: 'Noor uploaded "Tafsir 1"' });
+    expect(renderNotification(item(), EN_TRANSLATIONS)).toEqual({ title: 'New video', message: 'Noor uploaded “Tafsir 1”' });
     expect(renderNotification(item(), AR_TRANSLATIONS).message).toContain('Noor');
     expect(renderNotification(item({ notificationKey: 'commentReply', params: { actorName: 'Ali' } }), EN_TRANSLATIONS).message).toBe(
       'Ali replied to your comment',

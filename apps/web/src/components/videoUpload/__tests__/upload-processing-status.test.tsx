@@ -46,7 +46,7 @@ describe('UploadProcessingCard (single upload)', () => {
     card('processing');
     expect(screen.getByRole('heading', { name: 'Upload complete' })).toBeInTheDocument();
     expect(screen.getByTestId('upload-processing-message')).toHaveTextContent(
-      "We're processing your video. It will be available once processing finishes, and we'll notify you when it's ready.",
+      "We’re processing your video. It will be available once processing finishes, and we’ll notify you when it’s ready.",
     );
     expect(screen.getByTestId('upload-success')).toHaveAttribute('data-phase', 'processing');
     expect(screen.queryByTestId('upload-view-video')).toBeNull();
@@ -66,13 +66,13 @@ describe('UploadProcessingCard (single upload)', () => {
   it('shows Ready with a View video link once processed', () => {
     card('ready');
     expect(screen.getByRole('heading', { name: 'Your video is ready' })).toBeInTheDocument();
-    expect(screen.getByTestId('upload-processing-status')).toHaveTextContent('"Tafsir Surah Al-Fatiha" is ready to watch');
+    expect(screen.getByTestId('upload-processing-status')).toHaveTextContent('“Tafsir Surah Al-Fatiha” is ready to watch');
     expect(screen.getByTestId('upload-view-video')).toHaveAttribute('href', '/en/video/vid-1');
   });
 
   it('links a failed video to its edit page and shows no raw error', () => {
     card('failed');
-    expect(screen.getByRole('heading', { name: "Your video couldn't be processed" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "Your video couldn’t be processed" })).toBeInTheDocument();
     expect(screen.getByTestId('upload-edit-video')).toHaveAttribute('href', '/en/studio/video/vid-1/edit');
     expect(screen.queryByTestId('upload-view-video')).toBeNull();
     expect(document.body.textContent).not.toMatch(/error:|exception|status code|undefined/i);
@@ -150,7 +150,7 @@ describe('BatchUploadQueue processing status', () => {
   it('asks to keep the page open while files upload', () => {
     renderQueue([queueItem('completed', 1), queueItem('uploading', 2)], {}, true);
     expect(screen.getByTestId('batch-notice')).toHaveTextContent(
-      "Keep this page open until all uploads finish. Processing continues on our side after that, and we'll notify you when each video is ready.",
+      "Keep this page open until all uploads finish. Processing continues on our side after that, and we’ll notify you when each video is ready.",
     );
   });
 
@@ -186,7 +186,7 @@ describe('BatchUploadQueue processing status', () => {
     const [ready, failed] = screen.getAllByTestId('batch-file');
     expect(within(ready).getByTestId('batch-file-status')).toHaveTextContent('Ready');
     expect(within(ready).getByTestId('batch-file-view')).toHaveAttribute('href', '/en/video/v1');
-    expect(within(failed).getByTestId('batch-file-status')).toHaveTextContent("Couldn't be processed");
+    expect(within(failed).getByTestId('batch-file-status')).toHaveTextContent("Couldn’t be processed");
     expect(within(failed).getByTestId('batch-file-edit')).toHaveAttribute('href', '/en/studio/video/v2/edit');
     // One polite announcement region for the queue
     expect(screen.getByTestId('batch-processing-announcement')).toHaveAttribute('aria-live', 'polite');

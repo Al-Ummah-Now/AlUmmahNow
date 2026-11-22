@@ -20,8 +20,8 @@ describe('upload result notification text', () => {
         realtime: { ...EN_TRANSLATIONS.notifications.realtime, uploadReadyMessage: 'Your video "{videoTitle}" has finished processing' },
       },
     };
-    expect(resolveNotificationText(event('uploadReady'), stored)).toEqual({ title: 'Video ready', message: 'Your video "Tafsir 1" is ready to watch' });
-    expect(resolveNotificationText(event('uploadFailed'), stored)).toEqual({ title: 'Processing failed', message: '"Tafsir 1" couldn\'t be processed' });
+    expect(resolveNotificationText(event('uploadReady'), stored)).toEqual({ title: 'Video ready', message: 'Your video “Tafsir 1” is ready to watch' });
+    expect(resolveNotificationText(event('uploadFailed'), stored)).toEqual({ title: 'Processing failed', message: '“Tafsir 1” couldn’t be processed' });
   });
 
   it('renders in Arabic', () => {

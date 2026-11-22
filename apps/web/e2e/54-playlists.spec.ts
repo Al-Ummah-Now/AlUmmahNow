@@ -123,7 +123,7 @@ test.describe('Playlist manager', () => {
 
       // Delete (confirm dialog)
       await renamedRow.getByRole('button', { name: 'Delete playlist' }).click();
-      await expect(page.getByTestId('playlist-delete-dialog')).toContainText(`Delete "${renamed}"? This cannot be undone.`);
+      await expect(page.getByTestId('playlist-delete-dialog')).toContainText(`Delete “${renamed}”? This cannot be undone.`);
       await page.getByTestId('playlist-delete-dialog-confirm').click();
       await expect(renamedRow).toHaveCount(0);
       await expect

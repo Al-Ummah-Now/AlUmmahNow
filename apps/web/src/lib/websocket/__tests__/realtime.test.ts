@@ -20,7 +20,7 @@ describe('resolveNotificationText', () => {
       { ...base, notificationKey: 'newComment', params: { videoTitle: 'Tafsir' } },
       EN_TRANSLATIONS
     );
-    expect(text).toEqual({ title: 'New Comment', message: 'Someone commented on your video "Tafsir"' });
+    expect(text).toEqual({ title: 'New Comment', message: 'Someone commented on your video “Tafsir”' });
   });
 
   it('renders keyed notifications in Arabic', () => {

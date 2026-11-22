@@ -68,7 +68,7 @@ function parseChapterFile(
     if (!match) {
       errors.push({
         line: index + 1,
-        message: `Invalid format. Expected "MM:SS Title" or "HH:MM:SS Title"`,
+        message: `Invalid format. Expected “MM:SS Title” or “HH:MM:SS Title”`,
       });
       return;
     }
@@ -123,7 +123,7 @@ function parseChapterFile(
     if (duration < 10) {
       errors.push({
         line: index + 1,
-        message: `Chapter "${chapter.title}" is too short (${duration}s < 10s)`,
+        message: `Chapter “${chapter.title}” is too short (${duration}s < 10s)`,
       });
     }
   });

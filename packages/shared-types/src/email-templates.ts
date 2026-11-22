@@ -136,7 +136,7 @@ export interface EmailTemplateIssue {
  */
 export const CREATOR_INVITE_SEED_COPY: Record<EmailTemplateLang, EmailCopy> = {
   en: {
-    subject: "You're invited to Al Ummah Now",
+    subject: "You’re invited to Al Ummah Now",
     preheader: 'Your creator account is ready. Accept the invite to sign in.',
     preheaderChannels: 'Your creator account and {channels} are ready. Accept the invite to sign in.',
     greeting: 'Assalamu alaikum {name},',
@@ -146,13 +146,13 @@ export const CREATOR_INVITE_SEED_COPY: Record<EmailTemplateLang, EmailCopy> = {
     createdMany: 'It comes with the channels {channels}, ready for you to manage.',
     transferredOne: 'The channel {channels} has been moved to your account.',
     transferredMany: 'The channels {channels} have been moved to your account.',
-    how: "Accept the invite to sign in as {email}. You don't need a password: the button signs you in, and you can add a passkey (Face ID or fingerprint) right after.",
+    how: "Accept the invite to sign in as {email}. You don’t need a password: the button signs you in, and you can add a passkey (Face ID or fingerprint) right after.",
     button: 'Accept the invite',
     videoIntro: 'They also shared this video with you:',
-    videoAlt: 'Play "{title}" on Al Ummah Now',
+    videoAlt: 'Play “{title}” on Al Ummah Now',
     noteLabel: 'Note from the admin',
     expires: 'This link works once, until {expires}. If it has expired or was already used, open it anyway and ask for a new one.',
-    reason: "You got this email because an Al Ummah Now admin invited this address to a creator account. If you weren't expecting it, you can ignore it.",
+    reason: "You got this email because an Al Ummah Now admin invited this address to a creator account. If you weren’t expecting it, you can ignore it.",
   },
   ar: {
     subject: 'دعوة للانضمام إلى الأمة الآن',

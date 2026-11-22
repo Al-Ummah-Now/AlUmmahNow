@@ -3,15 +3,15 @@ import { creatorRefusalMessage, formatWait } from '../friendly-error';
 
 describe('friendly creator-tier refusals (never the server text)', () => {
   it('says when the user can upload again, in English and Arabic', () => {
-    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 23 * 60 })).toBe("You've reached the upload limit; try again in 23 minutes");
-    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 30 })).toBe("You've reached the upload limit; try again in 1 minute");
-    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 5 * 3600 })).toBe("You've reached the upload limit; try again in 5 hours");
+    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 23 * 60 })).toBe("You’ve reached the upload limit; try again in 23 minutes");
+    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 30 })).toBe("You’ve reached the upload limit; try again in 1 minute");
+    expect(creatorRefusalMessage(en, { code: 'upload_limit', retryAfter: 5 * 3600 })).toBe("You’ve reached the upload limit; try again in 5 hours");
     expect(creatorRefusalMessage(ar, { code: 'upload_limit', retryAfter: 23 * 60 })).toBe('بلغت حد الرفع؛ حاول مرة أخرى بعد 23 دقيقة');
-    expect(creatorRefusalMessage(en, { code: 'upload_limit' })).toBe("You've reached the upload limit; try again in a moment");
+    expect(creatorRefusalMessage(en, { code: 'upload_limit' })).toBe("You’ve reached the upload limit; try again in a moment");
   });
 
   it('explains uploads by invitation and the channel limit', () => {
-    expect(creatorRefusalMessage(en, { code: 'uploads_by_invitation' })).toBe("This account can't upload videos.");
+    expect(creatorRefusalMessage(en, { code: 'uploads_by_invitation' })).toBe("This account can’t upload videos.");
     expect(creatorRefusalMessage(ar, { code: 'uploads_by_invitation' })).toBe('لا يمكن رفع المرئيات من هذا الحساب.');
     expect(creatorRefusalMessage(en, { code: 'channel_limit', maxChannels: 3 })).toBe('You can own up to 3 channels');
   });

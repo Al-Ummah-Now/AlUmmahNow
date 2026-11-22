@@ -78,7 +78,7 @@ describe('CaptionDraftsPanel: using the review transcript (#1296)', () => {
   it('a failed claim says why and offers Try again; a gone transcript hides the offer', async () => {
     listCaptionDrafts.mockResolvedValue(listed({ transcriptAvailable: true, claims: [{ language: 'ar', status: 'failed', requestedAt: 'x', error: 'failed' }] }));
     render(<CaptionDraftsPanel videoId="v1" />);
-    expect(await screen.findByTestId('caption-claim-failed')).toHaveTextContent("Couldn't prepare the draft");
+    expect(await screen.findByTestId('caption-claim-failed')).toHaveTextContent("Couldn’t prepare the draft");
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(claimReviewTranscript).toHaveBeenCalledWith('v1', 'ar', false));
   });

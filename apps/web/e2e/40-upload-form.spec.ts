@@ -384,7 +384,7 @@ test.describe('Upload form - playlists', () => {
     await picker.getByTestId('upload-playlists-visibility-private').check();
     await picker.getByTestId('upload-playlists-description').fill('Made while uploading');
     await picker.getByTestId('upload-playlists-create').click();
-    await expect(picker.getByTestId('upload-playlists-message')).toContainText(`Created "${prefix} created" and selected it`);
+    await expect(picker.getByTestId('upload-playlists-message')).toContainText(`Created “${prefix} created” and selected it`);
     await expect(picker.getByTestId('upload-playlists-chip')).toHaveCount(2);
 
     await ui.submit.click();

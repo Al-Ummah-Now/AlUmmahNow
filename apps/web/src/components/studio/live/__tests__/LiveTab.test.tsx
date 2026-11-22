@@ -97,7 +97,7 @@ describe('Studio LiveTab', () => {
     const rows = await screen.findAllByTestId('studio-live-row');
     fireEvent.click(within(rows[0]).getByTestId('studio-live-delete'));
     const dialog = await screen.findByTestId('studio-live-delete-dialog');
-    expect(dialog).toHaveTextContent('"Stream a"');
+    expect(dialog).toHaveTextContent('“Stream a”');
     fireEvent.click(screen.getByTestId('studio-live-delete-dialog-cancel'));
     await waitFor(() => expect(screen.queryByTestId('studio-live-delete-dialog')).toBeNull());
     expect(remove).not.toHaveBeenCalled();
