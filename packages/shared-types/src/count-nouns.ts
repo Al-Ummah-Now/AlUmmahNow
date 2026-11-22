@@ -72,7 +72,8 @@ export interface CountNounOptions {
 export function formatCountNoun(locale: FormatLocale, count: number | string | null | undefined, noun: CountNoun, options: CountNounOptions = {}): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
   const join = options.joiner ?? ' ';
-  const shown = options.compact ? formatCompact(locale, n) : formatInteger(locale, n);
+  // Arabic numbers are never grouped (owner 2026-11-21: «١٢٣٤», not «١٬٢٣٤»); English keeps "1,234"
+  const shown = options.compact ? formatCompact(locale, n) : String(locale).toLowerCase().startsWith('ar') ? formatNumber(locale, n, { useGrouping: false }) : formatInteger(locale, n);
   if (String(locale).toLowerCase().startsWith('ar')) {
     const forms = AR[noun];
     if (n === 0) return options.zeroAsNumber ? `${shown}${join}${forms.other}` : forms.zero;

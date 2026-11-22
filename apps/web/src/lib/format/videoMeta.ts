@@ -69,14 +69,14 @@ export function formatAbsoluteDate(value: Date | string | number | null | undefi
 }
 
 /**
- * The full date and time, in the viewer's time zone: «١٢ نوفمبر ٢٠٢٦، ٠٦:٣٢ م» /
- * "November 12, 2026, 06:32 PM". For the relative time's tooltip and the watch page's description.
+ * The full date and time, in the viewer's time zone: «١٢ نوفمبر ٢٠٢٦، ٦:٣٢ م» /
+ * "November 12, 2026, 6:32 PM" (the hour without a leading zero). For the relative time's tooltip and the watch page's description.
  */
 export function formatAbsoluteDateTime(value: Date | string | number | null | undefined, lang: MetaLang, timeZone?: string): string {
   const date = toDate(value);
   if (!date) return '';
   const day = formatDate(lang, date, { dateStyle: 'long', timeZone });
-  const time = formatDate(lang, date, { hour: '2-digit', minute: '2-digit', timeZone });
+  const time = formatDate(lang, date, { hour: 'numeric', minute: '2-digit', timeZone });
   return `${day}${lang === 'ar' ? '، ' : ', '}${time}`;
 }
 

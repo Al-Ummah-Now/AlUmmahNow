@@ -203,7 +203,8 @@ export default function PostCard({
       {/* Comments Section - Smooth expand/collapse animation */}
       <div
         className={cn(
-          'transition-all duration-300 ease-in-out overflow-hidden',
+          // Its bottom corners follow the card's (a square panel would paint over the rounded card edge)
+          'transition-all duration-300 ease-in-out overflow-hidden rounded-b-[calc(var(--aun-radius-card)-1px)]',
           showComments ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
         )}
       >

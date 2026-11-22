@@ -103,3 +103,12 @@ html[data-theme='fawanees']:not(.dark) div.video-edit-form[data-testid][class*='
 html[data-theme='fawanees']:not(.dark) .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, white 92%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark div.video-edit-form[data-testid][class*='rounded'][class*='shadow'] { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, var(--aun-glass-base-dark) 94%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
+/* Community post cards are solid on the street: the card's colour blended over the page, never the street
+   showing through (owner, 2026-11-22: the street never shows through a card), the same fill as the shared
+   card surface. Higher than the system rule's `.aun-row-glass` (both !important). */
+html[data-theme='fawanees']:not(.dark) article[data-post-id].aun-row-glass {
+  background: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important;
+}
+html[data-theme='fawanees'].dark article[data-post-id].aun-row-glass {
+  background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important;
+}
