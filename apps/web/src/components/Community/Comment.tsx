@@ -355,9 +355,10 @@ export default function Comment({
         {/* Action Buttons */}
         {!comment.deletedAt && (
           <div className={cn('flex items-center gap-4 mt-2')}>
-            {/* Like Button */}
+            {/* Like Button. No "text-blue-" in the idle class, even under group-hover: the theme bridge paints any
+                class containing it in the link colour, so the idle icon was always amber (AUDIT-2 item 19) */}
             <button onClick={handleLike} disabled={!userId} aria-label={isRTL ? 'أعجبني' : 'Like'} aria-pressed={liked} className={cn('flex items-center gap-1 group')}>
-              <svg className={cn('w-4 h-4', liked ? 'text-blue-600 dark:text-blue-400 fill-current' : 'text-gray-600 dark:text-gray-400 group-hover:text-blue-600')} fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={liked ? 0 : 2} viewBox="0 0 24 24">
+              <svg className={cn('w-4 h-4', liked ? 'text-blue-600 dark:text-blue-400 fill-current' : 'text-[var(--fanous-color-text-muted)] group-hover:text-[var(--fanous-c-link-text)]')} fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={liked ? 0 : 2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
               </svg>
               {likes > 0 && <span className={cn('text-xs', liked ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400')}>{formatNumber(isRTL ? 'ar' : 'en', likes)}</span>}
