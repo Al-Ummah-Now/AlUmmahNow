@@ -160,7 +160,10 @@ export function setupClickOnlyMenus(player: InteractivePlayer): () => void {
   const syncOpenState = () => {
     if (disposed) return;
     const anyOpen = openMenuButtons().length > 0;
-    playerEl.classList.toggle(MENU_OPEN_CLASS, anyOpen);
+    // The settings menu (SettingsMenu, portalled out of the frame) sets the class too: its gear's
+    // aria-expanded wakes this observer, which must not take the class away while it is open
+    const settingsOpen = playerEl.querySelector('.vjs-fanous-settings[aria-expanded="true"]') !== null;
+    playerEl.classList.toggle(MENU_OPEN_CLASS, anyOpen || settingsOpen);
     if (anyOpen && keepActiveTimer === null) {
       player.userActive(true);
       keepActiveTimer = player.setInterval(() => player.reportUserActivity(), KEEP_ACTIVE_INTERVAL_MS);

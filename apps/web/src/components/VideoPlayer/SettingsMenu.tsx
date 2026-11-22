@@ -229,7 +229,10 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
       menu.style.maxHeight = `${room}px`;
       // A small player's panel is the whole frame whatever the view holds (Safari, playing HLS
       // natively, has no Quality row), so it never leaves a strip of controls showing above it
-      menu.style.height = `${over ? room : Math.min(room, view.scrollHeight + chrome)}px`;
+      const height = over ? room : Math.min(room, view.scrollHeight + chrome);
+      menu.style.height = `${height}px`;
+      // The pinned back row's backdrop paints the panel's gradient at the panel's size
+      menu.style.setProperty('--vjs-fanous-menu-h', `${height}px`);
     };
     fit();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
@@ -325,10 +328,13 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
 
   const sub = (title: string, options: MenuOption[], current: string, apply: (id: string) => void, extra?: { label: string; run: () => void }, download?: { label: string; href: string }) => (
     <>
-      <button type="button" role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-back" data-row="back" tabIndex={-1} onClick={() => go('root', panel)}>
-        <span className="vjs-fanous-mi-icon" aria-hidden="true">{dir === 'rtl' ? <ChevronRight /> : <ChevronLeft />}</span>
-        <span className="vjs-fanous-mi-label">{title}</span>
-      </button>
+      {/* Pinned while the submenu scrolls: the rows pass under it (styles: .vjs-fanous-mi-back-bar) */}
+      <div className="vjs-fanous-mi-back-bar" role="none">
+        <button type="button" role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-back" data-row="back" tabIndex={-1} onClick={() => go('root', panel)}>
+          <span className="vjs-fanous-mi-icon" aria-hidden="true">{dir === 'rtl' ? <ChevronRight /> : <ChevronLeft />}</span>
+          <span className="vjs-fanous-mi-label">{title}</span>
+        </button>
+      </div>
       <div role="group" aria-label={title}>
         {options.map((o) => (
           <button
