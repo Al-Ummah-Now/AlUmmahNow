@@ -236,10 +236,11 @@ function TranslatedValue({ t, prefix, value }: { t: Translator; prefix: string; 
   return <>{text === key ? value : text}</>;
 }
 
-export function BackLink({ href, label }: { href: string; label: string }) {
+/** The link back to a detail page's list, the same on every page; on a street plate (no lantern behind it). */
+export function BackLink({ href, label, testId }: { href: string; label: string; testId?: string }) {
   return (
     <div className="mb-6">
-      <Link href={href} className={linkClass}>
+      <Link href={href} className={`${linkClass} street-plate inline-block`} data-testid={testId}>
         <span aria-hidden="true" className="inline-block rtl:rotate-180">
           &larr;
         </span>{' '}

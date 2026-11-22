@@ -6,7 +6,7 @@ import { canManageImports } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
-import { EmptyState, smallButtonClass } from '@/components/content/parts';
+import { BackLink, EmptyState, smallButtonClass } from '@/components/content/parts';
 import { hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { LocalTime } from '@/components/LocalTime';
 import { UserName } from '@/components/audit/UserName';
@@ -46,7 +46,7 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
   if (!data) {
     return (
       <div>
-        <Link href="/imports" className={`${linkClass} text-sm`}>{t('imports.allImports')}</Link>
+        <BackLink href="/imports" label={t('imports.allImports')} />
         <ErrorAlert testId="import-batch-error">{t('imports.loadFailed')}</ErrorAlert>
       </div>
     );
@@ -64,10 +64,8 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
   return (
     <div>
       <LiveRefresh topics={['jobs']} />
-      <Link href="/imports" className={`${linkClass} text-sm`} data-testid="imports-back">
-        {t('imports.allImports')}
-      </Link>
-      <div className="mt-2 mb-6">
+      <BackLink href="/imports" label={t('imports.allImports')} testId="imports-back" />
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-fg break-words" data-testid="import-batch-title">
           <BatchName name={batch.name} createdAt={batch.createdAt} />
         </h1>
