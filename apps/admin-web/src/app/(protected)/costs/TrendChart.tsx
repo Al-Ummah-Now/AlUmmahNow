@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { dateTimeFormat } from '@al-ummah/shared-types';
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import { StackedBarChart, type StackedSeries } from '@/components/charts/StackedBarChart';
 import { opsFormats } from '../operations/model';
 import { localTrend, todayHoldsNextUtcDay, utcDates, utcDaysPhrase } from './model';
@@ -57,7 +57,7 @@ export function TrendChart({
   now: number;
   locale: string;
   title: string;
-  labels: { chart: string; table: string; day: string; total: string; empty: string };
+  labels: { chart: string; table: string; day: string; total: string; empty: string; tableUnit?: string };
   reference?: { value: number; label: string };
   axisUnit?: string;
   text: TrendText;
@@ -66,6 +66,8 @@ export function TrendChart({
   const zone = useSyncExternalStore(noSubscribe, viewerZone, () => 'UTC');
   const [picked, setPicked] = useState<number | null>(null);
   const f = opsFormats(locale);
+  // The table: plain amounts under one currency caption, so its eleven columns fit (Arabic spells the currency out)
+  const amount = numberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const local = localTrend(days, series, now, zone);
   const byKey = new Map(local.series.map((s) => [s.key, s.values]));
   const last = local.days.length - 1;
@@ -89,6 +91,7 @@ export function TrendChart({
         dayNote={utcOf}
         dayNoteLabel={text.utcLabel}
         dayNoteTitle={utcPhrase}
+        tableFormat={labels.tableUnit ? (v) => amount.format(v) : undefined}
         selected={selected}
         onSelect={setPicked}
         testId={testId}

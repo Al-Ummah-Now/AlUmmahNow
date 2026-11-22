@@ -23,7 +23,7 @@ export interface StackedBarChartProps {
   locale: string;
   format: (value: number) => string;
   dayLabel: (day: string) => string;
-  labels: { chart: string; table: string; day: string; total: string; empty: string };
+  labels: { chart: string; table: string; day: string; total: string; empty: string; tableUnit?: string };
   /** A horizontal reference line (e.g. the daily share of the budget), keyed in the legend. */
   reference?: { value: number; label: string };
   /**
@@ -38,6 +38,8 @@ export interface StackedBarChartProps {
   dayNoteLabel?: string;
   /** The hover title's note for a day, already labelled (e.g. "UTC days: Nov 21, Nov 22"); replaces "dayNoteLabel: dayNote". */
   dayNoteTitle?: (index: number) => string | undefined;
+  /** The table's amounts, when they differ from the chart's (e.g. plain numbers under one currency caption, `labels.tableUnit`). */
+  tableFormat?: (v: number) => string;
   /** A bar chosen by tap or click (hover titles don't exist on touch screens); drawn outlined. */
   selected?: number;
   onSelect?: (index: number) => void;
@@ -63,7 +65,7 @@ const TOP = 12;
 const UNIT_TOP = 32;
 const BOTTOM = 26;
 
-export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, dayNoteLabel, dayNoteTitle, selected, onSelect, testId }: StackedBarChartProps) {
+export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, dayNoteLabel, dayNoteTitle, tableFormat, selected, onSelect, testId }: StackedBarChartProps) {
   const rtl = /^ar\b/.test(locale);
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
@@ -197,7 +199,8 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer text-fg-muted underline">{labels.table}</summary>
         <div className="overflow-x-auto">
-          <table className="mt-2 w-full">
+          <table className="mt-2 w-full whitespace-nowrap">
+            {labels.tableUnit && <caption className="mt-1 text-start text-xs text-fg-muted">{labels.tableUnit}</caption>}
             <thead>
               <tr className="text-fg-muted">
                 <th scope="col" className="p-1 text-start font-medium">{labels.day}</th>
@@ -213,9 +216,9 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                 <tr key={day} className="border-t border-border">
                   <th scope="row" className="p-1 text-start font-normal">{dayLabel(day)}</th>
                   {series.map((s) => (
-                    <td key={s.key} className="p-1 text-end tabular-nums">{format(s.values[i] ?? 0)}</td>
+                    <td key={s.key} className="p-1 text-end tabular-nums">{(tableFormat ?? format)(s.values[i] ?? 0)}</td>
                   ))}
-                  <td className="p-1 text-end tabular-nums font-medium">{format(totals[i])}</td>
+                  <td className="p-1 text-end tabular-nums font-medium">{(tableFormat ?? format)(totals[i])}</td>
                   {dayNote && dayNoteLabel && <td className="p-1 text-end">{dayNote(i) ?? ''}</td>}
                 </tr>
               ))}
