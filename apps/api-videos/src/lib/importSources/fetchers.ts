@@ -208,7 +208,9 @@ export function parseFeed(xml: string, feedUrl: string): FetchedItem[] {
 		const thumb = safeUrl(selfClosing(block, 'media:thumbnail')[0]?.url, feedUrl);
 		const videoUrl = videoEnc ? safeUrl(videoEnc.url, feedUrl) : null;
 		const bytes = videoEnc?.length ? Number(videoEnc.length) || null : null;
-		const text = [title, body].filter(Boolean).join('\n\n').slice(0, 5000);
+		// A link post shows the title on its card, so the text is the summary alone (never the title twice)
+		const linkCard = !videoUrl && !images.length && !!link;
+		const text = (linkCard ? body : [title, body].filter(Boolean).join('\n\n')).slice(0, 5000);
 		const item: FetchedItem = {
 			itemId: id.slice(0, 500),
 			url: link,
@@ -216,7 +218,7 @@ export function parseFeed(xml: string, feedUrl: string): FetchedItem[] {
 			title: title || null,
 			text,
 			images: videoUrl ? [] : [...new Set(images)].slice(0, 10).map((url) => ({ url })),
-			link: !videoUrl && !images.length && link ? { url: link, title: title || null, description: body ? body.slice(0, 300) : null, image: thumb } : null,
+			link: linkCard ? { url: link, title: title || null, description: null, image: thumb } : null,
 			video: videoUrl ? { url: videoUrl, bytes, mimeType: videoEnc!.type ?? null } : null,
 		};
 		if (item.video?.bytes && item.video.bytes > IMPORT_MAX_VIDEO_BYTES) item.awaiting = 'too_large';

@@ -88,7 +88,7 @@ describe('views and the watch page line', () => {
     unmount();
     mockLang = 'ar';
     render(<details><WatchMetaSummary video={imported} views={5} lang="ar" describedById="tip" /><WatchMetaDetail video={imported} views={5} lang="ar" /></details>);
-    expect(screen.getByTestId('watch-origin')).toHaveTextContent(/^نُشر أول مرة على يوتيوب في /);
+    expect(screen.getByTestId('watch-origin')).toHaveTextContent(/^نُشر أولًا على يوتيوب في /);
   });
 
   it('a video brought from a social source names it, links the original, and the date follows the Arabic number rule', () => {
@@ -102,7 +102,7 @@ describe('views and the watch page line', () => {
     mockLang = 'ar';
     render(<details><WatchMetaSummary video={{ ...imported, importedFrom: { ...imported.importedFrom, platform: 'rss', url: 'javascript:alert(1)' } }} views={5} lang="ar" describedById="tip" /><WatchMetaDetail video={{ ...imported, importedFrom: { ...imported.importedFrom, platform: 'rss', url: 'javascript:alert(1)' } }} views={5} lang="ar" /></details>);
     const line = screen.getByTestId('watch-origin');
-    expect(line).toHaveTextContent(/^نُشر أول مرة على موقعه في ١٠ نوفمبر ٢٠٢٦$/);
+    expect(line).toHaveTextContent(/^نُشر أولًا على موقعه في ١٠ نوفمبر ٢٠٢٦$/);
     expect(line.querySelector('a')).toBeNull();
   });
 

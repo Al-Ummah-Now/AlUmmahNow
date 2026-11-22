@@ -361,7 +361,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
                 />
               )}
-              <details className="watch-desc" open={false}>
+              <details className="watch-desc aun-start-text" open={false}>
                 {/* Like the cards (YouTube style): views • relative time; the exact count and what the date
                     is on hover or focus, and in full when expanded */}
                 <WatchMetaSummary video={videoDetails} views={videoDetails.views} lang={lang} describedById="watch-meta-tip" />
