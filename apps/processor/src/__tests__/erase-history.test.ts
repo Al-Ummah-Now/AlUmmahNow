@@ -176,6 +176,13 @@ describe('admin history (#1253)', () => {
     job('j2', 'user.delete-data', 'user', CREATOR, {}, 'running', ADMIN, [CREATOR, ADMIN]);
     job('j3', 'user.sync-holds', 'user', CREATOR, {}, 'succeeded', CREATOR, [CREATOR]);
     job('j4', 'channel.transfer', 'channel', 'ch_9', { newOwnerId: VIEWER, previousOwnerId: ADMIN }, 'succeeded', ADMIN, [VIEWER, ADMIN]);
+    // Job log lines (search 0071): an attempt's error may name the account
+    const line = (jobId: string, error: string | null) =>
+      search.raw.prepare("INSERT INTO admin_job_log (job_id, at, event, attempt, error) VALUES (?, '2026-11-01', ?, 1, ?)").run(jobId, error ? 'failed_attempt' : 'succeeded', error);
+    line('j1', `R2 put failed for ${CREATOR}/avatar`);
+    line('j3', `Profile ${CREATOR} is locked`);
+    line('j4', `Owner ${VIEWER} has no channel slot`);
+    line('j4', null);
     return search;
   }
 
@@ -200,6 +207,13 @@ describe('admin history (#1253)', () => {
       { id: 'j4', target_id: 'ch_9', params: JSON.stringify({ newOwnerId: VIEWER, previousOwnerId: ADMIN }), result: '{}', actor_id: ADMIN },
     ]);
     expect(search.raw.prepare('SELECT user_id, job_id FROM admin_job_users WHERE user_id = ?').all(CREATOR)).toEqual([{ user_id: CREATOR, job_id: 'j2' }]);
+    // Log lines of the jobs naming the account are scrubbed; others stay as they were
+    expect(search.raw.prepare('SELECT job_id, error FROM admin_job_log ORDER BY id').all()).toEqual([
+      { job_id: 'j1', error: `R2 put failed for ${MARKER}/avatar` },
+      { job_id: 'j3', error: `Profile ${MARKER} is locked` },
+      { job_id: 'j4', error: `Owner ${VIEWER} has no channel slot` },
+      { job_id: 'j4', error: null },
+    ]);
     // Nothing else names the account (its own row's key and the running job aside)
     const text = JSON.stringify([...deletions.map((d) => ({ ...d, target_id: d.kind === 'user' ? '' : d.target_id })), ...jobs.filter((j) => j.id !== 'j2')]);
     expect(text).not.toContain(CREATOR);
@@ -216,6 +230,7 @@ describe('admin history (#1253)', () => {
     expect(search.raw.prepare('SELECT target_id FROM admin_deletions ORDER BY target_id').all()).toEqual([{ target_id: 'ch_1' }, { target_id: CREATOR }, { target_id: 'vid_2' }]);
     expect(search.raw.prepare('SELECT id FROM admin_jobs').all()).toEqual([{ id: 'j2' }]);
     expect(search.raw.prepare('SELECT DISTINCT job_id FROM admin_job_users').all()).toEqual([{ job_id: 'j2' }]);
+    expect(search.raw.prepare('SELECT COUNT(*) AS n FROM admin_job_log').get()).toEqual({ n: 0 });
     expect(await purgeExpiredAdminHistory(search, Date.parse('2027-01-01T00:00:00.000Z'))).toEqual({ deletions: 0, jobs: 0 });
   });
 });

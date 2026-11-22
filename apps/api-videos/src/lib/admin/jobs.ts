@@ -8,11 +8,14 @@
  *            → last attempt fails → status 'failed' and the message goes to
  *              the DLQ (the processor stores it in dead_letters)
  *   admin    → sees "failed — Retry" on the item and in the failed-jobs list;
- *              retryJob() queues it again with a fresh retry budget.
+ *              retryJob() queues it again with a fresh retry budget;
+ *              cancelJob() stops a job that has not finished (it runs again only through Retry).
  *
- * Rows live in SEARCH_DB.admin_jobs (migration search/0006).
+ * Rows live in SEARCH_DB.admin_jobs (migration search/0006); next_run_at and the per-job log
+ * (admin_job_log, the newest ADMIN_JOB_LOG_LIMIT lines) come from search/0071 (TA-8: the Jobs page shows
+ * attempts n/max, the next retry and what happened). Log writes never fail or stall the job.
  */
-import { ADMIN_JOB_MAX_RETRIES, collectPersonIds, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
+import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 
@@ -54,9 +57,16 @@ interface JobRow {
 	created_at: string;
 	updated_at: string;
 	finished_at: string | null;
+	next_run_at?: string | null;
+	run_id?: string | null;
 }
 
-const COLUMNS = 'id, kind, target_kind, target_id, params, status, attempts, last_error, result, actor_id, created_at, updated_at, finished_at';
+const COLUMNS = 'id, kind, target_kind, target_id, params, status, attempts, last_error, result, actor_id, created_at, updated_at, finished_at, next_run_at, run_id';
+const INSERT_COLUMNS = 'id, kind, target_kind, target_id, params, status, attempts, last_error, result, actor_id, created_at, updated_at, finished_at, run_id';
+/** Deliveries a run gets: the first plus the queue's max_retries. */
+export const ADMIN_JOB_MAX_ATTEMPTS = ADMIN_JOB_MAX_RETRIES + 1;
+/** Statuses a job never leaves by itself. */
+const FINISHED = new Set<string>(['succeeded', 'failed', 'cancelled']);
 const now = () => new Date().toISOString();
 
 function parse(value: string | null): Record<string, unknown> | null {
@@ -78,6 +88,8 @@ export function toJob(row: JobRow): AdminJob {
 		params: parse(row.params) ?? {},
 		status: row.status as AdminJobStatus,
 		attempts: Number(row.attempts) || 0,
+		maxAttempts: ADMIN_JOB_MAX_ATTEMPTS,
+		nextRunAt: row.next_run_at ?? null,
 		lastError: row.last_error,
 		result: parse(row.result),
 		actorId: row.actor_id,
@@ -93,9 +105,54 @@ function db(env: JobEnv): SearchDb {
 }
 
 export async function getJob(env: JobEnv, id: string): Promise<AdminJob | null> {
-	const row = await db(env).prepare(`SELECT ${COLUMNS} FROM admin_jobs WHERE id = ?`).bind(id).first<JobRow>();
+	const row = await readRow(env, id);
 	return row ? toJob(row) : null;
 }
+
+const readRow = (env: JobEnv, id: string) => db(env).prepare(`SELECT ${COLUMNS} FROM admin_jobs WHERE id = ?`).bind(id).first<JobRow>();
+
+interface LogRow { at: string; event: string; attempt: number | null; error: string | null; delay_seconds: number | null; retried: number | null }
+
+/** The job's log, oldest first. */
+export async function readJobLog(env: JobEnv, id: string): Promise<AdminJobLogEntry[]> {
+	const { results } = await db(env)
+		.prepare(`SELECT at, event, attempt, error, delay_seconds, retried FROM (SELECT * FROM admin_job_log WHERE job_id = ? ORDER BY id DESC LIMIT ${ADMIN_JOB_LOG_LIMIT}) ORDER BY id`)
+		.bind(id)
+		.all<LogRow>();
+	return (results ?? []).map((r) => ({
+		at: r.at,
+		event: r.event as AdminJobLogEvent,
+		...(r.attempt != null ? { attempt: Number(r.attempt) } : {}),
+		...(r.error ? { error: r.error } : {}),
+		...(r.delay_seconds != null ? { delaySeconds: Number(r.delay_seconds) } : {}),
+		...(r.retried ? { retried: true } : {}),
+	}));
+}
+
+/** The job with its log (GET /jobs/:id). */
+export async function getJobWithLog(env: JobEnv, id: string): Promise<AdminJob | null> {
+	const job = await getJob(env, id);
+	return job ? { ...job, log: await readJobLog(env, id).catch(() => []) } : null;
+}
+
+/** Adds a log line and drops the oldest past the limit. Never throws: the log never fails the job. */
+async function log(env: JobEnv, jobId: string, entry: Omit<AdminJobLogEntry, 'at'>): Promise<void> {
+	try {
+		const store = db(env);
+		await store.batch([
+			store
+				.prepare('INSERT INTO admin_job_log (job_id, at, event, attempt, error, delay_seconds, retried) VALUES (?, ?, ?, ?, ?, ?, ?)')
+				.bind(jobId, now(), entry.event, entry.attempt ?? null, entry.error ? entry.error.slice(0, 2000) : null, entry.delaySeconds ?? null, entry.retried ? 1 : 0),
+			store
+				.prepare(`DELETE FROM admin_job_log WHERE job_id = ?1 AND id <= (SELECT id FROM admin_job_log WHERE job_id = ?1 ORDER BY id DESC LIMIT 1 OFFSET ${ADMIN_JOB_LOG_LIMIT})`)
+				.bind(jobId),
+		]);
+	} catch (error) {
+		logger.warn('[AdminJobs] Could not write the job log', { jobId, event: entry.event, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
+const later = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
 
 export async function listJobs(env: JobEnv, query: { status?: string; targetKind?: string; targetId?: string; limit?: number }): Promise<AdminJob[]> {
 	const where: string[] = [];
@@ -128,29 +185,39 @@ export function jobLiveEvent(job: JobRef, status: AdminJobStatus, attempts?: num
 	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, targetType: job.targetKind, targetId: job.targetId, ...(attempts !== undefined ? { attempts } : {}) };
 }
 
-async function setStatus(env: JobEnv, job: JobRef, fields: Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null; target_id: string }>): Promise<void> {
+type StatusFields = Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null; target_id: string; next_run_at: string | null; run_id: string }>;
+
+/**
+ * Writes the job's fields. The consumer's writes pass `unlessCancelled`: an admin's Cancel wins over a
+ * delivery already in flight. Returns whether the row changed.
+ */
+async function setStatus(env: JobEnv, job: JobRef, fields: StatusFields, opts: { unlessCancelled?: boolean } = {}): Promise<boolean> {
 	const entries = Object.entries(fields);
-	await db(env)
-		.prepare(`UPDATE admin_jobs SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`)
+	const out = await db(env)
+		.prepare(`UPDATE admin_jobs SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?${opts.unlessCancelled ? " AND status != 'cancelled'" : ''}`)
 		.bind(...entries.map(([, v]) => v), now(), job.id)
 		.run();
+	const changed = opts.unlessCancelled ? Number((out as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 1) > 0 : true;
 	// Never throws, gives up after a few seconds: a live update never fails or stalls the job
-	if (fields.status) await publishAdminLive(env, 'jobs', jobLiveEvent(job, fields.status, fields.attempts));
+	if (changed && fields.status) await publishAdminLive(env, 'jobs', jobLiveEvent(job, fields.status, fields.attempts));
+	return changed;
 }
 
-const message = (jobId: string) => ({ id: crypto.randomUUID(), type: MessageType.AdminJob, payload: { jobId }, timestamp: Date.now() });
+/** A delivery of the job's run `runId` (messages from before a Cancel carry an older one). */
+const message = (jobId: string, runId: string | null) => ({ id: crypto.randomUUID(), type: MessageType.AdminJob, payload: { jobId, ...(runId ? { runId } : {}) }, timestamp: Date.now() });
 
 /** Queues the job's next run; when the queue refuses, the job is marked failed so the admin sees it and can retry. */
-async function enqueue(env: JobEnv, job: AdminJob, delaySeconds?: number): Promise<AdminJob> {
+async function enqueue(env: JobEnv, job: AdminJob, runId: string, delaySeconds?: number): Promise<AdminJob> {
 	try {
 		const queue = jobQueueFor(env, job.kind);
 		if (!queue) throw new Error('ADMIN_JOBS_QUEUE is not bound');
-		await queue.send(message(job.id), delaySeconds ? { delaySeconds } : undefined);
+		await queue.send(message(job.id, runId), delaySeconds ? { delaySeconds } : undefined);
 		return job;
 	} catch (error) {
 		const reason = `Could not queue the job: ${error instanceof Error ? error.message : String(error)}`;
 		logger.error('[AdminJobs] Enqueue failed', { alert: 'admin_job_failed', jobId: job.id, kind: job.kind, error: reason });
-		await setStatus(env, job, { status: 'failed', last_error: reason, finished_at: now() });
+		await setStatus(env, job, { status: 'failed', last_error: reason, finished_at: now(), next_run_at: null });
+		await log(env, job.id, { event: 'failed', error: reason });
 		return { ...job, status: 'failed', lastError: reason };
 	}
 }
@@ -165,6 +232,8 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 		params: input.params ?? {},
 		status: 'queued',
 		attempts: 0,
+		maxAttempts: ADMIN_JOB_MAX_ATTEMPTS,
+		nextRunAt: null,
 		lastError: null,
 		result: null,
 		actorId: input.actorId,
@@ -173,15 +242,17 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 		finishedAt: null,
 	};
 	const store = db(env);
+	const runId = crypto.randomUUID();
 	await store
-		.prepare(`INSERT INTO admin_jobs (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-		.bind(job.id, job.kind, job.targetKind, job.targetId, JSON.stringify(job.params), job.status, 0, null, null, job.actorId, at, at, null)
+		.prepare(`INSERT INTO admin_jobs (${INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		.bind(job.id, job.kind, job.targetKind, job.targetId, JSON.stringify(job.params), job.status, 0, null, null, job.actorId, at, at, null, runId)
 		.run();
 	// Who the job names, so an account erasure finds its jobs without a scan (#1253)
 	const links = jobUserIds(job).map((userId) => store.prepare('INSERT OR IGNORE INTO admin_job_users (user_id, job_id) VALUES (?, ?)').bind(userId, job.id));
 	if (links.length) await store.batch(links);
+	await log(env, job.id, { event: 'queued' });
 	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'queued'));
-	return enqueue(env, job);
+	return enqueue(env, job, runId);
 }
 
 /**
@@ -196,12 +267,37 @@ export function jobUserIds(job: Pick<AdminJob, 'actorId' | 'targetKind' | 'targe
 /** Erasure jobs: once one succeeds its row no longer names the erased account (#1253). */
 const ERASE_KINDS = new Set<string>(['user.delete-data', 'user.erase-run']);
 
-/** Queues a failed job again with a fresh retry budget. Only failed jobs can be retried. */
-export async function retryJob(env: JobEnv, id: string): Promise<AdminJob | null> {
+/** Whether Retry applies: a job that failed, or one an admin cancelled. */
+export const canRetry = (job: Pick<AdminJob, 'status'>) => job.status === 'failed' || job.status === 'cancelled';
+/** Whether Cancel applies: a job that has not finished. */
+export const canCancel = (job: Pick<AdminJob, 'status'>) => !FINISHED.has(job.status);
+
+/**
+ * Queues a failed job again with a fresh retry budget. A cancelled one only with `allowCancelled`: the
+ * Jobs page's Retry, which admin-api allows after checking the job kind's own permissions.
+ */
+export async function retryJob(env: JobEnv, id: string, opts: { allowCancelled?: boolean } = {}): Promise<AdminJob | null> {
 	const job = await getJob(env, id);
-	if (!job || job.status !== 'failed') return job;
-	await setStatus(env, job, { status: 'queued', attempts: 0, last_error: null, finished_at: null });
-	return enqueue(env, { ...job, status: 'queued', attempts: 0, lastError: null, finishedAt: null });
+	if (!job || !(job.status === 'failed' || (opts.allowCancelled && job.status === 'cancelled'))) return job;
+	// A new run: deliveries still queued from the old one are dropped when they arrive
+	const runId = crypto.randomUUID();
+	await setStatus(env, job, { status: 'queued', attempts: 0, last_error: null, finished_at: null, next_run_at: null, run_id: runId });
+	await log(env, job.id, { event: 'queued', retried: true });
+	return enqueue(env, { ...job, status: 'queued', attempts: 0, lastError: null, finishedAt: null, nextRunAt: null }, runId);
+}
+
+/**
+ * Stops a job that has not finished. A queued or waiting delivery is dropped when it arrives; a
+ * delivery already running finishes its current step, and nothing after it runs. Retry starts it again
+ * from the step it reached (handlers are idempotent and keep their progress in params).
+ */
+export async function cancelJob(env: JobEnv, id: string): Promise<AdminJob | null> {
+	const job = await getJob(env, id);
+	if (!job || !canCancel(job)) return job;
+	const at = now();
+	await setStatus(env, job, { status: 'cancelled', finished_at: at, next_run_at: null });
+	await log(env, job.id, { event: 'cancelled' });
+	return { ...job, status: 'cancelled', finishedAt: at, nextRunAt: null };
 }
 
 /** Exponential backoff between deliveries: 10s, 20s, 40s … capped at 5 minutes. */
@@ -229,58 +325,109 @@ export async function handleAdminJobBatch(
 	onFailed?: (job: AdminJob, error: string) => Promise<void>,
 ): Promise<void> {
 	for (const msg of batch.messages) {
-		const jobId = (msg.body as { payload?: { jobId?: unknown } } | null)?.payload?.jobId;
+		const payload = (msg.body as { payload?: { jobId?: unknown; runId?: unknown } } | null)?.payload;
+		const jobId = payload?.jobId;
 		if (typeof jobId !== 'string') {
 			logger.error('[AdminJobs] Message without a job id', { body: msg.body });
 			msg.ack();
 			continue;
 		}
 		let job: AdminJob | null;
+		let runId: string | null = null;
 		try {
-			job = await getJob(env, jobId);
+			const row = await readRow(env, jobId);
+			job = row ? toJob(row) : null;
+			runId = row?.run_id ?? null;
 		} catch (error) {
 			logger.warn('[AdminJobs] Could not read the job; retrying', { jobId, error: error instanceof Error ? error.message : String(error) });
 			msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });
 			continue;
 		}
-		// Gone or finished (a failed job only runs again through retryJob, with a new message)
-		if (!job || job.status === 'succeeded' || job.status === 'failed') {
+		// Gone or finished (a failed or cancelled job only runs again through retryJob, with a new message)
+		if (!job || FINISHED.has(job.status)) {
+			msg.ack();
+			continue;
+		}
+		// A delivery of an earlier run (queued before a Cancel and the Retry that followed it)
+		if (runId && payload?.runId !== undefined && payload.runId !== runId) {
 			msg.ack();
 			continue;
 		}
 		const handler = handlers[job.kind];
 		if (!handler) {
-			await setStatus(env, job, { status: 'failed', last_error: `No handler for ${job.kind}`, finished_at: now() });
+			const reason = `No handler for ${job.kind}`;
+			await setStatus(env, job, { status: 'failed', last_error: reason, finished_at: now(), next_run_at: null });
+			await log(env, job.id, { event: 'failed', error: reason });
 			msg.ack();
 			continue;
 		}
-		await setStatus(env, job, { status: 'running', attempts: msg.attempts });
+		// Cancelled between the read and now: drop the delivery
+		if (!(await setStatus(env, job, { status: 'running', attempts: msg.attempts, next_run_at: null }, { unlessCancelled: true }))) {
+			msg.ack();
+			continue;
+		}
+		await log(env, job.id, { event: 'started', attempt: msg.attempts });
 		try {
 			const outcome = await handler(env, { ...job, attempts: msg.attempts });
 			if (!('params' in outcome)) {
-				await setStatus(env, job, {
-					status: 'succeeded',
-					result: outcome.result ? JSON.stringify(outcome.result) : null,
-					last_error: null,
-					finished_at: now(),
-					// The account is erased: the record keeps the action, not the id (#1253)
-					...(ERASE_KINDS.has(job.kind) && job.targetKind === 'user' ? { target_id: ERASED_USER_ID } : {}),
-				});
-				if (ERASE_KINDS.has(job.kind) && job.targetKind === 'user') {
-					await db(env).prepare('DELETE FROM admin_job_users WHERE user_id = ? AND job_id = ?').bind(job.targetId, job.id).run();
+				const finished = await setStatus(
+					env,
+					job,
+					{
+						status: 'succeeded',
+						result: outcome.result ? JSON.stringify(outcome.result) : null,
+						last_error: null,
+						finished_at: now(),
+						next_run_at: null,
+						// The account is erased: the record keeps the action, not the id (#1253)
+						...(ERASE_KINDS.has(job.kind) && job.targetKind === 'user' ? { target_id: ERASED_USER_ID } : {}),
+					},
+					{ unlessCancelled: true },
+				);
+				if (finished && ERASE_KINDS.has(job.kind) && job.targetKind === 'user') {
+					// Its log lines may name the account too (an attempt's error): scrubbed with the target
+					const store = db(env);
+					await store.batch([
+						store.prepare('DELETE FROM admin_job_users WHERE user_id = ? AND job_id = ?').bind(job.targetId, job.id),
+						store.prepare('UPDATE admin_job_log SET error = replace(error, ?, ?) WHERE job_id = ? AND error IS NOT NULL').bind(job.targetId, ERASED_USER_ID, job.id),
+						store.prepare('UPDATE admin_jobs SET last_error = replace(last_error, ?, ?) WHERE id = ? AND last_error IS NOT NULL').bind(job.targetId, ERASED_USER_ID, job.id),
+					]);
 				}
-				logger.info('[AdminJobs] Job succeeded', { jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts });
+				if (finished) {
+					await log(env, job.id, { event: 'succeeded', attempt: msg.attempts });
+					logger.info('[AdminJobs] Job succeeded', { jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts });
+				}
 			} else {
-				// Resumable work: store the next step and queue it as a fresh delivery
-				await setStatus(env, job, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
+				// Resumable work: store the next step and queue it as a fresh delivery (unless an admin cancelled it meanwhile)
 				const delay = Math.min(43200, Math.max(0, Math.round(outcome.delaySeconds ?? 0)));
-				await jobQueueFor(env, job.kind)!.send(message(job.id), delay ? { delaySeconds: delay } : undefined);
+				const next = await setStatus(
+					env,
+					job,
+					{ status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null, next_run_at: delay ? later(delay) : null },
+					{ unlessCancelled: true },
+				);
+				if (next) {
+					if (delay) await log(env, job.id, { event: 'waiting', attempt: msg.attempts, delaySeconds: delay });
+					await jobQueueFor(env, job.kind)!.send(message(job.id, runId), delay ? { delaySeconds: delay } : undefined);
+				}
 			}
 			msg.ack();
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
 			const last = msg.attempts > ADMIN_JOB_MAX_RETRIES;
-			await setStatus(env, job, last ? { status: 'failed', last_error: reason, finished_at: now() } : { status: 'retrying', last_error: reason }).catch(() => undefined);
+			const delay = backoffSeconds(msg.attempts);
+			const recorded = await setStatus(
+				env,
+				job,
+				last ? { status: 'failed', last_error: reason, finished_at: now(), next_run_at: null } : { status: 'retrying', last_error: reason, next_run_at: later(delay) },
+				{ unlessCancelled: true },
+			).catch(() => true);
+			// Cancelled while this attempt ran: nothing more runs, no alert
+			if (!recorded) {
+				msg.ack();
+				continue;
+			}
+			await log(env, job.id, last ? { event: 'failed', attempt: msg.attempts, error: reason } : { event: 'failed_attempt', attempt: msg.attempts, error: reason, delaySeconds: delay });
 			if (last) {
 				// Flags the admin: the job shows "failed — Retry", and this alert reaches the logs
 				logger.error('[AdminJobs] Job failed after retries', { alert: 'admin_job_failed', jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts, error: reason });
@@ -294,7 +441,7 @@ export async function handleAdminJobBatch(
 				logger.warn('[AdminJobs] Job attempt failed; retrying', { jobId: job.id, kind: job.kind, attempts: msg.attempts, error: reason });
 			}
 			// After max_retries the queue moves the message to the DLQ
-			msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });
+			msg.retry({ delaySeconds: delay });
 		}
 	}
 }

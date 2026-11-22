@@ -113,6 +113,7 @@ export * from './entitlements';
 export * from './site-theme';
 export * from './site';
 export * from './admin-content';
+export * from './admin-import';
 export * from './user-warnings';
 
 // Error reporting: scrubbing, fingerprints, references, client and Worker reporters (admin Errors page)

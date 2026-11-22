@@ -967,7 +967,21 @@ app.post('/creators/tier', async (c) => {
 const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
 function redactJob(c: C, job: AdminJob): AdminJob {
   if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
-  return { ...job, params: {}, result: null, lastError: job.lastError ? 'hidden' : null };
+  return {
+    ...job,
+    params: {},
+    result: null,
+    lastError: job.lastError ? 'hidden' : null,
+    ...(job.log ? { log: job.log.map((line) => (line.error ? { ...line, error: 'hidden' } : line)) } : {}),
+  };
+}
+
+/** The job, for an action on it: refuses CSAM jobs to anyone but a super admin, then needs the kind's own permissions. */
+async function jobForAction(c: C, jobId: string): Promise<AdminJob | Response> {
+  const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(jobId)}`);
+  if (CSAM_JOB_KINDS.has(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return c.json({ success: false, code: 'forbidden', error: 'Super admins only' }, 403);
+  for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
+  return job;
 }
 
 app.get('/jobs', async (c) => {
@@ -982,12 +996,21 @@ app.get('/jobs/:id', async (c) => {
 
 app.post('/jobs/:id/retry', async (c) => {
   const jobId = c.req.param('id');
-  const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(jobId)}`);
   // Retrying runs the action again: it needs the permissions the action itself needs
-  if (CSAM_JOB_KINDS.has(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return c.json({ success: false, code: 'forbidden', error: 'Super admins only' }, 403);
-  for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
+  const job = await jobForAction(c, jobId);
+  if (job instanceof Response) return job;
   return ok(c, await audited(c, { kind: job.targetKind, id: job.targetId, action: 'job-retry', details: { jobId, jobKind: job.kind } }, () =>
     videos(c, `/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })));
+});
+
+// Stops a job that has not finished (TA-8). The same permissions as starting it again: whoever may
+// run the action may stop it. Audited with the status it had.
+app.post('/jobs/:id/cancel', async (c) => {
+  const jobId = c.req.param('id');
+  const job = await jobForAction(c, jobId);
+  if (job instanceof Response) return job;
+  return ok(c, await audited(c, { kind: job.targetKind, id: job.targetId, action: 'job-cancel', details: { jobId, jobKind: job.kind, status: job.status } }, () =>
+    videos(c, `/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })));
 });
 
 // ---------------------------------------------------------------------------

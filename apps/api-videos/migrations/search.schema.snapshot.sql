@@ -50,12 +50,14 @@
 --   apps/api-videos/migrations/search/0068_discovery_ranking.sql
 --   apps/api-videos/migrations/search/0069_index_repairs.sql
 --   apps/api-videos/migrations/search/0070_list_indexes.sql
+--   apps/api-videos/migrations/search/0071_admin_job_log.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
+CREATE TABLE admin_job_log (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, at TEXT NOT NULL, event TEXT NOT NULL, attempt INTEGER, error TEXT, delay_seconds INTEGER, retried INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE admin_job_users (user_id TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY (user_id, job_id)) WITHOUT ROWID;
-CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
+CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, next_run_at TEXT, run_id TEXT);
 CREATE TABLE billing_checkouts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, price_id TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'expired')), created_at TEXT NOT NULL, completed_at TEXT) WITHOUT ROWID;
 CREATE TABLE billing_customers (provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, mode, provider_ref)) WITHOUT ROWID;
 CREATE TABLE billing_events (id TEXT PRIMARY KEY, provider TEXT NOT NULL, mode TEXT NOT NULL, event_id TEXT NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processed', 'ignored', 'failed')), error TEXT, user_id TEXT, subscription_id TEXT, job_id TEXT, received_at TEXT NOT NULL, processed_at TEXT) WITHOUT ROWID;
@@ -185,6 +187,7 @@ CREATE INDEX idx_admin_deletions_list ON admin_deletions (kind, purged_at, delet
 CREATE INDEX idx_admin_deletions_owner ON admin_deletions (owner_id);
 CREATE INDEX idx_admin_deletions_purge_by ON admin_deletions (purge_requested_by);
 CREATE INDEX idx_admin_deletions_requested ON admin_deletions (purged_at, purge_requested_at);
+CREATE INDEX idx_admin_job_log_job ON admin_job_log (job_id, id);
 CREATE INDEX idx_admin_job_users_job ON admin_job_users (job_id);
 CREATE INDEX idx_admin_jobs_finished ON admin_jobs (finished_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);

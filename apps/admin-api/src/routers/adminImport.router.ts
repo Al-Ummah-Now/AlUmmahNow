@@ -26,8 +26,15 @@
  * channel by its full SHA-256, so the same file is never uploaded twice:
  *
  *   POST /batches                 { channelId, name? } → 201 { batch }
- *   GET  /batches?channelId=      the latest 50 batches (of a channel), with item counts per state
- *   GET  /batches/:id             { batch, items }
+ *   GET  /batches?channelId=      the latest 50 batches (of a channel), with item counts per state and the
+ *                                 channel's name (videos admin Imports view, TA-8)
+ *   GET  /batches/:id             { batch, items } (every item; what the app reads)
+ *   GET  /batches/:id?page=N[&state=]  the videos admin's batch page (TA-8): { batch (with channelName), items
+ *                                 (ADMIN_IMPORT_PAGE_SIZE per page, oldest first), total, page, pageSize, counts,
+ *                                 statuses } — statuses: per item with a video, what api-videos says became of
+ *                                 it (POST /internal/admin/import/status: the video, the attach job with attempts
+ *                                 n/max and next retry, each caption language); null when api-videos could not
+ *                                 be read (logged; the page says so)
  *   POST /batches/:id/items       { sha256, fileName, fileSize, mimeType, fingerprint, title, … the
  *                                 initiate's metadata } → 201 { item, upload } — the normal upload
  *                                 (api-videos /internal/admin/import/initiate: owned by the channel's
@@ -35,6 +42,8 @@
  *                                 session is the admin's, used with their Admin Tools token. The same
  *                                 file again resumes its unfinished video; a file already uploaded
  *                                 answers 409 already_imported with its item. Audited per video.
+ *   GET  /items/by-video/:videoId the file a video was imported from, and where it is in its batch's pages:
+ *                                 { item, page } (the Errors page links here through the Imports view)
  *   POST /items/:id/uploaded      the app sent the whole file → { item }
  *   POST /items/:id/sidecars      { captions?, chapters?, thumbnail?, playlistId?, publishAt? } (TA-6) → 202
  *                                 { item, jobId } — attached by api-videos' queued job 'import.attach'
@@ -71,10 +80,13 @@
  */
 import { Hono, type Context } from 'hono';
 import {
+  ADMIN_IMPORT_PAGE_SIZE,
   ENCODE_LADDER,
+  IMPORT_ITEM_STATES,
   ERROR_LIMITS,
   ERROR_REF_PATTERN,
   PREBUILT_LIMITS,
+  type AdminImportItemStatus,
   USER_ID as ERROR_USER_ID,
   contentPermissionsFor,
   hasContentPermission,
@@ -296,6 +308,16 @@ app.post('/batches', async (c) => {
   return c.json({ success: true, result: { batch: batchView(row) } }, 201);
 });
 
+/** Channel names for the Imports view; a channel that cannot be read (deleted, api-videos down) has none. */
+async function channelNames(c: C, ids: string[]): Promise<Map<string, string | null>> {
+  const unique = [...new Set(ids)];
+  const read = await Promise.allSettled(unique.map((id) => videos<{ name?: string }>(c, `/channels/${encodeURIComponent(id)}`)));
+  return new Map(unique.map((id, i) => {
+    const r = read[i];
+    return [id, r.status === 'fulfilled' && typeof r.value?.name === 'string' ? r.value.name : null];
+  }));
+}
+
 app.get('/batches', async (c) => {
   const channelId = c.req.query('channelId');
   const rows = (
@@ -313,15 +335,64 @@ app.get('/batches', async (c) => {
     ).results ?? [];
     for (const t of tallies) counts.set(t.batch_id, { ...(counts.get(t.batch_id) ?? {}), [t.state]: Number(t.n) });
   }
-  return c.json({ success: true, result: { batches: rows.map((r) => batchView(r, counts.get(r.id) ?? {})) } });
+  const names = await channelNames(c, rows.map((r) => r.channel_id));
+  return c.json({ success: true, result: { batches: rows.map((r) => ({ ...batchView(r, counts.get(r.id) ?? {}), channelName: names.get(r.channel_id) ?? null })) } });
 });
 
 app.get('/batches/:id', async (c) => {
   const batch = await readBatch(c, c.req.param('id'));
   if (!batch) return fail(c, 404, 'batch_not_found', 'No such import batch');
+  if (c.req.query('page') !== undefined) return batchPage(c, batch);
   const items = (await c.env.REPORTS_DB.prepare('SELECT * FROM import_items WHERE batch_id = ? ORDER BY created_at').bind(batch.id).all<ImportItemRow>()).results ?? [];
   return c.json({ success: true, result: { batch: batchView(batch), items: items.map(itemView) } });
 });
+
+/** The videos admin's batch page (TA-8): one page of files and what became of each on the server. */
+async function batchPage(c: C, batch: ImportBatchRow) {
+  const page = Math.max(1, Math.min(10_000, Number.parseInt(c.req.query('page') ?? '1', 10) || 1));
+  const stateParam = c.req.query('state');
+  const state = (IMPORT_ITEM_STATES as readonly string[]).includes(stateParam ?? '') ? stateParam : undefined;
+  const db = c.env.REPORTS_DB;
+  const [tallies, rows, names] = await Promise.all([
+    db.prepare('SELECT state, COUNT(*) AS n FROM import_items WHERE batch_id = ? GROUP BY state').bind(batch.id).all<{ state: string; n: number }>(),
+    (state
+      ? db.prepare('SELECT * FROM import_items WHERE batch_id = ? AND state = ? ORDER BY created_at, rowid LIMIT ? OFFSET ?').bind(batch.id, state, ADMIN_IMPORT_PAGE_SIZE, (page - 1) * ADMIN_IMPORT_PAGE_SIZE)
+      : db.prepare('SELECT * FROM import_items WHERE batch_id = ? ORDER BY created_at, rowid LIMIT ? OFFSET ?').bind(batch.id, ADMIN_IMPORT_PAGE_SIZE, (page - 1) * ADMIN_IMPORT_PAGE_SIZE)
+    ).all<ImportItemRow>(),
+    channelNames(c, [batch.channel_id]),
+  ]);
+  const counts: Record<string, number> = {};
+  for (const t of tallies.results ?? []) counts[t.state] = Number(t.n);
+  const total = state ? (counts[state] ?? 0) : Object.values(counts).reduce((a, b) => a + b, 0);
+  const items = rows.results ?? [];
+  const withVideo = items.filter((i) => i.video_id);
+  let statuses: Record<string, AdminImportItemStatus> | null = {};
+  if (withVideo.length) {
+    try {
+      const out = await videos<{ items: AdminImportItemStatus[] }>(c, '/import/status', {
+        method: 'POST',
+        json: { items: withVideo.map((i) => ({ videoId: i.video_id, attachJobId: i.attach_job_id ?? null })) },
+      });
+      statuses = Object.fromEntries(withVideo.map((i, n) => [i.id, out.items[n]]).filter(([, s]) => !!s));
+    } catch (error) {
+      logger.warn('[AdminImport] Could not read the batch page statuses', { batchId: batch.id, page, error: error instanceof Error ? error.message : String(error) });
+      statuses = null;
+    }
+  }
+  return c.json({
+    success: true,
+    result: {
+      batch: { ...batchView(batch), channelName: names.get(batch.channel_id) ?? null },
+      items: items.map(itemView),
+      total,
+      page,
+      pageSize: ADMIN_IMPORT_PAGE_SIZE,
+      counts,
+      ...(state ? { state } : {}),
+      statuses,
+    },
+  });
+}
 
 type Initiated = { videoId: string; tusSessionId: string; tusUploadId?: string; chunkSize: number; resumable: boolean; expiresAt?: string; reused?: boolean };
 
@@ -383,6 +454,19 @@ async function setItemState(c: C, state: 'uploaded' | 'failed', error: string | 
   await c.env.REPORTS_DB.prepare('UPDATE import_items SET state = ?, error = ?, updated_at = ? WHERE id = ?').bind(state, error, now(), item.id).run();
   return c.json({ success: true, result: { item: itemView({ ...item, state, error }) } });
 }
+
+app.get('/items/by-video/:videoId', async (c) => {
+  const videoId = c.req.param('videoId');
+  if (!CHANNEL_ID.test(videoId)) return fail(c, 400, 'invalid_request', 'videoId is not valid');
+  const item = await c.env.REPORTS_DB.prepare('SELECT *, rowid AS _row FROM import_items WHERE video_id = ? ORDER BY created_at DESC LIMIT 1').bind(videoId).first<ImportItemRow & { _row: number }>();
+  if (!item) return fail(c, 404, 'item_not_found', 'No imported file has this video');
+  // Its place among the batch's files, oldest first (the batch page's order)
+  const before = await c.env.REPORTS_DB.prepare('SELECT COUNT(*) AS n FROM import_items WHERE batch_id = ? AND (created_at < ? OR (created_at = ? AND rowid < ?))')
+    .bind(item.batch_id, item.created_at, item.created_at, item._row)
+    .first<{ n: number }>();
+  const { _row: _ignored, ...row } = item;
+  return c.json({ success: true, result: { item: itemView(row), page: Math.floor(Number(before?.n ?? 0) / ADMIN_IMPORT_PAGE_SIZE) + 1 } });
+});
 
 app.post('/items/:id/uploaded', (c) => setItemState(c, 'uploaded', null));
 

@@ -61,6 +61,8 @@ type Part = 'captions' | 'playlist' | 'chapters' | 'thumbnail' | 'schedule';
 interface AttachParams {
 	videoId: string;
 	key: string;
+	/** What came with the file (the Imports view shows each part's state); absent on older jobs */
+	sent?: Part[];
 	done: Part[];
 	waits: number;
 	warnings: string[];
@@ -123,9 +125,20 @@ export function validateSidecars(input: unknown): { ok: true; value: ImportSidec
 export async function stageImportSidecars(env: AttachEnv, videoId: string, sidecars: ImportSidecars, actorId: string): Promise<{ jobId: string; status: string }> {
 	const key = `${SIDECAR_PREFIX}${videoId}/${crypto.randomUUID()}.json`;
 	await env.global_settings.put(key, JSON.stringify(sidecars), { httpMetadata: { contentType: 'application/json' } });
-	const params: AttachParams = { videoId, key, done: [], waits: 0, warnings: [] };
+	const params: AttachParams = { videoId, key, sent: sentParts(sidecars), done: [], waits: 0, warnings: [] };
 	const job = await createJob(env, { kind: IMPORT_ATTACH_JOB_KIND, targetKind: 'video', targetId: videoId, params: params as unknown as Record<string, unknown>, actorId });
 	return { jobId: job.id, status: job.status };
+}
+
+/** The parts a file's sidecars carry, in the order the job puts them on. */
+export function sentParts(sidecars: ImportSidecars): Part[] {
+	const parts: Part[] = [];
+	if (sidecars.captions?.length) parts.push('captions');
+	if (sidecars.playlistId) parts.push('playlist');
+	if (sidecars.chapters) parts.push('chapters');
+	if (sidecars.thumbnail) parts.push('thumbnail');
+	if (sidecars.publishAt) parts.push('schedule');
+	return parts;
 }
 
 export const attachNeedsActionKey = (jobId: string) => `import-attach:${jobId}`;
@@ -275,6 +288,8 @@ export async function onImportAttachFailed(env: AttachEnv, job: AdminJob, error:
 		message: error.slice(0, 500),
 		itemType: 'video',
 		itemId: job.targetId,
+		// The file in the videos admin's Imports view (it finds the batch page by the video)
+		itemUrl: `/imports?video=${encodeURIComponent(job.targetId)}`,
 		retry: { kind: 'service', service: 'api-videos', path: '/internal/admin/import/attach/retry', body: { jobId: job.id } },
 		retryLabel: 'Try again',
 		extra: { jobId: job.id, videoId: job.targetId },

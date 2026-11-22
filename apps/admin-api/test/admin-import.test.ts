@@ -159,7 +159,7 @@ describe('/api/admin/import batches and items (TA-5)', () => {
   const SHA = 'f'.repeat(64);
   const FILE = { sha256: SHA, fileName: 'lesson-01.mp4', fileSize: 4096, mimeType: 'video/mp4', title: 'Lesson 1', fingerprint: { name: 'lesson-01.mp4', size: 4096, lastModified: 1, hash: 'c'.repeat(64) } };
 
-  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean } = {}) {
+  function importSetup(opts: { refuseInitiate?: boolean; noChannel?: boolean; statusDown?: boolean } = {}) {
     const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
     let n = 0;
     const videos = new Map<string, string>();
@@ -174,7 +174,11 @@ describe('/api/admin/import batches and items (TA-5)', () => {
           calls.push({ path: url.pathname, method, body, actor: new Headers(init?.headers).get('X-Admin-Actor') });
           const json = (status: number, payload: unknown) => new Response(JSON.stringify(payload), { status });
           if (url.pathname.startsWith('/internal/admin/channels/')) {
-            return opts.noChannel ? json(404, { success: false, code: 'channel_not_found', error: 'No such channel' }) : json(200, { success: true, result: { id: 'ch1' } });
+            return opts.noChannel ? json(404, { success: false, code: 'channel_not_found', error: 'No such channel' }) : json(200, { success: true, result: { id: 'ch1', name: 'قناة الدروس' } });
+          }
+          if (url.pathname === '/internal/admin/import/status') {
+            if (opts.statusDown) return json(500, { success: false, code: 'internal_error', error: 'down' });
+            return json(200, { success: true, result: { items: body.items.map((i: any) => ({ videoId: i.videoId, video: { title: `T ${i.videoId}`, processingStatus: 'completed', isDeleted: false }, attach: null, captions: [] })) } });
           }
           if (url.pathname === '/internal/admin/import/initiate') {
             if (opts.refuseInitiate) return json(409, { success: false, code: 'channel_suspended', error: 'The channel is suspended' });
@@ -219,6 +223,47 @@ describe('/api/admin/import batches and items (TA-5)', () => {
     const detail = await h.req(`/api/admin/import/batches/${batchId}`);
     assert.equal(detail.body.result.items.length, 1);
     assert.equal(detail.body.result.items[0].state, 'initiated');
+  });
+
+  it('the videos admin batch page (TA-8): a page of files, counts, the channel name and each file\'s status', async () => {
+    const h = importSetup();
+    const batchId = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    for (let i = 0; i < 3; i++) {
+      await h.req(`/api/admin/import/batches/${batchId}/items`, post({ ...FILE, sha256: String(i).repeat(64), fingerprint: { ...FILE.fingerprint, hash: String(i).repeat(64) } }));
+    }
+    const items = (await h.req(`/api/admin/import/batches/${batchId}`)).body.result.items;
+    await h.req(`/api/admin/import/items/${items[2].id}/failed`, post({ error: 'The file changed while it was read' }));
+    const page = await h.req(`/api/admin/import/batches/${batchId}?page=1`);
+    assert.equal(page.status, 200);
+    const r = page.body.result;
+    assert.equal(r.batch.channelName, 'قناة الدروس');
+    assert.equal(r.total, 3);
+    assert.equal(r.pageSize, 50);
+    assert.deepEqual(r.counts, { initiated: 2, failed: 1 });
+    assert.deepEqual(r.items.map((i: any) => i.id), items.map((i: any) => i.id), 'oldest first');
+    assert.equal(r.statuses[items[0].id].video.title, `T ${items[0].videoId}`);
+    const asked = h.calls.filter((c) => c.path === '/internal/admin/import/status').at(-1)!;
+    assert.deepEqual(asked.body.items.map((i: any) => i.attachJobId), [null, null, null]);
+    // A state filter, and a page past the end
+    const failed = (await h.req(`/api/admin/import/batches/${batchId}?page=1&state=failed`)).body.result;
+    assert.deepEqual([failed.total, failed.items.length, failed.state], [1, 1, 'failed']);
+    assert.deepEqual((await h.req(`/api/admin/import/batches/${batchId}?page=9`)).body.result.items, []);
+    // The Errors page's link: the file of a video, and its page
+    const found = await h.req(`/api/admin/import/items/by-video/${items[1].videoId}`);
+    assert.deepEqual([found.body.result.item.id, found.body.result.page], [items[1].id, 1]);
+    assert.equal((await h.req('/api/admin/import/items/by-video/vid-none')).status, 404);
+    assert.equal((await h.req('/api/admin/import/items/by-video/..%2Fx')).status, 400);
+    // The list names the channel too
+    assert.equal((await h.req('/api/admin/import/batches')).body.result.batches[0].channelName, 'قناة الدروس');
+  });
+
+  it('the batch page says "unknown" (statuses null) when api-videos cannot be read, and still lists the files', async () => {
+    const h = importSetup({ statusDown: true });
+    const batchId = (await h.req('/api/admin/import/batches', post({ channelId: 'ch1' }))).body.result.batch.id;
+    await h.req(`/api/admin/import/batches/${batchId}/items`, post(FILE));
+    const r = (await h.req(`/api/admin/import/batches/${batchId}?page=1`)).body.result;
+    assert.equal(r.items.length, 1);
+    assert.equal(r.statuses, null);
   });
 
   it('the same file again resumes its video, and once uploaded is refused as already imported (any batch)', async () => {

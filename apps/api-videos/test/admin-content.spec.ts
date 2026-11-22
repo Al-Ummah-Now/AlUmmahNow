@@ -1003,6 +1003,138 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 	});
 });
 
+describe('admin jobs on the Jobs page (TA-8: attempts n/max, next retry, log, Cancel)', () => {
+	/** One delivery of the oldest queued message through `handlers`; returns what the consumer did with it. */
+	async function deliver(env: unknown, jobs: JobsQueue, handlers: Record<string, (env: unknown, job: any) => Promise<any>>, attempts = 1) {
+		const d = jobs.pending.shift()!;
+		let outcome: 'ack' | 'retry' = 'ack';
+		await handleAdminJobBatch({ messages: [{ body: d.body, attempts, ack() { outcome = 'ack'; }, retry() { outcome = 'retry'; } }] }, env as never, handlers as never);
+		return { outcome, body: d.body as any };
+	}
+
+	it('a failed attempt shows attempts out of max, when it runs next, and a log in events', async () => {
+		const { env, jobs, call } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		assert.equal(created.maxAttempts, MAX_RETRIES + 1);
+		const before = Date.now();
+		const first = await deliver(env, jobs as never, { 'user.delete-data': async () => { throw new Error('R2 is down'); } });
+		assert.equal(first.outcome, 'retry');
+		const job = (await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result;
+		assert.equal(job.status, 'retrying');
+		assert.equal(job.attempts, 1);
+		assert.equal(job.maxAttempts, MAX_RETRIES + 1);
+		const next = Date.parse(job.nextRunAt);
+		assert.ok(next >= before + 10_000 && next <= Date.now() + 10_000, 'the next run is the backoff away');
+		assert.deepEqual(job.log.map((l: any) => [l.event, l.attempt ?? null, l.error ?? null, l.delaySeconds ?? null]), [
+			['queued', null, null, null],
+			['started', 1, null, null],
+			['failed_attempt', 1, 'R2 is down', 10],
+		]);
+		// The list carries the numbers but not the log
+		const listed = (await call('GET', `/jobs?targetKind=user&targetId=${OTHER}`, undefined, { hold: true })).body.result.items[0];
+		assert.equal(listed.nextRunAt, job.nextRunAt);
+		assert.equal(listed.log, undefined);
+		// The next attempt succeeds: no next run, the log ends with it
+		jobs.pending.push({ body: first.body, attempts: 2 });
+		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: true }) }, 2);
+		const done = (await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result;
+		assert.equal(done.status, 'succeeded');
+		assert.equal(done.nextRunAt, null);
+		assert.deepEqual(done.log.slice(-2).map((l: any) => [l.event, l.attempt]), [['started', 2], ['succeeded', 2]]);
+	});
+
+	it('a step that waits shows when it runs next', async () => {
+		const { env, jobs, call } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: false, params: { step: 2 }, delaySeconds: 300 }) });
+		const job = (await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result;
+		assert.equal(job.status, 'queued');
+		assert.ok(Date.parse(job.nextRunAt) > Date.now() + 290_000);
+		assert.deepEqual(job.log.at(-1), { at: job.log.at(-1).at, event: 'waiting', attempt: 1, delaySeconds: 300 });
+		assert.equal(jobs.pending[0].delaySeconds, 300);
+	});
+
+	it('Cancel drops a queued delivery; Retry starts a new run and a delivery left from the old one never runs', async () => {
+		const { env, jobs, call } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		// A step that waits: its delivery is still in the queue when the admin cancels
+		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: false, params: { step: 2 }, delaySeconds: 300 }) });
+		const cancelled = await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
+		assert.equal(cancelled.status, 200);
+		assert.equal(cancelled.body.result.status, 'cancelled');
+		assert.equal(cancelled.body.result.nextRunAt, null);
+		let ran = 0;
+		const handlers = { 'user.delete-data': async () => { ran++; return { done: true }; } };
+		const stale = jobs.pending[0];
+		await deliver(env, jobs as never, handlers);
+		assert.equal(ran, 0, 'a cancelled job never runs');
+		assert.equal((await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true })).body.code, 'job_finished');
+		// Retry: a new run; the old delivery comes back (as a late duplicate) and is dropped
+		const retried = await call('POST', `/jobs/${created.id}/retry`, undefined, { hold: true });
+		assert.equal(retried.body.result.status, 'queued');
+		jobs.pending.unshift(stale);
+		await deliver(env, jobs as never, handlers);
+		assert.equal(ran, 0, 'the delivery of the old run is dropped');
+		await deliver(env, jobs as never, handlers);
+		assert.equal(ran, 1, 'the new run runs once');
+		const job = (await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result;
+		assert.equal(job.status, 'succeeded');
+		assert.deepEqual(job.log.map((l: any) => l.event), ['queued', 'started', 'waiting', 'cancelled', 'queued', 'started', 'succeeded']);
+		assert.equal(job.log[4].retried, true);
+	});
+
+	it('Cancel while a step runs: the step finishes, nothing after it runs, no failure is raised', async () => {
+		const { env, jobs, call } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const { cancelJob } = await import('../src/lib/admin/jobs');
+		await deliver(env, jobs as never, {
+			'user.delete-data': async () => {
+				await cancelJob(env as never, created.id);
+				return { done: false, params: { step: 2 } };
+			},
+		});
+		assert.equal(jobs.pending.length, 0, 'the next step is not queued');
+		assert.equal((await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result.status, 'cancelled');
+		// The same while an attempt fails: no retry, no failed status
+		const other = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OWNER, actorId: 'usr_admin' });
+		const out = await deliver(env, jobs as never, {
+			'user.delete-data': async () => {
+				await cancelJob(env as never, other.id);
+				throw new Error('boom');
+			},
+		});
+		assert.equal(out.outcome, 'ack');
+		const job = (await call('GET', `/jobs/${other.id}`, undefined, { hold: true })).body.result;
+		assert.equal(job.status, 'cancelled');
+		assert.equal(job.log.at(-1).event, 'cancelled');
+	});
+
+	it('only a failed job retries by default; Cancel refuses a finished job', async () => {
+		const { env, jobs, call } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
+		const { retryJob } = await import('../src/lib/admin/jobs');
+		assert.equal((await retryJob(env as never, created.id))?.status, 'cancelled', 'other callers (Errors page, playlist) need allowCancelled');
+		jobs.pending.splice(0);
+		await call('POST', `/jobs/${created.id}/retry`, undefined, { hold: true });
+		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: true }) });
+		const res = await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
+		assert.equal(res.status, 409);
+		assert.equal(res.body.code, 'job_finished');
+		assert.equal((await call('POST', '/jobs/nope/cancel', undefined, { hold: true })).status, 404);
+	});
+
+	it('keeps the newest 50 log lines per job', async () => {
+		const { env, jobs, call, db } = await setup();
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		for (let i = 0; i < 30; i++) await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: false, params: { i }, delaySeconds: 60 }) });
+		const log = (await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result.log;
+		assert.equal(log.length, 50);
+		assert.equal(log.at(-1).event, 'waiting');
+		assert.equal((db.db.prepare('SELECT COUNT(*) AS n FROM admin_job_log WHERE job_id = ?').get(created.id) as any).n, 50, 'older lines are deleted, not just hidden');
+	});
+});
+
 describe('soft deletes (Recently deleted, restore, cleanup)', () => {
 	const DAY = 86_400_000;
 

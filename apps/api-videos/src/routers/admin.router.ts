@@ -16,6 +16,7 @@ import {
 	ADMIN_USER_SORTS,
 	ADMIN_VIDEO_SORTS,
 	ADMIN_VIDEO_STATUSES,
+	ADMIN_IMPORT_PAGE_SIZE,
 	ADMIN_JOB_STATUSES,
 	ADMIN_CREATOR_FILTERS,
 	MAX_BULK_CREATOR_TIER,
@@ -30,7 +31,7 @@ import { cleanLookup, lookup } from '../lib/admin/lookup';
 import { videoThumbnailFolder } from '../lib/admin/purgeCopies';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
-import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
+import { canCancel, canRetry, cancelJob, countJobs, getJob, getJobWithLog, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
@@ -55,6 +56,7 @@ import { InitiateBodySchema, initiateUpload, type InitiateBody } from '../endpoi
 import { loadChannelRecord } from '../lib/channelAccess';
 import { IMPORT_ATTACH_JOB_KIND, stageImportSidecars, validateSidecars, type AttachEnv } from '../lib/admin/importAttach';
 import { getJob as getAdminJob, retryJob as retryAdminJob } from '../lib/admin/jobs';
+import { importStatus, type ImportStatusEnv } from '../lib/admin/importStatus';
 import { OnDeviceSegmentSchema, submitOnDeviceTranscript } from '../endpoints/captions/captionDrafts';
 import { CaptionJobHttpError, requestTranslationJob } from '../lib/captions/jobs';
 import { SubtitleService } from '../lib/subtitles';
@@ -437,6 +439,13 @@ app.get('/import/videos/:videoId/delivery', async (c) => {
 		r2: r2 ? { status: r2.status, ...(r2.progress !== undefined ? { progress: r2.progress } : {}), ...(r2.error ? { error: r2.error } : {}), ...(r2.result?.prebuilt ? { prebuilt: r2.result.prebuilt } : {}) } : null,
 	});
 });
+// The Imports view (TA-8): what became of one page of a batch's files (video, sidecars, captions)
+const ImportStatusBody = z.object({
+	items: z
+		.array(z.object({ videoId: z.string().min(1).max(200), attachJobId: z.string().min(1).max(64).nullable().optional() }))
+		.max(ADMIN_IMPORT_PAGE_SIZE),
+});
+app.post('/import/status', async (c) => ok(c, { items: await importStatus(c.env as unknown as ImportStatusEnv, parse(ImportStatusBody, await body(c)).items) }));
 // The Errors page's Retry on an attach job that gave up (admin-api lib/errors-actions.ts)
 app.post('/import/attach/retry', async (c) => {
 	const { jobId } = parse(z.object({ jobId: z.string().min(1).max(64) }), await body(c));
@@ -733,16 +742,24 @@ const JobQuery = z.object({
 });
 app.get('/jobs', async (c) => ok(c, { items: await listJobs(c.env, parse(JobQuery, c.req.query())) }));
 app.get('/jobs/counts', async (c) => ok(c, { failed: await countJobs(c.env, 'failed'), retrying: await countJobs(c.env, 'retrying') }));
+// The job with its log (what happened, oldest first)
 app.get('/jobs/:id', async (c) => {
-	const job = await getJob(c.env, c.req.param('id'));
+	const job = await getJobWithLog(c.env, c.req.param('id'));
 	if (!job) throw new admin.AdminError(404, 'job_not_found');
 	return ok(c, job);
 });
 app.post('/jobs/:id/retry', async (c) => {
 	const existing = await getJob(c.env, c.req.param('id'));
 	if (!existing) throw new admin.AdminError(404, 'job_not_found');
-	if (existing.status !== 'failed') throw new admin.AdminError(409, 'job_not_failed', 'Only failed jobs can be retried');
-	return ok(c, await retryJob(c.env, existing.id));
+	if (!canRetry(existing)) throw new admin.AdminError(409, 'job_not_failed', 'Only failed or cancelled jobs can be retried');
+	return ok(c, await retryJob(c.env, existing.id, { allowCancelled: true }));
+});
+// Stops a job that has not finished (a running step finishes first); Retry starts it again
+app.post('/jobs/:id/cancel', async (c) => {
+	const existing = await getJob(c.env, c.req.param('id'));
+	if (!existing) throw new admin.AdminError(404, 'job_not_found');
+	if (!canCancel(existing)) throw new admin.AdminError(409, 'job_finished', 'The job has already finished');
+	return ok(c, await cancelJob(c.env, existing.id));
 });
 
 // ---------------------------------------------------------------------------
