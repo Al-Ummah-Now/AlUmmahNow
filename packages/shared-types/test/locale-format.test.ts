@@ -116,3 +116,9 @@ test('dates and times use a plain space on every runtime (WebKit writes U+00A0 b
   assert.equal(f.dateTimeFormat('ar', { timeZone: 'UTC' }).resolvedOptions().numberingSystem, 'arab');
 });
 
+
+test('bytes switch units at 1000: 1000 MB reads 1 GB', () => {
+  assert.equal(f.formatBytes('en', 1000 * 1024 ** 2), '1 GB');
+  assert.equal(f.formatBytes('en', 999 * 1024 ** 2), '999 MB');
+  assert.equal(f.formatBytes('ar', 1000 * 1024 ** 2, { useGrouping: false }), f.formatBytes('ar', 1024 ** 3, { useGrouping: false }));
+});

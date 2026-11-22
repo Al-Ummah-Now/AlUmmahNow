@@ -3,7 +3,7 @@
  * ("Nov 22, 2026, 2:20 PM EST"; Arabic with Arabic digits and «غرينتش-٥»), and the UTC time for a
  * tooltip, to compare with logs. Pure (Intl only), so it is tested with a pinned zone.
  */
-import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
+import { dateTimeFormat, isArabicLocale, numberFormat } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 
 /**
@@ -19,6 +19,23 @@ export function zoneLabel(at: Date, timeZone: string, locale: Locale): string {
   }
 }
 
+const NBSP = '\u00A0';
+const glue = (part: string) => part.replace(/\s/g, NBSP);
+
+/**
+ * The date stays whole ("Nov 22, 2026"), the time stays whole ("9:02 PM") and the zone stays with the time:
+ * a narrow cell breaks only between the date and the time (AUDIT-2 2026-11-22).
+ */
+function keepTogether(text: string, at: Date, locale: Locale, timeZone: string, withDate: boolean, timeStyle: 'short' | 'medium'): string {
+  const time = dateTimeFormat(locale, { timeStyle, timeZone }).format(at);
+  let out = text.endsWith(time) ? text.slice(0, text.length - time.length) + glue(time) : glue(text);
+  if (withDate) {
+    const date = dateTimeFormat(locale, { dateStyle: 'medium', timeZone }).format(at);
+    if (out.startsWith(date)) out = glue(date) + out.slice(date.length);
+  }
+  return out;
+}
+
 export interface LocalTime {
   /** In the zone, with its label */
   text: string;
@@ -32,14 +49,27 @@ export function formatLocalTime(value: string | number | Date, locale: Locale, t
   if (Number.isNaN(at.getTime())) return null;
   const withDate = opts.date !== false;
   const timeStyle = opts.seconds ? 'medium' : 'short';
-  const local = dateTimeFormat(locale, { ...(withDate ? { dateStyle: 'medium' } : {}), timeStyle, timeZone }).format(at);
-  const utc = dateTimeFormat(locale, { dateStyle: 'medium', timeStyle, timeZone: 'UTC' }).format(at);
-  return { text: `${local} ${zoneLabel(at, timeZone, locale)}`, utc: `${utc} ${zoneLabel(at, 'UTC', locale)}` };
+  const local = keepTogether(dateTimeFormat(locale, { ...(withDate ? { dateStyle: 'medium' } : {}), timeStyle, timeZone }).format(at), at, locale, timeZone, withDate, timeStyle);
+  const utc = keepTogether(dateTimeFormat(locale, { dateStyle: 'medium', timeStyle, timeZone: 'UTC' }).format(at), at, locale, 'UTC', true, timeStyle);
+  return { text: `${local}${NBSP}${zoneLabel(at, timeZone, locale)}`, utc: `${utc}${NBSP}${zoneLabel(at, 'UTC', locale)}` };
 }
 
-/** A wait in words: "10 seconds", "5 minutes", "12 hours" («١٠ ثوانٍ», «٥ دقائق»). Rounded down. */
+/** An hour on a chart axis in `timeZone`, without the zone (the heading names it): "Nov 22, 4:00 PM". */
+export function formatLocalHour(value: string | number | Date, locale: Locale, timeZone: string): string | null {
+  const at = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(at.getTime())) return null;
+  return dateTimeFormat(locale, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone }).format(at);
+}
+
+/**
+ * A wait in words, exact to the second: "10 seconds", "1 minute 20 seconds", "2 hours 5 minutes"
+ * («١٠ ثوانٍ», «دقيقة واحدة و٢٠ ثانية» in the page's own forms). Two units at most, the larger first.
+ */
 export function formatDuration(seconds: number, locale: Locale): string {
   const s = Math.max(0, Math.floor(seconds));
-  const [value, unit] = s < 60 ? [s, 'second'] : s < 3600 ? [Math.floor(s / 60), 'minute'] : s < 86400 ? [Math.floor(s / 3600), 'hour'] : [Math.floor(s / 86400), 'day'];
-  return numberFormat(locale, { style: 'unit', unit, unitDisplay: 'long', useGrouping: false }).format(value);
+  const [big, small]: [[number, string], [number, string]] =
+    s < 60 ? [[s, 'second'], [0, 'second']] : s < 3600 ? [[Math.floor(s / 60), 'minute'], [s % 60, 'second']] : s < 86400 ? [[Math.floor(s / 3600), 'hour'], [Math.floor((s % 3600) / 60), 'minute']] : [[Math.floor(s / 86400), 'day'], [Math.floor((s % 86400) / 3600), 'hour']];
+  const unit = ([value, name]: [number, string]) => numberFormat(locale, { style: 'unit', unit: name, unitDisplay: 'long', useGrouping: false }).format(value);
+  if (!small[0]) return unit(big);
+  return isArabicLocale(locale) ? `${unit(big)} و${unit(small)}` : `${unit(big)} ${unit(small)}`;
 }

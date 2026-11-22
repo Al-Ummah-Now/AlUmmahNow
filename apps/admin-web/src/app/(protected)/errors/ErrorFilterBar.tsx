@@ -9,6 +9,7 @@ import { fieldClass, linkClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import type { ErrorFacets } from '@/lib/api/error-groups-types';
 import { errorsHref, type ErrorListFilters } from './filters';
+import { appName, environmentName } from './ui';
 import { DateField } from '@/components/DateField';
 import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
@@ -42,7 +43,7 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
           <option value="">{t('errorsPage.allApps')}</option>
           {apps.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {appName(t, a)}
             </option>
           ))}
         </Select>
@@ -55,7 +56,7 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
           <option value="">{t('errorsPage.allEnvironments')}</option>
           {environments.map((e) => (
             <option key={e} value={e}>
-              {e}
+              {environmentName(t, e)}
             </option>
           ))}
         </Select>

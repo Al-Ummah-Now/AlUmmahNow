@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { ErrorFilterBar } from './ErrorFilterBar';
 import { FailuresSections, hasFailures, loadFailures } from './FailuresSections';
 import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseErrorFilters, searchedRef } from './filters';
-import { ErrorStatusChip, Sparkline, TestChip, errorTitle } from './ui';
+import { ErrorStatusChip, Sparkline, TestChip, appName, environmentName, errorTitle } from './ui';
 import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
@@ -171,8 +171,8 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
                           </span>
                         </Link>
                         <span className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-fg-subtle mt-1">
-                          <span className="font-mono" dir="ltr">{g.app}</span>
-                          <span dir="ltr">{g.environment}</span>
+                          <span>{appName(t, g.app)}</span>
+                          <span>{environmentName(t, g.environment)}</span>
                           {g.culprit && (
                             <span className="font-mono truncate max-w-xs" dir="ltr">
                               {g.culprit}

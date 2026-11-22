@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatLocalTime } from '@/lib/local-time';
+import { formatLocalHour, formatLocalTime, zoneLabel } from '@/lib/local-time';
 
 export function browserTimeZone(): string {
   try {
@@ -17,10 +17,15 @@ export function browserTimeZone(): string {
   }
 }
 
-export function LocalTime({ value, date = true, seconds = false, className, testId }: { value: string | number; date?: boolean; seconds?: boolean; className?: string; testId?: string }) {
-  const { locale } = useLanguage();
+function useBrowserZone(): string {
   const [zone, setZone] = useState('UTC');
   useEffect(() => setZone(browserTimeZone()), []);
+  return zone;
+}
+
+export function LocalTime({ value, date = true, seconds = false, className, testId }: { value: string | number; date?: boolean; seconds?: boolean; className?: string; testId?: string }) {
+  const { locale } = useLanguage();
+  const zone = useBrowserZone();
   const time = formatLocalTime(value, locale, zone, { date, seconds });
   if (!time) return null;
   return (
@@ -28,4 +33,19 @@ export function LocalTime({ value, date = true, seconds = false, className, test
       {time.text}
     </time>
   );
+}
+
+/** An hour on a chart axis in the admin's zone, without the zone (the chart's heading names it via LocalZoneName). */
+export function LocalHour({ value }: { value: string }) {
+  const { locale } = useLanguage();
+  const zone = useBrowserZone();
+  const text = formatLocalHour(value, locale, zone);
+  return text ? <time dateTime={value}>{text}</time> : null;
+}
+
+/** The admin's zone name now: "EST", «غرينتش-٥». */
+export function LocalZoneName() {
+  const { locale } = useLanguage();
+  const zone = useBrowserZone();
+  return <>{zoneLabel(new Date(), zone, locale)}</>;
 }

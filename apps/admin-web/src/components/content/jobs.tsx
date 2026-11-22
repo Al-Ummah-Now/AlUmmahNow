@@ -70,7 +70,7 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
           {jobs.map((job) => (
             <li key={job.id} className="border border-border rounded p-3 bg-surface-2" data-testid="job-item" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
+                <span className="font-medium text-fg [text-wrap:balance]">{t(JOB_KIND_LABEL[job.kind])}</span>
                 <JobStatusChip job={job} />
               </div>
               <LocalTime value={job.updatedAt} className="block mt-1 text-xs text-fg-muted" />
@@ -120,7 +120,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
     <>
       <tr className={`max-md:flex max-md:flex-col ${log.open ? '' : 'border-b border-border last:border-0'}`} data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
         <td className={TD}>
-          <span className="block font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
+          <span className="block font-medium text-fg [text-wrap:balance]">{t(JOB_KIND_LABEL[job.kind])}</span>
           <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
             {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
           </Link>

@@ -3,10 +3,31 @@
  */
 
 import { compactNumber, labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
+import { translateDynamic, type Translator } from '@/i18n/translate';
 
-/** "TypeError: message", without repeating a name the message already starts with. */
+/** The error's message as its title; the type ("UploadError") is shown apart, as a technical detail (errorType). */
 export function errorTitle(g: { name: string | null; message: string }): string {
-  return g.name && !g.message.startsWith(g.name) ? `${g.name}: ${g.message}` : g.message;
+  return g.message || g.name || '';
+}
+
+/** The type when the message doesn't already say it ("UploadError"), or null. */
+export function errorType(g: { name: string | null; message: string }): string | null {
+  return g.name && !g.message.startsWith(g.name) ? g.name : null;
+}
+
+/** Which app reported it, in words ("Al Ummah Now Tools", «أدوات الأمة الآن»); an unknown one as it is. */
+export const appName = (t: Translator, app: string) => translateDynamic(t, 'errorsPage.apps', app);
+
+/** The environment in words ("Production", «الإنتاج»). */
+export const environmentName = (t: Translator, environment: string) => translateDynamic(t, 'errorsPage.environments', environment);
+
+/** A language code in the page language ("ar" → "Arabic", «العربية»). */
+export function languageName(code: string, locale: string): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: 'language' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 const statusChipClasses: Record<string, string> = {
@@ -57,7 +78,7 @@ export function Sparkline({ values, label, width = 112, height = 28 }: { values:
  * Hourly occurrences as bars with a 0-based value axis and hour ticks. Time
  * runs from the axis side (left to right in English, right to left in Arabic),
  * like the Studio charts. Server-rendered: hover shows each bar's hour and
- * count (CSS), and a <details> table is the text alternative.
+ * count (CSS), and a <details> table is the text alternative. Hours are in the admin's zone (LocalHour).
  */
 export function HourlyChart({
   hours,
@@ -72,12 +93,12 @@ export function HourlyChart({
 }: {
   hours: { hour: string; occurrences: number }[];
   label: string;
-  barTitle: (h: { hour: string; occurrences: number }) => string;
+  barTitle: (h: { hour: string; occurrences: number }) => React.ReactNode;
   locale: string;
   /** Short label for an hour on the time axis */
-  hourLabel: (hour: string) => string;
+  hourLabel: (hour: string) => React.ReactNode;
   tableLabel: string;
-  hourHeading: string;
+  hourHeading: React.ReactNode;
   countHeading: string;
   emptyText: string;
 }) {
@@ -105,7 +126,7 @@ export function HourlyChart({
             ))}
             <div className="absolute inset-0 flex items-end gap-px">
               {hours.map((h) => (
-                <div key={h.hour} className="group relative flex h-full flex-1 items-end" title={barTitle(h)}>
+                <div key={h.hour} className="group relative flex h-full flex-1 items-end">
                   <div className="w-full rounded-t-sm bg-accent group-hover:opacity-80" style={{ height: h.occurrences ? `max(2px, ${(h.occurrences / scale.top) * 100}%)` : 0 }} />
                   <span
                     className="pointer-events-none absolute bottom-full start-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface px-2 py-1 text-xs text-fg shadow group-hover:block rtl:translate-x-1/2"
