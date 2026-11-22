@@ -18,8 +18,6 @@ import { IndexRepairRetryButton } from './IndexRepairRetryButton';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import type { MessageKey } from '@/i18n/translate';
 
-import { LocalTime } from '@/components/LocalTime';
-import { fillNodes } from '@/components/audit/fill';
 /** Label of each ownership index kind (Errors page, "Index out of sync"). */
 export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile' | 'playlist' | 'stream', MessageKey> = {
   video: 'errorsPage.indexKindVideo',

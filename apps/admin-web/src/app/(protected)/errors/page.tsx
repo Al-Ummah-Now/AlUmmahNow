@@ -15,7 +15,6 @@ import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseE
 import { ErrorStatusChip, Sparkline, TestChip, appName, environmentName, errorTitle } from './ui';
 import { LiveRefresh } from '@/components/LiveRefresh';
 
-import { LocalTime } from '@/components/LocalTime';
 import { Sep } from '@/components/Sep';
 export const dynamic = 'force-dynamic';
 

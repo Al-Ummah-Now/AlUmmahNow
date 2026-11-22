@@ -21,7 +21,6 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { normalizeRoute, pluralCategory, scrubContext, type ErrorContext, type RequestOrigin } from '@al-ummah/shared-types';
 
-import { LocalTime } from '@/components/LocalTime';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
