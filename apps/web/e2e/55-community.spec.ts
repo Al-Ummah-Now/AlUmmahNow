@@ -609,12 +609,12 @@ test.describe('Community tab - visitor', () => {
     await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible({ timeout: 3000 }));
     await expect(page.getByRole('menuitem')).toHaveText(['Copy link']);
     await page.keyboard.press('Escape');
+    // Comments open to read; signed out there is no comment box, only the way to sign in (#1622)
     await clickUntil(card.getByRole('button', { name: 'Comments' }), async () =>
-      expect(card.getByText('Be the first to comment!')).toBeVisible({ timeout: 3000 })
+      expect(card.getByTestId('post-comments-sign-in')).toBeVisible({ timeout: 3000 })
     );
-    // The submit button appears once the box is focused; it stays disabled without a signed-in channel
-    await card.getByPlaceholder('Add a public comment...').click();
-    await expect(card.getByRole('button', { name: 'Comment', exact: true })).toBeDisabled();
+    await expect(card.getByRole('button', { name: 'Sign in to comment' })).toBeVisible();
+    await expect(card.getByPlaceholder('Add a public comment...')).toHaveCount(0);
   });
 
   test('COMM-021 Arabic post card is RTL: avatar at the right, Arabic relative time', async ({ page }) => {
