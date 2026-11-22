@@ -59,5 +59,7 @@ describe('Library cards on the shared surface (#1634)', () => {
     expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveAttribute('dir', 'auto');
     // Balanced lines, so the post never ends on one lone word ("… with your / family.")
     expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveClass('[text-wrap:balance]');
+    // Its lines start where the page's lines start, not at the card's far edge
+    expect(screen.getByText('تبدأ سلسلتنا الجديدة يوم الجمعة.')).toHaveClass('[text-align:match-parent]');
   });
 });
