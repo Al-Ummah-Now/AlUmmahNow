@@ -121,5 +121,7 @@ html.fanous-street .street-plate {
   max-width: 100%;
   background: var(--fanous-color-background);
   border-radius: var(--r-lg, 14px);
-  box-shadow: 0 0 16px 14px var(--fanous-color-background);
+  /* An unblurred 12px ring is fully opaque wherever the lanterns land; the second shadow fades out to ~32px, so a
+     lantern at the edge dims away instead of being cut flat (AUDIT-2, #1631) */
+  box-shadow: 0 0 0 12px var(--fanous-color-background), 0 0 20px 22px var(--fanous-color-background);
 }
