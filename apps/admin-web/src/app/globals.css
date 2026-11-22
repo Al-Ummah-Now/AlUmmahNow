@@ -346,7 +346,9 @@ html.fanous-street .street-plate {
   max-width: 100%;
   background: var(--color-bg);
   border-radius: 14px;
-  box-shadow: 0 0 16px 14px var(--color-bg);
+  /* Solid for 28px around the text, so no lantern near it shows dimmed or touches it, then a long
+     feather (28px to about 52px), so a lantern further out fades away instead of being cut flat */
+  box-shadow: 0 0 0 28px var(--color-bg), 0 0 48px 28px var(--color-bg);
 }
 
 /* Costs page (COST-1): the theme's materials (materials.css) on its panels, so the page has the
