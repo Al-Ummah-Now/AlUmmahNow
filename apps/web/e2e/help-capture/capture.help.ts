@@ -2182,7 +2182,11 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
         const who = (el: Element, r: { top: number; bottom: number }) =>
           `${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '').split(/\s+/).slice(0, 3).join('.')}@${Math.round(r.top)}-${Math.round(r.bottom)}`;
         // Hidden or see-through things don't show in the picture, so they can't be cut
-        const seen = (el: Element) => el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+        // ...and nor do things off the screen's sides (the phone's closed drawer)
+        const seen = (el: Element) => {
+          const r = el.getBoundingClientRect();
+          return r.right > 0 && r.left < innerWidth && el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+        };
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         for (let t = walker.nextNode(); t; t = walker.nextNode()) {
           if (!t.textContent?.trim()) continue;
@@ -2201,10 +2205,14 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
         for (const el of document.querySelectorAll<HTMLElement>('body *')) {
           if (el.closest('[data-testid="nav-menu"]') || !seen(el)) continue;
           const cs = getComputedStyle(el);
-          const card = parseFloat(cs.borderBottomWidth) >= 1 || parseFloat(cs.borderTopWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
-          if (!card) continue;
+          const topLine = parseFloat(cs.borderTopWidth);
+          const surface = parseFloat(cs.borderBottomWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
+          if (!surface && topLine < 1) continue;
           const r = el.getBoundingClientRect();
-          if (r.width > 40 && r.height > 1 && !big(r) && r.bottom > from) items.push({ top: r.top, bottom: r.bottom, who: 'card ' + who(el, r) });
+          if (!(r.width > 40 && r.height > 1 && !big(r) && r.bottom > from)) continue;
+          // A divider (only its top border drawn, the rail's groups): only that line can be cut
+          if (!surface) items.push({ top: r.top, bottom: r.top + topLine, who: 'line ' + who(el, r) });
+          else items.push({ top: r.top, bottom: r.bottom, who: 'card ' + who(el, r) });
         }
         const cuts = (y: number) => items.filter((it) => it.top < y && it.bottom > y - 4);
         for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!cuts(y).length) return { y, why: [] as string[] };
