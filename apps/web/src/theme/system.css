@@ -529,6 +529,10 @@ a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-se
 /* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
    (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
 :where(article) [dir=auto]:not(input,textarea){text-align:start}
+/* Studio's video editor (components/videoEdit), every theme: its cards and fields keep the theme's glow, but a
+   short one. The full 30px glow is wider than the 24px gap between the editor's sections, so each section's
+   glow ran into the next (AUDIT-2 2026-11-22). Set on the panel, it reaches every card and field inside it */
+html[data-theme] .video-edit-form{--aun-glass-glow:0 0 10px -2px color-mix(in srgb,var(--aun-glass-c) 48%,transparent);--aun-glass-glow-lite:0 0 8px -3px color-mix(in srgb,var(--aun-glass-c) 40%,transparent)}
 /* Option cards: pick-one choices in a dialog (Add channel section). A raised card on the dialog
    surface: dialog text and muted text on a fill lifted from dialog.bg; the icon lights up as the
    primary button on hover. Groups have small headings; an odd last card spans the row. */
@@ -610,7 +614,3 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
    alone on their last line, in every theme (AUDIT-2 2026-11-22). Balanced, not "pretty": Chrome's pretty leaves a
    two-line title's last word alone ("The migration to / Madinah"); balance evens the lines out */
 .video-card :is(h2,h3,strong),[data-testid=watch-history-page] a.line-clamp-2,[data-testid=library-list-item] p.line-clamp-2,.lbl-row-title,.hlib-next-title,.plc-title{text-wrap:balance}
-/* Studio's video editor (components/videoEdit), every theme: its cards and fields keep the theme's glow, but a
-   short one. The full 30px glow is wider than the 24px gap between the editor's sections, so each section's
-   glow ran into the next (AUDIT-2 2026-11-22). Set on the panel, it reaches every card and field inside it */
-html[data-theme] .video-edit-form{--aun-glass-glow:0 0 10px -2px color-mix(in srgb,var(--aun-glass-c) 48%,transparent);--aun-glass-glow-lite:0 0 8px -3px color-mix(in srgb,var(--aun-glass-c) 40%,transparent)}
