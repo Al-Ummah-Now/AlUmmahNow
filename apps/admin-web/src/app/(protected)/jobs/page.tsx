@@ -19,6 +19,7 @@ const FILTERS = [
   { status: 'queued', label: 'jobs.statuses.queued' },
   { status: 'running', label: 'jobs.statuses.running' },
   { status: 'succeeded', label: 'jobs.filterDone' },
+  { status: 'cancelled', label: 'jobs.statuses.cancelled' },
   { status: undefined, label: 'jobs.filterAll' },
 ] as const;
 
@@ -26,6 +27,8 @@ const FILTERS = [
  * Admin jobs: heavy actions (deletes, suspend and ban cascades, transfers,
  * moves) run from a queue with retries. Failed ones are listed first so an
  * admin can retry them; they also show on the Errors page and on the item.
+ * Each job shows attempts n/max, its next try, its last error in plain words
+ * and its log; Cancel stops one that has not finished (TA-8).
  */
 export default async function JobsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const raw = await searchParams;

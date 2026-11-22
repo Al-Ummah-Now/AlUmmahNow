@@ -36,6 +36,7 @@ export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {
   retrying: 'adminJobs.statuses.retrying',
   succeeded: 'adminJobs.statuses.succeeded',
   failed: 'adminJobs.statuses.failed',
+  cancelled: 'adminJobs.statuses.cancelled',
 };
 
 /** Statuses of a job that is still going (the page refreshes while one is). */

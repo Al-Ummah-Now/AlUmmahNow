@@ -9,14 +9,15 @@
 import { useAdminLive } from '@/lib/live/useAdminLive';
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
-import { retryJob } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import type { MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, useContentAction } from './actions';
-import { Chip, SectionCard, smallButtonClass } from './parts';
-import { canRetryJob, isActiveJob, jobTargetHref, jobTone } from './job-helpers';
+import { Chip, SectionCard } from './parts';
+import { isActiveJob, jobTargetHref, jobTone } from './job-helpers';
+import { JobActionButtons, JobErrorText, JobLog, JobTiming, useJobCancel } from './job-parts';
+import { LocalTime } from '@/components/LocalTime';
 import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
@@ -50,8 +51,10 @@ export function JobStatusChip({ job }: { job: Pick<AdminJob, 'status'> }) {
  * not read them: that is said plainly, never shown as "no jobs".
  */
 export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; permissions: AdminContentPermission[] }) {
-  const { t, locale } = useLanguage();
-  const { run, busy, error, message } = useContentAction();
+  const { t } = useLanguage();
+  const action = useContentAction();
+  const { error, message } = action;
+  const cancel = useJobCancel(action);
   const active = !!jobs?.some(isActiveJob);
   useRefreshWhile(active);
 
@@ -70,33 +73,23 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
                 <span className="font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
                 <JobStatusChip job={job} />
               </div>
-              <p className="mt-1 text-xs text-fg-muted">
-                {formatDate(job.updatedAt, locale, true)}
-                {job.attempts > 0 && <> · {t('jobs.attempts', { count: job.attempts })}</>}
-              </p>
+              <LocalTime value={job.updatedAt} className="block mt-1 text-xs text-fg-muted" />
+              <JobTiming job={job} />
               {job.lastError && job.status !== 'succeeded' && (
-                <p className="mt-2 text-xs text-danger-fg break-words" dir="ltr" data-testid="job-error">
-                  {t('jobs.lastError', { error: job.lastError })}
-                </p>
-              )}
-              {job.status === 'failed' && canRetryJob(job, permissions) && (
                 <div className="mt-2">
-                  <button
-                    type="button"
-                    className={smallButtonClass}
-                    disabled={!!busy}
-                    onClick={() => run(`retry:${job.id}`, () => retryJob(job.id), { success: t('jobs.retried') })}
-                    data-testid="job-retry"
-                  >
-                    {busy === `retry:${job.id}` ? t('content.working') : t('jobs.retry')}
-                  </button>
+                  <JobErrorText error={job.lastError} />
                 </div>
               )}
+              <div className="mt-2 flex flex-wrap items-start justify-between gap-2">
+                <JobLog job={job} />
+                <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={cancel.ask} />
+              </div>
             </li>
           ))}
         </ul>
       )}
       {active && <p className="mt-3 text-xs text-fg-subtle">{t('jobs.autoRefresh')}</p>}
+      {cancel.dialog}
     </SectionCard>
   );
 }
@@ -115,10 +108,15 @@ export function FailedJobsBanner({ count }: { count: number }) {
   );
 }
 
-/** Jobs as a table (Jobs page, Errors page): job, item, status, attempts, last error, Retry. */
+/**
+ * Jobs as a table (Jobs page, Errors page): job and item, status with attempts n/max and the next try,
+ * the last error in plain words, when it changed, Retry and Cancel, and each job's log.
+ */
 export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: AdminJob[]; permissions: AdminContentPermission[]; testId?: string }) {
-  const { t, locale } = useLanguage();
-  const { run, busy, error, message } = useContentAction();
+  const { t } = useLanguage();
+  const action = useContentAction();
+  const { error, message } = action;
+  const cancel = useJobCancel(action);
   useRefreshWhile(jobs.some(isActiveJob));
   const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
   const td = 'px-3 sm:px-4 py-3 align-top text-sm';
@@ -147,26 +145,32 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
                     {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
                   </Link>
                   <span className="block text-xs text-fg-subtle">{fillNodes(t('jobs.by'), { actor: <UserName id={job.actorId} showEmail={false} /> })}</span>
-                  {job.lastError && job.status !== 'succeeded' && <span className="block md:hidden text-xs text-danger-fg break-words mt-1" dir="ltr">{job.lastError}</span>}
+                  {job.lastError && job.status !== 'succeeded' && (
+                    <div className="md:hidden mt-1">
+                      <JobErrorText error={job.lastError} testId="job-error-narrow" />
+                    </div>
+                  )}
+                  <div className="mt-2">
+                    <JobLog job={job} />
+                  </div>
                 </td>
                 <td className={td}>
                   <JobStatusChip job={job} />
-                  {job.attempts > 0 && <span className="block text-xs text-fg-muted mt-1">{t('jobs.attempts', { count: job.attempts })}</span>}
+                  <JobTiming job={job} />
                 </td>
-                <td className={`${td} ${wide} text-danger-fg break-words max-w-md`} dir="ltr">{job.status !== 'succeeded' ? job.lastError ?? '' : ''}</td>
-                <td className={`${td} ${wide} text-fg-muted whitespace-nowrap`}><time dateTime={job.updatedAt}>{formatDate(job.updatedAt, locale, true)}</time></td>
+                <td className={`${td} ${wide} max-w-md`}>{job.lastError && job.status !== 'succeeded' ? <JobErrorText error={job.lastError} /> : null}</td>
+                <td className={`${td} ${wide} text-fg-muted whitespace-nowrap`}>
+                  <LocalTime value={job.updatedAt} />
+                </td>
                 <td className={td}>
-                  {job.status === 'failed' && canRetryJob(job, permissions) && (
-                    <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run(`retry:${job.id}`, () => retryJob(job.id), { success: t('jobs.retried') })} data-testid="job-retry">
-                      {busy === `retry:${job.id}` ? t('content.working') : t('jobs.retry')}
-                    </button>
-                  )}
+                  <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={cancel.ask} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {cancel.dialog}
     </div>
   );
 }

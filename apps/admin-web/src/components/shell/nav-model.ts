@@ -38,6 +38,8 @@ export interface NavAccess {
   settings?: boolean;
   /** emails:manage (Settings › Emails: the system emails' wording): admins and super admins */
   emails?: boolean;
+  /** imports:manage (Imports: Admin Tools batches and files): admins and super admins */
+  imports?: boolean;
   /** Super admin: CSAM cases (docs/specs/CSAM-RESPONSE.md), which no other role may open */
   superAdmin?: boolean;
 }
@@ -97,6 +99,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/channels', label: 'nav.channels', icon: 'tv', group: 'content' },
   { href: '/playlists', label: 'nav.playlists', icon: 'list', group: 'content' },
   // Video categories (admin-managed): every admin reads, videos:categories changes
+  // Imports (wiki TOOLS-ADMIN TA-8): Admin Tools batches, their files and what became of each; imports:manage
+  { href: '/imports', label: 'nav.imports', icon: 'archive', group: 'content', requires: (a) => a.imports === true },
   { href: '/categories', label: 'nav.categories', icon: 'tag', group: 'content' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions', icon: 'tag', group: 'content' },
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },

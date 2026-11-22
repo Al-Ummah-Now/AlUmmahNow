@@ -133,6 +133,12 @@ export function canUseProcessing(role?: string): boolean {
  * (media:manage is granted to admins and super admins, not moderators).
  * admin-api enforces it; this only hides what the user cannot open.
  */
+/** imports:manage in admin-api: the Imports view (Admin Tools batches and files) and the Tools app itself. */
+export function canManageImports(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
 /** emails:manage in admin-api: Settings › Emails (edit, restore and test-send system emails). */
 export function canManageEmails(role?: string): boolean {
   const r = normalizeRole(role);

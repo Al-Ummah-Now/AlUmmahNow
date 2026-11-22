@@ -40,7 +40,7 @@ interface Followed {
   unknown?: boolean;
 }
 
-const done = (job: AdminJob) => job.status === 'succeeded' || job.status === 'failed';
+const done = (job: AdminJob) => job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled';
 
 export function ChannelTransfer({ channel }: Props) {
   const { t, locale } = useLanguage();

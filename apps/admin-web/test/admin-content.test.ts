@@ -42,6 +42,8 @@ const job = (over: Partial<AdminJob> = {}): AdminJob => ({
   params: {},
   status: 'queued',
   attempts: 0,
+  maxAttempts: 6,
+  nextRunAt: null,
   lastError: null,
   result: null,
   actorId: 'usr_admin',
