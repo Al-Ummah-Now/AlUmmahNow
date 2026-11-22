@@ -157,10 +157,10 @@ test.describe('invite creators', () => {
         await page.fill('input[name="email"]:not([type="hidden"])', EMAIL);
         await fillSecret(page.locator('input[name="password"]'), PASSWORD);
         await fillSecret(page.locator('input[name="repeat"]'), PASSWORD);
-        await page.click('button[data-component="button"]:not([type="button"])');
+        await page.click('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])');
         await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
         await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
-        await page.click('button[data-component="button"]:not([type="button"])');
+        await page.click('button[data-component="button"]:not([type="button"]):not([data-aun-email-link])');
       } else if (await offer.isVisible()) {
         // No password anywhere on the way in
         await expect(page.locator('input[type="password"]')).toHaveCount(0);
