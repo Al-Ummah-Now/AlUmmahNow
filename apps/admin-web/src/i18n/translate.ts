@@ -8,7 +8,7 @@
 import en, { type Messages } from './messages/en';
 import ar from './messages/ar';
 import type { Locale } from './config';
-import { dateTimeFormat, fillTemplate, formatCompact, formatCountNoun, numberFormat, type CountNoun } from '@al-ummah/shared-types';
+import { dateTimeFormat, fillTemplate, formatCompact, formatCountNoun, isArabicLocale, numberFormat, type CountNoun } from '@al-ummah/shared-types';
 
 export type { Messages };
 
@@ -78,36 +78,103 @@ function isCalendarDay(value: DateValue): boolean {
   return typeof value === 'string' && CALENDAR_DAY.test(value);
 }
 
+const NBSP = '\u00A0';
+
+/** Display options: `whole` keeps the date and the time each unbroken (see `wholeParts`). */
+export interface TimeDisplay {
+  whole?: boolean;
+}
+
+/**
+ * The formatted parts with every space a no-break space except the one between the date and the
+ * time: a narrow cell breaks only there, never inside "Nov 22, 2026" or "9:02 PM EST" (AUDIT-2
+ * 2026-11-22, TA-8). Without a time, or without a date, nothing breaks.
+ */
+function wholeParts(parts: Intl.DateTimeFormatPart[]): string {
+  const hour = parts.findIndex((p) => p.type === 'hour');
+  const firstDate = parts.findIndex((p) => p.type === 'year' || p.type === 'month' || p.type === 'day');
+  const between = hour > 0 && firstDate >= 0 && firstDate < hour ? hour - 1 : -1;
+  return parts.map((p, i) => (i === between ? p.value : p.value.replace(/\s/g, NBSP))).join('');
+}
+
+function render(format: Intl.DateTimeFormat, date: Date, display: TimeDisplay): string {
+  return display.whole ? wholeParts(format.formatToParts(date)) : format.format(date);
+}
+
 /**
  * A date, or with `withTime` a date and time with its zone, in the viewer's time zone.
  * A calendar day ("2026-11-21") stays that day: it is never shifted into the day before.
  */
-export function formatDate(value: DateValue, locale: Locale, withTime = false, timeZone?: string): string {
+export function formatDate(value: DateValue, locale: Locale, withTime = false, timeZone?: string, display: TimeDisplay = {}): string {
   const date = toDate(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  if (isCalendarDay(value)) return dateTimeFormat(locale, { ...DAY_FIELDS, timeZone: 'UTC' }).format(date);
-  return dateTimeFormat(locale, { ...(withTime ? TIME_FIELDS : DAY_FIELDS), ...(timeZone ? { timeZone } : {}) }).format(date);
+  if (isCalendarDay(value)) return render(dateTimeFormat(locale, { ...DAY_FIELDS, timeZone: 'UTC' }), date, display);
+  return render(dateTimeFormat(locale, { ...(withTime ? TIME_FIELDS : DAY_FIELDS), ...(timeZone ? { timeZone } : {}) }), date, display);
 }
 
-/** The same instant in UTC, with "UTC" in the text: the hover title of every admin time. Empty for a calendar day. */
-export function formatUtc(value: DateValue, locale: Locale): string {
+/**
+ * The same instant in UTC, with "UTC" in the text: the hover title of every admin time (with seconds
+ * for a `clock` time). Empty for a calendar day.
+ */
+export function formatUtc(value: DateValue, locale: Locale, display: TimeDisplay & { seconds?: boolean } = {}): string {
   const date = toDate(value);
   if (Number.isNaN(date.getTime()) || isCalendarDay(value)) return '';
-  return dateTimeFormat(locale, { ...TIME_FIELDS, timeZone: 'UTC' }).format(date);
+  return render(dateTimeFormat(locale, { ...TIME_FIELDS, ...(display.seconds ? { second: '2-digit' } : {}), timeZone: 'UTC' }), date, display);
 }
 
 /** A time of day with seconds and its zone ("9:41:05 AM EST"), for log lines and "updated" stamps. */
-export function formatClock(value: DateValue, locale: Locale, withDate = false, timeZone?: string): string {
+export function formatClock(value: DateValue, locale: Locale, withDate = false, timeZone?: string, display: TimeDisplay = {}): string {
   const date = toDate(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return dateTimeFormat(locale, {
+  return render(dateTimeFormat(locale, {
     ...(withDate ? DAY_FIELDS : {}),
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
     timeZoneName: 'short',
     ...(timeZone ? { timeZone } : {}),
-  }).format(date);
+  }), date, display);
+}
+
+/** A time of day with its zone and no date ("2:20 PM EST"): when a job runs next. */
+export function formatTime(value: DateValue, locale: Locale, timeZone?: string, display: TimeDisplay = {}): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return render(dateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', ...(timeZone ? { timeZone } : {}) }), date, display);
+}
+
+/**
+ * The zone's short name at that moment, as Intl writes it in the page language (orchestrator ruling
+ * 2026-11-22, from the owner's "9:41 AM EST"): "EST", "EDT", "GMT+5:30", "UTC"; Arabic «غرينتش-٥».
+ * Never a hand-built offset, so every admin page and the Tools app read the same.
+ */
+export function zoneLabel(at: Date, timeZone: string, locale: Locale): string {
+  try {
+    return dateTimeFormat(locale, { timeZone, timeZoneName: 'short' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** An hour on a chart axis in the viewer's zone, without the zone (the heading names it): "Nov 22, 4:00 PM". */
+export function formatHourTick(value: DateValue, locale: Locale, timeZone?: string): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return dateTimeFormat(locale, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...(timeZone ? { timeZone } : {}) }).format(date);
+}
+
+/**
+ * A wait in words, exact to the second: "10 seconds", "1 minute 20 seconds", "2 hours 5 minutes"
+ * («١٠ ثوانٍ», «دقيقة واحدة و٢٠ ثانية» in the page's own forms). Two units at most, the larger first.
+ * Each number stays with its unit, so a narrow log line never leaves the unit alone (AUDIT-2).
+ */
+export function formatDuration(seconds: number, locale: Locale): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const [big, small]: [[number, string], [number, string]] =
+    s < 60 ? [[s, 'second'], [0, 'second']] : s < 3600 ? [[Math.floor(s / 60), 'minute'], [s % 60, 'second']] : s < 86400 ? [[Math.floor(s / 3600), 'hour'], [Math.floor((s % 3600) / 60), 'minute']] : [[Math.floor(s / 86400), 'day'], [Math.floor((s % 86400) / 3600), 'hour']];
+  const unit = ([value, name]: [number, string]) => numberFormat(locale, { style: 'unit', unit: name, unitDisplay: 'long', useGrouping: false }).format(value).replace(/\s/g, NBSP);
+  if (!small[0]) return unit(big);
+  return isArabicLocale(locale) ? `${unit(big)} و${unit(small)}` : `${unit(big)} ${unit(small)}`;
 }
 
 /** A minute on a live chart axis ("14:05") in the viewer's zone; the column heading names the zone. */

@@ -8,8 +8,7 @@ import assert from 'node:assert/strict';
 import { ADMIN_JOB_LOG_EVENTS, CAPTION_JOB_ERRORS, IMPORT_CAPTION_STATES, IMPORT_ITEM_STATES, IMPORT_SIDECAR_PARTS } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
-import { createTranslator, type MessageKey } from '../src/i18n/translate';
-import { formatDuration, formatLocalTime, zoneLabel } from '../src/lib/local-time';
+import { createTranslator, formatClock, formatDate, formatDuration, formatTime, formatUtc, zoneLabel, type MessageKey } from '../src/i18n/translate';
 import { canCancelStatus, canRetryStatus, jobErrorWords, jobTone, logLineKey } from '../src/components/content/job-helpers';
 import { visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import { canManageImports } from '../src/lib/roles';
@@ -30,25 +29,33 @@ describe('times in the admin (local zone, UTC on hover)', () => {
   });
 
   it('formats the time in the zone with its label, and the same moment in UTC', () => {
-    const en1 = formatLocalTime(AT, 'en', 'America/New_York')!;
-    assert.match(en1.text, /Nov\s22,\s2026.*2:20\sPM\sEST$/);
-    assert.match(en1.utc, /7:20\sPM\sUTC$/);
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20\sPM\sEST$/);
+    // The shared admin formatter (i18n/translate), as <LocalTime> calls it: whole date and time
+    const NY = 'America/New_York';
+    const W = { whole: true } as const;
+    assert.match(formatDate(AT, 'en', true, NY, W), /Nov\s22,\s2026.*2:20\sPM\sEST$/);
+    assert.match(formatUtc(AT, 'en', W), /7:20\sPM\sUTC$/);
+    assert.match(formatTime(AT, 'en', NY, W), /^2:20\sPM\sEST$/);
     // Logs: steps seconds apart stay apart
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d\sPM\sEST$/);
-    assert.match(formatLocalTime(AT, 'ar', 'Asia/Riyadh', { seconds: true })!.text, /١٠:٢٠:[٠-٩]{2}/);
-    const ar1 = formatLocalTime(AT, 'ar', 'Asia/Riyadh')!;
-    assert.match(ar1.text, /١٠:٢٠/);
-    assert.ok(ar1.text.endsWith('غرينتش+٣'));
-    assert.doesNotMatch(ar1.text, LATIN_DIGIT, 'Arabic digits only');
-    assert.equal(formatLocalTime('not a date', 'en', 'UTC'), null);
+    assert.match(formatClock(AT, 'en', true, NY, W), /2:20:\d\d\sPM\sEST$/);
+    assert.match(formatClock(AT, 'ar', true, 'Asia/Riyadh', W), /١٠:٢٠:[٠-٩]{2}/);
+    assert.match(formatUtc(AT, 'en', { ...W, seconds: true }), /7:20:00\sPM\sUTC$/);
+    const ar1 = formatDate(AT, 'ar', true, 'Asia/Riyadh', W);
+    assert.match(ar1, /١٠:٢٠/);
+    assert.ok(ar1.endsWith('غرينتش+٣'));
+    assert.doesNotMatch(ar1, LATIN_DIGIT, 'Arabic digits only');
+    assert.equal(formatDate('not a date', 'en', true, 'UTC', W), 'not a date', 'an unreadable value is shown as it is');
   });
 
   it('breaks only between the date and the time: the date, the time and its zone stay whole', () => {
     const spaces = (s: string) => [...s].filter((c) => /\s/.test(c) && c !== '\u00A0').length;
-    assert.equal(spaces(formatLocalTime(AT, 'en', 'America/New_York')!.text), 1);
-    assert.equal(spaces(formatLocalTime(AT, 'ar', 'America/New_York')!.text), 1);
-    assert.equal(spaces(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text), 0);
+    const W = { whole: true } as const;
+    assert.equal(spaces(formatDate(AT, 'en', true, 'America/New_York', W)), 1);
+    assert.equal(spaces(formatDate(AT, 'ar', true, 'America/New_York', W)), 1);
+    assert.equal(spaces(formatClock(AT, 'en', true, 'America/New_York', W)), 1);
+    assert.equal(spaces(formatTime(AT, 'en', 'America/New_York', W)), 0);
+    assert.equal(spaces(formatDate(AT, 'en', false, 'America/New_York', W)), 0, 'a date alone never breaks');
+    // Without `whole` the text is unchanged (plain spaces), for callers that compare strings
+    assert.equal(formatDate(AT, 'en', true, 'America/New_York'), 'Nov 22, 2026, 2:20 PM EST');
   });
 
   it('says a wait in words, rounded down', () => {

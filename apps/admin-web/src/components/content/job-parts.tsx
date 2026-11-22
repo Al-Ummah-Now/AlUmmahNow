@@ -10,8 +10,7 @@ import type { AdminContentPermission, AdminJob, AdminJobLogEntry } from '@al-umm
 import { cancelJob, readJob, retryJob } from '@/lib/api/content';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { pageStart } from '@/i18n/config';
-import { formatNumber } from '@/i18n/translate';
-import { formatDuration } from '@/lib/local-time';
+import { formatDuration, formatNumber } from '@/i18n/translate';
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
 import { linkClass } from '@/components/ui';
