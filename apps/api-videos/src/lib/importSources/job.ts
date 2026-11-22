@@ -14,6 +14,7 @@
 import { featureGate, IMPORT_POSTS_PER_STEP, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { cancelJob, createJob, getJob, getJobWithLog, isCancelled, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { revokeSource, stillAuthorized } from './authorize';
+import { codedError } from './errors';
 import { fetchSource, itemKind } from './fetchers';
 import { postItem, skipItem, type PostItemEnv } from './post';
 import {
@@ -99,8 +100,19 @@ async function fetchPhase(env: SourceSyncEnv, source: SourceRow, params: SyncPar
 	return added;
 }
 
-/** The job: the fetch, then posting in steps. */
+/**
+ * The job: the fetch, then posting in steps. A failure is thrown with its coded reason (`"<code>: <detail>"`,
+ * lib/importSources/errors.ts), which the queue stores as the job's reason and the source's last error.
+ */
 export async function runSourceSync(env: SourceSyncEnv, job: AdminJob, f: typeof fetch = fetch): Promise<JobOutcome> {
+	try {
+		return await runSourceSyncSteps(env, job, f);
+	} catch (error) {
+		throw codedError(error, 'sync_failed');
+	}
+}
+
+async function runSourceSyncSteps(env: SourceSyncEnv, job: AdminJob, f: typeof fetch): Promise<JobOutcome> {
 	const params = { fetched: 0, posted: 0, skipped: 0, phase: 'fetch', ...(job.params as unknown as Partial<SyncParams>) } as SyncParams;
 	if (!params.sourceId) throw new Error('import.source-sync: missing sourceId');
 	const source = await readSource(env, params.sourceId);

@@ -26,7 +26,8 @@ export interface PagePreview {
 }
 
 export class PreviewError extends Error {
-  constructor(public code: 'bad_url' | 'blocked' | 'unreachable' | 'not_html' | 'too_large' | 'too_many_redirects') {
+  /** `status`: the HTTP status of an `unreachable` answer (none when nothing answered or it timed out) */
+  constructor(public code: 'bad_url' | 'blocked' | 'unreachable' | 'not_html' | 'too_large' | 'too_many_redirects', public status?: number) {
     super(code);
   }
 }
@@ -90,7 +91,10 @@ export async function safeFetch(raw: string, accept: string, fetchImpl: typeof f
         url = checkUrl(new URL(next, url).toString());
         continue;
       }
-      if (!res.ok) throw new PreviewError('unreachable');
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new PreviewError('unreachable', res.status);
+      }
       return res;
     }
     throw new PreviewError('too_many_redirects');

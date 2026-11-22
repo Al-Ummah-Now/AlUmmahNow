@@ -48,6 +48,7 @@ import { postItem } from './post';
 import { changes, claimItemIds, readSource, SourceError, sourceDb, type ItemRow, type SourceDbEnv, type SourceRow } from './store';
 import { initiateImportVideo, markVideoImported, type ImportUpload } from './video';
 import type { SourceSyncEnv } from './job';
+import { codedError } from './errors';
 import { logger } from '../logger';
 
 export const TAKEOUT_JOB_KIND = 'import.takeout-match' as const;
@@ -401,8 +402,20 @@ function stepContext(): { ctx: ExecutionContext; settle(): Promise<unknown> } {
 	return { ctx, settle: () => Promise.allSettled(pending) };
 }
 
-/** The job: match the new files (a step at a time), then post the uploaded ones. */
+/**
+ * The job: match the new files (a step at a time), then post the uploaded ones. A failure is thrown with its coded
+ * reason (`"<code>: <detail>"`, lib/importSources/errors.ts): `upload_incomplete`, a SourceError's code, else
+ * `takeout_failed`.
+ */
 export async function runTakeoutJob(env: SourceSyncEnv, job: AdminJob): Promise<JobOutcome> {
+	try {
+		return await runTakeoutSteps(env, job);
+	} catch (error) {
+		throw codedError(error, 'takeout_failed');
+	}
+}
+
+async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOutcome> {
 	const params = { matched: 0, unmatched: 0, ambiguous: 0, attached: 0, failed: 0, ...(job.params as unknown as Partial<TakeoutParams>) } as TakeoutParams;
 	if (!params.sourceId) throw new Error('import.takeout-match: missing sourceId');
 	const result = () => ({ ...params });
