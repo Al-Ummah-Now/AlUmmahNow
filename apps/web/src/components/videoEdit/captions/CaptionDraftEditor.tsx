@@ -326,7 +326,10 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden />
           </div>
         ) : (
-          <div className="grid flex-1 min-h-0 grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <div className="grid flex-1 min-h-0 grid-cols-1 max-md:overflow-y-auto md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            {/* Phones: the video, find/replace and cues scroll as one page, so a cue (a Quran card with
+                its attribution) is never squeezed into the little room left under the video. From
+                md the video column and the cue list scroll side by side. */}
             <aside className="border-b border-border p-4 md:border-b-0 md:border-e space-y-3 md:overflow-y-auto">
               {videoUrl && (
                 <CuePreviewVideo ref={videoRef} src={videoUrl} poster={posterUrl} lang={lang} />
@@ -349,7 +352,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
               </div>
             </aside>
 
-            <ol aria-label={tc.editor.cueList} className="min-h-0 overflow-y-auto p-4 space-y-3" data-testid="caption-cues">
+            <ol aria-label={tc.editor.cueList} className="p-4 space-y-3 md:min-h-0 md:overflow-y-auto" data-testid="caption-cues">
               {cues.length === 0 && <li className="text-sm text-muted-foreground">{tc.editor.empty}</li>}
               {cues.map((cue, i) => (
                 <li

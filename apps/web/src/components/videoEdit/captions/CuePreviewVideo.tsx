@@ -64,10 +64,12 @@ const CuePreviewVideo = forwardRef<HTMLVideoElement | null, CuePreviewVideoProps
         <button type="button" className={btn} onClick={toggle} aria-label={playing ? labels.pauseButton : labels.playButton}>
           {playing ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
         </button>
+        {/* Each time is its own left-to-right isolate: between two runs of Arabic digits the slash
+            would otherwise turn the pair right to left and show the duration first */}
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          <span aria-label={labels.currentTime}>{formatPlayerTime(lang, time)}</span>
+          <span dir="ltr" aria-label={labels.currentTime}>{formatPlayerTime(lang, time)}</span>
           {' / '}
-          <span aria-label={labels.duration}>{formatPlayerTime(lang, duration)}</span>
+          <span dir="ltr" aria-label={labels.duration}>{formatPlayerTime(lang, duration)}</span>
         </span>
         <input
           type="range"
