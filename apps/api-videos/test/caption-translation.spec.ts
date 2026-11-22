@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType, captionDraftKey, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
+import { MessageType, captionDraftKey, quranTranslationCueText, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
 import { finishJob, requestTranslationJob, type CaptionJobsEnv } from '../src/lib/captions/jobs';
 import { captionSubject, eraseCaptionMinutes, readUsage } from '../src/lib/captions/minutes';
@@ -179,6 +179,12 @@ describe('Quran translation editions (O7)', () => {
 		assert.equal((await editionFor(env as never, 'c2', 'en'))!.id, 85);
 		assert.deepEqual((await channelEditions(d1, 'c1')).map((e) => [e.language, e.source]), [['en', 'channel']]);
 		assert.deepEqual((await platformEditions(d1)).map((e) => [e.language, e.id, e.source]), [['en', 85, 'platform']]);
+	});
+
+	it('a translation that quotes speech keeps its own quotes, inside single outer marks', () => {
+		// Fixture wording shaped like an edition that opens a quotation mid-span (it closes in a later ayah)
+		assert.equal(quranTranslationCueText('Say, "fixture speech, [fixture] one,', 'Saheeh International', 'Al-Ikhlas', '112:1:1-112:1:4'), '‘Say, "fixture speech, [fixture] one,’ (Saheeh International · Al-Ikhlas 112:1)');
+		assert.equal(quranTranslationCueText('fixture text', 'Saheeh International', 'Al-Ikhlas', '112:2:1-112:2:2'), '“fixture text” (Saheeh International · Al-Ikhlas 112:2)');
 	});
 
 	it('a served translated track shows the edition’s text with its name; past the QF cap or with QF down, the reference', async () => {

@@ -169,7 +169,7 @@ describe('caption drafts', () => {
 		assert.equal(vtt.headers.get('content-disposition'), 'attachment; filename="v1-ar.vtt"');
 		assert.equal(vtt.headers.get('cache-control'), 'no-store');
 		const file = await vtt.text();
-		assert.match(file, /^WEBVTT\n\nNOTE\nQuran data provided by Quran Foundation \(https:\/\/quran\.foundation\/\)\nبيانات القرآن مقدَّمة من مؤسسة القرآن \(https:\/\/quran\.foundation\/\u200e\)\nQuran text: Uthmani \(Hafs\)\n\n/);
+		assert.match(file, /^WEBVTT\n\nNOTE\nQuran data provided by Quran Foundation \(https:\/\/quran\.foundation\/\)\nبيانات القرآن مقدَّمة من مؤسسة القرآن \(https:\/\/quran\.foundation\/\u200e\)\nQuran text: Uthmani \(Hafs\)\nنص القرآن: الرسم العثماني \(حفص\)\n\n/);
 		// The verse text exactly as served for viewing: unaltered
 		assert.equal(file.replace(/\n\nNOTE\n[^]*?\n\n/, '\n\n'), served.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
 		assert.match(file, /قُلْ هُوَ ٱللَّهُ أَحَدٌ/);

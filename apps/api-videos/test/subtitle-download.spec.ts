@@ -14,8 +14,9 @@ describe('subtitle downloads', () => {
 			'Quran data provided by Quran Foundation (https://quran.foundation/)',
 			'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/‎)',
 			'Translation: Saheeh International',
+			'الترجمة: Saheeh International',
 		]);
-		assert.equal(quranAttributionLines(null)[2], 'Quran text: Uthmani (Hafs)');
+		assert.deepEqual(quranAttributionLines(null).slice(2), ['Quran text: Uthmani (Hafs)', 'نص القرآن: الرسم العثماني (حفص)']);
 	});
 
 	it('puts the NOTE after the header, BOM and CRLF normalised, header settings kept', () => {
@@ -38,9 +39,9 @@ describe('subtitle downloads', () => {
 	it('an SRT keeps the attribution in a first zero-length cue; a VTT in a NOTE', () => {
 		const vtt = 'WEBVTT\n\n00:00.000 --> 00:01.000\n“[fixture translation 20 of 112:1]”\n';
 		const srt = subtitleDownload(vtt, 'srt', { edition });
-		assert.equal(srt.split('\n\n')[0], '1\n00:00:00,000 --> 00:00:00,000\nQuran data provided by Quran Foundation (https://quran.foundation/)\nبيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/‎)\nTranslation: Saheeh International');
+		assert.equal(srt.split('\n\n')[0], '1\n00:00:00,000 --> 00:00:00,000\nQuran data provided by Quran Foundation (https://quran.foundation/)\nبيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/‎)\nTranslation: Saheeh International\nالترجمة: Saheeh International');
 		assert.match(srt, /\n\n2\n00:00:00,000 --> 00:00:01,000\n“\[fixture translation 20 of 112:1\]”\n$/);
-		assert.match(subtitleDownload(vtt, 'vtt', { edition }), /^WEBVTT\n\nNOTE\n.*\nTranslation: Saheeh International\n\n00:00.000/s);
+		assert.match(subtitleDownload(vtt, 'vtt', { edition }), /^WEBVTT\n\nNOTE\n.*\nTranslation: Saheeh International\nالترجمة: Saheeh International\n\n00:00.000/s);
 		assert.equal(subtitleDownload(vtt, 'vtt', null), vtt);
 	});
 });
