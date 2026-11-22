@@ -2194,6 +2194,15 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
           const r = el.getBoundingClientRect();
           if (r.width > 1 && r.height > 1 && r.height < 160) items.push({ top: r.top, bottom: r.bottom });
         }
+        // A card's bottom line: the frame ends 4 px past it, or cuts through the card's body well above it
+        for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+          if (el.closest('[data-testid="nav-menu"]')) continue;
+          const cs = getComputedStyle(el);
+          const card = parseFloat(cs.borderBottomWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
+          if (!card) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width > 40 && r.bottom > from && r.bottom < innerHeight) items.push({ top: r.bottom - 4, bottom: r.bottom + 4 });
+        }
         for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!items.some((it) => it.top < y && it.bottom > y - 4)) return y;
         return innerHeight;
       }, mb.y + mb.height);
