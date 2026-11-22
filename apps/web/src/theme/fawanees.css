@@ -90,5 +90,5 @@ html.fanous-street .street-plate {
   max-width: 100%;
   background: var(--fanous-color-background);
   border-radius: var(--r-lg, 14px);
-  box-shadow: 0 0 12px 8px var(--fanous-color-background);
+  box-shadow: 0 0 16px 14px var(--fanous-color-background);
 }
