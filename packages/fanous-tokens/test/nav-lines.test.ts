@@ -88,7 +88,8 @@ test('no descendant combinator directly before a pseudo-class function', () => {
 // (nav/icons/<id>.webp, served at /aun-nav/icons/), never inlined, and nothing else is fetched
 test('the stylesheet inlines no images and fetches nothing', () => {
   assert.doesNotMatch(css, /url\(|@import|data:/);
-  assert.ok(css.length < 32_000, `aun-nav.css is ${css.length} bytes`);
+  // 32 KB, plus the theme header block (each built-in theme's band, edge, blur and control font)
+  assert.ok(css.length < 36_000, `aun-nav.css is ${css.length} bytes`);
 });
 
 // Production 2026-11-13 (owner's browser, profile and videos admin): the lines vanished and the

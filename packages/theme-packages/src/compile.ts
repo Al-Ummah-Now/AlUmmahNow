@@ -34,7 +34,7 @@ export interface CompileOptions {
   artUrl?: (mode: Mode, svg: string) => string;
 }
 
-export interface CompiledTheme { tokens: string; materials: string; fonts: string; player: string; art: string; css: string }
+export interface CompiledTheme { tokens: string; materials: string; fonts: string; player: string; art: string; nav: string; css: string }
 
 export const scopeOf = (id: string) => `html[data-theme='${id}']`;
 
@@ -300,6 +300,58 @@ function artCss(pkg: ThemePackage, opts: CompileOptions): string {
   return `${dark} {\n${block('dark')}\n}\n${light} {\n${block('light')}\n}\n`;
 }
 
+/** The custom property each material is written to, by name: `--m-glow` → `materials.glow` */
+const MATERIAL_PATH = new Map([...MATERIAL_VARS, ...OPTIONAL_MATERIAL_VARS].map(([path, prop]) => [prop, path]));
+
+/**
+ * A material value that stands alone: `var(--m-*)` (a {material.*} reference) is replaced by that
+ * material's own value, so an app without the videos app's materials (Auth, CMS, www) paints the
+ * same thing. Colour references stay `var(--fanous-*)`: every app vendors the theme's tokens.
+ */
+function standalone(pkg: ThemePackage, value: string, assetUrl: (p: string) => string, seen: string[] = []): string {
+  return toCss(value, assetUrl).replace(/var\((--m-[a-z0-9-]+)\)/g, (whole, prop: string) => {
+    const path = MATERIAL_PATH.get(prop);
+    const inner = path === undefined ? undefined : get(pkg, path);
+    if (inner === undefined || inner === '' || seen.includes(prop)) return whole;
+    return standalone(pkg, String(inner), assetUrl, [...seen, prop]);
+  });
+}
+
+/**
+ * The header controls the theme's body font reaches in the videos app (`body button`, `body input`…).
+ * Written out: a vendoring app's minifier (the CMS) drops the space in "a :is(b)" (nav-lines.test.ts).
+ */
+const navControls = (scope: string, suffix = '') => ['button', 'input', 'select', 'textarea'].map((el) => `${scope} .aun-header ${el}${suffix}`).join(',');
+
+/**
+ * The shared header's look for this theme (docs/design/NAV.md "Theme"), read by
+ * packages/fanous-tokens/nav/aun-nav.css in every app:
+ *   --aun-header-band   components.header.style.background, the bar's material
+ *   --aun-header-edge   components.header.style.edge, its shadow/rule
+ * and the theme's body font (typography.body) on the header's controls, as the videos app's body rule
+ * gives its buttons and inputs. Light-only header styles use the videos app's html.dark marking,
+ * as the materials do.
+ */
+function navCss(pkg: ThemePackage, assetUrl: (p: string) => string, isDefault: boolean): string {
+  const scope = scopeOf(pkg.id);
+  const header = pkg.components.header as { style: Record<string, string>; lightStyle?: Record<string, string> };
+  const vars = (style: Record<string, string> | undefined) => [
+    style?.background ? `--aun-header-band:${standalone(pkg, style.background, assetUrl)}` : '',
+    style?.edge ? `--aun-header-edge:${standalone(pkg, style.edge, assetUrl)}` : '',
+  ].filter(Boolean);
+  const base = vars(header.style);
+  // The default theme also paints a page that names no theme (an app before it sets data-theme)
+  const top = isDefault ? `${scope},html:not([data-theme])` : scope;
+  const light = vars(header.lightStyle);
+  const body = pkg.typography.body;
+  return [
+    `${top}{${base.join(';')}}`,
+    light.length ? `${scope}:not(.dark){${light.join(';')}}` : '',
+    body ? `${navControls(scope)}{font-family:${bodyStack(body.latin)}}` : '',
+    body ? `${navControls(scope, ':lang(ar)')}{font-family:${bodyStack(body.arabic)}}` : '',
+  ].filter(Boolean).join('\n') + '\n';
+}
+
 /** The package's CSS. Validate first: compiling an invalid package throws or emits broken CSS. */
 export function compilePackage(pkg: ThemePackage, opts: CompileOptions = {}): CompiledTheme {
   const assetUrl = opts.assetUrl ?? ((p: string) => p);
@@ -308,5 +360,6 @@ export function compilePackage(pkg: ThemePackage, opts: CompileOptions = {}): Co
   const fonts = fontsCss(pkg, assetUrl);
   const player = playerCss(pkg, assetUrl);
   const art = artCss(pkg, opts);
-  return { tokens, materials, fonts, player, art, css: [tokens, fonts, materials, player, art].join('\n') };
+  const nav = navCss(pkg, assetUrl, opts.isDefault ?? false);
+  return { tokens, materials, fonts, player, art, nav, css: [tokens, fonts, materials, player, art, nav].join('\n') };
 }
