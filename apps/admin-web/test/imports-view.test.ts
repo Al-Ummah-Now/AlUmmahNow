@@ -19,22 +19,23 @@ const LATIN_DIGIT = /[0-9]/;
 const AT = '2026-11-22T19:20:00.000Z';
 
 describe('times in the admin (local zone, UTC on hover)', () => {
-  it('shows the zone\'s offset at that moment, in each language', () => {
-    assert.equal(zoneLabel(new Date(AT), 'America/New_York', 'en'), 'UTC−5');
-    assert.equal(zoneLabel(new Date('2026-07-01T12:00:00Z'), 'America/New_York', 'en'), 'UTC−4', 'summer time');
-    assert.equal(zoneLabel(new Date(AT), 'Asia/Kolkata', 'en'), 'UTC+5:30');
+  it('shows the zone\'s short name at that moment, as Intl writes it in each language', () => {
+    assert.equal(zoneLabel(new Date(AT), 'America/New_York', 'en'), 'EST');
+    assert.equal(zoneLabel(new Date('2026-07-01T12:00:00Z'), 'America/New_York', 'en'), 'EDT', 'summer time');
+    assert.equal(zoneLabel(new Date(AT), 'Asia/Kolkata', 'en'), 'GMT+5:30');
     assert.equal(zoneLabel(new Date(AT), 'UTC', 'en'), 'UTC');
     assert.equal(zoneLabel(new Date(AT), 'Asia/Riyadh', 'ar'), 'غرينتش+٣');
-    assert.equal(zoneLabel(new Date(AT), 'UTC', 'ar'), 'غرينتش');
+    assert.equal(zoneLabel(new Date(AT), 'America/New_York', 'ar'), 'غرينتش-٥', 'Intl writes a hyphen');
+    assert.equal(zoneLabel(new Date(AT), 'UTC', 'ar'), 'UTC');
   });
 
   it('formats the time in the zone with its label, and the same moment in UTC', () => {
     const en1 = formatLocalTime(AT, 'en', 'America/New_York')!;
-    assert.match(en1.text, /Nov 22, 2026.*2:20 PM UTC−5$/);
+    assert.match(en1.text, /Nov 22, 2026.*2:20 PM EST$/);
     assert.match(en1.utc, /7:20 PM UTC$/);
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20 PM UTC−5$/);
+    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { date: false })!.text, /^2:20 PM EST$/);
     // Logs: steps seconds apart stay apart
-    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d PM UTC−5$/);
+    assert.match(formatLocalTime(AT, 'en', 'America/New_York', { seconds: true })!.text, /2:20:\d\d PM EST$/);
     assert.match(formatLocalTime(AT, 'ar', 'Asia/Riyadh', { seconds: true })!.text, /١٠:٢٠:[٠-٩]{2}/);
     const ar1 = formatLocalTime(AT, 'ar', 'Asia/Riyadh')!;
     assert.match(ar1.text, /١٠:٢٠/);

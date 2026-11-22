@@ -1,4 +1,6 @@
 import Link from '@/components/AppLink';
+import { LocalTime } from '@/components/LocalTime';
+import { formatLocalTime } from '@/lib/local-time';
 import { notFound } from 'next/navigation';
 import { getErrorGroup } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
@@ -6,7 +8,7 @@ import type { ErrorActivity, ErrorEvent, ErrorGroupDetail } from '@/lib/api/erro
 import { getAdminSession } from '@/lib/auth';
 import { canManageErrors, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatHour, formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
+import { formatHour, formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
@@ -92,8 +94,8 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         <Fact label={t('errorsPage.environment')} value={group.environment} mono />
         <Fact label={t('errorsPage.occurrences')} value={formatNumber(group.occurrences, locale)} />
         <Fact label={t('errorsPage.usersAffected')} value={formatNumber(group.users, locale)} />
-        <Fact label={t('errorsPage.firstSeen')} value={formatDate(group.first_seen, locale, true)} />
-        <Fact label={t('errorsPage.lastSeen')} value={formatDate(group.last_seen, locale, true)} />
+        <Fact label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} />} />
+        <Fact label={t('errorsPage.lastSeen')} value={<LocalTime value={group.last_seen} />} />
         <Fact label={t('errorsPage.firstRelease')} value={group.first_release ?? '—'} mono />
         <Fact label={t('errorsPage.lastRelease')} value={group.last_release ?? '—'} mono />
         {group.route && <Fact label={t('errorsPage.route')} value={group.route} mono />}
@@ -136,7 +138,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                     <Fact label={t('errorsPage.itemSource')} value={translateDynamic(t, 'itemSource', item.source)} />
                     <Fact label={t('errorsPage.itemAttempts')} value={formatNumber(item.attempts, locale)} />
                     <Fact label={t('errorsPage.itemLastResult')} value={item.last_attempt_result ?? '—'} />
-                    <Fact label={t('errorsPage.lastSeen')} value={formatDate(item.updated_at, locale, true)} />
+                    <Fact label={t('errorsPage.lastSeen')} value={<LocalTime value={item.updated_at} />} />
                   </dl>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {href && (
@@ -161,7 +163,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           <HourlyChart
             hours={hourly}
             label={t('errorsPage.timeline')}
-            barTitle={(h) => t('errorsPage.timelineHour', { hour: formatDate(hourDate(h.hour), locale, true), count: formatNumber(h.occurrences, locale) })}
+            barTitle={(h) => t('errorsPage.timelineHour', { hour: formatLocalTime(hourDate(h.hour), locale, 'UTC')?.text ?? h.hour, count: formatNumber(h.occurrences, locale) })}
             locale={locale}
             hourLabel={(hour) => formatHour(hour, locale)}
             tableLabel={t('errorsPage.timelineTable')}
@@ -191,7 +193,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                   <tr key={r.release}>
                     <td className="px-3 py-2 font-mono" dir="ltr">{r.release}</td>
                     <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.occurrences, locale)}</td>
-                    <td className="px-3 py-2 text-fg-muted">{formatDate(r.last_seen, locale)}</td>
+                    <td className="px-3 py-2 text-fg-muted"><LocalTime value={r.last_seen} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -243,7 +245,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         ) : (
           <ol className="border-s border-border ms-2 space-y-4" data-testid="error-activity">
             {activity.map((a) => (
-              <ActivityEntry key={a.id} entry={a} t={t} locale={locale} />
+              <ActivityEntry key={a.id} entry={a} t={t} />
             ))}
           </ol>
         )}
@@ -299,7 +301,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
   const template = e.route ? normalizeRoute(e.route) : '';
   const code = (v: string) => <code dir="ltr">{v}</code>;
   const facts: [string, React.ReactNode][] = [
-    [t('errorsPage.occurredAt'), formatDate(e.occurred_at, locale, true)],
+    [t('errorsPage.occurredAt'), <LocalTime key="at" value={e.occurred_at} />],
     [t('errorsPage.route'), e.route ? code(`${e.method ? `${e.method} ` : ''}${e.route}`) : '—'],
   ];
   if (template && template !== e.route) facts.push([t('errorsPage.routeTemplate'), code(template)]);
@@ -420,7 +422,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
   );
 }
 
-function ActivityEntry({ entry: a, t, locale }: { entry: ErrorActivity; t: Translator; locale: Locale }) {
+function ActivityEntry({ entry: a, t }: { entry: ErrorActivity; t: Translator }) {
   const title =
     a.kind === 'status'
       ? t('errorActivity.status', { from: translateDynamic(t, 'errorStatus', a.from_status ?? ''), to: translateDynamic(t, 'errorStatus', a.to_status ?? '') })
@@ -436,9 +438,7 @@ function ActivityEntry({ entry: a, t, locale }: { entry: ErrorActivity; t: Trans
             : t('errorsPage.by', { actor: a.actor_email ?? t('errorsPage.system') })}
         </span>
       </p>
-      <time dateTime={a.created_at} className="text-xs text-fg-subtle">
-        {formatDate(a.created_at, locale, true)}
-      </time>
+      <LocalTime value={a.created_at} className="text-xs text-fg-subtle" />
       {a.body && <p className="mt-1 text-sm text-fg whitespace-pre-wrap break-words" dir="auto">{a.body}</p>}
     </li>
   );
