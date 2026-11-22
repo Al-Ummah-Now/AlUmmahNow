@@ -99,6 +99,25 @@ describe('SettingsMenu', () => {
     expect(parseFloat(menu.style.height)).toBeLessThanOrEqual(104);
   });
 
+  it('covers a phone-width frame with the bar hidden under it; a wide frame keeps the bar', () => {
+    const rect = (x: number, y: number, w: number, h: number) => ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, toJSON: () => ({}) }) as DOMRect;
+    const phone = fakePlayer();
+    phone.el.getBoundingClientRect = () => rect(0, 0, 380, 214);
+    const { unmount } = render(<SettingsMenu player={phone.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
+    const menu = openMenu(phone);
+    expect(menu).toHaveAttribute('data-over-bar');
+    expect(phone.classes.has('vjs-menu-over-bar')).toBe(true);
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(phone.classes.has('vjs-menu-over-bar')).toBe(false);
+    unmount();
+
+    const wide = fakePlayer();
+    wide.el.getBoundingClientRect = () => rect(0, 0, 1280, 720);
+    render(<SettingsMenu player={wide.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
+    openMenu(wide);
+    expect(wide.classes.has('vjs-menu-over-bar')).toBe(false);
+  });
+
   it('opens a submenu with a back row and check marks, applies the choice and returns', () => {
     const f = fakePlayer();
     render(<SettingsMenu player={f.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
