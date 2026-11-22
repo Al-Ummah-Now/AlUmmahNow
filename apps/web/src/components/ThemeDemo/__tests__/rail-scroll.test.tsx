@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { cutItemTail, hasMoreBelow, useMoreBelow } from '../rail-scroll';
+import { cutItemTail, hasMoreBelow, railPad, useMoreBelow } from '../rail-scroll';
 
 /**
  * The side rail's list scrolls with no visible scrollbar, so on a short window its last item was cut off with
@@ -14,6 +14,16 @@ describe('side rail scroll hint', () => {
     expect(hasMoreBelow({ scrollTop: 0, clientHeight: 700, scrollHeight: 900 })).toBe(true);
     expect(hasMoreBelow({ scrollTop: 199, clientHeight: 700, scrollHeight: 900 })).toBe(false);
     expect(hasMoreBelow({ scrollTop: 0, clientHeight: 900, scrollHeight: 900 })).toBe(false);
+  });
+
+  it('railPad: a small overflow is absorbed by the items\' block padding, never under 6px', () => {
+    expect(railPad(0, 12)).toBeNull(); // fits: the full padding stays
+    expect(railPad(1.5, 12)).toBeNull(); // sub-pixel slack
+    expect(railPad(9, 12)).toBe(9); // 9px over: 1px less above and below each item
+    expect(railPad(30, 12)).toBe(8);
+    expect(railPad(96, 12)).toBe(6); // the least it shrinks to
+    expect(railPad(97, 12)).toBeNull(); // too much: the list scrolls and hides the cut item as before
+    expect(railPad(20, 0)).toBeNull();
   });
 
   it('cutItemTail: the item the edge would cut is hidden whole, a complete one never', () => {

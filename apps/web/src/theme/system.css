@@ -207,6 +207,8 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 
 
 
+/* The collapsed rail's items give up a little block padding (never under 6px, rail-scroll.ts railPad) when that is all it takes for every item to fit, so the Arabic rail shows «إرشادات المجتمع» as English shows "Community guidelines" (#1723 ruling) */
+html:not([data-rail=open]) .nv-scroll[style*="--nv-pad-y"] .nv{padding-block:var(--nv-pad-y)}
 @media(hover:hover){.b-secondary:active{background:var(--m-active)!important}}
 :is([class^="bg-black/"],[class*=" bg-black/"]):not(button):not(.fixed){background:rgb(9 21 30/.94)!important;color:#fff!important}
 [data-testid=channel-header] button[class*="rounded-lg"][class*="font-semibold"]{background:var(--aun-btn-filled-bg)!important;color:var(--aun-btn-filled-fg)!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:var(--aun-radius-button)!important;min-height:40px}
