@@ -9,42 +9,15 @@
  * zone between UTC-12 and UTC+12.
  */
 
+import { dateTimeFormat } from '@al-ummah/shared-types';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Keyed by canonical zone names only (validTimeZone), and capped: `tz` comes from the request
-const MAX_CACHED_ZONES = 64;
-const dayFormats = new Map<string, Intl.DateTimeFormat>();
-const clockFormats = new Map<string, Intl.DateTimeFormat>();
 
-function remember(cache: Map<string, Intl.DateTimeFormat>, key: string, format: Intl.DateTimeFormat): Intl.DateTimeFormat {
-	if (cache.size >= MAX_CACHED_ZONES) cache.delete(cache.keys().next().value as string);
-	cache.set(key, format);
-	return format;
-}
-
-function dayFormat(timeZone: string): Intl.DateTimeFormat {
-	let format = dayFormats.get(timeZone);
-	if (!format) {
-		format = remember(dayFormats, timeZone, new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }));
-	}
-	return format;
-}
-
-function clockFormat(timeZone: string): Intl.DateTimeFormat {
-	let format = clockFormats.get(timeZone);
-	if (!format) {
-		format = remember(clockFormats, timeZone, new Intl.DateTimeFormat('en-US', {
-			timeZone,
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			hourCycle: 'h23',
-		}));
-	}
-	return format;
-}
+// Shared cached formatters (locale-format; bounded cache). Only canonical zone names reach them
+// (validTimeZone), since `tz` comes from the request.
+const dayFormat = (timeZone: string) => dateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+const clockFormat = (timeZone: string) =>
+	dateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 
 function parts(format: Intl.DateTimeFormat, ms: number): Record<string, number> {
 	const out: Record<string, number> = {};
@@ -60,7 +33,7 @@ function parts(format: Intl.DateTimeFormat, ms: number): Record<string, number> 
 export function validTimeZone(timeZone?: string | null): string {
 	if (!timeZone || timeZone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+)*$/.test(timeZone)) return 'UTC';
 	try {
-		const canonical = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
+		const canonical = dateTimeFormat('en', { timeZone }).resolvedOptions().timeZone;
 		return canonical === 'Etc/UTC' || canonical === 'Etc/GMT' ? 'UTC' : canonical;
 	} catch {
 		return 'UTC';

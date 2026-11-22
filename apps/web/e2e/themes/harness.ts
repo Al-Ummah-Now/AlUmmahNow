@@ -146,8 +146,9 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       seen.add(el);
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') continue;
-      // Rendering skipped (a closed <details> body, content-visibility: hidden): nothing is drawn
-      if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) continue;
+      // Rendering skipped (a closed <details> body, content-visibility: hidden) or fully
+      // transparent (a side-rail row the list edge cuts through, faded by data-cut): nothing is drawn
+      if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ opacityProperty: true })) continue;
       // Disabled controls are exempt from contrast (WCAG 1.4.3, like axe): Subscribe while its
       // status loads, Like before the viewer has a channel to react as
       if (el.closest(':disabled, [aria-disabled="true"]')) continue;
