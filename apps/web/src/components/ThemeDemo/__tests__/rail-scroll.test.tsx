@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { hasMoreBelow, useMoreBelow } from '../rail-scroll';
+import { cutItemTail, hasMoreBelow, useMoreBelow } from '../rail-scroll';
 
 /**
  * The side rail's list scrolls with no visible scrollbar, so on a short window its last item was cut off with
@@ -14,6 +14,15 @@ describe('side rail scroll hint', () => {
     expect(hasMoreBelow({ scrollTop: 0, clientHeight: 700, scrollHeight: 900 })).toBe(true);
     expect(hasMoreBelow({ scrollTop: 199, clientHeight: 700, scrollHeight: 900 })).toBe(false);
     expect(hasMoreBelow({ scrollTop: 0, clientHeight: 900, scrollHeight: 900 })).toBe(false);
+  });
+
+  it('cutItemTail: the item the edge would cut is hidden whole, a complete one never', () => {
+    // List bottom at 700: the third item (680–740) straddles it, so 20px are hidden (its top to the edge)
+    expect(cutItemTail(700, [{ top: 600, bottom: 640 }, { top: 640, bottom: 680 }, { top: 680, bottom: 740 }])).toBe(20);
+    // An item that ends exactly at the edge is complete: nothing hidden
+    expect(cutItemTail(700, [{ top: 640, bottom: 700 }, { top: 700, bottom: 760 }])).toBe(0);
+    // Nothing straddles the edge
+    expect(cutItemTail(700, [])).toBe(0);
   });
 
   function List() {
