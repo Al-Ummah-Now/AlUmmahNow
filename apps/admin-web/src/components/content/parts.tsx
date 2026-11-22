@@ -137,9 +137,10 @@ export function CursorPager({ hasCursor, nextHref, firstHref, labels, t }: { has
   );
 }
 
+/** A centred line balances its lines, so a wrap never leaves one word alone ("…your / attention.") */
 export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-surface border border-border rounded-lg p-8 text-center text-fg-muted" data-testid="content-empty">
+    <div className="bg-surface border border-border rounded-lg p-8 text-center text-balance text-fg-muted" data-testid="content-empty">
       {children}
     </div>
   );

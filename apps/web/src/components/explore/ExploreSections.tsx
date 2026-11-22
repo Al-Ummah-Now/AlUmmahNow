@@ -58,7 +58,9 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 
 export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id: string; icon: LucideIcon; title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
-    <div className="relative z-10 mb-3 flex items-end justify-between gap-3">
+    // Only the action (View all) is lifted above the phone rail's room (its -my-8): lifting the whole
+    // header painted the Fawanees street plates' glow over the first card's corner (re-audit 8)
+    <div className="mb-3 flex items-end justify-between gap-3">
       <div className="min-w-0">
         <h2 id={id} className="street-plate flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
           <Icon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
@@ -66,7 +68,7 @@ export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id:
         </h2>
         {subtitle && <p className="street-plate mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
       </div>
-      {action && <div className="street-plate shrink-0">{action}</div>}
+      {action && <div className="street-plate relative z-10 shrink-0">{action}</div>}
     </div>
   );
 }
