@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { PREBUILT_LIMITS, prebuiltStagingPrefix, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../src/endpoints/video/renditions';
 import { checkPlan, manifestKey, sweepStaging } from '../src/lib/media/prebuilt';
+import { readAtMost } from '../src/lib/media/prebuiltUploads';
 import { applyJobEvent, clearDeliverySettingsCache, enqueueTranscode, withPrebuiltOutcome } from '../src/lib/media/r2-delivery';
 import { Hono } from 'hono';
 import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
@@ -238,6 +239,29 @@ describe('admin import renditions (TA-12)', () => {
 		const named = env({ channelId: 'chB', media: { providers: { r2: { status: 'pending' } } } });
 		await named.global_settings.put(SETTINGS_KEY, JSON.stringify({ ...DEFAULT_MEDIA_SETTINGS, channels: { chB: { ingest: ['bunny'] } } }));
 		assert.equal(((await (await admin(named, 'GET', `/videos/${ID}/delivery`)).json()) as any).result.takesRenditions, true);
+	});
+});
+
+describe('rendition file bodies', () => {
+	const stream = (...chunks: number[]) =>
+		new ReadableStream<Uint8Array>({
+			start(controller) {
+				for (const n of chunks) controller.enqueue(new Uint8Array(n));
+				controller.close();
+			},
+		});
+	it('reads at most the declared size, whatever the length header says', async () => {
+		assert.equal((await readAtMost(stream(2, 3), 5))?.byteLength, 5);
+		assert.equal((await readAtMost(stream(2, 2), 5))?.byteLength, 4);
+		assert.equal(await readAtMost(stream(4, 4, 4), 5), null);
+		assert.equal((await readAtMost(null, 5))?.byteLength, 0);
+	});
+	it('a body longer than declared is refused without a length header', async () => {
+		const e = env();
+		const id = (await stage(e)).body.data.stagingId;
+		const res = await app().request(`/api/videos/${ID}/renditions/${id}/files/360p/init.mp4`, { method: 'PUT', body: stream(2, 2), duplex: 'half' } as RequestInit, e as never);
+		assert.equal(res.status, 400);
+		assert.equal([...e.MEDIA_PRIVATE.store.keys()].some((k) => k.endsWith('360p/init.mp4')), false);
 	});
 });
 

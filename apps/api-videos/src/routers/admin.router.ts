@@ -410,7 +410,7 @@ app.put('/import/videos/:videoId/renditions/:stagingId/files/:rung/:file', async
 	const video = (await importVideo(c)) as WithPrebuilt;
 	return importReply(
 		c,
-		await putRenditionFile(prebuiltEnv(c), video, { stagingId: c.req.param('stagingId'), rung: c.req.param('rung'), name: c.req.param('file'), contentLength: c.req.header('content-length'), body: () => c.req.arrayBuffer() }),
+		await putRenditionFile(prebuiltEnv(c), video, { stagingId: c.req.param('stagingId'), rung: c.req.param('rung'), name: c.req.param('file'), contentLength: c.req.header('content-length'), body: c.req.raw.body }),
 	);
 });
 app.post('/import/videos/:videoId/renditions/:stagingId/complete', async (c) => importReply(c, await completeRenditions(prebuiltEnv(c), (await importVideo(c)) as WithPrebuilt, c.req.param('stagingId'))));
