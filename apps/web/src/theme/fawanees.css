@@ -101,3 +101,8 @@ html[data-theme='fawanees']:not(.dark) div.video-edit-form[data-testid][class*='
 html[data-theme='fawanees']:not(.dark) .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, white 92%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark div.video-edit-form[data-testid][class*='rounded'][class*='shadow'] { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, var(--aun-glass-base-dark) 94%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
+
+/* Studio's work area stays plain (docs/design/FAWANEES-STREET.md, "Where it does not draw"): a work
+   tool's fields and help lines never have a lantern or string behind them. The rail keeps its own
+   surface; the frame paints the page colour over the street */
+html.fanous-street .studio-frame { background: var(--fanous-color-background); }

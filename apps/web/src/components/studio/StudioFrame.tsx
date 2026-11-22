@@ -268,7 +268,7 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
   const title = item ? t.studio.nav[item.id] : t.studio.title;
 
   return (
-    <div className="min-h-[calc(100dvh-var(--aun-header-height,4rem))] text-foreground md:flex" data-testid="studio-frame">
+    <div className="studio-frame min-h-[calc(100dvh-var(--aun-header-height,4rem))] text-foreground md:flex" data-testid="studio-frame">
       <aside className="studio-rail sticky top-[var(--aun-header-height,4rem)] hidden h-[calc(100dvh-var(--aun-header-height,4rem))] w-60 shrink-0 border-e border-border md:block">
         <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} />
       </aside>

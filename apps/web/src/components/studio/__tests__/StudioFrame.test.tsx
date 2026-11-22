@@ -52,6 +52,11 @@ describe('StudioFrame', () => {
     expect(document.querySelector('a[href*="/settings/channel/"]')).toBeNull();
   });
 
+  it('the work area is the plain studio frame (theme/fawanees.css paints the page colour over the street)', () => {
+    frame('owner', {}, {});
+    expect(screen.getByTestId('studio-frame')).toHaveClass('studio-frame');
+  });
+
   it('names the icon-only channel switcher after the channel shown beside it', () => {
     frame('owner');
     const switcher = screen.getAllByTestId('studio-switcher')[0];
