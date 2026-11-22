@@ -10,6 +10,8 @@ html body{background:var(--m-page)!important;background-attachment:fixed!importa
 .demo-layer,.min-h-screen{background:transparent!important}
 :focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h3{letter-spacing:0}
+/* A name in the other script keeps its own tracking: Latin inside an Arabic page's heading keeps the Latin -.01em (so it wraps as on the English page: the channel tile's "Seerah Notes for / Young Muslims"), and Arabic is never tracked, on any page (it breaks the joins) */
+html[lang=ar] :is(h1,h2,h3) [dir=auto]:dir(ltr){letter-spacing:-.01em}:is(h1,h2,h3) [dir=auto]:dir(rtl){letter-spacing:0}
 #page-content h1:not(.watch-title){font-weight:700;line-height:1.2}
 .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;transition:background-color 140ms,color 140ms}.ic svg{width:22px;height:22px;stroke-width:1.75}@media(hover:hover){.ic:hover{background:var(--fanous-c-nav-hover)}}
 /* Header */

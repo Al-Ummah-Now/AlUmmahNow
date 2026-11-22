@@ -56,7 +56,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
   return (
     <section aria-labelledby={headingId} data-testid={`library-section-${id}`} className="mb-10">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id={headingId} className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+        <h2 id={headingId} className="street-plate flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
           <span aria-hidden="true" className="text-[var(--fanous-color-accent)]">{icon}</span>
           {title}
           {typeof state.total === 'number' && state.total > 0 && (
@@ -64,7 +64,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
           )}
         </h2>
         {seeAllHref && typeof state.total === 'number' && state.total > 0 && (
-          <Link href={seeAllHref} className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid={`library-see-all-${id}`}>
+          <Link href={seeAllHref} className="street-plate inline-block text-sm font-medium text-blue-700 hover:underline dark:text-blue-300" data-testid={`library-see-all-${id}`}>
             {texts.seeAll}
           </Link>
         )}
@@ -83,7 +83,7 @@ function Section<T>({ id, title, icon, seeAllHref, empty, state, retry, render, 
           </button>
         </div>
       ) : state.items.length === 0 ? (
-        <p className="text-sm text-gray-600 dark:text-gray-400" data-testid={`library-empty-${id}`}>{empty}</p>
+        <p className="street-plate text-sm text-gray-600 dark:text-gray-400" data-testid={`library-empty-${id}`}>{empty}</p>
       ) : (
         <ul className={grid ? 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6' : 'space-y-3'}>
           {state.items.map((item) => (
@@ -166,11 +166,11 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
   return (
     <main dir={dir} className="mx-auto max-w-7xl px-4 py-8" data-testid="library-page">
       <header className="mb-8">
-        <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-white">
+        <h1 className="street-plate flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-white">
           <LibraryIcon className="h-8 w-8 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {texts.title}
         </h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">{texts.description}</p>
+        <p className="street-plate mt-1 text-gray-600 dark:text-gray-400">{texts.description}</p>
       </header>
 
       <Section
