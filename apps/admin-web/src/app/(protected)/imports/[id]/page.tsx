@@ -6,7 +6,7 @@ import { canManageImports } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
-import { EmptyState, MetaLine, smallButtonClass } from '@/components/content/parts';
+import { EmptyState, smallButtonClass } from '@/components/content/parts';
 import { hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { LocalTime } from '@/components/LocalTime';
 import { UserName } from '@/components/audit/UserName';
@@ -71,22 +71,20 @@ export default async function ImportBatchPageView({ params, searchParams }: { pa
         <h1 className="text-3xl font-bold text-fg break-words" data-testid="import-batch-title">
           <BatchName name={batch.name} createdAt={batch.createdAt} />
         </h1>
-        <MetaLine
-          className="block text-fg-muted mt-1"
-          parts={[
-            fillNodes(t('imports.meta'), {
-              channel: batch.channelName ? (
-                <Link href={`/channels/${encodeURIComponent(batch.channelId)}`} className={linkClass}>
-                  {batch.channelName}
-                </Link>
-              ) : (
-                t('imports.channelGone')
-              ),
-              date: <LocalTime value={batch.createdAt} />,
-            }),
-            fillNodes(t('imports.by'), { actor: <UserName id={batch.createdBy} showEmail={false} /> }),
-          ]}
-        />
+        {/* Arabic joins with «،»: a middle dot reads as «٠» (number rule O38) */}
+        <p className="text-fg-muted mt-1 [&_a]:underline [&_a]:underline-offset-2" data-testid="import-batch-meta">
+          {fillNodes(t('imports.metaBy'), {
+            channel: batch.channelName ? (
+              <Link href={`/channels/${encodeURIComponent(batch.channelId)}`} className={linkClass}>
+                <bdi>{batch.channelName}</bdi>
+              </Link>
+            ) : (
+              t('imports.channelGone')
+            ),
+            date: <LocalTime value={batch.createdAt} />,
+            actor: <UserName id={batch.createdBy} showEmail={false} />,
+          })}
+        </p>
       </div>
       <nav aria-label={t('imports.stateFilter')} className="mb-4 flex flex-wrap gap-2" data-testid="import-state-filters">
         {filters.map((f) => {

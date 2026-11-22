@@ -2313,6 +2313,7 @@ const en = {
     cancel: 'Cancel job',
     cancelled: 'Cancelled. Retry starts it again.',
     cancelTitle: 'Cancel this job?',
+    keepJob: 'Keep job',
     cancelBody: 'Nothing more of it runs. A step already running finishes first. Retry starts it again from where it stopped.',
     showLog: 'Log',
     hideLog: 'Hide log',
@@ -2376,6 +2377,8 @@ const en = {
     videoNotImported: 'No imported file has this video.',
     allImports: 'All imports',
     meta: 'Into {channel}, started {date}',
+    metaBy: 'Into {channel}, started {date} · by {actor}',
+    fileMeta: '{size} · {date}',
     counts: {
       uploaded: 'Uploaded: {count}',
       initiated: 'Uploading: {count}',

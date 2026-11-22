@@ -17,11 +17,11 @@ export function browserTimeZone(): string {
   }
 }
 
-export function LocalTime({ value, date = true, className, testId }: { value: string; date?: boolean; className?: string; testId?: string }) {
+export function LocalTime({ value, date = true, seconds = false, className, testId }: { value: string; date?: boolean; seconds?: boolean; className?: string; testId?: string }) {
   const { locale } = useLanguage();
   const [zone, setZone] = useState('UTC');
   useEffect(() => setZone(browserTimeZone()), []);
-  const time = formatLocalTime(value, locale, zone, { date });
+  const time = formatLocalTime(value, locale, zone, { date, seconds });
   if (!time) return null;
   return (
     <time dateTime={value} title={time.utc} className={className} data-testid={testId}>
