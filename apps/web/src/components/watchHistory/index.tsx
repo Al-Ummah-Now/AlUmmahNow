@@ -17,7 +17,6 @@ import { formatAbsoluteDate, formatRelativeTime, formatVideoCount, keepNumbersWi
 import { MetaParts } from '@/components/common/MetaParts';
 import { channelLabel } from '@/lib/channel-name';
 
-import { metaSeparator } from '@/lib/i18n/meta-separator';
 export interface WatchHistoryPageProps {
   /** `continue`: the Continue watching view (`/history?view=continue`) */
   view?: 'all' | 'continue';
