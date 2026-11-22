@@ -167,6 +167,10 @@ There is one sign-out entry, inside the account menu. The header has no separate
 - The name has one width, 9rem, with an ellipsis: switching who you act as ("Community Corner" and
   "Amina Yusuf") never moves the header's other controls, and a long name never pushes the header
   apart (AUDIT-2 2026-11-21: Upload, the bell, language and theme moved 47px on a switch).
+- The name hugs the avatar on the header's start side in both directions. It keeps `dir="auto"`
+  (a Latin name in Arabic reads left to right and ends in its own ellipsis), but its side comes
+  from the page's `dir`, never its own (AUDIT-2 2026-11-22: "Noor Studio" sat 68px from its avatar
+  in the Arabic header).
 
 ## Account menu
 
