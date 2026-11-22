@@ -57,7 +57,7 @@ function formatRelativeTimeArabic(date: Date | undefined, prefix: string = ''): 
  * RTL-Specific Features:
  * - Status badge positioned top-RIGHT (opposite of LTR)
  * - Viewer count positioned top-LEFT (opposite of LTR)
- * - Channel info with avatar on left, name on right (flex-row-reverse)
+ * - Channel info mirrored by dir="rtl": avatar on the right, then the name
  * - All text right-aligned
  * - Metadata flows right-to-left
  * - Arabic numerals and date formatting
@@ -245,12 +245,10 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
             {stream.title}
           </h3>
 
-          {/* Channel Info - RTL: flex-row-reverse (avatar left, name right) */}
+          {/* Channel Info: the card is dir="rtl", so a plain row already mirrors the English card
+              (avatar first, on the right, then the name); flex-row-reverse would undo it */}
           {showChannel && (
-            <div className="flex flex-row-reverse items-center gap-2">
-              <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate text-right">
-                {stream.channel.name}
-              </span>
+            <div className="flex items-center gap-2">
               {stream.channel.avatarUrl && (
                 <div className="relative w-6 h-6 md:w-8 md:h-8 flex-shrink-0">
                   <Image
@@ -262,11 +260,14 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
                   />
                 </div>
               )}
+              <span className="text-xs md:text-sm text-gray-600 dark:text-gray-400 truncate text-right">
+                {stream.channel.name}
+              </span>
             </div>
           )}
 
-          {/* Metadata - RTL: flex-row-reverse (right-to-left flow) */}
-          <div className="flex flex-row-reverse items-center gap-1.5 text-[10px] md:text-xs text-gray-500 dark:text-gray-500 justify-end">
+          {/* Metadata: a plain row in the dir="rtl" card reads right to left (time, then category) */}
+          <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-gray-500 dark:text-gray-500 justify-start">
             {relativeTime && <span className="truncate">{relativeTime}</span>}
             {stream.category && relativeTime && <MetaSep lang="ar" gap="0.375rem" />}
             {stream.category && (

@@ -22,12 +22,14 @@ describe('ViewerCount RTL Component', () => {
       expect(status).toHaveAttribute('dir', 'rtl');
     });
 
-    it('has flex-row-reverse class for RTL layout', () => {
+    it('leads with the icon in RTL (dir="rtl", no flex-row-reverse, which put the icon last)', () => {
       const { container } = renderWithRTL(
         <ViewerCountRTL count={100} />
       );
-      const status = container.querySelector('[role="status"]');
-      expect(status).toHaveClass('flex-row-reverse');
+      const status = container.querySelector('[role="status"]')!;
+      expect(status).toHaveAttribute('dir', 'rtl');
+      expect(status).not.toHaveClass('flex-row-reverse');
+      expect(status.firstElementChild?.tagName.toLowerCase()).toBe('svg');
     });
   });
 

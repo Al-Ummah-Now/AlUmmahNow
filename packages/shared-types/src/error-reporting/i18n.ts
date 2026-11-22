@@ -74,9 +74,9 @@ export const ERROR_SCREEN_STRINGS: Record<'en' | 'ar', ErrorScreenStrings> = {
     copy: 'انسخ الرقم المرجعي',
     copied: 'نُسخ',
     needHelp: 'ما زلت تواجه المشكلة؟',
-    uploadWait: 'ما زال الرفع جارياً. ستُحدَّث الصفحة عند اكتماله.',
+    uploadWait: 'ما زال الرفع جاريًا. ستُحدَّث الصفحة عند اكتماله.',
     updateNow: 'أعد التحميل الآن',
-    updateLater: 'لاحقاً',
+    updateLater: 'لاحقًا',
     updateNotice: 'يتوفر إصدار جديد من الموقع.',
   },
 };

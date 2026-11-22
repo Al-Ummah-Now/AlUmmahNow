@@ -83,7 +83,7 @@ const statusConfig: Record<ScheduledPublishStatus, {
 
 // Format countdown display
 export function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
-  if (ms <= 0) return locale === 'ar' ? 'قريباً' : 'Soon';
+  if (ms <= 0) return locale === 'ar' ? 'قريبًا' : 'Soon';
 
   const n = (v: number) => formatNumber(locale, v);
   const seconds = Math.floor(ms / 1000);

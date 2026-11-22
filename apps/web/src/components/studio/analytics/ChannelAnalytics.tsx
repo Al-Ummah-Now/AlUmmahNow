@@ -223,6 +223,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                       {sortHeader('avgViewDuration', text.metrics.avgViewDuration)}
                     </tr>
                   </thead>
+                  {/* One watch-time unit for the whole column (the largest row's): «٠ س», never «٠ د» among hours */}
                   <tbody>
                     {sorted.map((item) => (
                       <tr key={item.videoId} className="border-b border-border" data-testid="studio-top-row">
@@ -230,7 +231,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                           <Link href={videoHref(item.videoId)} dir="auto" title={topContentTitle(item, locale)} className="line-clamp-2 break-words text-foreground hover:underline" data-testid="studio-top-title">{topContentTitle(item, locale)}</Link>
                         </td>
                         <td className="whitespace-nowrap p-2 text-end tabular-nums">{number.format(item.views)}</td>
-                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
+                        <td className="whitespace-nowrap p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(Math.max(0, ...sorted.map((row) => row.watchTime || 0))))(item.watchTime)}</td>
                         <td className="whitespace-nowrap p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
                       </tr>
                     ))}

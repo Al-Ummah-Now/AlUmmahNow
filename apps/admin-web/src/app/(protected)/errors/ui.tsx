@@ -73,10 +73,12 @@ export function TestChip({ label }: { label: string }) {
  * Occurrences per day as an inline SVG polyline. Drawn left to right in
  * time order in both directions (a time axis is not mirrored in RTL).
  */
-export function Sparkline({ values, label, width = 112, height = 28 }: { values: number[]; label: string; width?: number; height?: number }) {
+/** Daily counts, oldest first. Time runs like the Studio and admin charts: left to right in
+ *  English, right to left in Arabic (`rtl`), so today is at the reading end in both. */
+export function Sparkline({ values, label, width = 112, height = 28, rtl = false }: { values: number[]; label: string; width?: number; height?: number; rtl?: boolean }) {
   const max = Math.max(1, ...values);
   const step = values.length > 1 ? width / (values.length - 1) : width;
-  const points = values.map((v, i) => `${(i * step).toFixed(1)},${(height - 2 - (v / max) * (height - 4)).toFixed(1)}`).join(' ');
+  const points = values.map((v, i) => `${(rtl ? width - i * step : i * step).toFixed(1)},${(height - 2 - (v / max) * (height - 4)).toFixed(1)}`).join(' ');
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className="text-accent overflow-visible" style={{ direction: 'ltr' }} data-testid="error-sparkline">
       <line x1="0" y1={height - 1} x2={width} y2={height - 1} className="stroke-border" strokeWidth="1" />

@@ -43,7 +43,7 @@ describe('sanitizeText', () => {
 
   it('keeps ordinary English and Arabic text intact', () => {
     expect(sanitizeText('Great lecture, thank you!')).toBe('Great lecture, thank you!');
-    expect(sanitizeText('جزاك الله خيراً على هذا الدرس')).toBe('جزاك الله خيراً على هذا الدرس');
+    expect(sanitizeText('جزاك الله خيرًا على هذا الدرس')).toBe('جزاك الله خيرًا على هذا الدرس');
   });
 
   it('removes control and bidi-override characters', () => {

@@ -50,13 +50,13 @@ const POST_TYPES: PostTypeCard[] = [
     type: PostType.POLL,
     icon: BarChart3,
     label: { en: 'Poll', ar: 'استطلاع' },
-    description: { en: 'Ask your audience a question', ar: 'اسأل جمهورك سؤالاً' }
+    description: { en: 'Ask your audience a question', ar: 'اسأل جمهورك سؤالًا' }
   },
   {
     type: PostType.QUIZ,
     icon: Brain,
     label: { en: 'Quiz', ar: 'اختبار' },
-    description: { en: 'Create an interactive quiz', ar: 'أنشئ اختباراً تفاعلياً' }
+    description: { en: 'Create an interactive quiz', ar: 'أنشئ اختبارًا تفاعليًا' }
   },
   {
     type: PostType.VIDEO,

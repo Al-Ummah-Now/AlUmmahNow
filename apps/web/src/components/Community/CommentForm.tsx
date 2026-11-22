@@ -67,7 +67,7 @@ export default function CommentForm({
     if (content.length > MAX_COMMENT_LENGTH) {
       setError(
         isRTL
-          ? `التعليق طويل جداً (${charactersMax(true, MAX_COMMENT_LENGTH)})`
+          ? `التعليق طويل جدًا (${charactersMax(true, MAX_COMMENT_LENGTH)})`
           : `Comment is too long (${MAX_COMMENT_LENGTH} characters max)`
       );
       return;
@@ -148,7 +148,7 @@ export default function CommentForm({
             onFocus={() => setIsFocused(true)}
             placeholder={
               isRTL
-                ? 'أضف تعليقاً عاماً...'
+                ? 'أضف تعليقًا عامًا...'
                 : 'Add a public comment...'
             }
             className={cn(

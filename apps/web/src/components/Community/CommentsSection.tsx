@@ -158,8 +158,8 @@ export default function CommentsSection({
                 'cursor-pointer'
               )}
             >
-              <option value="top">{isRTL ? 'الأكثر إعجاباً' : 'Top comments'}</option>
-              <option value="newest">{isRTL ? 'الأحدث أولاً' : 'Newest first'}</option>
+              <option value="top">{isRTL ? 'الأكثر إعجابًا' : 'Top comments'}</option>
+              <option value="newest">{isRTL ? 'الأحدث أولًا' : 'Newest first'}</option>
             </ThemedSelectField>
           </div>
         )}

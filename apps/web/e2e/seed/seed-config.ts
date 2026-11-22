@@ -223,7 +223,7 @@ export const SEED_CHANNELS: readonly SeedChannel[] = [
         title: 'QA Lecture 4 — Fiqh of Prayer (Scheduled)',
         titleAr: 'محاضرة اختبار ٤ — فقه الصلاة (مجدولة)',
         description: 'Seeded QA video scheduled for publication about one day after seeding.',
-        descriptionAr: 'مرئي اختبار مجدول للنشر بعد يوم تقريباً من إنشائه.',
+        descriptionAr: 'مرئي اختبار مجدول للنشر بعد يوم تقريبًا من إنشائه.',
         category: 'fiqh',
         tags: ['qa-seed', 'fiqh', 'scheduled'],
         language: 'en',
@@ -346,7 +346,7 @@ Chapter three: closing remarks.
 export const SAMPLE_WEBVTT_AR = `WEBVTT
 
 00:00:00.000 --> 00:00:05.000
-بسم الله. مرحباً بكم في هذه المحاضرة التجريبية.
+بسم الله. مرحبًا بكم في هذه المحاضرة التجريبية.
 
 00:00:05.000 --> 00:00:15.000
 تم إنشاء هذا المرئي بواسطة سير عمل بيانات الاختبار.

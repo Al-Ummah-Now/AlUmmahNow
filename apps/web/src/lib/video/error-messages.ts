@@ -80,7 +80,7 @@ export const ERROR_MESSAGES_AR: Record<VideoErrorType, ErrorMessages> = {
   },
   [VideoErrorType.DECODE_ERROR]: {
     title: 'خطأ في التشغيل',
-    description: 'غير قادر على فك تشفير المرئي. قد يكون الملف تالفاً.',
+    description: 'غير قادر على فك تشفير المرئي. قد يكون الملف تالفًا.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب جودة بديلة',
     details: 'يشير هذا الخطأ إلى مشكلة في ترميز المرئي.',
@@ -90,11 +90,11 @@ export const ERROR_MESSAGES_AR: Record<VideoErrorType, ErrorMessages> = {
     description: 'غير قادر على تحميل البث المباشر. جاري التبديل إلى تنسيق بديل.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'استخدم التنزيل المباشر',
-    details: 'بث HLS غير متاح. جاري المحاولة بتنسيق MP4 بدلاً من ذلك.',
+    details: 'بث HLS غير متاح. جاري المحاولة بتنسيق MP4 بدلًا من ذلك.',
   },
   [VideoErrorType.TIMEOUT_ERROR]: {
     title: 'انتهت مهلة التحميل',
-    description: 'استغرق تحميل المرئي وقتاً طويلاً. يرجى المحاولة مرة أخرى.',
+    description: 'استغرق تحميل المرئي وقتًا طويلًا. يرجى المحاولة مرة أخرى.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب جودة أقل',
     details: 'قد يكون هذا بسبب بطء الاتصال بالشبكة أو مشاكل في الخادم.',

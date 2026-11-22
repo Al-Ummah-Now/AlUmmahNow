@@ -179,11 +179,13 @@ describe('StreamStatusBadge (RTL)', () => {
       expect(badge).toHaveAttribute('dir', 'rtl');
     });
 
-    it('applies flex-row-reverse for icon placement', () => {
+    it('leads with the icon in RTL (dir="rtl", no flex-row-reverse, which put the icon last)', () => {
       render(<StreamStatusBadgeRTL status="live" showIcon />);
       const badge = screen.getByRole('status');
 
-      expect(badge).toHaveClass('flex-row-reverse');
+      expect(badge).toHaveAttribute('dir', 'rtl');
+      expect(badge).not.toHaveClass('flex-row-reverse');
+      expect(badge.firstElementChild?.tagName.toLowerCase()).toBe('svg');
     });
   });
 
