@@ -104,6 +104,24 @@ test.describe('player controls', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 
+  // Video.js sizes cue text at 5% of the caption area, which sits above the control bar: on a
+  // phone-width player that came out near 6px. The skin keeps it readable (13px floor).
+  test('captions stay readable on a phone-width player', async ({ page }) => {
+    const player = await openHarness(page, { width: 380 });
+    await startPlayback(page, player);
+    await pauseAt(page, player, 5);
+    await player.locator('.vjs-fanous-captions').click();
+    const cue = player.locator('.vjs-text-track-cue > div').first();
+    await expect(cue).toContainText(/Peace be upon you/);
+    const size = await cue.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(size).toBeGreaterThanOrEqual(13);
+    const display = await rect(player.locator('.vjs-text-track-display'));
+    const box = await rect(cue);
+    // The whole cue stays inside the caption area, clear of the control bar under it
+    expect(box.y).toBeGreaterThanOrEqual(display.y);
+    expect(box.bottom).toBeLessThanOrEqual(display.bottom + 1);
+  });
+
   test('enters and leaves fullscreen', async ({ page }) => {
     const player = await openHarness(page);
     await startPlayback(page, player);
