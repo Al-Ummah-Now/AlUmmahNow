@@ -9,7 +9,7 @@ describe('thumbnailRefusalMessage (#1466)', () => {
   ] as const)('is in the page language, never the server text (%s)', (lang, t) => {
     const limit = thumbnailRefusalMessage(t, { code: 'upload_limit', status: 429, retryAfter: 1380 }, lang);
     // 23 minutes: the noun agrees with the count (#1666), in the page's digits
-    expect(limit).toBe(lang === 'ar' ? 'بلغت حد الرفع؛ حاول مرة أخرى بعد ٢٣ دقيقة' : "You've reached the upload limit; try again in 23 minutes");
+    expect(limit).toBe(lang === 'ar' ? 'بلغت حد الرفع؛ حاول مرة أخرى بعد ٢٣ دقيقة' : "You’ve reached the upload limit; try again in 23 minutes");
     expect(thumbnailRefusalMessage(t, { code: 'upload_limit', status: 429 })).toBe(t.creator.limitReachedSoon);
     expect(thumbnailRefusalMessage(t, { code: 'upload_limits_unavailable', status: 503 })).toBe(t.creator.unavailable);
     expect(thumbnailRefusalMessage(t, { code: 'thumbnail_shape', status: 422 })).toBe(t.video.thumbnailWrongShape);
