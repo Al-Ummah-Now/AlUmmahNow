@@ -81,6 +81,18 @@ export function decodeEntities(s: string): string {
 const HTML_MAX_CHARS = 200_000;
 const SCRIPT_PASSES = 5;
 
+/** One pass: the text with every whole <script>…</script> and <style>…</style> block cut out. */
+function withoutBlocks(text: string): string {
+	const block = /<(script|style)\b[\s\S]*?<\/\1\s*>/gi;
+	let kept = '';
+	let from = 0;
+	for (let m = block.exec(text); m; m = block.exec(text)) {
+		kept += text.slice(from, m.index);
+		from = m.index + m[0].length;
+	}
+	return kept + text.slice(from);
+}
+
 /** HTML (a feed's description, a Mastodon status) as plain text: paragraphs and line breaks kept. */
 export function htmlToText(html: string): string {
 	let text = html.slice(0, HTML_MAX_CHARS).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
@@ -93,7 +105,7 @@ export function htmlToText(html: string): string {
 			break;
 		}
 		before = text;
-		text = text.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '');
+		text = withoutBlocks(text);
 	}
 	text = text
 		.replace(/<br\s*\/?>/gi, '\n')
