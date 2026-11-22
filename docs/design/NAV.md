@@ -54,7 +54,7 @@ the same elements as JSX and their tests compare the result with the builders.
   in videos web and the admins, so every header lines up.
 - **One typeface** in every header, set by the contract whatever the page uses: system-ui
   (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro, then system-ui so Latin inside an Arabic header matches English (`--aun-header-font-ar`).
-  The header's controls (buttons and inputs: the account button and its name, the menu items, the
+  The header's controls (buttons, summaries and inputs: the account button and its name, the menu items, the
   search field) use the theme's body font where the theme has one (Nahas: Source Serif 4, Arabic
   Amiri; Zujaj: Inter, Arabic Noto Kufi Arabic), as videos always did; Fawanees and Lantern keep the
   header typeface.
@@ -70,7 +70,7 @@ read the same values from the stylesheet they already vendor:
 |---|---|---|
 | `--aun-header-band` | `components.header.style.background` | `{material.*}` written out, so apps without the videos materials paint the same band |
 | `--aun-header-edge` | `components.header.style.edge` | the bar's `box-shadow` |
-| `html[data-theme=<id>] .aun-header button, input, select, textarea` | `typography.body` | Latin stack; `:lang(ar)` gets the Arabic stack |
+| `html[data-theme=<id>] .aun-header button, summary, input, select, textarea` | `typography.body` | Latin stack; `:lang(ar)` gets the Arabic stack |
 
 The variables are set on `html[data-theme='<id>']` (the default theme also on `html:not([data-theme])`),
 so every app marks its theme on `<html>`. A built-in theme's header has no light-only style (the

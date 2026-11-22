@@ -43,7 +43,7 @@ test('the bar paints the band on its own layer, the shared blur behind it, an ap
 test('a theme with a body font puts it on the header controls, Arabic first on Arabic pages', () => {
   for (const id of THEMES) {
     const body = theme(id).typography.body as { latin: string[]; arabic: string[] } | undefined;
-    const sel = (suffix = '') => ['button', 'input', 'select', 'textarea'].map((el) => `html[data-theme='${id}'] .aun-header ${el}${suffix}`).join(',');
+    const sel = (suffix = '') => ['button', 'summary', 'input', 'select', 'textarea'].map((el) => `html[data-theme='${id}'] .aun-header ${el}${suffix}`).join(',');
     if (!body) {
       assert.ok(!block.includes(`html[data-theme='${id}'] .aun-header`), `${id} has no body font: its controls keep the header's`);
       continue;
