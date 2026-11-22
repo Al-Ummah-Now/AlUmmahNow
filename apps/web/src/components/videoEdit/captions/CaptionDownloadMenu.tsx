@@ -51,13 +51,15 @@ export default function CaptionDownloadMenu({ videoId, language, languageLabel, 
             data-source={source}
             disabled={busy}
             aria-label={`${t.action} (${languageLabel})`}
+            title={t.action}
             className={
               className ??
-              'inline-flex h-10 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50'
+              'inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 sm:px-3'
             }
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-            <span className="whitespace-nowrap">{t.action}</span>
+            {/* Phones: the icon alone keeps a row's actions on one line (the name stays in aria-label and title) */}
+            <span className="hidden whitespace-nowrap sm:inline">{t.action}</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[11rem] border-border bg-card text-foreground">

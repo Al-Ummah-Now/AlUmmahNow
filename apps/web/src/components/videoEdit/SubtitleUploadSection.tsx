@@ -372,7 +372,7 @@ export default function SubtitleUploadSection({
                         languageLabel={lang === 'ar' ? langInfo.nameAr : langInfo.name}
                         source="track"
                         t={t.captions.download}
-                        className="inline-flex h-8 md:h-9 min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs md:text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                        className="inline-flex h-8 md:h-9 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 sm:px-3 text-xs md:text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                       />
                     )}
                     {!subtitle.isDefault && subtitle.status === 'active' && (
