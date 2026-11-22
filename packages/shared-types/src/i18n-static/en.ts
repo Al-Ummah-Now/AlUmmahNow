@@ -663,7 +663,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     homeEmptyTitle: 'No videos yet',
     homeEmptyBody: 'New videos from channels will show up here. In the meantime, find channels and live streams on\u00a0Explore.',
     homeEmptyAction: 'Go to Explore',
-    homeLoadFailed: "Videos couldn't be loaded.",
+    homeLoadFailed: 'Videos couldn’t be loaded.',
     clearSearch: 'Clear search',
     bulkDeletePartial: 'Deleted {succeeded} video(s), but {failed} failed to delete',
     selectVideo: 'Select video',
