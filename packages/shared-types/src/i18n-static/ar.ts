@@ -659,7 +659,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     noVideosFound: 'لم يتم العثور على مرئيات',
     uploadFirstVideo: 'ارفع أول مرئي للبدء',
     homeEmptyTitle: 'لا توجد مرئيات بعد',
-    homeEmptyBody: 'ستظهر هنا المرئيات الجديدة من القنوات. وإلى ذلك الحين، اعثر على القنوات والبث المباشر في «استكشف».',
+    homeEmptyBody: 'ستظهر هنا المرئيات الجديدة من القنوات. وإلى ذلك الحين، اعثر على القنوات والبث المباشر في\u00a0«استكشف».',
     homeEmptyAction: 'انتقل إلى «استكشف»',
     homeLoadFailed: 'تعذّر تحميل المرئيات.',
     clearSearch: 'مسح البحث',
