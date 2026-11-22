@@ -4,12 +4,14 @@
  * the lines but on its own still leaves a long last word alone in a narrow column (history on phones).
  *
  * Only for titles of three words or more, and only when the joined pair is short enough to fit the narrowest title
- * column (history on a 390px phone, 142px) in every theme's font: a pair wider than the column would overflow instead
- * of wrapping. Arabic letters run wider in some themes (Zujaj), so an Arabic pair gets a lower limit.
+ * column in every theme's font on a 390px phone: a pair wider than the column would overflow instead of wrapping.
+ * Measured: the widest 17-letter Arabic pair is 136px in Zujaj's Noto Kufi against its 151px column, and 121px in
+ * Fawanees against its 130px history column; an 18-letter English pair fits the same columns. Arabic letters run
+ * wider in some themes (Zujaj), so an Arabic pair gets a lower limit.
  */
 const ARABIC = /[\u0600-\u06ff]/;
 
-export function keepLastWordsTogether(title: string, maxPair = ARABIC.test(title) ? 15 : 18): string {
+export function keepLastWordsTogether(title: string, maxPair = ARABIC.test(title) ? 17 : 18): string {
   const words = title.trim().split(/\s+/);
   if (words.length < 3) return title;
   const pair = `${words[words.length - 2]} ${words[words.length - 1]}`;

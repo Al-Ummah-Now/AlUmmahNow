@@ -15,8 +15,13 @@ describe('keepLastWordsTogether', () => {
     expect(keepLastWordsTogether('A talk on extraordinarily misunderstood')).toBe('A talk on extraordinarily misunderstood');
   });
 
+  it('joins an Arabic pair up to 17 letters, which fits the narrowest column in every font', () => {
+    expect(keepLastWordsTogether('زكاة المدخرات بالتفصيل')).toBe('زكاة المدخرات\u00a0بالتفصيل');
+    expect(keepLastWordsTogether('رمي الجمرات بالتفصيل')).toBe('رمي الجمرات\u00a0بالتفصيل');
+  });
+
   it('gives Arabic, which runs wider in some fonts, a lower limit', () => {
-    expect(keepLastWordsTogether('زكاة المدخرات بالتفصيل')).toBe('زكاة المدخرات بالتفصيل');
+    expect(keepLastWordsTogether('دروس في الاستغفار بالتفصيل')).toBe('دروس في الاستغفار بالتفصيل');
   });
 
   it('replaces only the last gap, whatever its whitespace', () => {
