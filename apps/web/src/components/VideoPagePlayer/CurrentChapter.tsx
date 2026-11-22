@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getChapterTitle } from '@/lib/video/chapters';
@@ -33,30 +33,22 @@ export function CurrentChapter({
 }: CurrentChapterProps) {
   const { t, isRTL, lang } = useLanguage();
   const [isVisible, setIsVisible] = useState(false);
-  const [previousChapterId, setPreviousChapterId] = useState<string | null>(null);
+  // A ref, not state: setting state here re-ran the effect, whose cleanup cleared the hide timer,
+  // so the toast never hid (it sat over the captions on a phone-width player)
+  const shownChapterId = useRef<string | null>(null);
 
-  // Show overlay when chapter changes
+  // Show overlay when chapter changes, then hide it after the delay
   useEffect(() => {
     if (!enabled || !chapter) {
       setIsVisible(false);
       return undefined;
     }
-
-    // Only show if chapter actually changed
-    if (chapter.id !== previousChapterId) {
-      setIsVisible(true);
-      setPreviousChapterId(chapter.id);
-
-      // Auto-hide after delay
-      const hideTimer = setTimeout(() => {
-        setIsVisible(false);
-      }, autoHideDelay);
-
-      return () => clearTimeout(hideTimer);
-    }
-
-    return undefined;
-  }, [chapter, previousChapterId, enabled, autoHideDelay]);
+    if (chapter.id === shownChapterId.current) return undefined;
+    shownChapterId.current = chapter.id;
+    setIsVisible(true);
+    const hideTimer = setTimeout(() => setIsVisible(false), autoHideDelay);
+    return () => clearTimeout(hideTimer);
+  }, [chapter, enabled, autoHideDelay]);
 
   // Show on hover (parent should handle this via prop)
   const handleMouseEnter = useCallback(() => {

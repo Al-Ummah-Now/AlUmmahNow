@@ -838,6 +838,23 @@
   bottom: 16px;
 }
 
+/* Video.js sizes cue text at 5% of the caption area's height, and the area stops above the control
+   bar: on a phone-width player that left about 6px text. 1em is Video.js's size (with the viewer's
+   Caption style size applied), so this only lifts text that would be under 13px. */
+.video-js.vjs-fanous .vjs-text-track-cue > div {
+  font-size: max(1em, 13px) !important;
+}
+
+/* Where the floor can apply (a 16:9 player under about 640px wide), the cue box Video.js measured at
+   its own size would leave the larger text hanging over the control bar: the box grows upward from
+   the bottom of the caption area instead, as Video.js does for a larger Caption style size. */
+@container fanous-player (max-width: 659px) {
+  .video-js.vjs-fanous .vjs-text-track-cue {
+    top: auto !important;
+    height: auto !important;
+  }
+}
+
 /* The theme's caption style, until the viewer sets their own in Caption style */
 .video-js.vjs-fanous:not(.vjs-fanous-custom-captions) .vjs-text-track-cue > div {
   background-color: var(--fanous-player-cue) !important;
