@@ -883,14 +883,15 @@
 
 /* An identity or account switch in progress (#1673): the pill keeps who you are, dims its name and
    draws a loading ring round the avatar. The ring overlays the avatar, so the pill never changes
-   width, and it shows on the avatar-only phone pill too. */
+   width, and it shows on the avatar-only phone pill too. Both wait 0.3s: a quick switch shows no
+   flash of the loading state (AUDIT-2 2026-11-21). */
 .aun-acct-btn[aria-busy='true'] {
   position: relative;
   cursor: progress;
 }
 .aun-acct-btn[aria-busy='true'] .aun-acct-name,
 .aun-acct-btn[aria-busy='true'] .aun-caret {
-  opacity: 0.6;
+  animation: aun-busy-dim 0s linear 0.3s both;
 }
 .aun-acct-btn[aria-busy='true']::before {
   content: '';
@@ -904,11 +905,20 @@
   border-inline-end-color: transparent;
   border-radius: var(--fanous-radius-full, 999px);
   pointer-events: none;
+  animation: aun-busy-in 0s linear 0.3s both;
+}
+@keyframes aun-busy-dim {
+  from { opacity: 1; }
+  to { opacity: 0.6; }
+}
+@keyframes aun-busy-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .aun-acct-btn[aria-busy='true']::before {
-    animation: aun-busy-spin 0.9s linear infinite;
+    animation: aun-busy-in 0s linear 0.3s both, aun-busy-spin 0.9s linear infinite;
   }
   .aun-acct-btn,
   .aun-icon-btn,
