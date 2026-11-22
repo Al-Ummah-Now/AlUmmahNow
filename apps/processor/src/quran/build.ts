@@ -1,7 +1,19 @@
 /**
- * Builds our copy of the Quran from the QF `quran_core:1` snapshot records:
+ * Builds our copy of the Quran from the QF `quran_core:1` and `mushafs:4` (Uthmani Hafs) snapshot
+ * records:
  * - one file per surah with each verse's `text_uthmani` verbatim and split into its words;
  * - the matcher's index of normalised Imla'i words (`text_imlaei` of the `word` rows).
+ *
+ * Word boundaries come from `mushaf_word.text` (each word's Uthmani text, linked to the quran_core
+ * `word` row by `word_id`, QF 2026-11-22): a word row spans the verse tokens its mushaf text has.
+ * The mushaf text is only used to cut the verse; it is not stored a second time. A verse whose
+ * mushaf words do not match its tokens (or a snapshot without them) falls back to the Imla'i spans
+ * below, and the counts say how many did.
+ *
+ * NOT FOR MACHINE LEARNING (QF Developer Terms, Must NOT item 4; QF 2026-11-22): the copy and the
+ * index built here serve captions and the review matcher only. Never use them, or any QF text, to
+ * train, fine-tune or evaluate a machine-learning or AI model (no datasets, no eval sets, no
+ * fixtures exported from them). Tests use the synthetic fixtures in src/__tests__/fixtures.
  *
  * Words are numbered by their order among the verse's `word` rows (markers are not words), the
  * same numbering on both sides. A few QF words are written as two (بَعْدَ مَا in 2:181, 8:6, 13:37;
@@ -29,6 +41,7 @@ interface Verse {
   text: string;
 }
 interface Word {
+  id: number;
   surah: number;
   ayah: number;
   position: number;
@@ -52,6 +65,19 @@ export function splitUthmaniWords(text: string): string[] {
   return words;
 }
 
+/** Letter-bearing tokens of Uthmani text (pause and section marks dropped), NFC. */
+function letterTokens(text: string): string[] {
+  return text.normalize('NFC').split(/\s+/).filter((t) => ARABIC_LETTER.test(t));
+}
+
+/**
+ * Mushaf word text we can cut a verse with: Arabic letters, no presentation forms or private-use
+ * glyph codes (a font-glyph `text` would be U+E000–F8FF or U+FB50–FEFF).
+ */
+export function isUthmaniWordText(text: unknown): text is string {
+  return typeof text === 'string' && ARABIC_LETTER.test(text) && !/[\uE000-\uF8FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+}
+
 /** The words of a word row's Imla'i text (pause marks, which have no letter, are not words). */
 function imlaeiParts(imlaei: string): string[] {
   return imlaei.split(/\s+/).filter((t) => ARABIC_LETTER.test(t));
@@ -63,7 +89,9 @@ export class QuranCoreCollector {
   private readonly chapters = new Map<number, Chapter>();
   private readonly verses = new Map<string, Verse>();
   private readonly words: Word[] = [];
-  readonly counts = { chapter: 0, verse: 0, word: 0, other: 0 };
+  /** mushaf_word.text by quran_core word id (mushafs:4) */
+  private readonly mushafText = new Map<number, string>();
+  readonly counts = { chapter: 0, verse: 0, word: 0, mushafWord: 0, other: 0, versesByMushaf: 0, versesByImlaei: 0 };
 
   add(r: Record<string, unknown>): void {
     switch (r.record_type) {
@@ -86,8 +114,17 @@ export class QuranCoreCollector {
         if (r.char_type_name !== 'word') return;
         const m = /^(\d{1,3}):(\d{1,3}):(\d{1,3})$/.exec(String(r.location ?? ''));
         if (!m || typeof r.text_imlaei !== 'string') throw new QuranBuildError(`Word row ${String(r.id)} has no location or no text_imlaei`);
-        this.words.push({ surah: Number(m[1]), ayah: Number(m[2]), position: num(r.position ?? m[3]), imlaei: r.text_imlaei });
+        this.words.push({ id: num(r.id), surah: Number(m[1]), ayah: Number(m[2]), position: num(r.position ?? m[3]), imlaei: r.text_imlaei });
         this.counts.word++;
+        return;
+      }
+      case 'mushaf_word': {
+        const mushaf = num(r.mushaf_id);
+        if (Number.isFinite(mushaf) && mushaf !== 4) return;
+        const wordId = num(r.word_id);
+        if ((r.char_type_name ?? 'word') !== 'word' || !Number.isFinite(wordId) || typeof r.text !== 'string') return;
+        this.mushafText.set(wordId, r.text);
+        this.counts.mushafWord++;
         return;
       }
       default:
@@ -126,6 +163,14 @@ export class QuranCoreCollector {
           continue;
         }
         const split = splitUthmaniWords(verse.text);
+        const byMushaf = this.mushafSpans(split, words);
+        if (byMushaf) {
+          this.counts.versesByMushaf++;
+          file.ayat.push({ text: verse.text, words: cut(split, byMushaf) });
+          pushIndexRows(rows, surah, ayah, words);
+          continue;
+        }
+        this.counts.versesByImlaei++;
         // A row whose Imla'i text has two parts spans two Uthmani tokens when the Uthmani text
         // writes them apart (37:130 إِلْ يَاسِينَ), and one when it writes them as one word
         // (2:21 يَٰٓأَيُّهَا, Imla'i "يا أيها"): one token per row then.
@@ -139,21 +184,50 @@ export class QuranCoreCollector {
           bad.push(`${key}: ${split.length} Uthmani words, ${words.length} word rows (${total} Imla'i parts)`);
           continue;
         }
-        const ayahWords: string[] = [];
-        let at = 0;
-        for (const span of spans) {
-          ayahWords.push(split.slice(at, at + span).join(' '));
-          at += span;
-        }
-        file.ayat.push({ text: verse.text, words: ayahWords });
-        // A two-part word is indexed as both parts at its location, as it is said: بعد ما
-        words.forEach((w, i) => {
-          for (const part of imlaeiParts(w.imlaei)) rows.push({ loc: { surah, ayah, word: i + 1 }, imlaei: part });
-        });
+        file.ayat.push({ text: verse.text, words: cut(split, spans) });
+        pushIndexRows(rows, surah, ayah, words);
       }
       surahs.push(file);
     }
     if (bad.length) throw new QuranBuildError(`${bad.length} verse(s) failed the check: ${bad.slice(0, 5).join('; ')}`);
     return { surahs, index: QuranIndex.build(rows, version, syncedAt) };
   }
+
+  /**
+   * Token spans of the verse's word rows from their mushaf_word text, or null when any row has no
+   * usable mushaf text or the letters differ from the verse's own tokens (never a guess).
+   */
+  private mushafSpans(split: string[], words: Word[]): number[] | null {
+    if (!this.mushafText.size) return null;
+    const spans: number[] = [];
+    let at = 0;
+    for (const w of words) {
+      const text = this.mushafText.get(w.id);
+      if (!isUthmaniWordText(text)) return null;
+      const want = letterTokens(text);
+      const got = split.slice(at, at + want.length).flatMap(letterTokens);
+      if (!want.length || got.join(' ') !== want.join(' ')) return null;
+      spans.push(want.length);
+      at += want.length;
+    }
+    return at === split.length ? spans : null;
+  }
+}
+
+/** The verse's words: consecutive tokens joined per span (`words.join(' ') === text`). */
+function cut(split: string[], spans: number[]): string[] {
+  const out: string[] = [];
+  let at = 0;
+  for (const span of spans) {
+    out.push(split.slice(at, at + span).join(' '));
+    at += span;
+  }
+  return out;
+}
+
+/** A two-part word is indexed as both parts at its location, as it is said: بعد ما */
+function pushIndexRows(rows: Array<{ loc: { surah: number; ayah: number; word: number }; imlaei: string }>, surah: number, ayah: number, words: Word[]): void {
+  words.forEach((w, i) => {
+    for (const part of imlaeiParts(w.imlaei)) rows.push({ loc: { surah, ayah, word: i + 1 }, imlaei: part });
+  });
 }

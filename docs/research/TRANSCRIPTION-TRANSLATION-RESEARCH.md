@@ -266,7 +266,7 @@ The Tanzil **TXT** export prepends the basmala to ayah 1 of every surah (`18|1|�
 | + snap to the nearest pause (fixed −35 dB) | 37 ms | 492 ms | 73% | 63% |
 | **+ snap to the nearest pause (adaptive −40…−20 dB)** | **33 ms** | **278 ms** | **88%** | **71%** |
 
-**Partial-quote word timing** (QF word segments as truth): start errors 0 to −1,230 ms, end errors −30 to −693 ms (Whisper timestamps without snapping). Forced alignment (§10) is the next step if word-level highlighting is wanted.
+**Partial-quote word timing** (QF word segments as truth; QF 2026-11-22: QF content may not be used to evaluate an ML/AI model, so this measurement is not repeated with QF data and its truth data was never kept, spec §9.6): start errors 0 to −1,230 ms, end errors −30 to −693 ms (Whisper timestamps without snapping). Forced alignment (§10) is the next step if word-level highlighting is wanted.
 
 ### 8.5 DeepL ASR in the same pipeline (§9)
 

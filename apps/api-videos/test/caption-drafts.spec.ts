@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { QURAN_CURRENT_KEY, captionDraftKey, quranTextKey, type CaptionDraft } from '@al-ummah/shared-types';
 import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../src/endpoints/captions/captionDrafts';
 import { SubtitlesGet } from '../src/endpoints/video/subtitlesGet';
+import { SubtitlesDownload } from '../src/endpoints/video/subtitlesDownload';
 import { clearQuranCopyCache } from '../src/lib/quran/copy';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
@@ -81,6 +82,7 @@ const app = (userId = 'owner') =>
 		r.delete('/api/videos/:videoId/captions/drafts/:language', CaptionDraftDelete);
 		r.post('/api/videos/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
 		r.get('/api/videos/:videoId/subtitles/:language', SubtitlesGet);
+		r.get('/api/videos/:videoId/subtitles/:language/download', SubtitlesDownload);
 	}, { userId });
 const json = (method: string, body?: unknown) => ({ method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
 
@@ -151,6 +153,48 @@ describe('caption drafts', () => {
 		assert.match(served.headers.get('etag')!, new RegExp(`-${VERSION}"$`));
 		const again = await app().request('/api/videos/v1/subtitles/ar', { headers: { 'If-None-Match': served.headers.get('etag')! } }, e as never);
 		assert.equal(again.status, 304);
+	});
+
+	it('a viewer downloads the track: verse text filled at download time, attribution and edition inside, nothing stored', async () => {
+		const e = env();
+		const accepted = draft().cues.map((c) => (c.id === 'c2' ? { ...c, segments: [{ ...(c.segments[0] as any), status: 'accepted' }] } : c));
+		await app().request('/api/videos/v1/captions/drafts/ar', json('PUT', { baseVersion: 1, cues: accepted }), e as never);
+		await app().request('/api/videos/v1/captions/drafts/ar/publish', json('POST', { baseVersion: 2 }), e as never);
+		const keys = [...e.subtitles.store.keys()].sort();
+		const served = await (await app('').request('/api/videos/v1/subtitles/ar', {}, e as never)).text();
+
+		const vtt = await app('').request('/api/videos/v1/subtitles/ar/download', {}, e as never);
+		assert.equal(vtt.status, 200);
+		assert.equal(vtt.headers.get('content-type'), 'text/vtt; charset=utf-8');
+		assert.equal(vtt.headers.get('content-disposition'), 'attachment; filename="v1-ar.vtt"');
+		assert.equal(vtt.headers.get('cache-control'), 'no-store');
+		const file = await vtt.text();
+		assert.match(file, /^WEBVTT\n\nNOTE\nQuran data provided by Quran Foundation \(https:\/\/quran\.foundation\/\)\nبيانات القرآن مقدَّمة من مؤسسة القرآن \(https:\/\/quran\.foundation\/\u200e\)\nQuran text: Uthmani \(Hafs\)\n\n/);
+		// The verse text exactly as served for viewing: unaltered
+		assert.equal(file.replace(/\n\nNOTE\n[^]*?\n\n/, '\n\n'), served.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n'));
+		assert.match(file, /قُلْ هُوَ ٱللَّهُ أَحَدٌ/);
+		assert.ok(!file.includes(HEARD) && !/[\uE000\uE001]/.test(file));
+
+		const srt = await app('').request('/api/videos/v1/subtitles/ar/download?format=srt', {}, e as never);
+		assert.equal(srt.headers.get('content-type'), 'application/x-subrip; charset=utf-8');
+		assert.equal(srt.headers.get('content-disposition'), 'attachment; filename="v1-ar.srt"');
+		const srtFile = await srt.text();
+		assert.match(srtFile, /^1\n00:00:00,000 --> 00:00:00,000\nQuran data provided by Quran Foundation \(https:\/\/quran\.foundation\/\)\n/);
+		assert.match(srtFile, /\n3\n00:00:03,000 --> 00:00:06,000\n.*قُلْ هُوَ ٱللَّهُ أَحَدٌ/);
+
+		// Built per request: the bucket holds exactly what it held before
+		assert.deepEqual([...e.subtitles.store.keys()].sort(), keys);
+		assert.ok(!e.subtitles.store.get('v1/ar.vtt')!.includes('قُلْ'));
+		assert.equal((await app('').request('/api/videos/v1/subtitles/en/download', {}, e as never)).status, 404);
+	});
+
+	it('a track without Quran downloads as uploaded, with no attribution', async () => {
+		const e = env();
+		e.subtitles.store.set('v1/en.vtt', 'WEBVTT\n\n00:00.000 --> 00:02.500 align:start\n<v Speaker>Hello</v> <b>there</b>\n');
+		const vtt = await (await app('').request('/api/videos/v1/subtitles/en/download', {}, e as never)).text();
+		assert.equal(vtt, 'WEBVTT\n\n00:00.000 --> 00:02.500 align:start\n<v Speaker>Hello</v> <b>there</b>\n');
+		const srt = await (await app('').request('/api/videos/v1/subtitles/en/download?format=srt', {}, e as never)).text();
+		assert.equal(srt, '1\n00:00:00,000 --> 00:00:02,500\nHello <b>there</b>\n');
 	});
 
 	it('with no fresh copy an accepted span is served as a reference', async () => {
