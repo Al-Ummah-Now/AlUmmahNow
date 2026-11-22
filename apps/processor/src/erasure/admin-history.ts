@@ -3,13 +3,13 @@
  * search migration 0031). Owner decision 2026-11-13:
  *
  * - The history is kept 2 years (ADMIN_HISTORY_RETENTION_DAYS): purged deletions (purged_at set)
- *   and finished jobs (succeeded / failed) older than that are deleted by the daily cron. Pending
+ *   and finished jobs (succeeded / failed / cancelled) with their log older than that are deleted by the daily cron. Pending
  *   deletions are never touched (their own 30-day cleanup purges them).
  * - Erasing an account keeps every action record but scrubs the account from it:
  *   admin_deletions of its content get the title "erased <kind>" and owner deleted-user; its own
  *   account row the title "erased user"; deleted_by / purge_requested_by naming it become
  *   deleted-user. admin_jobs naming it (admin_job_users) get deleted-user as actor, in params and
- *   result, and as target once finished. A job still running keeps its target: it is the erasure
+ *   result, its last error and log lines, and as target once finished. A job still running keeps its target: it is the erasure
  *   itself or work that must finish; api-videos scrubs an erasure job's target when it succeeds.
  *   The account's own deletion row keeps its key (kind, target_id): the purge and the run sweep
  *   find it by that id.
@@ -30,18 +30,29 @@ export interface AdminHistoryResult {
 
 export async function eraseUserAdminHistory(search: D1Database, userId: string, marker: string): Promise<AdminHistoryResult> {
   if (!userId || userId === marker) throw new Error('eraseUserAdminHistory needs a user id');
-  const [owned, account, deletedBy, purgeBy, jobs] = await search.batch([
+  const [owned, account, deletedBy, purgeBy, , jobs] = await search.batch([
     search.prepare("UPDATE admin_deletions SET title = 'erased ' || kind, owner_id = ? WHERE owner_id = ? RETURNING target_id").bind(marker, userId),
     search.prepare("UPDATE admin_deletions SET title = ? WHERE kind = 'user' AND target_id = ? AND title <> ? RETURNING target_id").bind(ERASED_USER_LABEL, userId, ERASED_USER_LABEL),
     search.prepare('UPDATE admin_deletions SET deleted_by = ? WHERE deleted_by = ? RETURNING target_id').bind(marker, userId),
     search.prepare('UPDATE admin_deletions SET purge_requested_by = ? WHERE purge_requested_by = ? RETURNING target_id').bind(marker, userId),
+    // The jobs' log lines (search 0071): an error message may name the account. Before the jobs below,
+    // while their target and links still name it.
+    search
+      .prepare(
+        `UPDATE admin_job_log SET error = replace(error, ?1, ?2)
+         WHERE error IS NOT NULL
+           AND job_id IN (SELECT job_id FROM admin_job_users WHERE user_id = ?1
+                          UNION SELECT id FROM admin_jobs WHERE target_kind = 'user' AND target_id = ?1)`
+      )
+      .bind(userId, marker),
     search
       .prepare(
         `UPDATE admin_jobs SET
            actor_id = CASE WHEN actor_id = ?1 THEN ?2 ELSE actor_id END,
-           target_id = CASE WHEN target_kind = 'user' AND target_id = ?1 AND status IN ('succeeded', 'failed') THEN ?2 ELSE target_id END,
+           target_id = CASE WHEN target_kind = 'user' AND target_id = ?1 AND status IN ('succeeded', 'failed', 'cancelled') THEN ?2 ELSE target_id END,
            params = replace(params, ?1, ?2),
-           result = CASE WHEN result IS NULL THEN NULL ELSE replace(result, ?1, ?2) END
+           result = CASE WHEN result IS NULL THEN NULL ELSE replace(result, ?1, ?2) END,
+           last_error = CASE WHEN last_error IS NULL THEN NULL ELSE replace(last_error, ?1, ?2) END
          WHERE id IN (SELECT job_id FROM admin_job_users WHERE user_id = ?1)
             OR (target_kind = 'user' AND target_id = ?1)
          RETURNING id`
@@ -72,7 +83,7 @@ export async function purgeExpiredAdminHistory(search: D1Database, now = Date.no
   const ids = (
     (
       await search
-        .prepare(`SELECT id FROM admin_jobs WHERE finished_at < ? AND status IN ('succeeded', 'failed') LIMIT ${PURGE_BATCH}`)
+        .prepare(`SELECT id FROM admin_jobs WHERE finished_at < ? AND status IN ('succeeded', 'failed', 'cancelled') LIMIT ${PURGE_BATCH}`)
         .bind(cutoff)
         .all<{ id: string }>()
     ).results ?? []
@@ -81,6 +92,7 @@ export async function purgeExpiredAdminHistory(search: D1Database, now = Date.no
     const list = ids.map(() => '?').join(',');
     await search.batch([
       search.prepare(`DELETE FROM admin_job_users WHERE job_id IN (${list})`).bind(...ids),
+      search.prepare(`DELETE FROM admin_job_log WHERE job_id IN (${list})`).bind(...ids),
       search.prepare(`DELETE FROM admin_jobs WHERE id IN (${list})`).bind(...ids),
     ]);
   }

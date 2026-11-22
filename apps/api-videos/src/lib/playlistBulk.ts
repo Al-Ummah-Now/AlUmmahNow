@@ -260,7 +260,8 @@ export function toPlaylistJobStatus(job: AdminJob | null, playlistId: string): P
 	return {
 		id: job.id,
 		playlistId,
-		status: job.status,
+		// An admin's Cancel reads as stopped: the playlist's managers see "failed" with Retry
+		status: job.status === 'cancelled' ? 'failed' : job.status,
 		total: Array.isArray(params.videoIds) ? params.videoIds.length : 0,
 		processed: Number(result.processed ?? params.offset ?? 0) || 0,
 		added: Number(result.added ?? params.added ?? 0) || 0,
@@ -278,7 +279,8 @@ export async function retryPlaylistJob(env: JobEnv, jobId: string, playlistId: s
 	const current = await playlistJobStatus(env, jobId, playlistId);
 	if (!current) return null;
 	if (current.status !== 'failed') return current;
-	return toPlaylistJobStatus(await retryJob(env, jobId), playlistId);
+	// Their own add job: Retry also restarts one an admin cancelled (shown to them as failed)
+	return toPlaylistJobStatus(await retryJob(env, jobId, { allowCancelled: true }), playlistId);
 }
 
 /** Removes `ids` with one conditional write. Idempotent: ids not in the playlist are ignored. */

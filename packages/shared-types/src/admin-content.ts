@@ -626,7 +626,8 @@ export const ADMIN_JOB_KINDS = [
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
-export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed'] as const;
+/** `cancelled`: an admin stopped it (Jobs page Cancel); it runs again only through Retry. */
+export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
 export type AdminJobTarget = 'channel' | 'video' | 'user' | 'billing';
 
@@ -638,13 +639,42 @@ export interface AdminJob {
   params: Record<string, unknown>;
   status: AdminJobStatus;
   attempts: number;
+  /** Deliveries a run gets before it is marked failed (ADMIN_JOB_MAX_RETRIES + 1) */
+  maxAttempts: number;
+  /** When the queue delivers it next (a retry after a failed attempt, or a step that waits); null when not waiting */
+  nextRunAt: string | null;
   lastError: string | null;
   result: Record<string, unknown> | null;
   actorId: string;
   createdAt: string;
   updatedAt: string;
   finishedAt: string | null;
+  /** What happened to the job, oldest first (GET /jobs/:id only; the newest ADMIN_JOB_LOG_LIMIT lines) */
+  log?: AdminJobLogEntry[];
 }
+
+/**
+ * One line of a job's log. Events, not sentences, so the admin reads it in their language:
+ *   queued       created, or queued again by Retry (`retried: true`)
+ *   started      a delivery began (`attempt`)
+ *   waiting      a step finished and the next one waits `delaySeconds` (resumable work)
+ *   failed_attempt  the attempt threw (`error`); it runs again after `delaySeconds`
+ *   failed       the last attempt threw, or the queue refused it (`error`)
+ *   succeeded    done
+ *   cancelled    an admin stopped it
+ */
+export const ADMIN_JOB_LOG_EVENTS = ['queued', 'started', 'waiting', 'failed_attempt', 'failed', 'succeeded', 'cancelled'] as const;
+export type AdminJobLogEvent = (typeof ADMIN_JOB_LOG_EVENTS)[number];
+export interface AdminJobLogEntry {
+  at: string;
+  event: AdminJobLogEvent;
+  attempt?: number;
+  error?: string;
+  delaySeconds?: number;
+  retried?: boolean;
+}
+/** Lines kept per job: the oldest go first. */
+export const ADMIN_JOB_LOG_LIMIT = 50;
 
 /** The permission an admin needs to retry a job of each kind (the same one that started it). */
 export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly AdminContentPermission[]>> = {
