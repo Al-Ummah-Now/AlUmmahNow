@@ -11,7 +11,7 @@
  * never read or changed here.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { ChevronDown, Download, Loader2 } from 'lucide-react';
 import type { CaptionsTranslations } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { reportError } from '@/lib/errors/reporter';
@@ -58,6 +58,8 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
       <Download className="h-4 w-4 shrink-0" aria-hidden />
       {/* Phones: the icon alone keeps a row's actions on one line (the name stays in aria-label and title) */}
       <span className="hidden whitespace-nowrap sm:inline">{t.action}</span>
+      {/* Open: the chevron turns and the button looks pressed (aria-expanded) */}
+      <ChevronDown className="hidden h-4 w-4 shrink-0 transition-transform group-aria-expanded:rotate-180 sm:inline" aria-hidden />
     </>
   );
   if (look === 'track') {
@@ -66,7 +68,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
         {...common}
         variant="outline"
         size="sm"
-        className="h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm"
+        className="group h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm aria-expanded:!border-primary aria-expanded:!bg-muted"
       >
         {content}
       </Button>
@@ -75,7 +77,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
   return (
     <button
       {...common}
-      className="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-3"
+      className="group inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-expanded:border-primary aria-expanded:bg-muted sm:px-3"
     >
       {content}
     </button>
@@ -140,7 +142,8 @@ export function CaptionDownloadFormats({ videoId, language, languageLabel, sourc
       className="mt-3 space-y-2 rounded-lg border border-border bg-muted p-3"
     >
       <p className="text-sm text-foreground">{t.choose}</p>
-      <div className="flex flex-wrap gap-2">
+      {/* 12px apart: the focus ring and its halo never touch the other format */}
+      <div className="flex flex-wrap gap-3">
         {CAPTION_DOWNLOAD_FORMATS.map((format, i) => (
           <button
             key={format}
