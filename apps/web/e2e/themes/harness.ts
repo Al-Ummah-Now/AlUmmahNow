@@ -166,6 +166,13 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       let clipped = false;
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
         const o = getComputedStyle(a);
+        // Hidden by a clip-path inset (the side rail hides an item its edge would cut, rail-scroll.ts): not seen
+        const inset = /^inset\(([^)]*)\)/.exec(o.clipPath);
+        if (inset) {
+          const [t, rr, b, l] = (() => { const v = inset[1].split(/\s+/).map((x) => parseFloat(x) || 0); return [v[0], v[1] ?? v[0], v[2] ?? v[0], v[3] ?? v[1] ?? v[0]]; })();
+          const cr = a.getBoundingClientRect();
+          if (r.top < cr.top + t - 1 || r.bottom > cr.bottom - b + 1 || r.left < cr.left + l - 1 || r.right > cr.right - rr + 1) { clipped = true; break; }
+        }
         if (o.overflow === 'visible' && o.overflowY === 'visible') continue;
         const ar = a.getBoundingClientRect();
         // Scrolled out of view, or sideways out of a clipping box
