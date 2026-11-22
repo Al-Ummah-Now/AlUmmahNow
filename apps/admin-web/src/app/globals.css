@@ -475,6 +475,12 @@ html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav)
   margin-top: calc((1lh - 0.5rem) / 2);
 }
 
+/* An icon in a wrapping pill (1rem high) sits on the first line too */
+.cost-pill-wrap > svg {
+  align-self: flex-start;
+  margin-top: calc((1lh - 1rem) / 2);
+}
+
 .cost-pill[data-tone='warn'] {
   border-color: var(--warning-fg);
   color: var(--fg);

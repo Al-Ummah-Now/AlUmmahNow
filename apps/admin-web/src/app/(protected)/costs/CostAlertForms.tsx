@@ -51,7 +51,7 @@ export function MyCostAlerts({ me, accountEmail, digest }: { me: CostSubscriptio
       <h2 id="costs-my-alerts-title" className="text-lg font-semibold text-fg">{t('costs.alerts.title')}</h2>
       <p className="mt-1 text-sm text-fg-muted">{t('costs.alerts.note')}</p>
       {email && (
-        <p className="cost-pill mt-3 max-w-full" data-testid="costs-alerts-email">
+        <p className="cost-pill cost-pill-wrap mt-3 max-w-full" data-testid="costs-alerts-email">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-fg-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18v12H3zM3 7l9 6 9-6" />
           </svg>
