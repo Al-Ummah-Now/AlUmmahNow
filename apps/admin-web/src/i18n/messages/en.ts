@@ -980,6 +980,7 @@ const en = {
       supportPayoutFund: 'Check the payout service is funded',
       supportPayoutSend: 'Send a payout',
       supportPayoutStatus: 'Refresh payout statuses',
+      importSourceSync: 'Sync a social import source',
     },
     statuses: {
       queued: 'Queued',
