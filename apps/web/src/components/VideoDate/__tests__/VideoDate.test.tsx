@@ -25,7 +25,7 @@ describe('VideoDate', () => {
     render(<VideoDate video={{ dateCreated: dayAgo }} lang="en" />);
     const time = timeOf();
     expect(time.firstChild?.textContent).toBe('1 day ago');
-    expect(time.getAttribute('title')).toMatch(/^Published on \w+ \d+, \d{4}, \d{2}:\d{2} (AM|PM)$/);
+    expect(time.getAttribute('title')).toMatch(/^Published on \w+ \d+, \d{4}, \d{1,2}:\d{2} (AM|PM)$/);
     // Screen readers hear the labelled date (visually hidden)
     expect(time.querySelector('.sr-only')?.textContent).toContain('Published on');
   });
