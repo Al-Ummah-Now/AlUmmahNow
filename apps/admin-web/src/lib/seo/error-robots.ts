@@ -22,6 +22,10 @@ export function withOneRobotsMeta(response: Response): Response {
   if (response.status < 400) return response;
   const Ctor = (globalThis as { HTMLRewriter?: new () => Rewriter }).HTMLRewriter;
   if (!Ctor || !(response.headers.get('content-type') ?? '').includes('text/html')) return response;
+  // The header says it too, whatever the markup carries
+  const headers = new Headers(response.headers);
+  headers.set('X-Robots-Tag', ERROR_ROBOTS);
+  const tagged = new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   let seen = false;
   return new Ctor()
     .on('meta[name="robots"]', {
@@ -34,5 +38,5 @@ export function withOneRobotsMeta(response: Response): Response {
         el.setAttribute('content', ERROR_ROBOTS);
       },
     })
-    .transform(response);
+    .transform(tagged);
 }

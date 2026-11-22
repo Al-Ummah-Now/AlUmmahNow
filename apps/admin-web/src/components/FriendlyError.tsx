@@ -51,9 +51,11 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
   useEffect(() => {
     setCanGoBack(lost && window.history.length > 1);
     setContactHref(contactHrefFor(window.location, locale, reference));
-    // The tab says what happened, in the family's format
-    document.title = errorPageTitle(locale, copy.title);
-  }, [lost, locale, reference, copy.title]);
+  }, [lost, locale, reference]);
+  // The tab says what happened, in the family's format. React 19 hoists a rendered <title> ahead of the
+  // route's own (a document.title write lost to it); the 404 page's title is its metadata
+  // (app/not-found.tsx), so it never carries a second <title>.
+  const ownTitle = lost ? null : errorPageTitle(locale, copy.title);
 
   let primary: { label: string; icon: ErrorPageIcon; onClick?: () => void; href?: string };
   if (kind === 'update') primary = { label: s.reload, icon: 'update', onClick: reload };
@@ -69,6 +71,8 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
   );
 
   return (
+    <>
+    {ownTitle ? <title>{ownTitle}</title> : null}
     <div
       lang={locale}
       dir={dir}
@@ -122,6 +126,7 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
         </footer>
       </section>
     </div>
+    </>
   );
 }
 

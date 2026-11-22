@@ -140,11 +140,12 @@ export function ErrorScreen(props: ErrorScreenProps) {
   const kind = swapped && alternate ? alternate : baseKind;
   const head: Head = swapped ? { kind, title: s.kinds[kind].title, body: s.kinds[kind].body } : { kind, title: props.title ?? s.kinds[kind].title, body: props.body ?? s.kinds[kind].body };
   const status = ERROR_KIND_STATUS[kind];
-  // The tab says what happened, in the family's one format ("Page not found | Al Ummah Now"), whatever
-  // route the error happened on
-  useEffect(() => {
-    document.title = errorPageTitle(locale, head.title);
-  }, [locale, head.title]);
+  // The tab says what happened, in the family's one format ("Something went wrong | Al Ummah Now"),
+  // whatever route the error happened on. React 19 hoists a rendered <title> into <head> ahead of the
+  // route's own, so it wins while the screen is up and goes when it unmounts (a document.title write
+  // lost to the route's metadata title). The 404/410 page's title is its metadata (not-found-metadata,
+  // the Worker's 410 swap), so it never carries a second <title>.
+  const ownTitle = kind !== 'notFound' && kind !== 'gone' ? errorPageTitle(locale, head.title) : null;
   const [copied, setCopied] = useState(false);
   // After mount only (the server can't know the history): no hydration mismatch
   const [canGoBack, setCanGoBack] = useState(false);
@@ -162,6 +163,8 @@ export function ErrorScreen(props: ErrorScreenProps) {
   };
 
   return (
+    <>
+    {ownTitle ? <title>{ownTitle}</title> : null}
     <main
       id={MAIN_CONTENT_ID}
       className="ep"
@@ -218,5 +221,6 @@ export function ErrorScreen(props: ErrorScreenProps) {
         </footer>
       </section>
     </main>
+    </>
   );
 }

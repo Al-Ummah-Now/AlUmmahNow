@@ -26,7 +26,9 @@ describe('withOneRobotsMeta (one robots meta on an error page)', () => {
     (globalThis as { HTMLRewriter?: unknown }).HTMLRewriter = FakeRewriter;
     for (const status of [404, 410, 500, 503]) {
       calls.length = 0;
-      withOneRobotsMeta(html(status));
+      const out = withOneRobotsMeta(html(status));
+      expect(out.status).toBe(status);
+      expect(out.headers.get('X-Robots-Tag')).toBe(ERROR_ROBOTS);
       expect(calls).toEqual([`0 set content=${ERROR_ROBOTS}`, '1 removed', 'selector meta[name="robots"]']);
     }
     expect(ERROR_ROBOTS).toBe('noindex, nofollow');
