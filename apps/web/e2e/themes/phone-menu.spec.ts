@@ -31,8 +31,8 @@ for (const theme of THEMES) {
       await expect(toast, 'toasts stay up while the menu is open').toBeVisible();
       await page.screenshot({ path: info.outputPath(`phone-menu-${theme}-${mode}.png`) });
 
-      // Never see-through (#898): frosted glass since O36 (2026-11-16), so the fill layers together cover at
-      // least 85% (a Canvas layer that always resolves plus the menu colour) and the page behind is blurred
+      // Never see-through (#898), and solid since 2026-11-22 (owner: surfaces are solid; AUDIT-2 read page
+      // text through the Acting-as menu): the fill layers together cover the page completely
       const surface = await menu.evaluate((m) => { const s = getComputedStyle(m); return { color: s.backgroundColor, image: s.backgroundImage, blur: s.backdropFilter || (s as unknown as Record<string, string>).webkitBackdropFilter || '' }; });
       const alphaOf = (c: string): number => {
         if (/^rgb\(/.test(c)) return 1;
@@ -41,8 +41,7 @@ for (const theme of THEMES) {
       };
       const layers = [surface.color, ...(surface.image.match(/(?:rgba?|color)\([^()]*\)/g) ?? []).slice(0, 1)];
       const cover = 1 - layers.reduce((clear, c) => clear * (1 - alphaOf(c)), 1);
-      expect(cover, `menu surface ${JSON.stringify(surface)}`).toBeGreaterThanOrEqual(0.85);
-      if (cover < 1) expect(surface.blur, `a translucent menu blurs the page behind it ${JSON.stringify(surface)}`).toMatch(/blur\(/);
+      expect(cover, `menu surface ${JSON.stringify(surface)}`).toBeGreaterThanOrEqual(0.999);
 
       const covered = await menu.locator('[role^="menuitem"], a, button').evaluateAll((els) => els
         .filter((el) => el.getClientRects().length)

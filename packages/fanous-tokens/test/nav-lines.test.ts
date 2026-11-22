@@ -99,13 +99,14 @@ test('light-dark() only picks between plain values (no color-mix() nested inside
   }
 });
 
-// Frosted glass since O36 (2026-11-16): the panel is translucent on purpose, but never see-through. The
-// Canvas layer always resolves, the menu colour sits on it, and the blur is its own longhand.
-test('the menu never goes see-through when its colour fails: an --aun-menu-bg layer over Canvas, blurred', () => {
+// Solid since 2026-11-22 (owner: surfaces are solid; AUDIT-2 read page text through the Acting-as
+// menu): an opaque Canvas layer that always resolves, the menu colour over it, and no blur.
+test('the menu is solid and never goes see-through when its colour fails: --aun-menu-bg over Canvas', () => {
   const menu = css.slice(css.indexOf('\n.aun-menu {'), css.indexOf('\n}', css.indexOf('\n.aun-menu {')));
-  assert.match(menu, /\n\s*background-color:\s*color-mix\(in srgb, Canvas \d+%, transparent\);/);
-  assert.match(menu, /\n\s*background-image:\s*linear-gradient\(color-mix\(in srgb, var\(--aun-menu-bg\) \d+%, transparent\), color-mix\(in srgb, var\(--aun-menu-bg\) \d+%, transparent\)\);/);
-  assert.match(menu, /\n\s*backdrop-filter:\s*var\(--aun-glass-blur, blur\(\d+px\)/);
+  assert.match(menu, /\n\s*background-color:\s*Canvas;/);
+  assert.match(menu, /\n\s*background-image:\s*linear-gradient\(var\(--aun-menu-bg\), var\(--aun-menu-bg\)\);/);
+  assert.doesNotMatch(menu, /backdrop-filter/, 'a solid menu has nothing to blur');
+  assert.doesNotMatch(menu, /color-mix\([^)]*transparent\)\s*,?\s*color-mix|Canvas \d+%/, 'no translucent layer');
   assert.doesNotMatch(css, /background(-color)?:\s*var\(--aun-menu-bg\)/, 'a var() background drops to transparent when it fails');
 });
 
