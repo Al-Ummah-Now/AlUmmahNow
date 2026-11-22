@@ -101,6 +101,9 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     apiOrigin,
     authOrigin,
     ...LIVE_EDGE_ORIGINS,
+    // Caption tracks of an owner-only video, fetched with the viewer's token and handed to the
+    // player as blob URLs, which video.js loads over XHR (hooks/useVideoSubtitles.ts)
+    'blob:',
     ...(isDevelopment
       ? ['http://127.0.0.1:*', 'http://localhost:*', 'ws://localhost:*', 'wss://localhost:*', 'ws://127.0.0.1:*']
       : websocketOrigins(env.websocketUrl)),

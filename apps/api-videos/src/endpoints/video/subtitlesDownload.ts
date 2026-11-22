@@ -13,11 +13,12 @@ import { fillServedTrack } from '../../lib/captions/drafts';
 import { subtitleDownload, type SubtitleDownloadFormat } from '../../lib/captions/download';
 import { editionFor } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
-import { PublicRoute, type AppContext } from '../../base';
+import { OptionalAuthRoute, type AppContext } from '../../base';
+import { loadVideoRecord, videoReadAccess, VIDEO_NOT_FOUND } from '../../lib/videoReadAccess';
 
 const errorBody = z.object({ success: z.boolean(), error: z.string() });
 
-export class SubtitlesDownload extends PublicRoute {
+export class SubtitlesDownload extends OptionalAuthRoute {
 	schema = {
 		tags: ['Subtitles'],
 		summary: 'Download a subtitle track as a file',
@@ -44,6 +45,9 @@ export class SubtitlesDownload extends PublicRoute {
 			const { params, query } = await this.getValidatedData<typeof this.schema>();
 			const { videoId, language } = params;
 			const format = ((query.format as string) || 'vtt') as SubtitleDownloadFormat;
+			// The video's own read rule (GET /api/videos/:id): hidden from this viewer → the same 404
+			const video = await loadVideoRecord<{ channelId?: string; userId?: string }>(c.env as never, videoId);
+			if (!(await videoReadAccess(c.env, video as never, this.getUserId(c)))) return c.json(VIDEO_NOT_FOUND, 404);
 			const track = await c.env.subtitles.get(`${videoId}/${language}.vtt`);
 			if (!track) return c.json({ success: false, error: `Subtitle not found for language: ${language}` }, 404);
 
@@ -52,9 +56,7 @@ export class SubtitlesDownload extends PublicRoute {
 			const translatedTrack = quranTrack && track.customMetadata?.qtr === '1';
 			let edition: Awaited<ReturnType<typeof editionFor>> = null;
 			if (translatedTrack) {
-				const videoObj = await c.env.videos?.get(videoId).catch(() => null);
-				const channelId = videoObj ? ((await videoObj.json().catch(() => null)) as { channelId?: string } | null)?.channelId : null;
-				edition = await editionFor(c.env as never, channelId, language);
+				edition = await editionFor(c.env as never, video?.channelId ?? null, language);
 			}
 			const served = quranTrack
 				? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined)

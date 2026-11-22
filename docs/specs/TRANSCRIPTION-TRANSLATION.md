@@ -322,6 +322,7 @@ Owner decisions 2026-11-13: build with **mode A**; the **Arabic text is served f
 
 **R2 `subtitles` bucket** (keys extend today's layout):
 - `{videoId}/{lang}.vtt` holds the **published** track. The player and the existing `GET /subtitles/:language` are unchanged.
+- **Who may read a published track** is the video's own read rule (`GET /api/videos/:id`, `lib/videoReadAccess.ts`), on `GET /subtitles`, `GET /subtitles/:lang` and `GET /subtitles/:lang/download` alike. A removed, soft-deleted or pending-deletion video, and one not open to anyone (private, draft, scheduled, still processing, held or rejected by review) that the viewer may not see, answers the video GET's 404 (no existence leak). The owner and channel members with `video.view_private` read it with their token; those responses are `private, no-store` with no ETag or 304, and the list says `restricted: true` so the player fetches each track with the token (blob URL). Only a video open to anyone is served `public` with an ETag.
 - `{videoId}/drafts/{lang}/v{n}.json` holds the editable document.
 - `{videoId}/drafts/{lang}/v{n}.vtt` is the preview.
 

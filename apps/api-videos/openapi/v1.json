@@ -55762,10 +55762,15 @@
                         },
                         "defaultLanguage": {
                           "type": "string"
+                        },
+                        "restricted": {
+                          "type": "boolean",
+                          "description": "True when the video is not open to anyone: each track must be fetched with the viewer's token"
                         }
                       },
                       "required": [
-                        "tracks"
+                        "tracks",
+                        "restricted"
                       ]
                     }
                   },
