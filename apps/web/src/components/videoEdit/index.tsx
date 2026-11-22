@@ -288,7 +288,7 @@ export default function VideoEdit({
   const VideoPreviewComponent = isRTL ? VideoPreviewRTL : VideoPreview;
 
   return (
-    <div data-testid="video-edit-form" className={`bg-white dark:bg-gray-900 rounded-lg shadow-lg ${className}`}>
+    <div data-testid="video-edit-form" className={`video-edit-form bg-white dark:bg-gray-900 rounded-lg shadow-lg ${className}`}>
       {discardDialog}
       {/* Header */}
       <div className="border-b dark:border-gray-700 p-6">

@@ -14,7 +14,7 @@ import type { SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
 import CaptionDraftsPanel from './captions/CaptionDraftsPanel';
-import CaptionDownloadMenu from './captions/CaptionDownloadMenu';
+import { CaptionDownloadButton, CaptionDownloadFormats } from './captions/CaptionDownloadMenu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -59,6 +59,8 @@ export default function SubtitleUploadSection({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<SubtitleTrack | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  /** The track whose download formats are open (one at a time) */
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const loadSubtitles = useCallback(async () => {
     setIsLoading(true);
@@ -173,7 +175,7 @@ export default function SubtitleUploadSection({
             gap-2
           ">
             <Languages className="w-5 h-5 md:w-6 md:h-6" />
-            {t.subtitle?.subtitles || 'Subtitles / Captions'}
+            {t.subtitle?.subtitles || 'Captions'}
           </h3>
           <p className="
             text-xs
@@ -183,7 +185,7 @@ export default function SubtitleUploadSection({
             mt-1
           ">
             {t.subtitle?.subtitlesDescription ||
-              'Upload subtitle files in multiple languages'}
+              'Upload caption files in multiple languages'}
           </p>
         </div>
 
@@ -206,7 +208,7 @@ export default function SubtitleUploadSection({
           "
         >
           <Plus className="w-4 h-4 md:w-5 md:h-5" />
-          {t.subtitle?.addSubtitle || 'Add Subtitle'}
+          {t.subtitle?.addSubtitle || 'Add captions'}
         </Button>
       </div>
 
@@ -245,7 +247,7 @@ export default function SubtitleUploadSection({
             dark:text-gray-300
             mb-2
           ">
-            {t.subtitle?.noSubtitles || 'No subtitles uploaded yet'}
+            {t.subtitle?.noSubtitles || 'No captions yet'}
           </h4>
           <p className="
             text-sm
@@ -257,7 +259,7 @@ export default function SubtitleUploadSection({
             mx-auto
           ">
             {t.subtitle?.noSubtitlesDescription ||
-              'Add subtitle tracks to make your video accessible in multiple languages'}
+              'Add captions so more viewers can follow your video, in more languages'}
           </p>
           <Button
             type="button"
@@ -266,7 +268,7 @@ export default function SubtitleUploadSection({
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="w-4 h-4 me-2" />
-            {t.subtitle?.uploadFirstSubtitle || 'Upload First Subtitle'}
+            {t.subtitle?.uploadFirstSubtitle || 'Add captions'}
           </Button>
         </Card>
       )}
@@ -366,13 +368,14 @@ export default function SubtitleUploadSection({
                     sm:flex-shrink-0
                   ">
                     {subtitle.status === 'active' && (
-                      <CaptionDownloadMenu
-                        videoId={videoId}
+                      <CaptionDownloadButton
                         language={subtitle.language}
                         languageLabel={lang === 'ar' ? langInfo.nameAr : langInfo.name}
                         source="track"
+                        look="track"
+                        expanded={downloading === subtitle.language}
+                        onToggle={() => setDownloading((cur) => (cur === subtitle.language ? null : subtitle.language))}
                         t={t.captions.download}
-                        className="inline-flex h-8 md:h-9 min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 sm:px-3 text-xs md:text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                       />
                     )}
                     {!subtitle.isDefault && subtitle.status === 'active' && (
@@ -428,7 +431,7 @@ export default function SubtitleUploadSection({
                         min-w-[44px]
                         min-h-[44px]
                       "
-                      aria-label={t.subtitle?.deleteSubtitle || 'Delete subtitle'}
+                      aria-label={t.subtitle?.deleteSubtitle || 'Delete captions'}
                     >
                       {actionLoading === `delete-${subtitle.language}` ? (
                         <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" />
@@ -438,6 +441,16 @@ export default function SubtitleUploadSection({
                     </Button>
                   </div>
                 </div>
+                {downloading === subtitle.language && subtitle.status === 'active' && (
+                  <CaptionDownloadFormats
+                    videoId={videoId}
+                    language={subtitle.language}
+                    languageLabel={lang === 'ar' ? langInfo.nameAr : langInfo.name}
+                    source="track"
+                    t={t.captions.download}
+                    onClose={() => setDownloading(null)}
+                  />
+                )}
               </Card>
             );
           })}
@@ -467,11 +480,11 @@ export default function SubtitleUploadSection({
         ">
           <AlertDialogHeader>
             <AlertDialogTitle className="dark:text-white">
-              {t.subtitle?.confirmDelete || 'Delete Subtitle?'}
+              {t.subtitle?.confirmDelete || 'Delete these captions?'}
             </AlertDialogTitle>
             <AlertDialogDescription className="dark:text-gray-400">
               {t.subtitle?.confirmDeleteDescription ||
-                'Are you sure you want to delete this subtitle track? This action cannot be undone.'}
+                'This deletes the captions for this language. You can’t undo it.'}
               {deleteConfirm && (
                 <span className="block mt-2 font-medium text-gray-900 dark:text-gray-100">
                   {lang === 'ar'

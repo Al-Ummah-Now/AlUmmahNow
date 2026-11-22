@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/ar').AR_TRANSLATIONS, lang: 'ar', isRTL: true }),
@@ -24,5 +24,11 @@ describe('SubtitleUploadSection: Download per published track', () => {
     expect(downloads[0]).toHaveAttribute('aria-label', 'تنزيل الترجمة (العربية)');
     expect(downloads[0]).toHaveTextContent('تنزيل الترجمة');
     expect(downloads.slice(1)).toEqual([null, null]);
+
+    // The formats open inside the same track card, below its row
+    fireEvent.click(downloads[0]!);
+    const formats = screen.getByTestId('caption-download-formats');
+    expect(rows[0]).toContainElement(formats);
+    expect(formats).toHaveTextContent('اختر صيغة الملف');
   });
 });

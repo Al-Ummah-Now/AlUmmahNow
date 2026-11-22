@@ -42,7 +42,7 @@ export default function SubtitlePreview({
           font-semibold
           dark:text-white
         ">
-          {t.subtitle?.preview || 'Subtitle Preview'}
+          {t.subtitle?.preview || 'Caption preview'}
         </h4>
         <span className="
           text-xs
@@ -204,7 +204,7 @@ export default function SubtitlePreview({
             dark:text-green-300
             font-medium
           ">
-            {t.subtitle?.noIssues || 'No issues detected. Subtitles look good!'}
+            {t.subtitle?.noIssues || 'No issues found. The captions look good.'}
           </p>
         </div>
       )}
