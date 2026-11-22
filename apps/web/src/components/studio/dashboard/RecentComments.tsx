@@ -59,8 +59,8 @@ export function RecentComments({ locale, channelId }: { locale: string; channelI
                 <bdi className="font-medium text-foreground">{comment.author.displayName}</bdi>
                 <time dateTime={comment.createdAt}>{formatRelativeTime(comment.createdAt, lang)}</time>
               </p>
-              <p dir="auto" className="clamp-2 text-foreground">{comment.text}</p>
-              <p className="text-xs text-muted-foreground">
+              <p dir="auto" className="line-clamp-2 text-foreground [text-align:match-parent]">{comment.text}</p>
+              <p className="text-xs text-muted-foreground [text-wrap:balance]">
                 <OnTitle template={t.studio.commentsPage.on} title={comment.targetTitle} />
               </p>
             </li>

@@ -96,7 +96,7 @@ export const STUDIO_EN = {
     ownedBy: 'This channel belongs to {owner}.',
     ownedBySomeone: 'You help run this channel; its owner is the only one who can delete it.',
     ownedByYou: 'You own this channel.',
-    transferNote: 'Ownership can’t be changed here. Contact the Al Ummah Now team.',
+    transferNote: 'Ownership can’t be changed here. Contact the Al\u00a0Ummah\u00a0Now team.',
     uploadDefaults: 'Upload defaults',
     uploadDefaultsBody: 'Upload defaults are set on your account, for every channel you upload to.',
     uploadDefaultsLink: 'Edit upload defaults',

@@ -104,5 +104,10 @@ html[data-theme='fawanees'].dark .video-edit-form :is([data-slot='card'], [class
 
 /* Studio's work area stays plain (docs/design/FAWANEES-STREET.md, "Where it does not draw"): a work
    tool's fields and help lines never have a lantern or string behind them. The rail keeps its own
-   surface; the frame paints the page colour over the street */
-html.fanous-street .studio-frame { background: var(--fanous-color-background); }
+   surface; the frame paints the page colour over the street. The page's own space below the frame
+   (room for the phone tab bar) is painted too, by a solid shadow pushed down half a screen, so the
+   end of a Studio page has no lantern peeking above the tab bar */
+html.fanous-street .studio-frame {
+  background: var(--fanous-color-background);
+  box-shadow: 0 50vh 0 0 var(--fanous-color-background);
+}

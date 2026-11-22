@@ -156,7 +156,7 @@
   "apps/web/src/components/search/SearchFilters/rtl/index.tsx": 36,
   "apps/web/src/components/search/TrendingContent/index.tsx": 24,
   "apps/web/src/components/search/TrendingContent/rtl/index.tsx": 24,
-  "apps/web/src/components/settings/ChannelAboutFields.tsx": 49,
+  "apps/web/src/components/settings/ChannelAboutFields.tsx": 10,
   "apps/web/src/components/settings/TemplateEditorModal.tsx": 130,
   "apps/web/src/components/settings/VariableGuide.tsx": 38,
   "apps/web/src/components/subscription/SubscriptionFeed.tsx": 15,
