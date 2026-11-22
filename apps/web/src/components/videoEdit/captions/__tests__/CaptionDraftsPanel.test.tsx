@@ -127,3 +127,14 @@ describe('CaptionDraftsPanel: the claim spinner always ends (owner review 2026-1
     expect(await screen.findByText(jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS.captions.loadFailed)).toBeInTheDocument();
   });
 });
+
+describe('CaptionDraftsPanel: Download (QF 2026-11-22)', () => {
+  it('each draft offers its own download, from the draft route', async () => {
+    listCaptionDrafts.mockResolvedValue(listed({ drafts: [arDraft, { ...arDraft, language: 'en' }] }));
+    render(<CaptionDraftsPanel videoId="v1" />);
+    const rows = await screen.findAllByTestId('caption-draft');
+    const buttons = rows.map((r) => r.querySelector('[data-testid="caption-download"]'));
+    expect(buttons.map((b) => b?.getAttribute('data-source'))).toEqual(['draft', 'draft']);
+    expect(buttons.map((b) => b?.getAttribute('aria-label'))).toEqual(['Download captions (Arabic)', 'Download captions (English)']);
+  });
+});

@@ -47,7 +47,7 @@ import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
 import { VideoTranslatedMetadataGet } from '../endpoints/translate/translate';
 import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet, CaptionTranslateCreate } from '../endpoints/captions/captionJobs';
 import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../endpoints/video/renditions';
-import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, OnDeviceTranscriptSubmit, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
+import { CaptionDraftDelete, CaptionDraftDownload, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, OnDeviceTranscriptSubmit, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -192,6 +192,7 @@ videoRouter.get('/:videoId/captions/drafts/:language', CaptionDraftGet);
 videoRouter.put('/:videoId/captions/drafts/:language', CaptionDraftSave);
 videoRouter.delete('/:videoId/captions/drafts/:language', CaptionDraftDelete);
 videoRouter.post('/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
+videoRouter.get('/:videoId/captions/drafts/:language/download', CaptionDraftDownload);
 videoRouter.post('/:videoId/captions/drafts/:language/transcript', OnDeviceTranscriptSubmit);
 videoRouter.post('/:videoId/renditions', RenditionsCreate);
 videoRouter.put('/:videoId/renditions/:stagingId/files/:rung/:file', RenditionFilePut);
