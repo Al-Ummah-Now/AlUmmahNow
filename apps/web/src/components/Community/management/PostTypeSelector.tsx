@@ -147,8 +147,8 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
               md:gap-3           /* Desktop: more spacing */
               text-center
             ">
-              {/* A fixed circle centred over the label: with a padded auto-width box the
-                  theme's card stretched it into a full-width pill, icon at its start */}
+              {/* A fixed circle centred over the label. No comments in this class string: the old
+                  "icon container" note put Tailwind's `container` (width: 100%) on it, a full-width pill */}
               <div className={`
                 grid place-items-center shrink-0 self-center
                 w-11 h-11 md:w-14 md:h-14
@@ -174,6 +174,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
                   {label}
                 </h3>
                 <p className="
+                  [text-wrap:balance]
                   text-xs        /* Mobile: extra small */
                   md:text-sm     /* Desktop: small */
                   text-muted-foreground
