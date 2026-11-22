@@ -67,6 +67,9 @@ describe('ChannelTranslationSettings', () => {
     expect(screen.queryByTestId('channel-quran-ar')).toBeNull();
     expect(screen.getByTestId('channel-quran-en')).toHaveTextContent(cs.sourceDefault);
     expect(screen.queryByText(/paused/i)).toBeNull();
+    // Hints wrap balanced: no lone "viewers." on a phone
+    expect(screen.getByText(cs.hint)).toHaveClass('text-balance');
+    expect(screen.getByText(cs.quranHint)).toHaveClass('text-balance');
   });
 
   it("saves a picked edition and shows it as the channel's choice", async () => {

@@ -143,10 +143,10 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
             data-testid="channel-handle-input"
           />
         </div>
-        <p id={ids.handleHelp} className="text-sm text-muted-foreground mt-1 break-words">
+        <p id={ids.handleHelp} className="text-balance text-sm text-muted-foreground mt-1 break-words">
           {t.channel.handleHelp.replace('{url}', previewUrl)}
         </p>
-        <p id={ids.handleStatus} className="text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
+        <p id={ids.handleStatus} className="text-balance text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
           {status.state === 'checking' && <span className="text-muted-foreground">{t.channel.handleChecking}</span>}
           {status.state === 'available' && <span className="text-green-700 dark:text-green-400">{t.channel.handleAvailable.replace('{handle}', normalizedHandle)}</span>}
           {status.state === 'current' && <span className="text-muted-foreground">{t.channel.handleCurrent}</span>}
@@ -157,7 +157,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
       {/* Links */}
       <fieldset>
         <legend className="mb-1.5 block text-sm font-medium text-foreground">{t.channel.links}</legend>
-        <p className="text-sm text-muted-foreground mb-2">{t.channel.linksHelp.replace('{max}', formatNumber(lang, MAX_CHANNEL_LINKS))}</p>
+        <p className="text-balance text-sm text-muted-foreground mb-2">{t.channel.linksHelp.replace('{max}', formatNumber(lang, MAX_CHANNEL_LINKS))}</p>
         <ul className="space-y-2" id={ids.links}>
           {value.links.map((link, index) => {
             const invalid = (link.title.trim() !== '' || link.url.trim() !== '') && !isValidLink(link);
@@ -195,13 +195,13 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>
-                {invalid && <p className="text-sm text-red-600 dark:text-red-400 sm:hidden" role="alert">{t.channel.invalidLinkUrl}</p>}
+                {invalid && <p className="text-balance text-sm text-red-600 dark:text-red-400 sm:hidden" role="alert">{t.channel.invalidLinkUrl}</p>}
               </li>
             );
           })}
         </ul>
         {value.links.some((l) => (l.title.trim() !== '' || l.url.trim() !== '') && !isValidLink(l)) && (
-          <p className="hidden sm:block text-sm text-red-600 dark:text-red-400 mt-1" role="alert">{t.channel.invalidLinkUrl}</p>
+          <p className="hidden sm:block text-balance text-sm text-red-600 dark:text-red-400 mt-1" role="alert">{t.channel.invalidLinkUrl}</p>
         )}
         {value.links.length < MAX_CHANNEL_LINKS && (
           <button
@@ -235,7 +235,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
           className={inputClass}
           data-testid="channel-contact-input"
         />
-        <p id={ids.emailHelp} className={`text-sm mt-1 ${emailInvalid ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+        <p id={ids.emailHelp} className={`text-balance text-sm mt-1 ${emailInvalid ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
           {emailInvalid ? t.channel.invalidEmail : t.channel.contactEmailHelp}
         </p>
       </div>

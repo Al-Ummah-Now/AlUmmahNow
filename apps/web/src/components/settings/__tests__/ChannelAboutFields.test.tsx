@@ -29,4 +29,13 @@ describe('ChannelAboutFields look like the Profile form fields', () => {
       expect(el.className).not.toMatch(/\b(?:dark:)?(?:bg|border)-gray-\d+/);
     }
   });
+
+  it('help lines wrap balanced, so none ends on one lone word ("hide / it." on a phone)', () => {
+    const { container } = render(
+      <ChannelAboutFields channelId="ch1" currentHandle="halaqat.alfajr" value={{ handle: 'halaqat.alfajr', links: [], contactEmail: '', location: '' }} onChange={jest.fn()} />,
+    );
+    const help = [...container.querySelectorAll('p')];
+    expect(help.length).toBeGreaterThanOrEqual(4);
+    for (const p of help) expect(p).toHaveClass('text-balance');
+  });
 });
