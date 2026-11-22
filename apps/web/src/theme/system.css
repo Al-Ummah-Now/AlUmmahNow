@@ -597,9 +597,10 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
 .tabbar .tb-phone{display:none}
 .tabbar button.tb{border:0;background:transparent;font-family:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;cursor:pointer;padding:0;width:100%}
 /* Every tab label the same size and on one line, so every icon sits on the same row ("Request tier" wrapped to two
-   lines and lifted its icon out of line). Columns are 1fr, which never shrinks below its content: a longer label
-   widens its own column a little and the others share the rest, so no label is split or runs into the next */
-.tabbar .tb{padding-inline:2px}.tabbar .tb>span{text-align:center;line-height:1.2;white-space:nowrap}
+   lines and lifted its icon out of line). Columns are sized to their label and share the free space equally, so the
+   gap between any two labels is the same: equal 1fr columns left "Request tier" filling its column edge to edge,
+   touching "Subscriptions" */
+.tabbar{grid-auto-columns:auto}.tabbar .tb{padding-inline:2px}.tabbar .tb>span{text-align:center;line-height:1.2;white-space:nowrap}
 .tabbar .tb[aria-disabled=true]{opacity:.6;cursor:not-allowed}
 @media(max-width:639px){.ah .ah-menu,.ah-end .upload-action{display:none}.tabbar .tb-phone{display:flex}}
 /* Video titles on cards and in lists (grid, history, library, playlist-style cards, Up next) never leave one word
