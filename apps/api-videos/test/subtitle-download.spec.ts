@@ -9,6 +9,25 @@ import { quranAttributionLines, subtitleDownload, vttToSrt, withVttNote } from '
 const edition = { id: 20, name: 'Saheeh International', language: 'en' };
 
 describe('subtitle downloads', () => {
+	it('keeps Quran Foundation text byte for byte: straight quotes stay straight (QF: unaltered), only our own lines are typographic', async () => {
+		// Shaped like an edition's text (a quotation opening mid-span) and a Content Sync ayah
+		const qfTranslation = 'Say, "fixture speech, [fixture] one,';
+		const qfArabic = 'قُلْ هُوَ ٱللَّهُ أَحَدٌ';
+		const { quranTranslationCueText, quranCueText } = await import('@al-ummah/shared-types');
+		const en = quranTranslationCueText(qfTranslation, 'Saheeh International', 'Al-Ikhlas', '112:1:1-112:1:4');
+		const ar = quranCueText(qfArabic, 'الإخلاص', '112:1:1-112:1:4', 'ar');
+		assert.ok(en.includes(qfTranslation), 'the cue holds the translation exactly');
+		assert.ok(ar.includes(qfArabic), 'the cue holds the ayah exactly');
+		for (const [cue, text] of [[en, qfTranslation], [ar, qfArabic]] as const) {
+			const served = `WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\n${cue}\n`;
+			for (const format of ['vtt', 'srt'] as const) {
+				const file = subtitleDownload(served, format, { edition: null });
+				assert.ok(file.includes(text), `${format}: the text exactly as Quran Foundation serves it`);
+				assert.equal(file.split('"').length, served.split('"').length, `${format}: no quote mark changed`);
+			}
+		}
+	});
+
 	it('names the translation edition of a translated track, the Uthmani text otherwise', () => {
 		assert.deepEqual(quranAttributionLines(edition), [
 			'Quran data provided by Quran Foundation (https://quran.foundation/)',
