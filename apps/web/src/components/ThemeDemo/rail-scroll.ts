@@ -49,13 +49,25 @@ export function useMoreBelow<T extends HTMLElement>(): RefObject<T | null> {
     update();
     el.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
+    // The items too, not only the list: when the web font arrives the labels rewrap (an Arabic label
+    // set in the fallback font took a line more), the list's own box keeps its size, and a tail
+    // measured before then hid «إرشادات المجتمع» behind an empty band (AUDIT-2, #1630)
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
-    resize?.observe(el);
-    const mutate = typeof MutationObserver === 'undefined' ? null : new MutationObserver(update);
+    const watchItems = () => {
+      resize?.disconnect();
+      resize?.observe(el);
+      el.querySelectorAll<HTMLElement>('.nv, .nv-heading').forEach((n) => resize?.observe(n));
+    };
+    watchItems();
+    const mutate = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => { watchItems(); update(); });
     mutate?.observe(el, { childList: true, subtree: true });
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    fonts?.addEventListener?.('loadingdone', update);
+    void fonts?.ready?.then(update);
     return () => {
       el.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      fonts?.removeEventListener?.('loadingdone', update);
       resize?.disconnect();
       mutate?.disconnect();
     };
