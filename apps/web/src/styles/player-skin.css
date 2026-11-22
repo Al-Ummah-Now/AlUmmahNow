@@ -1955,6 +1955,14 @@
   pointer-events: none;
 }
 
+/* An open player menu (settings, captions, a Video.js popup) takes the frame: the toast steps out
+   of its way rather than sitting on the panel's edge. The toast is the player's sibling, so it is
+   reached through their wrapper. */
+:has(.video-js.vjs-fanous.vjs-menu-open) > .vjs-fanous-chapter-toast {
+  visibility: hidden;
+  opacity: 0;
+}
+
 .vjs-fanous-chapter-toast-body {
   padding: 8px 14px;
   border: 1px solid var(--fanous-player-pill-edge);
