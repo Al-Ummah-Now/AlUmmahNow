@@ -189,7 +189,7 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
                       <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span><Sep />{a.rule_id}<Sep />
-                      <span className="text-fg-muted">{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime /> })}</span>
+                      <span className="text-fg-muted">{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
                     </li>
                   ))}
                 </ul>

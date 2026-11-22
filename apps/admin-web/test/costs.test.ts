@@ -387,12 +387,12 @@ describe('costs sections render', () => {
     const check = React.createElement('button', { 'data-testid': 'costs-token-check' }, 'Check again');
     const html = render(React.createElement(sections.TokenNotice as React.FC, { d, t, f, check } as never));
     assert.match(html, /data-kind="refused"/);
-    assert.ok(html.includes('Account Analytics Read'));
+    assert.ok(html.includes('Account\u00a0Analytics\u00a0Read'), 'the permission name never breaks');
     assert.ok(html.includes('missing, not zero'));
     assert.ok(html.includes('costs-token-check'));
     assert.ok(html.includes('#connections'));
     const ar = render(React.createElement(sections.TokenNotice as React.FC, { d: { ...d, canManage: false }, t: createTranslator('ar'), f: opsFormats('ar'), check } as never));
-    assert.ok(ar.includes('Account Analytics Read'));
+    assert.ok(ar.includes('Account\u00a0Analytics\u00a0Read'));
     assert.ok(!ar.includes('costs-token-check'));
   });
 
@@ -538,7 +538,7 @@ describe('costs audit fixes, round 3 (AUDIT-2 2026-11-21)', () => {
     assert.equal(connectionActions('unreadable'), true, 'an unreadable key can still be removed');
     for (const locale of ['en', 'ar'] as const) assert.ok(createTranslator(locale)('costs.connections.status.release') !== 'costs.connections.status.release');
     // The Arabic token note isolates each Latin permission name, so RTL keeps «Account Analytics: Read» whole
-    assert.ok(createTranslator('ar')('costs.connections.about.cloudflare').includes('\u2066Account Analytics: Read\u2069'));
+    assert.ok(createTranslator('ar')('costs.connections.about.cloudflare').includes('\u2066Account\u00a0Analytics:\u00a0Read\u2069'));
   });
 
   it('Operations: one precision for the error rate now and before; an empty backlog is nothing', () => {
@@ -549,5 +549,29 @@ describe('costs audit fixes, round 3 (AUDIT-2 2026-11-21)', () => {
     assert.equal(worstBacklog({ name: 'transcode-stage', backlog: 0 }), null);
     assert.deepEqual(worstBacklog({ name: 'transcode-qa', backlog: 4 }), { name: 'transcode-qa', backlog: 4 });
     assert.equal(worstBacklog(null), null);
+  });
+});
+
+describe('costs audit fixes, round 4 (AUDIT-2 2026-11-21)', () => {
+  it('Arabic masked keys read ••••7fA2 (isolated LTR), and Resend says what it shows without a key', () => {
+    const ar = createTranslator('ar');
+    assert.equal(ar('costs.connections.status.set', { last4: '7fA2' }), 'مُضاف \u2066••••7fA2\u2069');
+    assert.ok(createTranslator('en')('costs.connections.about.resend').includes('Without it, Resend shows no cost.'));
+    assert.ok(ar('costs.connections.about.resend').includes('من دونه'));
+  });
+
+  it('the Images allowance is one form in the row and its note', () => {
+    const line = { key: 'images_transformations' as const, used: 0, included: 5000, billable: 0, cost: 0, listCost: 0, projectedCost: 0, source: 'none' as const, billed: true };
+    for (const [locale, form] of [['ar', '٥ آلاف'], ['en', '5K']] as const) {
+      const html = renderToStaticMarkup(React.createElement(details.CloudflarePanel as React.FC, { d: freshDashboard({ cloudflare: { billedMtd: 0, billedProjected: 0, listMtd: 0, lines: [line] } }), t: createTranslator(locale), f: opsFormats(locale) } as never) as never);
+      const note = html.replace(/\u00a0/g, ' ');
+      assert.ok(note.includes(`${form} ${locale === 'ar' ? 'تحويل' : 'a month'}`), `${locale} note uses ${form}`);
+    }
+  });
+
+  it('shares and changes always carry two decimals', () => {
+    const f = opsFormats('en');
+    assert.equal(f.rate(0.103), '10.30%');
+    assert.equal(f.rate(0.2283), '22.83%');
   });
 });

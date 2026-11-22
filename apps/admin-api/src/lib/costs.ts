@@ -403,17 +403,80 @@ export function withCloudflareLines(products: ProductLine[], lines: { key: strin
     .sort((a, b) => b.mtd - a.mtd);
 }
 
-/**
- * Parts rounded to cents that must add up to a displayed total: the cent or two rounding leaves
- * goes to the largest part (largest-remainder style), so the page never shows parts ≠ total.
- */
-export function balanceTo(parts: Record<string, number>, total: number): Record<string, number> {
-  const out = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, round2(v)]));
-  const diff = round2(round2(total) - Object.values(out).reduce((sum, v) => sum + v, 0));
-  if (diff === 0 || Math.abs(diff) > 0.05) return out;
-  const largest = Object.entries(out).sort((a, b) => b[1] - a[1])[0]?.[0];
-  if (largest) out[largest] = round2(out[largest]! + diff);
+/** Splits `totalCents` over `weights` by largest remainder: whole cents that add up exactly. */
+export function apportionCents(totalCents: number, weights: Map<string, number>): Map<string, number> {
+  const out = new Map<string, number>();
+  const sum = [...weights.values()].reduce((a, b) => a + Math.max(0, b), 0);
+  if (weights.size === 0) return out;
+  if (sum <= 0) {
+    // Nothing to weigh by: an even split, any leftover cent to the first
+    const keys = [...weights.keys()];
+    keys.forEach((k, i) => out.set(k, Math.floor(totalCents / keys.length) + (i < totalCents % keys.length ? 1 : 0)));
+    return out;
+  }
+  const exact = [...weights].map(([k, w]) => ({ k, v: (Math.max(0, w) / sum) * totalCents }));
+  for (const e of exact) out.set(e.k, Math.floor(e.v));
+  let left = totalCents - [...out.values()].reduce((a, b) => a + b, 0);
+  for (const e of [...exact].sort((a, b) => b.v - Math.floor(b.v) - (a.v - Math.floor(a.v)) || b.v - a.v)) {
+    if (left <= 0) break;
+    out.set(e.k, out.get(e.k)! + 1);
+    left--;
+  }
   return out;
+}
+
+/**
+ * Each resource's month to date in cents, as the page shows it: every Cloudflare product's total
+ * (the sum of its invoice lines) split over that product's resources by their own list cost. A
+ * product's drivers then add up to the product, and an environment is the sum of its rows.
+ */
+export function resourceMtds(resourceDays: ResourceDay[], products: ProductLine[], now: Date): Map<string, { env: string; product: CostProduct; usd: number }> {
+  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
+  const byProduct = new Map<CostProduct, Map<string, number>>();
+  const meta = new Map<string, { env: string; product: CostProduct }>();
+  for (const r of resourceDays) {
+    const product = KIND_PRODUCT[r.kind];
+    if (!product || r.day < monthStart) continue;
+    const w = byProduct.get(product) ?? new Map<string, number>();
+    w.set(r.resource_id, (w.get(r.resource_id) ?? 0) + num(r.cost));
+    byProduct.set(product, w);
+    meta.set(r.resource_id, { env: r.env, product });
+  }
+  const out = new Map<string, { env: string; product: CostProduct; usd: number }>();
+  for (const [product, weights] of byProduct) {
+    const total = Math.round((products.find((p) => p.product === product)?.mtd ?? 0) * 100);
+    for (const [id, cents] of apportionCents(total, weights)) out.set(id, { ...meta.get(id)!, usd: cents / 100 });
+  }
+  return out;
+}
+
+/**
+ * Month to date per environment from the rows the page shows: each resource's share (resourceMtds)
+ * plus Containers (per env when billing splits it, else production), and the account-wide products
+ * (Bunny, Workers AI, Resend, the plan, fixed) under 'account'. Adds up to the products exactly.
+ */
+export function envsFromRows(rows: Map<string, { env: string; product: CostProduct; usd: number }>, products: ProductLine[], productDays: { day: string; env: string; product: string; cost: number }[], containersSource: string, now: Date): Record<string, number> {
+  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
+  const cents: Record<string, number> = { production: 0, stage: 0, qa: 0, account: 0 };
+  const split = new Set<CostProduct>();
+  for (const r of rows.values()) {
+    cents[r.env in cents ? r.env : 'account']! += Math.round(r.usd * 100);
+    split.add(r.product);
+  }
+  for (const p of products) {
+    if (split.has(p.product)) continue;
+    const total = Math.round(p.mtd * 100);
+    if (p.product !== 'containers') {
+      // Account-wide: Bunny, Workers AI, Resend, the plan, fixed (and a Cloudflare line with no resource of ours)
+      cents.account! += total;
+      continue;
+    }
+    const weights = new Map<string, number>();
+    if (containersSource === 'billing') for (const d of productDays) if (d.product === 'containers' && d.day >= monthStart && d.env in cents) weights.set(d.env, (weights.get(d.env) ?? 0) + num(d.cost));
+    if (weights.size === 0) weights.set('production', 1);
+    for (const [e, c] of apportionCents(total, weights)) cents[e]! += c;
+  }
+  return Object.fromEntries(Object.entries(cents).map(([k, v]) => [k, v / 100]));
 }
 
 /** Month to date per environment; account-wide costs (Bunny, Workers AI, Resend, the plan) under 'account'. */
@@ -577,6 +640,8 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
     }))
     .filter((l) => l.used > 0 || l.source === 'none');
   const products = withCloudflareLines(productLines(resourceDays, extras, now, fixed), cfLines);
+  // Each resource's month to date as shown: its product's total split over the product's resources
+  const rows = resourceMtds(resourceDays, products, now);
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
   const idle = billIdle(idleProjection(resourceDays, extras, now, fixed.projected), idleBilledCloudflare(meterDays, now));
   // A fixed cost's day: its month's share for that one day, when it is active then
@@ -596,7 +661,7 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
     // Linear: the month so far scaled to the whole month; trailing: the last 7 full days carried forward (drives alerts)
     forecast: { linear: round2(nonCloudflareLinear + billed.linear.total + PLAN_BASE_USD + fixed.projected), trailing: budget.projected },
     products,
-    envs: balanceTo(envLines(resourceDays, productDays, extras, now, fixed.mtd), products.reduce((sum, p) => sum + p.mtd, 0)),
+    envs: envsFromRows(rows, products, productDays, extras.sources.containers, now),
     movers: topMovers(resourceDays, products, now),
     spikes: spikes.slice(0, 10),
     // The daily total (every source), and the same days per env and source for the stacked chart
@@ -610,7 +675,7 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
     },
     fixed: { items: fixed.items, mtd: fixed.mtd, projected: fixed.projected },
     idle,
-    drivers: costDrivers(resourceDays, idle, spikes, now),
+    drivers: costDrivers(resourceDays, idle, spikes, now, rows),
     sources: extras.sources,
     alerts: openAlerts,
     settings,
