@@ -118,7 +118,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
   const log = useJobLog(job);
   return (
     <>
-      <tr className={log.open ? '' : 'border-b border-border last:border-0'} data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
+      <tr className={`max-md:flex max-md:flex-col ${log.open ? '' : 'border-b border-border last:border-0'}`} data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
         <td className={TD}>
           <span className="block font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
           <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
@@ -134,7 +134,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
             {log.toggle}
           </div>
         </td>
-        <td className={TD}>
+        <td className={`${TD} max-md:pt-0`}>
           <JobStatusChip job={job} />
           <JobTiming job={job} />
         </td>
@@ -142,7 +142,7 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
         <td className={`${TD} ${WIDE} text-fg-muted whitespace-nowrap`}>
           <LocalTime value={job.updatedAt} />
         </td>
-        <td className={TD}>
+        <td className={`${TD} max-md:pt-0 empty:hidden`}>
           <JobActionButtons job={job} permissions={permissions} action={action} onCancelAsk={onCancelAsk} />
         </td>
       </tr>
@@ -175,7 +175,8 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
       <div className="bg-surface border border-border rounded-lg overflow-x-auto">
         <table className="w-full" data-testid={testId}>
           <caption className="sr-only">{t('jobs.tableCaption')}</caption>
-          <thead className="border-b border-border">
+          {/* A phone stacks each job's cells (job, status, actions): the column heads would not line up */}
+          <thead className="border-b border-border max-md:hidden">
             <tr>
               <th className={th} scope="col">{t('jobs.colJob')}</th>
               <th className={th} scope="col">{t('jobs.colStatus')}</th>
