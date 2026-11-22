@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { dateTimeFormat, joinMeta } from '@al-ummah/shared-types';
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import { StackedBarChart, type StackedSeries } from '@/components/charts/StackedBarChart';
 import { opsFormats } from '../operations/model';
-import { localTrend, todayHoldsNextUtcDay } from './model';
+import { localTrend, todayHoldsNextUtcDay, utcDates, utcDaysPhrase } from './model';
 
 const noSubscribe = () => () => {};
 const viewerZone = () => {
@@ -20,9 +20,15 @@ export interface TrendText {
   note: string;
   /** Added to the note only when today's bar also holds the next UTC day (the Americas' evening). */
   noteToday: string;
-  /** "By UTC day": the hover titles' and the table's label for a bar's UTC days. */
+  /** "UTC days": the table's column of each bar's UTC days. */
   utcLabel: string;
-  /** The chosen bar, e.g. "{day}: {total} (By UTC day: {utc})". */
+  /** A bar's UTC days with their label, by how many it holds: "UTC day: {days}", "UTC days: {days}" (Arabic has a dual). */
+  utcOne: string;
+  utcTwo: string;
+  utcMany: string;
+  /** Between two dates: ", " / «، ». */
+  utcSep: string;
+  /** The chosen bar, e.g. "{day}: {total} ({utc})", {utc} being the labelled UTC days. */
   detail: string;
 }
 
@@ -64,7 +70,8 @@ export function TrendChart({
   const byKey = new Map(local.series.map((s) => [s.key, s.values]));
   const last = local.days.length - 1;
   const selected = picked ?? last;
-  const utcOf = (i: number) => (local.utcDays[i]?.length ? joinMeta(locale, local.utcDays[i]!.map(f.day)) : undefined);
+  const utcOf = (i: number) => (local.utcDays[i]?.length ? utcDates(local.utcDays[i]!, f.day, text.utcSep) : undefined);
+  const utcPhrase = (i: number) => utcDaysPhrase(local.utcDays[i] ?? [], f.day, text);
   const totalOf = (i: number) => local.series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0);
   const todayHoldsNext = todayHoldsNextUtcDay(local);
   return (
@@ -81,6 +88,7 @@ export function TrendChart({
         labels={labels}
         dayNote={utcOf}
         dayNoteLabel={text.utcLabel}
+        dayNoteTitle={utcPhrase}
         selected={selected}
         onSelect={setPicked}
         testId={testId}
@@ -89,7 +97,7 @@ export function TrendChart({
         {text.detail
           .replace('{day}', f.day(local.days[selected] ?? ''))
           .replace('{total}', f.usd(totalOf(selected)))
-          .replace('{utc}', utcOf(selected) ?? '—')}
+          .replace('{utc}', utcPhrase(selected) ?? text.utcOne.replace('{days}', '—'))}
       </p>
       <p className="mt-2 text-xs text-fg-muted" data-testid={`${testId}-note`}>
         {text.note}

@@ -606,6 +606,10 @@ export function TrendPanel({ d, t, f, locale, now = Date.now() }: Common & { d: 
           note: t('costs.breakdown.trendNote'),
           noteToday: t('costs.breakdown.trendNoteToday'),
           utcLabel: t('costs.breakdown.utcDays'),
+          utcOne: t('costs.breakdown.utcDayOne', { days: '{days}' }),
+          utcTwo: t('costs.breakdown.utcDayTwo', { days: '{days}' }),
+          utcMany: t('costs.breakdown.utcDayMany', { days: '{days}' }),
+          utcSep: t('costs.breakdown.utcDaySep'),
           // Filled in the browser with the bar chosen there
           detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }),
         }}

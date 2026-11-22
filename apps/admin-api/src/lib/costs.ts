@@ -43,8 +43,8 @@ import {
 } from './opsCost';
 import { apportionCents } from './opsCost';
 export { apportionCents };
-import { idleBilledCloudflare } from './cfBilling';
-import { CF_METERS, fixedCostMonthShare } from '@al-ummah/shared-types';
+import { idleBilledCloudflare, STORAGE_METERS, type MeterUsage } from './cfBilling';
+import { billLine, CF_METERS, fixedCostMonthShare, type CfMeterKey } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
 import { loadD1Limits, parseD1LimitsInput } from './d1Capacity';
 import type { D1Limits } from '@al-ummah/shared-types';
@@ -424,28 +424,100 @@ export function withCloudflareLines(products: ProductLine[], lines: { key: strin
 
 
 /**
- * Each resource's month to date in cents, as the page shows it: every Cloudflare product's total
- * (the sum of its invoice lines) split over that product's resources by their own list cost. A
- * product's drivers then add up to the product, and an environment is the sum of its rows.
+ * Each Cloudflare invoice line's list price per UTC day of this month, in whole cents: storage is
+ * that day's size over the month's days (today's for the part the data covers), the rest is the
+ * day's usage at list. A past day never changes and today's only grows, so every month-to-date
+ * figure built from these cents (lines, products, resources, environments, the chart) only grows.
  */
-export function resourceMtds(resourceDays: ResourceDay[], products: ProductLine[], now: Date): Map<string, { env: string; product: CostProduct; usd: number }> {
+export function lineDayCents(meterDays: Map<string, MeterUsage>, now: Date, coveredUntil: Date = now): Map<CfMeterKey, Map<string, number>> {
+  const month = now.toISOString().slice(0, 7);
+  const today = now.toISOString().slice(0, 10);
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const todayStart = Date.parse(`${today}T00:00:00Z`);
+  const todayShare = Math.max(0, Math.min(1, (Math.min(coveredUntil.getTime(), now.getTime()) - todayStart) / 86_400_000));
+  const out = new Map<CfMeterKey, Map<string, number>>();
+  for (const [day, usage] of meterDays) {
+    if (!day.startsWith(month) || day > today) continue;
+    for (const [k, v] of Object.entries(usage) as [CfMeterKey, number][]) {
+      if (!(k in CF_METERS)) continue;
+      const used = STORAGE_METERS.includes(k) ? (num(v) * (day === today ? todayShare : 1)) / daysInMonth : num(v);
+      const cents = Math.round(billLine(k, used).listCost * 100);
+      const m = out.get(k) ?? new Map<string, number>();
+      m.set(day, (m.get(day) ?? 0) + cents);
+      out.set(k, m);
+    }
+  }
+  return out;
+}
+
+/**
+ * One day of a product, in cents, over that day's resources: each resource is rounded on its own
+ * (so a resource's day only grows with its own usage, whatever the others do) and the day's largest
+ * resource takes the few cents of rounding and today's storage accrual. When that would leave the
+ * largest below zero, the day is split by largest remainder instead.
+ */
+export function splitDayCents(totalCents: number, weights: Map<string, number>): Map<string, number> {
+  const own = new Map([...weights].map(([id, w]) => [id, Math.round(w * 100)]));
+  let largest: string | null = null;
+  for (const [id, w] of weights) if (largest === null || w > weights.get(largest)! || (w === weights.get(largest)! && id < largest)) largest = id;
+  if (largest === null) return own;
+  const rest = totalCents - [...own.values()].reduce((a, b) => a + b, 0);
+  const top = own.get(largest)! + rest;
+  if (top < 0) return apportionCents(totalCents, weights);
+  own.set(largest, top);
+  return own;
+}
+
+/**
+ * The page's Cloudflare cents, one cell per resource and UTC day of this month: each product's day
+ * (the sum of its invoice lines that day, lineDayCents) split over that day's resources
+ * (splitDayCents). A product's resources add up to the product and an environment to its
+ * resources, every day and so every month to date; past days are fixed, so nothing steps back.
+ * Cents of a day with no resource of ours stay account-wide.
+ */
+export function resourceDayCents(resourceDays: ResourceDay[], lineCents: Map<CfMeterKey, Map<string, number>>, now: Date): { rows: Map<string, { env: string; product: CostProduct; usd: number }>; envDays: Map<string, Map<string, number>> } {
   const monthStart = `${now.toISOString().slice(0, 7)}-01`;
-  const byProduct = new Map<CostProduct, Map<string, number>>();
+  const weights = new Map<string, Map<string, number>>();
   const meta = new Map<string, { env: string; product: CostProduct }>();
   for (const r of resourceDays) {
     const product = KIND_PRODUCT[r.kind];
     if (!product || r.day < monthStart) continue;
-    const w = byProduct.get(product) ?? new Map<string, number>();
+    const key = `${product}|${r.day}`;
+    const w = weights.get(key) ?? new Map<string, number>();
     w.set(r.resource_id, (w.get(r.resource_id) ?? 0) + num(r.cost));
-    byProduct.set(product, w);
+    weights.set(key, w);
     meta.set(r.resource_id, { env: r.env, product });
   }
-  const out = new Map<string, { env: string; product: CostProduct; usd: number }>();
-  for (const [product, weights] of byProduct) {
-    const total = Math.round((products.find((p) => p.product === product)?.mtd ?? 0) * 100);
-    for (const [id, cents] of apportionCents(total, weights)) out.set(id, { ...meta.get(id)!, usd: cents / 100 });
+  const totals = new Map<string, number>();
+  for (const [product, keys] of Object.entries(PRODUCT_METERS) as [CostProduct, readonly string[]][]) {
+    for (const k of keys) for (const [day, c] of lineCents.get(k as CfMeterKey) ?? []) totals.set(`${product}|${day}`, (totals.get(`${product}|${day}`) ?? 0) + c);
   }
-  return out;
+  const cents = new Map<string, number>();
+  const envDays = new Map<string, Map<string, number>>();
+  const add = (env: string, day: string, c: number) => {
+    const m = envDays.get(env) ?? new Map<string, number>();
+    m.set(day, (m.get(day) ?? 0) + c);
+    envDays.set(env, m);
+  };
+  const unattributed = new Map<CostProduct, number>();
+  for (const [key, total] of totals) {
+    const [product, day] = key.split('|') as [CostProduct, string];
+    const w = weights.get(key);
+    if (!w?.size) {
+      if (total) unattributed.set(product, (unattributed.get(product) ?? 0) + total);
+      if (total) add('account', day, total);
+      continue;
+    }
+    for (const [id, c] of splitDayCents(total, w)) {
+      cents.set(id, (cents.get(id) ?? 0) + c);
+      add(meta.get(id)!.env, day, c);
+    }
+  }
+  const rows = new Map<string, { env: string; product: CostProduct; usd: number }>();
+  for (const [id, c] of cents) rows.set(id, { ...meta.get(id)!, usd: c / 100 });
+  // Account-wide cents of a product: a row with no resource, under 'account' (envsFromRows)
+  for (const [product, c] of unattributed) rows.set(`account:${product}`, { env: 'account', product, usd: c / 100 });
+  return { rows, envDays };
 }
 
 /**
@@ -621,7 +693,10 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
   const back14 = new Date(now.getTime() - 15 * 86_400_000).toISOString().slice(0, 10);
   const from = back14 < since ? back14 : since;
   const [resourceDays, productDays] = await Promise.all([loadResourceDays(env, from), loadProductDays(env, from)]);
-  const { budget, billed, fixed, extras, meterDays } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
+  const { budget, billed, fixed, extras, meterDays, coveredUntil } = await loadBudget(env, now, settings, from, { resourceDays, productDays });
+  // Cloudflare at list, one rounding per invoice line and UTC day: every list figure below sums these
+  const dayCents = lineDayCents(meterDays, now, coveredUntil);
+  const lineCents = (key: CfMeterKey) => [...(dayCents.get(key)?.values() ?? [])].reduce((a, b) => a + b, 0);
   // Cloudflare as the page shows it: each invoice line at cents. The list tile and each Cloudflare
   // product are sums of these same rounded lines, so every displayed total adds up to the cent
   const cfLines = billed.mtd.lines
@@ -631,7 +706,7 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
       included: l.included,
       billable: l.billable,
       cost: l.cost,
-      listCost: round2(l.listCost),
+      listCost: lineCents(l.key) / 100,
       projectedCost: billed.projected.lines.find((p) => p.key === l.key)?.cost ?? 0,
       source: CF_METERS[l.key].source,
       billed: (CF_METERS[l.key] as { billed?: boolean }).billed !== false,
@@ -639,12 +714,19 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
     .filter((l) => l.used > 0 || l.source === 'none');
   const products = withCloudflareLines(productLines(resourceDays, extras, now, fixed), cfLines);
   // Each resource's month to date as shown: its product's total split over the product's resources
-  const rows = resourceMtds(resourceDays, products, now);
+  const { rows, envDays } = resourceDayCents(resourceDays, dayCents, now);
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
   const idle = billIdle(idleProjection(resourceDays, extras, now, fixed.projected), idleBilledCloudflare(meterDays, now));
   // A fixed cost's day: its month's share for that one day, when it is active then
   const fixedDaily = (day: string) => fixed.items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
-  const trend = trendBySource(resourceDays, extras, fixedDaily, now);
+  // A day with no resource of ours (account-wide Cloudflare cents) is drawn with production
+  const chartEnvDays = new Map(envDays);
+  for (const [day, c] of envDays.get('account') ?? []) {
+    const m = new Map(chartEnvDays.get('production') ?? []);
+    m.set(day, (m.get(day) ?? 0) + c);
+    chartEnvDays.set('production', m);
+  }
+  const trend = trendBySource(resourceDays, extras, fixedDaily, now, chartEnvDays);
   const openAlerts = (await env.COSTS_DB!.prepare('SELECT key, value, opened_at FROM ops_cost_alerts ORDER BY opened_at DESC').all<{ key: string; value: number; opened_at: string }>().catch(() => ({ results: [] }))).results ?? [];
   // Data as of the last collection that brought Cloudflare's figures: a run Cloudflare refused
   // (even one that finished "partial" with the other sources) adds none, so it doesn't move the date

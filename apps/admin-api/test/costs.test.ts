@@ -11,11 +11,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { openCostCredential, type CostCredentialRow } from '@al-ummah/shared-types';
 import costsRouter from '../src/routers/costs.router';
-import { apportionCents, envLines, envsFromRows, productLines, resourceMtds, withCloudflareLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
+import { apportionCents, envLines, envsFromRows, lineDayCents, productLines, resourceDayCents, splitDayCents, withCloudflareLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
-import { CF_METERS, type CfMeterKey } from '@al-ummah/shared-types';
+import { billLine, CF_METERS, type CfMeterKey } from '@al-ummah/shared-types';
 import { analyticsFromRun, costsDashboard } from '../src/lib/costs';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -602,20 +602,84 @@ describe('rounding: lines are the source, totals are built from the parts shown'
     assert.deepEqual([...apportionCents(5, new Map([['a', 0], ['b', 0]]))].map(([, c]) => c), [3, 2]);
   });
 
-  it('a product\'s resources add up to it, and environments are the sums of their rows', () => {
+  it('a product\'s resources add up to it every day, and environments are the sums of their rows', () => {
     const now = new Date('2026-11-21T12:00:00Z');
-    const rd = (id: string, kind: string, env: string, cost: number) => ({ day: '2026-11-05', resource_id: id, kind, env, name: id, cost }) as never;
-    const days = [rd('r2:videos', 'r2', 'production', 26.006), rd('w:p', 'worker', 'production', 20.004), rd('w:q', 'worker', 'qa', 20.004), rd('w:s', 'worker', 'stage', 0.546)];
-    const products = [{ product: 'r2', mtd: 26.0, projected: 0, last7: 0, prev7: 0 }, { product: 'workers', mtd: 40.55, projected: 0, last7: 0, prev7: 0 }, { product: 'containers', mtd: 8.7, projected: 0, last7: 0, prev7: 0 }, { product: 'bunny', mtd: 30, projected: 0, last7: 0, prev7: 0 }] as never[];
-    const rows = resourceMtds(days, products as never, now);
+    const rd = (day: string, id: string, kind: string, env: string, cost: number) => ({ day, resource_id: id, kind, env, name: id, cost }) as never;
+    const days = [
+      rd('2026-11-05', 'r2:videos', 'r2', 'production', 26.006),
+      rd('2026-11-05', 'w:p', 'worker', 'production', 20.004),
+      rd('2026-11-05', 'w:q', 'worker', 'qa', 20.004),
+      rd('2026-11-05', 'w:s', 'worker', 'stage', 0.546),
+      rd('2026-10-31', 'w:p', 'worker', 'production', 9), // last month: not this month's cents
+    ];
+    const lines = new Map([
+      ['r2_storage_gb', new Map([['2026-11-05', 2600]])],
+      ['workers_requests', new Map([['2026-11-05', 4000]])],
+      ['workers_cpu_ms', new Map([['2026-11-05', 55]])],
+      ['kv_reads', new Map([['2026-11-05', 7]])], // no KV resource that day: account-wide
+    ]) as never;
+    const { rows, envDays } = resourceDayCents(days, lines, now);
     assert.equal(rows.get('r2:videos')!.usd, 26, 'the only R2 resource equals R2, not a cent more');
-    const workers = ['w:p', 'w:q', 'w:s'].map((id) => rows.get(id)!.usd);
-    assert.equal(Math.round(workers.reduce((a, b) => a + b, 0) * 100), 4055);
+    assert.equal(Math.round(['w:p', 'w:q', 'w:s'].reduce((a, id) => a + rows.get(id)!.usd, 0) * 100), 4055);
+    assert.equal(rows.get('w:s')!.usd, 0.55, 'a small resource keeps its own rounding');
+    assert.equal(rows.get('account:kv')!.usd, 0.07);
+    assert.equal(envDays.get('stage')!.get('2026-11-05'), 55);
+    const products = [{ product: 'r2', mtd: 26, projected: 0, last7: 0, prev7: 0 }, { product: 'workers', mtd: 40.55, projected: 0, last7: 0, prev7: 0 }, { product: 'kv', mtd: 0.07, projected: 0, last7: 0, prev7: 0 }, { product: 'containers', mtd: 8.7, projected: 0, last7: 0, prev7: 0 }, { product: 'bunny', mtd: 30, projected: 0, last7: 0, prev7: 0 }] as never[];
     const envs = envsFromRows(rows, products as never, [], 'none', now);
     assert.equal(Math.round((envs.production! - rows.get('r2:videos')!.usd - rows.get('w:p')!.usd - 8.7) * 100), 0, 'production = its rows + Containers');
     assert.equal(envs.qa, rows.get('w:q')!.usd);
-    assert.equal(envs.account, 30);
-    assert.equal(Math.round(Object.values(envs).reduce((a, b) => a + b, 0) * 100), Math.round((26 + 40.55 + 8.7 + 30) * 100));
+    assert.equal(Math.round(envs.account! * 100), 3007);
+    assert.equal(Math.round(Object.values(envs).reduce((a, b) => a + b, 0) * 100), Math.round((26 + 40.55 + 0.07 + 8.7 + 30) * 100));
+  });
+
+  it('a day is split with each resource rounded on its own; the largest takes the rest, never below zero', () => {
+    assert.deepEqual([...splitDayCents(103, new Map([['big', 1.004], ['s1', 0.004], ['s2', 0.006]]))], [['big', 102], ['s1', 0], ['s2', 1]]);
+    assert.deepEqual([...splitDayCents(98, new Map([['big', 1.004], ['s1', 0.004], ['s2', 0.006]]))], [['big', 97], ['s1', 0], ['s2', 1]]);
+    // The largest would go negative: largest remainder instead, still adding up
+    const lr = splitDayCents(1, new Map([['a', 0.02], ['b', 0.02]]));
+    assert.equal([...lr.values()].reduce((a, b) => a + b, 0), 1);
+  });
+
+  it('through a day of hourly collections no line, product, resource or environment steps back, and the chart\'s month is the month to date', () => {
+    // Production grows fast, stage barely: the case where shares of a rounded total once took a cent back
+    const rates: Record<string, { env: string; reqs: number }> = { 'w:prod': { env: 'production', reqs: 9_100_000 }, 'w:api': { env: 'production', reqs: 2_700_000 }, 'w:stage': { env: 'stage', reqs: 1_366_000 }, 'w:qa': { env: 'qa', reqs: 33_000 } };
+    const listOf = (reqs: number) => billLine('workers_requests', reqs).listCost;
+    let prev: Record<string, number> | null = null;
+    for (let minutes = 30; minutes <= 24 * 60 - 30; minutes += 10) {
+      const now = new Date(Date.parse('2026-11-21T00:00:00Z') + minutes * 60_000);
+      const part = minutes / 1440;
+      const resourceDays: never[] = [];
+      const meterDays = new Map<string, Record<string, number>>();
+      for (const day of ['2026-11-19', '2026-11-20', '2026-11-21']) {
+        const share = day === '2026-11-21' ? part : 1;
+        let total = 0;
+        for (const [id, r] of Object.entries(rates)) {
+          const reqs = Math.round(r.reqs * share);
+          total += reqs;
+          resourceDays.push({ day, resource_id: id, kind: 'worker', env: r.env, name: id, cost: listOf(reqs) } as never);
+        }
+        meterDays.set(day, { workers_requests: total, r2_storage_gb: 26 });
+      }
+      const cents = lineDayCents(meterDays as never, now);
+      const { rows, envDays } = resourceDayCents(resourceDays, cents, now);
+      const line = [...cents.get('workers_requests')!.values()].reduce((a, b) => a + b, 0);
+      const storage = [...cents.get('r2_storage_gb')!.values()].reduce((a, b) => a + b, 0);
+      const fig: Record<string, number> = { line, storage };
+      for (const [id, r] of rows) fig[id] = Math.round(r.usd * 100);
+      for (const [env, m] of envDays) fig[`env:${env}`] = [...m.values()].reduce((a, b) => a + b, 0);
+      assert.equal(Object.keys(rates).reduce((a, id) => a + fig[id]!, 0), line, 'resources = the product');
+      if (prev) for (const [k, v] of Object.entries(fig)) assert.ok(v >= (prev[k] ?? 0), `${k} stepped back at ${now.toISOString()}: ${prev[k]} → ${v}`);
+      prev = fig;
+    }
+  });
+
+  it('storage counts today only for the part the data covers', () => {
+    const now = new Date('2026-11-21T21:00:00Z');
+    const days = new Map([['2026-11-20', { r2_storage_gb: 3000 }], ['2026-11-21', { r2_storage_gb: 3000 }]]) as never;
+    const full = lineDayCents(days, now).get('r2_storage_gb')!;
+    const early = lineDayCents(days, now, new Date('2026-11-21T15:00:00Z')).get('r2_storage_gb')!;
+    assert.equal(full.get('2026-11-20'), early.get('2026-11-20'), 'a past day is fixed');
+    assert.ok(early.get('2026-11-21')! < full.get('2026-11-21')!, 'a collection that stopped earlier counts less of today');
   });
 
   it('a Cloudflare product\'s weekly change is the sum of its resources\' changes, to the cent', () => {
