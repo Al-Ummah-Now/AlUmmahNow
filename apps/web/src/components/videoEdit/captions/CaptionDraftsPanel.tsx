@@ -342,7 +342,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     // A warning in every theme, by its icon and tint as well as its colour (Zujaj's ink is close to its body text)
                     <p data-testid="caption-draft-machine" className="inline-flex items-start gap-1.5 rounded-md bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
                       <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-                      {tc.translate.review}
+                      <span style={{ textWrap: 'balance' }}>{tc.translate.review}</span>
                     </p>
                   )}
                   {d.kind === 'translation' && d.sourceLanguage && d.sourceVersion !== undefined && sourceVersion(d.sourceLanguage) !== undefined && sourceVersion(d.sourceLanguage)! > d.sourceVersion && (
