@@ -429,5 +429,6 @@ function WatchDescription({ video, lang }: { video: { id: string; title: string;
   const viewer = useViewerTranslation(video, lang);
   const translated = viewer.showing ? viewer.translation!.description : null;
   if (translated) return <p lang={viewer.translation!.lang} dir="auto" data-machine-translation="true">{translated}</p>;
-  return video.description ? <p>{video.description}</p> : null;
+  // The creator’s own words take their own direction (an English description on the Arabic page ends on the right)
+  return video.description ? <p dir="auto">{video.description}</p> : null;
 }
