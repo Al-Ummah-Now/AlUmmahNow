@@ -101,7 +101,3 @@ html[data-theme='fawanees']:not(.dark) div.video-edit-form[data-testid][class*='
 html[data-theme='fawanees']:not(.dark) .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, white 92%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark div.video-edit-form[data-testid][class*='rounded'][class*='shadow'] { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, var(--aun-glass-base-dark) 94%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
-/* The editor's cards and fields keep the lantern glow, but a short one: the full 30px glow is wider than
-   the 24px gap between the editor's sections, so each section's glow ran into the next (AUDIT-2
-   2026-11-22). Set on the panel, it reaches every card and field inside it */
-html[data-theme='fawanees'] .video-edit-form { --aun-glass-glow: 0 0 10px -2px color-mix(in srgb, var(--aun-glass-c) 48%, transparent); --aun-glass-glow-lite: 0 0 8px -3px color-mix(in srgb, var(--aun-glass-c) 40%, transparent); }
