@@ -7,7 +7,7 @@
  *   GET    /channels/:channelId/connections        → { connections }: what the owner connected
  *   POST   /                          { channelId, network, address, label?, schedule?, permission? } → 201 { source }
  *   GET    /:id                       → { source }
- *   PATCH  /:id                       { label?, schedule?, enabled? } → { source }
+ *   PATCH  /:id                       { label?, schedule?, enabled? } → { source } (409 not_connected: turning on a connected source whose connection is gone)
  *   DELETE /:id                       → { deleted } (its posts and videos stay)
  *   POST   /:id/sync                  → 202 { jobId, status } (the one already waiting, if any)
  *   GET    /:id/items                 ?state=&limit= → { items }
@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { IMPORT_SOURCE_NETWORKS, IMPORT_SOURCE_SCHEDULES, type ImportItemState } from '@al-ummah/shared-types';
 import { getJob, retryJob } from '../lib/admin/jobs';
 import { loadChannelRecord } from '../lib/channelAccess';
-import { authorizeSource, channelConnections, normalizeAddress } from '../lib/importSources/authorize';
+import { authorizeSource, channelConnections, normalizeAddress, stillAuthorized } from '../lib/importSources/authorize';
 import { resolveBlueskyAddress } from '../lib/importSources/fetchers';
 import { SOURCE_SYNC_JOB_KIND, startSourceSync } from '../lib/importSources/job';
 import { deleteSource, insertSource, listItems, listSources, readSource, SourceError, updateSource, viewSource } from '../lib/importSources/store';
@@ -108,6 +108,8 @@ app.get('/:id', async (c) => ok(c, { source: await viewSource(c.env, (await sour
 app.patch('/:id', async (c) => {
 	const row = await sourceOr404(c);
 	const patch = parse(Patch, await body(c));
+	// A connected source turns back on only while the owner's connection is there
+	if (patch.enabled && !row.enabled && !(await stillAuthorized(c.env, row))) throw new SourceError(409, 'not_connected', "The owner's connection to this account is gone; they need to connect it again");
 	await updateSource(c.env, row.id, patch);
 	return ok(c, { source: await viewSource(c.env, row.id) });
 });
