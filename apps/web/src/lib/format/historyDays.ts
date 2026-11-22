@@ -1,4 +1,4 @@
-import { formatDate, formatTime } from '@al-ummah/shared-types';
+import { formatDate, formatDateToParts, formatTime } from '@al-ummah/shared-types';
 
 /**
  * The full history page groups what was watched by day, the way YouTube does: Today, Yesterday, the weekday for the
@@ -12,8 +12,12 @@ export interface HistoryDay<T> {
   entries: T[];
 }
 
-const dayKey = (date: Date, timeZone?: string) =>
-  new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', ...(timeZone ? { timeZone } : {}) }).format(date);
+/** YYYY-MM-DD of the date in the time zone (Latin digits: the 'en' parts) */
+const dayKey = (date: Date, timeZone?: string) => {
+  const parts = formatDateToParts('en', date, { year: 'numeric', month: '2-digit', day: '2-digit', ...(timeZone ? { timeZone } : {}) });
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
 
 /** Whole days between two YYYY-MM-DD keys (b - a) */
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
