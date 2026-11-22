@@ -77,7 +77,7 @@ describe('jobs on the Jobs page', () => {
   });
 
   it('offers Retry on failed and cancelled jobs, Cancel on unfinished ones', () => {
-    assert.deepEqual(['queued', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'].map((status) => [canRetryStatus({ status } as never), canCancelStatus({ status } as never)]), [
+    assert.deepEqual(['queued', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'].map((status) => [canRetryStatus({ status } as never), canCancelStatus({ status, kind: 'channel.purge' } as never)]), [
       [false, true],
       [false, true],
       [false, true],
@@ -86,6 +86,9 @@ describe('jobs on the Jobs page', () => {
       [true, false],
     ]);
     assert.equal(jobTone('cancelled'), 'neutral');
+    // A data erasure runs to the end: no Cancel
+    assert.equal(canCancelStatus({ status: 'queued', kind: 'user.delete-data' }), false);
+    assert.equal(canCancelStatus({ status: 'running', kind: 'user.erase-run' }), false);
   });
 });
 

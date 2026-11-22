@@ -15,7 +15,7 @@
  * (admin_job_log, the newest ADMIN_JOB_LOG_LIMIT lines) come from search/0071 (TA-8: the Jobs page shows
  * attempts n/max, the next retry and what happened). Log writes never fail or stall the job.
  */
-import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
+import { ADMIN_JOB_LOG_LIMIT, ADMIN_JOB_MAX_RETRIES, ADMIN_JOB_UNCANCELLABLE_KINDS, collectPersonIds, type AdminJobLogEntry, type AdminJobLogEvent, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 
@@ -269,8 +269,10 @@ const ERASE_KINDS = new Set<string>(['user.delete-data', 'user.erase-run']);
 
 /** Whether Retry applies: a job that failed, or one an admin cancelled. */
 export const canRetry = (job: Pick<AdminJob, 'status'>) => job.status === 'failed' || job.status === 'cancelled';
-/** Whether Cancel applies: a job that has not finished. */
-export const canCancel = (job: Pick<AdminJob, 'status'>) => !FINISHED.has(job.status);
+/** Whether Cancel applies to the kind at all (never to a data erasure). */
+export const cancellableKind = (kind: string) => !(ADMIN_JOB_UNCANCELLABLE_KINDS as readonly string[]).includes(kind);
+/** Whether Cancel applies: a job of a cancellable kind that has not finished. */
+export const canCancel = (job: Pick<AdminJob, 'status' | 'kind'>) => cancellableKind(job.kind) && !FINISHED.has(job.status);
 
 /**
  * Queues a failed job again with a fresh retry budget. A cancelled one only with `allowCancelled`: the
@@ -295,7 +297,13 @@ export async function cancelJob(env: JobEnv, id: string): Promise<AdminJob | nul
 	const job = await getJob(env, id);
 	if (!job || !canCancel(job)) return job;
 	const at = now();
-	await setStatus(env, job, { status: 'cancelled', finished_at: at, next_run_at: null });
+	// Only while it is still unfinished: a delivery that finished it meanwhile wins, and the caller sees the job as it is
+	const out = await db(env)
+		.prepare("UPDATE admin_jobs SET status = 'cancelled', finished_at = ?, next_run_at = NULL, updated_at = ? WHERE id = ? AND status IN ('queued', 'running', 'retrying')")
+		.bind(at, at, job.id)
+		.run();
+	if (Number((out as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0) === 0) return getJob(env, id);
+	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'cancelled', job.attempts));
 	await log(env, job.id, { event: 'cancelled' });
 	return { ...job, status: 'cancelled', finishedAt: at, nextRunAt: null };
 }

@@ -1951,6 +1951,7 @@ const en = {
       forbidden: 'Your role is not allowed to do this.',
       job_not_failed: 'Only a failed job can be retried.',
       job_finished: 'This job has already finished.',
+      job_not_cancellable: 'A data erasure cannot be cancelled once it has started.',
       job_not_found: 'Job not found.',
       user_exists: 'This email already has an account. Give them the tier or channel from their user page.',
       already_invited: 'This email already has an open invite.',
