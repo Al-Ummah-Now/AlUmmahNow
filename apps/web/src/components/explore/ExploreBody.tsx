@@ -33,7 +33,7 @@ export function ExploreBody({ model, renderLiveCard }: { model: ExploreModel; re
           <h1 className="street-plate text-2xl font-bold text-gray-900 dark:text-white">{t.explore.title}</h1>
           <p className="street-plate mt-1 text-gray-600 dark:text-gray-300">{t.explore.subtitle}</p>
         </div>
-        <div role="group" aria-label={t.explore.contentLanguage} className="flex gap-2" data-testid="explore-language">
+        <div role="group" aria-label={t.explore.contentLanguage} className="street-plate flex gap-2" data-testid="explore-language">
           {[undefined, ...EXPLORE_LANGUAGES].map(code => {
             const selected = language === code;
             return (
