@@ -113,7 +113,7 @@ test.describe('Section manager', () => {
     await openManager(page);
     await expect(page.getByRole('heading', { level: 2, name: 'Channel sections' })).toBeVisible();
     await expect(page.getByText(`Customize your channel layout (max ${MAX_SECTIONS} sections)`)).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toHaveText(`${existing.length} of ${MAX_SECTIONS} sections used`);
+    await expect(page.getByTestId('sections-count')).toHaveText(existing.length === 0 ? `None of ${MAX_SECTIONS} sections used yet` : `${existing.length} of ${MAX_SECTIONS} sections used`);
     await expect(page.getByTestId('publish-sections')).toBeDisabled();
 
     // In Studio: Customisation → Layout, Sections view; the Studio rail is the way around

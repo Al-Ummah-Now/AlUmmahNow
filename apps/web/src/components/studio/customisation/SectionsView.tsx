@@ -320,7 +320,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
       )}
 
       <div className="text-sm text-muted-foreground" data-testid="sections-count">
-        {s.sectionsUsed.replace('{count}', formatNumber(lang, sections.length)).replace('{max}', formatCountNoun(lang, MAX_SECTIONS, 'section'))}
+        {(sections.length === 0 ? s.sectionsNoneUsed : s.sectionsUsed).replace('{count}', formatNumber(lang, sections.length)).replace('{max}', formatCountNoun(lang, MAX_SECTIONS, 'section'))}
         {hasChanges && (
           <span className="ms-2 font-medium text-foreground" data-testid="sections-unpublished">
             {s.unpublishedChanges}

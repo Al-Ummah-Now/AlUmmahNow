@@ -2013,6 +2013,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
       publish: 'Publish',
       publishing: 'Publishing...',
       sectionsUsed: '{count} of {max} used',
+      sectionsNoneUsed: 'None of {max} used yet',
       unpublishedChanges: '(Unpublished changes)',
       empty: 'No sections yet. Add your first section to customize your channel.',
       maxReached: 'Maximum number of sections reached. Delete a section to add a new one.',

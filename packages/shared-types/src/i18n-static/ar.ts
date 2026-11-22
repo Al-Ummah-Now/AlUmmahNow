@@ -2011,6 +2011,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       publish: 'نشر',
       publishing: 'جارٍ النشر...',
       sectionsUsed: 'تم استخدام {count} من {max}',
+      sectionsNoneUsed: 'لم يُستخدم أي قسم بعد من {max}',
       unpublishedChanges: '(تغييرات غير منشورة)',
       empty: 'لا توجد أقسام بعد. أضف قسمك الأول لتخصيص قناتك.',
       maxReached: 'تم الوصول إلى الحد الأقصى لعدد الأقسام. احذف قسماً لإضافة قسم جديد.',
