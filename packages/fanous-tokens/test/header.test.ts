@@ -166,15 +166,24 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.match(css.slice(tight, css.indexOf('\n}\n', tight)), /\.aun-signin \{\n    padding-inline: var\(--fanous-spacing-md, 12px\);/);
 });
 
-test('the account name has one width, so switching who you act as never moves the header (AUDIT-2 2026-11-21)', () => {
+test('the account button has one width, so switching who you act as never moves the header (AUDIT-2 2026-11-21)', () => {
   const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');
   const name = css.slice(css.indexOf('.aun-acct-name {'), css.indexOf('}', css.indexOf('.aun-acct-name {')));
-  // a fixed slot, not a cap: "Community Corner" and "Amina Yusuf" take the same room
-  assert.match(name, /inline-size: \d+(\.\d+)?rem;/);
-  assert.doesNotMatch(name, /max-width/);
+  // the name is a cap, not a slot: the caret follows a short name straight away (AUDIT-2 2026-11-22:
+  // a fixed 9rem name slot left ~72px between "Noor Studio" and the caret)
+  assert.match(name, /max-inline-size: 9rem;/);
+  assert.doesNotMatch(name, /(^|[^-])inline-size:/m);
   // a longer name ends in an ellipsis on one line
   assert.match(name, /text-overflow: ellipsis;/);
   assert.match(name, /white-space: nowrap;/);
+  // the one width is on the button where the name shows (768px up), packed to the start, so any
+  // spare room sits after the caret; it is sized for the name's full 9rem
+  const at = css.indexOf('@media (min-width: 48rem) {\n  .aun-acct-btn:has(.aun-acct-name) {');
+  assert.ok(at >= 0, 'button width rule');
+  const btn = css.slice(at, css.indexOf('}', at));
+  assert.match(btn, /box-sizing: border-box;/);
+  assert.match(btn, /inline-size: calc\([^;]*1\.75rem[^;]*9rem[^;]*0\.875rem\);/);
+  assert.match(btn, /justify-content: flex-start;/);
 });
 
 test('the account name hugs the avatar in both directions, whatever its script (AUDIT-2 2026-11-22)', () => {

@@ -75,10 +75,10 @@
 }
 .aun-acct-name {
   min-width: 0;
-  /* One width whatever the name: switching who you act as ("Community Corner" and "Amina Yusuf")
-     never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px); a longer name ends
-     in an ellipsis, and never pushes the header apart */
-  inline-size: 9rem;
+  /* As wide as the name, up to 9rem: a longer name ends in an ellipsis and never pushes the header
+     apart. The caret follows the name straight away (AUDIT-2 2026-11-22: a fixed 9rem name slot left
+     ~72px between a short name and the caret); the button below keeps the one width */
+  max-inline-size: 9rem;
   /* the name hugs the avatar on the header's start side in both directions: a Latin name in Arabic
      keeps its own direction (dir="auto") but its start would be the slot's left, ~68px from the
      avatar (AUDIT-2 2026-11-22); the physical side comes from the page's dir, below */
@@ -86,6 +86,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* One width whatever the name: switching who you act as ("Community Corner" and "Amina Yusuf")
+   never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px). The width is on the
+   button, not the name: avatar, 8px, the name, 8px, the caret, packed to the start, and whatever is
+   left over sits after the caret, toward the header's end edge (AUDIT-2 2026-11-22). The width is
+   border + padding + avatar + gaps + the name's 9rem + the caret. */
+@media (min-width: 48rem) {
+  .aun-acct-btn:has(.aun-acct-name) {
+    box-sizing: border-box;
+    inline-size: calc(2px + var(--fanous-spacing-xs, 4px) + var(--fanous-spacing-sm, 8px) + 1.75rem + 2 * var(--fanous-spacing-sm, 8px) + 9rem + 0.875rem);
+    justify-content: flex-start;
+  }
 }
 /* below 768px the button is the avatar and the caret; the name is still its accessible name */
 @media (max-width: 47.99rem) {
