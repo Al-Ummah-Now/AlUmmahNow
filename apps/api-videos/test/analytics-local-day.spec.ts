@@ -31,6 +31,9 @@ describe('local days', () => {
 		assert.equal(validTimeZone('Not/AZone'), 'UTC');
 		assert.equal(validTimeZone(undefined), 'UTC');
 		assert.equal(validTimeZone(NY), NY);
+		// Case variants and offsets never become new cache keys
+		assert.equal(validTimeZone('america/new_york'), NY);
+		assert.equal(validTimeZone('+05:30'), 'UTC');
 	});
 });
 

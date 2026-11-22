@@ -10,14 +10,21 @@
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Keyed by canonical zone names only (validTimeZone), and capped: `tz` comes from the request
+const MAX_CACHED_ZONES = 64;
 const dayFormats = new Map<string, Intl.DateTimeFormat>();
 const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+function remember(cache: Map<string, Intl.DateTimeFormat>, key: string, format: Intl.DateTimeFormat): Intl.DateTimeFormat {
+	if (cache.size >= MAX_CACHED_ZONES) cache.delete(cache.keys().next().value as string);
+	cache.set(key, format);
+	return format;
+}
 
 function dayFormat(timeZone: string): Intl.DateTimeFormat {
 	let format = dayFormats.get(timeZone);
 	if (!format) {
-		format = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
-		dayFormats.set(timeZone, format);
+		format = remember(dayFormats, timeZone, new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }));
 	}
 	return format;
 }
@@ -25,7 +32,7 @@ function dayFormat(timeZone: string): Intl.DateTimeFormat {
 function clockFormat(timeZone: string): Intl.DateTimeFormat {
 	let format = clockFormats.get(timeZone);
 	if (!format) {
-		format = new Intl.DateTimeFormat('en-US', {
+		format = remember(clockFormats, timeZone, new Intl.DateTimeFormat('en-US', {
 			timeZone,
 			year: 'numeric',
 			month: '2-digit',
@@ -34,8 +41,7 @@ function clockFormat(timeZone: string): Intl.DateTimeFormat {
 			minute: '2-digit',
 			second: '2-digit',
 			hourCycle: 'h23',
-		});
-		clockFormats.set(timeZone, format);
+		}));
 	}
 	return format;
 }
@@ -46,12 +52,16 @@ function parts(format: Intl.DateTimeFormat, ms: number): Record<string, number> 
 	return out;
 }
 
-/** The IANA zone if the runtime knows it, else UTC (an unknown or missing `tz` never fails a request). */
+/**
+ * The runtime's canonical name of an IANA zone ("america/new_york" → "America/New_York"), else UTC:
+ * an unknown or missing `tz` never fails a request. Offsets ("+05:30") are refused, so the caches
+ * only ever hold real zone names.
+ */
 export function validTimeZone(timeZone?: string | null): string {
-	if (!timeZone || timeZone.length > 64) return 'UTC';
+	if (!timeZone || timeZone.length > 64 || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+)*$/.test(timeZone)) return 'UTC';
 	try {
-		dayFormat(timeZone);
-		return timeZone;
+		const canonical = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
+		return canonical === 'Etc/UTC' || canonical === 'Etc/GMT' ? 'UTC' : canonical;
 	} catch {
 		return 'UTC';
 	}
