@@ -116,6 +116,8 @@ describe('Watch later page', () => {
     render(<LibraryListPage kind="liked" dir="rtl" />);
     await waitFor(() => expect(screen.getByTestId('library-list-empty')).toHaveTextContent('ستظهر هنا المرئيات التي تعجبك'));
     expect(screen.getByTestId('library-liked-page')).toHaveAttribute('dir', 'rtl');
+    // The empty line sits on the page itself, on a street plate (the title and back link are in the solid panel)
+    expect(screen.getByTestId('library-list-empty')).toHaveClass('street-plate');
   });
 
   it('asks anonymous visitors to sign in', () => {

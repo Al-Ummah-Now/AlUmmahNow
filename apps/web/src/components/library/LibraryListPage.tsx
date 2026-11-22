@@ -159,7 +159,7 @@ export function LibraryListPage({ kind, dir }: Props) {
           </button>
         </div>
       ) : items.length === 0 ? (
-        <p className="lbl-empty" data-testid="library-list-empty">{meta.empty}</p>
+        <p className="lbl-empty street-plate" data-testid="library-list-empty">{meta.empty}</p>
       ) : null}
     </>
   );
@@ -180,10 +180,11 @@ export function LibraryListPage({ kind, dir }: Props) {
   if (kind === 'saved-posts') {
     return (
       <main dir={dir} className="mx-auto max-w-3xl px-4 py-8" data-testid={`library-${kind}-page`}>
+        {/* Saved posts have no panel: the back link, title and empty line sit on the page, each on a street plate */}
         <nav aria-label={texts.title} className="mb-2 text-sm">
-          <Link href={`/${lang}/library`} className="lbl-crumb">{texts.title}</Link>
+          <Link href={`/${lang}/library`} className="lbl-crumb street-plate inline-block">{texts.title}</Link>
         </nav>
-        <h1 className="mb-6 flex items-center gap-3 text-2xl font-bold text-[var(--fanous-color-text-primary)]">
+        <h1 className="street-plate mb-6 flex items-center gap-3 text-2xl font-bold text-[var(--fanous-color-text-primary)]">
           <meta.Icon className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {meta.title}
         </h1>
