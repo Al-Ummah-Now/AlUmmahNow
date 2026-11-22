@@ -341,8 +341,10 @@ html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 
 /* Text that sits on the page itself (a page's title, its intro and the back link above it) rests
    on a plate of page colour, so no lantern or string ever runs through its glyphs (owner
-   2026-11-22: the street never crosses text). Text inside cards already has a solid surface. */
-html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)),
+   2026-11-22: the street never crosses text). Text inside cards already has a solid surface: the
+   error card's heading and body are never plated, or their page-colour shadow would cover the
+   card's badge and heading (the not-found page). */
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.ep-card *),
 html.fanous-street .street-plate {
   width: fit-content;
   max-width: 100%;
