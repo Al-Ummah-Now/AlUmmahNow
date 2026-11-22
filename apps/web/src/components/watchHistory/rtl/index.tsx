@@ -11,6 +11,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useWatchHistory } from '@/hooks/useWatchHistory';
 import { resolveUrl } from '@/lib/utility';
+import { keepLastWordsTogether } from '@/lib/format/titleWrap';
 import { entryTitle } from '@/services/api/watch-history';
 import { PauseHistoryButton, PausedNotice, watchHistoryErrorMessage, type WatchHistoryEntryProps, type WatchHistoryPageProps } from '../index';
 import { formatAbsoluteDate, formatRelativeTime, formatVideoCount, keepNumbersWithUnits } from '@/lib/format/videoMeta';
@@ -38,7 +39,7 @@ function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryPro
       </Link>
       <div className="flex-1 min-w-0 text-right">
         <Link href={`/${lang}/video/${entry.videoId}`} className="font-semibold text-gray-900 dark:text-white line-clamp-2 hover:underline">
-          {entryTitle(entry, lang)}
+          {keepLastWordsTogether(entryTitle(entry, lang))}
         </Link>
         {entry.channelName && entry.channelId && (
           <Link href={`/${lang}/channels/${entry.channelId}`} className="block py-0.5 text-sm text-gray-600 dark:text-gray-400 hover:underline">
