@@ -214,6 +214,14 @@ describe('a published track as source cues (captionCuesFromVtt)', () => {
 		]);
 	});
 
+	it('never rebuilds markup from entities: escaped tags written as text lose their angle brackets', () => {
+		const vtt = ['WEBVTT', '', '00:00.000 --> 00:02.000', '&lt;script&gt;alert(1)&lt;/script&gt; a &lt;b&gt;word&lt;/b&gt;', ''].join('\n');
+		const [cue] = captionCuesFromVtt(vtt);
+		const text = (cue!.segments[0] as { text: string }).text;
+		assert.equal(/[<>]/.test(text), false, text);
+		assert.equal(text, 'scriptalert(1)/script a bword/b');
+	});
+
 	it('skips the header, NOTE and STYLE blocks, bad timings and empty cues; accepts short and comma times', () => {
 		const vtt = ['WEBVTT - imported', 'Kind: captions', '', 'NOTE a comment --> not a cue', '', 'STYLE', '::cue { color: red }', '', '00:01.000 --> 00:02,500 align:start', 'Hello', '', '00:05.000 --> 00:04.000', 'Backwards', '', '00:06.000 --> 00:07.000', '<b></b>', ''].join('\n');
 		assert.deepEqual(captionCuesFromVtt(vtt), [{ id: 'c1', startMs: 1000, endMs: 2500, segments: [{ type: 'speech', text: 'Hello' }] }]);

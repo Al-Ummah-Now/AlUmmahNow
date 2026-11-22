@@ -507,11 +507,16 @@ function vttMs(value: string): number | null {
   return ((Number(m[1] ?? 0) * 60 + Number(m[2])) * 60 + Number(m[3])) * 1000 + Number(m[4]!.padEnd(3, '0'));
 }
 const VTT_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', nbsp: ' ', lrm: '', rlm: '', quot: '"', apos: "'" };
-/** A published cue's speech as plain text: no tags, entities decoded, no direction marks, one line. */
+/**
+ * A published cue's speech as plain text: no tags, entities decoded, no direction marks, one line.
+ * Angle brackets left after decoding (`&lt;b&gt;` written as text) are dropped too, so no markup can
+ * be rebuilt from entities (CodeQL js/incomplete-multi-character-sanitization).
+ */
 function vttSpeech(raw: string): string {
   return raw
     .replace(/<[^>]*>/g, '')
     .replace(/&(amp|lt|gt|nbsp|lrm|rlm|quot|apos);/g, (_, e: string) => VTT_ENTITIES[e]!)
+    .replace(/[<>]/g, '')
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
     .replace(MARK_CHARS, '')
     .replace(/\s+/g, ' ')
