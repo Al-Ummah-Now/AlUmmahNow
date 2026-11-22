@@ -19,6 +19,11 @@ import { studioVideoTitle } from '@/lib/studio/videos';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 
+/** A summary card's counts: compact and cut ("5.4K"), the number kept on one line with its noun */
+const CARD_COUNT = { compact: true, joiner: '\u00a0' } as const;
+/** A value with its unit never breaks between them («٢٤ س», "24 hr") */
+const keepTogether = (text: string) => text.replace(/ /g, '\u00a0');
+
 /** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
 const RECENT_DAYS = 28;
 
@@ -294,11 +299,11 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                 {latest.thumbnailUrl?.trim() ? <Image src={latest.thumbnailUrl} alt="" fill sizes="112px" className="object-cover" unoptimized /> : <Film aria-hidden="true" className="h-6 w-6" />}
               </div>
               <div className="min-w-0 text-sm">
-                <Link href={editHref(latest)} dir="auto" className="block truncate font-medium text-foreground hover:underline">{studioVideoTitle(latest, locale)}</Link>
+                <Link href={editHref(latest)} dir="auto" className="block truncate font-medium text-foreground hover:underline rtl:text-right">{studioVideoTitle(latest, locale)}</Link>
                 <p className="mt-1 text-muted-foreground">
-                  {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view', { compact: true }), likes: formatCountNoun(locale, latest.likesCount, 'like', { compact: true }), comments: formatCountNoun(locale, latest.commentsCount, 'comment', { compact: true }) })}
+                  {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view', CARD_COUNT), likes: formatCountNoun(locale, latest.likesCount, 'like', CARD_COUNT), comments: formatCountNoun(locale, latest.commentsCount, 'comment', CARD_COUNT) })}
                 </p>
-                {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime) })}</p>}
+                {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: keepTogether(formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime)) })}</p>}
               </div>
             </div>
           </Card>
