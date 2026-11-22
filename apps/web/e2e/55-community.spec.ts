@@ -451,7 +451,11 @@ test.describe('Post manager', () => {
     await expect(back).toHaveAccessibleName('العودة إلى المنشورات');
     await expect(back).toHaveAttribute('href', `/ar/studio/${channelId()}/content/posts`);
     await selectType(page, 'text');
-    await expect(page.getByPlaceholder('شارك أفكارك مع مجتمعك...')).toHaveAttribute('dir', 'rtl');
+    // The editor takes its text's own direction (an English post on the Arabic page reads LTR); empty, it
+    // follows the Arabic page: right to left
+    const editor = page.getByPlaceholder('شارك أفكارك مع مجتمعك...');
+    await expect(editor).toHaveAttribute('dir', 'auto');
+    expect(await editor.evaluate((el) => el.matches(':dir(rtl)'))).toBe(true);
     await page.getByRole('button', { name: 'نشر' }).click();
     await expect(page.getByText('المحتوى مطلوب')).toBeVisible();
   });
