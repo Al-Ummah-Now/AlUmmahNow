@@ -176,3 +176,20 @@ test('the account name has one width, so switching who you act as never moves th
   assert.match(name, /text-overflow: ellipsis;/);
   assert.match(name, /white-space: nowrap;/);
 });
+
+test('the account name hugs the avatar in both directions, whatever its script (AUDIT-2 2026-11-22)', () => {
+  const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');
+  // dir="auto" gives a Latin name in Arabic its own LTR direction, so `start` alone would put it at the
+  // slot's far (left) edge, ~68px from the avatar; the side comes from the page's dir instead
+  const side = (dir: string) => {
+    const at = css.search(new RegExp(`\\[dir='${dir}'\\] \\.aun-acct-name,`));
+    assert.ok(at >= 0, `[dir='${dir}'] .aun-acct-name`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  assert.match(side('rtl'), /text-align: right;/);
+  assert.match(side('ltr'), /text-align: left;/);
+  // and nothing later sends it back to its own start
+  const ltr = css.search(/\[dir='ltr'\] \.aun-acct-name,/);
+  const later = css.slice(css.indexOf('}', ltr));
+  assert.doesNotMatch(later, /\.aun-acct-name[^{]*\{[^}]*text-align/);
+});

@@ -79,6 +79,9 @@
      never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px); a longer name ends
      in an ellipsis, and never pushes the header apart */
   inline-size: 9rem;
+  /* the name hugs the avatar on the header's start side in both directions: a Latin name in Arabic
+     keeps its own direction (dir="auto") but its start would be the slot's left, ~68px from the
+     avatar (AUDIT-2 2026-11-22); the physical side comes from the page's dir, below */
   text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -733,12 +736,15 @@
 }
 /* A name in the other script (a Latin name in Arabic) keeps its own direction (dir="auto") but
    lines up with the menu's start, like its email. Physical sides from the page's dir: Chrome's
-   text-align: match-parent acts as inherit and would align it by its own direction */
+   text-align: match-parent acts as inherit and would align it by its own direction. The header
+   account name (.aun-acct-name) follows the same rule: it hugs the avatar whatever its script */
+[dir='rtl'] .aun-acct-name,
 [dir='rtl'] .aun-acct-label,
 [dir='rtl'] .aun-menu-who-name,
 [dir='rtl'] .aun-menu-text {
   text-align: right;
 }
+[dir='ltr'] .aun-acct-name,
 [dir='ltr'] .aun-acct-label,
 [dir='ltr'] .aun-menu-who-name,
 [dir='ltr'] .aun-menu-text {
