@@ -342,8 +342,12 @@ export function trendBySource(
   const today = days[days.length - 1]!;
   // The cells the plan's and the fixed costs' month to date sum (accruedMonthCents): per day without
   // drift, today for its elapsed part
+  // The running total starts on the 1st, not where the window starts, so a finished day keeps its
+  // cents whichever day the window opens on
+  const fromFirst: string[] = [];
+  for (let t = Date.parse(`${days[0]!.slice(0, 7)}-01T00:00:00Z`); t <= Date.parse(`${today}T00:00:00Z`); t += 86_400_000) fromFirst.push(new Date(t).toISOString().slice(0, 10));
   const accrued = (perDay: (d: string) => number) => {
-    const cells = centsByDay(days.map((d) => [d, perDay(d) * dayElapsed(d, now)] as const));
+    const cells = centsByDay(fromFirst.map((d) => [d, perDay(d) * dayElapsed(d, now)] as const));
     return days.map((d) => (cells.get(d) ?? 0) / 100);
   };
   const daysIn = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0)).getUTCDate();
