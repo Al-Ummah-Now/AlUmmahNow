@@ -109,25 +109,32 @@ export async function putRenditionFile(
  * without a length, or with a false one, cannot make the Worker buffer more than the declared size).
  */
 export async function readAtMost(body: ReadableStream<Uint8Array> | null, limit: number): Promise<Uint8Array | null> {
-	const out = new Uint8Array(limit);
-	if (!body) return out.subarray(0, 0);
+	if (!body) return new Uint8Array(0);
+	const chunks: Uint8Array[] = [];
 	const reader = body.getReader();
 	let size = 0;
 	try {
 		while (true) {
 			const { done, value } = await reader.read();
 			if (done) break;
-			if (size + value.byteLength > limit) {
+			size += value.byteLength;
+			if (size > limit) {
 				await reader.cancel().catch(() => undefined);
 				return null;
 			}
-			out.set(value, size);
-			size += value.byteLength;
+			chunks.push(value);
 		}
 	} finally {
 		reader.releaseLock();
 	}
-	return out.subarray(0, size);
+	// Joined once the whole body is in: memory follows what arrived, never the declared size
+	const out = new Uint8Array(size);
+	let at = 0;
+	for (const chunk of chunks) {
+		out.set(chunk, at);
+		at += chunk.byteLength;
+	}
+	return out;
 }
 
 /** Every declared file is there: the renditions wait for the original upload's transcode. */
