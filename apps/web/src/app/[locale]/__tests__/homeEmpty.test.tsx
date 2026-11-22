@@ -85,7 +85,7 @@ describe('home with no videos (#1629)', () => {
     mockFetchVideos.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({ data: [{ id: 'v1', title: 'Friday reminder' }], cursor: '' } as never);
     render(<VideosPage />);
     const alert = await screen.findByTestId('home-load-failed');
-    expect(alert).toHaveTextContent(lang === 'ar' ? 'تعذّر تحميل المرئيات.' : "Videos couldn't be loaded.");
+    expect(alert).toHaveTextContent(lang === 'ar' ? 'تعذّر تحميل المرئيات.' : 'Videos couldn’t be loaded.');
     expect(screen.queryByTestId('home-empty')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: lang === 'ar' ? 'إعادة المحاولة' : 'Retry' }));
     await waitFor(() => expect(screen.getAllByTestId('video-card')).toHaveLength(1));
