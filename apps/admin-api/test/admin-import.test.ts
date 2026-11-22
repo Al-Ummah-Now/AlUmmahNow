@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { ENCODE_LADDER, PREBUILT_LIMITS } from '@al-ummah/shared-types';
-import adminImportRouter, { parseNewChannel, parseNewItem } from '../src/routers/adminImport.router';
+import adminImportRouter, { parseNewChannel, parseNewItem, toolsErrorEvents } from '../src/routers/adminImport.router';
 import { sqliteD1 } from './d1-sqlite';
 
 const ADMIN = 'usr_' + 'a'.repeat(32);
@@ -343,5 +343,74 @@ describe('/api/admin/import/items/:id/transcript and /translations (TA-7)', () =
     assert.equal(refused.body.code, 'draft_exists');
     assert.equal((await send('it1/transcript', { ...transcript, language: '' })).status, 400);
     assert.equal(((await db.prepare("SELECT COUNT(*) AS n FROM site_settings_log").first<any>())).n, 2);
+  });
+});
+
+describe('/api/admin/import/errors (TA-11)', () => {
+  function errorsSetup(roles: string[] = ['Admin'], environment = 'production') {
+    const sent: any[] = [];
+    const env = { REPORTS_DB: sqliteD1(), INTERNAL_API_KEY: 'k', ENVIRONMENT: environment, ERRORS_QUEUE: { async send(msg: unknown) { sent.push(msg); } } };
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, email: 'staff@example.com', roles } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const req = async (json: unknown, raw?: string) => {
+      const res = await app.request('/api/admin/import/errors', { method: 'POST', body: raw ?? JSON.stringify(json), headers: { 'Content-Type': 'application/json', 'User-Agent': 'AlUmmahNowTools/1.0' } }, env as never);
+      return { status: res.status, body: (await res.json()) as any };
+    };
+    return { req, sent };
+  }
+  const event = (over: Record<string, unknown> = {}) => ({ kind: 'upload', ref: 'ERR-AB12-CD34', message: 'Upload of lesson-01.mp4 failed: 503', release: '1.0.0', ...over });
+
+  it('queues the app\'s reports as app tools, under the token\'s account and never the body\'s', async () => {
+    const { req, sent } = errorsSetup();
+    const res = await req({ events: [event({ userId: OWNER, app: 'admin-api' })] });
+    assert.equal(res.status, 202);
+    assert.deepEqual(res.body.result, { accepted: 1, rateLimited: 0 });
+    assert.equal(sent.length, 1);
+    const [queued] = sent[0].events;
+    assert.equal(queued.app, 'tools');
+    assert.equal(queued.userId, ADMIN);
+    assert.equal(queued.ref, 'ERR-AB12-CD34');
+    assert.equal(sent[0].trustedRetry, false, 'the app cannot attach Retry actions');
+    assert.equal(sent[0].userAgent, 'AlUmmahNowTools/1.0');
+  });
+
+  it('keeps only the app\'s own kinds, gives a reference when none came, and drops needs-action items', () => {
+    const events = toolsErrorEvents(
+      [event({ ref: undefined }), event({ kind: 'http' }), event({ kind: 'action', action: { key: 'x', source: 'upload', title: 'X' } }), 'nonsense', event({ message: '' })],
+      { userId: ADMIN, environment: 'qa' },
+    );
+    assert.equal(events.length, 1);
+    assert.match(events[0].ref, /^ERR-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    assert.equal(events[0].action, undefined);
+  });
+
+  it('honours "test" outside production only', () => {
+    assert.equal(toolsErrorEvents([event({ test: true })], { userId: ADMIN, environment: 'production' })[0].test, undefined);
+    assert.equal(toolsErrorEvents([event({ test: true })], { userId: ADMIN, environment: 'qa' })[0].test, true);
+  });
+
+  it('refuses non-staff, bad bodies and too many reports at once', async () => {
+    assert.equal((await errorsSetup(['Moderator']).req({ events: [event()] })).status, 403);
+    const { req, sent } = errorsSetup();
+    assert.equal((await req(null, '{nope')).status, 400);
+    assert.equal((await req({ events: [event({ kind: 'http' })] })).status, 400);
+    assert.equal((await req({ events: Array.from({ length: 21 }, () => event()) })).status, 413);
+    assert.equal((await req(null, JSON.stringify({ events: [event({ message: 'x'.repeat(70 * 1024) })] }))).status, 413);
+    assert.equal(sent.length, 0);
+  });
+
+  it('applies the per-client minute limit to an account', async () => {
+    const { req } = errorsSetup();
+    let limited = false;
+    for (let i = 0; i < 20 && !limited; i++) {
+      const res = await req({ events: Array.from({ length: 20 }, () => event()) });
+      if (res.status === 429) limited = true;
+      else assert.equal(res.status, 202);
+    }
+    assert.ok(limited, 'a flood of reports is cut off within the minute');
   });
 });
