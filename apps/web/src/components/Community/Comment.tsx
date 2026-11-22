@@ -347,7 +347,9 @@ export default function Comment({
             </div>
           </div>
         ) : (
-          <p className="mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-start" dir={comment.deletedAt ? undefined : 'auto'}>
+          /* Balanced (no «هل» left hanging at a line's end) and lined up with the page, like Studio's comments:
+             a comment in the other script keeps its own direction (dir=auto) but starts where the page's lines start */
+          <p className="mt-1 text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words text-left [text-wrap:balance] [html[dir=rtl]_&]:text-right" dir={comment.deletedAt ? undefined : 'auto'}>
             {comment.deletedAt ? (isRTL ? '[تم حذف هذا التعليق]' : '[This comment has been deleted]') : comment.content}
           </p>
         )}

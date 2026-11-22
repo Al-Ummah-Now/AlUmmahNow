@@ -36,7 +36,7 @@
   "apps/web/src/components/ChannelTabs/index.tsx": 10,
   "apps/web/src/components/ChannelTabs/rtl/index.tsx": 12,
   "apps/web/src/components/ChannelTile/index.tsx": 24,
-  "apps/web/src/components/Community/Comment.tsx": 51,
+  "apps/web/src/components/Community/Comment.tsx": 48,
   "apps/web/src/components/Community/CommentButton.tsx": 2,
   "apps/web/src/components/Community/CommentForm.tsx": 13,
   "apps/web/src/components/Community/CommentsSection.tsx": 30,
