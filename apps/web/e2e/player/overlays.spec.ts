@@ -279,6 +279,23 @@ for (const lang of ['en', 'ar'] as const) {
       await expectOnTop(dialog, 'shortcuts dialog (fullscreen)');
     });
 
+    test('an open menu hides the chapter toast; it never sits on the panel', async ({ page }) => {
+      const player = await openHarness(page, { lang });
+      await startPlayback(page, player);
+      // Into the second chapter: its toast comes up
+      await pauseAt(page, player, 45);
+      const toast = page.locator('.vjs-fanous-chapter-toast');
+      await expect(toast).toHaveClass(/opacity-100/);
+      await expect(toast).toBeVisible();
+      await page.mouse.move(2, 2);
+      await openSettings(page, player);
+      await expect(toast).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('player-settings-menu')).toBeHidden();
+      // Closed again, the toast is back while its time lasts (or has faded on its own): never stuck hidden
+      expect(await toast.evaluate((el) => getComputedStyle(el).visibility)).toBe('visible');
+    });
+
     // These are part of the frame, so content laid over the player covers them with it; what
     // matters is that nothing in the frame or the page draws over them
     test('in-frame overlays (end screen, start over) are not covered by the page', async ({ page }) => {
