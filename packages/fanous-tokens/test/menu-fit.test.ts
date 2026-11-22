@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 type Box = { left: number; top: number; width: number; height: number };
 const rect = (b: Box) => ({ ...b, right: b.left + b.width, bottom: b.top + b.height });
 
-function stubPopup(box: Box, opts: { vw?: number; vh?: number; anchor?: Box; position?: string; visual?: { offsetTop: number; height: number } } = {}) {
+function stubPopup(box: Box, opts: { vw?: number; vh?: number; anchor?: Box; position?: string; visual?: { offsetTop: number; height: number }; bar?: Box } = {}) {
   const style: Record<string, string> = {};
   const vw = opts.vw ?? 375;
   const vh = opts.vh ?? 667;
@@ -21,6 +21,7 @@ function stubPopup(box: Box, opts: { vw?: number; vh?: number; anchor?: Box; pos
       return rect({ ...box, width });
     },
     offsetParent: opts.anchor ? { getBoundingClientRect: () => rect(opts.anchor!) } : null,
+    closest: (sel: string) => (sel === '.aun-header' && opts.bar ? { getBoundingClientRect: () => rect(opts.bar!) } : null),
     style: {
       removeProperty: (k: string) => delete style[k],
       set translate(v: string) { style.translate = v; },
@@ -94,4 +95,21 @@ test('an on-screen keyboard (smaller visual viewport) counts as the bottom', () 
   const { el, style } = stubPopup({ left: 10, top: 100, width: 290, height: 300 }, { position: 'fixed', visual: { offsetTop: 0, height: 300 } });
   fitToViewport(el);
   assert.equal(style['max-block-size'], '192px');
+});
+
+test('a phone sheet hangs 4px under its bar when a banner pushes the bar down (AUDIT-2, CMS #154)', () => {
+  // CSS puts the sheet at the bar's height + 4px (60px); a 40px banner puts the bar's bottom at 96px
+  const { el, style } = stubPopup({ left: 8, top: 60, width: 359, height: 300 }, { position: 'fixed', bar: { left: 0, top: 40, width: 375, height: 56 } });
+  fitToViewport(el);
+  assert.equal(style.translate, '0px 40px');
+  // the height cap counts from where the sheet now starts
+  const tall = stubPopup({ left: 8, top: 60, width: 359, height: 900 }, { position: 'fixed', bar: { left: 0, top: 40, width: 375, height: 56 } });
+  fitToViewport(tall.el);
+  assert.equal(tall.style['max-block-size'], `${667 - 8 - 100}px`);
+});
+
+test('a phone sheet under a bar at the top stays where its CSS put it', () => {
+  const { el, style } = stubPopup({ left: 8, top: 60, width: 359, height: 300 }, { position: 'fixed', bar: { left: 0, top: 0, width: 375, height: 56 } });
+  fitToViewport(el);
+  assert.equal(style.translate, undefined);
 });

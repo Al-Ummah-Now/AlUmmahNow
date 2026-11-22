@@ -470,7 +470,9 @@ suggestions or tooltip ever renders outside the viewport.**
   anchor when it fits; otherwise, when there is more room above the anchor, it opens upwards. Its
   height is capped to the room on that side (the popup scrolls inside), never with a minimum height,
   measured against the visual viewport (an on-screen keyboard counts). It re-fits when its own size
-  changes (results arriving after it opened) and on resize. Source:
+  changes (results arriving after it opened) and on resize. A fixed phone sheet (the account menu
+  below 480px) hangs 4px under its `.aun-header`, wherever the bar is: a banner above the header (the
+  CMS theme preview or passkey bar) pushes the bar down, and the sheet must never cover it. Source:
   `packages/fanous-tokens/nav/menu-fit.js` (videos web via `useFitToViewport`, videos admin);
   www `src/scripts/menu-fit.ts` and CMS `src/admin/client/dom.ts` carry the same function.
 - Tests: each app has an E2E that opens its menus at 320, 375 and 414 px wide and a landscape phone
