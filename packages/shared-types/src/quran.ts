@@ -79,6 +79,16 @@ export function quranAyahLabel(r: QuranRange): string {
  */
 export const QURAN_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
 
+/**
+ * The same wording for a line that wraps on screen (a caption cue, Studio's Quran card): no-break
+ * spaces keep "Quran Foundation (https://quran.foundation/)" together, so the URL never sits alone
+ * on the last line.
+ */
+export const QURAN_ATTRIBUTION_LINE = {
+  en: QURAN_ATTRIBUTION.en.replace('Quran Foundation (', 'Quran\u00a0Foundation\u00a0('),
+  ar: QURAN_ATTRIBUTION.ar.replace('مؤسسة القرآن (', 'مؤسسة\u00a0القرآن\u00a0('),
+} as const;
+
 /** The same wording, written inside every file that carries Quran text (a downloaded subtitle file's NOTE). */
 export const QF_ATTRIBUTION = QURAN_ATTRIBUTION;
 

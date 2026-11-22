@@ -39,9 +39,11 @@ export interface QuranSpanCardProps {
   onRange: (range: string) => void;
   /** Our copy of the official text is available (features `quranText`) */
   textAvailable: boolean;
+  /** A translated draft: the Quran Foundation translation its viewers see in place of the Arabic text */
+  translationEdition?: string | null;
 }
 
-export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, onRange, textAvailable }: QuranSpanCardProps) {
+export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, onRange, textAvailable, translationEdition }: QuranSpanCardProps) {
   const range = parseQuranRange(segment.range);
   const label = range ? quranAyahLabel(range) : segment.range;
   const shownLabel = lang === 'ar' ? toArabicDigits(label) : label;
@@ -132,6 +134,14 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
             <blockquote lang="ar" dir="rtl" className="text-lg leading-loose text-foreground">
               ﴿{passage.ayat.map((a) => a.text).join(' ')}﴾
             </blockquote>
+            <p className="text-[11px] text-muted-foreground">{t.textEdition}</p>
+            {translationEdition && (
+              <p className="text-[11px] text-muted-foreground">
+                {t.translationEdition.split('{name}')[0]}
+                <bdi>{translationEdition}</bdi>
+                {t.translationEdition.split('{name}')[1]}
+              </p>
+            )}
             <p className="text-[11px] text-muted-foreground">{t.attribution}</p>
           </figure>
         ) : (

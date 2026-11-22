@@ -89,6 +89,8 @@ describe('caption editor edits', () => {
   it('formats times and reads typed references in either digit set', () => {
     expect(formatCueTime(61_400)).toBe('01:01.4');
     expect(formatCueTime(3_723_000)).toBe('1:02:03.0');
+    expect(formatCueTime(61_400, 'ar')).toBe('٠١:٠١٫٤');
+    expect(formatCueTime(3_723_000, 'ar')).toBe('١:٠٢:٠٣٫٠');
     expect(parseShortReference('3:166')).toBe('3:166');
     expect(parseShortReference(' 3 : 166 – 167 ')).toBe('3:166-167');
     expect(parseShortReference('٣:١٦٦-١٦٧')).toBe('3:166-167');

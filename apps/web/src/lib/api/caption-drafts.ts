@@ -27,7 +27,12 @@ export interface CaptionDraftSummary {
   track: 'none' | 'machine' | 'upload';
 }
 
-export type CaptionDraftDetail = Omit<CaptionDraftSummary, 'cues'> & { cues: CaptionCue[]; cueCount: number };
+export type CaptionDraftDetail = Omit<CaptionDraftSummary, 'cues'> & {
+  cues: CaptionCue[];
+  cueCount: number;
+  /** A translated draft with Quran: the Quran Foundation translation its viewers see there */
+  quranEdition?: { name: string } | null;
+};
 
 export interface QuranPassage {
   range: string;
