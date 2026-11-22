@@ -19,7 +19,7 @@ export default async function NotFound() {
   const { locale } = await getI18n();
 
   return (
-    <PublicShell>
+    <PublicShell top>
       <div data-testid="not-found" className="w-full">
         <FriendlyError locale={locale} kind="notFound" inline />
       </div>
