@@ -23,6 +23,24 @@ export function cutItemTail(listBottom: number, items: ReadonlyArray<{ top: numb
   return 0;
 }
 
+/** The collapsed rail item's own block padding (system.css .nv) and the least it may shrink to. */
+const BASE_PAD = 10;
+const MIN_PAD = 6;
+
+/**
+ * The block padding that lets every collapsed rail item fit, when the list is only a little taller than
+ * its box: the Arabic labels take more lines than English («المرئيات التي أعجبتك», «الخصوصية وملفات تعريف
+ * الارتباط»), so at 1280×800 «إرشادات المجتمع» did not fit where "Community guidelines" does (#1723 ruling:
+ * the rail shows the same items in both languages). `overflow` is the list's height beyond its box at the
+ * full padding; null keeps the full padding (it fits, or tightening could not make it fit: the list then
+ * scrolls and the cut item is hidden as before).
+ */
+export function railPad(overflow: number, count: number): number | null {
+  if (overflow <= END_SLACK || count === 0) return null;
+  const pad = Math.floor(BASE_PAD - overflow / (2 * count));
+  return pad >= MIN_PAD ? pad : null;
+}
+
 /**
  * The side rail's list scrolls with a hidden scrollbar, so on a short window its last item was simply cut off
  * at the bottom edge (#1620). This keeps `data-more-below` on the list while items are below the visible
@@ -35,6 +53,18 @@ export function useMoreBelow<T extends HTMLElement>(): RefObject<T | null> {
     const el = ref.current;
     if (!el) return;
     const update = () => {
+      // Tighten first (collapsed rail only; the open rail's rows have a fixed height): the overflow is
+      // measured as if at the full padding, so applying the padding never flips the result back
+      const links = el.querySelectorAll<HTMLElement>('.nv');
+      const collapsed = typeof document !== 'undefined' && document.documentElement.dataset.rail !== 'open';
+      const current = parseFloat(el.style.getPropertyValue('--nv-pad-y')) || BASE_PAD;
+      const natural = el.scrollHeight + links.length * 2 * (BASE_PAD - current) - el.clientHeight;
+      const pad = collapsed ? railPad(natural, links.length) : null;
+      if (pad === null) {
+        if (el.style.getPropertyValue('--nv-pad-y')) el.style.removeProperty('--nv-pad-y');
+      } else if (pad !== current) {
+        el.style.setProperty('--nv-pad-y', `${pad}px`);
+      }
       if (hasMoreBelow(el)) {
         el.dataset.moreBelow = '';
         // Hide the item the edge would cut (system.css clips the list by --nv-tail; layout is unchanged)
