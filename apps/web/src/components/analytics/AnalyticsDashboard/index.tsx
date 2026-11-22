@@ -1,6 +1,6 @@
 'use client';
 
-import { formatCountNoun, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { fillTemplate, formatCountNoun, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';

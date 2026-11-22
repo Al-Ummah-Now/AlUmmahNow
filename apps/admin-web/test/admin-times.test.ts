@@ -70,7 +70,8 @@ describe('admin times: local with the zone, UTC on hover', () => {
     const en = render('en');
     assert.match(en, /<time dateTime="2026-11-21T14:41:05Z" title="Nov 21, 2026, 2:41 PM UTC">/);
     // The server has no viewer zone: it renders UTC, named, and the browser switches to local
-    assert.match(en, />Nov 21, 2026, 2:41 PM UTC<\/time>/);
+    // The text keeps the date and the time each whole (no-break spaces inside, one plain break between)
+    assert.match(en, />Nov\u00A021,\u00A02026, 2:41\u00A0PM\u00A0UTC<\/time>/);
     assert.match(render('ar'), /title="٢١ نوفمبر ٢٠٢٦، ٢:٤١ م UTC"/);
   });
 

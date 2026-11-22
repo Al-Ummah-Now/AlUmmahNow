@@ -22,7 +22,8 @@ function render(counts: number[], locale: 'en' | 'ar' = 'en', axisNote?: string)
     label: 'Occurrences',
     barTitle: (h: { hour: string; occurrences: number }) => `${formatHour(h.hour, locale)}: ${h.occurrences}`,
     locale,
-    hourLabel: (hour: string) => formatHour(hour, locale),
+    // Pinned to UTC: these tests are about bucket labels, not zones (pages pass the viewer's zone)
+    hourLabel: (hour: string) => formatHour(hour, locale, 'UTC'),
     tableLabel: 'Show as table',
     hourHeading: 'Hour',
     countHeading: 'Occurrences',

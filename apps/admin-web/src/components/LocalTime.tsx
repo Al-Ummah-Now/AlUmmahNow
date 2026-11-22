@@ -3,8 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import { useOptionalLocale } from '@/i18n/I18nProvider';
 import type { Locale } from '@/i18n/config';
-import { formatDate } from '@/i18n/translate';
-import { formatLocalHour, formatLocalTime, zoneLabel } from '@/lib/local-time';
+import { formatClock, formatDate, formatHourTick, formatTime, formatUtc, zoneLabel } from '@/i18n/translate';
 
 const noSubscribe = () => () => {};
 
@@ -31,12 +30,15 @@ function useLocale(localeProp?: Locale | string): Locale {
   return localeProp === 'ar' || localeProp === 'en' ? localeProp : (context ?? 'en');
 }
 
+const WHOLE = { whole: true } as const;
+
 /**
  * A time in the admin (owner, 2026-11-21): the viewer's local time with its zone ("Nov 22, 2026,
  * 2:20 PM EST", «غرينتش-٥»), and the UTC time as the hover title, to compare with logs. A date alone
  * by default; `withTime` adds the time, `clock` shows seconds (log lines, "updated" stamps; the date
- * too with `withTime`), `timeOnly` the time without the date ("next try at"). Times come from
- * lib/local-time, which keeps the date and the time each whole in a narrow cell (AUDIT-2).
+ * too with `withTime`), `timeOnly` the time without the date ("next try at"). The date and the time
+ * each stay whole, so a narrow cell breaks only between them (AUDIT-2). One formatter for every admin
+ * time: i18n/translate.
  */
 export function LocalTime({ value, withTime = false, clock = false, timeOnly = false, className, locale: localeProp, testId }: {
   value: string | number | Date;
@@ -51,16 +53,17 @@ export function LocalTime({ value, withTime = false, clock = false, timeOnly = f
   const zone = useZone();
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return <>{String(value)}</>;
-  const dateTime = typeof value === 'string' ? value : date.toISOString();
-  if (!withTime && !clock && !timeOnly) {
-    // A date alone; a calendar day ("2026-11-21") stays that day in every zone (formatDate)
-    return <time dateTime={dateTime} className={className} data-testid={testId}>{formatDate(value, locale, false, zone)}</time>;
-  }
-  const time = formatLocalTime(date, locale, zone, { date: !timeOnly && (withTime || !clock), seconds: clock });
-  if (!time) return null;
+  const text = timeOnly
+    ? formatTime(value, locale, zone, WHOLE)
+    : clock
+      ? formatClock(value, locale, withTime, zone, WHOLE)
+      : formatDate(value, locale, withTime, zone, WHOLE);
+  // Every time has its UTC moment on hover (a tooltip never wraps, so plain spaces); a calendar day
+  // ("2026-11-21") has none (formatUtc gives '')
+  const utc = formatUtc(value, locale, { seconds: clock });
   return (
-    <time dateTime={dateTime} title={time.utc} className={className} data-testid={testId}>
-      {time.text}
+    <time dateTime={typeof value === 'string' ? value : date.toISOString()} title={utc || undefined} className={className} data-testid={testId}>
+      {text}
     </time>
   );
 }
@@ -69,8 +72,7 @@ export function LocalTime({ value, withTime = false, clock = false, timeOnly = f
 export function LocalHour({ value }: { value: string }) {
   const locale = useLocale();
   const zone = useZone();
-  const text = formatLocalHour(value, locale, zone);
-  return text ? <time dateTime={value}>{text}</time> : null;
+  return <time dateTime={value}>{formatHourTick(value, locale, zone)}</time>;
 }
 
 /** The admin's zone name now: "EST", «غرينتش-٥». */
