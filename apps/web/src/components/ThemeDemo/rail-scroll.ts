@@ -11,6 +11,19 @@ export function hasMoreBelow(el: Pick<HTMLElement, 'scrollTop' | 'clientHeight' 
 }
 
 /**
+ * How many pixels to hide at the bottom of the list so no item shows cut by its edge: the item that
+ * straddles the bottom edge is hidden whole, so the edge strip always sits under a complete item with
+ * that item's own padding as the gap (AUDIT-2: «إرشادات» ended 3px above the strip). Rects are viewport
+ * coordinates; 0 when nothing straddles the edge.
+ */
+export function cutItemTail(listBottom: number, items: ReadonlyArray<{ top: number; bottom: number }>): number {
+  for (const it of items) {
+    if (it.top < listBottom - END_SLACK && it.bottom > listBottom + 0.5) return Math.max(0, Math.ceil(listBottom - it.top));
+  }
+  return 0;
+}
+
+/**
  * The side rail's list scrolls with a hidden scrollbar, so on a short window its last item was simply cut off
  * at the bottom edge (#1620). This keeps `data-more-below` on the list while items are below the visible
  * area; system.css then shades the edge strip under the list, never over it (and shows a thin scrollbar on hover/focus). Re-checked on
@@ -22,8 +35,16 @@ export function useMoreBelow<T extends HTMLElement>(): RefObject<T | null> {
     const el = ref.current;
     if (!el) return;
     const update = () => {
-      if (hasMoreBelow(el)) el.dataset.moreBelow = '';
-      else delete el.dataset.moreBelow;
+      if (hasMoreBelow(el)) {
+        el.dataset.moreBelow = '';
+        // Hide the item the edge would cut (system.css clips the list by --nv-tail; layout is unchanged)
+        const bottom = el.getBoundingClientRect().bottom;
+        const items = Array.from(el.querySelectorAll<HTMLElement>('.nv, .nv-heading'), (n) => n.getBoundingClientRect());
+        el.style.setProperty('--nv-tail', `${cutItemTail(bottom, items)}px`);
+      } else {
+        delete el.dataset.moreBelow;
+        el.style.removeProperty('--nv-tail');
+      }
     };
     update();
     el.addEventListener('scroll', update, { passive: true });
