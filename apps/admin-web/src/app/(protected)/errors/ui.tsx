@@ -2,7 +2,7 @@
  * Presentational pieces of the Errors pages (server and client safe).
  */
 
-import { compactNumber, labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
+import { compactNumber, niceScale, numberFormat } from '@al-ummah/shared-types';
 import { translateDynamic, type Translator } from '@/i18n/translate';
 
 /** The error's message as its title; the type ("UploadError") is shown apart, as a technical detail (errorType). */
@@ -80,6 +80,18 @@ export function Sparkline({ values, label, width = 112, height = 28 }: { values:
  * like the Studio charts. Server-rendered: hover shows each bar's hour and
  * count (CSS), and a <details> table is the text alternative. Hours are in the admin's zone (LocalHour).
  */
+/**
+ * Hours to label on the time axis, evenly apart and counted back from the latest hour: every 12 hours of 48,
+ * every 6 of 24 (AUDIT-2: uneven 8/7/8-hour gaps read as missing data).
+ */
+export function hourTicks(length: number): number[] {
+  if (length <= 0) return [];
+  const step = length >= 36 ? 12 : length >= 18 ? 6 : Math.max(1, Math.round(length / 4));
+  const picked: number[] = [];
+  for (let i = length - 1; i >= 0; i -= step) picked.unshift(i);
+  return picked;
+}
+
 export function HourlyChart({
   hours,
   label,
@@ -90,6 +102,7 @@ export function HourlyChart({
   hourHeading,
   countHeading,
   emptyText,
+  axisNote,
 }: {
   hours: { hour: string; occurrences: number }[];
   label: string;
@@ -101,13 +114,15 @@ export function HourlyChart({
   hourHeading: React.ReactNode;
   countHeading: string;
   emptyText: string;
+  /** Under the time axis: which zone its hours are in ("Times in EST") */
+  axisNote?: React.ReactNode;
 }) {
   const scale = niceScale(hours.map((h) => h.occurrences), { integer: true, target: 3 });
   const tick = compactNumber(locale);
   const number = numberFormat(locale);
   const empty = hours.every((h) => !h.occurrences);
   const y = (value: number) => 100 - (value / scale.top) * 100;
-  const ticksAt = labelIndices(hours.length, 4);
+  const ticksAt = hourTicks(hours.length);
   return (
     <figure className="m-0" data-testid="error-hourly-chart">
       <div className="flex gap-2">
@@ -142,19 +157,21 @@ export function HourlyChart({
           <div className="relative mt-1 h-4 text-xs text-fg-muted" aria-hidden="true">
             {ticksAt.map((index, order) => {
               const at = ((index + 0.5) / hours.length) * 100;
-              // First and last labels hug the inline edges; the others centre on their bar (from sm up: on a
-              // phone the date labels would run into each other). Logical
-              // insets only: a physical translateX pushed the last label off the page in Arabic.
-              const first = order === 0;
-              const last = order === ticksAt.length - 1;
-              const place = first ? { insetInlineStart: 0 } : last ? { insetInlineEnd: 0 } : { insetInlineStart: `${at}%` };
+              // Each label centres on its bar; one near an edge hugs that edge instead. Logical insets only: a
+              // physical translateX pushed the last label off the page in Arabic. On a phone only the first and
+              // the last show (the date labels would run into each other).
+              const nearStart = at < 12;
+              const nearEnd = at > 88;
+              const place = nearStart ? { insetInlineStart: 0 } : nearEnd ? { insetInlineEnd: 0 } : { insetInlineStart: `${at}%` };
+              const phone = order === 0 || order === ticksAt.length - 1;
               return (
-                <span key={index} className={`absolute whitespace-nowrap ${first || last ? '' : 'hidden sm:block -translate-x-1/2 rtl:translate-x-1/2'}`} style={place} data-testid="error-hourly-x-tick">
+                <span key={index} className={`absolute whitespace-nowrap ${phone ? '' : 'hidden sm:block'} ${nearStart || nearEnd ? '' : '-translate-x-1/2 rtl:translate-x-1/2'}`} style={place} data-testid="error-hourly-x-tick">
                   {hourLabel(hours[index].hour)}
                 </span>
               );
             })}
           </div>
+          {axisNote && <p className="mt-1 text-xs text-fg-muted" data-testid="error-hourly-zone">{axisNote}</p>}
         </div>
       </div>
       <details className="mt-2 text-sm">

@@ -27,7 +27,7 @@ export function JobErrorText({ error, testId = 'job-error' }: { error: string; t
   const { t } = useLanguage();
   return (
     <div className="text-xs break-words" data-testid={testId}>
-      <p className="text-danger-fg">{t(jobErrorWords(error))}</p>
+      <p className="text-danger-fg [text-wrap:balance]">{t(jobErrorWords(error))}</p>
       {error !== 'hidden' && (
         <details className="mt-1 text-fg-muted">
           <summary className="cursor-pointer select-none hover:text-fg">{t('jobs.technical')}</summary>
@@ -117,7 +117,7 @@ function LogLine({ entry, max }: { entry: AdminJobLogEntry; max: number }) {
     <li className="grid grid-cols-1 sm:grid-cols-[minmax(11rem,auto)_1fr] gap-x-4 gap-y-0.5 py-2 border-b border-border last:border-0" data-testid="job-log-line" data-event={entry.event}>
       <LocalTime value={entry.at} seconds className="text-xs text-fg-muted tabular-nums" />
       <div className="min-w-0">
-        <p className="text-sm text-fg">{text}</p>
+        <p className="text-sm text-fg [text-wrap:balance]">{text}</p>
         {entry.error && <JobErrorText error={entry.error} testId="job-log-error" />}
       </div>
     </li>

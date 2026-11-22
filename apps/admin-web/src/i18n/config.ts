@@ -52,3 +52,11 @@ export function localeFromAcceptLanguage(header: string | null | undefined): Loc
   }
   return null;
 }
+
+/**
+ * The page's start side, for text whose own direction differs from the page's (an English title on an
+ * Arabic page, a code, a number): it still lines up with the rest of its row (AUDIT-2 2026-11-22).
+ */
+export function pageStart(locale: Locale): 'left' | 'right' {
+  return getDirection(locale) === 'rtl' ? 'right' : 'left';
+}

@@ -130,6 +130,9 @@ function JobRow({ job, permissions, action, onCancelAsk }: { job: AdminJob; perm
               <JobErrorText error={job.lastError} testId="job-error-narrow" />
             </div>
           )}
+          <span className="md:hidden block mt-1 text-xs text-fg-muted" data-testid="job-updated-narrow">
+            {fillNodes(t('jobs.updatedAt'), { when: <LocalTime value={job.updatedAt} /> })}
+          </span>
           <div className="mt-2" data-testid="job-log">
             {log.toggle}
           </div>

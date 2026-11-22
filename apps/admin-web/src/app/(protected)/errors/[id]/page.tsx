@@ -8,7 +8,7 @@ import { getAdminSession } from '@/lib/auth';
 import { canManageErrors, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
-import type { Locale } from '@/i18n/config';
+import { pageStart, type Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName } from '../ui';
@@ -31,7 +31,6 @@ const GROUP_ID = /^eg_[0-9a-f]{16}$/;
 const USER_ID = /^usr_[A-Za-z0-9_-]{1,64}$/;
 /** Public videos site, for items that point at a video (same config as the access-denied page). */
 const WEB_ORIGIN = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://alummahnow.net';
-const thClass = 'text-start px-3 py-2 text-fg-muted font-medium';
 
 export default async function ErrorGroupPage({ params, searchParams }: PageProps) {
   const { id } = await params;
@@ -69,13 +68,14 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
   const groupActions = groupActionsFor(role, group, viewerId);
   const latest = events[0];
   const stack = latest?.symbolicated_stack || latest?.stack || null;
+  const start = pageStart(locale);
 
   return (
     <div className="space-y-6" data-testid="error-group" data-group-id={group.id} data-status={group.status}>
       <div>
         {back}
         <div className="flex flex-wrap items-start gap-3">
-          <h1 className="text-2xl font-bold text-fg break-words min-w-0 flex-1" dir="ltr" style={{ textAlign: 'start' }} data-testid="error-group-message">
+          <h1 className="text-2xl font-bold text-fg break-words min-w-0 flex-1 [text-wrap:balance]" dir="auto" style={{ textAlign: start }} data-testid="error-group-message">
             {errorTitle(group)}
           </h1>
           <ErrorStatusChip status={group.status} label={translateDynamic(t, 'errorStatus', group.status)} testId="error-status" />
@@ -94,17 +94,18 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
       </div>
 
       <dl className={`${cardClass} grid grid-cols-2 md:grid-cols-4 gap-4 text-sm`}>
-        <Fact label={t('errorsPage.app')} value={appName(t, group.app)} />
-        <Fact label={t('errorsPage.environment')} value={environmentName(t, group.environment)} />
-        <Fact label={t('errorsPage.occurrences')} value={formatNumber(group.occurrences, locale)} />
-        <Fact label={t('errorsPage.usersAffected')} value={formatNumber(group.users, locale)} />
-        <Fact label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} />} />
-        <Fact label={t('errorsPage.lastSeen')} value={<LocalTime value={group.last_seen} />} />
-        <Fact label={t('errorsPage.firstRelease')} value={group.first_release ?? '—'} mono />
-        <Fact label={t('errorsPage.lastRelease')} value={group.last_release ?? '—'} mono />
-        {group.route && <Fact label={t('errorsPage.route')} value={group.route} mono />}
-        {group.resolved_release && <Fact label={t('errorsPage.resolvedIn')} value={group.resolved_release} mono />}
+        <Fact align={start} label={t('errorsPage.app')} value={appName(t, group.app)} />
+        <Fact align={start} label={t('errorsPage.environment')} value={environmentName(t, group.environment)} />
+        <Fact align={start} label={t('errorsPage.occurrences')} value={formatNumber(group.occurrences, locale)} />
+        <Fact align={start} label={t('errorsPage.usersAffected')} value={formatNumber(group.users, locale)} />
+        <Fact align={start} label={t('errorsPage.firstSeen')} value={<LocalTime value={group.first_seen} />} />
+        <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={group.last_seen} />} />
+        <Fact align={start} label={t('errorsPage.firstRelease')} value={group.first_release ?? '—'} mono />
+        <Fact align={start} label={t('errorsPage.lastRelease')} value={group.last_release ?? '—'} mono />
+        {group.route && <Fact align={start} label={t('errorsPage.route')} value={group.route} mono />}
+        {group.resolved_release && <Fact align={start} label={t('errorsPage.resolvedIn')} value={group.resolved_release} mono />}
         <Fact
+          align={start}
           label={t('errorsPage.assignee')}
           value={group.assignee_id ? (group.assignee_id === viewerId ? t('errorsPage.you') : <UserName id={group.assignee_id} email={group.assignee_email} showEmail={false} />) : t('errorsPage.unassigned')}
         />
@@ -139,10 +140,10 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                     <ErrorStatusChip status={item.status} label={translateDynamic(t, 'itemStatus', item.status)} testId="error-item-status" />
                   </div>
                   <dl className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                    <Fact label={t('errorsPage.itemSource')} value={translateDynamic(t, 'itemSource', item.source)} />
-                    <Fact label={t('errorsPage.itemAttempts')} value={formatNumber(item.attempts, locale)} />
-                    <Fact label={t('errorsPage.itemLastResult')} value={item.last_attempt_result ?? '—'} />
-                    <Fact label={t('errorsPage.lastSeen')} value={<LocalTime value={item.updated_at} />} />
+                    <Fact align={start} label={t('errorsPage.itemSource')} value={translateDynamic(t, 'itemSource', item.source)} />
+                    <Fact align={start} label={t('errorsPage.itemAttempts')} value={formatNumber(item.attempts, locale)} />
+                    <Fact align={start} label={t('errorsPage.itemLastResult')} value={item.last_attempt_result ?? '—'} />
+                    <Fact align={start} label={t('errorsPage.lastSeen')} value={<LocalTime value={item.updated_at} />} />
                   </dl>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {href && (
@@ -172,6 +173,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
             hourLabel={(hour) => <LocalHour value={hourDate(hour).toISOString()} />}
             tableLabel={t('errorsPage.timelineTable')}
             hourHeading={fillNodes(t('errorsPage.timelineHourHeading'), { zone: <LocalZoneName /> })}
+            axisNote={fillNodes(t('errorsPage.timelineZone'), { zone: <LocalZoneName /> })}
             countHeading={t('errorsPage.colOccurrences')}
             emptyText={t('errorsPage.timelineEmpty')}
           />
@@ -183,26 +185,22 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           {releases.length === 0 ? (
             <p className="text-fg-muted">{t('errorsPage.noReleases')}</p>
           ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="error-releases">
-              <thead>
-                <tr>
-                  <th scope="col" className={thClass}>{t('errorsPage.colReleaseName')}</th>
-                  <th scope="col" className={`${thClass} text-end`}>{t('errorsPage.colOccurrences')}</th>
-                  <th scope="col" className={thClass}>{t('errorsPage.colLastSeen')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {releases.map((r) => (
-                  <tr key={r.release}>
-                    <td className="px-3 py-2 font-mono whitespace-nowrap" dir="ltr">{r.release}</td>
-                    <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.occurrences, locale)}</td>
-                    <td className="px-3 py-2 text-fg-muted"><LocalTime value={r.last_seen} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
+            // A list, not a table: the card is a third of the page, and three columns clipped the time (AUDIT-2)
+            <ul className="divide-y divide-border text-sm" data-testid="error-releases">
+              {releases.map((r) => (
+                <li key={r.release} className="py-2 first:pt-0 last:pb-0" data-testid="error-release">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <code className="font-mono text-fg" dir="ltr">{r.release}</code>
+                    <span className="text-fg-muted">
+                      {t('errorsPage.colOccurrences')}: <span className="text-fg tabular-nums">{formatNumber(r.occurrences, locale)}</span>
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-fg-muted">
+                    {t('errorsPage.colLastSeen')}: <LocalTime value={r.last_seen} />
+                  </p>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       </div>
@@ -258,11 +256,12 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
   );
 }
 
-function Fact({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
+/** A label over its value. The value lines up with the label at the page's start, whatever its own direction. */
+function Fact({ label, value, mono = false, align }: { label: string; value: React.ReactNode; mono?: boolean; align: 'left' | 'right' }) {
   return (
     <div className="min-w-0">
       <dt className="text-fg-muted">{label}</dt>
-      <dd className={`text-fg break-words ${mono ? 'font-mono' : ''}`} dir={mono ? 'ltr' : 'auto'} style={mono ? { textAlign: 'start' } : undefined}>
+      <dd className={`text-fg break-words ${mono ? 'font-mono' : ''}`} dir={mono ? 'ltr' : undefined} style={{ textAlign: align }}>
         {value}
       </dd>
     </div>
@@ -407,14 +406,15 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
       {extra.length > 0 && (
         <div className="mt-4">
           <h3 className="text-sm font-medium text-fg mb-2">{t('errorsPage.extra')}</h3>
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs" data-testid="error-sample-extra">
+          {/* The same grid as the facts above, so its columns line up with theirs (AUDIT-2) */}
+          <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm" data-testid="error-sample-extra">
             {extra.map(([k, v]) => {
               // Known keys in words, and the import step too; an unknown key stays as sent
               const label = translateDynamic(t, 'errorsPage.extraKeys', k);
               const known = label !== k;
               const step = k === 'step' ? translateDynamic(t, 'errorsPage.importSteps', v) : v;
               return (
-                <div key={k} className="flex gap-2 min-w-0">
+                <div key={k} className="min-w-0">
                   <dt className={`text-fg-muted ${known ? '' : 'font-mono'}`} dir={known ? 'auto' : 'ltr'}>{label}</dt>
                   <dd className={`text-fg break-all ${step !== v ? '' : 'font-mono'}`} dir={step !== v ? 'auto' : 'ltr'}>{step}</dd>
                 </div>

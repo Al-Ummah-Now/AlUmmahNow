@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/AppLink';
 import { formatBytes, intlLocale, isArabicLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { pageStart } from '@/i18n/config';
 import { translateDynamic, type MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { LocalTime } from '@/components/LocalTime';
@@ -120,6 +121,8 @@ function Captions({ captions }: { captions: ImportCaptionStatus[] }) {
 
 export function ImportItems({ items, statuses, permissions }: { items: AdminImportItem[]; statuses: Record<string, AdminImportItemStatus> | null; permissions: AdminContentPermission[] }) {
   const { t, locale } = useLanguage();
+  // Names and titles in the other script still line up with their row (AUDIT-2)
+  const start = pageStart(locale);
   const action = useContentAction();
   const cancel = useJobCancel(action);
   // Refresh while an attach job is still going
@@ -155,7 +158,7 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
                 <tr key={item.id} id={`item-${item.id}`} className={`${cardTable.row} scroll-mt-24 ${marked === item.id ? 'bg-surface-hover outline-2 outline-solid -outline-offset-2 outline-focus' : ''}`} data-testid="import-item" data-item-id={item.id} data-state={item.state} data-marked={marked === item.id ? 'true' : undefined}>
                   <td className={`${cardTable.cell} md:min-w-56`}>
                     {/* A file name stays whole: one line, an ellipsis when the column is narrow, the full name on hover */}
-                    <span className="block max-w-72 font-medium text-fg truncate" dir="auto" title={item.fileName}>
+                    <span className="block max-w-full md:max-w-72 font-medium text-fg truncate" dir="auto" style={{ textAlign: start }} title={item.fileName}>
                       {item.fileName}
                     </span>
                     <span className="block text-xs text-fg-muted mt-0.5">
@@ -188,7 +191,7 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
                       <span className="text-sm text-fg-muted">{t('imports.videoGone')}</span>
                     ) : (
                       <>
-                        <Link href={`/videos/${encodeURIComponent(item.videoId)}`} className={`${linkClass} block font-medium break-words [text-wrap:balance]`} dir="auto">
+                        <Link href={`/videos/${encodeURIComponent(item.videoId)}`} className={`${linkClass} block font-medium break-words [text-wrap:balance]`} dir="auto" style={{ textAlign: start }}>
                           {status.video.title || item.fileName}
                         </Link>
                         {status.video.processingStatus && (

@@ -52,15 +52,17 @@ describe('times in the admin (local zone, UTC on hover)', () => {
   });
 
   it('says a wait in words, rounded down', () => {
-    assert.equal(formatDuration(10, 'en'), '10 seconds');
-    assert.equal(formatDuration(300, 'en'), '5 minutes');
-    assert.equal(formatDuration(43200, 'en'), '12 hours');
-    assert.equal(formatDuration(90, 'en'), '1 minute 30 seconds');
-    assert.equal(formatDuration(80, 'en'), '1 minute 20 seconds', 'a retry wait is never understated');
-    assert.equal(formatDuration(160, 'en'), '2 minutes 40 seconds');
-    assert.equal(formatDuration(7500, 'en'), '2 hours 5 minutes');
+    const plain = (text: string) => text.replace(/\u00A0/g, ' ');
+    assert.equal(formatDuration(80, 'en'), '1\u00A0minute 20\u00A0seconds', 'each number stays with its unit; the break is between them');
+    assert.equal(plain(formatDuration(10, 'en')), '10 seconds');
+    assert.equal(plain(formatDuration(300, 'en')), '5 minutes');
+    assert.equal(plain(formatDuration(43200, 'en')), '12 hours');
+    assert.equal(plain(formatDuration(90, 'en')), '1 minute 30 seconds');
+    assert.equal(plain(formatDuration(80, 'en')), '1 minute 20 seconds', 'a retry wait is never understated');
+    assert.equal(plain(formatDuration(160, 'en')), '2 minutes 40 seconds');
+    assert.equal(plain(formatDuration(7500, 'en')), '2 hours 5 minutes');
     assert.match(formatDuration(80, 'ar'), / و/);
-    assert.match(formatDuration(300, 'ar'), /^٥ /);
+    assert.match(formatDuration(300, 'ar'), /^٥\u00A0/, 'the number stays with its unit');
     assert.doesNotMatch(formatDuration(43200, 'ar'), LATIN_DIGIT);
   });
 });
