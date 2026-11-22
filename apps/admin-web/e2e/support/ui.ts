@@ -12,7 +12,7 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
   await page.goto('/login');
   await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL) || expectedPath.test(url.pathname));
   if (page.url().startsWith(OPENAUTH_URL)) {
-    await page.locator('input[name="email"]').fill(account.email);
+    await page.locator('input[name="email"]:not([type="hidden"])').fill(account.email);
     // Seed password: never through fill(), whose step title the HTML report keeps
     await fillSecret(page.locator('input[name="password"]'), account.password);
     await page.locator('button[data-component="button"]:not([type="button"])').click();

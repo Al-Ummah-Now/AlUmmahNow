@@ -130,7 +130,7 @@ test.describe('Release: watch-page channel row', () => {
       const back = (await context.cookies(target().web)).find((c) => c.name === 'auth_return');
       expect(back?.value && decodeURIComponent(back.value), 'sign-in does not return to the video').toBe(`/${locale}/video/${video!.id}`);
       // The auth server only accepts the environment's own callback, not a local WEB_APP_URL
-      if (!process.env.WEB_APP_URL) await expect(page.locator('input[name="email"], a[href*="register"]').first()).toBeVisible();
+      if (!process.env.WEB_APP_URL) await expect(page.locator('input[name="email"]:not([type="hidden"]), a[href*="register"]').first()).toBeVisible();
     });
   }
 

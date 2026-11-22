@@ -154,7 +154,7 @@ test.describe('invite creators', () => {
         testInfo.annotations.push({ type: 'issuer', description: 'issuer predates the invite direct sign-in: signed up with a password' });
         await shot(page, testInfo, '6-sign-in-page');
         await signIn.click();
-        await page.fill('input[name="email"]', EMAIL);
+        await page.fill('input[name="email"]:not([type="hidden"])', EMAIL);
         await fillSecret(page.locator('input[name="password"]'), PASSWORD);
         await fillSecret(page.locator('input[name="repeat"]'), PASSWORD);
         await page.click('button[data-component="button"]:not([type="button"])');

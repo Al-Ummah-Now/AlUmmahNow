@@ -320,7 +320,7 @@ async function globalSetup(_config: FullConfig) {
         ciLogger.info(`[Setup] Filling registration form for ${user.email}`);
 
         // Fill registration form - OpenAuth uses name attributes
-        await page.fill('input[name="email"]', user.email);
+        await page.fill('input[name="email"]:not([type="hidden"])', user.email);
         await fillSecret(page.locator('input[name="password"]'), user.password);
         await fillSecret(page.locator('input[name="repeat"]'), user.password); // Repeat password field
         await page.click('button[data-component="button"]:not([type="button"])');

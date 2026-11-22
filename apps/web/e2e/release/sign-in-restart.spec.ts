@@ -16,7 +16,7 @@ test.use({ trace: 'off' });
 const RAW_ERROR = /unknown state|invalid_state/i;
 
 async function submitLogin(page: Page, email: string): Promise<void> {
-  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="email"]:not([type="hidden"])', email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
   // The submit button is localized ("Continue" / "متابعة")
   await page.click('form[data-component="form"] button[data-component="button"]:not([type="button"])');

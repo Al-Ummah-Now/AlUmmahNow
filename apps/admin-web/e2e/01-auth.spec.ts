@@ -25,7 +25,7 @@ test.describe('authentication - signed out', () => {
       expect(url.searchParams.get('redirect_uri')).toBe(`${ADMIN_WEB_URL}/api/callback`);
       expect(url.searchParams.get('response_type')).toBe('code');
       await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL));
-      await expect(page.locator('input[name="email"]')).toBeVisible();
+      await expect(page.locator('input[name="email"]:not([type="hidden"])')).toBeVisible();
     });
   }
 
@@ -36,7 +36,7 @@ test.describe('authentication - signed out', () => {
     // No prompt: the auth server signs an existing browser session in silently
     expect(new URL((await authorize).url()).searchParams.get('prompt')).toBeNull();
     await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL));
-    await expect(page.locator('input[name="email"]')).toBeVisible();
+    await expect(page.locator('input[name="email"]:not([type="hidden"])')).toBeVisible();
   });
 
   test('AUTH-03 admin can log in through the auth server', async ({ page }) => {
