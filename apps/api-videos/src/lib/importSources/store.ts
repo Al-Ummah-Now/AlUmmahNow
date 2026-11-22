@@ -55,6 +55,8 @@ export interface SourceRow {
 	next_sync_at: number | null;
 	last_sync_at: number | null;
 	last_job_id: string | null;
+	/** The latest Takeout match job (search/0073; undefined before it) */
+	takeout_job_id?: string | null;
 	last_error: string | null;
 	created_by: string;
 	created_at: number;
@@ -237,6 +239,17 @@ export async function markSyncFailed(env: SourceDbEnv, row: Pick<SourceRow, 'id'
 	await sourceDb(env)
 		.prepare('UPDATE import_sources SET last_error = ?, next_sync_at = ?, updated_at = ? WHERE id = ?')
 		.bind(error.slice(0, 500), row.enabled ? nextImportSyncAt(row.schedule, now) : null, now, row.id)
+		.run();
+}
+
+/**
+ * A sync an admin cancelled: not a failure (no error on the source), and a scheduled source keeps its
+ * schedule (the cron cleared next_sync_at when it queued the sync; the sync would have set it again).
+ */
+export async function markSyncCancelled(env: SourceDbEnv, row: Pick<SourceRow, 'id' | 'schedule' | 'enabled'>, now = Date.now()): Promise<void> {
+	await sourceDb(env)
+		.prepare('UPDATE import_sources SET next_sync_at = COALESCE(next_sync_at, ?), updated_at = ? WHERE id = ?')
+		.bind(row.enabled ? nextImportSyncAt(row.schedule, now) : null, now, row.id)
 		.run();
 }
 

@@ -587,6 +587,13 @@ export const ADMIN_JOB_KINDS = [
    */
   'import.source-sync',
   /**
+   * YouTube Takeout files for a YouTube import source (wiki TOOLS-ADMIN TA-9/TA-13; api-videos
+   * lib/importSources/takeout.ts): match the files the app listed to the source's records waiting for
+   * their file, then, for each file the app uploaded, post the record's video on the channel.
+   * Idempotent, resumable steps. Target the channel; params name the source.
+   */
+  'import.takeout-match',
+  /**
    * Take a CSAM match down (api-videos lib/csam/contain.ts, docs/specs/CSAM-RESPONSE.md):
    * encrypted evidence copy, then every copy purged (R2, originals, Bunny, images, CDN), then the
    * uploader banned. Resumable phases in params; the last failure flags the admin. Target the
@@ -700,6 +707,8 @@ export interface AdminJobLogEntry {
   error?: string;
   delaySeconds?: number;
   retried?: boolean;
+  /** cancelled: the admin who stopped it (their id, and their name when admin-api knew it) */
+  by?: { id: string; name: string | null };
 }
 /** Lines kept per job: the oldest go first. */
 export const ADMIN_JOB_LOG_LIMIT = 50;
@@ -727,6 +736,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'import.attach': ['videos:manage'],
   // admin-api also requires a super admin (import_sources:manage is super admin only)
   'import.source-sync': ['videos:manage'],
+  'import.takeout-match': ['videos:manage'],
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
   'images.index-owners': ['users:manage'],

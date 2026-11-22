@@ -56,13 +56,13 @@
 --   apps/api-videos/migrations/search/0077_feature_switches.sql
 --   apps/api-videos/migrations/search/0078_support_tech_staff.sql
 --   apps/api-videos/migrations/search/0079_offline_downloads.sql
---   apps/api-videos/migrations/search/0080_channel_quran_translations_index.sql
---   apps/api-videos/migrations/search/0081_import_sources.sql
+--   apps/api-videos/migrations/search/0080_import_sources.sql
+--   apps/api-videos/migrations/search/0080_import_takeout.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
-CREATE TABLE admin_job_log (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, at TEXT NOT NULL, event TEXT NOT NULL, attempt INTEGER, error TEXT, delay_seconds INTEGER, retried INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE admin_job_log (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, at TEXT NOT NULL, event TEXT NOT NULL, attempt INTEGER, error TEXT, delay_seconds INTEGER, retried INTEGER NOT NULL DEFAULT 0, actor_id TEXT, actor_name TEXT);
 CREATE TABLE admin_job_users (user_id TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY (user_id, job_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, next_run_at TEXT, run_id TEXT);
 CREATE TABLE billing_checkouts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, price_id TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'expired')), created_at TEXT NOT NULL, completed_at TEXT) WITHOUT ROWID;
@@ -106,7 +106,8 @@ CREATE TABLE feature_switch_changes (id TEXT PRIMARY KEY, key TEXT NOT NULL, ver
 CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)), version INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE import_source_items (source_id TEXT NOT NULL, item_id TEXT NOT NULL, kind TEXT, state TEXT NOT NULL, payload TEXT, post_id TEXT, video_id TEXT, original_url TEXT, original_at INTEGER, note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (source_id, item_id));
-CREATE TABLE import_sources (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', auth_kind TEXT NOT NULL, social_account_id TEXT, yt_import_id TEXT, permission_by TEXT, permission_note TEXT, permission_at INTEGER, schedule TEXT NOT NULL DEFAULT 'manual', enabled INTEGER NOT NULL DEFAULT 1, cursor TEXT, next_sync_at INTEGER, last_sync_at INTEGER, last_job_id TEXT, last_error TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (channel_id, network, address));
+CREATE TABLE import_sources (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', auth_kind TEXT NOT NULL, social_account_id TEXT, yt_import_id TEXT, permission_by TEXT, permission_note TEXT, permission_at INTEGER, schedule TEXT NOT NULL DEFAULT 'manual', enabled INTEGER NOT NULL DEFAULT 1, cursor TEXT, next_sync_at INTEGER, last_sync_at INTEGER, last_job_id TEXT, last_error TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, takeout_job_id TEXT, UNIQUE (channel_id, network, address));
+CREATE TABLE import_takeout_files (id TEXT PRIMARY KEY, source_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, youtube_id TEXT, title TEXT, duration_ms INTEGER, mime_type TEXT, state TEXT NOT NULL, matched_by TEXT, note TEXT, item_id TEXT, candidates TEXT, video_id TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (source_id, name, size));
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
@@ -271,7 +272,6 @@ CREATE INDEX idx_channel_invites_invitee_email ON channel_invites (invitee_email
 CREATE INDEX idx_channel_invites_invitee_user ON channel_invites (invitee_user_id, status);
 CREATE INDEX idx_channel_invites_inviter ON channel_invites (invited_by, created_at);
 CREATE UNIQUE INDEX idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
-CREATE INDEX idx_channel_quran_translations_edition ON channel_quran_translations (lang, qf_translation_id, name);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
 CREATE INDEX idx_content_ownership_channel_feed ON content_ownership (kind, channel_id, COALESCE(created_at, 0), id);
@@ -304,6 +304,8 @@ CREATE INDEX idx_import_source_items_video ON import_source_items (video_id);
 CREATE INDEX idx_import_sources_created ON import_sources (created_at DESC);
 CREATE INDEX idx_import_sources_due ON import_sources (enabled, next_sync_at);
 CREATE INDEX idx_import_sources_network ON import_sources (network, address);
+CREATE INDEX idx_import_takeout_files_item ON import_takeout_files (source_id, item_id);
+CREATE INDEX idx_import_takeout_files_state ON import_takeout_files (source_id, state);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);

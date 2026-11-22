@@ -774,6 +774,81 @@ sources.post('/:id/sync', async (c) => {
   const result = await auditedSource(c, c.req.param('id'), 'source:sync', {}, () => videos<{ jobId: string; status: string }>(c, `${path}/sync`, { method: 'POST' }));
   return c.json({ success: true, result }, 202);
 });
+// Cancel (TA-9 follow-up): stops one of the source's jobs (its sync, or its Takeout match). Idempotent:
+// a job already cancelled or finished answers 200 with its state. The job log names the admin.
+const JOB_ID = /^[0-9a-f-]{36}$/;
+/** The admin's name for "cancelled by …": the token's name, never the email. */
+const adminName = (c: C): string | null => {
+  const p = (auth(c)?.payload ?? {}) as Record<string, unknown>;
+  const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : [p.given_name, p.family_name].filter((v) => typeof v === 'string' && v.trim()).join(' ').trim();
+  return name ? name.slice(0, 200) : null;
+};
+sources.post('/:id/cancel', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const body = (await c.req.json().catch(() => null)) as { jobId?: unknown } | null;
+  const jobId = typeof body?.jobId === 'string' ? body.jobId : '';
+  if (!JOB_ID.test(jobId)) return fail(c, 400, 'invalid_request', 'jobId is not valid');
+  const result = await auditedSource(c, c.req.param('id'), 'source:cancel', { jobId }, () =>
+    videos<{ job: { status: string } }>(c, `${path}/cancel`, { method: 'POST', json: { jobId, byName: adminName(c) } }),
+  );
+  return c.json({ success: true, result });
+});
+
+// YouTube Takeout files (TA-9/TA-13): the app lists the export's videos, api-videos' queued job
+// 'import.takeout-match' matches them to the source's records waiting for their file, the admin picks
+// the record of an ambiguous one, the app uploads each matched file (the record's resumable upload) and
+// says when it sent it; the same job then posts the record's video. YouTube sources only (409 not_youtube).
+const TAKEOUT_FILE_ID = /^tkf_[0-9a-f]{32}$/;
+const takeoutFilePath = (c: C) => {
+  const path = sourcePath(c);
+  const fileId = c.req.param('fileId') ?? '';
+  return path && TAKEOUT_FILE_ID.test(fileId) ? `${path}/takeout/files/${fileId}` : null;
+};
+sources.post('/:id/takeout/files', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const body = (await c.req.json().catch(() => null)) as { files?: unknown } | null;
+  if (!body || !Array.isArray(body.files)) return fail(c, 400, 'invalid_request', 'files must be a list');
+  const result = await auditedSource(c, c.req.param('id'), 'source:takeout-files', { files: body.files.length }, () =>
+    videos<{ listed: number; added: number; jobId: string; status: string }>(c, `${path}/takeout/files`, { method: 'POST', json: { files: body.files } }),
+  );
+  return c.json({ success: true, result }, 202);
+});
+sources.get('/:id/takeout', async (c) => {
+  const path = sourcePath(c);
+  if (!path) return fail(c, 404, 'source_not_found', 'No such source');
+  const q = new URLSearchParams();
+  const state = c.req.query('state');
+  const limit = c.req.query('limit');
+  if (state) q.set('state', state.slice(0, 20));
+  if (limit) q.set('limit', limit.slice(0, 4));
+  return c.json({ success: true, result: await videos(c, `${path}/takeout${q.size ? `?${q}` : ''}`) });
+});
+sources.post('/:id/takeout/files/:fileId/confirm', async (c) => {
+  const path = takeoutFilePath(c);
+  if (!path) return fail(c, 404, 'file_not_found', 'No such Takeout file');
+  const body = (await c.req.json().catch(() => null)) as { itemId?: unknown } | null;
+  const itemId = typeof body?.itemId === 'string' ? body.itemId.slice(0, 200) : '';
+  if (!itemId) return fail(c, 400, 'invalid_request', 'itemId is required');
+  const result = await auditedSource(c, c.req.param('id'), 'source:takeout-confirm', { fileId: c.req.param('fileId'), itemId }, () =>
+    videos(c, `${path}/confirm`, { method: 'POST', json: { itemId } }),
+  );
+  return c.json({ success: true, result });
+});
+sources.post('/:id/takeout/files/:fileId/upload', async (c) => {
+  const path = takeoutFilePath(c);
+  if (!path) return fail(c, 404, 'file_not_found', 'No such Takeout file');
+  const result = await auditedSource(c, c.req.param('id'), 'source:takeout-upload', { fileId: c.req.param('fileId') }, () =>
+    videos(c, `${path}/upload`, { method: 'POST' }),
+  );
+  return c.json({ success: true, result });
+});
+sources.post('/:id/takeout/files/:fileId/uploaded', async (c) => {
+  const path = takeoutFilePath(c);
+  if (!path) return fail(c, 404, 'file_not_found', 'No such Takeout file');
+  return c.json({ success: true, result: await videos(c, `${path}/uploaded`, { method: 'POST' }) }, 202);
+});
 app.route('/sources', sources);
 
 export default app;

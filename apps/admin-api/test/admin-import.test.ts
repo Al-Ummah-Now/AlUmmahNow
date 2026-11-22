@@ -604,7 +604,7 @@ describe('/api/admin/import/errors (TA-11)', () => {
 
 describe('/api/admin/import/sources (TA-9)', () => {
   const SOURCE = 'isrc_' + 'c'.repeat(32);
-  function sources(roles: string[], refuse?: { status: number; code: string }) {
+  function sources(roles: string[], refuse?: { status: number; code: string }, payload: Record<string, unknown> = {}) {
     const calls: { path: string; method: string; body: any; actor: string | null }[] = [];
     const env = {
       REPORTS_DB: sqliteD1(),
@@ -617,6 +617,10 @@ describe('/api/admin/import/sources (TA-9)', () => {
           const json = (status: number, payload: unknown) => new Response(JSON.stringify(payload), { status });
           if (refuse) return json(refuse.status, { success: false, code: refuse.code, error: 'refused', message: 'An English sentence from api-videos.', lang: 'en', action: 'none', users: 3 });
           if (method === 'POST' && url.pathname.endsWith('/sync')) return json(202, { success: true, result: { jobId: 'job-1', status: 'queued' } });
+          if (method === 'POST' && url.pathname.endsWith('/cancel')) return json(200, { success: true, result: { job: { id: JOB, status: 'cancelled' } } });
+          if (method === 'POST' && url.pathname.endsWith('/takeout/files')) return json(202, { success: true, result: { listed: 2, added: 2, jobId: JOB, status: 'queued' } });
+          if (method === 'POST' && url.pathname.includes('/takeout/files/')) return json(200, { success: true, result: { file: { id: FILE, state: 'matched' } } });
+          if (url.pathname.endsWith('/takeout')) return json(200, { success: true, result: { files: [], counts: {}, jobId: null } });
           if (method === 'POST') return json(201, { success: true, result: { source: { id: SOURCE, auth: 'recorded' } } });
           return json(200, { success: true, result: { sources: [], source: { id: SOURCE }, items: [], deleted: true } });
         },
@@ -624,7 +628,7 @@ describe('/api/admin/import/sources (TA-9)', () => {
     };
     const app = new Hono();
     app.use('*', async (c, next) => {
-      c.set('auth' as never, { userId: ADMIN, email: 'staff@example.com', roles } as never);
+      c.set('auth' as never, { userId: ADMIN, email: 'staff@example.com', roles, payload } as never);
       await next();
     });
     app.route('/api/admin/import', adminImportRouter);
@@ -632,6 +636,8 @@ describe('/api/admin/import/sources (TA-9)', () => {
     const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, new_value, actor_id FROM site_settings_log').all<any>()).results ?? [];
     return { req, calls, audit };
   }
+  const JOB = '0b6f7c1e-5d2a-4a8e-9f3c-1d2e3f4a5b6c';
+  const FILE = 'tkf_' + 'd'.repeat(32);
   const create = { channelId: 'ch1', network: 'rss', address: 'https://feeds.example.org/a.xml', schedule: 'daily', permission: { by: 'The scholar', note: 'Email of 2026-11-20' } };
 
   it('is for super admins only: an admin is refused before api-videos is called', async () => {
@@ -691,5 +697,51 @@ describe('/api/admin/import/sources (TA-9)', () => {
     const bad = await req('/api/admin/import/sources/..%2Fbatches/sync', { method: 'POST' });
     assert.equal(bad.status, 404);
     assert.equal(calls.length, 4);
+  });
+
+  it('cancels a job of the source, audited, naming the admin (never their email) for the job log', async () => {
+    const { req, calls, audit } = sources(['Super Admin'], undefined, { name: 'Amina Staff' });
+    const res = await req(`/api/admin/import/sources/${SOURCE}/cancel`, post({ jobId: JOB }));
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).result.job.status, 'cancelled');
+    assert.deepEqual([calls[0]!.method, calls[0]!.path, calls[0]!.actor, calls[0]!.body], ['POST', `/internal/admin/import/sources/${SOURCE}/cancel`, ADMIN, { jobId: JOB, byName: 'Amina Staff' }]);
+    const [row] = await audit();
+    assert.ok(String(row.new_value).includes('source:cancel') || String(row.key).includes(SOURCE));
+    const anonymous = sources(['Super Admin']);
+    await anonymous.req(`/api/admin/import/sources/${SOURCE}/cancel`, post({ jobId: JOB }));
+    assert.equal(anonymous.calls[0]!.body.byName, null, 'no name: never the email');
+    const bad = await req(`/api/admin/import/sources/${SOURCE}/cancel`, post({ jobId: '../x' }));
+    assert.equal(bad.status, 400);
+    const admin = sources(['Admin']);
+    assert.equal((await admin.req(`/api/admin/import/sources/${SOURCE}/cancel`, post({ jobId: JOB }))).status, 403);
+    assert.equal(admin.calls.length, 0);
+  });
+
+  it('forwards Takeout listing, report, confirm, upload and uploaded; audits the changes', async () => {
+    const { req, calls, audit } = sources(['Super Admin']);
+    const files = [{ name: 'Talk.mp4', size: 10, videoId: 'dQw4w9WgXcQ' }, { name: 'Other.mp4', size: 20 }];
+    const listed = await req(`/api/admin/import/sources/${SOURCE}/takeout/files`, post({ files }));
+    assert.equal(listed.status, 202);
+    assert.equal((await listed.json()).result.jobId, JOB);
+    await req(`/api/admin/import/sources/${SOURCE}/takeout?state=ambiguous`);
+    await req(`/api/admin/import/sources/${SOURCE}/takeout/files/${FILE}/confirm`, post({ itemId: 'dQw4w9WgXcQ' }));
+    await req(`/api/admin/import/sources/${SOURCE}/takeout/files/${FILE}/upload`, { method: 'POST' });
+    const uploaded = await req(`/api/admin/import/sources/${SOURCE}/takeout/files/${FILE}/uploaded`, { method: 'POST' });
+    assert.equal(uploaded.status, 202);
+    assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+      `POST /internal/admin/import/sources/${SOURCE}/takeout/files`,
+      `GET /internal/admin/import/sources/${SOURCE}/takeout?state=ambiguous`,
+      `POST /internal/admin/import/sources/${SOURCE}/takeout/files/${FILE}/confirm`,
+      `POST /internal/admin/import/sources/${SOURCE}/takeout/files/${FILE}/upload`,
+      `POST /internal/admin/import/sources/${SOURCE}/takeout/files/${FILE}/uploaded`,
+    ]);
+    assert.deepEqual(calls[0]!.body, { files });
+    assert.deepEqual(calls[2]!.body, { itemId: 'dQw4w9WgXcQ' });
+    assert.equal((await audit()).length, 3, 'listing, confirm and upload are audited');
+    const badFile = await req(`/api/admin/import/sources/${SOURCE}/takeout/files/x/confirm`, post({ itemId: 'a' }));
+    assert.equal(badFile.status, 404);
+    const noFiles = await req(`/api/admin/import/sources/${SOURCE}/takeout/files`, post({ files: 'x' }));
+    assert.equal(noFiles.status, 400);
+    assert.equal(calls.length, 5);
   });
 });
