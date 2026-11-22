@@ -8,6 +8,10 @@ import { PREBUILT_LIMITS, prebuiltStagingPrefix, type TranscodeJobMessage, type 
 import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../src/endpoints/video/renditions';
 import { checkPlan, manifestKey, sweepStaging } from '../src/lib/media/prebuilt';
 import { applyJobEvent, clearDeliverySettingsCache, enqueueTranscode, withPrebuiltOutcome } from '../src/lib/media/r2-delivery';
+import { Hono } from 'hono';
+import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
+import adminInternalRouter from '../src/routers/admin.router';
+import { clearMediaSettingsCache, SETTINGS_KEY } from '../src/lib/media/settings';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
 const ID = '912859ed-e618-4d04-8438-874a74a251dd';
@@ -158,6 +162,82 @@ describe('staging pre-encoded renditions', () => {
 		assert.equal(del.status, 200);
 		assert.equal(e.videos.read(ID).prebuilt, undefined);
 		assert.equal(e.MEDIA_PRIVATE.store.size, 0);
+	});
+});
+
+describe('admin import renditions (TA-12)', () => {
+	const ADMIN = 'usr_' + 'a'.repeat(32);
+	beforeEach(() => clearMediaSettingsCache());
+	const admin = (e: ReturnType<typeof env>, method: string, path: string, init: { json?: unknown; bytes?: number; actor?: string | null } = {}) => {
+		const r = new Hono();
+		r.route('/internal/admin', adminInternalRouter as never);
+		const headers: Record<string, string> = {};
+		if (init.actor !== null) headers['X-Admin-Actor'] = init.actor ?? ADMIN;
+		let body: BodyInit | undefined;
+		if (init.json !== undefined) {
+			headers['Content-Type'] = 'application/json';
+			body = JSON.stringify(init.json);
+		} else if (init.bytes !== undefined) body = new Uint8Array(init.bytes);
+		return r.request(`/internal/admin/import${path}`, { method, headers, body }, e as never);
+	};
+
+	it('stages for a video the admin does not own, takes the files, completes; the first transcode carries it', async () => {
+		const e = env();
+		assert.notEqual(e.videos.read(ID).userId, ADMIN);
+		const res = await admin(e, 'POST', `/videos/${ID}/renditions`, { json: PLAN });
+		assert.equal(res.status, 201);
+		const staged = ((await res.json()) as any).result;
+		assert.equal(staged.status, 'uploading');
+		assert.equal(staged.maxFileBytes, PREBUILT_LIMITS.maxFileBytes);
+		const manifest = JSON.parse(String(e.MEDIA_PRIVATE.store.get(manifestKey(ID, staged.stagingId))!.body));
+		assert.equal(manifest.createdBy, ADMIN);
+
+		const early = await admin(e, 'POST', `/videos/${ID}/renditions/${staged.stagingId}/complete`);
+		assert.equal(early.status, 409);
+		assert.deepEqual(await early.json(), { success: false, code: 'files_missing', error: 'files_missing', missing: FILES.map((f) => f.path) });
+		assert.equal((await admin(e, 'PUT', `/videos/${ID}/renditions/${staged.stagingId}/files/360p/index.m3u8`, { bytes: 3 })).status, 400);
+		for (const f of FILES) assert.equal((await admin(e, 'PUT', `/videos/${ID}/renditions/${staged.stagingId}/files/${f.path}`, { bytes: f.bytes })).status, 204);
+		const done = await admin(e, 'POST', `/videos/${ID}/renditions/${staged.stagingId}/complete`);
+		assert.equal(done.status, 200);
+		assert.equal(((await done.json()) as any).result.status, 'ready');
+
+		const before = (await (await admin(e, 'GET', `/videos/${ID}/delivery`)).json()) as any;
+		assert.equal(before.result.staging.status, 'ready');
+		assert.equal(before.result.r2, null);
+		assert.equal((await enqueueTranscode(e as never, ID, 'upload')).queued, true);
+		assert.deepEqual((e.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage).prebuilt, { stagingId: staged.stagingId, rungs: ['360p'] });
+	});
+
+	it('needs the importing admin for staging, a known video, and refuses once the transcode started', async () => {
+		assert.equal((await admin(env(), 'POST', `/videos/${ID}/renditions`, { json: PLAN, actor: null })).status, 400);
+		assert.equal((await admin(env(), 'POST', `/videos/missing/renditions`, { json: PLAN })).status, 404);
+		const late = await admin(env({ r2: { status: 'transcoding', jobId: 'j', rev: 'abcdefgh12345678', access: 'priv', attempts: 1, queuedAt: 'x' } }), 'POST', `/videos/${ID}/renditions`, { json: PLAN });
+		assert.equal(late.status, 409);
+		assert.equal(((await late.json()) as any).code, 'too_late');
+		const bad = await admin(env(), 'POST', `/videos/${ID}/renditions`, { json: { rungs: ['4k'], files: FILES } });
+		assert.equal(bad.status, 400);
+	});
+
+	it('cancel drops the files; the server then encodes', async () => {
+		const e = env();
+		const staged = ((await (await admin(e, 'POST', `/videos/${ID}/renditions`, { json: PLAN })).json()) as any).result;
+		assert.equal((await admin(e, 'DELETE', `/videos/${ID}/renditions/${staged.stagingId}`)).status, 200);
+		assert.equal(e.videos.read(ID).prebuilt, undefined);
+		assert.equal(e.MEDIA_PRIVATE.store.size, 0);
+	});
+
+	it('delivery says whether R2 takes the channel or video, and what the transcode did with the renditions', async () => {
+		const e = env({ channelId: 'chB', r2: { status: 'ready', jobId: 'j', rev: 'abcdefgh12345678', access: 'priv', attempts: 1, queuedAt: 'x', result: { prebuilt: { used: false, reason: 'keyframes', rung: '720p' } } } });
+		await e.global_settings.put(SETTINGS_KEY, JSON.stringify({ ...DEFAULT_MEDIA_SETTINGS, channels: { chB: { ingest: ['bunny'] } } }));
+		const channel = (await (await admin(e, 'GET', '/channels/chB/delivery')).json()) as any;
+		assert.equal(channel.result.takesRenditions, false);
+		assert.equal(((await (await admin(e, 'GET', '/channels/chA/delivery')).json()) as any).result.takesRenditions, true);
+		const video = ((await (await admin(e, 'GET', `/videos/${ID}/delivery`)).json()) as any).result;
+		assert.deepEqual(video, { takesRenditions: false, staging: null, r2: { status: 'ready', prebuilt: { used: false, reason: 'keyframes', rung: '720p' } } });
+		// A video that names its providers follows them, whatever the channel says now
+		const named = env({ channelId: 'chB', media: { providers: { r2: { status: 'pending' } } } });
+		await named.global_settings.put(SETTINGS_KEY, JSON.stringify({ ...DEFAULT_MEDIA_SETTINGS, channels: { chB: { ingest: ['bunny'] } } }));
+		assert.equal(((await (await admin(named, 'GET', `/videos/${ID}/delivery`)).json()) as any).result.takesRenditions, true);
 	});
 });
 

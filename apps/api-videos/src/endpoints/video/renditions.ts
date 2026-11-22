@@ -12,15 +12,10 @@
  */
 import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
-import { PREBUILT_LIMITS, isPrebuiltStagingId, prebuiltStagingPrefix, type PrebuiltUploadState, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
-import R2Repository from '../../lib/r2Repo';
-import { logger } from '../../lib/logger';
 import { editableVideo } from '../captions/captionDrafts';
-import { checkPlan, deleteStaging, isStale, manifestKey, missingFiles, newStagingId, readManifest, stagedSizes, tooLate, type PrebuiltManifest } from '../../lib/media/prebuilt';
-
-type WithPrebuilt = VideoObject & { prebuilt?: PrebuiltUploadState; r2?: any };
+import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltOutcome, type WithPrebuilt } from '../../lib/media/prebuiltUploads';
 
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const State = z.object({
@@ -34,19 +29,17 @@ const State = z.object({
 });
 const stagingParams = z.object({ videoId: Str({ description: 'Video ID' }), stagingId: Str({ description: 'From POST /renditions' }) });
 
-const videos = (c: AppContext) => new R2Repository<WithPrebuilt>(c.env.videos);
+/** The public answer of a renditions call (the admin import answers its own way, routers/admin.router.ts). */
+function renditionsReply(c: AppContext, out: PrebuiltOutcome) {
+	if (out.status === 204) return c.body(null, 204);
+	if ('error' in out) return c.json({ success: false, error: out.error, ...(out.detail ?? {}) }, out.status);
+	return c.json({ success: true, ...(Object.keys(out.data).length ? { data: out.data } : {}) }, out.status);
+}
 
-async function setState(c: AppContext, videoId: string, update: (current: PrebuiltUploadState | undefined) => PrebuiltUploadState | undefined | false): Promise<PrebuiltUploadState | undefined | false> {
-	let out: PrebuiltUploadState | undefined | false = false;
-	await videos(c).updateObject(videoId, (video) => {
-		const next = update(video.prebuilt);
-		out = next;
-		if (next === false) return false;
-		if (next) video.prebuilt = next;
-		else delete video.prebuilt;
-		return true;
-	});
-	return out;
+/** The video, when this user may edit it. */
+async function editable(c: AppContext, videoId: string, userId: string) {
+	const access = await editableVideo(c, videoId, userId);
+	return 'response' in access ? access : { video: access.video as WithPrebuilt };
 }
 
 export class RenditionsCreate extends AuthenticatedRoute {
@@ -85,47 +78,10 @@ export class RenditionsCreate extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		const access = await editableVideo(c, params.videoId, userId);
+		const access = await editable(c, params.videoId, userId);
 		if ('response' in access) return access.response;
-		const bucket = c.env.MEDIA_PRIVATE;
-		if (!bucket) return c.json({ success: false, error: 'storage_unavailable' }, 503);
-		const video = access.video as WithPrebuilt;
-		if (tooLate(video.r2)) return c.json({ success: false, error: 'too_late' }, 409);
-		const plan = checkPlan(body);
-		if (!plan.ok) {
-			const failed = plan as Extract<typeof plan, { ok: false }>;
-			return c.json({ success: false, error: failed.error, ...(failed.detail ? { detail: failed.detail } : {}) }, 400);
-		}
-		const ok = plan as Extract<typeof plan, { ok: true }>;
-		const stagingId = newStagingId();
-		const now = new Date().toISOString();
-		const manifest: PrebuiltManifest = { v: 1, videoId: params.videoId, stagingId, rungs: ok.rungs, files: ok.files, createdAt: now, createdBy: userId, ...(body.encoder ? { encoder: body.encoder } : {}) };
-		await bucket.put(manifestKey(params.videoId, stagingId), JSON.stringify(manifest), { httpMetadata: { contentType: 'application/json' } });
-		const state: PrebuiltUploadState = { stagingId, status: 'uploading', rungs: ok.rungs, files: ok.files.length, bytes: ok.bytes, createdAt: now, ...(body.encoder ? { encoder: body.encoder } : {}) };
-		let replaced: string | undefined;
-		const written = await setState(c, params.videoId, (current) => {
-			if (current && current.status === 'queued') return false;
-			replaced = current?.stagingId;
-			return state;
-		});
-		if (written === false) {
-			await deleteStaging(bucket, params.videoId, stagingId);
-			return c.json({ success: false, error: 'too_late' }, 409);
-		}
-		if (replaced && replaced !== stagingId) await deleteStaging(bucket, params.videoId, replaced).catch(() => undefined);
-		logger.info('[Renditions] Pre-encoded upload staged', { videoId: params.videoId, stagingId, rungs: ok.rungs.join(','), files: ok.files.length, bytes: ok.bytes });
-		return c.json({ success: true, data: { ...state, maxFileBytes: PREBUILT_LIMITS.maxFileBytes } }, 201);
+		return renditionsReply(c, await stageRenditions(c.env, access.video, body, userId));
 	}
-}
-
-/** The staged upload this request names, if it is still the video's current one. */
-async function currentStaging(c: AppContext, videoId: string, stagingId: string, userId: string) {
-	const access = await editableVideo(c, videoId, userId);
-	if ('response' in access) return { response: access.response };
-	const video = access.video as WithPrebuilt;
-	if (!isPrebuiltStagingId(stagingId) || video.prebuilt?.stagingId !== stagingId || isStale(video.prebuilt)) return { response: c.json({ success: false, error: 'staging_not_found' }, 404) };
-	if (!c.env.MEDIA_PRIVATE) return { response: c.json({ success: false, error: 'storage_unavailable' }, 503) };
-	return { video, state: video.prebuilt };
 }
 
 export class RenditionFilePut extends AuthenticatedRoute {
@@ -148,19 +104,9 @@ export class RenditionFilePut extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const found = await currentStaging(c, params.videoId, params.stagingId, this.getUserId(c));
-		if ('response' in found) return found.response;
-		if (found.state!.status !== 'uploading') return c.json({ success: false, error: 'not_uploading' }, 409);
-		const manifest = await readManifest(c.env.MEDIA_PRIVATE, params.videoId, params.stagingId);
-		const path = `${params.rung}/${params.file}`;
-		const declared = manifest?.files.find((f) => f.path === path);
-		if (!declared) return c.json({ success: false, error: 'file_not_declared' }, 400);
-		const length = Number(c.req.header('content-length'));
-		if (Number.isFinite(length) && length !== declared.bytes) return c.json({ success: false, error: 'size_mismatch' }, 400);
-		const data = await c.req.arrayBuffer();
-		if (data.byteLength !== declared.bytes) return c.json({ success: false, error: 'size_mismatch' }, 400);
-		await c.env.MEDIA_PRIVATE.put(`${prebuiltStagingPrefix(params.videoId, params.stagingId)}${path}`, data);
-		return c.body(null, 204);
+		const access = await editable(c, params.videoId, this.getUserId(c));
+		if ('response' in access) return access.response;
+		return renditionsReply(c, await putRenditionFile(c.env, access.video, { stagingId: params.stagingId, rung: params.rung, name: params.file, contentLength: c.req.header('content-length'), body: () => c.req.arrayBuffer() }));
 	}
 }
 
@@ -183,18 +129,9 @@ export class RenditionsComplete extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const found = await currentStaging(c, params.videoId, params.stagingId, this.getUserId(c));
-		if ('response' in found) return found.response;
-		if (tooLate(found.video!.r2)) return c.json({ success: false, error: 'too_late' }, 409);
-		if (found.state!.status !== 'uploading') return c.json({ success: true, data: found.state });
-		const manifest = await readManifest(c.env.MEDIA_PRIVATE, params.videoId, params.stagingId);
-		if (!manifest) return c.json({ success: false, error: 'staging_not_found' }, 404);
-		const missing = missingFiles(manifest, await stagedSizes(c.env.MEDIA_PRIVATE, params.videoId, params.stagingId));
-		if (missing.length) return c.json({ success: false, error: 'files_missing', missing }, 409);
-		const state = await setState(c, params.videoId, (current) => (current?.stagingId === params.stagingId && current.status === 'uploading' ? { ...current, status: 'ready' } : false));
-		if (state === false) return c.json({ success: false, error: 'staging_not_found' }, 404);
-		logger.info('[Renditions] Pre-encoded upload ready', { videoId: params.videoId, stagingId: params.stagingId });
-		return c.json({ success: true, data: state });
+		const access = await editable(c, params.videoId, this.getUserId(c));
+		if ('response' in access) return access.response;
+		return renditionsReply(c, await completeRenditions(c.env, access.video, params.stagingId));
 	}
 }
 
@@ -217,12 +154,8 @@ export class RenditionsCancel extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const found = await currentStaging(c, params.videoId, params.stagingId, this.getUserId(c));
-		if ('response' in found) return found.response;
-		if (found.state!.status === 'queued') return c.json({ success: false, error: 'too_late' }, 409);
-		const cleared = await setState(c, params.videoId, (current) => (current?.stagingId === params.stagingId && current.status !== 'queued' ? undefined : false));
-		if (cleared === false) return c.json({ success: false, error: 'too_late' }, 409);
-		await deleteStaging(c.env.MEDIA_PRIVATE, params.videoId, params.stagingId);
-		return c.json({ success: true });
+		const access = await editable(c, params.videoId, this.getUserId(c));
+		if ('response' in access) return access.response;
+		return renditionsReply(c, await cancelRenditions(c.env, access.video, params.stagingId));
 	}
 }

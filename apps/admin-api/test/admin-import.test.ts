@@ -346,6 +346,109 @@ describe('/api/admin/import/items/:id/transcript and /translations (TA-7)', () =
   });
 });
 
+describe('/api/admin/import/items/:id/renditions and /delivery (TA-12)', () => {
+  const STAGING = '0123456789abcdef';
+  async function harness() {
+    const db = sqliteD1();
+    const calls: { path: string; method: string; type: string | null; length: string | null; bytes: number | null; json: any }[] = [];
+    let answer: (path: string, method: string) => Response = (path, method) => {
+      if (method === 'PUT') return new Response(null, { status: 204 });
+      if (path.endsWith('/delivery')) return Response.json({ success: true, result: { takesRenditions: !path.includes('/channels/chB/') } });
+      return Response.json({ success: true, result: { stagingId: STAGING, status: path.endsWith('/complete') ? 'ready' : 'uploading' } }, { status: method === 'POST' && path.endsWith('/renditions') ? 201 : 200 });
+    };
+    const env = {
+      REPORTS_DB: db,
+      INTERNAL_API_KEY: 'k',
+      VIDEOS: {
+        async fetch(input: string, init?: RequestInit) {
+          const url = new URL(input);
+          const method = init?.method ?? 'GET';
+          const headers = new Headers(init?.headers);
+          let bytes: number | null = null;
+          let json: any = null;
+          if (init?.body) {
+            const buf = await new Response(init.body).arrayBuffer();
+            if (headers.get('Content-Type') === 'application/json') json = JSON.parse(new TextDecoder().decode(buf));
+            else bytes = buf.byteLength;
+          }
+          calls.push({ path: url.pathname, method, type: headers.get('Content-Type'), length: headers.get('Content-Length'), bytes, json });
+          return answer(url.pathname, method);
+        },
+      },
+    };
+    const t = new Date().toISOString();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, video_id, state, created_by, created_at, updated_at) VALUES ('it1','b1','ch1',?, 'a.mp4', 1, 'vid-1', 'initiated', ?, ?, ?)").bind('e'.repeat(64), ADMIN, t, t).run();
+    await db.prepare("INSERT INTO import_items (id, batch_id, channel_id, sha256, file_name, file_size, video_id, state, created_by, created_at, updated_at) VALUES ('it2','b1','ch1',?, 'b.mp4', 1, NULL, 'initiated', ?, ?, ?)").bind('f'.repeat(64), ADMIN, t, t).run();
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('auth' as never, { userId: ADMIN, roles: ['Admin'] } as never);
+      await next();
+    });
+    app.route('/api/admin/import', adminImportRouter);
+    const req = (path: string, init?: RequestInit) => app.request(`/api/admin/import${path}`, init, env as never);
+    const audit = async () => ((await db.prepare('SELECT key, new_value FROM site_settings_log ORDER BY rowid').all<any>()).results ?? []).map((r: any) => ({ key: r.key, ...JSON.parse(r.new_value) }));
+    return { req, calls, audit, setAnswer: (a: typeof answer) => (answer = a) };
+  }
+  const plan = { rungs: ['360p'], files: [{ path: '360p/index.m3u8', bytes: 4 }], encoder: 'libx264' };
+
+  it('stages for the item\'s video (audited: rungs and counts), streams each file, completes, and reads delivery', async () => {
+    const h = await harness();
+    const staged = await h.req('/items/it1/renditions', post(plan));
+    assert.equal(staged.status, 201);
+    assert.equal((await staged.json()).result.stagingId, STAGING);
+    assert.deepEqual(h.calls[0], { path: '/internal/admin/import/videos/vid-1/renditions', method: 'POST', type: 'application/json', length: null, bytes: null, json: plan });
+
+    const put = await h.req(`/items/it1/renditions/${STAGING}/files/360p/index.m3u8`, { method: 'PUT', body: new Uint8Array(4), headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Content-Length': '4' } });
+    assert.equal(put.status, 204);
+    assert.deepEqual(h.calls[1], { path: `/internal/admin/import/videos/vid-1/renditions/${STAGING}/files/360p/index.m3u8`, method: 'PUT', type: 'application/vnd.apple.mpegurl', length: '4', bytes: 4, json: null });
+
+    const done = await h.req(`/items/it1/renditions/${STAGING}/complete`, { method: 'POST' });
+    assert.equal((await done.json()).result.status, 'ready');
+    const delivery = await (await h.req('/items/it1/delivery')).json();
+    assert.equal(delivery.result.takesRenditions, true);
+    assert.equal(h.calls[3]!.path, '/internal/admin/import/videos/vid-1/delivery');
+
+    const rows = await h.audit();
+    assert.equal(rows.length, 1, 'staging is audited; files, complete and reads are not');
+    assert.deepEqual(rows[0], { key: 'content:import:vid-1', action: 'renditions:stage', details: { itemId: 'it1', rungs: ['360p'], files: 1, encoder: 'libx264' } });
+  });
+
+  it('passes files_missing through with its list, and cancel is audited (dropped when refused)', async () => {
+    const h = await harness();
+    h.setAnswer(() => Response.json({ success: false, code: 'files_missing', error: 'files_missing', missing: ['360p/index.m3u8'] }, { status: 409 }));
+    const early = await h.req(`/items/it1/renditions/${STAGING}/complete`, { method: 'POST' });
+    assert.equal(early.status, 409);
+    assert.deepEqual(await early.json(), { success: false, code: 'files_missing', error: 'files_missing', missing: ['360p/index.m3u8'] });
+    h.setAnswer(() => Response.json({ success: false, code: 'too_late', error: 'too_late' }, { status: 409 }));
+    assert.equal((await h.req(`/items/it1/renditions/${STAGING}`, { method: 'DELETE' })).status, 409);
+    assert.equal((await h.audit()).length, 0);
+    h.setAnswer(() => Response.json({ success: true, result: {} }));
+    assert.equal((await h.req(`/items/it1/renditions/${STAGING}`, { method: 'DELETE' })).status, 200);
+    assert.equal((await h.audit())[0].action, 'renditions:cancel');
+  });
+
+  it('refuses before api-videos: no item, no video yet, a bad staging id, file name or size', async () => {
+    const h = await harness();
+    assert.equal((await h.req('/items/nope/renditions', post(plan))).status, 404);
+    assert.equal((await h.req('/items/it2/renditions', post(plan))).status, 409);
+    assert.equal((await h.req('/items/it1/renditions/XYZ/complete', { method: 'POST' })).status, 404);
+    for (const path of ['4k/seg.m4s', '360p/.hidden', '360p/a%2Fb']) {
+      assert.equal((await h.req(`/items/it1/renditions/${STAGING}/files/${path}`, { method: 'PUT', body: new Uint8Array(1) })).status, 400, path);
+    }
+    const big = await h.req(`/items/it1/renditions/${STAGING}/files/360p/seg_00001.m4s`, { method: 'PUT', body: new Uint8Array(1), headers: { 'Content-Length': String(PREBUILT_LIMITS.maxFileBytes + 1) } });
+    assert.equal(big.status, 413);
+    assert.equal(h.calls.length, 0);
+  });
+
+  it('GET /encoding?channelId= says whether the channel takes renditions', async () => {
+    const h = await harness();
+    assert.equal((await (await h.req('/encoding?channelId=chB')).json()).result.takesRenditions, false);
+    assert.equal((await (await h.req('/encoding?channelId=chA')).json()).result.takesRenditions, true);
+    assert.equal(h.calls[0]!.path, '/internal/admin/import/channels/chB/delivery');
+    assert.equal('takesRenditions' in (await (await h.req('/encoding')).json()).result, false);
+  });
+});
+
 describe('/api/admin/import/errors (TA-11)', () => {
   function errorsSetup(roles: string[] = ['Admin'], environment = 'production') {
     const sent: any[] = [];

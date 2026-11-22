@@ -57,7 +57,9 @@ import { getJob as getAdminJob, retryJob as retryAdminJob } from '../lib/admin/j
 import { OnDeviceSegmentSchema, submitOnDeviceTranscript } from '../endpoints/captions/captionDrafts';
 import { CaptionJobHttpError, requestTranslationJob } from '../lib/captions/jobs';
 import { SubtitleService } from '../lib/subtitles';
-import type { VideoObject } from '@al-ummah/shared-types';
+import { PREBUILT_LIMITS, ingestTargets, type VideoMediaProviders, type VideoObject } from '@al-ummah/shared-types';
+import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltEnv, type PrebuiltOutcome, type StagePlan, type WithPrebuilt } from '../lib/media/prebuiltUploads';
+import { readMediaSettings } from '../lib/media/settings';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -383,6 +385,50 @@ app.post('/import/videos/:videoId/translations', async (c) => {
 		}
 	}
 	return ok(c, { results });
+});
+// Admin Tools renditions (TA-12): HLS rungs encoded on the admin's computer with the server's ladder,
+// staged before the original upload completes, then verified by the first transcode like desktop
+// Studio's (lib/media/prebuiltUploads.ts). The video is the channel owner's, so the public routes'
+// owner check would refuse the admin; admin-api checked imports:manage and audits each staging.
+const importReply = (c: Context<Env>, out: PrebuiltOutcome) => {
+	if (out.status === 204) return c.body(null, 204);
+	if ('error' in out) return c.json({ success: false, code: out.error, error: out.error, ...(out.detail ?? {}) }, out.status);
+	return c.json({ success: true, result: out.data }, out.status);
+};
+const prebuiltEnv = (c: Context<Env>) => c.env as unknown as PrebuiltEnv;
+const ImportRenditions = z.object({
+	rungs: z.array(z.string().max(16)).min(1).max(8),
+	files: z.array(z.object({ path: z.string().max(200), bytes: z.number().int().nonnegative() })).min(1).max(PREBUILT_LIMITS.maxFiles),
+	encoder: z.string().max(120).optional(),
+});
+app.post('/import/videos/:videoId/renditions', async (c) => {
+	const adminId = importingAdmin(c);
+	const video = (await importVideo(c)) as WithPrebuilt;
+	return importReply(c, await stageRenditions(prebuiltEnv(c), video, parse(ImportRenditions, await body(c)) as StagePlan, adminId));
+});
+app.put('/import/videos/:videoId/renditions/:stagingId/files/:rung/:file', async (c) => {
+	const video = (await importVideo(c)) as WithPrebuilt;
+	return importReply(
+		c,
+		await putRenditionFile(prebuiltEnv(c), video, { stagingId: c.req.param('stagingId'), rung: c.req.param('rung'), name: c.req.param('file'), contentLength: c.req.header('content-length'), body: () => c.req.arrayBuffer() }),
+	);
+});
+app.post('/import/videos/:videoId/renditions/:stagingId/complete', async (c) => importReply(c, await completeRenditions(prebuiltEnv(c), (await importVideo(c)) as WithPrebuilt, c.req.param('stagingId'))));
+app.delete('/import/videos/:videoId/renditions/:stagingId', async (c) => importReply(c, await cancelRenditions(prebuiltEnv(c), (await importVideo(c)) as WithPrebuilt, c.req.param('stagingId'))));
+/** Whether R2 transcodes this channel's new uploads: only then are renditions worth encoding (r2-delivery.ts). */
+const channelTakesRenditions = async (c: Context<Env>, channelId: string | undefined) => ingestTargets(await readMediaSettings(c.env as never), channelId).includes('r2');
+app.get('/import/channels/:channelId/delivery', async (c) => ok(c, { takesRenditions: await channelTakesRenditions(c, c.req.param('channelId')) }));
+// What the server did with an imported video's renditions, for the app's queue and log: still staged,
+// used as they were, or encoded again and why (PREBUILT_REJECTIONS)
+app.get('/import/videos/:videoId/delivery', async (c) => {
+	const video = (await importVideo(c)) as WithPrebuilt & { channelId?: string; media?: VideoMediaProviders };
+	const takesRenditions = video.media ? !!video.media.providers.r2 : await channelTakesRenditions(c, video.channelId);
+	const r2 = video.r2;
+	return ok(c, {
+		takesRenditions,
+		staging: video.prebuilt ?? null,
+		r2: r2 ? { status: r2.status, ...(r2.progress !== undefined ? { progress: r2.progress } : {}), ...(r2.error ? { error: r2.error } : {}), ...(r2.result?.prebuilt ? { prebuilt: r2.result.prebuilt } : {}) } : null,
+	});
 });
 // The Errors page's Retry on an attach job that gave up (admin-api lib/errors-actions.ts)
 app.post('/import/attach/retry', async (c) => {
