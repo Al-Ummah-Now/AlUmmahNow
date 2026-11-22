@@ -116,7 +116,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
   const previewUrl = `${origin}/${lang}/@${normalizedHandle || t.channel.handlePlaceholder}`;
   const emailInvalid = !isValidContactEmail(value.contactEmail);
 
-  // handleHelp is "<lead>{url}.<space><rule>": split it into the URL sentence and the rule
+  // handleHelp is "<lead>{url} <rule>" (no full stop after the URL, so none is read as part of it): split it into the URL line and the rule
   const [handleHelpLead, handleHelpAfterUrl = ''] = t.channel.handleHelp.split('{url}');
   const tailMatch = /^(\S*)\s+([\s\S]*)$/.exec(handleHelpAfterUrl);
   const handleHelpUrlTail = tailMatch ? tailMatch[1] : handleHelpAfterUrl;

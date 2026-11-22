@@ -118,7 +118,9 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 )}
               </div>
 
-              <p className="text-sm md:text-base clamp-2 mb-2" dir="auto">
+              {/* Its own direction for the words, the page's edge for the line (like Studio comments), and two
+                  lines that end in an ellipsis: the fading clamp left a short second line looking cut off */}
+              <p className="text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] mb-2 text-left [html[dir=rtl]_&]:text-right" dir="auto" data-testid="post-card-text">
                 {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 

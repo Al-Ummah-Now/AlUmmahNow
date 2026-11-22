@@ -147,9 +147,11 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
               md:gap-3           /* Desktop: more spacing */
               text-center
             ">
+              {/* A fixed circle centred over the label: with a padded auto-width box the
+                  theme's card stretched it into a full-width pill, icon at its start */}
               <div className={`
-                p-3              /* Mobile: smaller icon container */
-                md:p-4           /* Desktop: larger icon container */
+                grid place-items-center shrink-0 self-center
+                w-11 h-11 md:w-14 md:h-14
                 rounded-full
                 ${isSelected
                   ? 'bg-primary text-primary-foreground'

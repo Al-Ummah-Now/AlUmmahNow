@@ -48,7 +48,7 @@ describe('ChannelAboutFields look like the Profile form fields', () => {
     const lines = [...help.children] as HTMLElement[];
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(line).toHaveClass('block');
-    expect(lines[0].textContent).toMatch(/^Your channel URL: \S+\/@halaqat\.alfajr\.$/);
+    expect(lines[0].textContent).toMatch(/^Your channel URL: \S+\/@halaqat\.alfajr$/);
     expect(lines[0].querySelector('bdi')).toHaveAttribute('dir', 'ltr');
     expect(lines[0].querySelector('bdi')?.textContent).toMatch(/\/@halaqat\.alfajr$/);
     expect(lines[1].textContent).toBe('3 to 30 characters: Latin letters, digits, periods, underscores and hyphens.');

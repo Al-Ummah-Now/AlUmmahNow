@@ -412,7 +412,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     editChannelDetails: 'Edit channel name, description, and branding',
     backToChannel: 'Back to Channel',
     handle: 'Handle',
-    handleHelp: 'Your channel URL: {url}. 3 to 30 characters: Latin letters, digits, periods, underscores and hyphens.',
+    handleHelp: 'Your channel URL: {url} 3 to 30 characters: Latin letters, digits, periods, underscores and hyphens.',
     handlePlaceholder: 'yourhandle',
     handleChecking: 'Checking availability…',
     handleAvailable: '@{handle} is available',
