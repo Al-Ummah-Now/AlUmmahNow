@@ -4525,10 +4525,10 @@ const ar: Messages = {
       estimated: 'تقديري: الطلبات المسجّلة مضروبة في عدد الأحداث لكل طلب.',
       wholeUnits: 'تُفوتَر بوحدات كاملة: يُحتسب {billable} بعد المشمول على أنه {charged}.',
       notBilled: 'لا تُفوتر Cloudflare هذا البند بعد.',
-      gbMonths: '{value} غيغابايت‑شهر',
+      gbMonths: '{value}\u00a0غيغابايت‑شهر',
       hours: '{count, plural, zero {# ساعة} one {ساعة واحدة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}',
-      cpuMs: '{value} مللي ثانية',
-      gbSeconds: '{value} غيغابايت‑ثانية',
+      cpuMs: '{value}\u00a0مللي\u00a0ثانية',
+      gbSeconds: '{value}\u00a0غيغابايت‑ثانية',
       none: {
         browser_hours: 'لا يستخدم أي Worker من «الأمة الآن» خدمة Browser\u00a0Run: الساعات في الفاتورة لمشروع آخر.',
         analytics_engine_writes: 'لا يُفوتَر بعد.',

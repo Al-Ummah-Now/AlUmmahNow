@@ -24,6 +24,7 @@ import { logger } from './logger';
 import {
   BASELINE_DAYS,
   PLAN_BASE_USD,
+  planMtd,
   billIdle,
   costDrivers,
   costWindowStart,
@@ -44,7 +45,7 @@ import {
 import { apportionCents } from './opsCost';
 export { apportionCents };
 import { idleBilledCloudflare, STORAGE_METERS, type MeterUsage } from './cfBilling';
-import { billLine, CF_METERS, fixedCostMonthShare, type CfMeterKey } from '@al-ummah/shared-types';
+import { billLine, centsByDay, CF_METERS, fixedCostsDay, type CfMeterKey } from '@al-ummah/shared-types';
 import type { D1Database } from './types';
 import { loadD1Limits, parseD1LimitsInput } from './d1Capacity';
 import type { D1Limits } from '@al-ummah/shared-types';
@@ -390,7 +391,7 @@ export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCo
     line.prev7 = round2(mine.reduce((sum, w) => sum + round2(w.prev7), 0));
   }
   const plan = projectMonth([], now);
-  out.push({ product: 'plan', mtd: round2((PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth), projected: PLAN_BASE_USD, last7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth), prev7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth) });
+  out.push({ product: 'plan', mtd: planMtd(now), projected: PLAN_BASE_USD, last7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth), prev7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth) });
   // Fixed and other costs: flat over the month, like the plan
   if (fixed.projected > 0) out.push({ product: 'fixed', mtd: round2(fixed.mtd), projected: round2(fixed.projected), last7: round2((fixed.projected * 7) / plan.daysInMonth), prev7: round2((fixed.projected * 7) / plan.daysInMonth) });
   return out.filter((l) => l.mtd > 0 || l.projected > 0 || l.last7 > 0 || l.prev7 > 0 || l.product === 'plan').sort((a, b) => b.mtd - a.mtd);
@@ -424,9 +425,10 @@ export function withCloudflareLines(products: ProductLine[], lines: { key: strin
 
 
 /**
- * Each Cloudflare invoice line's list price per UTC day of this month, in whole cents: storage is
- * that day's size over the month's days (today's for the part the data covers), the rest is the
- * day's usage at list. A past day never changes and today's only grows, so every month-to-date
+ * Each Cloudflare invoice line's list price per UTC day of this month, in whole cents (centsByDay:
+ * the running total rounded, so a line's month is its exact price rounded once): storage is that
+ * day's size over the month's days (today's for the part the data covers), the rest is the day's
+ * usage at list. A past day never changes and today's only grows, so every month-to-date
  * figure built from these cents (lines, products, resources, environments, the chart) only grows.
  */
 export function lineDayCents(meterDays: Map<string, MeterUsage>, now: Date, coveredUntil: Date = now): Map<CfMeterKey, Map<string, number>> {
@@ -435,29 +437,30 @@ export function lineDayCents(meterDays: Map<string, MeterUsage>, now: Date, cove
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   const todayStart = Date.parse(`${today}T00:00:00Z`);
   const todayShare = Math.max(0, Math.min(1, (Math.min(coveredUntil.getTime(), now.getTime()) - todayStart) / 86_400_000));
-  const out = new Map<CfMeterKey, Map<string, number>>();
+  const usd = new Map<CfMeterKey, [string, number][]>();
   for (const [day, usage] of meterDays) {
     if (!day.startsWith(month) || day > today) continue;
     for (const [k, v] of Object.entries(usage) as [CfMeterKey, number][]) {
       if (!(k in CF_METERS)) continue;
       const used = STORAGE_METERS.includes(k) ? (num(v) * (day === today ? todayShare : 1)) / daysInMonth : num(v);
-      const cents = Math.round(billLine(k, used).listCost * 100);
-      const m = out.get(k) ?? new Map<string, number>();
-      m.set(day, (m.get(day) ?? 0) + cents);
-      out.set(k, m);
+      const list = usd.get(k) ?? [];
+      list.push([day, billLine(k, used).listCost]);
+      usd.set(k, list);
     }
   }
-  return out;
+  // Per day without drift: a line's month is its exact list price rounded once
+  return new Map([...usd].map(([k, days]) => [k, centsByDay(days)]));
 }
 
 /**
  * One day of a product, in cents, over that day's resources: each resource is rounded on its own
- * (so a resource's day only grows with its own usage, whatever the others do) and the day's largest
+ * (`ownCents`, its own running month rounded per day; else the day rounded), so a resource's day
+ * only grows with its own usage, whatever the others do, and the day's largest
  * resource takes the few cents of rounding and today's storage accrual. When that would leave the
  * largest below zero, the day is split by largest remainder instead.
  */
-export function splitDayCents(totalCents: number, weights: Map<string, number>): Map<string, number> {
-  const own = new Map([...weights].map(([id, w]) => [id, Math.round(w * 100)]));
+export function splitDayCents(totalCents: number, weights: Map<string, number>, ownCents?: Map<string, number>): Map<string, number> {
+  const own = new Map([...weights].map(([id, w]) => [id, ownCents?.get(id) ?? Math.round(w * 100)]));
   let largest: string | null = null;
   for (const [id, w] of weights) if (largest === null || w > weights.get(largest)! || (w === weights.get(largest)! && id < largest)) largest = id;
   if (largest === null) return own;
@@ -499,6 +502,10 @@ export function resourceDayCents(resourceDays: ResourceDay[], lineCents: Map<CfM
     m.set(day, (m.get(day) ?? 0) + c);
     envDays.set(env, m);
   };
+  // Each resource's own cents per day, without drift (its month to date is its own exact cost rounded once)
+  const rawByResource = new Map<string, [string, number][]>();
+  for (const [key, w] of weights) for (const [id, usd] of w) (rawByResource.get(id) ?? rawByResource.set(id, []).get(id)!).push([key.split('|')[1]!, usd]);
+  const ownByResource = new Map([...rawByResource].map(([id, days]) => [id, centsByDay(days)]));
   const unattributed = new Map<CostProduct, number>();
   for (const [key, total] of totals) {
     const [product, day] = key.split('|') as [CostProduct, string];
@@ -508,7 +515,8 @@ export function resourceDayCents(resourceDays: ResourceDay[], lineCents: Map<CfM
       if (total) add('account', day, total);
       continue;
     }
-    for (const [id, c] of splitDayCents(total, w)) {
+    const day0 = key.split('|')[1]!;
+    for (const [id, c] of splitDayCents(total, w, new Map([...w.keys()].map((id) => [id, ownByResource.get(id)?.get(day0) ?? 0])))) {
       cents.set(id, (cents.get(id) ?? 0) + c);
       add(meta.get(id)!.env, day, c);
     }
@@ -560,8 +568,7 @@ export function envLines(resourceDays: ResourceDay[], productDays: { day: string
     out.production! += extras.containers.filter((d) => d.day >= monthStart).reduce((s, d) => s + d.cost, 0);
   }
   for (const list of [extras.bunny, extras.ai, extras.resend]) out.account! += list.filter((d) => d.day >= monthStart).reduce((s, d) => s + d.cost, 0);
-  const plan = projectMonth([], now);
-  out.account! += (PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth + fixedMtd;
+  out.account! += planMtd(now) + fixedMtd;
   for (const k of Object.keys(out)) out[k] = round2(out[k]!);
   return out;
 }
@@ -718,7 +725,7 @@ export async function costsDashboard(env: CostsEnv, now = new Date()) {
   const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
   const idle = billIdle(idleProjection(resourceDays, extras, now, fixed.projected), idleBilledCloudflare(meterDays, now));
   // A fixed cost's day: its month's share for that one day, when it is active then
-  const fixedDaily = (day: string) => fixed.items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
+  const fixedDaily = (day: string) => fixedCostsDay(fixed.items, day);
   // A day with no resource of ours (account-wide Cloudflare cents) is drawn with production
   const chartEnvDays = new Map(envDays);
   for (const [day, c] of envDays.get('account') ?? []) {

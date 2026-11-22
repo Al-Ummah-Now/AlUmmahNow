@@ -69,28 +69,67 @@ export function fixedCostMonthShare(c: Pick<FixedCost, 'amountUsd' | 'period' | 
   return Math.round(((monthly * days) / daysInMonth) * 1e6) / 1e6;
 }
 
+/** The part of UTC day `day` that has passed at `now`: 1 for an earlier day, 0 for a later one. */
+export function dayElapsed(day: string, now: Date): number {
+  return Math.max(0, Math.min(1, (now.getTime() - Date.parse(`${day}T00:00:00Z`)) / 86_400_000));
+}
+
 /**
- * The month so far and the whole month for every active cost. "So far" counts the active days up
- * to `now` (the same way the plan's fee is spread), so the projection never jumps on the 1st.
+ * Daily amounts (USD) as whole cents per day without drift: within each month a day's cents are
+ * the running total to that day, rounded, less the running total to the day before, rounded. A
+ * month's days then add up to its exact total rounded once (a steady 0.275 a day is not 0.28 every
+ * day), a past day never changes when later days arrive, and a growing day only grows.
+ */
+export function centsByDay(amounts: Iterable<readonly [string, number]>): Map<string, number> {
+  const byDay = new Map<string, number>();
+  for (const [day, usd] of amounts) byDay.set(day, (byDay.get(day) ?? 0) + (Number.isFinite(usd) ? usd : 0));
+  const out = new Map<string, number>();
+  let month = '';
+  let running = 0;
+  let shown = 0;
+  for (const day of [...byDay.keys()].sort()) {
+    if (day.slice(0, 7) !== month) {
+      month = day.slice(0, 7);
+      running = 0;
+      shown = 0;
+    }
+    running += byDay.get(day)!;
+    const upTo = Math.round(running * 100);
+    out.set(day, upTo - shown);
+    shown = upTo;
+  }
+  return out;
+}
+
+/** The UTC days of `now`'s month up to today. */
+export function monthDaysTo(now: Date): string[] {
+  const month = now.toISOString().slice(0, 7);
+  return Array.from({ length: now.getUTCDate() }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
+}
+
+/**
+ * A daily amount's month to date in cents (today only for its elapsed part): the sum of the cells
+ * the daily chart draws (centsByDay), which is the exact month rounded once.
+ */
+export function accruedMonthCents(perDay: (day: string) => number, now: Date): number {
+  let cents = 0;
+  for (const c of centsByDay(monthDaysTo(now).map((day) => [day, perDay(day) * dayElapsed(day, now)] as const)).values()) cents += c;
+  return cents;
+}
+
+/** Every active cost's share for one UTC day (its month's share spread over the month's days). */
+export function fixedCostsDay(items: Pick<FixedCost, 'amountUsd' | 'period' | 'startDate' | 'endDate'>[], day: string): number {
+  return items.reduce((sum, c) => (c.startDate <= day && (!c.endDate || c.endDate >= day) ? sum + fixedCostMonthShare({ ...c, startDate: day, endDate: day }, day.slice(0, 7)) : sum), 0);
+}
+
+/**
+ * The month so far and the whole month for every active cost. "So far" is the sum of the month's
+ * UTC days to `now`, each at the cent (accruedMonthCents, the days the chart draws), so the
+ * projection never jumps on the 1st and the month equals its days.
  */
 export function fixedCostsForMonth(items: Pick<FixedCost, 'amountUsd' | 'period' | 'startDate' | 'endDate'>[], now: Date): { mtd: number; projected: number } {
   const month = now.toISOString().slice(0, 7);
-  const today = now.toISOString().slice(0, 10);
-  const elapsedFraction = (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440;
-  let mtd = 0;
-  let projected = 0;
-  for (const c of items) {
-    const whole = fixedCostMonthShare(c, month);
-    if (whole <= 0) continue;
-    projected += whole;
-    // Days before today, plus the part of today that has passed
-    const untilYesterday = today > `${month}-01` ? fixedCostMonthShare({ ...c, endDate: minDay(c.endDate, dayBefore(today)) }, month) : 0;
-    const todayShare = fixedCostMonthShare({ ...c, startDate: maxDay(c.startDate, today), endDate: minDay(c.endDate, today) }, month);
-    mtd += untilYesterday + todayShare * elapsedFraction;
-  }
-  return { mtd: Math.round(mtd * 100) / 100, projected: Math.round(projected * 100) / 100 };
+  const projected = items.reduce((sum, c) => sum + Math.max(0, fixedCostMonthShare(c, month)), 0);
+  return { mtd: accruedMonthCents((day) => fixedCostsDay(items, day), now) / 100, projected: Math.round(projected * 100) / 100 };
 }
 
-const dayBefore = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
-const minDay = (a: string | null, b: string) => (a && a < b ? a : b);
-const maxDay = (a: string, b: string) => (a > b ? a : b);

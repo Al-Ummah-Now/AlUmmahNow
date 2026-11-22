@@ -73,7 +73,7 @@ export default async function CostsPage() {
             <div className="min-w-0 min-[1800px]:col-span-2"><EnvsPanel d={d} t={t} f={f} /></div>
           </div>
           <CloudflarePanel d={d} t={t} f={f} />
-          <FixedCosts items={d.fixed.items} mtd={d.fixed.mtd} projected={d.fixed.projected} canManage={d.canManage} />
+          <FixedCosts items={d.fixed.items} mtd={d.fixed.mtd} projected={d.fixed.projected} canManage={d.canManage} now={now.getTime()} />
           <TrendPanel d={d} t={t} f={f} locale={locale} />
           <DriversSection d={d} t={t} f={f} />
           <MoversSection d={d} t={t} locale={locale} />

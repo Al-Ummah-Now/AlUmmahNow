@@ -81,8 +81,11 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
             const max = Math.max(0, ...r.spark.values.map((v) => v ?? 0));
             return (
               <tr key={r.id} className="border-t border-border" data-testid="ops-resource-row">
-                <th scope="row" className="p-2 text-start font-normal text-fg [overflow-wrap:normal] [word-break:normal]" dir="ltr" data-testid="ops-resource-name">
-                  <BreakAtHyphens name={r.name} />
+                <th scope="row" className="p-2 text-start font-normal text-fg [overflow-wrap:normal] [word-break:normal]" data-testid="ops-resource-name">
+                  {/* The cell follows the page (an Arabic name column starts on the right); the Latin name keeps its own order */}
+                  <span dir="ltr">
+                    <BreakAtHyphens name={r.name} />
+                  </span>
                 </th>
                 <td className="p-2 text-end tabular-nums">{fmt(r.metrics[spec.metric])}</td>
                 <td className="p-2 text-end">

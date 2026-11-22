@@ -295,9 +295,13 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     // 30 UTC days before today and today: the page draws 30 days on the viewer's calendar
     assert.equal(tr.days.length, 31);
     assert.equal(tr.days[0], day(30));
-    assert.equal(plan.at(-2), Math.round((PLAN_BASE_USD / 30) * 100) / 100);
-    // now is 12:00 UTC: half of today's share
-    assert.equal(plan.at(-1), Math.round((PLAN_BASE_USD / 30 / 2) * 100) / 100);
+    // Each day at the cent without drift: within a cent of its exact share, and a month's days are its
+    // exact total rounded once (now is 12:00 UTC: today carries half its share)
+    assert.ok(Math.abs(plan.at(-2)! - PLAN_BASE_USD / 30) < 0.01);
+    assert.ok(Math.abs(plan.at(-1)! - PLAN_BASE_USD / 60) < 0.01);
+    const month = tr.days.at(-1)!.slice(0, 7);
+    const monthDays = tr.days.filter((d) => d.startsWith(month)).length;
+    assert.equal(Math.round(plan.reduce((sum, v, i) => sum + (tr.days[i]!.startsWith(month) ? v : 0), 0) * 100), Math.round((PLAN_BASE_USD / 30) * (monthDays - 0.5) * 100));
     assert.equal(fixed.at(-2), 0.3);
     assert.equal(fixed.at(-1), 0.15);
     assert.equal(tr.series.find((x) => x.key === 'qa')!.values.at(-2), 2);
