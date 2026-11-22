@@ -789,3 +789,16 @@ describe('AUDIT-2 round 15: resource names stay whole', () => {
     assert.ok(!html.includes('<wbr') && !html.includes('break-all'));
   });
 });
+
+describe('AUDIT-2 round 18: no street plates inside the Costs header card', () => {
+  it('the Costs header is an opaque card that opts out of the plates, and the plate rule honours it', async () => {
+    const { readFileSync } = await import('node:fs');
+    const html = renderToStaticMarkup(React.createElement(sections.CostsHeader as React.FC, { d: freshDashboard(), t: createTranslator('ar'), f: opsFormats('ar'), now: NOW } as never));
+    assert.match(html, /^<header class="cost-hero[^"]*" data-testid="costs-header" data-solid-surface="">/);
+    const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+    const rule = css.match(/html\.fanous-street #main-content :is\(h1[^{]*/)?.[0] ?? '';
+    // Every page-text selector skips text inside a solid surface (and .cost-hero)
+    assert.ok(rule.includes('[data-solid-surface] *'), 'plate rule must exclude [data-solid-surface] *');
+    assert.ok(rule.includes('.cost-hero *'), 'plate rule must exclude .cost-hero *');
+  });
+});

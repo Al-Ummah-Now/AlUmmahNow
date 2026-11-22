@@ -389,14 +389,14 @@ html.fanous-street {
    2026-11-22: the street never crosses text). Painted on ::before at z-index: -1 (matching the
    shared .street-plate in fanous-street.css), so the shadow sits above the street and strictly
    below every heading, subtitle, pill and card — never fading adjacent text or card borders.
-   Text inside cards/heroes/panels and styled pills/chips already has a solid surface and is excluded. */
-html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *):not(.cost-pill, [class*='bg-'], [class*='border']) {
+   Text inside cards/heroes/panels, solid-surface opt-outs and styled pills/chips already has a solid surface and is excluded. */
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *, [data-solid-surface] *):not(.cost-pill, [class*='bg-'], [class*='border']) {
   position: relative;
   width: fit-content;
   max-width: 100%;
 }
 
-html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *):not(.cost-pill, [class*='bg-'], [class*='border'])::before {
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.cost-hero *, .cost-panel *, .cost-tile *, .cost-banner *, .cost-note *, .bg-surface *, .bg-surface-2 *, .bg-danger-bg *, .aun-glass *, .aun-glass-lite *, .aun-glass-panel *, [role='alert'] *, [data-solid-surface] *):not(.cost-pill, [class*='bg-'], [class*='border'])::before {
   content: '';
   position: absolute;
   inset: 0;
