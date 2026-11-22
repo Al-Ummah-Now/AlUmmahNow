@@ -182,8 +182,10 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
   const title = item ? t.studio.nav[item.id] : t.studio.title;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] text-foreground md:flex" data-testid="studio-frame">
-      <aside className="studio-rail sticky top-0 hidden h-[calc(100vh-3.5rem)] w-60 shrink-0 border-e border-border md:block">
+    <div className="min-h-[calc(100dvh-4rem)] text-foreground md:flex" data-testid="studio-frame">
+      {/* Pinned under the header (4rem from 640px up, aun-nav.css .aun-header) and running to the screen's
+          bottom: at top-0 it slid under the header, hiding the channel switcher, and ended 3.5rem short */}
+      <aside className="studio-rail sticky top-16 hidden h-[calc(100dvh-4rem)] w-60 shrink-0 border-e border-border md:block" data-testid="studio-rail">
         <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} />
       </aside>
 
