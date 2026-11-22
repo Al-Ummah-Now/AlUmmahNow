@@ -83,7 +83,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
     switch (selectedType) {
       case PostType.TEXT:
         if (!textContent.trim()) return isRTL ? 'المحتوى مطلوب' : 'Content is required';
-        if (textContent.length > 5000) return isRTL ? 'المحتوى طويل جداً' : 'Content too long';
+        if (textContent.length > 5000) return isRTL ? 'المحتوى طويل جدًا' : 'Content too long';
         break;
 
       case PostType.IMAGE:

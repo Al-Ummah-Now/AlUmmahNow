@@ -37,7 +37,7 @@ jest.mock('@/lib/i18n', () => ({
       noChannelTrailer: locale === 'ar' ? 'لا يوجد مقطع تعريفي' : 'No channel trailer',
       about: locale === 'ar' ? 'حول' : 'About',
       content: locale === 'ar' ? 'المحتوى' : 'Content',
-      channelSectionsPlaceholder: locale === 'ar' ? 'سيتم إضافة الأقسام قريباً' : 'Sections coming soon',
+      channelSectionsPlaceholder: locale === 'ar' ? 'سيتم إضافة الأقسام قريبًا' : 'Sections coming soon',
       home: locale === 'ar' ? 'الرئيسية' : 'Home',
       videos: locale === 'ar' ? 'المرئيات' : 'Videos',
       shorts: locale === 'ar' ? 'مقاطع قصيرة' : 'Shorts',

@@ -138,7 +138,7 @@ describe('#1666: exact admin wording, 1 2 3 10 11 100', () => {
 
   it('errors page counts and repeats', () => {
     assert.deepEqual(arOf('errorsPage.openItems'), ['عنصر مفتوح واحد', 'عنصران مفتوحان', '٣ عناصر مفتوحة', '١٠ عناصر مفتوحة', '١١ عنصرًا مفتوحًا', '١٠٠ عنصر مفتوح']);
-    assert.equal(sp(tAr('errorsPage.sparkline' as never, { count: 2 })), 'مرتان في آخر ١٤ يوماً');
+    assert.equal(sp(tAr('errorsPage.sparkline' as never, { count: 2 })), 'مرتان في آخر ١٤ يومًا');
     assert.equal(tEn('errorsPage.sparkline' as never, { count: 1 }), '1 occurrence in the last 14 days');
     assert.deepEqual(arOf('deleted.retrying'), [
       'فشل الحذف النهائي مرة واحدة؛ تجري إعادة المحاولة', 'فشل الحذف النهائي مرتين؛ تجري إعادة المحاولة', 'فشل الحذف النهائي ٣ مرات؛ تجري إعادة المحاولة',

@@ -55,7 +55,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
     },
     ar: {
       title: 'إنشاء قناة جديدة',
-      description: 'أنشئ قناة جديدة لبدء مشاركة محتواك. يمكنك تخصيصها لاحقاً.',
+      description: 'أنشئ قناة جديدة لبدء مشاركة محتواك. يمكنك تخصيصها لاحقًا.',
       channelName: 'اسم القناة',
       channelNamePlaceholder: 'أدخل اسم القناة',
       descriptionLabel: 'الوصف (اختياري)',
@@ -66,7 +66,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
       creating: 'جارٍ الإنشاء...',
       required: 'اسم القناة مطلوب',
       minLength: 'يجب أن يكون اسم القناة 3 أحرف على الأقل',
-      maxLength: 'يجب أن يكون اسم القناة أقل من 50 حرفاً',
+      maxLength: 'يجب أن يكون اسم القناة أقل من 50 حرفًا',
       descMaxLength: 'يجب أن يكون الوصف أقل من 500 حرف',
     },
   };

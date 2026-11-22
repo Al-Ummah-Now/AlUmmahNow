@@ -29,7 +29,7 @@ const EMPTY_STATE_CONFIGS_AR: Record<
   'no-live': {
     icon: VideoOff,
     title: 'لا توجد بثوث مباشرة الآن',
-    message: 'تحقق مرة أخرى لاحقاً أو تصفح المحتوى المسجل',
+    message: 'تحقق مرة أخرى لاحقًا أو تصفح المحتوى المسجل',
     action: {
       label: 'تصفح التسجيلات',
       href: '/ar/videos'

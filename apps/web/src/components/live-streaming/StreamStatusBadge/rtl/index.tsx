@@ -82,7 +82,7 @@ export const StreamStatusBadgeRTL = React.memo<StreamStatusBadgeProps>(
         dir="rtl"
         className={cn(
           badgeVariants({ status: safeStatus, size }),
-          'flex-row-reverse', // RTL: Reverse icon and text
+          // dir="rtl" already puts the icon first, on the right (no flex-row-reverse, which undid it)
           className
         )}
       >

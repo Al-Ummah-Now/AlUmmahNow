@@ -54,7 +54,7 @@ export function VideoPostForm({
           value={content}
           onChange={(e) => onContentChange(e.target.value)}
           placeholder={isRTL
-            ? 'أضف تعليقاً على المرئي...'
+            ? 'أضف تعليقًا على المرئي...'
             : 'Add a comment about the video...'
           }
           dir={isRTL ? 'rtl' : 'ltr'}

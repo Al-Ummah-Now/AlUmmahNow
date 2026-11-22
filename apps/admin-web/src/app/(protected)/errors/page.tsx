@@ -189,7 +189,7 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
                         </span>
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <Sparkline values={g.daily} label={t('errorsPage.sparkline', { count: total14 })} />
+                        <Sparkline values={g.daily} label={t('errorsPage.sparkline', { count: total14 })} rtl={locale === 'ar'} />
                       </td>
                       <td className="px-4 py-4 align-top">
                         <ErrorStatusChip status={g.status} label={translateDynamic(t, 'errorStatus', g.status)} />

@@ -78,7 +78,7 @@ export const ViewerCountRTL = React.memo<ViewerCountProps>(
         dir="rtl"
         className={cn(
           getContainerClasses(isLive, !!onClick),
-          'flex-row-reverse', // RTL: Icon on right, text on left
+          // dir="rtl" already puts the icon first, on the right (no flex-row-reverse, which undid it)
           className
         )}
         onClick={onClick}
