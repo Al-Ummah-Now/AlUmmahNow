@@ -122,3 +122,12 @@ test('bytes switch units at 1000: 1000 MB reads 1 GB', () => {
   assert.equal(f.formatBytes('en', 999 * 1024 ** 2), '999 MB');
   assert.equal(f.formatBytes('ar', 1000 * 1024 ** 2, { useGrouping: false }), f.formatBytes('ar', 1024 ** 3, { useGrouping: false }));
 });
+
+test('Arabic file sizes write the unit in full, ungrouped, like the Tools app', () => {
+  assert.equal(f.formatBytes('ar', 1.2 * 1024 ** 3), '١٫٢ غيغابايت');
+  assert.equal(f.formatBytes('ar', 921.6 * 1024 ** 2), '٩٢١٫٦ ميغابايت');
+  assert.equal(f.formatBytes('ar', 1536), '١٫٥ كيلوبايت');
+  assert.equal(f.formatBytes('ar', 999), '٩٩٩ بايت');
+  assert.equal(f.formatBytes('ar-SA', 1024 ** 3), '١ غيغابايت');
+  assert.equal(f.formatBytes('en', 1536), '1.5 kB');
+});

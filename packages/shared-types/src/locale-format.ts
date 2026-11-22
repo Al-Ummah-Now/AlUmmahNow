@@ -162,7 +162,10 @@ export function formatUnit(locale: FormatLocale, value: number, unit: string, op
 
 const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte', 'petabyte'] as const;
 
-/** Bytes in the largest whole unit (1024 steps): 1536 -> "1.5 kB" / «١٫٥ ك.ب». */
+/**
+ * Bytes in the largest whole unit (1024 steps): 1536 -> "1.5 kB" / «١٫٥ كيلوبايت». Arabic writes the unit
+ * in full and never groups digits, the same as the Tools app («١٫٢ غيغابايت», «٩٢١٫٦ ميغابايت»).
+ */
 export function formatBytes(locale: FormatLocale, bytes: number, options?: Intl.NumberFormatOptions): string {
   let value = Math.max(0, Number.isFinite(bytes) ? bytes : 0);
   let index = 0;
@@ -171,7 +174,8 @@ export function formatBytes(locale: FormatLocale, bytes: number, options?: Intl.
     value /= 1024;
     index += 1;
   }
-  return formatUnit(locale, value, BYTE_UNITS[index], { maximumFractionDigits: index === 0 ? 0 : 1, ...options });
+  const arabic = isArabicLocale(locale) ? { unitDisplay: 'long' as const, useGrouping: false } : undefined;
+  return formatUnit(locale, value, BYTE_UNITS[index], { maximumFractionDigits: index === 0 ? 0 : 1, ...arabic, ...options });
 }
 
 type DateInput = Date | string | number;
