@@ -1,5 +1,6 @@
 /** Date ranges and sums for the Studio Analytics page (spec §4.6). */
 
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import { localizedText } from '@/lib/playlists/playlist-names';
 
 export type RangePreset = '7' | '28' | '90' | '365' | 'all';
@@ -18,16 +19,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** The browser's IANA time zone, UTC when it can't tell. */
 export function viewerTimeZone(): string {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return dateTimeFormat('en').resolvedOptions().timeZone || 'UTC';
   } catch {
     return 'UTC';
   }
 }
 
-/** YYYY-MM-DD of `time` on the calendar of `timeZone` (en-CA formats dates as ISO). */
+/** YYYY-MM-DD of `time` on the calendar of `timeZone`. */
 export function localDay(time: number, timeZone: string): string {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(time));
+    const p: Record<string, string> = {};
+    for (const part of dateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(time))) p[part.type] = part.value;
+    return `${p.year}-${p.month}-${p.day}`;
   } catch {
     return new Date(time).toISOString().slice(0, 10);
   }
