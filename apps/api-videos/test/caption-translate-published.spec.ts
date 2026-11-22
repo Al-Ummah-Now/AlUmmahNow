@@ -215,11 +215,11 @@ describe('a published track as source cues (captionCuesFromVtt)', () => {
 	});
 
 	it('never rebuilds markup from entities: escaped tags written as text lose their angle brackets', () => {
-		const vtt = ['WEBVTT', '', '00:00.000 --> 00:02.000', '&lt;script&gt;alert(1)&lt;/script&gt; a &lt;b&gt;word&lt;/b&gt;', ''].join('\n');
+		const vtt = ['WEBVTT', '', '00:00.000 --> 00:02.000', '&lt;script&gt;alert(1)&lt;/script&gt; a &lt;b&gt;word&lt;/b&gt; <scr<b>ipt>x', ''].join('\n');
 		const [cue] = captionCuesFromVtt(vtt);
 		const text = (cue!.segments[0] as { text: string }).text;
 		assert.equal(/[<>]/.test(text), false, text);
-		assert.equal(text, 'scriptalert(1)/script a bword/b');
+		assert.equal(text, 'scriptalert(1)/script a bword/b iptx');
 	});
 
 	it('skips the header, NOTE and STYLE blocks, bad timings and empty cues; accepts short and comma times', () => {

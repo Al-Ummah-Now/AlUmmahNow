@@ -513,8 +513,14 @@ const VTT_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', nbsp:
  * be rebuilt from entities (CodeQL js/incomplete-multi-character-sanitization).
  */
 function vttSpeech(raw: string): string {
-  return raw
-    .replace(/<[^>]*>/g, '')
+  // Tags out until none is left: a tag split by another (`<scr<b>ipt>`) never survives one pass
+  let text = raw;
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text
     .replace(/&(amp|lt|gt|nbsp|lrm|rlm|quot|apos);/g, (_, e: string) => VTT_ENTITIES[e]!)
     .replace(/[<>]/g, '')
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
