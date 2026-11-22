@@ -60,13 +60,13 @@ export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id:
   return (
     <div className="relative z-10 mb-3 flex items-end justify-between gap-3">
       <div className="min-w-0">
-        <h2 id={id} className="flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 id={id} className="street-plate flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
           <Icon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
           <span className="truncate">{title}</span>
         </h2>
-        {subtitle && <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
+        {subtitle && <p className="street-plate mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className="street-plate shrink-0">{action}</div>}
     </div>
   );
 }

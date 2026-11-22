@@ -30,8 +30,8 @@ export function ExploreBody({ model, renderLiveCard }: { model: ExploreModel; re
     <main className="flex w-full flex-col gap-10 p-4 md:p-6" data-testid="explore-page">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.explore.title}</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-300">{t.explore.subtitle}</p>
+          <h1 className="street-plate text-2xl font-bold text-gray-900 dark:text-white">{t.explore.title}</h1>
+          <p className="street-plate mt-1 text-gray-600 dark:text-gray-300">{t.explore.subtitle}</p>
         </div>
         <div role="group" aria-label={t.explore.contentLanguage} className="flex gap-2" data-testid="explore-language">
           {[undefined, ...EXPLORE_LANGUAGES].map(code => {

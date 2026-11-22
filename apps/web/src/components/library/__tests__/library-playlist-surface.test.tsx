@@ -43,3 +43,15 @@ describe('Library playlist tiles on the shared surface', () => {
     expect(tile.className).not.toMatch(/\bborder-gray-200\b/);
   });
 });
+
+describe('Library text that sits on the page itself', () => {
+  it('the title, subtitle, section headings and empty-state lines each sit on a street plate (no lantern runs through them)', async () => {
+    render(<LibraryHubView dir="ltr" />);
+    const empty = await screen.findByTestId('library-empty-history');
+    expect(empty).toHaveClass('street-plate');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('street-plate');
+    for (const h of screen.getAllByRole('heading', { level: 2 })) expect(h).toHaveClass('street-plate');
+    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling).toHaveClass('street-plate');
+  });
+});
+

@@ -65,3 +65,30 @@ html[data-theme='fawanees'] .lbl-panel { background-image: linear-gradient(180de
 html[data-theme='fawanees'] :is(.hx-days, .hx-side, .lbl-list) { padding: 12px; border-radius: var(--r-xl, 20px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fanous-color-primary-sheen) 12%, transparent); }
 html[data-theme='fawanees'] :is(.hx-head, .hx-main-head, .hx-results) { padding: 10px 14px; border-radius: var(--r-lg, 14px); background: var(--fanous-color-background); }
 html[data-theme='fawanees'] :is(.lbl-btn-secondary, .lbl-more, .hx-notice) { background: var(--fanous-color-background); }
+
+/* Every glass surface (cards `.c` and the system card rule, the error card, panels) is the same colour,
+   but solid: blended over the page here instead of letting the street through (owner, 2026-11-22: the
+   street never shows through a card; the same colours as the history and Watch later cards, #1723).
+   Lite and panel keep their own strengths (80/92% light, 85/94% dark), solid. The glass tokens are set in aun-surfaces.css by mode with selectors up to (0,4,0), hence !important. */
+html[data-theme='fawanees']:not(.dark) {
+  --aun-glass-surface: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important;
+  --aun-glass-lite-surface: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important;
+  --aun-glass-panel-surface: color-mix(in srgb, white 92%, var(--fanous-color-background)) !important;
+}
+html[data-theme='fawanees'].dark {
+  --aun-glass-surface: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important;
+  --aun-glass-lite-surface: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important;
+  --aun-glass-panel-surface: color-mix(in srgb, var(--aun-glass-base-dark) 94%, var(--fanous-color-background)) !important;
+}
+
+/* Text that sits on the page itself (a page's title and subtitle, section headings and their links,
+   empty-state lines) gets a plate of the page colour with a soft edge, so no lantern or string ever
+   runs through its words (owner, 2026-11-22, as the history page headings, #1723). It hugs the text
+   and only exists under the street. */
+html.fanous-street .street-plate {
+  width: fit-content;
+  max-width: 100%;
+  background: var(--fanous-color-background);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: 0 0 12px 8px var(--fanous-color-background);
+}
