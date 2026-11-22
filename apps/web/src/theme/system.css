@@ -526,9 +526,11 @@ a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-se
 [dir=rtl] .nv-panel{box-shadow:inset 1px 0 0 var(--aun-glass-edge)}
 /* Studio's own nav column: the same rail glass as the site rail (no glass on any ancestor of a fixed element) */
 .studio-rail{background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
-/* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
-   (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
-:where(article) [dir=auto]:not(input,textarea){text-align:start}
+/* User-written post, card and comment bodies carry dir="auto": each reads in its own direction, but lines up where
+   the page's lines start (an English post on the Arabic page reads left to right, right-aligned), as Studio's
+   posts and comments and the Library's saved posts do */
+:where(article) [dir=auto]:not(input,textarea){text-align:left}
+html[dir=rtl] :where(article) [dir=auto]:not(input,textarea){text-align:right}
 /* Studio's video editor (components/videoEdit), every theme: its cards and fields keep the theme's glow, but a
    short one. The full 30px glow is wider than the 24px gap between the editor's sections, so each section's
    glow ran into the next (AUDIT-2 2026-11-22). Set on the panel, it reaches every card and field inside it */
