@@ -51798,6 +51798,20 @@
                         },
                         "cueCount": {
                           "type": "number"
+                        },
+                        "quranEdition": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ]
                         }
                       },
                       "required": [
