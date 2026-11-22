@@ -66,6 +66,14 @@ async function paneOrder(page: Page): Promise<string[]> {
 
 const current = (page: Page) => page.locator('[data-testid="playlist-pane-item"][aria-current="true"]');
 
+/**
+ * Waits for the pane after a move to another item. On the slow `next dev` server (Firefox) a soft
+ * move can take longer than navigateOrLoad's 2 s deadline, so the page is also loaded normally,
+ * and that load alone was seen taking 13 s (run 44985436416). The pane then fetches its queue
+ * again, so 15 s was not enough.
+ */
+const AFTER_MOVE = { timeout: 30_000 };
+
 test.describe('playlist playback', () => {
   test.beforeEach(async ({ page }) => {
     await serveQueue(page);
@@ -89,7 +97,7 @@ test.describe('playlist playback', () => {
     await expect(page.getByTestId('player-next-badge')).toContainText('2 / 3');
     await expect(page.getByTestId('player-end-screen').locator('.vjs-fanous-next-title')).toHaveText('Lesson: short');
     await expect(page).toHaveURL(/src=short&list=fixtures&index=1/, { timeout: 8_000 });
-    await expect(current(page)).toHaveAttribute('data-video-id', 'short');
+    await expect(current(page)).toHaveAttribute('data-video-id', 'short', AFTER_MOVE);
     await expect(page.getByTestId('playlist-pane-position')).toHaveText('2 / 3');
     await expectPlaying(page);
   });
@@ -100,11 +108,11 @@ test.describe('playlist playback', () => {
     await expectPlaying(page);
     await page.getByTestId('playlist-pane-next').click();
     await expect(page).toHaveURL(/src=short/);
-    await expect(current(page)).toHaveAttribute('data-video-id', 'short');
+    await expect(current(page)).toHaveAttribute('data-video-id', 'short', AFTER_MOVE);
     await expectPlaying(page);
     await page.locator('[data-testid="playlist-pane-item"][data-video-id="bright"]').click();
     await expect(page).toHaveURL(/src=bright&list=fixtures&index=2/);
-    await expect(current(page)).toHaveAttribute('data-video-id', 'bright');
+    await expect(current(page)).toHaveAttribute('data-video-id', 'bright', AFTER_MOVE);
     await expectPlaying(page);
   });
 
@@ -132,7 +140,7 @@ test.describe('playlist playback', () => {
     await seekToEnd(page);
     await expect(page.getByTestId('player-next-badge')).toContainText('1 / 3');
     await expect(page).toHaveURL(/src=dark&list=fixtures&index=0/, { timeout: 8_000 });
-    await expect(current(page)).toHaveAttribute('data-video-id', 'dark');
+    await expect(current(page)).toHaveAttribute('data-video-id', 'dark', AFTER_MOVE);
     await expectPlaying(page);
   });
 
@@ -143,7 +151,7 @@ test.describe('playlist playback', () => {
     await expect.poll(() => paneOrder(page)).toEqual([...ORDER]);
     await page.getByTestId('playlist-pane-next').click();
     await expect(page).toHaveURL(/src=(short|bright)&list=fixtures/);
-    await expect.poll(() => paneOrder(page)).toEqual([...ORDER]);
+    await expect.poll(() => paneOrder(page), AFTER_MOVE).toEqual([...ORDER]);
   });
 
   test('a refused unmuted play falls back to muted playback with "Tap to unmute"', async ({ page }) => {
