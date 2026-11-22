@@ -9,7 +9,7 @@
 
 'use client';
 
-import { formatCountNoun, numberFormat } from '@al-ummah/shared-types';
+import { formatCountNoun, numberFormat, pluralCategory } from '@al-ummah/shared-types';
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
@@ -20,32 +20,51 @@ import type { LiveStreamCardProps } from '../types';
 import { MetaSep } from '@/components/ui/MetaSep';
 
 /**
+ * Arabic counted time after «منذ»/«بعد». Those words take the genitive, so the forms are
+ * «دقيقة» (1, no numeral), «دقيقتين» (2), «٣ دقائق» (3–10, CLDR few), «١١ دقيقة» (11–99, many),
+ * «١٠٠ دقيقة» (other). The notification centre's minutesAgo/hoursAgo/daysAgo use the same set.
+ */
+const AR_TIME_UNITS = {
+  day: { one: 'يوم', two: 'يومين', few: 'أيام', many: 'يومًا', other: 'يوم' },
+  hour: { one: 'ساعة', two: 'ساعتين', few: 'ساعات', many: 'ساعة', other: 'ساعة' },
+  minute: { one: 'دقيقة', two: 'دقيقتين', few: 'دقائق', many: 'دقيقة', other: 'دقيقة' },
+} as const;
+
+export function arabicTimeSpan(n: number, unit: keyof typeof AR_TIME_UNITS): string {
+  const forms = AR_TIME_UNITS[unit];
+  if (n === 1) return forms.one;
+  if (n === 2) return forms.two;
+  const form = pluralCategory('ar', n);
+  const noun = form === 'few' ? forms.few : form === 'many' ? forms.many : forms.other;
+  return `${numberFormat('ar').format(n)} ${noun}`;
+}
+
+/**
  * Format relative time from date (Arabic)
- * Examples: "منذ ساعتين", "بدأ منذ 30 دقيقة"
+ * Examples: «منذ ساعتين», «بدأ منذ ٣٠ دقيقة», «بدأ منذ دقيقة»
  */
 function formatRelativeTimeArabic(date: Date | undefined, prefix: string = ''): string | null {
   if (!date) return null;
 
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / 60_000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  // Format numbers in Arabic numerals
-  const formatNum = (n: number) => numberFormat('ar').format(n);
-
-  if (days > 0) {
-    return `${prefix}منذ ${formatNum(days)} ${days === 1 ? 'يوم' : 'أيام'}`;
-  }
-  if (hours > 0) {
-    return `${prefix}منذ ${formatNum(hours)} ${hours === 1 ? 'ساعة' : hours === 2 ? 'ساعتين' : 'ساعات'}`;
-  }
-  if (minutes > 0) {
-    return `${prefix}منذ ${formatNum(minutes)} ${minutes === 1 ? 'دقيقة' : minutes === 2 ? 'دقيقتين' : 'دقائق'}`;
-  }
+  if (days > 0) return `${prefix}منذ ${arabicTimeSpan(days, 'day')}`;
+  if (hours > 0) return `${prefix}منذ ${arabicTimeSpan(hours, 'hour')}`;
+  if (minutes > 0) return `${prefix}منذ ${arabicTimeSpan(minutes, 'minute')}`;
   return `${prefix}الآن`;
+}
+
+/** «يبدأ بعد ساعتين و٥ دقائق»; a whole hour drops the minutes, under a minute reads «يبدأ الآن». */
+function formatStartsInArabic(diffMs: number): string {
+  const hours = Math.floor(diffMs / 3_600_000);
+  const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+  if (hours > 0) {
+    return minutes > 0 ? `يبدأ بعد ${arabicTimeSpan(hours, 'hour')} و${arabicTimeSpan(minutes, 'minute')}` : `يبدأ بعد ${arabicTimeSpan(hours, 'hour')}`;
+  }
+  return minutes > 0 ? `يبدأ بعد ${arabicTimeSpan(minutes, 'minute')}` : 'يبدأ الآن';
 }
 
 /**
@@ -100,18 +119,8 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
         return formatRelativeTimeArabic(stream.startedAt, 'بدأ ');
       }
       if (stream.status === 'scheduled' && stream.scheduledStartTime) {
-        const now = new Date();
-        const scheduled = stream.scheduledStartTime;
-        if (scheduled > now) {
-          const diff = scheduled.getTime() - now.getTime();
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const formatNum = (n: number) => numberFormat('ar').format(n);
-          if (hours > 0) {
-            return `يبدأ بعد ${formatNum(hours)} ${hours === 1 ? 'ساعة' : hours === 2 ? 'ساعتين' : 'ساعات'} و ${formatNum(minutes)} ${minutes === 1 ? 'دقيقة' : minutes === 2 ? 'دقيقتين' : 'دقائق'}`;
-          }
-          return `يبدأ بعد ${formatNum(minutes)} ${minutes === 1 ? 'دقيقة' : minutes === 2 ? 'دقيقتين' : 'دقائق'}`;
-        }
+        const diff = stream.scheduledStartTime.getTime() - Date.now();
+        if (diff > 0) return formatStartsInArabic(diff);
       }
       if (stream.status === 'ended' && stream.endedAt) {
         return formatRelativeTimeArabic(stream.endedAt, 'انتهى ');
