@@ -575,6 +575,15 @@ export const CONTACT_PATH = '/contact/';
 const mdLink = (label: string, href: string) => `[${label.replace(/[[\]]/g, '')}](${href})`;
 
 /**
+ * The meta-line separator: Arabic joins with «،» (the owner's number rule, 2026-11-21), English with «·».
+ * A vendored copy of render's metaSeparator (this file has no imports).
+ */
+const metaSep = (locale: 'en' | 'ar') => (locale === 'ar' ? '، ' : ' · ');
+/** Links on one markdown line; the body has no locale, so Arabic labels pick the Arabic separator. */
+const joinLinks = (xs: { label: string; url: string }[]) =>
+   xs.map((x) => mdLink(x.label, x.url)).join(metaSep(xs.some((x) => /\p{Script=Arabic}/u.test(x.label)) ? 'ar' : 'en'));
+
+/**
  * The markdown `body` kept beside the blocks for readers that predate blocks (meta descriptions, RSS,
  * the v1 fallback). Rich text is kept verbatim, so a page with one rich-text block has exactly its old
  * body. Media-only blocks are left out; an embedded video becomes a `::video[ID]` line.
@@ -586,7 +595,7 @@ export function pageBlocksToMarkdown(blocks: PageBlock[]): string {
       if (!isBlockComplete(b)) continue;
       switch (b.type) {
          case 'hero':
-            parts.push([b.title ? `## ${b.title}` : '', b.subtitle, b.buttons.filter((x) => x.label && x.url).map((x) => mdLink(x.label, x.url)).join(' · ')].filter(Boolean).join('\n\n'));
+            parts.push([b.title ? `## ${b.title}` : '', b.subtitle, joinLinks(b.buttons.filter((x) => x.label && x.url))].filter(Boolean).join('\n\n'));
             break;
          case 'markdown':
             parts.push(b.text.trim());
@@ -1456,7 +1465,7 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
                const pic = image(cover, { sizes: '(min-width: 40rem) 12rem, 30vw', priority: false, className: 'pb-img' });
                const date = str(p.published_at) ? fmtDate(p.published_at, L) : null;
                const title = link ? `<a class="pb-card-link" href="${esc(link)}">${esc(p.title)}</a>` : esc(p.title);
-               return `<li class="pb-post">${pic ? `<div class="pb-post-media">${pic}</div>` : '<div class="pb-post-media pb-post-ph" aria-hidden="true">' + iconSvg('posts') + '</div>'}<div class="pb-post-body"><h3 class="pb-post-t">${title}</h3>${p.excerpt ? `<p class="pb-post-x">${esc(p.excerpt)}</p>` : ''}${date ? `<p class="pb-post-m"><time datetime="${esc(p.published_at)}">${esc(date)}</time>${p.author_name ? ` · ${esc(p.author_name)}` : ''}</p>` : ''}</div></li>`;
+               return `<li class="pb-post">${pic ? `<div class="pb-post-media">${pic}</div>` : '<div class="pb-post-media pb-post-ph" aria-hidden="true">' + iconSvg('posts') + '</div>'}<div class="pb-post-body"><h3 class="pb-post-t">${title}</h3>${p.excerpt ? `<p class="pb-post-x">${esc(p.excerpt)}</p>` : ''}${date ? `<p class="pb-post-m"><time datetime="${esc(p.published_at)}">${esc(date)}</time>${p.author_name ? `${metaSep(L)}${esc(p.author_name)}` : ''}</p>` : ''}</div></li>`;
             });
             return section(b, `${heading(b.id, b.heading)}<ul class="pb-posts" role="list">${items.join('')}</ul>`, { labelled: !!b.heading });
          }
