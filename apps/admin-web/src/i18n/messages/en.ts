@@ -4092,7 +4092,7 @@ const en = {
   },
   operations: {
     title: 'Operations',
-    subtitle: 'Platform usage and health of one environment: Workers, databases, storage, queues, KV and Durable Objects, collected hourly from Cloudflare. What it costs is on the Costs page.',
+    subtitle: 'Platform usage and health of one environment: Workers, databases, storage, queues, KV and Durable\u00a0Objects, collected hourly from Cloudflare. What it costs is on the Costs page.',
     noAccess: 'You need the operations permission to open this page.',
     openLink: 'Platform health and usage: Operations',
     spendLine: 'All environments this month: {value}',
@@ -4102,7 +4102,7 @@ const en = {
     rangeLabel: 'Period',
     ranges: { '24h': 'Last {#24} hours', '7d': 'Last {#7} days', '30d': 'Last {#30} days' },
     tabsLabel: 'Area',
-    tabs: { worker: 'Workers', d1: 'Databases', r2: 'Storage', queue: 'Queues', kv: 'KV', do: 'Durable Objects' },
+    tabs: { worker: 'Workers', d1: 'Databases', r2: 'Storage', queue: 'Queues', kv: 'KV', do: 'Durable\u00a0Objects' },
     loadFailed: 'Could not load platform analytics. Try again in a minute.',
     notReady: 'No data yet: the collector runs every hour, at ten past.',
     notConfigured: 'Platform analytics are not set up in this environment.',
