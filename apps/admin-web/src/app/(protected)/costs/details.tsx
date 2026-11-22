@@ -26,11 +26,11 @@ const th = 'px-3 py-2 font-medium whitespace-nowrap';
 
 /** A meter's usage in its own unit: GB-months for storage, hours for Browser Run, else a count. */
 function usage(line: CostCloudflareLine, value: number, t: Translator, f: OpsFormats): string {
-  if (line.key.endsWith('_storage_gb')) return t('costs.cloudflare.gbMonths', { value: f.gb(value) });
+  if (line.key.endsWith('_storage_gb')) return t('costs.cloudflare.gbMonths', { value: Math.abs(value) >= 1000 ? f.countNoun(value) : f.gb(value) });
   // Hours agree with their number in Arabic («١٠ ساعات»)
   if (line.key === 'browser_hours') return t('costs.cloudflare.hours', { count: Math.floor(value * 10) / 10 });
-  if (line.key === 'workers_cpu_ms') return t('costs.cloudflare.cpuMs', { value: f.count(value) });
-  if (line.key === 'do_gb_seconds') return t('costs.cloudflare.gbSeconds', { value: f.count(value) });
+  if (line.key === 'workers_cpu_ms') return t('costs.cloudflare.cpuMs', { value: f.countNoun(value) });
+  if (line.key === 'do_gb_seconds') return t('costs.cloudflare.gbSeconds', { value: f.countNoun(value) });
   return f.count(value);
 }
 

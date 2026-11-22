@@ -3,7 +3,7 @@
  * charts each tab shows, gap filling of sparse series, number formats with
  * the locale's digits, and the Costs page's budget meter helpers. Pure: server and client safe.
  */
-import { compactNumber, dateTimeFormat, moneyFormat, numberFormat } from '@al-ummah/shared-types';
+import { compactNumber, dateTimeFormat, formatCompact, moneyFormat, numberFormat } from '@al-ummah/shared-types';
 import type { CostBudget, CostBudgetLevel, CostIdle } from '@/lib/api/costs-types';
 import { OPS_ENVS, OPS_KINDS, OPS_RANGES, type OpsEnv, type OpsKind, type OpsMetric, type OpsRange, type OpsSeries } from '@/lib/api/ops-types';
 
@@ -92,6 +92,8 @@ export function fillSeries(series: Pick<OpsSeries, 'granularity' | 'points'>, ra
 
 export interface OpsFormats {
   count: (v: number) => string;
+  /** A count before its unit or noun: Arabic keeps «ألف» there («٤٧٩ ألف غيغابايت‑ثانية», not «ألفًا»). */
+  countNoun: (v: number) => string;
   bytes: (v: number) => string;
   ms: (v: number) => string;
   us: (v: number) => string;
@@ -126,6 +128,7 @@ export function opsFormats(locale: string): OpsFormats {
   const date = (s: string) => new Date(s.length === 10 ? `${s}T00:00:00Z` : s);
   return {
     count: (v) => compact(v),
+    countNoun: (v) => (loc.startsWith('ar') ? formatCompact(loc as never, v, 1, { beforeNoun: true }) : compact(v)),
     bytes: (v) => {
       let i = 0;
       let n = v;
@@ -140,7 +143,7 @@ export function opsFormats(locale: string): OpsFormats {
     // (Arabic spells it out: its short form «م.ث.» reads like ms). Zero is in ms, so an axis
     // starting at 0 under ms ticks doesn't switch units at its base.
     us: (v) => (v >= 1000 || v === 0 ? ms.format(v / 1000) : micro.format(v)),
-    gbs: (v) => `${compact(Math.round(v))} GB-s`,
+    gbs: (v) => `${loc.startsWith('ar') ? formatCompact(loc as never, Math.round(v), 1, { beforeNoun: true }) : compact(Math.round(v))}\u00a0GB-s`,
     gb: (v) => (Math.abs(v) >= 1000 ? compact(v) : small.format(v)),
     percent: (v) => percent.format(v),
     rate: (v) => rate.format(v),
@@ -151,7 +154,8 @@ export function opsFormats(locale: string): OpsFormats {
       return Number.isNaN(d.getTime()) ? t : formatHour(d.toISOString().slice(0, 13), loc as Locale);
     },
     day: (t) => day.format(date(t)),
-    month: (ym) => month.format(date(`${ym}-01`)),
+    // A month never leaves its year alone on the next line («November 2026»)
+    month: (ym) => month.format(date(`${ym}-01`)).replace(/ /g, '\u00a0'),
     time: (iso) => formatDate(date(iso), loc as Locale, true),
   };
 }

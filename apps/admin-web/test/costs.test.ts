@@ -413,8 +413,8 @@ describe('costs sections render', () => {
     // mount, so the lines are checked through the function the section renders them with.
     const lines = d.alerts.map((a) => sections.alertText(d, a.key, t, f));
     assert.deepEqual(lines, [
-      '80% of the November 2026 budget used',
-      'November 2026 is forecast to go over the budget',
+      '80% of the November\u00a02026 budget used',
+      'November\u00a02026 is forecast to go over the budget',
       'Spend jumped on admin-api-qa (QA)',
     ]);
     const tAr = createTranslator('ar');
@@ -712,6 +712,21 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
     assert.ok(table.includes('المبالغ بالدولار الأمريكي.'));
     assert.ok(!table.slice(table.indexOf('<tbody')).includes('دولار'), 'no currency word in the cells');
     assert.ok(table.includes('٢٢٫٠٠'), 'Arabic digits and decimal sign, never grouped');
+  });
+
+  it('a count before its unit keeps «ألف», and units, months and "a month" never wrap away from their number (AUDIT-2 round 12)', async () => {
+    const { opsFormats } = await import('../src/app/(protected)/operations/model');
+    const ar = opsFormats('ar');
+    const sp = (x: string) => x.replace(/\s/g, ' ');
+    assert.equal(sp(ar.count(79000)), '٧٩ ألفًا', 'standing alone, the accusative');
+    assert.equal(sp(ar.countNoun(79000)), '٧٩ ألف');
+    assert.equal(sp(ar.countNoun(479000)), '٤٧٩ ألف');
+    const tAr = createTranslator('ar');
+    assert.ok(tAr('costs.cloudflare.gbSeconds', { value: ar.countNoun(479000) }).endsWith('ألف\u00a0غيغابايت‑ثانية'));
+    assert.ok(!ar.gbs(79000).includes('ألفًا'));
+    assert.equal(opsFormats('en').month('2026-11'), 'November\u00a02026');
+    for (const k of ['costs.drivers.perMonth', 'costs.fixed.perMonth', 'costs.movers.perMonth']) assert.ok(tAr(k as never, { value: '١١٫١٦' } as never).endsWith('١١٫١٦\u00a0شهريًا'), k);
+    assert.ok(tAr('costs.thresholds.budgetLevelsHelp').includes('٥٠،\u00a0٨٠،\u00a0١٠٠'));
   });
 
   it('a bar holding two UTC days says so in the plural (the dual in Arabic), comma-joined, each date unbroken', async () => {
