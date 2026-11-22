@@ -46,3 +46,12 @@ html[data-theme='fawanees'] .related-videos > h2 { padding-inline: 6px; }
 @media (max-width: 1023px) { html[data-theme='fawanees'] .related-videos > h2 { padding-inline: 0; } }
 html[data-theme='fawanees'] [data-theatre] .related-videos > h2 { padding-inline: 0; }
 
+
+/* The home page's rail-style headings and playlist-style cards (theme/home-rails.css,
+   theme/playlist-card.css): the "See all" pill, each card and its count badge are the same colours as
+   everywhere else, but solid, blended over the page here instead of letting the street through */
+html[data-theme='fawanees'] .hr-all { background: color-mix(in srgb, var(--fanous-color-primary) 9%, var(--fanous-color-background)); }
+@media (hover: hover) { html[data-theme='fawanees'] .hr-all:hover { background: color-mix(in srgb, var(--fanous-color-primary) 16%, var(--fanous-color-background)); } }
+html[data-theme='fawanees']:not(.dark) .plc-link.video-card { background: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important; }
+html[data-theme='fawanees'].dark .plc-link.video-card { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; }
+html[data-theme='fawanees'] .plc-badge { background: var(--fanous-color-background); }
