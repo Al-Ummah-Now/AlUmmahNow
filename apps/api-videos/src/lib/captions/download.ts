@@ -27,8 +27,20 @@ const srtTime = (t: string) => {
 	const parts = t.trim().split(':');
 	const [h, m, s] = parts.length === 3 ? parts : ['00', ...parts];
 	const [sec, ms = '000'] = s!.split('.');
-	return `${h!.padStart(2, '0')}:${m!.padStart(2, '0')}:${sec!.padStart(2, '0')},${ms.padEnd(3, '0').slice(0, 3)}`;
+	// SRT's file format (HH:MM:SS,mmm), not a displayed time
+	return `${[h!, m!, sec!].map((p) => p.padStart(2, '0')).join(':')},${ms.padEnd(3, '0').slice(0, 3)}`;
 };
+
+/** Removes every tag but <b>, <i> and <u>, until none is left (a tag split by another is caught too). */
+function stripTags(line: string): string {
+	let prev: string;
+	let out = line;
+	do {
+		prev = out;
+		out = out.replace(/<(?!\/?[biu]>)[^>]*>/g, '');
+	} while (out !== prev);
+	return out;
+}
 
 /**
  * WebVTT → SRT. Cue settings, NOTE/STYLE/REGION blocks and tags other than <b>, <i> and <u> are
@@ -47,7 +59,7 @@ export function vttToSrt(vtt: string, comment?: string[]): string {
 		const to = rest!.trim().split(/\s+/)[0]!;
 		const text = lines
 			.slice(at + 1)
-			.map((l) => l.replace(/<(?!\/?[biu]>)[^>]*>/g, ''))
+			.map(stripTags)
 			.join('\n');
 		cues.push(`${srtTime(from!)} --> ${srtTime(to)}\n${text}`);
 	}
