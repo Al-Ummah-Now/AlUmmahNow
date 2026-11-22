@@ -801,4 +801,10 @@ describe('AUDIT-2 round 18: no street plates inside the Costs header card', () =
     assert.ok(rule.includes('[data-solid-surface] *'), 'plate rule must exclude [data-solid-surface] *');
     assert.ok(rule.includes('.cost-hero *'), 'plate rule must exclude .cost-hero *');
   });
+
+  it('the Operations spend line, page text outside the title block, rests on its own plate', async () => {
+    const { readFileSync } = await import('node:fs');
+    const page = readFileSync(new URL('../src/app/(protected)/operations/page.tsx', import.meta.url), 'utf8');
+    assert.match(page, /<p className="street-plate [^"]*" data-testid="ops-spend-link">/);
+  });
 });
