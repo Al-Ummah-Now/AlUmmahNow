@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CommunityPost } from '@al-ummah/shared-types';
+import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { getCommunityPost, listCommunityPosts } from '@/lib/api/community-posts';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useActiveChannel } from '@/contexts/ActiveChannelContext';
@@ -12,6 +12,14 @@ import { useProfile } from '@/hooks/useProfile';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { userDisplayName } from '@/lib/display-name';
 import PostCard from './PostCard';
+
+/**
+ * The channel page is the visitor's view, for its owner too (owner, 2026-11-10): a post scheduled
+ * for later stays in Studio › Posts › Scheduled until it goes live. The API still returns it to
+ * people who manage the channel (Studio lists from the same endpoint).
+ */
+const isUpcoming = (post: CommunityPost) =>
+  post.status === PostStatus.SCHEDULED && !!post.scheduledAt && Date.parse(post.scheduledAt) > Date.now();
 import { cn } from '@/lib/utils';
 
 interface CommunityPostsProps {
@@ -59,7 +67,8 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
       );
 
       if (response && Array.isArray(response.posts)) {
-        setPosts((prev) => (pageNumber === 1 ? response.posts : [...prev, ...response.posts]));
+        const visible = response.posts.filter((post) => !isUpcoming(post));
+        setPosts((prev) => (pageNumber === 1 ? visible : [...prev, ...visible]));
         setHasMore(Boolean(response.pagination?.hasNext));
         setPage(pageNumber);
       } else if (pageNumber === 1) {
