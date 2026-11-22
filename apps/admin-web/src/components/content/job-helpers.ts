@@ -2,7 +2,7 @@
  * Pure helpers for admin jobs (no React, no server actions), shared by the
  * jobs UI and its tests.
  */
-import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type AdminJob, type AdminJobLogEntry } from '@al-ummah/shared-types';
+import { ADMIN_JOB_PERMISSIONS, ADMIN_JOB_UNCANCELLABLE_KINDS, type AdminContentPermission, type AdminJob, type AdminJobLogEntry } from '@al-ummah/shared-types';
 import type { MessageKey } from '@/i18n/translate';
 import type { ChipTone } from './parts';
 
@@ -21,7 +21,7 @@ export function jobTone(status: AdminJob['status']): ChipTone {
 /** Retry: a failed job, or one an admin cancelled. */
 export const canRetryStatus = (job: Pick<AdminJob, 'status'>) => job.status === 'failed' || job.status === 'cancelled';
 /** Cancel: a job that has not finished. */
-export const canCancelStatus = (job: Pick<AdminJob, 'status'>) => ACTIVE.has(job.status);
+export const canCancelStatus = (job: Pick<AdminJob, 'status' | 'kind'>) => ACTIVE.has(job.status) && !(ADMIN_JOB_UNCANCELLABLE_KINDS as readonly string[]).includes(job.kind);
 
 /**
  * A job's error in plain words: what kind of problem it was, from the raw message the job stored. The

@@ -31,7 +31,7 @@ import { cleanLookup, lookup } from '../lib/admin/lookup';
 import { videoThumbnailFolder } from '../lib/admin/purgeCopies';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
-import { canCancel, canRetry, cancelJob, countJobs, getJob, getJobWithLog, listJobs, retryJob } from '../lib/admin/jobs';
+import { canCancel, canRetry, cancelJob, cancellableKind, countJobs, getJob, getJobWithLog, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
@@ -758,8 +758,12 @@ app.post('/jobs/:id/retry', async (c) => {
 app.post('/jobs/:id/cancel', async (c) => {
 	const existing = await getJob(c.env, c.req.param('id'));
 	if (!existing) throw new admin.AdminError(404, 'job_not_found');
+	if (!cancellableKind(existing.kind)) throw new admin.AdminError(409, 'job_not_cancellable', 'A data erasure cannot be cancelled');
 	if (!canCancel(existing)) throw new admin.AdminError(409, 'job_finished', 'The job has already finished');
-	return ok(c, await cancelJob(c.env, existing.id));
+	const job = await cancelJob(c.env, existing.id);
+	// Finished between the read and the update: the conditional update left it as it was
+	if (job?.status !== 'cancelled') throw new admin.AdminError(409, 'job_finished', 'The job has already finished');
+	return ok(c, job);
 });
 
 // ---------------------------------------------------------------------------

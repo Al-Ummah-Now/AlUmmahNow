@@ -1056,15 +1056,15 @@ describe('admin jobs on the Jobs page (TA-8: attempts n/max, next retry, log, Ca
 
 	it('Cancel drops a queued delivery; Retry starts a new run and a delivery left from the old one never runs', async () => {
 		const { env, jobs, call } = await setup();
-		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const created = await createJob(env as never, { kind: 'channel.purge', targetKind: 'channel', targetId: 'ch_cancel1', actorId: 'usr_admin' });
 		// A step that waits: its delivery is still in the queue when the admin cancels
-		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: false, params: { step: 2 }, delaySeconds: 300 }) });
+		await deliver(env, jobs as never, { 'channel.purge': async () => ({ done: false, params: { step: 2 }, delaySeconds: 300 }) });
 		const cancelled = await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
 		assert.equal(cancelled.status, 200);
 		assert.equal(cancelled.body.result.status, 'cancelled');
 		assert.equal(cancelled.body.result.nextRunAt, null);
 		let ran = 0;
-		const handlers = { 'user.delete-data': async () => { ran++; return { done: true }; } };
+		const handlers = { 'channel.purge': async () => { ran++; return { done: true }; } };
 		const stale = jobs.pending[0];
 		await deliver(env, jobs as never, handlers);
 		assert.equal(ran, 0, 'a cancelled job never runs');
@@ -1085,10 +1085,10 @@ describe('admin jobs on the Jobs page (TA-8: attempts n/max, next retry, log, Ca
 
 	it('Cancel while a step runs: the step finishes, nothing after it runs, no failure is raised', async () => {
 		const { env, jobs, call } = await setup();
-		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const created = await createJob(env as never, { kind: 'channel.purge', targetKind: 'channel', targetId: 'ch_cancel1', actorId: 'usr_admin' });
 		const { cancelJob } = await import('../src/lib/admin/jobs');
 		await deliver(env, jobs as never, {
-			'user.delete-data': async () => {
+			'channel.purge': async () => {
 				await cancelJob(env as never, created.id);
 				return { done: false, params: { step: 2 } };
 			},
@@ -1096,9 +1096,9 @@ describe('admin jobs on the Jobs page (TA-8: attempts n/max, next retry, log, Ca
 		assert.equal(jobs.pending.length, 0, 'the next step is not queued');
 		assert.equal((await call('GET', `/jobs/${created.id}`, undefined, { hold: true })).body.result.status, 'cancelled');
 		// The same while an attempt fails: no retry, no failed status
-		const other = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OWNER, actorId: 'usr_admin' });
+		const other = await createJob(env as never, { kind: 'channel.purge', targetKind: 'channel', targetId: 'ch_cancel2', actorId: 'usr_admin' });
 		const out = await deliver(env, jobs as never, {
-			'user.delete-data': async () => {
+			'channel.purge': async () => {
 				await cancelJob(env as never, other.id);
 				throw new Error('boom');
 			},
@@ -1111,17 +1111,41 @@ describe('admin jobs on the Jobs page (TA-8: attempts n/max, next retry, log, Ca
 
 	it('only a failed job retries by default; Cancel refuses a finished job', async () => {
 		const { env, jobs, call } = await setup();
-		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const created = await createJob(env as never, { kind: 'channel.purge', targetKind: 'channel', targetId: 'ch_cancel1', actorId: 'usr_admin' });
 		await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
 		const { retryJob } = await import('../src/lib/admin/jobs');
 		assert.equal((await retryJob(env as never, created.id))?.status, 'cancelled', 'other callers (Errors page, playlist) need allowCancelled');
 		jobs.pending.splice(0);
 		await call('POST', `/jobs/${created.id}/retry`, undefined, { hold: true });
-		await deliver(env, jobs as never, { 'user.delete-data': async () => ({ done: true }) });
+		await deliver(env, jobs as never, { 'channel.purge': async () => ({ done: true }) });
 		const res = await call('POST', `/jobs/${created.id}/cancel`, undefined, { hold: true });
 		assert.equal(res.status, 409);
 		assert.equal(res.body.code, 'job_finished');
 		assert.equal((await call('POST', '/jobs/nope/cancel', undefined, { hold: true })).status, 404);
+	});
+
+	it('a data erasure cannot be cancelled; a cancel that lands after the job finished changes nothing', async () => {
+		const { env, jobs, call, db } = await setup();
+		const erase = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const refused = await call('POST', `/jobs/${erase.id}/cancel`, undefined, { hold: true });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'job_not_cancellable');
+		const { cancelJob } = await import('../src/lib/admin/jobs');
+		assert.equal((await cancelJob(env as never, erase.id))?.status, 'queued');
+		jobs.pending.splice(0);
+		// Finished between the read and the update: the conditional update leaves it succeeded
+		const purge = await createJob(env as never, { kind: 'channel.purge', targetKind: 'channel', targetId: 'ch_race', actorId: 'usr_admin' });
+		const real = (env as any).SEARCH_DB.prepare.bind((env as any).SEARCH_DB);
+		(env as any).SEARCH_DB.prepare = (sql: string) => {
+			if (sql.includes("SET status = 'cancelled'")) db.db.prepare("UPDATE admin_jobs SET status = 'succeeded' WHERE id = ?").run(purge.id);
+			return real(sql);
+		};
+		const late = await cancelJob(env as never, purge.id);
+		(env as any).SEARCH_DB.prepare = real;
+		assert.equal(late?.status, 'succeeded');
+		const job = (await call('GET', `/jobs/${purge.id}`, undefined, { hold: true })).body.result;
+		assert.equal(job.status, 'succeeded');
+		assert.ok(!job.log.some((l: any) => l.event === 'cancelled'));
 	});
 
 	it('keeps the newest 50 log lines per job', async () => {

@@ -676,6 +676,12 @@ export interface AdminJobLogEntry {
 /** Lines kept per job: the oldest go first. */
 export const ADMIN_JOB_LOG_LIMIT = 50;
 
+/**
+ * Kinds Cancel never applies to: a data erasure, once asked for, runs to the end (a cancel arriving
+ * after its last step would leave the person's id in the job's own records).
+ */
+export const ADMIN_JOB_UNCANCELLABLE_KINDS: readonly AdminJobKind[] = ['user.delete-data', 'user.erase-run'];
+
 /** The permission an admin needs to retry a job of each kind (the same one that started it). */
 export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly AdminContentPermission[]>> = {
   'channel.sync-holds': ['channels:manage'],
