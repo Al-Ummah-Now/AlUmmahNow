@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from '@/components/common/AppLink';
 import { can, formatInteger, type ChannelRole } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -51,16 +51,19 @@ export function GeneralTab({ locale, role, channel }: { locale: string; role: Ch
     };
   }, [channel.id, isOwner, role]);
 
-  let limits: string;
+  let limits: ReactNode;
   if (!isOwner) limits = text.limitsOwnerOnly;
   else if (creator.status !== 'ready') limits = '';
   else if (!creator.access.tier) limits = text.limitsNone;
   else if (!creator.access.limits) limits = text.limitsUnlimited;
-  else
-    limits = text.limitsTier
-      .replace('{tier}', creator.access.tier.name)
+  else {
+    const sentence = text.limitsTier
       .replace('{perHour}', formatInteger(locale, creator.access.limits.perHour))
       .replace('{perDay}', formatInteger(locale, creator.access.limits.perDay));
+    // The tier's name is admin text (often Latin): isolated so it keeps its own direction in Arabic
+    const tierName = creator.access.tier.name;
+    limits = sentence.split('{tier}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key={`tier-${i}`}>{tierName}</bdi>, part]));
+  }
 
   return (
     <div className="max-w-3xl space-y-4" data-testid="studio-settings-general">

@@ -231,7 +231,9 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
     );
   }
 
-  const initial = avatarInitial(primaryText({ en: fields.nameEn, ar: fields.nameAr }), channel.name, channel.handle);
+  // The page language's name first, the same as the rail and the header pill (an Arabic page shows «ح», not "A")
+  const shownName = lang === 'ar' ? fields.nameAr.trim() || fields.nameEn.trim() : fields.nameEn.trim() || fields.nameAr.trim();
+  const initial = avatarInitial(shownName, channel.name, channel.handle);
   const counter = (n: number, max: number) => text.count.replace('{n}', formatNumber(lang, n)).replace('{max}', formatNumber(lang, max));
 
   return (
@@ -256,7 +258,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
         <div className="px-4 pb-4 md:px-6">
           <EditableAvatar
             url={images.avatarUrl}
-            alt={primaryText({ en: fields.nameEn, ar: fields.nameAr }) || channel.name || t.channel.currentAvatar}
+            alt={shownName || t.channel.currentAvatar}
             onPick={() => document.getElementById('studio-avatar-input')?.click()}
             onRemove={() => void removeImage('avatar')}
             labels={{ pick: t.channel.clickToChangeAvatar, change: t.channel.changeAvatar, remove: t.channel.removeAvatar }}

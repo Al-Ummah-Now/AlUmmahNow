@@ -14,12 +14,16 @@ const update = jest.fn();
 jest.mock('@/lib/api/channels', () => ({ getChannelForOwner: (...a: unknown[]) => getChannel(...a) }));
 jest.mock('@/lib/api/channel-profile', () => ({ updateChannelProfile: (...a: unknown[]) => update(...a) }));
 jest.mock('@/lib/api/direct-upload', () => ({ uploadFileDirect: jest.fn() }));
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: EN_TRANSLATIONS, lang: 'en', isRTL: false }) }));
+let mockLang: 'en' | 'ar' = 'en';
+jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: EN_TRANSLATIONS, lang: mockLang, isRTL: mockLang === 'ar' }) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ reloadChannels: jest.fn() }) }));
 jest.mock('@/hooks/useLeaveGuard', () => ({ useLeaveGuard: () => null }));
 jest.mock('@/components/ui/confirm-dialog', () => ({ useConfirm: () => ({ confirm: jest.fn(), dialog: null }) }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
-jest.mock('@/components/media/ProfileImages', () => ({ EditableAvatar: () => null, EditableCover: () => null }));
+jest.mock('@/components/media/ProfileImages', () => ({
+  EditableAvatar: ({ placeholder }: { placeholder?: React.ReactNode }) => <div data-testid="avatar-placeholder">{placeholder}</div>,
+  EditableCover: () => null,
+}));
 jest.mock('@/components/ImageCropDialog', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/settings/ChannelTranslationSettings', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/components/settings/ChannelAboutFields', () => ({ ChannelAboutFields: () => null, canSubmitAboutFields: () => true }));
@@ -32,6 +36,7 @@ const save = () => screen.getByTestId('channel-edit-save');
 describe('ProfileTab: either-language save', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLang = 'en';
     update.mockImplementation(async (_id: string, data: Record<string, unknown>) => ({ ok: true, channel: { ...base, ...data } }));
   });
 
@@ -65,5 +70,18 @@ describe('ProfileTab: either-language save', () => {
     render(<ProfileTab channelId="ch1" role="owner" />);
     await waitFor(() => expect(nameAr().value).toBe('حلقة الفجر'));
     expect(nameEn().value).toBe('');
+  });
+
+  it('the avatar initial comes from the page language: «ح» on an Arabic page, "A" on an English one', async () => {
+    getChannel.mockResolvedValue({ ...base, name: 'Al-Fajr', nameLocalized: { en: 'Al-Fajr', ar: 'حلقة الفجر' } });
+    mockLang = 'ar';
+    const { unmount } = render(<ProfileTab channelId="ch1" role="owner" />);
+    await waitFor(() => expect(nameAr().value).toBe('حلقة الفجر'));
+    expect(screen.getByTestId('avatar-placeholder').textContent).toBe('ح');
+    unmount();
+    mockLang = 'en';
+    render(<ProfileTab channelId="ch1" role="owner" />);
+    await waitFor(() => expect(nameEn().value).toBe('Al-Fajr'));
+    expect(screen.getByTestId('avatar-placeholder').textContent).toBe('A');
   });
 });
