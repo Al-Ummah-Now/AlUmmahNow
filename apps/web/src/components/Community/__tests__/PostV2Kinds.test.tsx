@@ -58,6 +58,8 @@ describe('PostV2 kinds on the Community tab', () => {
     const post = fx('link');
     render(<LinkPost post={{ ...post, link: { ...post.link!, siteName: null } }} />);
     expect(screen.getByTestId('community-link-site')).toHaveTextContent('example.org');
+    // dir=auto like the title, so the host line sits at the start edge on Arabic pages too
+    expect(screen.getByTestId('community-link-site')).toHaveAttribute('dir', 'auto');
   });
 
   it('markdown: no HTML, no javascript: links, https images only', () => {
