@@ -6,6 +6,8 @@
 @import '../../../web/src/theme/materials.css';
 /* Header account button and menus: the shared nav contract (docs/design/NAV.md) */
 @import '../../../../packages/fanous-tokens/nav/aun-nav.css';
+/* the header controls' fonts (nahas, zujaj), served from public/aun-nav/fonts */
+@import '../../../../packages/fanous-tokens/nav/aun-nav-fonts.css';
 /* Cards, panels, menus and buttons: frosted glass with the golden edge, flat Material everything else */
 @import '../../../../packages/fanous-tokens/surfaces/aun-surfaces.css';
 @import '../../../../packages/fanous-tokens/street/fanous-street.css';
@@ -262,8 +264,10 @@ body:lang(ar) {
   font-family: var(--fanous-font-arabic), system-ui, sans-serif;
 }
 
-/* The shell's materials: the same surfaces as the site's header, rail and selected item */
-.shell-header {
+/* The shell's materials: the same surfaces as the site's header, rail and selected item. The header bar
+   itself (.aun-header) takes its band, edge and blur from the shared contract (aun-nav.css, the theme
+   header block), like every app's; this paints the phone tab bar to match */
+.shell-header:not(.aun-header) {
   background: var(--m-header, var(--fanous-c-nav-bg));
   box-shadow: var(--m-header-edge, none);
   -webkit-backdrop-filter: var(--m-blur, none);

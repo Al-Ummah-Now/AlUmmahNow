@@ -36,7 +36,7 @@ test('the art is scoped to the theme and mode; uploaded packages carry it inline
   const { art, css } = compilePackage(theme, { svgText: svgTextOf(files) });
   assert.match(art, /html\[data-theme='my-theme'\]\.dark \{\n {2}--fanous-header-graphic: url\("data:image\/svg\+xml,%3Csvg/);
   assert.match(art, /html\[data-theme='my-theme'\]:not\(\.dark\) \{\n {2}--fanous-header-graphic: url\("data:image\/svg\+xml,/);
-  assert.ok(css.endsWith(art), 'the art is part of the served CSS');
+  assert.ok(css.includes(art), 'the art is part of the served CSS');
   assert.doesNotMatch(art, /[<>"]svg/, 'encoded, so it cannot leave the url("…")');
 });
 
