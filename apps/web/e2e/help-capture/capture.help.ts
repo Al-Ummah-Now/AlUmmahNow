@@ -2174,8 +2174,9 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
       const menu = await openMenu(page, 'channels');
       // The picker itself, header and menu (rows' columns)
       const mb = (await menu.boundingBox())!;
-      // Ends on a clear band at least 4 px under the menu: no text or icon cut or within 4 px of the edge
-      // (AUDIT-2 2026-11-22: the rail's next item and the channel name were sliced)
+      // Ends on a clear band at least 4 px under the menu that cuts nothing: no text or icon, and no
+      // picture or card either (AUDIT-2 2026-11-22: end below the player, so its poster is whole, and
+      // after the channel card's bottom border on phone). Page-sized wrappers are left out
       const pickerBottom = await page.evaluate((from) => {
         const items: Array<{ top: number; bottom: number }> = [];
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -2189,19 +2190,19 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
           range.selectNodeContents(t);
           for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) items.push({ top: r.top, bottom: r.bottom });
         }
-        for (const el of document.querySelectorAll('svg, img, input, button, select, textarea')) {
+        const big = (r: DOMRect) => r.height > innerHeight * 0.7 || (r.width >= innerWidth * 0.98 && r.height > innerHeight * 0.4);
+        for (const el of document.querySelectorAll('svg, img, video, canvas, input, button, select, textarea')) {
           if (el.closest('[data-testid="nav-menu"]')) continue;
           const r = el.getBoundingClientRect();
-          if (r.width > 1 && r.height > 1 && r.height < 160) items.push({ top: r.top, bottom: r.bottom });
+          if (r.width > 1 && r.height > 1 && !big(r)) items.push({ top: r.top, bottom: r.bottom });
         }
-        // A card's bottom line: the frame ends 4 px past it, or cuts through the card's body well above it
         for (const el of document.querySelectorAll<HTMLElement>('body *')) {
           if (el.closest('[data-testid="nav-menu"]')) continue;
           const cs = getComputedStyle(el);
-          const card = parseFloat(cs.borderBottomWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
+          const card = parseFloat(cs.borderBottomWidth) >= 1 || parseFloat(cs.borderTopWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
           if (!card) continue;
           const r = el.getBoundingClientRect();
-          if (r.width > 40 && r.bottom > from && r.bottom < innerHeight) items.push({ top: r.bottom - 4, bottom: r.bottom + 4 });
+          if (r.width > 40 && r.height > 1 && !big(r) && r.bottom > from) items.push({ top: r.top, bottom: r.bottom });
         }
         for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!items.some((it) => it.top < y && it.bottom > y - 4)) return y;
         return innerHeight;
