@@ -128,15 +128,27 @@ export function idleBilledCloudflare(days: Map<string, MeterUsage>, now: Date): 
   return billMonth(usage).total;
 }
 
-/** The month's billed estimate and its projection from per-day meter usage. */
-export function billedCloudflare(days: Map<string, MeterUsage>, now: Date): CloudflareBilled {
+/**
+ * The month's billed estimate and its projection from per-day meter usage. `coveredUntil` is how
+ * far today's collected data reaches (the end of the newest hour in ops_hourly; now by default):
+ * storage accrues by time, so today's size counts only for that part of the day, and a collection
+ * that stopped earlier (a refused token) shows fewer GB-months, not the same.
+ */
+export function billedCloudflare(days: Map<string, MeterUsage>, now: Date, coveredUntil: Date = now): CloudflareBilled {
   const month = now.toISOString().slice(0, 7);
   const today = now.toISOString().slice(0, 10);
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   const daysElapsed = now.getUTCDate() - 1 + (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440;
   const daysLeft = Math.max(0, daysInMonth - daysElapsed);
   const mtd: MeterUsage = {};
-  for (const [day, u] of days) if (day.startsWith(month)) addInto(mtd, u);
+  // Storage on today's row counts for the part of today the data covers (a whole day on earlier rows)
+  const todayStart = Date.parse(`${today}T00:00:00Z`);
+  const todayShare = Math.max(0, Math.min(1, (Math.min(coveredUntil.getTime(), now.getTime()) - todayStart) / 86_400_000));
+  for (const [day, u] of days) {
+    if (!day.startsWith(month)) continue;
+    if (day !== today) addInto(mtd, u);
+    else for (const [k, v] of Object.entries(u) as [CfMeterKey, number][]) mtd[k] = (mtd[k] ?? 0) + (STORAGE_METERS.includes(k) ? v * todayShare : v);
+  }
   // The last 7 full days carried forward (the same rule as the rest of the budget's projection)
   const full = [...days.keys()].filter((d) => d < today).sort().slice(-7);
   const avg: MeterUsage = {};
@@ -145,12 +157,12 @@ export function billedCloudflare(days: Map<string, MeterUsage>, now: Date): Clou
   addInto(projected, avg, daysLeft);
   const linear: MeterUsage = {};
   addInto(linear, mtd, daysElapsed > 0 ? daysInMonth / daysElapsed : 1);
-  // Storage: GB-days so far plus the latest day's size for the days left, over the month's days
+  // Storage: GB-days so far plus the latest size for the rest of the month (from where the data stops), over the month's days
   const latest = full.length ? days.get(full[full.length - 1]!)! : {};
   for (const k of STORAGE_METERS) {
     const sofar = mtd[k] ?? 0;
     mtd[k] = sofar / daysInMonth;
-    projected[k] = (sofar + (latest[k] ?? 0) * daysLeft) / daysInMonth;
+    projected[k] = (sofar + (latest[k] ?? 0) * Math.max(0, daysInMonth - (now.getUTCDate() - 1) - todayShare)) / daysInMonth;
     linear[k] = projected[k];
   }
   return { month, mtd: billMonth(mtd), projected: billMonth(projected), linear: billMonth(linear), usage: { mtd, projected } };

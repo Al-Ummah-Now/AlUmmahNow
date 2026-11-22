@@ -386,6 +386,20 @@ describe('Cloudflare billed estimate (COST-GAPS)', () => {
     assert.ok(b.mtd.listTotal > b.mtd.total, 'list price ignores the included usage');
   });
 
+  it('today\'s storage counts only for the part of the day the data covers (AUDIT-2 round 9)', () => {
+    const now = new Date('2026-11-21T21:40:00Z');
+    const days = new Map<string, MeterUsage>();
+    for (let d = 1; d <= 21; d++) days.set(`2026-11-${String(d).padStart(2, '0')}`, { r2_storage_gb: 30 });
+    const healthy = billedCloudflare(days, now, new Date('2026-11-21T21:00:00Z'));
+    const refused = billedCloudflare(days, now, new Date('2026-11-21T15:00:00Z'));
+    // 20 whole days + 21/24 of today, over 30 days; the earlier cut has fewer GB-months
+    assert.ok(Math.abs(healthy.usage.mtd.r2_storage_gb! - (30 * (20 + 21 / 24)) / 30) < 1e-9);
+    assert.ok(Math.abs(refused.usage.mtd.r2_storage_gb! - (30 * (20 + 15 / 24)) / 30) < 1e-9);
+    assert.ok(refused.usage.mtd.r2_storage_gb! < healthy.usage.mtd.r2_storage_gb!);
+    // The month end is the same 30 GB for the whole month either way
+    assert.ok(Math.abs(healthy.usage.projected.r2_storage_gb! - 30) < 1e-9 && Math.abs(refused.usage.projected.r2_storage_gb! - 30) < 1e-9);
+  });
+
   it('the dashboard counts Cloudflare as billed, lists the meters, the fixed costs, idle cost, drivers and the stacked trend', async () => {
     const db = costsD1();
     const now = new Date('2026-11-21T12:00:00Z');

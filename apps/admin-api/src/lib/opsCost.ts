@@ -210,12 +210,37 @@ export function idleProjection(
  * floors are list prices, so the account's included usage would otherwise be counted as cost and
  * the idle month could exceed the projected one. The per-env split keeps its list-price shares.
  */
+/** Splits `totalCents` over `weights` by largest remainder: whole cents that add up exactly. */
+export function apportionCents(totalCents: number, weights: Map<string, number>): Map<string, number> {
+  const out = new Map<string, number>();
+  const sum = [...weights.values()].reduce((a, b) => a + Math.max(0, b), 0);
+  if (weights.size === 0) return out;
+  if (sum <= 0) {
+    // Nothing to weigh by: an even split, any leftover cent to the first
+    const keys = [...weights.keys()];
+    keys.forEach((k, i) => out.set(k, Math.floor(totalCents / keys.length) + (i < totalCents % keys.length ? 1 : 0)));
+    return out;
+  }
+  const exact = [...weights].map(([k, w]) => ({ k, v: (Math.max(0, w) / sum) * totalCents }));
+  for (const e of exact) out.set(e.k, Math.floor(e.v));
+  let left = totalCents - [...out.values()].reduce((a, b) => a + b, 0);
+  for (const e of [...exact].sort((a, b) => b.v - Math.floor(b.v) - (a.v - Math.floor(a.v)) || b.v - a.v)) {
+    if (left <= 0) break;
+    out.set(e.k, out.get(e.k)! + 1);
+    left--;
+  }
+  return out;
+}
+
 export function billIdle(idle: IdleProjection, cloudflareBilled: number): IdleProjection {
   const listCf = idle.parts.cloudflare;
   const ratio = listCf > 0 ? cloudflareBilled / listCf : 0;
+  // The environments split the rounded Cloudflare part in cents (largest remainder), so they add up to it exactly
+  const cloudflare = round2(cloudflareBilled);
+  const cents = ratio > 0 ? apportionCents(Math.round(cloudflare * 100), new Map(Object.entries(idle.byEnv))) : new Map<string, number>();
   const byEnv: Record<string, number> = {};
-  for (const [k, v] of Object.entries(idle.byEnv)) byEnv[k] = round2(v * ratio);
-  const parts = { ...idle.parts, cloudflare: round2(cloudflareBilled) };
+  for (const k of Object.keys(idle.byEnv)) byEnv[k] = (cents.get(k) ?? 0) / 100;
+  const parts = { ...idle.parts, cloudflare };
   return { ...idle, byEnv, parts, monthlyUsd: round2(Object.values(parts).reduce((s, x) => s + x, 0)) };
 }
 
@@ -532,6 +557,18 @@ export function wantedAlerts(
   return out;
 }
 
+/** The end of the newest collected hour today (ops_hourly), or now when it can't tell. */
+export async function dataReachesUntil(db: D1Database | undefined, now: Date): Promise<Date> {
+  if (!db) return now;
+  try {
+    const row = await db.prepare('SELECT MAX(hour) AS hour FROM ops_hourly WHERE hour >= ?').bind(`${now.toISOString().slice(0, 10)}T00:00:00Z`).first<{ hour: string | null }>();
+    const t = row?.hour ? Date.parse(row.hour) : NaN;
+    return Number.isFinite(t) ? new Date(Math.min(now.getTime(), t + 3_600_000)) : now;
+  } catch {
+    return now;
+  }
+}
+
 /**
  * Everything the one budget counts (COST-GAPS), loaded once: Cloudflare as billed after the
  * included usage, Bunny, Containers, Workers AI, Resend, the plan and the fixed and other costs.
@@ -547,7 +584,7 @@ export async function loadBudget(env: CostDbs, now: Date, settings: CostAlertSet
     fixedCostsBudget(env.COSTS_DB, now),
   ]);
   const extras = await loadExtraDays(env, since, productDays);
-  const billed = billedCloudflare(meterDays, now);
+  const billed = billedCloudflare(meterDays, now, await dataReachesUntil(env.COSTS_DB, now));
   const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels, {
     cloudflare: { mtd: billed.mtd.total, projected: billed.projected.total },
     fixed: { mtd: fixed.mtd, projected: fixed.projected },
