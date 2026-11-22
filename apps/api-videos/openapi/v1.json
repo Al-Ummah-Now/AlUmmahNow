@@ -398,6 +398,16 @@
             "description": "ISO end date (default: now)",
             "name": "dateTo",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC",
+            "name": "tz",
+            "in": "query"
           }
         ],
         "responses": {
@@ -886,6 +896,16 @@
             "description": "ISO end date (default: now)",
             "name": "dateTo",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC",
+            "name": "tz",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1084,6 +1104,16 @@
             "required": false,
             "description": "ISO end date (default: now)",
             "name": "dateTo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC",
+            "name": "tz",
             "in": "query"
           }
         ],
@@ -1342,6 +1372,16 @@
             "required": false,
             "description": "ISO end date (default: now)",
             "name": "dateTo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC",
+            "name": "tz",
             "in": "query"
           }
         ],
@@ -1688,6 +1728,16 @@
             "required": false,
             "description": "ISO end date (default: now)",
             "name": "dateTo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC",
+            "name": "tz",
             "in": "query"
           }
         ],
@@ -6356,6 +6406,17 @@
             },
             "required": false,
             "name": "dateTo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The viewer's IANA time zone; the default end date follows it"
+            },
+            "required": false,
+            "description": "The viewer's IANA time zone; the default end date follows it",
+            "name": "tz",
             "in": "query"
           },
           {

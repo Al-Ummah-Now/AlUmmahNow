@@ -73,6 +73,7 @@ const MetricSchema = z.object({
 const RangeQuery = {
   dateFrom: Str({ description: "ISO start date (default: 28 days ago)" }).optional(),
   dateTo: Str({ description: "ISO end date (default: now)" }).optional(),
+  tz: Str({ description: "The viewer's IANA time zone (e.g. America/New_York): the default end date and the days likes, comments and subscribers fall on follow it. Unknown or absent = UTC" }).optional(),
 };
 
 const errorResponses = {
@@ -219,7 +220,7 @@ export class AnalyticsChannelGet extends AuthenticatedRoute {
     const { params, query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const range = parseRange(query.dateFrom, query.dateTo);
+      const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
       const scope = await loadScope(c, userId, params.channelId, range);
       if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const rollups = await loadRollups(c.env, "channel", [params.channelId], range);
@@ -279,7 +280,7 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
       if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {
         return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
       }
-      const range = parseRange(query.dateFrom, query.dateTo);
+      const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
       const rollups = await loadRollups(c.env, "video", [video.id], range);
       const daily = buildDailySeries(range, [video], [], rollups);
       const inRange = sumSeries(daily);
@@ -326,7 +327,7 @@ export class AnalyticsRetentionGet extends AuthenticatedRoute {
       if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {
         return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
       }
-      const range = parseRange(query.dateFrom, query.dateTo);
+      const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
       const docs = await loadRetention(c.env, video.id, range);
       return c.json(buildRetentionCurve(docs, range));
     } catch (error) {
@@ -361,7 +362,7 @@ export class AnalyticsMetricsGet extends AuthenticatedRoute {
     const { query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const range = parseRange(query.dateFrom, query.dateTo);
+      const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
       const scope = await loadScope(c, userId, query.channelId, range);
       if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const rollups = await loadRollups(c.env, "channel", scope.channels.map(ch => ch.id), range);

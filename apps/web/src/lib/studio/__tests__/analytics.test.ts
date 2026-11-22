@@ -4,14 +4,30 @@ const NOW = new Date('2026-11-09T12:00:00.000Z');
 
 describe('rangeDates', () => {
   it('covers the last N days and the N before', () => {
-    expect(rangeDates('7', NOW)).toEqual({
-      current: { dateFrom: '2026-11-03', dateTo: '2026-11-09' },
-      previous: { dateFrom: '2026-10-27', dateTo: '2026-11-02' },
+    expect(rangeDates('7', NOW, undefined, 'UTC')).toEqual({
+      current: { dateFrom: '2026-11-03', dateTo: '2026-11-09', tz: 'UTC' },
+      previous: { dateFrom: '2026-10-27', dateTo: '2026-11-02', tz: 'UTC' },
     });
   });
 
   it('runs all time from the channel\'s creation, with nothing to compare', () => {
-    expect(rangeDates('all', NOW, '2026-01-15T00:00:00.000Z')).toEqual({ current: { dateFrom: '2026-01-15', dateTo: '2026-11-09' }, previous: null });
+    expect(rangeDates('all', NOW, '2026-01-15T00:00:00.000Z', 'UTC')).toEqual({ current: { dateFrom: '2026-01-15', dateTo: '2026-11-09', tz: 'UTC' }, previous: null });
+  });
+
+  // 7:30 pm Eastern on 21 Nov (EST) is 00:30 UTC on 22 Nov: the chart ends on the viewer's 21 Nov
+  it('ends on the viewer\'s today just after 7 pm Eastern, when UTC is already tomorrow', () => {
+    const evening = new Date('2026-11-22T00:30:00.000Z');
+    expect(rangeDates('28', evening, undefined, 'America/New_York')).toEqual({
+      current: { dateFrom: '2026-10-25', dateTo: '2026-11-21', tz: 'America/New_York' },
+      previous: { dateFrom: '2026-09-27', dateTo: '2026-10-24', tz: 'America/New_York' },
+    });
+    expect(rangeDates('7', evening, undefined, 'UTC').current.dateTo).toBe('2026-11-22');
+    // The channel's first day is its local creation date too
+    expect(rangeDates('all', evening, '2026-01-15T02:00:00.000Z', 'America/New_York').current.dateFrom).toBe('2026-01-14');
+  });
+
+  it('sends the browser zone by default', () => {
+    expect(rangeDates('7', NOW).current.tz).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 });
 
