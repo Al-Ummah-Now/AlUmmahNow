@@ -191,7 +191,7 @@ There is one sign-out entry, inside the account menu. The header has no separate
   4. a name in the other language;
   5. `@handle`;
   6. the email, only when there is nothing else.
-- `.aun-caret`.
+- `.aun-caret`, in the name's colour (`--fanous-c-nav-text`) in every app.
 - Pill shape (`--fanous-radius-full`), 2.5rem tall, 1px `--fanous-c-nav-search-border`. Hover
   and open use `--fanous-c-nav-hover`. Focus is a 2px `--fanous-c-nav-active-text` ring.
 - Below 768px the name is visually hidden but stays the accessible name. The button shows the
