@@ -11,6 +11,7 @@ describe('asServiceUnavailable', () => {
     const out = asServiceUnavailable(req('/en/video/abc'), res(500));
     expect(out.status).toBe(503);
     expect(out.headers.get('Retry-After')).toBe('120');
+    expect(out.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
     expect(out.headers.get('Cache-Control')).toBe('no-store');
     expect(out.headers.get('Content-Type')).toBe('text/html');
     expect(await out.text()).toBe('body');

@@ -12,6 +12,7 @@
  * guides/error-pages.md). The card has one heading block, so the page keeps one h1.
  */
 import { ERROR_PAGE_ICONS, errorCodeLabel, errorPageTitle, errorScreenStrings } from '@al-ummah/shared-types';
+import { ERROR_ROBOTS } from './error-robots';
 
 const GONE_PATH = /^\/[a-z]{2}\/(video|shorts|playlist|channels)\/([A-Za-z0-9_-]{1,128})\/?$/;
 const API_COLLECTION: Record<string, string> = { video: 'videos', shorts: 'videos', playlist: 'playlists', channels: 'channels' };
@@ -40,7 +41,7 @@ export async function asGoneIfPurged(request: Request, response: Response, env: 
     return response;
   }
   const headers = new Headers(response.headers);
-  headers.set('X-Robots-Tag', 'noindex');
+  headers.set('X-Robots-Tag', ERROR_ROBOTS);
   const gone = new Response(response.body, { status: 410, statusText: 'Gone', headers });
   return asGonePage(gone, new URL(request.url).pathname.startsWith('/ar/') ? 'ar' : 'en');
 }

@@ -8,6 +8,8 @@
  * and HEAD of locale pages; API routes, embeds and files keep their status. The request log
  * keeps the original 500. The page's error card then shows 503 too (withStatusGlobal).
  */
+import { ERROR_ROBOTS } from './error-robots';
+
 const PAGE_PATH = /^\/[a-z]{2}(\/|$)/;
 export const RETRY_AFTER_SECONDS = 120;
 
@@ -18,7 +20,7 @@ export function asServiceUnavailable(request: Request, response: Response): Resp
   const headers = new Headers(response.headers);
   headers.set('Retry-After', String(RETRY_AFTER_SECONDS));
   headers.set('Cache-Control', 'no-store');
-  headers.set('X-Robots-Tag', 'noindex');
+  headers.set('X-Robots-Tag', ERROR_ROBOTS);
   return withStatusGlobal(new Response(response.body, { status: 503, statusText: 'Service Unavailable', headers }), 503);
 }
 

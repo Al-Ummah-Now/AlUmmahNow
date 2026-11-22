@@ -28,6 +28,7 @@ describe('asGoneIfPurged', () => {
     const fetcher = api(410);
     const out = await asGoneIfPurged(req('/en/video/abc'), page(404), env, fetcher);
     expect(out.status).toBe(410);
+    expect(out.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
     expect(out.headers.get('Content-Type')).toBe('text/html');
     expect(await out.text()).toContain('not found');
     expect(fetcher).toHaveBeenCalledWith('https://videos.api.example/api/videos/abc', expect.anything());
