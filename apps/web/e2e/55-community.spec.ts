@@ -146,6 +146,16 @@ test.beforeAll(async ({ browser, creators }) => {
   });
 });
 
+/** Resolves once every running CSS transition/animation on the page has finished (a frame later). */
+async function settleTransitions(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    const finite = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity);
+    await Promise.race([Promise.all(finite.map((a) => a.finished.catch(() => undefined))), new Promise((r) => setTimeout(r, 3000))]);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+  });
+}
+
 test.describe('Post manager', () => {
   test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
@@ -473,7 +483,9 @@ test.describe('Community tab - engagement', () => {
         }
         for (const theme of SITE_THEMES) {
           await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
-          await page.waitForTimeout(150);
+          // Measure once every colour transition has finished (the theme switch and, on the first theme
+          // after the clicks, the idle→active change): a fixed wait read colours mid-transition
+          await settleTransitions(page);
           // Against the real pixels behind each count and icon (the card is glass over the page)
           for (const r of await actionRowContrast(page, row)) {
             if (r.ratio < r.required) failures.push(`${theme} ${mode} ${state} ${r.name}: ${r.ratio}:1 < ${r.required}:1 (${r.color})`);
