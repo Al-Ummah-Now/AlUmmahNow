@@ -47,10 +47,11 @@ interface Props {
   children: ReactNode;
 }
 
+// Filled like the post card and header avatars: a muted circle vanished on the drawer's own surface
 function Avatar({ url, name }: { url?: string; name: string }) {
   if (url) return <Image src={url} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-full object-cover" unoptimized />;
   return (
-    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--aun-btn-filled-bg)] text-sm font-bold text-[var(--aun-btn-filled-fg)]">
       {avatarInitial(name)}
     </span>
   );
