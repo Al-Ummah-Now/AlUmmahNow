@@ -101,6 +101,13 @@
   pointer-events: auto;
 }
 
+/* A small frame's menu covers the whole frame, 8px in: nothing of the bar shows in that margin.
+   Opacity only, so the gear stays focusable for the menu to hand focus back to on close. */
+.video-js.vjs-fanous.vjs-menu-open.vjs-menu-over-bar .vjs-control-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .video-js.vjs-fanous .vjs-custom-control-spacer {
   display: block;
   flex: 1 1 auto;

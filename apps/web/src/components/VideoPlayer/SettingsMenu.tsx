@@ -221,6 +221,10 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
       const anchor = (over ? frame.bottom : frame.bottom - barH) - 8;
       const room = Math.max(0, Math.min(over ? frame.height - 16 : above, anchor - 8));
       menu.toggleAttribute('data-over-bar', over);
+      // The panel covering a small frame sits 8px in from its edges: the bar under it is hidden so
+      // none of it (the active captions button's underline) shows in that margin
+      if (over) p.addClass('vjs-menu-over-bar');
+      else p.removeClass('vjs-menu-over-bar');
       menu.style.bottom = `${viewportH - anchor}px`;
       menu.style.maxHeight = `${room}px`;
       // A small player's panel is the whole frame whatever the view holds (Safari, playing HLS
@@ -238,6 +242,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
       ro?.disconnect();
       window.removeEventListener('scroll', fit, { capture: true });
       window.removeEventListener('resize', fit);
+      p.removeClass('vjs-menu-over-bar');
     };
   }, [open, panel, p, host]);
 
