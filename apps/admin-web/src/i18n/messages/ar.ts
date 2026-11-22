@@ -4468,7 +4468,7 @@ const ar: Messages = {
       reconcile: 'المجموع بسعر القائمة {list}، ناقص الاستخدام المشمول في Cloudflare {included}، يساوي {billed}: ما أُنفق هذا الشهر كما تحسبه الميزانية.',
       trendKeys: { production: 'الإنتاج', stage: 'التجهيز', qa: 'الاختبار', bunny: 'Bunny', containers: 'التحويل', ai: 'Workers\u00a0AI', resend: 'Resend', plan: 'خطة Workers', fixed: 'الثابتة وغيرها' },
       axisUnit: 'دولار',
-      trendNote: 'كل بيئة هي إنفاقها على Cloudflare بسعر القائمة؛ وبقية المصادر بما فُوتر أو قُدّر.',
+      trendNote: 'كل بيئة هي إنفاقها على Cloudflare بسعر القائمة؛ وبقية المصادر بما فُوتر أو قُدّر. الأيام بتوقيت غرينتش كما تعدّها Cloudflare وBunny وResend، فيبدأ عمود اليوم الجديد مساءً بتوقيت نيويورك.',
     },
     products: {
       workers: 'Workers',
@@ -4684,9 +4684,9 @@ const ar: Messages = {
       resendPlan: 'خطة Resend',
       resendPlanHelp: 'تحدّد سعر بند البريد في التوقّع.',
       plans: {
-        free: 'المجانية: {included, plural, one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}} شهريًا',
-        pro: 'Pro: {price} شهريًا، {included, plural, one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}}',
-        scale: 'Scale: {price} شهريًا، {included, plural, one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}}',
+        free: 'المجانية: {emails} شهريًا',
+        pro: 'Pro: {price} شهريًا، {emails}',
+        scale: 'Scale: {price} شهريًا، {emails}',
       },
       save: 'احفظ الإعدادات',
       saved: 'حُفظت إعدادات التنبيه.',
@@ -4707,7 +4707,7 @@ const ar: Messages = {
       about: {
         cloudflare: 'رمز \u2066API\u2069 للقراءة فقط. يحتاج إلى صلاحية \u2066Account\u00a0Analytics:\u00a0Read\u2069، وللتغطية الكاملة أيضًا صلاحية القراءة \u2066(Read)\u2069 لكلٍّ من \u2066Workers Scripts\u2069 و\u2066D1\u2069 و\u2066Workers KV Storage\u2069 و\u2066Workers R2 Storage\u2069 و\u2066Queues\u2069 و\u2066Containers\u2069.',
         bunny: 'مفتاح API الخاص بالحساب، ويُقرأ به الفوترة. من دونه تُقدَّر تكلفة Bunny من البثّ.',
-        resend: 'مفتاح API بصلاحيات كاملة، يُعدّ به ما أُرسل من رسائل (مفتاح الإرسال وحده لا يستطيع ذلك). من دونه لا تظهر لـ Resend أي تكلفة.',
+        resend: 'مفتاح API بصلاحيات كاملة، يُعدّ به ما أُرسل من رسائل (مفتاح الإرسال وحده لا يستطيع ذلك). من دونه لا تظهر أي تكلفة لـ\u00a0Resend.',
       },
       status: {
         release: 'غير مُضاف هنا: يستخدم الجامع رمز الإصدار المشترك',

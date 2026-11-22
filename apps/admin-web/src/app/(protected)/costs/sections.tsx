@@ -635,14 +635,14 @@ function MoversTable({ title, rows, empty, testId, t, locale }: { t: Translator;
                 return (
                   <tr key={m.id} className="border-t border-border" data-testid="costs-mover-row" data-direction={dir}>
                     <th scope="row" className="px-3 py-2 text-start font-normal">
-                      <bdi className="block break-words font-medium text-fg">{label}</bdi>
+                      <bdi className="block break-words font-medium text-fg sm:whitespace-nowrap">{label}</bdi>
                       <span className="text-xs text-fg-muted"><bdi>{t(`costs.products.${m.product}`)}</bdi><Sep locale={locale} />{envLabel(t, m.env)}</span>
                     </th>
                     <td className={`px-3 py-2 text-end tabular-nums whitespace-nowrap ${DIRECTION_TEXT[dir]}`}>
                       <span aria-hidden="true">{DIRECTION_MARK[dir]} </span>{signed(m.change)}
                       <span className="block text-xs text-fg-muted sm:hidden">{t('costs.movers.perMonth', { value: signed(m.monthlyImpact) })}</span>
                     </td>
-                    <td className="hidden px-3 py-2 text-end text-fg-muted tabular-nums whitespace-nowrap sm:table-cell">{t('costs.movers.perMonth', { value: signed(m.monthlyImpact) })}</td>
+                    <td className="hidden px-3 py-2 text-end text-fg-muted tabular-nums whitespace-nowrap sm:table-cell">{signed(m.monthlyImpact)}</td>
                   </tr>
                 );
               })}

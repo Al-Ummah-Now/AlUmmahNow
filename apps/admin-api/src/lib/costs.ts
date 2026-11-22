@@ -370,6 +370,23 @@ export function productLines(resourceDays: ResourceDay[], extras: { bunny: DayCo
     const p = projectMonth(daily, now);
     out.push({ product, mtd: p.mtd, projected: p.trailing, last7: round2(sumDays(daily, last)), prev7: round2(sumDays(daily, prev)) });
   }
+  // A Cloudflare product's weeks are the sums of its resources' weeks at cents, as Top movers
+  // rounds each resource: the resource changes then add up to the product's change
+  const weeks = new Map<string, { product: CostProduct; last7: number; prev7: number }>();
+  for (const r of resourceDays) {
+    const product = KIND_PRODUCT[r.kind];
+    if (!product || (!last.includes(r.day) && !prev.includes(r.day))) continue;
+    const w = weeks.get(r.resource_id) ?? { product, last7: 0, prev7: 0 };
+    if (last.includes(r.day)) w.last7 += num(r.cost);
+    else w.prev7 += num(r.cost);
+    weeks.set(r.resource_id, w);
+  }
+  for (const line of out) {
+    const mine = [...weeks.values()].filter((w) => w.product === line.product);
+    if (!mine.length) continue;
+    line.last7 = round2(mine.reduce((sum, w) => sum + round2(w.last7), 0));
+    line.prev7 = round2(mine.reduce((sum, w) => sum + round2(w.prev7), 0));
+  }
   const plan = projectMonth([], now);
   out.push({ product: 'plan', mtd: round2((PLAN_BASE_USD * plan.daysElapsed) / plan.daysInMonth), projected: PLAN_BASE_USD, last7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth), prev7: round2((PLAN_BASE_USD * 7) / plan.daysInMonth) });
   // Fixed and other costs: flat over the month, like the plan

@@ -486,7 +486,9 @@ describe('costs audit fixes, round 3 (AUDIT-2 2026-11-21)', () => {
     // 116.9K past the allowance bills as one whole million
     const line = { ...doLine, cost: 0.15, listCost: 0.0167 };
     assert.equal(details.wholeUnits(line, t, f), 'Billed in whole units: 116.9K past the allowance is charged as 1M.');
-    assert.equal(details.wholeUnits({ ...line, cost: 0.01, listCost: 0.0167 }, t, f), null, 'not when billed is under list');
+    assert.equal(details.wholeUnits({ ...line, billable: 950_000, cost: 0.15, listCost: 0.3 }, t, f), null, 'not when the rounding is small and billed is under list');
+    // Used 1M against 1M included, $0.15 billed: the card says why
+    assert.equal(details.wholeUnits({ ...line, used: 1_001_100, billable: 1_100, cost: 0.15, listCost: 0.15 }, t, f), 'Billed in whole units: 1.1K past the allowance is charged as 1M.');
     assert.equal(details.wholeUnits({ ...line, billable: 0 }, t, f), null, 'not inside the allowance');
     const d = freshDashboard({ cloudflare: { billedMtd: 0.15, billedProjected: 0.15, listMtd: 0.02, lines: [line] } });
     const html = render(h(details.CloudflarePanel, { d, t, f }));
@@ -573,5 +575,32 @@ describe('costs audit fixes, round 4 (AUDIT-2 2026-11-21)', () => {
     const f = opsFormats('en');
     assert.equal(f.rate(0.103), '10.30%');
     assert.equal(f.rate(0.2283), '22.83%');
+  });
+});
+
+describe('costs audit fixes, round 5 (AUDIT-2 2026-11-21)', () => {
+  it('a new fixed cost starts on the viewer\'s own date, not UTC\'s', async () => {
+    const { localDate } = await import('../src/app/(protected)/costs/model');
+    const d = new Date(2026, 10, 21, 19, 30);
+    assert.equal(localDate(d), '2026-11-21');
+  });
+
+  it('Resend plans read compact with the noun agreeing', async () => {
+    const { formatCount } = await import('../src/i18n/translate');
+    const { compactNumber } = await import('@al-ummah/shared-types');
+    assert.equal(createTranslator('ar')('costs.thresholds.plans.free', { emails: formatCount(3000, 'message', 'ar', { compact: true }) }).replace(/\u00a0/g, ' '), 'المجانية: ٣ آلاف رسالة شهريًا');
+    assert.equal(createTranslator('en')('costs.thresholds.plans.pro', { price: '$20.00', emails: `${compactNumber('en')(50000)} emails` }), 'Pro: $20.00 a month, 50K emails');
+  });
+
+  it('Top movers show the monthly impact as an amount under its "Monthly impact" heading', () => {
+    const mover = { id: 'd1:qa', label: 'al-ummah-now-reports-qa', product: 'd1' as const, env: 'qa', last7: 1, prev7: 20.79, change: -19.79, monthlyImpact: -84.81 };
+    const html = renderToStaticMarkup(React.createElement(sections.MoversSection as React.FC, { d: freshDashboard({ movers: { up: [], down: [mover] } }), t: createTranslator('ar'), locale: 'ar' } as never) as never);
+    assert.ok(html.includes('sm:whitespace-nowrap'), 'names stay whole on wider screens');
+    assert.equal((html.match(/شهريًا/g) ?? []).length, 1, 'only the phone line repeats «شهريًا»');
+  });
+
+  it('the daily chart says its days are UTC days', () => {
+    assert.ok(createTranslator('en')('costs.breakdown.trendNote').includes('UTC days'));
+    assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('غرينتش'));
   });
 });

@@ -188,8 +188,13 @@ export default async function OperationsPage({ searchParams }: PageProps) {
                 <ul className="mb-2 space-y-1">
                   {overview.alerts.map((a) => (
                     <li key={a.key} className="text-fg" data-testid="ops-alert">
-                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span><Sep />{a.rule_id}<Sep />
-                      <span className="text-fg-muted">{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
+                      {/* Each separator stays with what follows it: "• Since …" never leaves the "•" at a line end
+                          (the Arabic comma, «، », already sits with the item before it) */}
+                      <span className="font-medium">{a.resource_id.slice(a.resource_id.indexOf(':') + 1)}</span>
+                      {locale === 'ar' ? <Sep locale="ar" /> : ' '}
+                      <span className="whitespace-nowrap">{locale === 'ar' ? null : '•\u00a0'}{a.rule_id}</span>
+                      {locale === 'ar' ? <Sep locale="ar" /> : ' '}
+                      <span className="text-fg-muted">{locale === 'ar' ? null : '•\u00a0'}{fillNodes(t('operations.alerts.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
                     </li>
                   ))}
                 </ul>
