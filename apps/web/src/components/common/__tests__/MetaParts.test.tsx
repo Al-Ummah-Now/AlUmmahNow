@@ -20,6 +20,21 @@ describe('MetaParts', () => {
     expect(container.querySelectorAll('[data-meta-part]')[1]).toHaveClass('whitespace-nowrap');
   });
 
+  it('spaces the English bullet with a fixed margin, not the font\'s space width', () => {
+    const { container } = render(<p><MetaParts lang="en" parts={[{ key: 'a', node: '36 minutes ago' }, { key: 'b', node: '38% watched' }]} /></p>);
+    expect(container.querySelector('[data-meta-sep]')).toHaveClass('mx-1');
+    // The spaces stay in the text (copy, screen readers, the break before the bullet) but take no width
+    const spaces = container.querySelectorAll('[data-meta-space]');
+    expect(spaces).toHaveLength(2);
+    spaces.forEach((s) => expect(s).toHaveClass('text-[0px]'));
+  });
+
+  it('keeps the Arabic comma\'s spacing as text: it hugs the word before it, one space after', () => {
+    const { container } = render(<p><MetaParts lang="ar" parts={parts} /></p>);
+    expect(container.querySelector('[data-meta-sep]')).not.toHaveClass('mx-1');
+    expect(container.querySelectorAll('[data-meta-space]')).toHaveLength(0);
+  });
+
   it('stacks with no separator when asked, and only hides it on phones for "phone"', () => {
     const always = render(<p><MetaParts lang="en" stack="always" parts={parts} /></p>);
     expect(always.container.textContent).not.toMatch(/[•،]/);
