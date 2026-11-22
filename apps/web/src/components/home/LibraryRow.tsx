@@ -15,8 +15,9 @@
  * is no row. Each list loads on its own and a failed one is simply left out (optional content never
  * shows an error); the row appears once all three have settled, so it never grows card by card.
  * Layout (theme/home-rails.css): three across on tablets and up; a card whose cell is wide enough lays
- * its cover beside the text and lists the next videos of its list ("Up next"), so one or two cards fill
- * the row with more to see, not just a bigger picture; phones swipe a row of two or three.
+ * its cover beside the text, so one or two cards fill the row; a card alone also lists the next two
+ * videos of its list ("Up next"), more to see rather than just a bigger picture. Phones swipe a row of
+ * two or three.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -41,8 +42,8 @@ import '@/theme/home-rails.css';
 
 type ListKind = 'watch-later' | 'liked';
 
-/** How many videos a card loads: its cover's and the next ones a wide card lists */
-const LOAD = 4;
+/** How many videos a card loads: its cover's and the two a lone wide card lists under "Up next" */
+const LOAD = 3;
 
 interface ContinueCard {
   kind: 'continue';
@@ -102,7 +103,7 @@ interface NextItem {
 }
 
 /**
- * The videos after the cover's one, shown only when the card is wide (theme/home-rails.css). Part of the
+ * The videos after the cover's one, shown only when the card has the row to itself (theme/home-rails.css). Part of the
  * card's link: a preview of what the list holds, not links of their own.
  */
 function UpNext({ items, label, testId }: { items: NextItem[]; label: string; testId: string }) {

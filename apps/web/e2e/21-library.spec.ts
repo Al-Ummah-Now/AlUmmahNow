@@ -115,6 +115,10 @@ test.describe('Library (signed in)', () => {
   });
 
   test('home "Your library" row: Watch later and Liked videos cards open their lists and play them', async ({ page, request }, testInfo) => {
+    const playAllName = (lang: 'en' | 'ar', list: 'watch-later' | 'liked') =>
+      lang === 'en'
+        ? `Play all in ${list === 'liked' ? 'Liked videos' : 'Watch later'}`
+        : `تشغيل الكل في ${list === 'liked' ? 'المرئيات التي أعجبتك' : 'المشاهدة لاحقًا'}`;
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
     await seedHub(request, cleanup, unlike);
     const video = await ownVideo(request);
@@ -130,6 +134,9 @@ test.describe('Library (signed in)', () => {
       await expect(liked.getByRole('heading', { name: likedTitle })).toBeVisible();
       await expect(row.getByTestId('home-library-watch-later-card')).toHaveAttribute('href', `/${lang}/library/watch-later`);
       await expect(row.getByTestId('home-library-watch-later-play')).toHaveAttribute('href', new RegExp(`^/${lang}/video/[^?]+\\?list=WL&index=\\d+$`));
+      // Each Play all is named for its list, so the row's buttons are told apart by screen readers
+      await expect(row.getByTestId('home-library-watch-later-play')).toHaveAccessibleName(playAllName(lang, 'watch-later'));
+      await expect(liked.getByTestId('home-library-liked-play')).toHaveAccessibleName(playAllName(lang, 'liked'));
       // Liked videos play newest first, in place (list LL)
       await expect(liked.getByTestId('home-library-liked-play')).toHaveAttribute('href', `/${lang}/video/${video.id}?list=LL&index=0`);
     }
