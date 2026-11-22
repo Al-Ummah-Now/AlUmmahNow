@@ -117,8 +117,9 @@ export function budgetStatus(
     month: now.toISOString().slice(0, 7),
     mtd,
     projected,
-    share: share === null ? null : Math.round(share * 1000) / 1000,
-    projectedShare: projectedShare === null ? null : Math.round(projectedShare * 1000) / 1000,
+    // Enough precision for the page to show two decimals of a percent (24.92%, not 24.9 padded)
+    share: share === null ? null : Math.round(share * 1e6) / 1e6,
+    projectedShare: projectedShare === null ? null : Math.round(projectedShare * 1e6) / 1e6,
     level: share === null ? 'ok' : levelOf(share),
     projectedLevel: projectedShare === null ? 'ok' : levelOf(projectedShare),
     parts,

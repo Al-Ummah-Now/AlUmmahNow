@@ -4470,7 +4470,7 @@ const en = {
       reconcile: 'Total at list price {list}, less Cloudflare’s included usage {included}, is {billed}: the month to date the budget counts.',
       trendKeys: { production: 'Production', stage: 'Stage', qa: 'QA', bunny: 'Bunny', containers: 'Transcoding', ai: 'Workers AI', resend: 'Resend', plan: 'Workers plan', fixed: 'Fixed and other' },
       axisUnit: 'USD',
-      trendNote: 'Each environment is its Cloudflare spend at list price; the other sources as billed or estimated.',
+      trendNote: 'Each environment is its Cloudflare spend at list price; the other sources as billed or estimated. Days are UTC days, as Cloudflare, Bunny and Resend count them, so a new bar starts in the evening, New York time.',
     },
     products: {
       workers: 'Workers',
@@ -4686,9 +4686,9 @@ const en = {
       resendPlan: 'Resend plan',
       resendPlanHelp: 'Prices the email line of the forecast.',
       plans: {
-        free: 'Free: {included, plural, one {# email} other {# emails}} a month',
-        pro: 'Pro: {price} a month, {included, plural, one {# email} other {# emails}}',
-        scale: 'Scale: {price} a month, {included, plural, one {# email} other {# emails}}',
+        free: 'Free: {emails} a month',
+        pro: 'Pro: {price} a month, {emails}',
+        scale: 'Scale: {price} a month, {emails}',
       },
       save: 'Save settings',
       saved: 'Alert settings saved.',

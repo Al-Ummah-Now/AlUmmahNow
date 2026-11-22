@@ -44,13 +44,16 @@ function lineNote(line: CostCloudflareLine, t: Translator, f: OpsFormats): strin
 }
 
 /**
- * Billed above list price: Cloudflare bills each started unit past the allowance (the invoice
- * charged 0.62M KV writes as 1M), so a small overage reads high. Say so with the line's numbers.
+ * Cloudflare bills each started unit past the allowance (the invoice charged 0.62M KV writes as
+ * 1M), so a small overage reads high. Say so with the line's numbers.
  */
 export function wholeUnits(line: CostCloudflareLine, t: Translator, f: OpsFormats): string | null {
   const meter = CF_METERS[line.key];
-  if (!meter || line.billable <= 0 || line.cost <= line.listCost) return null;
+  if (!meter || line.billable <= 0) return null;
   const units = Math.ceil(line.billable / meter.unit - 1e-9);
+  // Worth saying when it shows: billed above list, or charged for half again what was used past the
+  // allowance (1.1K past 1M reads as "Used 1M, Included 1M" yet bills a whole million)
+  if (line.cost <= line.listCost && units * meter.unit < 1.5 * line.billable) return null;
   return t('costs.cloudflare.wholeUnits', { billable: usage(line, line.billable, t, f), charged: usage(line, units * meter.unit, t, f) });
 }
 

@@ -291,3 +291,7 @@ export function ruleValueFromInput(metric: CapacityRule['metric'], input: string
 }
 export const ruleInputOf = (r: CapacityRule) => String(isPercentMetric(r.metric) ? Math.round(r.value * 1000) / 10 : r.value);
 
+/** The viewer's own date (YYYY-MM-DD): at 7 pm in New York it is still the 21st, though UTC is on the 22nd. */
+export function localDate(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

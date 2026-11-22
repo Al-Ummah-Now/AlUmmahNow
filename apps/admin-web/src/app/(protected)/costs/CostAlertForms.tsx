@@ -6,8 +6,9 @@
  * here against the same limits admin-api applies (model.ts validateSettingsForm).
  */
 import { useId, useState } from 'react';
-import { COST_ALERT_KINDS, numberFormat, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
+import { compactNumber, COST_ALERT_KINDS, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { formatCount } from '@/i18n/translate';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { fieldClass } from '@/components/ui';
 import { saveCostSettings, saveMyCostAlerts } from '@/lib/api/costs';
@@ -158,7 +159,6 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
   const err = (k: SettingsField) => (shown[k] ? t(shown[k]!.key, shown[k]!.params) : undefined);
   const f = opsFormats(locale);
   const days = weekdayNames(locale);
-  const count = numberFormat(locale);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -177,7 +177,9 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
 
   const planLabel = (p: ResendPlan) => {
     const plan = RESEND_PLANS[p];
-    return t(`costs.thresholds.plans.${p}`, { price: f.usd(plan.monthlyUsd), included: count.format(plan.included) });
+    // Compact from 1,000 with the noun agreeing (O38): «٣ آلاف رسالة», "3K emails"
+    const emails = locale === 'ar' ? formatCount(plan.included, 'message', 'ar', { compact: true }) : `${compactNumber('en')(plan.included)} emails`;
+    return t(`costs.thresholds.plans.${p}`, { price: f.usd(plan.monthlyUsd), emails });
   };
 
   const groupClass = 'cost-tile space-y-4 p-4';

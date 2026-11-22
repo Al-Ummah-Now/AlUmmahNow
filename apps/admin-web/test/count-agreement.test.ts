@@ -58,9 +58,7 @@ const KEYS = [
   'errorsPage.openItems',
   'abusePage.subtitle',
   'transcodeTroubleshoot.logsHoursOption',
-  'costs.thresholds.plans.free',
-  'costs.thresholds.plans.pro',
-  'costs.thresholds.plans.scale',
+  // costs.thresholds.plans.* take a compact noun phrase from formatCount (it agrees itself): costs.test.ts
   'mediaDelivery.scaleVolume',
   'mediaDelivery.liveStart',
   'mediaBackfill.estCeiling',

@@ -7,9 +7,10 @@
  * counts as a twelfth a month, from its start date to its end date, in the budget, the forecast
  * and the alerts. Checked here with the same validator admin-api applies (parseFixedCostInput).
  */
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { FIXED_COST_LIMITS, FIXED_COST_PERIODS, fixedCostMonthShare, parseFixedCostInput, type FixedCost, type FixedCostInput, type FixedCostPeriod } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { localDate } from './model';
 import { fieldClass } from '@/components/ui';
 import { DateField } from '@/components/DateField';
 import { NumberField } from '@/components/forms/NumberField';
@@ -36,7 +37,7 @@ interface Form {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDate();
 const emptyForm = (): Form => ({ name: '', amount: '', period: 'monthly', startDate: today(), endDate: '', note: '' });
 const formOf = (c: FixedCost): Form => ({ name: c.name, amount: String(c.amountUsd), period: c.period, startDate: c.startDate, endDate: c.endDate ?? '', note: c.note ?? '' });
 /** Eastern Arabic digits and the Arabic decimal separator typed into the amount. */
@@ -49,6 +50,11 @@ export function FixedCosts({ items, mtd, projected, canManage }: { items: FixedC
   const month = new Date().toISOString().slice(0, 7);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(emptyForm);
+  // The server renders in UTC: once in the browser, start a new cost on the viewer's own date
+  useEffect(() => {
+    setForm((cur) => (editing === null && !cur.name && !cur.amount ? { ...cur, startDate: localDate() } : cur));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const { run, busy, feedback } = useCostAction('fixed');
   const { confirm, dialog } = useConfirm();

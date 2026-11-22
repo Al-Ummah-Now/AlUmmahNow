@@ -604,6 +604,24 @@ describe('rounding: lines are the source, totals are built from the parts shown'
     assert.equal(Math.round(Object.values(envs).reduce((a, b) => a + b, 0) * 100), Math.round((26 + 40.55 + 8.7 + 30) * 100));
   });
 
+  it('a Cloudflare product\'s weekly change is the sum of its resources\' changes, to the cent', () => {
+    const now = new Date('2026-11-21T12:00:00Z');
+    const days: never[] = [];
+    // Four D1 databases whose daily costs round differently: the product must not drift a cent
+    const costs: Record<string, [number, number]> = { 'd1:a': [0.2286, 0.0001], 'd1:b': [0.0586, 0.0001], 'd1:c': [0.0014, 2.3628], 'd1:d': [0.0011, 0.0097] };
+    for (const [id, [lastDay, prevDay]] of Object.entries(costs)) {
+      for (let i = 1; i <= 14; i++) {
+        const day = `2026-11-${String(21 - i).padStart(2, '0')}`;
+        days.push({ day, resource_id: id, kind: 'd1', env: 'production', name: id, cost: i <= 7 ? lastDay : prevDay } as never);
+      }
+    }
+    const products = productLines(days, { bunny: [], containers: [], ai: [], resend: [] }, now);
+    const d1 = products.find((p) => p.product === 'd1')!;
+    const movers = topMovers(days, products, now, 100);
+    const change = [...movers.up, ...movers.down].filter((m) => m.product === 'd1').reduce((sum, m) => sum + Math.round(m.change * 100), 0);
+    assert.equal(Math.round((d1.last7 - d1.prev7) * 100), change);
+  });
+
   it('"Data as of" is the last collection that read Cloudflare, not a later refused one', async () => {
     const db = costsD1();
     const run = (id: string, at: string, status: string, detail: object) =>
