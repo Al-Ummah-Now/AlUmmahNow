@@ -103,7 +103,7 @@ function ChannelSwitcher({ locale, channel, segments, role }: { locale: string; 
           text-align:match-parent the same way; a Latin name in the Arabic UI aligns right, like its neighbours).
           A long name or handle wraps onto more lines instead of being cut. */}
       <span className="min-w-0 flex-1 text-start">
-        <span dir="auto" className="block text-sm font-medium text-foreground [overflow-wrap:anywhere] text-left [html[dir=rtl]_&]:text-right" data-testid="studio-channel-name">{channel.name}</span>
+        <span dir="auto" className="block text-sm font-medium text-foreground [overflow-wrap:anywhere] [text-wrap:balance] text-left [html[dir=rtl]_&]:text-right" data-testid="studio-channel-name">{channel.name}</span>
         {channel.handle && <span dir="ltr" className="block text-xs text-muted-foreground [overflow-wrap:anywhere] text-left [html[dir=rtl]_&]:text-right">{formatHandle(channel.handle)}</span>}
       </span>
     <DropdownMenu>
@@ -177,7 +177,9 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate, artic
         data-testid={`studio-nav-${item.id}`}
         className={cn(
           'flex min-h-11 items-center rounded-md px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-          current ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          // The site rail's own active look (theme material + its text colour); bg-accent is the raised
+          // surface, white on the light card, so the current page did not show in light (AUDIT-2)
+          current ? 'font-semibold text-[var(--fanous-c-drawer-active-text)] [background:var(--m-active)] [box-shadow:var(--m-active-edge)]' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         )}
       >
         {t.studio.nav[item.id]}

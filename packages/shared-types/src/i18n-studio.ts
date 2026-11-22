@@ -710,8 +710,9 @@ export const STUDIO_AR: StudioTranslations = {
   navLabel: 'الاستوديو',
   openMenu: 'فتح قائمة الاستوديو',
   closeMenu: 'إغلاق قائمة الاستوديو',
-  upload: 'رفع',
-  goLive: 'بث مباشر',
+  // The same words as the header's upload button and the Go live page's own button (AUDIT-2 terms)
+  upload: 'رفع مرئي',
+  goLive: 'ابدأ البث',
   saveAsDraft: 'حفظ كمسودة',
   tabsLabel: 'أقسام هذه الصفحة',
   channelHidden: 'أخفى فريق الإشراف هذه القناة، ولا يستطيع الزوار رؤيتها.',
@@ -729,7 +730,9 @@ export const STUDIO_AR: StudioTranslations = {
   tabs: {
     videos: 'المرئيات',
     live: 'البث المباشر',
-    youtube: 'الانتقال من يوتيوب',
+    // Short like the other tabs, so the phone shows all four as English does («الانتقال من يوتيوب» folded
+    // into «المزيد»); the import page keeps its full title
+    youtube: 'من يوتيوب',
     posts: 'المنشورات',
     profile: 'الملف الشخصي',
     layout: 'التخطيط',
@@ -769,7 +772,7 @@ export const STUDIO_AR: StudioTranslations = {
     heading: 'التخطيط',
     intro: 'ما يراه الزوار في صفحة قناتك.',
     sections: 'الأقسام',
-    tabs: 'علامات التبويب',
+    tabs: 'التبويبات',
     viewsLabel: 'عروض التخطيط',
     preview: 'معاينة صفحة القناة',
   },
@@ -1164,7 +1167,7 @@ export const STUDIO_AR: StudioTranslations = {
     retry: 'حاول مرة أخرى',
     tasks: { title: 'يحتاج إلى انتباه', none: 'لا شيء يحتاج إلى انتباه.', failed: 'فشل', processing: 'قيد المعالجة' },
     totals: { title: 'إجماليات القناة', views: 'إجمالي المشاهدات', subscribers: 'المشتركون', videos: 'المرئيات', last28: 'المشاهدات، آخر {days} يومًا' },
-    quick: { title: 'روابط سريعة', upload: 'رفع', goLive: 'بث مباشر', newPost: 'منشور جديد', customise: 'تخصيص' },
+    quick: { title: 'روابط سريعة', upload: 'رفع مرئي', goLive: 'ابدأ البث', newPost: 'منشور جديد', customise: 'تخصيص' },
     welcome: { title: 'مرحبًا بك في الاستوديو', body: 'ارفع مرئيًا للبدء.', upload: 'ارفع أول مرئي لك' },
     inviteWelcome: {
       title: 'مرحبًا بك في الأمة الآن',

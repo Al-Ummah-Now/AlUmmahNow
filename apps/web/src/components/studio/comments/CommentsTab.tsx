@@ -1,5 +1,6 @@
 'use client';
 
+import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { numberFormat as localeNumberFormat, formatInteger } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, Check, Heart, MessageSquareReply, MoreVertical, Pin, RotateCcw, ShieldAlert, Trash2, X } from 'lucide-react';
@@ -39,7 +40,6 @@ import { cn } from '@/lib/utils';
 import { OnTitle } from './OnTitle';
 
 const PAGE_SIZE = 20;
-const DEFAULT_AVATAR = '/avatar.png';
 
 const itemOf = (comment: StudioComment): BulkItem => ({ kind: comment.kind, targetId: comment.targetId, commentId: comment.id });
 
@@ -421,7 +421,8 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
           />
         )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={comment.author.avatarUrl || DEFAULT_AVATAR} alt="" className="h-9 w-9 shrink-0 rounded-full bg-muted object-cover" />
+        {/* No photo → the first letter, as everywhere else on the site (was one stock silhouette for everyone) */}
+        <ComposerAvatar src={comment.author.avatarUrl} name={comment.author.displayName} as="member" className="h-9 w-9" testId="studio-comment-avatar" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <bdi className="font-medium text-foreground">{comment.author.displayName}</bdi>
@@ -434,12 +435,12 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
             )}
           </div>
           <p className="mt-0.5 flex min-w-0 items-baseline text-xs text-muted-foreground">
-            <span className="me-1 shrink-0 rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{comment.kind === 'video' ? text.video : text.post}</span>
+            <span className="me-1 shrink-0 rounded bg-[color-mix(in_srgb,var(--fanous-color-primary)_16%,transparent)] px-1.5 py-0.5 font-medium text-foreground">{comment.kind === 'video' ? text.video : text.post}</span>
             <Link href={`/${locale}${comment.targetUrlPath}`} className="min-w-0 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <OnTitle template={text.on} title={comment.targetTitle} />
             </Link>
           </p>
-          <p dir="auto" className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground text-left [html[dir=rtl]_&]:text-right" data-testid="studio-comment-text">{comment.text}</p>
+          <p dir="auto" className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground [text-wrap:balance] text-left [html[dir=rtl]_&]:text-right" data-testid="studio-comment-text">{comment.text}</p>
           {isTopLevel && comment.repliesCount > 0 && <p className="mt-1 text-xs text-muted-foreground">{replies}</p>}
           {heldByModeration && (
             <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground" data-testid="studio-comment-held-moderation">
@@ -622,7 +623,7 @@ function BlockedPeople({ channelId, lang, open, onOpenChange, onNotice }: { chan
             {items.map((person) => (
               <li key={person.userId} className="flex items-center gap-3 py-2" data-testid="studio-block">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={person.avatarUrl || DEFAULT_AVATAR} alt="" className="h-8 w-8 rounded-full bg-muted object-cover" />
+                <ComposerAvatar src={person.avatarUrl} name={person.displayName} as="member" className="h-8 w-8" testId="studio-blocked-avatar" />
                 <div className="min-w-0 flex-1">
                   <bdi className="block truncate text-sm font-medium text-foreground">{person.displayName}</bdi>
                   <span className="text-xs text-muted-foreground">{text.blocks.since.replace('{time}', formatRelativeTime(person.blockedAt, lang))}</span>

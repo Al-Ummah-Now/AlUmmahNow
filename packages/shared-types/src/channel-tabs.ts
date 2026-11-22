@@ -82,7 +82,7 @@ export const DEFAULT_CHANNEL_TABS: ChannelTab[] = [
   {
     id: 'live',
     name: 'Live',
-    nameLocalized: { en: 'Live', ar: 'بث مباشر' },
+    nameLocalized: { en: 'Live', ar: 'البث المباشر' },
     type: 'system',
     visible: true,
     position: 3

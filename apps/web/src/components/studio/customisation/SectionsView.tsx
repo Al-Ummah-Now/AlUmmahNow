@@ -333,7 +333,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
           <div className="space-y-2 md:space-y-3" data-testid="sections-list">
             {sections.length === 0 ? (
               <div className="p-8 md:p-12 text-center border border-border bg-muted rounded-lg">
-                <p className="text-sm md:text-base text-muted-foreground">{s.empty}</p>
+                <p className="text-sm md:text-base text-muted-foreground [text-wrap:balance]">{s.empty}</p>
               </div>
             ) : (
               sections.map((section) => (

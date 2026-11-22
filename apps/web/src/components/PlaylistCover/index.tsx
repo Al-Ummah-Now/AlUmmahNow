@@ -22,10 +22,12 @@ interface PlaylistCoverProps {
 function PlaylistCoverPlaceholder() {
   return (
     <div
-      className="flex h-full w-full items-center justify-center bg-[var(--fanous-color-surface)]"
+      // Tinted toward the theme colour: the plain surface was the card's own colour, so an empty
+      // cover vanished on light cards (AUDIT-2)
+      className="flex h-full w-full items-center justify-center bg-[color-mix(in_srgb,var(--fanous-color-primary)_12%,var(--fanous-color-surface))]"
       data-testid="playlist-cover-placeholder"
     >
-      <ListVideo className="h-1/3 w-1/3 max-h-12 max-w-12 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+      <ListVideo className="h-1/3 w-1/3 max-h-12 max-w-12 text-[var(--fanous-color-text-muted)]" aria-hidden="true" />
     </div>
   );
 }

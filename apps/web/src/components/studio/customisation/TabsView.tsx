@@ -71,7 +71,7 @@ export function TabsView({ channelId }: { channelId: string }) {
     <section aria-labelledby="studio-tabs-heading" className="space-y-4" data-testid="studio-layout-tabs">
       <div>
         <h2 id="studio-tabs-heading" className="text-lg font-semibold text-foreground">{t.channel.tabs.manage_tabs}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t.channel.tabs.manage_tabs_description}</p>
+        <p className="mt-1 text-sm text-muted-foreground [text-wrap:balance]">{t.channel.tabs.manage_tabs_description}</p>
       </div>
       <TabManagement channelId={channelId} initialConfig={config} onSave={handleSave} />
     </section>

@@ -215,8 +215,9 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
   tabTeam: 'الفريق',
   tabActivity: 'النشاط',
   inviteTitle: 'دعوة شخص',
-  inviteLabel: 'البريد الإلكتروني أو المعرّف @',
-  invitePlaceholder: 'name@example.com أو ‎@handle',
+  // No «@» or Latin example beside Arabic words: it lands at the wrong end of the line
+  inviteLabel: 'البريد الإلكتروني أو اسم المستخدم',
+  invitePlaceholder: 'البريد الإلكتروني أو اسم المستخدم',
   roleLabel: 'الدور',
   invite: 'إرسال الدعوة',
   inviting: 'جارٍ الإرسال…',

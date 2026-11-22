@@ -259,7 +259,7 @@ export default function TabManagement({
       </DndContext>
 
       {/* How hiding works (a hint, not a warning: nothing is wrong) */}
-      <p className="text-sm text-muted-foreground" data-testid="tabs-visibility-hint">{t.channel.tabs.at_least_one_visible}</p>
+      <p className="text-sm text-muted-foreground [text-wrap:balance]" data-testid="tabs-visibility-hint">{t.channel.tabs.at_least_one_visible}</p>
     </div>
   );
 }

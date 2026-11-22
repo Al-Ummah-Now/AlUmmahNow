@@ -187,7 +187,9 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
               {can(role, 'members.manage') && (
                 <form onSubmit={onInvite} className={CARD} data-testid="team-add-form" aria-describedby={message ? ids.status : undefined}>
                   <h2 className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.inviteTitle}</h2>
-                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                  {/* Top-aligned, so both labels share one baseline (bottom alignment put "Role" 8px lower: the search
+                      field is taller than the select); the button drops by one label line to sit beside the fields */}
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-start">
                     <div>
                       <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.inviteLabel}</label>
                       <Autocomplete
@@ -214,7 +216,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                       </ThemedSelectField>
                     </div>
                     <button type="submit" disabled={!handle.trim() || busy === 'invite'} aria-busy={busy === 'invite'}
-                      className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover`} data-testid="team-add-submit">
+                      className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover sm:mt-6`} data-testid="team-add-submit">
                       {busy === 'invite' ? tr.inviting : tr.invite}
                     </button>
                   </div>

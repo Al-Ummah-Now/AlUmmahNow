@@ -60,8 +60,10 @@ export function GeneralTab({ locale, role, channel }: { locale: string; role: Ch
     const sentence = text.limitsTier
       .replace('{perHour}', formatInteger(locale, creator.access.limits.perHour))
       .replace('{perDay}', formatInteger(locale, creator.access.limits.perDay));
-    // The tier's name is admin text (often Latin): isolated so it keeps its own direction in Arabic
-    const tierName = creator.access.tier.name;
+    // The tier's own Arabic name in Arabic («صانع محتوى», as the tier page says); the admin's name otherwise,
+    // isolated so a Latin name keeps its own direction in Arabic
+    const { tier } = creator.access;
+    const tierName = locale === 'ar' && tier.nameAr ? tier.nameAr : tier.name;
     limits = sentence.split('{tier}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key={`tier-${i}`}>{tierName}</bdi>, part]));
   }
 

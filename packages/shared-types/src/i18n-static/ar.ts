@@ -412,7 +412,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     editChannelDetails: 'تعديل اسم القناة والوصف والعلامة التجارية',
     backToChannel: 'العودة إلى القناة',
     handle: 'المعرّف',
-    handleHelp: 'رابط قناتك: {url}. من ٣ إلى ٣٠ حرفًا: أحرف لاتينية وأرقام ونقاط وشرطات سفلية وشرطات.',
+    // No full stop after the URL: beside a Latin URL it lands at the line's left end and reads as part of the link
+    handleHelp: 'رابط قناتك: {url} من ٣ إلى ٣٠ حرفًا: أحرف لاتينية وأرقام ونقاط وشرطات سفلية وشرطات.',
     handlePlaceholder: 'yourhandle',
     handleChecking: 'جارٍ التحقق من التوفر…',
     handleAvailable: '@{handle} متاح',
