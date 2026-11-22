@@ -16,6 +16,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'search.rebuild-ownership': 'adminJobs.kinds.searchRebuildOwnership',
   'playlist.add-videos': 'adminJobs.kinds.playlistAddVideos',
   'import.attach': 'adminJobs.kinds.importAttach',
+  'import.source-sync': 'adminJobs.kinds.importSourceSync',
   'csam.contain': 'adminJobs.kinds.csamContain',
   'images.index-owners': 'adminJobs.kinds.imagesIndexOwners',
   'media.transcode-retry': 'adminJobs.kinds.mediaTranscodeRetry',

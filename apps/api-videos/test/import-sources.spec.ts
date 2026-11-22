@@ -194,6 +194,9 @@ describe('parsing feeds', () => {
 
 	it('turns HTML into plain text', () => {
 		assert.equal(htmlToText('<p>a&nbsp;b</p><script>x</script><p>c<br/>d &#1587;</p>'), 'a b\n\nc\nd س');
+		// A block hidden inside another and a stray "<" never come through; escaped ones are text
+		assert.equal(htmlToText('a<scr<script>x</script>ipt>alert(1)</script>b'), 'ab');
+		assert.equal(htmlToText('1 < 2 &lt;3'), '1 2 <3');
 	});
 });
 

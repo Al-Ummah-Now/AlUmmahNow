@@ -79,12 +79,18 @@ export function decodeEntities(s: string): string {
 
 /** HTML (a feed's description, a Mastodon status) as plain text: paragraphs and line breaks kept. */
 export function htmlToText(html: string): string {
-	const text = html
-		.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-		.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+	let text = html.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+	// Until nothing changes, so a block hidden inside another ("<scr<script>…</script>ipt>") goes too
+	for (let before = ''; before !== text; ) {
+		before = text;
+		text = text.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, '');
+	}
+	text = text
 		.replace(/<br\s*\/?>/gi, '\n')
-		.replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, '\n\n')
-		.replace(/<[^>]+>/g, '');
+		.replace(/<\/(p|div|li|h[1-6]|blockquote)\s*>/gi, '\n\n')
+		.replace(/<[^>]*>/g, '')
+		// A stray "<" left over goes too: only escaped ones (&lt;) become text
+		.replace(/</g, '');
 	return decodeEntities(text)
 		.replace(/[ \t\f\v ]+/g, ' ')
 		.replace(/ *\n */g, '\n')

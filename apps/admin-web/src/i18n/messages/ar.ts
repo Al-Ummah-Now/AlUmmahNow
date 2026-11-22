@@ -979,6 +979,7 @@ const ar: Messages = {
       supportPayoutFund: 'التحقق من تمويل خدمة الدفع',
       supportPayoutSend: 'إرسال تحويل',
       supportPayoutStatus: 'تحديث حالات التحويلات',
+      importSourceSync: 'مزامنة مصدر استيراد اجتماعي',
     },
     statuses: {
       queued: 'في الانتظار',
