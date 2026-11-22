@@ -10,7 +10,7 @@ import type { Locale } from '@/i18n/config';
 export function zoneLabel(at: Date, timeZone: string, locale: Locale): string {
   let raw = 'GMT';
   try {
-    raw = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+    raw = dateTimeFormat('en', { timeZone, timeZoneName: 'shortOffset' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
   } catch {
     raw = 'GMT';
   }
