@@ -68,8 +68,15 @@ export function unseenOf(counts: { unreadCount: number; unseenCount?: number }):
   return typeof counts.unseenCount === 'number' ? counts.unseenCount : counts.unreadCount;
 }
 
+// The last counts shown, per user: a bell that remounts (or sees no user for a render) while the
+// page refreshes after an identity switch shows them at once instead of dropping its badge until
+// the counts come back (AUDIT-2 2026-11-21: the badge blinked out for a frame on every switch).
+// Keyed by user, so another account never sees them.
+let lastShown: { userId: string; state: BellState } | null = null;
+
 export function useNotificationBell(userId: string | undefined): UseNotificationBellResult {
-  const [state, setState] = useState<BellState>(EMPTY_BELL);
+  const [state, setState] = useState<BellState>(() => (userId && lastShown?.userId === userId ? lastShown.state : EMPTY_BELL));
+  const stateUser = useRef<string | undefined>(userId && lastShown?.userId === userId ? userId : undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
   const known = useRef<Set<string>>(new Set());
@@ -77,13 +84,20 @@ export function useNotificationBell(userId: string | undefined): UseNotification
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
+    if (stateUser.current) lastShown = { userId: stateUser.current, state };
   }, [state]);
 
   useEffect(() => {
     known.current = new Set();
     if (!userId) {
       setState(EMPTY_BELL);
+      stateUser.current = undefined;
       return;
+    }
+    // Back to a user whose counts were shown a moment ago: those, until the fresh ones arrive
+    if (stateUser.current !== userId) {
+      setState(lastShown?.userId === userId ? lastShown.state : EMPTY_BELL);
+      stateUser.current = userId;
     }
     let cancelled = false;
     void NotificationsService.counts().then((counts) => {
