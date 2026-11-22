@@ -71,7 +71,9 @@
 .aun-acct-btn .aun-caret {
   width: 0.875rem;
   height: 0.875rem;
-  color: var(--fanous-c-nav-icon);
+  /* the name's colour, as the videos header has always drawn it (AUDIT-2 2026-11-22, #483: one token
+     for the chevron in every app) */
+  color: var(--fanous-c-nav-text);
 }
 .aun-acct-name {
   min-width: 0;

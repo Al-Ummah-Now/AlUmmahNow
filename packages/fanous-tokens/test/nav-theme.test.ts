@@ -77,3 +77,10 @@ test('the fonts are the videos app\'s, byte for byte, and its admin serves the s
     assert.ok(bytes.equals(readFileSync(at(`../../../apps/admin-web/public/aun-nav/fonts/${file}`))), `admin-web ${file}`);
   }
 });
+
+test('the account chevron is the name\'s colour, one token in every app (AUDIT-2 2026-11-22, #483)', () => {
+  const caret = /\n\.aun-acct-btn \.aun-caret \{([^}]*)\}/.exec(css)![1];
+  assert.match(caret, /color: var\(--fanous-c-nav-text\);/);
+  // nothing else in the contract recolours it
+  assert.equal([...css.matchAll(/\.aun-caret[^{]*\{[^}]*\bcolor:/g)].length, 1);
+});
