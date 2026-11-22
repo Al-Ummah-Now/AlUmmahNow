@@ -155,7 +155,9 @@ export function EditableAvatar({ url, alt, onPick, onRemove, labels, testId, ima
           }
         }}
       >
-        <div className="absolute inset-0 overflow-hidden rounded-full bg-[var(--fanous-color-surface-raised)]">
+        {/* The fill is a style, not a bg-[var(--fanous-color-surface…)] class: the theme's glass-card rule
+            matches that class plus "rounded" and would square the circle with the card radius */}
+        <div className="absolute inset-0 overflow-hidden rounded-full" style={{ background: 'var(--fanous-color-surface-raised)' }}>
           {!hasImage && placeholder}
           {hasImage && <AvatarImage src={url} alt={alt} testId={imageTestId} fallback={null} />}
         </div>
