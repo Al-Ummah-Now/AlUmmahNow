@@ -88,7 +88,7 @@ function currentStaging(env: PrebuiltEnv, video: WithPrebuilt, stagingId: string
 export async function putRenditionFile(
 	env: PrebuiltEnv,
 	video: WithPrebuilt,
-	file: { stagingId: string; rung: string; name: string; contentLength?: string | null; body: () => Promise<ArrayBuffer> },
+	file: { stagingId: string; rung: string; name: string; contentLength?: string | null; body: ReadableStream<Uint8Array> | null },
 ): Promise<PrebuiltOutcome> {
 	const found = currentStaging(env, video, file.stagingId);
 	if ('outcome' in found) return found.outcome;
@@ -97,12 +97,37 @@ export async function putRenditionFile(
 	const path = `${file.rung}/${file.name}`;
 	const declared = manifest?.files.find((f) => f.path === path);
 	if (!declared) return fail(400, 'file_not_declared');
-	const length = Number(file.contentLength);
-	if (file.contentLength && Number.isFinite(length) && length !== declared.bytes) return fail(400, 'size_mismatch');
-	const data = await file.body();
-	if (data.byteLength !== declared.bytes) return fail(400, 'size_mismatch');
+	if (file.contentLength != null && file.contentLength !== '' && Number(file.contentLength) !== declared.bytes) return fail(400, 'size_mismatch');
+	const data = await readAtMost(file.body, declared.bytes);
+	if (!data || data.byteLength !== declared.bytes) return fail(400, 'size_mismatch');
 	await found.bucket.put(`${prebuiltStagingPrefix(video.id, file.stagingId)}${path}`, data);
 	return { status: 204 };
+}
+
+/**
+ * The body, when it is at most `limit` bytes; null as soon as it is longer (the rest is never read, so a body
+ * without a length, or with a false one, cannot make the Worker buffer more than the declared size).
+ */
+export async function readAtMost(body: ReadableStream<Uint8Array> | null, limit: number): Promise<Uint8Array | null> {
+	const out = new Uint8Array(limit);
+	if (!body) return out.subarray(0, 0);
+	const reader = body.getReader();
+	let size = 0;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (size + value.byteLength > limit) {
+				await reader.cancel().catch(() => undefined);
+				return null;
+			}
+			out.set(value, size);
+			size += value.byteLength;
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	return out.subarray(0, size);
 }
 
 /** Every declared file is there: the renditions wait for the original upload's transcode. */

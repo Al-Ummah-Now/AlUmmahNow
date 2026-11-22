@@ -435,6 +435,8 @@ describe('/api/admin/import/items/:id/renditions and /delivery (TA-12)', () => {
     for (const path of ['4k/seg.m4s', '360p/.hidden', '360p/a%2Fb']) {
       assert.equal((await h.req(`/items/it1/renditions/${STAGING}/files/${path}`, { method: 'PUT', body: new Uint8Array(1) })).status, 400, path);
     }
+    const unsized = await h.req(`/items/it1/renditions/${STAGING}/files/360p/seg_00001.m4s`, { method: 'PUT', body: new Uint8Array(1) });
+    assert.equal(unsized.status, 411);
     const big = await h.req(`/items/it1/renditions/${STAGING}/files/360p/seg_00001.m4s`, { method: 'PUT', body: new Uint8Array(1), headers: { 'Content-Length': String(PREBUILT_LIMITS.maxFileBytes + 1) } });
     assert.equal(big.status, 413);
     assert.equal(h.calls.length, 0);

@@ -472,8 +472,10 @@ app.put('/items/:id/renditions/:stagingId/files/:rung/:file', async (c) => {
   const rung = c.req.param('rung');
   const file = c.req.param('file');
   if (!RUNG.test(rung) || !FILE.test(file) || file.startsWith('.')) return fail(c, 400, 'file_not_declared', 'Not a rendition file');
-  const length = c.req.header('content-length');
-  if (length && Number(length) > PREBUILT_LIMITS.maxFileBytes) return c.json({ success: false, code: 'file_too_large', error: `At most ${PREBUILT_LIMITS.maxFileBytes} bytes per file` }, 413);
+  // The declared length is required: api-videos reads no more than the file's declared size either way
+  const length = c.req.header('content-length') ?? '';
+  if (!/^\d{1,10}$/.test(length)) return c.json({ success: false, code: 'length_required', error: 'Content-Length is required' }, 411);
+  if (Number(length) > PREBUILT_LIMITS.maxFileBytes) return c.json({ success: false, code: 'file_too_large', error: `At most ${PREBUILT_LIMITS.maxFileBytes} bytes per file` }, 413);
   // Streamed through: a segment is up to 32 MiB and the app sends several at once
   await videos<undefined>(c, `${found.path}/files/${rung}/${file}`, { method: 'PUT', raw: { body: c.req.raw.body, contentType: c.req.header('content-type'), contentLength: length } });
   return c.body(null, 204);

@@ -106,7 +106,7 @@ export class RenditionFilePut extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await editable(c, params.videoId, this.getUserId(c));
 		if ('response' in access) return access.response;
-		return renditionsReply(c, await putRenditionFile(c.env, access.video, { stagingId: params.stagingId, rung: params.rung, name: params.file, contentLength: c.req.header('content-length'), body: () => c.req.arrayBuffer() }));
+		return renditionsReply(c, await putRenditionFile(c.env, access.video, { stagingId: params.stagingId, rung: params.rung, name: params.file, contentLength: c.req.header('content-length'), body: c.req.raw.body }));
 	}
 }
 
