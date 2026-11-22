@@ -11,4 +11,11 @@ describe('TextPostForm direction', () => {
     render(<TextPostForm content="يتناول درسنا القادم قصة أصحاب الكهف. ما الذي تودّون أن نشرحه أولًا؟" onChange={() => undefined} locale={locale} />);
     expect(screen.getByTestId('post-content-editor')).toHaveAttribute('dir', 'auto');
   });
+
+  it.each([['en', 'ltr'], ['ar', 'rtl']])('empty (or no letter yet) on the %s page: the page\'s direction, %s', (locale, dir) => {
+    const { rerender } = render(<TextPostForm content="" onChange={() => undefined} locale={locale} />);
+    expect(screen.getByTestId('post-content-editor')).toHaveAttribute('dir', dir);
+    rerender(<TextPostForm content="12 " onChange={() => undefined} locale={locale} />);
+    expect(screen.getByTestId('post-content-editor')).toHaveAttribute('dir', dir);
+  });
 });

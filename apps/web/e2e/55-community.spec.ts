@@ -454,8 +454,12 @@ test.describe('Post manager', () => {
     // The editor takes its text's own direction (an English post on the Arabic page reads LTR); empty, it
     // follows the Arabic page: right to left
     const editor = page.getByPlaceholder('شارك أفكارك مع مجتمعك...');
-    await expect(editor).toHaveAttribute('dir', 'auto');
+    await expect(editor).toHaveAttribute('dir', 'rtl');
     expect(await editor.evaluate((el) => el.matches(':dir(rtl)'))).toBe(true);
+    await editor.fill('Our new series starts on Friday.');
+    await expect(editor).toHaveAttribute('dir', 'auto');
+    expect(await editor.evaluate((el) => el.matches(':dir(ltr)'))).toBe(true);
+    await editor.fill('');
     await page.getByRole('button', { name: 'نشر' }).click();
     await expect(page.getByText('المحتوى مطلوب')).toBeVisible();
   });
