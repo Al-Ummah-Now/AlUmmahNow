@@ -89,8 +89,8 @@ describe('formatAbsoluteDateTime', () => {
   const date = new Date('2026-11-12T18:32:00Z');
 
   it('writes the date and the time, in each language', () => {
-    expect(formatAbsoluteDateTime(date, 'ar', 'UTC')).toBe('١٢ نوفمبر ٢٠٢٦، ٠٦:٣٢ م');
-    expect(formatAbsoluteDateTime(date, 'en', 'UTC')).toBe('November 12, 2026, 06:32 PM');
+    expect(formatAbsoluteDateTime(date, 'ar', 'UTC')).toBe('١٢ نوفمبر ٢٠٢٦، ٦:٣٢ م');
+    expect(formatAbsoluteDateTime(date, 'en', 'UTC')).toBe('November 12, 2026, 6:32 PM');
     expect(formatAbsoluteDateTime('nope', 'en')).toBe('');
   });
 });

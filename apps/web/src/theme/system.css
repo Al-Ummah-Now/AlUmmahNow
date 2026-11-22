@@ -620,6 +620,8 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
    «في «استكشف».» short on line 3 (AUDIT-2 review), and held to a reading measure, so on a 1280 desktop it isn't one
    1,180px line across the card */
 [data-testid=home-empty] p{text-wrap:balance;max-inline-size:60ch}
-/* Text that takes its own direction (dir=auto: a post body, a description) still starts at the page's start edge:
-   English on an Arabic page sits at the right, Arabic on an English page at the left (AUDIT-2 2026-11-22) */
-.aun-start-text [dir="auto"]{text-align:match-parent}
+/* Text that takes its own direction (dir=auto: a post body, a link card's text, a description) still starts at
+   the page's start edge: English on an Arabic page sits at the right, Arabic on an English page at the left
+   (AUDIT-2 2026-11-22). Physical sides from <html dir>: start/match-parent would follow the dir=auto element
+   (or its dir=auto parent) instead, and this wins over the article-wide [dir=auto]{text-align:start} */
+html[dir=rtl] .aun-start-text [dir=auto]:not(input,textarea){text-align:right}html[dir=ltr] .aun-start-text [dir=auto]:not(input,textarea){text-align:left}
