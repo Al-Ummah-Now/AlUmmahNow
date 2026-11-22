@@ -36,7 +36,8 @@ const linkTitle = (item: FetchedItem) => item.link?.title ?? item.title ?? null;
 function postBody(item: FetchedItem, media: { images?: PostImage[]; videoId?: string; linkImage?: PostImage | null }): Partial<CommunityPost> {
 	if (media.videoId) return { type: PostType.VIDEO, videoId: media.videoId, content: item.text || undefined };
 	if (media.images?.length) return { type: PostType.IMAGE, images: media.images, content: item.text || undefined };
-	if (item.link) {
+	// A link is only ever a web address (the fetchers check it; checked again here before it is published)
+	if (item.link && /^https?:\/\//i.test(item.link.url)) {
 		return {
 			type: PostType.LINK,
 			content: item.text || undefined,

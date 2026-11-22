@@ -258,8 +258,10 @@ async function fetchBluesky(address: string, cursor: string | null, f: typeof fe
 			continue;
 		}
 		const view = p.embed?.media ?? p.embed;
-		if (view?.images?.length) item.images = view.images.filter((i) => i.fullsize).slice(0, 10).map((i) => ({ url: i.fullsize!, alt: i.alt ?? null }));
-		if (view?.external?.uri) item.link = { url: view.external.uri, title: view.external.title ?? null, description: view.external.description ?? null, image: view.external.thumb ?? null };
+		// Every URL from the network is checked like a feed's (public http(s) only), never trusted as given
+		if (view?.images?.length) item.images = view.images.map((i) => ({ url: safeUrl(i.fullsize), alt: i.alt ?? null })).filter((i): i is { url: string; alt: string | null } => !!i.url).slice(0, 10);
+		const external = safeUrl(view?.external?.uri);
+		if (external) item.link = { url: external, title: view!.external!.title ?? null, description: view!.external!.description ?? null, image: safeUrl(view!.external!.thumb) };
 		const blob = p.record?.embed?.video ?? p.record?.embed?.media?.video;
 		if (blob?.ref?.$link) {
 			if (pds === undefined) pds = await blueskyPds(did, f);
@@ -313,10 +315,12 @@ async function fetchMastodon(address: string, cursor: string | null, f: typeof f
 		}
 		const media = s.media_attachments ?? [];
 		const video = media.find((m) => m.type === 'video' || m.type === 'gifv');
-		if (video?.url) item.video = { url: video.url, bytes: null, mimeType: 'video/mp4' };
+		const videoUrl = safeUrl(video?.url);
+		if (videoUrl) item.video = { url: videoUrl, bytes: null, mimeType: 'video/mp4' };
 		else {
-			item.images = media.filter((m) => m.type === 'image' && m.url).slice(0, 10).map((m) => ({ url: m.url!, alt: m.description ?? null }));
-			if (!item.images.length && s.card?.url) item.link = { url: s.card.url, title: s.card.title ?? null, description: s.card.description ?? null, image: s.card.image ?? null };
+			item.images = media.filter((m) => m.type === 'image').map((m) => ({ url: safeUrl(m.url), alt: m.description ?? null })).filter((i): i is { url: string; alt: string | null } => !!i.url).slice(0, 10);
+			const card = safeUrl(s.card?.url);
+			if (!item.images.length && card) item.link = { url: card, title: s.card!.title ?? null, description: s.card!.description ?? null, image: safeUrl(s.card!.image) };
 		}
 		if (media.some((m) => m.type === 'audio' || m.type === 'unknown') && !itemKind(item)) item.skip = 'unsupported_media';
 		if (!item.skip && !itemKind(item)) item.skip = 'empty';

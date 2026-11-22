@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import type { AdminJob, CommunityPost } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { JobsQueue, MemoryBucket, MemoryQueue, drainJobs } from './helpers';
-import { htmlToText, parseFeed } from '../src/lib/importSources/fetchers';
+import { fetchSource, htmlToText, parseFeed } from '../src/lib/importSources/fetchers';
 import { authorizeSource, normalizeAddress } from '../src/lib/importSources/authorize';
 import { recordTelegramPost, telegramItem } from '../src/lib/importSources/telegram';
 import { insertSource, listItems, readSource, SourceError } from '../src/lib/importSources/store';
@@ -168,6 +168,28 @@ describe('parsing feeds', () => {
 		assert.equal(entry!.itemId, 'tag:a,2026:1');
 		assert.deepEqual(entry!.video, { url: 'https://a.example/1.mp4', bytes: 1000, mimeType: 'video/mp4' });
 		assert.equal(entry!.url, 'https://a.example/1');
+	});
+
+	it('drops any link, image or video a network gives that is not a public web address', async () => {
+		const f = (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.includes('/accounts/lookup')) return Response.json({ id: '42' });
+			if (url.includes('/accounts/42/statuses'))
+				return Response.json([
+					{ id: '2', url: 'https://social.example/@s/2', created_at: '2026-11-12T10:00:00Z', content: '<p>card</p>', visibility: 'public', media_attachments: [], card: { url: 'javascript:alert(1)', title: 'x', image: 'http://169.254.169.254/x' } },
+					{ id: '1', url: 'https://social.example/@s/1', created_at: '2026-11-11T10:00:00Z', content: '<p>media</p>', visibility: 'public', media_attachments: [{ type: 'image', url: 'http://10.0.0.5/a.png' }, { type: 'image', url: 'https://files.social.example/b.png' }, { type: 'video', url: 'file:///etc/passwd' }] },
+				]);
+			if (url.includes('app.bsky.feed.getAuthorFeed'))
+				return Response.json({ feed: [{ post: { uri: 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/app.bsky.feed.post/3k', author: { did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', handle: 'a.bsky.social' }, record: { text: 'hi', createdAt: '2026-11-12T10:00:00Z' }, embed: { $type: 'app.bsky.embed.external#view', external: { uri: 'data:text/html,<script>x</script>', title: 't', thumb: 'javascript:1' } } } }] });
+			throw new Error(`unexpected ${url}`);
+		}) as typeof fetch;
+		const { items } = await fetchSource('mastodon', 'scholar@social.example', null, f);
+		const byId = Object.fromEntries(items.map((i) => [i.itemId, i]));
+		assert.equal(byId['2']!.link, null, 'a javascript: card is not a link');
+		assert.deepEqual(byId['1']!.images.map((i) => i.url), ['https://files.social.example/b.png']);
+		assert.equal(byId['1']!.video, null);
+		const bsky = await fetchSource('bluesky', 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa', null, f);
+		assert.equal(bsky.items[0]!.link, null, 'a data: embed is not a link');
 	});
 
 	it('turns HTML into plain text', () => {
