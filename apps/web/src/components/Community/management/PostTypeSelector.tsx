@@ -51,13 +51,13 @@ const POST_TYPES: PostTypeCard[] = [
     type: PostType.POLL,
     icon: BarChart3,
     label: { en: 'Poll', ar: 'استطلاع' },
-    description: { en: 'Ask your audience a question', ar: 'اسأل جمهورك سؤالاً' }
+    description: { en: 'Ask your audience a question', ar: 'اسأل جمهورك سؤالًا' }
   },
   {
     type: PostType.QUIZ,
     icon: Brain,
     label: { en: 'Quiz', ar: 'اختبار' },
-    description: { en: 'Create an interactive quiz', ar: 'أنشئ اختباراً تفاعلياً' }
+    description: { en: 'Create an interactive quiz', ar: 'أنشئ اختبارًا تفاعليًا' }
   },
   {
     type: PostType.VIDEO,
@@ -94,9 +94,10 @@ const POST_TYPES: PostTypeCard[] = [
 
 /**
  * The nine post kinds as tiles (owner review): one column of rows on a phone, three columns from
- * 640px, so the rows are always full (3 × 3) and no slot is empty. Each tile is a row, icon at the
- * start and the name with its description beside it; descriptions wrap to a second line and are
- * never cut or ellipsised.
+ * 640px, so the rows are always full (3 × 3) and no slot is empty. Each tile has the icon and the name
+ * on one line and the description under both, across the whole tile: beside the icon a desktop tile
+ * left the description about 90px, so it broke into 3–4 lines ending on one word ("community",
+ * «متحركة»; AUDIT-2). Descriptions are balanced and never cut or ellipsised.
  */
 export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelectorProps) {
   const isRTL = locale === 'ar';
@@ -117,7 +118,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
         return (
           <Card
             key={postType.type}
-            className={`flex cursor-pointer items-start gap-3 p-3 text-start transition-colors md:p-4 active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)] ${
+            className={`flex cursor-pointer flex-col gap-1.5 p-3 text-start transition-colors md:p-4 active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)] ${
               isSelected ? 'border-2 border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'
             }`}
             onClick={() => onSelect(postType.type)}
@@ -132,15 +133,15 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
             tabIndex={0}
             data-post-type={postType.type}
           >
-            <span
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              <Icon className="h-5 w-5" aria-hidden="true" />
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              >
+                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+              </span>
+              <span className={`min-w-0 text-sm font-semibold [overflow-wrap:break-word] md:text-base ${isSelected ? 'text-primary' : 'text-foreground'}`}>{label}</span>
             </span>
-            <span className="min-w-0 flex-1 space-y-0.5">
-              <span className={`block text-sm font-semibold md:text-base ${isSelected ? 'text-primary' : 'text-foreground'}`}>{label}</span>
-              <span className="block text-xs leading-snug text-muted-foreground [text-wrap:balance] md:text-sm" data-testid="post-type-description">{description}</span>
-            </span>
+            <span className="block text-xs leading-snug text-muted-foreground [text-wrap:balance] md:text-sm" data-testid="post-type-description">{description}</span>
           </Card>
         );
       })}

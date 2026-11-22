@@ -2252,7 +2252,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     pleaseSpecify: 'يرجى التوضيح:',
     briefDescription: 'وصف موجز للمشكلة',
     additionalDetails: 'تفاصيل إضافية (اختياري)',
-    additionalDetailsPlaceholder: 'قدم أي سياق إضافي قد يساعد في المراجعة',
+    additionalDetailsPlaceholder: 'أي تفاصيل أخرى تساعدنا في المراجعة',
     charactersCount: '{count}/٥٠٠ حرف',
     reviewNotice: 'يراجع فريق الإشراف البلاغات وقد تستغرق المعالجة من ٢٤ إلى ٤٨ ساعة. قد تؤدي البلاغات الكاذبة إلى تقييد الحساب.',
     submit: 'إرسال البلاغ',

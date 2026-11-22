@@ -7,6 +7,7 @@
  */
 
 'use client';
+import { FitWords } from '@/components/common/FitWords';
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect } from 'react';
@@ -376,7 +377,7 @@ export function UnifiedNavigation() {
           data-loading={nameLoading || undefined}
         >
           {/* Inside the slot, so the phone layout's 1px clip of the name still holds */}
-          {nameLoading ? <span data-skeleton="" style={NAME_SKELETON} aria-hidden="true" /> : channel ? getChannelName(channel.name, channel.nameLocalized) : displayName}
+          {nameLoading ? <span data-skeleton="" style={NAME_SKELETON} aria-hidden="true" /> : <FitWords text={(channel ? getChannelName(channel.name, channel.nameLocalized) : displayName) ?? ''} />}
         </span>
         <span className="sr-only">{t.navigation.navigationMenu}</span>
         <ChevronDown className="aun-caret" aria-hidden="true" />

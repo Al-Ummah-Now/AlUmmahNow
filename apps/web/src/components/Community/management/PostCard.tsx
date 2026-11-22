@@ -159,9 +159,9 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
           </div>
         </div>
 
-        {/* Its own direction for the words, the page's edge for the line (like Studio comments), and two
-            lines that end in an ellipsis: the fading clamp left a short second line looking cut off */}
-        <p className="text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] text-left [html[dir=rtl]_&]:text-right" dir="auto" data-testid="post-card-text">
+        {/* Two lines, ended by an ellipsis at the text's own end: the shared fade (clamp-2) fades the box's
+            last 3em, which is empty when line 2 breaks early, so the cut never showed (AUDIT-2) */}
+        <p className="line-clamp-2 text-sm [overflow-wrap:anywhere] md:text-base" dir="auto" data-testid="managed-post-text">
           {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
         </p>
 

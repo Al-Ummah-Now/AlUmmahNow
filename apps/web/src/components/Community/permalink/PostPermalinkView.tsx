@@ -40,7 +40,7 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
 
   return (
     <div dir={isRTL ? 'rtl' : 'ltr'} className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
-      <nav aria-label={fill(t.community.allPostsFrom)} className="mb-3">
+      <nav aria-label={fill(t.community.allPostsFrom)} className="street-plate mb-3">
         <Link
           href={postsHref}
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 -ms-3 text-sm font-medium text-[var(--fanous-color-text-secondary)] hover:bg-[var(--fanous-color-surface-raised)] hover:text-[var(--fanous-color-text-primary)] transition-colors"
@@ -52,7 +52,7 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
           {fill(t.community.allPostsFrom)}
         </Link>
       </nav>
-      <h1 className="mb-4 text-xl font-semibold text-[var(--fanous-color-text-primary)]">{fill(t.community.postFrom)}</h1>
+      <h1 className="street-plate mb-4 text-xl font-semibold text-[var(--fanous-color-text-primary)] [text-wrap:balance]">{fill(t.community.postFrom)}</h1>
       <PostCard
         post={post}
         isRTL={isRTL}

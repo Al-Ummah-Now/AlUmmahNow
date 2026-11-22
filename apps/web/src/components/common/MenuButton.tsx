@@ -27,6 +27,12 @@ interface MenuButtonProps {
   /** Called when the menu opens (lazy loading). */
   onOpen?: () => void;
   disabled?: boolean;
+  /**
+   * The menu opens below (or above) the closest ancestor matching this selector instead of the
+   * button itself: a post card's ⋮ menu opens below the whole header row, clear of the channel name
+   * beside the button. The end edge still lines up with the button.
+   */
+  anchorClosest?: string;
 }
 
 /**
@@ -40,7 +46,7 @@ interface MenuButtonProps {
  * stay inside the band between the sticky header and the phone tab bar. Its end
  * edge lines up with the button's end, so it works in LTR and RTL.
  */
-export function MenuButton({ label, children, items, buttonClassName = '', menuClassName = '', testId, onOpen, disabled }: MenuButtonProps) {
+export function MenuButton({ label, children, items, buttonClassName = '', menuClassName = '', testId, onOpen, disabled, anchorClosest }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -53,7 +59,10 @@ export function MenuButton({ label, children, items, buttonClassName = '', menuC
     const button = buttonRef.current;
     const menu = menuRef.current;
     if (!button || !menu) return;
-    const anchor = button.getBoundingClientRect();
+    const own = button.getBoundingClientRect();
+    const row = anchorClosest ? button.closest(anchorClosest)?.getBoundingClientRect() : undefined;
+    // Vertical edges from the row, horizontal from the button
+    const anchor = row ? ({ x: own.left, y: row.top, left: own.left, right: own.right, width: own.width, top: row.top, bottom: row.bottom, height: row.height } as DOMRect) : own;
     const rtl = getComputedStyle(button).direction === 'rtl';
     // Natural size, unconstrained by a previous max height
     const prev = menu.style.maxHeight;
@@ -64,7 +73,7 @@ export function MenuButton({ label, children, items, buttonClassName = '', menuC
     setPlace((cur) =>
       cur && cur.top === next.top && cur.left === next.left && cur.maxHeight === next.maxHeight && cur.side === next.side ? cur : next,
     );
-  }, []);
+  }, [anchorClosest]);
 
   useLayoutEffect(() => {
     if (!open) {

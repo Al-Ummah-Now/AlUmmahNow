@@ -11,8 +11,8 @@ import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 export function SignInToComment({ testId = 'comments-sign-in' }: { testId?: string }) {
   const { t, lang } = useLanguage();
   return (
-    <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center" data-testid={testId}>
-      <p className="text-gray-600 dark:text-gray-400 mb-3">
+    <div className="p-4 border border-[var(--fanous-color-divider)] rounded-lg bg-[var(--fanous-color-surface-raised)] text-center" data-testid={testId}>
+      <p className="text-[var(--fanous-color-text-secondary)] mb-3">
         {t.comments.signInToComment}
       </p>
       <Button

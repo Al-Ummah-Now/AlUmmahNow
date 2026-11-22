@@ -99,8 +99,8 @@ export default function PostCard({
 
   return (
     <article id={`post-${post.id}`} data-post-id={post.id} className="aun-row-glass scroll-mt-24">
-      {/* Post Header */}
-      <div className={cn(
+      {/* Post Header: the ⋮ menu opens below this row, so it never sits on the channel name */}
+      <div data-menu-anchor className={cn(
         'flex items-start gap-3 p-4 border-b border-[var(--fanous-color-divider)]',
         // Direction comes from the RTL container (dir=rtl); no manual reversal
       )}>

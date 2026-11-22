@@ -102,6 +102,7 @@ export default function PostActionsMenu({ post, canManage = false, onDeleted, on
         testId={canManage ? 'post-owner-actions' : 'post-actions-menu'}
         disabled={deleting}
         menuClassName="menu-solid"
+        anchorClosest="[data-menu-anchor]"
         buttonClassName="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--fanous-color-text-secondary)] hover:bg-[var(--fanous-color-surface-raised)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)]"
       >
         <MoreVertical className="h-5 w-5" aria-hidden="true" />

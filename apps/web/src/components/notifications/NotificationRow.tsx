@@ -81,8 +81,8 @@ export function NotificationRow({ item, onOpen, onMarkRead, onMarkUnread, onDele
     <div className="flex items-start gap-3 min-w-0 flex-1">
       <Icon item={item} />
       <div className="min-w-0 flex-1 text-start">
-        <p className={`text-sm ${TEXT} ${item.isRead ? 'font-normal' : 'font-bold'}`}>{title}</p>
-        {message && <p className={`text-sm ${SECONDARY} ${compact ? 'clamp-2' : ''}`}>{message}</p>}
+        <p className={`text-sm [text-wrap:balance] ${TEXT} ${item.isRead ? 'font-normal' : 'font-bold'}`}>{title}</p>
+        {message && <p className={`text-sm [text-wrap:balance] ${SECONDARY} ${compact ? 'clamp-2' : ''}`}>{message}</p>}
         <p className={`text-xs ${SECONDARY} mt-1`}>
           <time dateTime={item.createdAt}>{relativeTime(item.createdAt, t, lang)}</time>
         </p>

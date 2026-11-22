@@ -2258,7 +2258,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     pleaseSpecify: 'Please specify:',
     briefDescription: 'Brief description of the issue',
     additionalDetails: 'Additional details (optional)',
-    additionalDetailsPlaceholder: 'Provide any additional context that might help our review',
+    additionalDetailsPlaceholder: 'Anything else that helps our review',
     charactersCount: '{count}/500 characters',
     reviewNotice: 'Reports are reviewed by our moderation team and may take 24-48 hours to process. False reports may result in account restrictions.',
     submit: 'Submit Report',

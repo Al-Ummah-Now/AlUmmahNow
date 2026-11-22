@@ -111,3 +111,15 @@ html.fanous-street .studio-frame {
   background: var(--fanous-color-background);
   box-shadow: 0 50vh 0 0 var(--fanous-color-background);
 }
+
+/* Text that sits on the page itself (a page's title and subtitle, section headings and their links,
+   empty-state lines) gets a plate of the page colour with a soft edge, so no lantern or string ever
+   runs through its words (owner, 2026-11-22, as the history page headings, #1723). It hugs the text
+   and only exists under the street. */
+html.fanous-street .street-plate {
+  width: fit-content;
+  max-width: 100%;
+  background: var(--fanous-color-background);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: 0 0 12px 8px var(--fanous-color-background);
+}

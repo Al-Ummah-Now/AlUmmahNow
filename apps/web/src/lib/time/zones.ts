@@ -97,6 +97,24 @@ export function zoneName(zone: string, locale: string, at = new Date()): string 
   return zoneCity(zone);
 }
 
+/**
+ * The zone's place in the page's language: English takes it from the zone id ("Buenos Aires"); Arabic
+ * from CLDR's location name («توقيت نيويورك» → «نيويورك», a one-zone country by its country name:
+ * «مصر»). Null when CLDR has only an offset for it.
+ */
+export function zonePlace(zone: string, locale: string, at = new Date()): string | null {
+  if (locale !== 'ar') return zoneCity(zone);
+  try {
+    const part = dateTimeFormat('ar', { timeZone: zone, timeZoneName: 'shortGeneric' })
+      .formatToParts(at)
+      .find((p) => p.type === 'timeZoneName')?.value;
+    if (!part || /(GMT|UTC|غرينتش|[0-9٠-٩])/.test(part)) return null;
+    return part.replace(/^توقيت\s+/, '').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** The place in the zone id ("America/Argentina/Buenos_Aires" → "Buenos Aires"). */
 export function zoneCity(zone: string): string {
   return (zone.split('/').pop() ?? zone).replace(/_/g, ' ');
