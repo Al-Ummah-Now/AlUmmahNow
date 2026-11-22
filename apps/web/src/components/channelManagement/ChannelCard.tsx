@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { AvatarImage, CoverImage } from '@/components/media/ProfileImages';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 /**
  * ChannelCard Component
@@ -55,7 +56,7 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
           data-testid="channel-card-avatar"
         >
           {/* The initial shows when there is no avatar or it fails to load (the image covers it otherwise) */}
-          <span aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+          <span aria-hidden="true">{avatarInitial(name, channel.handle)}</span>
           <AvatarImage src={channel.avatarUrl} alt="" fallback={null} testId="channel-card-avatar-image" />
         </div>
       </div>

@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Plus, Check, LogOut, ChevronDown } from 'lucide-react';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 export default function AccountSwitcherRTL() {
   const { t } = useLanguage();
@@ -59,7 +60,7 @@ export default function AccountSwitcherRTL() {
           </div>
         </div>
         <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
-          {user.displayName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+          {avatarInitial(user.displayName, user.email)}
         </div>
       </button>
 
@@ -114,7 +115,7 @@ export default function AccountSwitcherRTL() {
                       </div>
                     </div>
                     <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                      {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                      {avatarInitial(account.displayName, account.email)}
                     </div>
                   </button>
 

@@ -18,6 +18,7 @@ import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import { can, formatNumber } from '@al-ummah/shared-types';
 import ChannelTranslationSettings from '@/components/settings/ChannelTranslationSettings';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 interface ChannelData {
   id: string;
@@ -314,7 +315,7 @@ function ChannelEditPage() {
             busy={photoBusy === 'avatar'}
             placeholder={
               <div className="flex h-full w-full items-center justify-center bg-[var(--aun-btn-filled-bg)]">
-                <span className="text-3xl font-bold text-white">{(formData.nameEn || formData.name).charAt(0).toUpperCase()}</span>
+                <span className="text-3xl font-bold text-white">{avatarInitial(formData.nameEn, formData.name, about.handle)}</span>
               </div>
             }
             className="relative z-[3] -mt-12 mb-4"

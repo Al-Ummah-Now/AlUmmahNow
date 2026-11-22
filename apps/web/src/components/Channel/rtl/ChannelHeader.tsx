@@ -12,6 +12,8 @@ import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { formatHandle } from '@/lib/channel-url';
+import { channelOwnName } from '@/lib/channel-name';
+import { avatarInitial } from '@/lib/avatar-initial';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 import { formatSubscribers } from '@/lib/format/videoMeta';
@@ -31,7 +33,11 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   // Manage buttons follow the viewer's channel role (owner, or a role they hold)
   const manageRole: ChannelRole | undefined = owner ? 'owner' : user?.channels?.find((c) => c.id === channel.id)?.role;
   const t = getTranslations(locale as 'en' | 'ar');
-  const displayName = channel.nameLocalized?.[locale] || channel.name;
+  // Names are not guaranteed (a stored channel can lack one): fall back to the handle, then a label
+  const ownName = channelOwnName(channel, locale);
+  const handleLabel = formatHandle(channel.handle);
+  const displayName = ownName || handleLabel || t.channel.unnamed;
+  const initial = avatarInitial(ownName, channel.handle);
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
 
   const {
@@ -87,7 +93,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl md:text-5xl font-bold text-gray-600 dark:text-gray-300">
-                {displayName.charAt(0).toUpperCase()}
+                {initial}
               </div>
             )}
           </div>
@@ -100,7 +106,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white line-clamp-2 break-normal [overflow-wrap:break-word]">
-                  {displayName}
+                  {/* A handle title keeps its "@" in front in Arabic, like the handle line */}
+                  {!ownName && handleLabel ? <span dir="ltr">{handleLabel}</span> : displayName}
                 </h1>
                 {channel.isVerified && <VerifiedBadge size="md" />}
               </div>
@@ -141,7 +148,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               )}
             </div>
 
-            {channel.handle && (
+            {/* Without a name the title already is the handle */}
+            {channel.handle && ownName && (
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" dir="ltr" data-testid="channel-handle">
                 {formatHandle(channel.handle)}
               </p>

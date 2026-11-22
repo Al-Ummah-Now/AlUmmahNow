@@ -16,6 +16,7 @@ import { acceptInvite, daysUntil, declineInvite, loadMyInvites } from '@/lib/cha
 import { teamErrorMessage } from '@/lib/channels/team-errors';
 import { CHANNEL_INVITES_CHANGED } from '@/lib/channels/invites-count';
 import { pluralText } from '@/lib/notifications/toast-queue';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 const CARD = 'c p-4 sm:p-6';
 const BUTTON = 'inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60';
@@ -112,7 +113,7 @@ export default function ChannelInvites() {
                       <img src={invite.channel.avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
                     ) : (
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-lg font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                        {name.charAt(0).toUpperCase()}
+                        {avatarInitial(name, invite.channel.handle)}
                       </span>
                     )}
                     <div className="min-w-0 flex-1">

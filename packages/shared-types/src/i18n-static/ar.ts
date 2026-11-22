@@ -283,6 +283,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     singleChannel: 'قناة',
     clickToChangeCover: 'اضغط لتغيير الغلاف',
     clickToChangeAvatar: 'اضغط لتغيير الصورة',
+    unnamed: 'قناة بلا اسم',
     changeCover: 'تغيير الغلاف',
     removeCover: 'إزالة الغلاف',
     changeAvatar: 'تغيير الصورة',
