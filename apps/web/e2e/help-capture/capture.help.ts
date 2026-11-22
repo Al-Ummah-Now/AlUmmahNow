@@ -2177,36 +2177,44 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
       // Ends on a clear band at least 4 px under the menu that cuts nothing: no text or icon, and no
       // picture or card either (AUDIT-2 2026-11-22: end below the player, so its poster is whole, and
       // after the channel card's bottom border on phone). Page-sized wrappers are left out
-      const pickerBottom = await page.evaluate((from) => {
-        const items: Array<{ top: number; bottom: number }> = [];
+      const crop = await page.evaluate((from) => {
+        const items: Array<{ top: number; bottom: number; who: string }> = [];
+        const who = (el: Element, r: { top: number; bottom: number }) =>
+          `${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '').split(/\s+/).slice(0, 3).join('.')}@${Math.round(r.top)}-${Math.round(r.bottom)}`;
+        // Hidden or see-through things don't show in the picture, so they can't be cut
+        const seen = (el: Element) => el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         for (let t = walker.nextNode(); t; t = walker.nextNode()) {
           if (!t.textContent?.trim()) continue;
           const el = t.parentElement;
-          if (!el || el.closest('[data-testid="nav-menu"]')) continue;
-          const cs = getComputedStyle(el);
-          if (cs.visibility === 'hidden' || cs.opacity === '0') continue;
+          if (!el || el.closest('[data-testid="nav-menu"]') || !seen(el)) continue;
           const range = document.createRange();
           range.selectNodeContents(t);
-          for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) items.push({ top: r.top, bottom: r.bottom });
+          for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) items.push({ top: r.top, bottom: r.bottom, who: `"${t.textContent.trim().slice(0, 20)}" ${who(el, r)}` });
         }
         const big = (r: DOMRect) => r.height > innerHeight * 0.7 || (r.width >= innerWidth * 0.98 && r.height > innerHeight * 0.4);
         for (const el of document.querySelectorAll('svg, img, video, canvas, input, button, select, textarea')) {
-          if (el.closest('[data-testid="nav-menu"]')) continue;
+          if (el.closest('[data-testid="nav-menu"]') || !seen(el)) continue;
           const r = el.getBoundingClientRect();
-          if (r.width > 1 && r.height > 1 && !big(r)) items.push({ top: r.top, bottom: r.bottom });
+          if (r.width > 1 && r.height > 1 && !big(r)) items.push({ top: r.top, bottom: r.bottom, who: who(el, r) });
         }
         for (const el of document.querySelectorAll<HTMLElement>('body *')) {
-          if (el.closest('[data-testid="nav-menu"]')) continue;
+          if (el.closest('[data-testid="nav-menu"]') || !seen(el)) continue;
           const cs = getComputedStyle(el);
           const card = parseFloat(cs.borderBottomWidth) >= 1 || parseFloat(cs.borderTopWidth) >= 1 || cs.boxShadow !== 'none' || (cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(cs.borderBottomLeftRadius) > 0);
           if (!card) continue;
           const r = el.getBoundingClientRect();
-          if (r.width > 40 && r.height > 1 && !big(r) && r.bottom > from) items.push({ top: r.top, bottom: r.bottom });
+          if (r.width > 40 && r.height > 1 && !big(r) && r.bottom > from) items.push({ top: r.top, bottom: r.bottom, who: 'card ' + who(el, r) });
         }
-        for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!items.some((it) => it.top < y && it.bottom > y - 4)) return y;
-        return innerHeight;
+        const cuts = (y: number) => items.filter((it) => it.top < y && it.bottom > y - 4);
+        for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (!cuts(y).length) return { y, why: [] as string[] };
+        // No clean line: say what crosses the line that cuts least under the menu, for the log
+        let best = innerHeight;
+        for (let y = Math.ceil(from) + 4; y < innerHeight; y++) if (cuts(y).length < cuts(best).length) best = y;
+        return { y: innerHeight, why: [`least-cut y ${best}:`, ...cuts(best).map((it) => it.who)] };
       }, mb.y + mb.height);
+      const pickerBottom = crop.y;
+      log.push(`${name} picker bottom ${pickerBottom} (menu bottom ${Math.round(mb.y + mb.height)}) ${crop.why.join(' | ')}`);
       await page.screenshot({ path: join(dir, `${name}.0-picker.png`), clip: { x: 0, y: 0, width: vw, height: pickerBottom } });
       await menu.getByTestId('nav-channel-option-none').click();
       for (let i = 0; i < 12; i++) {
