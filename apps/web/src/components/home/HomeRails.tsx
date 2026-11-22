@@ -80,7 +80,7 @@ function HomeRailRow({ rail, heading, index }: { rail: HomeRail; heading: string
         <span className="hr-badge" aria-hidden="true">
           <Icon />
         </span>
-        <h2 id={headingId} className="hr-title">
+        <h2 id={headingId} className="hr-title street-plate">
           {heading}
         </h2>
         <span className="hr-rule" aria-hidden="true" />

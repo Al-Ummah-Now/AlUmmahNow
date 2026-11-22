@@ -157,7 +157,7 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
 <LibraryRow />
 {featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
 <HomeRails rails={rails} />
-<h1 className="home-h text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>
+<h1 className="home-h street-plate text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards
             // (and the button below) don't shift the layout when they load
