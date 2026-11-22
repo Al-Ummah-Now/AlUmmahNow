@@ -27,13 +27,23 @@ describe('NotFoundPage (prod 2026-11-18: crashed with 500 instead of a 404)', ()
 });
 
 describe('NotFoundPage: the shared error card (wiki guides/error-pages.md)', () => {
-  it('one heading, the 410 words hidden until the Worker answers 410', () => {
+  it('one heading block and one h1 in the DOM (no hidden 410 copy), the family tab title', () => {
     pathname = '/en/nope';
     render(<NotFoundPage />);
     const main = screen.getByTestId('not-found-page');
     expect(main).toHaveAttribute('data-error-status', '404');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Page not found');
-    expect(main.querySelector('[data-when="410"]')).toHaveAttribute('hidden');
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(main.querySelectorAll('.ep-head')).toHaveLength(1);
+    expect(main.querySelector('[hidden]')).toBeNull();
+    expect(document.title).toBe('Page not found | Al Ummah Now');
+  });
+
+  it('the family buttons, not the site ones', () => {
+    pathname = '/en/nope';
+    render(<NotFoundPage />);
+    expect(screen.getByRole('link', { name: 'Home page' })).toHaveClass('ep-btn', 'ep-btn-primary');
+    expect(screen.getByRole('link', { name: 'Home page' })).not.toHaveClass('b-primary');
   });
 
   it('offers the site search, home, and contact; Arabic code line in ٠–٩', () => {
@@ -51,7 +61,7 @@ describe('NotFoundPage answered as 410 Gone by the Worker (lib/seo/gone.ts)', ()
     delete (window as unknown as Record<string, unknown>).__aunHttpStatus;
   });
 
-  it('shows the 410 words, code line and title, with the 404 block hidden', () => {
+  it('shows the 410 words, code line and title in the one block', () => {
     pathname = '/en/video/abc';
     (window as unknown as Record<string, unknown>).__aunHttpStatus = 410;
     render(<NotFoundPage />);
@@ -59,7 +69,7 @@ describe('NotFoundPage answered as 410 Gone by the Worker (lib/seo/gone.ts)', ()
     expect(main).toHaveAttribute('data-error-status', '410');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('This was removed');
     expect(screen.getByText('Error 410')).toBeInTheDocument();
-    expect(main.querySelector('[data-when="404"]')).toHaveAttribute('hidden');
-    expect(document.title).toBe('This was removed');
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(document.title).toBe('This was removed | Al Ummah Now');
   });
 });

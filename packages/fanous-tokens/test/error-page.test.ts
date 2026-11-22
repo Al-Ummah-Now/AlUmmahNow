@@ -31,6 +31,17 @@ test('logical properties only (one sheet for English and Arabic)', () => {
   assert.doesNotMatch(rules, /(margin|padding|border)-(left|right)\b|\b(left|right)\s*:|text-align:(left|right)/);
 });
 
+test('the card has its own buttons (UNIFY): one gold, height and shape in every app', () => {
+  assert.match(rules, /\.ep \.ep-btn\{[^}]*min-height:44px[^}]*border-radius:999px[^}]*font-family:inherit/);
+  assert.match(rules, /\.ep \.ep-btn-primary\{background:var\(--fanous-c-button-primary-bg,var\(--fanous-color-primary\)\)/);
+  assert.match(rules, /\.ep \.ep-btn-secondary\{background:transparent;[^}]*border:1px solid var\(--fanous-c-button-secondary-border/);
+});
+
+test('titles take the page font and bodies wrap in balanced lines (no lone last word)', () => {
+  assert.match(rules, /\.ep-title\{[^}]*font-family:inherit[^}]*text-wrap:balance/);
+  assert.match(rules, /\.ep-body\{[^}]*text-wrap:balance/);
+});
+
 test('the videos site and admin use this file itself, not a copy', () => {
   const web = readFileSync(new URL('../../../apps/web/src/components/errors/ErrorScreen.tsx', import.meta.url), 'utf8');
   const admin = readFileSync(new URL('../../../apps/admin-web/src/app/globals.css', import.meta.url), 'utf8');

@@ -19,7 +19,7 @@ test('ERR-001 the site root redirects to /en', async ({ page }) => {
 });
 
 for (const [locale, heading, description, home, back] of [
-  ['en', 'Page not found', /couldn't find this page/, 'Go to home', 'Go back'],
+  ['en', 'Page not found', /couldn’t find this page/, 'Home page', 'Go back'],
   ['ar', 'الصفحة غير موجودة', /لم نعثر على هذه الصفحة/, 'الصفحة الرئيسية', 'رجوع'],
 ] as const) {
   test(`ERR-002 unknown path shows the localized 404 page with status 404 (${locale})`, async ({ page }) => {
@@ -72,7 +72,7 @@ test('ERR-005 an unsupported locale is redirected to /en and shows the English 4
   expect(response?.status()).toBe(404);
   const main = page.getByTestId('not-found-page');
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Page not found');
-  await clickAndWaitForURL(page, main.getByRole('link', { name: 'Go to home' }), /\/en\/?$/);
+  await clickAndWaitForURL(page, main.getByRole('link', { name: 'Home page' }), /\/en\/?$/);
 });
 
 test('ERR-006 a path without a locale is moved under /en and 404s with a real 404 status', async ({ page }) => {
@@ -81,7 +81,7 @@ test('ERR-006 a path without a locale is moved under /en and 404s with a real 40
   expect(response?.status()).toBe(404);
   const main = page.getByTestId('not-found-page');
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Page not found');
-  await expect(main.getByRole('link', { name: 'Go to home' })).toHaveAttribute('href', '/en');
+  await expect(main.getByRole('link', { name: 'Home page' })).toHaveAttribute('href', '/en');
 });
 
 test('ERR-007 the old unprefixed /video?vid= URL lands on /en/video/<id>', async ({ page }) => {

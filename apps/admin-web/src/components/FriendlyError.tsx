@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorCodeLabel, errorKindIcon, errorScreenStrings, type ErrorPageIcon, type FriendlyErrorKind } from '@al-ummah/shared-types';
+import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorCodeLabel, errorKindIcon, errorPageTitle, errorScreenStrings, type ErrorPageIcon, type FriendlyErrorKind } from '@al-ummah/shared-types';
 import { boundaryOutcome, handleBoundaryError } from '@/lib/errors/boundary';
 import { reportError } from '@/lib/errors/reporter';
 import { recoverFromVersionSkew } from '@/lib/version-skew';
-import { primaryButtonClass, secondaryButtonClass } from './ui';
 
 interface FriendlyErrorProps {
   locale: string;
@@ -16,26 +15,45 @@ interface FriendlyErrorProps {
   onRetry?: () => void;
   /** Smaller, for a segment boundary inside the admin layout. */
   inline?: boolean;
-  /** The admin app's own wording for the home link ("Go to Dashboard"); defaults to the shared copy. */
-  homeLabel?: string;
+}
+
+/** The family's buttons (aun-error-page.css), never admin's own: the same on every app. */
+const PRIMARY = 'ep-btn ep-btn-primary';
+const SECONDARY = 'ep-btn ep-btn-secondary';
+
+/**
+ * "Still stuck? Contact us": the public contact page on the videos site of this admin's domain
+ * (admin.<domain> → videos.<domain>), with the reference. None on a host without that shape (local dev).
+ */
+export function contactHrefFor(location: { protocol: string; host: string }, locale: string, reference?: string): string | undefined {
+  if (!location.host.startsWith('admin.')) return undefined;
+  return `${location.protocol}//videos.${location.host.slice('admin.'.length)}/${locale === 'ar' ? 'ar' : 'en'}/contact${reference ? `?ref=${encodeURIComponent(reference)}` : ''}`;
 }
 
 /**
  * The only thing a user sees when something fails: the shared error card (frosted glass, badge, the
  * "Error 404" line, words and actions as on every Al Ummah Now app; wiki guides/error-pages.md),
- * en/ar with RTL, an action that fits, Go back, and the reference to quote. Never a stack, a
- * framework URL or the error's own text.
+ * en/ar with RTL, an action that fits, Go back on a 404, the reference to quote and "Still stuck?
+ * Contact us". Never a stack, a framework URL or the error's own text.
  */
-export function FriendlyError({ locale, kind, reference, onRetry, inline = false, homeLabel }: FriendlyErrorProps) {
+export function FriendlyError({ locale, kind, reference, onRetry, inline = false }: FriendlyErrorProps) {
   const s = errorScreenStrings(locale);
   const copy = s.kinds[kind];
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const reload = () => window.location.reload();
-  const home = homeLabel || s.goHome;
+  const home = s.goHome;
   const status = ERROR_KIND_STATUS[kind];
-  // After mount only (the server can't know the history)
+  const lost = kind === 'notFound' || kind === 'gone';
+  // After mount only (the server can't know the history or the host). Go back only where the
+  // videos site offers it (404/410), so the 500 actions are Home page + Try again everywhere
   const [canGoBack, setCanGoBack] = useState(false);
-  useEffect(() => setCanGoBack(window.history.length > 1), []);
+  const [contactHref, setContactHref] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setCanGoBack(lost && window.history.length > 1);
+    setContactHref(contactHrefFor(window.location, locale, reference));
+    // The tab says what happened, in the family's format
+    document.title = errorPageTitle(locale, copy.title);
+  }, [lost, locale, reference, copy.title]);
 
   let primary: { label: string; icon: ErrorPageIcon; onClick?: () => void; href?: string };
   if (kind === 'update') primary = { label: s.reload, icon: 'update', onClick: reload };
@@ -73,25 +91,30 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
         </div>
         {reference && <ReferenceBox reference={reference} label={s.reference} hint={s.referenceHint} copyLabel={s.copy} copiedLabel={s.copied} />}
         <footer className="ep-foot">
+          {contactHref ? (
+            <p className="ep-help">
+              {s.needHelp} <a href={contactHref}>{s.contactUs}</a>
+            </p>
+          ) : null}
           <div className="ep-actions">
             {canGoBack ? (
-              <button type="button" onClick={() => window.history.back()} className={`${secondaryButtonClass} ep-btn`} data-testid="friendly-error-back">
+              <button type="button" onClick={() => window.history.back()} className={SECONDARY} data-testid="friendly-error-back">
                 <Icon name="back" />
                 <span>{s.goBack}</span>
               </button>
             ) : null}
             {showHome && (
-              <a href="/dashboard" className={`${secondaryButtonClass} ep-btn`}>
+              <a href="/dashboard" className={SECONDARY}>
                 <Icon name="home" />
                 <span>{home}</span>
               </a>
             )}
             {primary.href ? (
-              <a href={primary.href} className={`${primaryButtonClass} ep-btn`} data-testid="friendly-error-action">
+              <a href={primary.href} className={PRIMARY} data-testid="friendly-error-action">
                 {primaryInner}
               </a>
             ) : (
-              <button type="button" onClick={primary.onClick} className={`${primaryButtonClass} ep-btn`} data-testid="friendly-error-action">
+              <button type="button" onClick={primary.onClick} className={PRIMARY} data-testid="friendly-error-action">
                 {primaryInner}
               </button>
             )}
@@ -142,7 +165,7 @@ function ReferenceBox({ reference, label, hint, copyLabel, copiedLabel }: { refe
  * recovery and reports once mounted. Renders nothing while a version-skew
  * reload takes over.
  */
-export function BoundaryError({ error, reset, locale, inline, homeLabel }: { error: Error & { digest?: string }; reset?: () => void; locale: string; inline?: boolean; homeLabel?: string }) {
+export function BoundaryError({ error, reset, locale, inline }: { error: Error & { digest?: string }; reset?: () => void; locale: string; inline?: boolean }) {
   const outcome = useMemo(() => boundaryOutcome(error, { online: typeof navigator === 'undefined' ? undefined : navigator.onLine }), [error]);
 
   useEffect(() => {
@@ -150,5 +173,5 @@ export function BoundaryError({ error, reset, locale, inline, homeLabel }: { err
   }, [error, outcome]);
 
   if (outcome.skew) return null;
-  return <FriendlyError locale={locale} kind={outcome.kind} reference={outcome.ref} onRetry={reset} inline={inline} homeLabel={homeLabel} />;
+  return <FriendlyError locale={locale} kind={outcome.kind} reference={outcome.ref} onRetry={reset} inline={inline} />;
 }

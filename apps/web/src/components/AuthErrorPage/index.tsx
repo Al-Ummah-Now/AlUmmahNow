@@ -2,6 +2,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { login } from '@/lib/actions';
+import { errorScreenStrings } from '@al-ummah/shared-types';
 import { ErrorScreen } from '@/components/errors/ErrorScreen';
 
 /**
@@ -29,7 +30,8 @@ export default function AuthErrorPage() {
         testId: 'auth-error-retry',
         form: (button) => <form action={login.bind(null, locale)}>{button}</form>,
       }}
-      secondary={[{ label: t.auth.backHome, icon: 'home', href: `/${lang}`, testId: 'auth-error-home' }]}
+      // The family's one home label ("Home page" / «الصفحة الرئيسية»)
+      secondary={[{ label: errorScreenStrings(lang).goHome, icon: 'home', href: `/${lang}`, testId: 'auth-error-home' }]}
       contactHref={`/${lang}/contact`}
     />
   );

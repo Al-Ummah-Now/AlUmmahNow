@@ -10,7 +10,7 @@
 import { isChunkLoadError, isNetworkError, isVersionSkewError } from './classify';
 import { numberFormat } from '../locale-format';
 
-export type FriendlyErrorKind = 'generic' | 'offline' | 'update' | 'session' | 'server' | 'notFound' | 'gone';
+export type FriendlyErrorKind = 'generic' | 'offline' | 'update' | 'session' | 'server' | 'unavailable' | 'notFound' | 'gone';
 
 export interface FriendlyErrorCopy {
   title: string;
@@ -36,6 +36,8 @@ export interface ErrorScreenStrings {
   searchPlaceholder: string;
   /** "Error {code}" above the title */
   errorCode: string;
+  /** The tab title: "{title} | Al Ummah Now" (the same format on every app) */
+  pageTitle: string;
   uploadWait: string;
   updateNow: string;
   updateLater: string;
@@ -49,13 +51,14 @@ export const ERROR_SCREEN_STRINGS: Record<'en' | 'ar', ErrorScreenStrings> = {
       offline: { title: 'You seem to be offline', body: 'We could not reach Al Ummah Now. Check your connection, then try again.' },
       update: { title: 'A new version is available', body: 'The site was updated while this page was open. Reload to continue with the latest version.' },
       session: { title: 'Please sign in again', body: 'Your session has ended. Sign in again to pick up where you left off.' },
-      server: { title: 'We could not load this page', body: 'Our server had a problem with this request. It has been reported. Please try again in a moment.' },
-      notFound: { title: 'Page not found', body: "We couldn't find this page. The link may be wrong, or the page may have moved." },
-      gone: { title: 'This was removed', body: "It's no longer on Al Ummah Now. Search for something else, or go to the home\u00a0page." },
+      server: { title: 'We could not load this page', body: 'Our server had a problem with this request. It has been reported. Please try again in a\u00a0moment.' },
+      unavailable: { title: 'Page temporarily unavailable', body: 'Our server is not responding right now. Try again in a few\u00a0minutes.' },
+      notFound: { title: 'Page not found', body: 'We couldn’t find this page. The link may be wrong, or the page may have moved.' },
+      gone: { title: 'This was removed', body: 'It’s no longer on Al Ummah Now. Search for something else, or go to the home\u00a0page.' },
     },
     tryAgain: 'Try again',
     reload: 'Reload page',
-    goHome: 'Go to home',
+    goHome: 'Home page',
     signIn: 'Sign in again',
     contactUs: 'Contact us',
     reference: 'Reference',
@@ -68,6 +71,7 @@ export const ERROR_SCREEN_STRINGS: Record<'en' | 'ar', ErrorScreenStrings> = {
     searchLabel: 'Search Al Ummah Now',
     searchPlaceholder: 'Search videos, channels and posts',
     errorCode: 'Error {code}',
+    pageTitle: '{title} | Al Ummah Now',
     uploadWait: 'Your upload is still in progress. The page will update when it finishes.',
     updateNow: 'Reload now',
     updateLater: 'Later',
@@ -80,6 +84,7 @@ export const ERROR_SCREEN_STRINGS: Record<'en' | 'ar', ErrorScreenStrings> = {
       update: { title: 'يتوفر إصدار جديد', body: 'جرى تحديث الموقع أثناء فتح هذه الصفحة. أعد تحميلها لتتابع على أحدث إصدار.' },
       session: { title: 'يُرجى تسجيل الدخول مرة أخرى', body: 'انتهت جلستك. سجّل الدخول مرة أخرى لتتابع من حيث توقفت.' },
       server: { title: 'تعذّر تحميل هذه الصفحة', body: 'واجه الخادم مشكلة في هذا الطلب، وقد أُبلغ عنها. يُرجى المحاولة بعد قليل.' },
+      unavailable: { title: 'الصفحة غير متاحة مؤقتًا', body: 'الخادم لا يستجيب حاليًا. حاول مرة أخرى بعد دقائق.' },
       notFound: { title: 'الصفحة غير موجودة', body: 'لم نعثر على هذه الصفحة. ربما الرابط غير صحيح أو نُقلت الصفحة.' },
       gone: { title: 'حُذف هذا المحتوى', body: 'لم يعد موجودًا على الأمة الآن. ابحث عن شيء آخر أو انتقل إلى الصفحة\u00a0الرئيسية.' },
     },
@@ -98,6 +103,7 @@ export const ERROR_SCREEN_STRINGS: Record<'en' | 'ar', ErrorScreenStrings> = {
     searchLabel: 'ابحث في الأمة الآن',
     searchPlaceholder: 'ابحث في المرئيات والقنوات والمنشورات',
     errorCode: 'خطأ {code}',
+    pageTitle: '{title} | الأمة الآن',
     uploadWait: 'ما زال الرفع جارياً. ستُحدَّث الصفحة عند اكتماله.',
     updateNow: 'أعد التحميل الآن',
     updateLater: 'لاحقاً',
@@ -112,6 +118,7 @@ export function friendlyErrorKind(error: unknown, opts: { online?: boolean; dige
   if (opts.status === 401) return 'session';
   if (opts.status === 404) return 'notFound';
   if (opts.status === 410) return 'gone';
+  if (opts.status === 503) return 'unavailable';
   if (opts.digest || (opts.status && opts.status >= 500)) return 'server';
   return 'generic';
 }
@@ -126,7 +133,7 @@ export function errorCodeLabel(locale: string | undefined, code: number): string
 }
 
 /** The HTTP status each screen stands for (the code line); none for the client-only screens. */
-export const ERROR_KIND_STATUS: Partial<Record<FriendlyErrorKind, number>> = { notFound: 404, gone: 410, server: 500 };
+export const ERROR_KIND_STATUS: Partial<Record<FriendlyErrorKind, number>> = { notFound: 404, gone: 410, server: 500, unavailable: 503 };
 
 export type ErrorPageIcon = 'notFound' | 'gone' | 'alert' | 'offline' | 'update' | 'session' | 'search' | 'back' | 'home' | 'retry' | 'copy';
 
@@ -147,6 +154,11 @@ export const ERROR_PAGE_ICONS: Record<ErrorPageIcon, string> = {
   retry: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
 };
+
+/** "Page not found | Al Ummah Now" / «الصفحة غير موجودة | الأمة الآن»: the error pages' tab title. */
+export function errorPageTitle(locale: string | undefined, title: string): string {
+  return errorScreenStrings(locale).pageTitle.replace('{title}', title);
+}
 
 /** The badge icon for a screen. */
 export function errorKindIcon(kind: FriendlyErrorKind): ErrorPageIcon {

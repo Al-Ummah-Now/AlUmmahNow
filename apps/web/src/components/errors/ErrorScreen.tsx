@@ -8,6 +8,7 @@ import {
   ERROR_PAGE_ICONS,
   errorCodeLabel,
   errorKindIcon,
+  errorPageTitle,
   errorScreenStrings,
   type ErrorPageIcon,
   type FriendlyErrorKind,
@@ -44,7 +45,7 @@ export interface ErrorScreenProps {
   body?: string;
   /**
    * Another screen the same HTML can turn into: a 404 the Worker answers as 410 Gone (lib/seo/gone.ts)
-   * swaps data-error-status, and CSS shows the matching heading block.
+   * rewrites the card's words and status, and the card renders that screen once hydrated.
    */
   alternate?: FriendlyErrorKind;
   /** The site search (404 and 410) */
@@ -62,9 +63,11 @@ export interface ErrorScreenProps {
   dataKind?: string;
 }
 
-export function ErrorIcon({ name }: { name: ErrorPageIcon }) {
+export function ErrorIcon({ name, swappable }: { name: ErrorPageIcon; swappable?: boolean }) {
   return (
     <svg
+      // The Worker may redraw the badge for a 410 before hydration (lib/seo/gone.ts)
+      suppressHydrationWarning={swappable || undefined}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -79,25 +82,30 @@ export function ErrorIcon({ name }: { name: ErrorPageIcon }) {
   );
 }
 
-function HeadBlock({ head, locale, hidden }: { head: Head; locale: string; hidden?: boolean }) {
+/**
+ * The badge, code line, title and words. One block and one h1: for a 404 the Worker answers as 410
+ * (lib/seo/gone.ts) it rewrites the text, the badge and the status before hydration, and the card
+ * then renders the 410 screen itself (`swapped`), so only text differs while hydrating.
+ */
+function HeadBlock({ head, locale }: { head: Head; locale: string }) {
   const status = ERROR_KIND_STATUS[head.kind];
   return (
-    // The Worker may swap `hidden` between the 404 and 410 blocks before hydration (lib/seo/gone.ts)
-    <div className="ep-head" data-when={status ?? 'any'} hidden={hidden || undefined} suppressHydrationWarning>
+    <div className="ep-head" data-when={status ?? 'any'} suppressHydrationWarning>
       <span className="ep-badge" aria-hidden="true">
-        <ErrorIcon name={errorKindIcon(head.kind)} />
+        <ErrorIcon name={errorKindIcon(head.kind)} swappable />
       </span>
       <div className="ep-heading">
-        {status ? <p className="ep-code">{errorCodeLabel(locale, status)}</p> : null}
-        <h1 className="ep-title" id={`ep-title-${status ?? head.kind}`}>{head.title}</h1>
+        {status ? <p className="ep-code" suppressHydrationWarning>{errorCodeLabel(locale, status)}</p> : null}
+        <h1 className="ep-title" id={`ep-title-${status ?? head.kind}`} suppressHydrationWarning>{head.title}</h1>
       </div>
-      <p className="ep-body">{head.body}</p>
+      <p className="ep-body" suppressHydrationWarning>{head.body}</p>
     </div>
   );
 }
 
 function ActionButton({ action, variant }: { action: ErrorAction; variant: 'primary' | 'secondary' }) {
-  const cls = `b ${variant === 'primary' ? 'b-primary' : 'b-secondary'} ep-btn`;
+  // The family's own buttons (aun-error-page.css), never the site's: the same on every app
+  const cls = `ep-btn ${variant === 'primary' ? 'ep-btn-primary' : 'ep-btn-secondary'}`;
   const inner = (
     <>
       {action.icon ? <ErrorIcon name={action.icon} /> : null}
@@ -130,12 +138,13 @@ export function ErrorScreen(props: ErrorScreenProps) {
   const altStatus = alternate ? ERROR_KIND_STATUS[alternate] : undefined;
   const swapped = useSyncExternalStore(noSubscribe, () => altStatus !== undefined && documentStatus() === altStatus, () => false);
   const kind = swapped && alternate ? alternate : baseKind;
-  const other = swapped ? baseKind : alternate;
   const head: Head = swapped ? { kind, title: s.kinds[kind].title, body: s.kinds[kind].body } : { kind, title: props.title ?? s.kinds[kind].title, body: props.body ?? s.kinds[kind].body };
   const status = ERROR_KIND_STATUS[kind];
+  // The tab says what happened, in the family's one format ("Page not found | Al Ummah Now"), whatever
+  // route the error happened on
   useEffect(() => {
-    if (swapped) document.title = s.kinds[kind].title;
-  }, [swapped, kind, s]);
+    document.title = errorPageTitle(locale, head.title);
+  }, [locale, head.title]);
   const [copied, setCopied] = useState(false);
   // After mount only (the server can't know the history): no hydration mismatch
   const [canGoBack, setCanGoBack] = useState(false);
@@ -169,13 +178,12 @@ export function ErrorScreen(props: ErrorScreenProps) {
     >
       <section className="ep-card" aria-labelledby={`ep-title-${status ?? kind}`}>
         <HeadBlock head={head} locale={locale} />
-        {other ? <HeadBlock head={{ kind: other, title: s.kinds[other].title, body: s.kinds[other].body }} locale={locale} hidden /> : null}
 
         {search ? (
           <form className="ep-search" role="search" action={`/${locale}/search`} method="get">
             <label className="ep-sr" htmlFor="ep-search-q">{s.searchLabel}</label>
             <input id="ep-search-q" className="ep-search-input" type="search" name="q" placeholder={s.searchPlaceholder} autoComplete="off" enterKeyHint="search" />
-            <button type="submit" className="b b-secondary ep-btn ep-search-btn" data-testid="error-search">
+            <button type="submit" className="ep-btn ep-btn-secondary ep-search-btn" data-testid="error-search">
               <ErrorIcon name="search" />
               <span>{s.search}</span>
             </button>

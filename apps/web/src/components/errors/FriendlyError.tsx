@@ -29,6 +29,13 @@ export interface FriendlyErrorProps {
   locale?: 'en' | 'ar';
 }
 
+/** This document's HTTP status, when the Worker set it (lib/seo/unavailable.ts: a failed page is 503). */
+function documentStatus(): number | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const value = (window as unknown as Record<string, unknown>).__aunHttpStatus;
+  return typeof value === 'number' ? value : undefined;
+}
+
 function pageLocale(): string {
   if (typeof window === 'undefined') return 'en';
   const seg = window.location.pathname.split('/')[1];
@@ -41,10 +48,15 @@ export function FriendlyError({ error, reset, boundary, kind: forcedKind, locale
   const [skew, setSkew] = useState(false);
   // Same reference the server logged for this render error (digest), else a new one
   const [reference, setReference] = useState(() => (error.digest ? errorRefFromDigest(error.digest) : ''));
-  const kind = useMemo(
+  // The page's real status after mount (the Worker answers a failed page render 503), so the code
+  // line matches the response: "Error 503", never "Error 500" on a 503
+  const [httpStatus, setHttpStatus] = useState<number | undefined>(undefined);
+  useEffect(() => setHttpStatus(documentStatus()), []);
+  const detected = useMemo(
     () => forcedKind ?? friendlyErrorKind(error, { online: typeof navigator === 'undefined' ? true : navigator.onLine, digest: error.digest }),
     [error, forcedKind],
   );
+  const kind: FriendlyErrorKind = detected === 'server' && httpStatus === 503 ? 'unavailable' : detected;
 
   useEffect(() => {
     setLocale(fixedLocale ?? pageLocale());
@@ -59,10 +71,11 @@ export function FriendlyError({ error, reset, boundary, kind: forcedKind, locale
       // The release E2E trigger page: a test group (no alert mail, deleted after a day)
       ...(window.location.pathname.includes('/dev/error-test') ? { test: true } : {}),
       ...(error.digest ? { ref: errorRefFromDigest(error.digest) } : {}),
-      extra: { boundary, screen: kind, ...(error.digest ? { serverRendered: true } : {}) },
+      // Reported once: the 503 swap below changes only the words shown
+      extra: { boundary, screen: detected, ...(error.digest ? { serverRendered: true } : {}) },
     });
     if (ref) setReference(ref);
-  }, [error, boundary, kind, fixedLocale]);
+  }, [error, boundary, detected, fixedLocale]);
 
   if (skew) return null;
 

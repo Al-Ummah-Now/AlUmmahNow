@@ -466,14 +466,7 @@ html.fanous-street .street-plate {
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 
-/* The error card's buttons are admin's standard ones (components/ui.tsx) with an icon; inside the
-   admin layout or the public shell the card needs no page height of its own */
-.ep-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
+/* Inside the admin layout or the public shell the error card needs no page height of its own */
 .ep-inline {
   min-height: 0;
   padding-block: 24px;

@@ -7,10 +7,11 @@
  * deletion tombstone). Only 404s pay for that request; a deleted item that can still be restored
  * stays a 404.
  *
- * The 404 page's HTML carries both cards' words (components/errors/ErrorScreen.tsx): here the 410
- * one is shown and the title changed, so the page says "This was removed" (wiki guides/error-pages.md).
+ * The 404 page's card (components/errors/ErrorScreen.tsx) is rewritten to the 410 one here: its code
+ * line, badge, title and words, and the tab title, so the page says "This was removed" (wiki
+ * guides/error-pages.md). The card has one heading block, so the page keeps one h1.
  */
-import { errorScreenStrings } from '@al-ummah/shared-types';
+import { ERROR_PAGE_ICONS, errorCodeLabel, errorPageTitle, errorScreenStrings } from '@al-ummah/shared-types';
 
 const GONE_PATH = /^\/[a-z]{2}\/(video|shorts|playlist|channels)\/([A-Za-z0-9_-]{1,128})\/?$/;
 const API_COLLECTION: Record<string, string> = { video: 'videos', shorts: 'videos', playlist: 'playlists', channels: 'channels' };
@@ -47,7 +48,7 @@ export async function asGoneIfPurged(request: Request, response: Response, env: 
 interface RewriterElement {
   setAttribute(n: string, v: string): void;
   removeAttribute(n: string): void;
-  setInnerContent(c: string): void;
+  setInnerContent(c: string, o?: { html: boolean }): void;
   prepend(c: string, o: { html: boolean }): void;
 }
 interface Rewriter {
@@ -59,21 +60,29 @@ interface Rewriter {
 export const HTTP_STATUS_GLOBAL = '__aunHttpStatus';
 
 /**
- * The error card's 410 words and title (Workers HTMLRewriter; a runtime without it keeps the 404
- * words). Next may render the not-found tree again in the browser, which would undo attribute
+ * The error card's 410 code, badge, words and tab title (Workers HTMLRewriter; a runtime without it
+ * keeps the 404 words). Next may render the not-found tree again in the browser, which would undo attribute
  * swaps, so the page also gets the status as a global, set by a script carrying the page's CSP
  * nonce (from the response's own Content-Security-Policy), and the card reads it.
  */
 export function asGonePage(response: Response, locale: 'en' | 'ar'): Response {
   const Ctor = (globalThis as { HTMLRewriter?: new () => Rewriter }).HTMLRewriter;
   if (!Ctor || !(response.headers.get('content-type') ?? '').includes('text/html')) return response;
-  const title = errorScreenStrings(locale).kinds.gone.title;
+  const gone = errorScreenStrings(locale).kinds.gone;
   const nonce = /'nonce-([A-Za-z0-9+/_=-]+)'/.exec(response.headers.get('content-security-policy') ?? '')?.[1];
   let rewriter = new Ctor()
     .on('[data-error-status="404"]', { element: (el) => el.setAttribute('data-error-status', '410') })
-    .on('.ep-head[data-when="404"]', { element: (el) => el.setAttribute('hidden', '') })
-    .on('.ep-head[data-when="410"]', { element: (el) => el.removeAttribute('hidden') })
-    .on('title', { element: (el) => el.setInnerContent(title) });
+    .on('.ep-head[data-when="404"]', { element: (el) => el.setAttribute('data-when', '410') })
+    .on('.ep-head .ep-badge svg', {
+      element: (el) => {
+        el.setAttribute('data-icon', 'gone');
+        el.setInnerContent(ERROR_PAGE_ICONS.gone, { html: true });
+      },
+    })
+    .on('.ep-head .ep-code', { element: (el) => el.setInnerContent(errorCodeLabel(locale, 410)) })
+    .on('.ep-head .ep-title', { element: (el) => el.setInnerContent(gone.title) })
+    .on('.ep-head .ep-body', { element: (el) => el.setInnerContent(gone.body) })
+    .on('title', { element: (el) => el.setInnerContent(errorPageTitle(locale, gone.title)) });
   if (nonce) {
     rewriter = rewriter.on('head', { element: (el) => el.prepend(`<script nonce="${nonce}">window.${HTTP_STATUS_GLOBAL}=410</script>`, { html: true }) });
   }

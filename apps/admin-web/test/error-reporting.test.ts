@@ -9,7 +9,7 @@ import * as React from 'react';
 import { ERROR_REF_PATTERN, errorRefFromDigest } from '@al-ummah/shared-types';
 import { handleErrorReport, MAX_REPORT_BYTES, type RouteDeps } from '../src/lib/errors/forward';
 import { boundaryOutcome, handleBoundaryError } from '../src/lib/errors/boundary';
-import { BoundaryError, FriendlyError } from '../src/components/FriendlyError';
+import { BoundaryError, FriendlyError, contactHrefFor } from '../src/components/FriendlyError';
 
 // tsx compiles the components' JSX in classic mode (tsconfig jsx: preserve): they read the global React
 (globalThis as unknown as { React: unknown }).React = React;
@@ -169,11 +169,20 @@ describe('error boundaries', () => {
   });
 
   it('not found offers the way home and no reference', () => {
-    const html = render(FriendlyError, { locale: 'en', kind: 'notFound', homeLabel: 'Go to Dashboard' });
+    const html = render(FriendlyError, { locale: 'en', kind: 'notFound' });
     assert.match(html, /Page not found/);
-    assert.match(html, /href="\/dashboard"[^>]*>(?:(?!<\/a>)[\s\S])*Go to Dashboard</);
+    // The family's one home label and buttons (never admin's own button classes)
+    assert.match(html, /href="\/dashboard" class="ep-btn ep-btn-primary"[^>]*>(?:(?!<\/a>)[\s\S])*Home page</);
     assert.match(html, /Error 404/);
     assert.match(render(FriendlyError, { locale: 'ar', kind: 'notFound' }), /خطأ ٤٠٤/);
     assert.ok(!html.includes('friendly-error-ref'));
+  });
+});
+
+describe('contact link', () => {
+  it('is the videos site contact page of the same domain, with the reference', () => {
+    assert.equal(contactHrefFor({ protocol: 'https:', host: 'admin.qa.alummahnow.net' }, 'ar', 'ERR-4ER3-NCSD'), 'https://videos.qa.alummahnow.net/ar/contact?ref=ERR-4ER3-NCSD');
+    assert.equal(contactHrefFor({ protocol: 'https:', host: 'admin.alummahnow.net' }, 'en'), 'https://videos.alummahnow.net/en/contact');
+    assert.equal(contactHrefFor({ protocol: 'http:', host: 'localhost:3002' }, 'en'), undefined);
   });
 });

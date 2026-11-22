@@ -1,6 +1,7 @@
 /**
  * @jest-environment node
  */
+import { ERROR_PAGE_ICONS } from '@al-ummah/shared-types';
 import { asGoneIfPurged, goneLookupPath } from '../gone';
 
 const env = { API_URL: 'https://videos.api.example/' };
@@ -65,16 +66,20 @@ describe('asGonePage (the error card switches to its 410 words)', () => {
     calls.length = 0;
   });
 
-  it('shows the 410 block, hides the 404 one and retitles the page in its language', async () => {
+  it('rewrites the one card to its 410 code, badge and words, and retitles the page in its language', async () => {
     (globalThis as { HTMLRewriter?: unknown }).HTMLRewriter = FakeRewriter;
     const csp = new Response('<html></html>', { status: 404, headers: { 'Content-Type': 'text/html', 'Content-Security-Policy': "script-src 'self' 'nonce-abc123=' 'strict-dynamic'" } });
     const out = await asGoneIfPurged(req('/ar/video/abc'), csp, env, api(410));
     expect(out.status).toBe(410);
     expect(calls).toEqual([
       '[data-error-status="404"] set data-error-status=410',
-      '.ep-head[data-when="404"] set hidden=',
-      '.ep-head[data-when="410"] rm hidden',
-      'title text حُذف هذا المحتوى',
+      '.ep-head[data-when="404"] set data-when=410',
+      '.ep-head .ep-badge svg set data-icon=gone',
+      `.ep-head .ep-badge svg text ${ERROR_PAGE_ICONS.gone}`,
+      '.ep-head .ep-code text خطأ ٤١٠',
+      '.ep-head .ep-title text حُذف هذا المحتوى',
+      '.ep-head .ep-body text لم يعد موجودًا على الأمة الآن. ابحث عن شيء آخر أو انتقل إلى الصفحة\u00a0الرئيسية.',
+      'title text حُذف هذا المحتوى | الأمة الآن',
       // the card reads it after Next renders the tree again in the browser (ErrorScreen)
       'head prepend <script nonce="abc123=">window.__aunHttpStatus=410</script>',
     ]);
