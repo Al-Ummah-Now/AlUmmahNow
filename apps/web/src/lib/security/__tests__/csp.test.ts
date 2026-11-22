@@ -51,6 +51,10 @@ describe('buildContentSecurityPolicy (production)', () => {
     expect(d['connect-src']).not.toContain('http://localhost:*');
   });
 
+  it("allows blob: connections for an owner-only video's caption tracks (fetched with the token)", () => {
+    expect(d['connect-src']).toContain('blob:');
+  });
+
   it('allows the self-hosted live edges for live HLS (fetched and played natively)', () => {
     expect(d['connect-src']).toEqual(expect.arrayContaining(['https://live.alummahnow.net', 'https://live.qa.alummahnow.net']));
     expect(d['media-src']).toEqual(expect.arrayContaining(['https://live.stage.alummahnow.net']));

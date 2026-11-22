@@ -2,7 +2,6 @@ import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { MEDIA_PROVIDER_IDS, PLAYBACK_FALLBACK_REASONS } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { canOnVideo } from "../../lib/channelAccess";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
@@ -10,7 +9,7 @@ import { logger } from "../../lib/logger";
 import { applyPlayback, choosePlayback, countFallback, logDecision, parseExclude, parseFallbackReason } from "../../lib/media/playback";
 import { countProviderFailure, reporterKey, reporterNetwork } from "../../lib/media/health";
 import { getSecret } from "../../lib/env-helpers";
-import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
+import { videoReadAccess } from '../../lib/videoReadAccess';
 
 /**
  * GET /api/videos/:id/playback?exclude=<provider>[,<provider>…]&reason=<code>
@@ -63,9 +62,9 @@ export class VideoPlayback extends OptionalAuthRoute {
 		const notFound = () => c.json({ success: false, error: "Object not found" }, 404);
 		const repository = new R2Repository<z.infer<typeof BusinessVideo>>(c.env.videos);
 		const video = await repository.getObject(id);
-		if (!video || isVideoRemoved(video)) return notFound();
-		// Not open to anyone (private, draft, scheduled, still processing): owner and allowed members only (#1241)
-		if ((isRestrictedVideo(video) || !isVideoOpenToAnyone(video)) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) return notFound();
+		// The video GET's rule (lib/videoReadAccess.ts): removed → no one; not open to anyone
+		// (private, draft, scheduled, still processing) → owner and allowed members only (#1241)
+		if (!(await videoReadAccess(c.env, video, userId))) return notFound();
 
 		const exclude = parseExclude(request.query.exclude);
 		if (!exclude.length) return c.json({ success: false, error: "exclude must name a provider" }, 400);

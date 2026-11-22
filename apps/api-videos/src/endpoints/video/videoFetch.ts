@@ -1,5 +1,4 @@
 import { withPlayback } from '../../lib/media/playback';
-import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -9,7 +8,8 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { GONE_BODY, isPurged } from '../../lib/gone';
-import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
+import { isVideoRemoved } from '../../lib/visibility';
+import { videoReadAccess } from '../../lib/videoReadAccess';
 
 export class VideoFetch extends OptionalAuthRoute {
 	schema = {
@@ -125,8 +125,8 @@ export class VideoFetch extends OptionalAuthRoute {
 		// Check privacy permissions
 		// Anyone else may open it only when it is open to anyone (shared rule, #1241): public or
 		// unlisted, released and ready. Private, draft, scheduled and still-processing videos: the
-		// owner, or a channel member allowed to see private videos (lib/channelAccess.ts).
-		if ((isRestrictedVideo(video) || !isVideoOpenToAnyone(video)) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
+		// owner, or a channel member allowed to see private videos (lib/channelAccess.ts). One rule for every by-id read, captions included (lib/videoReadAccess.ts).
+		if (!(await videoReadAccess(c.env, video, userId))) {
 			return c.json(
 				{
 					success: false,

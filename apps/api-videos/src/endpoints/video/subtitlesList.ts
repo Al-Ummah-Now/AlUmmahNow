@@ -6,9 +6,10 @@ import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
 import { SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
-import { PublicRoute, AppContext } from '../../base';
+import { OptionalAuthRoute, AppContext } from '../../base';
+import { loadVideoRecord, videoReadAccess, VIDEO_NOT_FOUND } from '../../lib/videoReadAccess';
 
-export class SubtitlesList extends PublicRoute {
+export class SubtitlesList extends OptionalAuthRoute {
   schema = {
     tags: ['Subtitles'],
     summary: 'List subtitle tracks for a video',
@@ -31,6 +32,7 @@ export class SubtitlesList extends PublicRoute {
               data: z.object({
                 tracks: z.array(z.any()), // SubtitleTrack[]
                 defaultLanguage: z.string().optional(),
+                restricted: z.boolean().describe('True when the video is not open to anyone: each track must be fetched with the viewer\'s token'),
               }),
             }),
           },
@@ -67,6 +69,15 @@ export class SubtitlesList extends PublicRoute {
       const request = await this.getValidatedData<typeof this.schema>();
       const { videoId } = request.params;
 
+      // The video's own read rule (GET /api/videos/:id): hidden from this viewer → the same 404
+      const video = await loadVideoRecord(c.env as never, videoId);
+      const access = await videoReadAccess(c.env, video as never, this.getUserId(c));
+      if (!access) return c.json(VIDEO_NOT_FOUND, 404);
+      // Not open to anyone: only this signed-in viewer may read the tracks, so players must fetch
+      // each one with the viewer's token (a <track> URL alone gets the 404)
+      const restricted = access === 'viewer';
+      if (restricted) c.header('Cache-Control', 'private, no-store');
+
       const subtitleBucket = c.env.subtitles;
 
       // Load subtitle metadata
@@ -81,6 +92,7 @@ export class SubtitlesList extends PublicRoute {
           data: {
             tracks: [],
             defaultLanguage: undefined,
+            restricted,
           },
         });
       }
@@ -96,6 +108,7 @@ export class SubtitlesList extends PublicRoute {
         data: {
           tracks: metadata.tracks,
           defaultLanguage,
+          restricted,
         },
       });
     } catch (error: any) {

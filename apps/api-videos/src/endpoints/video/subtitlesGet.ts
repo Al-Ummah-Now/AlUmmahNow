@@ -8,9 +8,10 @@ import { captionMarkerRanges } from '@al-ummah/shared-types';
 import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';
 import { editionFor } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
-import { PublicRoute, AppContext } from '../../base';
+import { OptionalAuthRoute, AppContext } from '../../base';
+import { loadVideoRecord, videoReadAccess, VIDEO_NOT_FOUND } from '../../lib/videoReadAccess';
 
-export class SubtitlesGet extends PublicRoute {
+export class SubtitlesGet extends OptionalAuthRoute {
   schema = {
     tags: ['Subtitles'],
     summary: 'Get specific subtitle track',
@@ -72,6 +73,15 @@ export class SubtitlesGet extends PublicRoute {
       const { videoId, language } = request.params;
       const { format } = request.query;
 
+      // The video's own read rule (GET /api/videos/:id): a removed video, or one not open to
+      // anyone that this viewer may not see, answers the same 404 as a missing video
+      const video = await loadVideoRecord<{ channelId?: string; userId?: string }>(c.env as never, videoId);
+      const access = await videoReadAccess(c.env, video as never, this.getUserId(c));
+      if (!access) return c.json(VIDEO_NOT_FOUND, 404);
+      // Only a video open to anyone may be cached publicly or revalidated (304); the owner's or a
+      // channel member's read of a private, scheduled or held video is never stored anywhere
+      const cacheControl = access === 'anyone' ? 'public, max-age=3600, stale-while-revalidate=86400' : 'private, no-store';
+
       const subtitleBucket = c.env.subtitles;
 
       // Determine which file to fetch
@@ -108,9 +118,7 @@ export class SubtitlesGet extends PublicRoute {
       const translatedTrack = quranTrack && subtitleObject.customMetadata?.qtr === '1';
       let edition: Awaited<ReturnType<typeof editionFor>> = null;
       if (translatedTrack) {
-        const videoObj = await c.env.videos?.get(videoId).catch(() => null);
-        const channelId = videoObj ? ((await videoObj.json().catch(() => null)) as { channelId?: string } | null)?.channelId : null;
-        edition = await editionFor(c.env as never, channelId, language);
+        edition = await editionFor(c.env as never, video?.channelId ?? null, language);
       }
       const etag = quranTrack
         ? `"${subtitleObject.etag.replace(/"/g, '')}-${await quranCopyTag(c.env.MEDIA_PRIVATE)}${translatedTrack ? `-e${edition?.id ?? 0}` : ''}"`
@@ -118,13 +126,13 @@ export class SubtitlesGet extends PublicRoute {
 
       // Check If-None-Match header for conditional request
       const ifNoneMatch = c.req.header('If-None-Match');
-      if (ifNoneMatch && ifNoneMatch === etag) {
+      if (access === 'anyone' && ifNoneMatch && ifNoneMatch === etag) {
         // Content hasn't changed, return 304 Not Modified
         return new Response(null, {
           status: 304,
           headers: {
             'ETag': etag,
-            'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+            'Cache-Control': cacheControl,
           },
         });
       }
@@ -140,8 +148,8 @@ export class SubtitlesGet extends PublicRoute {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `inline; filename="${videoId}-${language}.${format || 'vtt'}"`,
-          'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-          'ETag': etag,
+          'Cache-Control': cacheControl,
+          ...(access === 'anyone' ? { 'ETag': etag } : {}),
         },
       });
     } catch (error: any) {
