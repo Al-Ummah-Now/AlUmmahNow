@@ -112,7 +112,7 @@ export default function PostActionsMenu({ post, canManage = false, onDeleted, on
           onOpenChange={setReportOpen}
           contentType="post"
           contentId={post.id}
-          contentTitle={typeof post.content === 'string' ? post.content.slice(0, 80) : undefined}
+          contentTitle={typeof post.content === 'string' ? post.content : undefined}
         />
       )}
     </>

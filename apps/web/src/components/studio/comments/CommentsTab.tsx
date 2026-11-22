@@ -357,7 +357,7 @@ export function CommentsTab({ locale, channel, role, tab, target }: Props) {
         <ReportContentButton
           contentType="comment"
           contentId={reportOf.id}
-          contentTitle={reportOf.text.slice(0, 80)}
+          contentTitle={reportOf.text}
           hideTrigger
           open
           onOpenChange={(open) => { if (!open) setReportOf(null); }}

@@ -173,7 +173,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         : undefined,
       onApprove: isVideoOwner && comment.isHeld ? () => handleApprove(comment.id) : undefined,
       actions: !isOwnComment ? (
-        <ReportContentButton contentType="comment" contentId={comment.id} contentTitle={comment.text.slice(0, 80)} compact />
+        <ReportContentButton contentType="comment" contentId={comment.id} contentTitle={comment.text} compact />
       ) : undefined,
     };
   };

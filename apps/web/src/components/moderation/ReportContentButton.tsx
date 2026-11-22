@@ -209,8 +209,9 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                   )}
 
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      {t.reportContent.reporting} <strong>{contentTitle || contentTypeLabel}</strong>
+                    {/* The whole text, clamped to two lines: the browser ends it with an ellipsis instead of a mid-word cut */}
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2 [overflow-wrap:anywhere]">
+                      {t.reportContent.reporting} <strong><bdi>{contentTitle || contentTypeLabel}</bdi></strong>
                     </p>
                   </div>
 
