@@ -36,6 +36,8 @@ export interface StackedBarChartProps {
   dayNote?: (index: number) => string | undefined;
   /** The table column for `dayNote`, so the note is in the text alternative too. */
   dayNoteLabel?: string;
+  /** The hover title's note for a day, already labelled (e.g. "UTC days: Nov 21, Nov 22"); replaces "dayNoteLabel: dayNote". */
+  dayNoteTitle?: (index: number) => string | undefined;
   /** A bar chosen by tap or click (hover titles don't exist on touch screens); drawn outlined. */
   selected?: number;
   onSelect?: (index: number) => void;
@@ -61,7 +63,7 @@ const TOP = 12;
 const UNIT_TOP = 32;
 const BOTTOM = 26;
 
-export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, dayNoteLabel, selected, onSelect, testId }: StackedBarChartProps) {
+export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, dayNoteLabel, dayNoteTitle, selected, onSelect, testId }: StackedBarChartProps) {
   const rtl = /^ar\b/.test(locale);
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
@@ -110,7 +112,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
         {!empty &&
           days.map((day, i) => {
             let base = 0;
-            const note = dayNote?.(i);
+            const note = dayNoteTitle ? dayNoteTitle(i) : dayNote?.(i) && (dayNoteLabel ? `${dayNoteLabel}: ${dayNote(i)}` : dayNote(i));
             return (
               <g
                 key={day}
@@ -131,7 +133,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                   const y1 = y(base);
                   return (
                     <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
-                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}${note ? ` (${dayNoteLabel ? `${dayNoteLabel}: ` : ''}${note})` : ''}`}</title>
+                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}${note ? ` (${note})` : ''}`}</title>
                     </rect>
                   );
                 })}

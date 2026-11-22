@@ -305,6 +305,18 @@ export function listJoin(items: readonly string[], sep: string): string {
   return items.join(sep.trim() === '•' ? ' • ' : sep);
 }
 
+/** A bar's UTC days as dates that never break between day and month, joined with `sep`. */
+export function utcDates(days: readonly string[], dayLabel: (day: string) => string, sep: string): string {
+  return days.map((d) => dayLabel(d).replace(/\s+/g, '\u00a0')).join(sep);
+}
+
+/** A bar's UTC days with their label, by count ("UTC day: Nov 21", "UTC days: Nov 21, Nov 22"; Arabic has a dual). */
+export function utcDaysPhrase(days: readonly string[], dayLabel: (day: string) => string, text: { utcOne: string; utcTwo: string; utcMany: string; utcSep: string }): string | undefined {
+  if (!days.length) return undefined;
+  const template = days.length === 1 ? text.utcOne : days.length === 2 ? text.utcTwo : text.utcMany;
+  return template.replace('{days}', utcDates(days, dayLabel, text.utcSep));
+}
+
 const DAY_MS = 86_400_000;
 const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 

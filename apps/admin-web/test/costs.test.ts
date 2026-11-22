@@ -682,19 +682,35 @@ describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () 
       React.createElement(TrendChartModule.TrendChart, {
         days, series: sourceOf(days).map((s) => ({ ...s, label: s.key, color: 'red' })), now: Date.parse('2026-11-22T00:30:00Z'), locale: 'en', title: 'Daily spend',
         labels: { chart: 'c', table: 't', day: 'd', total: 'x', empty: 'e' }, testId: 'costs-trend',
-        text: { note: t('costs.breakdown.trendNote'), noteToday: t('costs.breakdown.trendNoteToday'), utcLabel: t('costs.breakdown.utcDays'), detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }) },
+        text: { note: t('costs.breakdown.trendNote'), noteToday: t('costs.breakdown.trendNoteToday'), utcLabel: t('costs.breakdown.utcDays'), utcOne: t('costs.breakdown.utcDayOne', { days: '{days}' }), utcTwo: t('costs.breakdown.utcDayTwo', { days: '{days}' }), utcMany: t('costs.breakdown.utcDayMany', { days: '{days}' }), utcSep: t('costs.breakdown.utcDaySep'), detail: t('costs.breakdown.trendDetail', { day: '{day}', total: '{total}', utc: '{utc}' }) },
       }),
     );
     // Server render: UTC days, each bar its own UTC day, in the hover titles and the table
-    assert.match(html, /Nov 22 • production: \$22\.00 \(By UTC day: Nov 22\)/);
-    assert.match(html, /<th scope="col"[^>]*>By UTC day<\/th>/);
+    assert.match(html, /Nov 22 • production: \$22\.00 \(UTC day: Nov 22\)/);
+    assert.match(html, /<th scope="col"[^>]*>UTC days<\/th>/);
     // A phone has no hover: the chosen bar (today's until one is tapped) is written out under the chart
-    assert.match(html, /data-testid="costs-trend-detail" data-day="2026-11-22">Nov 22: \$22\.17 \(By UTC day: Nov 22\)</);
+    assert.match(html, /data-testid="costs-trend-detail" data-day="2026-11-22">Nov 22: \$22\.17 \(UTC day: Nov 22\)</);
     assert.ok(html.includes('Tap or hover a bar'));
     // The "next UTC day" sentence only when it is true: not on UTC days
     assert.ok(!html.includes(t('costs.breakdown.trendNoteToday')));
     // Day labels are centred on their bars
     assert.ok(!/data-tick="[^"]+"[^>]*text-anchor="(start|end)"/.test(html) && !/text-anchor="(start|end)"[^>]*data-tick/.test(html));
+  });
+
+  it('a bar holding two UTC days says so in the plural (the dual in Arabic), comma-joined, each date unbroken', async () => {
+    const { utcDaysPhrase } = await import('../src/app/(protected)/costs/model');
+    const textOf = (locale: 'en' | 'ar') => {
+      const t = createTranslator(locale);
+      return { utcOne: t('costs.breakdown.utcDayOne', { days: '{days}' }), utcTwo: t('costs.breakdown.utcDayTwo', { days: '{days}' }), utcMany: t('costs.breakdown.utcDayMany', { days: '{days}' }), utcSep: t('costs.breakdown.utcDaySep') };
+    };
+    const en = (d: string) => (d.endsWith('21') ? 'Nov 21' : 'Nov 22');
+    const ar = (d: string) => (d.endsWith('21') ? '٢١ نوفمبر' : '٢٢ نوفمبر');
+    assert.equal(utcDaysPhrase(['2026-11-21'], en, textOf('en')), 'UTC day: Nov\u00a021');
+    assert.equal(utcDaysPhrase(['2026-11-21', '2026-11-22'], en, textOf('en')), 'UTC days: Nov\u00a021, Nov\u00a022');
+    assert.equal(utcDaysPhrase(['2026-11-21'], ar, textOf('ar')), 'يوم غرينتش: ٢١\u00a0نوفمبر');
+    assert.equal(utcDaysPhrase(['2026-11-21', '2026-11-22'], ar, textOf('ar')), 'يوما غرينتش: ٢١\u00a0نوفمبر، ٢٢\u00a0نوفمبر');
+    assert.equal(utcDaysPhrase(['2026-11-20', '2026-11-21', '2026-11-22'], ar, textOf('ar'))?.startsWith('أيام غرينتش: '), true);
+    assert.equal(utcDaysPhrase([], en, textOf('en')), undefined);
   });
 
   it('the note adds "today also holds the next UTC day" only when it does', async () => {

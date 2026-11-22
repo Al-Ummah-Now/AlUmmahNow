@@ -319,6 +319,8 @@ export function trendBySource(
   extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[]; resend: DayCost[] },
   fixedDaily: (day: string) => number,
   now: Date,
+  /** This month's environment days as the page shows them, in cents (costs.ts resourceDayCents); other days from the raw rows. */
+  envDayCents?: Map<string, Map<string, number>>,
 ): { days: string[]; series: { key: CostTrendKey; values: number[] }[] } {
   // 30 UTC days to today, plus the one before: the page draws the last 30 days on the viewer's
   // calendar, and in the Americas' evening its window starts a UTC day earlier (admin-web localTrend)
@@ -340,7 +342,10 @@ export function trendBySource(
   return {
     days,
     series: [
-      ...(['production', 'stage', 'qa'] as const).map((e) => ({ key: e, values: series(perEnv.get(e)) })),
+      ...(['production', 'stage', 'qa'] as const).map((e) => {
+        const shown = envDayCents?.get(e);
+        return { key: e, values: series(perEnv.get(e)).map((v, i) => (envDayCents && days[i]!.startsWith(today.slice(0, 7)) ? (shown?.get(days[i]!) ?? 0) / 100 : v)) };
+      }),
       { key: 'bunny' as const, values: series(fromList(extras.bunny)) },
       { key: 'containers' as const, values: series(fromList(extras.containers)) },
       { key: 'ai' as const, values: series(fromList(extras.ai)) },
@@ -584,12 +589,13 @@ export async function loadBudget(env: CostDbs, now: Date, settings: CostAlertSet
     fixedCostsBudget(env.COSTS_DB, now),
   ]);
   const extras = await loadExtraDays(env, since, productDays);
-  const billed = billedCloudflare(meterDays, now, await dataReachesUntil(env.COSTS_DB, now));
+  const coveredUntil = await dataReachesUntil(env.COSTS_DB, now);
+  const billed = billedCloudflare(meterDays, now, coveredUntil);
   const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels, {
     cloudflare: { mtd: billed.mtd.total, projected: billed.projected.total },
     fixed: { mtd: fixed.mtd, projected: fixed.projected },
   });
-  return { budget, billed, fixed, resourceDays, productDays, extras, meterDays };
+  return { budget, billed, fixed, resourceDays, productDays, extras, meterDays, coveredUntil };
 }
 
 /** The alert settings (COSTS_DB cost_settings 'alerts'), defaults when unset or not migrated. */
