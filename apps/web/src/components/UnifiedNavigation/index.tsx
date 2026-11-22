@@ -587,7 +587,7 @@ export function UnifiedNavigation() {
                     </p>
                     {section.items.map((ch) => (
                       <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
-                        <span className="relative flex-none">
+                        <span className="aun-avatar-slot">
                           {avatar(ch.avatarUrl, avatarInitial(getChannelName(ch.name, ch.nameLocalized)))}
                           {ch.isMain && ch.role === 'owner' && (
                             <>

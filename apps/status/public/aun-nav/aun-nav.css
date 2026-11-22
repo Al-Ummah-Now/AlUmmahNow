@@ -78,11 +78,20 @@
   /* One width whatever the name: switching who you act as ("Community Corner" and "Amina Yusuf")
      never moves the other header buttons (AUDIT-2 2026-11-21: they jumped 47px); a longer name ends
      in an ellipsis, and never pushes the header apart */
-  inline-size: 9rem;
+  max-inline-size: 9rem;
   text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The pill keeps one width (avatar, the longest name slot, caret) and its content sits at the start:
+   the caret follows the name, and the spare room after it is drawn only on hover or when the menu is
+   open (AUDIT-2 2026-11-22: the caret floated 70px from a short name in a fixed name slot) */
+@media (min-width: 48rem) {
+  .aun-acct-btn {
+    justify-content: flex-start;
+    min-inline-size: calc(var(--fanous-spacing-xs, 4px) + 1.75rem + 9rem + 0.875rem + 3 * var(--fanous-spacing-sm, 8px) + 2px);
+  }
 }
 /* below 768px the button is the avatar and the caret; the name is still its accessible name */
 @media (max-width: 47.99rem) {
@@ -663,9 +672,17 @@
 .aun-menu-item > .aun-menu-text ~ svg {
   margin-inline: auto 0;
 }
-.aun-menu-item > .aun-avatar {
+.aun-menu-item > .aun-avatar,
+.aun-menu-item > .aun-avatar-slot > .aun-avatar {
   width: var(--aun-menu-lead);
   height: var(--aun-menu-lead);
+}
+/* a channel's picture with the owner's crown on it: the slot is the picture's size, so its name lines
+   up with the other rows (AUDIT-2 2026-11-22: 4px off) */
+.aun-avatar-slot {
+  position: relative;
+  flex: none;
+  display: inline-flex;
 }
 .aun-menu-item > .aun-menu-text {
   flex: 1 1 auto;
