@@ -10,7 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import opsRouter, { parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
-import { alertEvent, billIdle, budgetStatus, findSpikes, idleProjection, trendBySource, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
+import { alertEvent, billIdle, budgetStatus, costDrivers, findSpikes, idleProjection, trendBySource, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
 import { idleBilledCloudflare, type MeterUsage } from '../src/lib/cfBilling';
@@ -285,6 +285,16 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     // Rounded one by one each would be 0.33 (0.99 in all); split in cents they are 0.34 + 0.33 + 0.33
     assert.equal(Math.round(Object.values(billed.byEnv).reduce((a, b) => a + b, 0) * 100), 100);
     assert.equal(billed.parts.cloudflare, 1);
+  });
+
+  it('drivers: every resource shows its own idle cost, not only the 15 biggest (AUDIT-2 round 13)', () => {
+    const rows: ResourceDay[] = [];
+    for (let r = 0; r < 18; r++) for (let n = 1; n <= 14; n++) rows.push(rd(n, `worker:w${r}`, (18 - r) * 0.01 + 0.004));
+    const idle = idleProjection(rows, { bunny: [], containers: [], ai: [] }, now);
+    assert.equal(idle.top.length, 15);
+    const drivers = costDrivers(rows, idle, [], now);
+    const smallest = drivers.find((d) => d.id === 'worker:w17')!;
+    assert.equal(smallest.idleMonthlyUsd, Math.round(0.014 * 30 * 100) / 100, 'the 18th resource still shows its own idle cost');
   });
 
   it('trend: a finished day of the plan keeps its cents whichever day the 31-day window opens on', () => {
