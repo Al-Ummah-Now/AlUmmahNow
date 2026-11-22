@@ -133,7 +133,8 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                 </Button>
               </DropdownMenuTrigger>
               {/* Below the button (never over the author line), its end edge on the button's: inside the screen in both directions */}
-              <DropdownMenuContent side="bottom" align="end">
+              {/* Opaque: it opens over the next card, whose text must not show through */}
+              <DropdownMenuContent side="bottom" align="end" className="menu-solid">
                 <DropdownMenuItem onClick={() => onView(post)}>
                   <Eye className="w-4 h-4 me-2" aria-hidden="true" />
                   {t.community.viewPost}
