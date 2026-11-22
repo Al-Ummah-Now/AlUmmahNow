@@ -32,7 +32,7 @@ interface Rewriter {
 /**
  * The error card shows the status the page really has (components/errors/ErrorScreen.tsx reads
  * window.__aunHttpStatus, as for a 410 in lib/seo/gone.ts): a page answered 503 says "Error 503,
- * Page temporarily unavailable", never "Error 500". The script carries the page's CSP nonce; a
+ * We’ll be back shortly", never "Error 500". The script carries the page's CSP nonce; a
  * runtime without HTMLRewriter, or a page without a nonce, keeps the server-error words.
  */
 export function withStatusGlobal(response: Response, status: number): Response {

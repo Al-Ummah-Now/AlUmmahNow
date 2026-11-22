@@ -4,8 +4,8 @@ import { test } from 'node:test';
 
 /**
  * The error-page family's card (errors/aun-error-page.css, wiki guides/error-pages.md): used as is by
- * the videos site and admin, vendored by UI and the CMS. It must restyle with every theme and mode,
- * never animate, and keep a readable card without backdrop-filter.
+ * the videos site and admin, vendored by UI, Auth and the CMS. It must restyle with every theme and mode,
+ * never animate, and be one solid card colour in every app.
  */
 const css = readFileSync(new URL('../errors/aun-error-page.css', import.meta.url), 'utf8');
 const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -15,16 +15,27 @@ test('no animation or transition (reduced motion by default)', () => {
 });
 
 test('colours come from tokens: only the documented fallbacks are literal', () => {
-  const literals = rules.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/gi) ?? [];
+  // rgb(from …) works a colour out of a token (the card); only a literal rgb()/hsl() is a hard-coded colour
+  const literals = rules.match(/#[0-9a-f]{3,8}\b|rgba?\((?!from )|hsla?\(/gi) ?? [];
   assert.deepEqual(literals, ['#e8b477']);
   for (const v of rules.match(/var\(--[a-z0-9-]+/g) ?? []) {
     assert.match(v, /^var\(--(fanous-|aun-|ep-)/, v);
   }
 });
 
-test('a near-opaque card without blur support or with reduced transparency', () => {
-  assert.match(rules, /@supports not \(\(backdrop-filter:blur\(1px\)\) or \(-webkit-backdrop-filter:blur\(1px\)\)\)\{\.ep-card\{background:var\(--fanous-color-surface\)\}\}/);
-  assert.match(rules, /prefers-reduced-transparency:reduce\)\{\.ep-card\{background:var\(--fanous-color-surface\)\}\}/);
+test('one solid card (owner, 2026-11-22): no blur, no see-through surface, the same colour in every app', () => {
+  assert.doesNotMatch(rules, /backdrop-filter|transparent\)\);?\s*--ep-edge|aun-glass-surface/);
+  // Worked out from the page colour, so it does not depend on an app's mode selector or glass tokens
+  assert.match(rules, /--ep-surface:var\(--fanous-color-surface\)/);
+  assert.match(rules, /@supports \(color:rgb\(from red r g b\)\)\{\.ep\{--ep-surface:rgb\(from var\(--fanous-color-background\) /);
+  assert.match(rules, /\.ep-card\{[^}]*background:var\(--ep-surface\)/);
+});
+
+test('the help line and the actions share one row on wide screens in every language', () => {
+  assert.match(rules, /\.ep-foot\{display:flex;flex-wrap:nowrap/);
+  assert.match(rules, /\.ep-help\{flex:1 1 0;min-width:0;[^}]*text-wrap:balance/);
+  assert.match(rules, /\.ep-actions\{display:flex;flex:none;flex-wrap:nowrap/);
+  assert.match(rules, /\.ep-ref-hint\{[^}]*text-wrap:balance/);
 });
 
 test('logical properties only (one sheet for English and Arabic)', () => {
