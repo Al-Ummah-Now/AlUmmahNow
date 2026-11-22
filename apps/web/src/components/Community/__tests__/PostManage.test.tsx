@@ -164,7 +164,7 @@ describe('localized date, time and zone', () => {
 
   it('names a zone in the page language with its offset, never the raw id', () => {
     const winter = new Date('2026-11-16T12:00:00Z');
-    expect(zoneLabel('America/New_York', 'en', winter)).toBe('Eastern Time (GMT−5)');
+    expect(zoneLabel('America/New_York', 'en', winter)).toBe('Eastern Time\u00a0(GMT−5)');
     const ar = zoneLabel('America/New_York', 'ar', winter);
     // The offset is a left-to-right isolate, so it never reads «(٥−GMT)»
     expect(ar).toContain('(\u2066GMT−٥\u2069)');

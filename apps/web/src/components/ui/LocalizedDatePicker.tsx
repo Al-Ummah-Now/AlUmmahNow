@@ -159,7 +159,7 @@ export function LocalizedDatePicker({
           role="dialog"
           aria-modal="false"
           aria-label={label}
-          className="rounded-md border border-input bg-[var(--fanous-color-surface-raised)] p-3 shadow-md"
+          className="min-w-0 max-w-full rounded-md border border-input bg-[var(--fanous-color-surface-raised)] p-2 shadow-md sm:p-3"
           data-testid={`${testId}-calendar`}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -173,7 +173,7 @@ export function LocalizedDatePicker({
               {locale === 'ar' ? <ChevronLeft className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
             </button>
           </div>
-          <table ref={grid} role="grid" aria-labelledby={`${id}-month`} className="w-full border-collapse text-center text-sm" onKeyDown={onKey}>
+          <table ref={grid} role="grid" aria-labelledby={`${id}-month`} className="w-full table-fixed border-collapse text-center text-sm" onKeyDown={onKey}>
             <thead>
               <tr>
                 {weekdays.map((w) => (
@@ -191,7 +191,7 @@ export function LocalizedDatePicker({
                     const isFocus = isoDay(focus) === iso;
                     const off = outOfRange(d);
                     return (
-                      <td key={iso} role="gridcell" aria-selected={isSelected || undefined} className="p-0.5">
+                      <td key={iso} role="gridcell" aria-selected={isSelected || undefined} className="p-px">
                         <button
                           type="button"
                           data-day={iso}
@@ -205,7 +205,7 @@ export function LocalizedDatePicker({
                               pick(d);
                             }
                           }}
-                          className={`grid h-9 w-full min-w-9 place-items-center rounded-full ${
+                          className={`mx-auto grid aspect-square w-full max-w-9 min-w-0 place-items-center rounded-full ${
                             isSelected
                               ? 'bg-[var(--fanous-color-primary)] font-semibold text-[var(--fanous-color-on-primary)]'
                               : 'hover:bg-[var(--fanous-color-surface)]'

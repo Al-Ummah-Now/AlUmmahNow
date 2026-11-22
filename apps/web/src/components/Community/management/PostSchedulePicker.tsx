@@ -16,7 +16,7 @@ import { LocalizedDatePicker, isoDay } from '@/components/ui/LocalizedDatePicker
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/hooks/useLanguage';
 import { formatDateTime, formatTime } from '@al-ummah/shared-types';
-import { allZones, browserZone, dateToWallTime, isZone, wallTimeToDate, zoneCity, zoneLabel, zoneName } from '@/lib/time/zones';
+import { allZones, browserZone, dateToWallTime, isZone, offsetLabel, wallTimeToDate, zoneCity, zoneLabel, zoneName } from '@/lib/time/zones';
 
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000;
 export const SCHEDULE_MAX_LEAD_MS = 365 * 24 * 60 * 60 * 1000;
@@ -54,11 +54,18 @@ export function toLocalInput(date: Date, zone = browserZone()): string {
 }
 
 /** A post's scheduled time in the viewer's language, digits and zone. */
-export function formatScheduledAt(iso: string, locale: string): string {
+/**
+ * "Nov 27, 2026, 8:14 PM (GMT−5)" / «٢٧ نوفمبر ٢٠٢٦، ٨:١٤ م (GMT−٥)»: the viewer's local time with its
+ * zone, so a scheduled time never reads as if it were the channel's (the offset is an LTR isolate in
+ * Arabic, as in zoneLabel).
+ */
+export function formatScheduledAt(iso: string, locale: string, zone = browserZone()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   // The shared formatter: Arabic ٠–٩, English 0–9, the same on the server and in every browser
-  return formatDateTime(locale, date, { dateStyle: 'medium', timeStyle: 'short' });
+  const when = formatDateTime(locale, date, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone });
+  const offset = offsetLabel(zone, locale, date);
+  return `${when} (${locale === 'ar' ? `\u2066${offset}\u2069` : offset})`;
 }
 
 export function scheduleStateFrom(iso?: string | null, zone = browserZone()): ScheduleState {
@@ -160,7 +167,8 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
       id: z,
       label: zoneLabel(z, locale, at),
       // The zone id (a code, Latin in both languages); the Latin city name only on the English page
-      subtitle: z === 'UTC' ? 'UTC' : locale === 'ar' ? z : `${zoneCity(z)} · ${z}`,
+      // The city and zone id in both languages (Latin, in an isolate in Arabic): the city is how people search
+      subtitle: z === 'UTC' ? 'UTC' : `${zoneCity(z)} · ${z}`,
       keywords: [z, zoneCity(z), zoneName(z, 'en', at), zoneName(z, 'ar', at)],
       selected: z === zone,
     }));
@@ -246,21 +254,22 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
           </fieldset>
 
           <div id={`${id}-zone`} className="space-y-2 text-sm" data-testid="post-schedule-zone">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* The same two rows in both languages: the label with Change, then the zone (it wraps on its own row) */}
+            <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="text-muted-foreground">{texts.timezoneLabel}:</span>
-              {ready && <span className="font-medium" data-testid="post-schedule-timezone">{zoneLabel(zone, locale)}</span>}
+              <span className="text-muted-foreground">{texts.timezoneLabel}</span>
               <button
                 type="button"
                 onClick={() => { setPickingZone((p) => !p); setZoneQuery(''); }}
                 aria-expanded={pickingZone}
                 disabled={disabled}
-                className="rounded px-1 text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)]"
+                className="ms-auto rounded px-1 text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-link)]"
                 data-testid="post-schedule-zone-change"
               >
                 {texts.changeTimezone}
               </button>
             </div>
+            {ready && <p className="m-0 font-medium [text-wrap:balance]" data-testid="post-schedule-timezone">{zoneLabel(zone, locale)}</p>}
             {pickingZone && (
               <Autocomplete
                 value={zoneQuery}

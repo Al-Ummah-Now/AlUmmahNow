@@ -58,10 +58,10 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
         `}>
           {remaining >= 0
             ? (isRTL
-              ? `${formatNumber('ar', remaining)} حرف متبقي`
+              ? `${formatNumber('ar', remaining, { useGrouping: false })} حرف متبقي`
               : `${formatNumber('en', remaining)} characters remaining`)
             : (isRTL
-              ? `${formatNumber('ar', Math.abs(remaining))} حرف زائد`
+              ? `${formatNumber('ar', Math.abs(remaining), { useGrouping: false })} حرف زائد`
               : `${formatNumber('en', Math.abs(remaining))} characters over limit`)
           }
         </span>

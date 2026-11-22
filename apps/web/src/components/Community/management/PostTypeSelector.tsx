@@ -139,7 +139,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className={`block text-sm font-semibold md:text-base ${isSelected ? 'text-primary' : 'text-foreground'}`}>{label}</span>
-              <span className="block text-xs leading-snug text-muted-foreground md:text-sm" data-testid="post-type-description">{description}</span>
+              <span className="block text-xs leading-snug text-muted-foreground [text-wrap:balance] md:text-sm" data-testid="post-type-description">{description}</span>
             </span>
           </Card>
         );

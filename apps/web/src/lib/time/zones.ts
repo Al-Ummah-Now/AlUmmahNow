@@ -103,10 +103,11 @@ export function zoneCity(zone: string): string {
 }
 
 /**
- * "Eastern Time (GMT−5)" / «التوقيت الشرقي لأمريكا الشمالية (GMT−٥)». In Arabic the offset is a
+ * "Eastern Time (GMT−5)" / «التوقيت الشرقي لأمريكا الشمالية (GMT−٥)», joined by a no-break space. In Arabic the offset is a
  * left-to-right isolate (U+2066 … U+2069): without it the bidi algorithm shows «(٥−GMT)».
  */
 export function zoneLabel(zone: string, locale: string, at = new Date()): string {
   const offset = offsetLabel(zone, locale, at);
-  return `${zoneName(zone, locale, at)} (${locale === 'ar' ? `\u2066${offset}\u2069` : offset})`;
+  // A no-break space keeps the offset with the name's last word: "(GMT−5)" never wraps onto a line alone
+  return `${zoneName(zone, locale, at)}\u00a0(${locale === 'ar' ? `\u2066${offset}\u2069` : offset})`;
 }
