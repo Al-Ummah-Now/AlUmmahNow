@@ -278,7 +278,7 @@ export interface CaptionsTranslations {
 
 export const CAPTIONS_EN: CaptionsTranslations = {
   draftsTitle: 'Caption drafts',
-  draftsHint: 'Only you and your channel team see a draft. Viewers see it once you publish it.',
+  draftsHint: 'Only you and your channel team see a\u00a0draft. Viewers see it once you publish it.',
   origin: {
     review_transcript: 'From the automatic transcript',
     transcription: 'Automatic transcription',
