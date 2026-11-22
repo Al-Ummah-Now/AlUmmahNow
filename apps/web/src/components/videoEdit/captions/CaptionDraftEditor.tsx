@@ -15,6 +15,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { getCaptionDraft, publishCaptionDraft, saveCaptionDraft, type CaptionDraftSummary } from '@/lib/api/caption-drafts-client';
 import QuranSpanCard from './QuranSpanCard';
+import CuePreviewVideo from './CuePreviewVideo';
 import {
   NUDGE_MS,
   acceptAllConfident,
@@ -68,6 +69,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
   const [find, setFind] = useState('');
   const [replaceWith, setReplaceWith] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [quranEdition, setQuranEdition] = useState<string | null>(null);
   const version = useRef(0);
   const savedCues = useRef<CaptionCue[] | null>(null);
   const saving = useRef<Promise<boolean> | null>(null);
@@ -88,6 +90,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
     }
     version.current = res.data.version;
     savedCues.current = res.data.cues;
+    setQuranEdition(res.data.quranEdition?.name ?? null);
     setHistory(initHistory(res.data.cues));
     setSaveState('saved');
   }, [videoId, language]);
@@ -326,7 +329,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
           <div className="grid flex-1 min-h-0 grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <aside className="border-b border-border p-4 md:border-b-0 md:border-e space-y-3 md:overflow-y-auto">
               {videoUrl && (
-                <video ref={videoRef} src={videoUrl} poster={posterUrl} controls playsInline preload="metadata" className="aspect-video w-full rounded-lg bg-muted" />
+                <CuePreviewVideo ref={videoRef} src={videoUrl} poster={posterUrl} lang={lang} />
               )}
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <label className="flex items-center gap-2 text-xs font-medium text-foreground">
@@ -362,12 +365,14 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
                       type="button"
                       onClick={() => seek(cue.startMs)}
                       disabled={!videoUrl}
-                      aria-label={tc.editor.playFrom.replace('{time}', formatCueTime(cue.startMs))}
+                      aria-label={tc.editor.playFrom.replace('{time}', formatCueTime(cue.startMs, lang))}
                       className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2 font-mono text-xs tabular-nums text-foreground hover:bg-muted/70"
-                      dir="ltr"
                     >
                       <Play className="h-3 w-3" aria-hidden />
-                      {formatCueTime(cue.startMs)} → {formatCueTime(cue.endMs)}
+                      {/* Each time reads left to right (#1541); the range runs with the page: start → end, «البداية ← النهاية» */}
+                      <span dir="ltr">{formatCueTime(cue.startMs, lang)}</span>
+                      <span aria-hidden>{lang === 'ar' ? '←' : '→'}</span>
+                      <span dir="ltr">{formatCueTime(cue.endMs, lang)}</span>
                     </button>
                     <span className="inline-flex items-center gap-0.5">
                       <span className="px-1 text-[11px] font-medium text-muted-foreground">{tc.editor.start}</span>
@@ -436,6 +441,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
                         onReject={() => edit((c) => rejectSpan(c, cue.id, s))}
                         onRange={(range) => edit((c) => setSpanRange(c, cue.id, s, range))}
                         textAvailable={quranText}
+                        translationEdition={quranEdition}
                       />
                     ),
                   )}

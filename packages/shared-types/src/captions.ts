@@ -9,7 +9,7 @@
  *   served: the official text from our Quran Foundation copy for a span the creator accepted, a
  *   reference with a quran.com link for an unconfirmed one or when there is no fresh copy.
  */
-import { QURAN_ATTRIBUTION, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type AsrWord, type QuranMatch, type QuranMatchClass } from './quran';
+import { QURAN_ATTRIBUTION_LINE, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type AsrWord, type QuranMatch, type QuranMatchClass } from './quran';
 
 /** A matcher class (a suggestion) or `accepted` (the creator confirmed it). */
 export type CaptionQuranStatus = QuranMatchClass | 'accepted';
@@ -477,7 +477,7 @@ export async function fillCaptionQuranMarkers(
   // attribution, so it reaches every player (web, native apps, embeds) with the text itself
   const ar = language.split('-')[0]!.toLowerCase() === 'ar';
   const rtl = RTL_CAPTION_LANGUAGES.has(language.split('-')[0]!.toLowerCase());
-  const attribution = `${rtl ? '\u200f' : ''}${ar ? QURAN_ATTRIBUTION.ar : QURAN_ATTRIBUTION.en}`;
+  const attribution = `${rtl ? '\u200f' : ''}${ar ? QURAN_ATTRIBUTION_LINE.ar : QURAN_ATTRIBUTION_LINE.en}`;
   return vtt
     .split(/(\n{2,})/)
     .map((block) => {

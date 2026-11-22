@@ -97,6 +97,18 @@ describe('caption drafts', () => {
 		assert.equal(one.data.cues.length, 3);
 		assert.equal((await app('stranger').request('/api/videos/v1/captions/drafts/ar', {}, e as never)).status, 403);
 		assert.equal((await app().request('/api/videos/v1/captions/drafts/en', {}, e as never)).status, 404);
+		assert.equal(one.data.quranEdition, null, 'the Arabic draft shows the Arabic text, no translation');
+	});
+
+	it('a translated draft with Quran names the translation its viewers see there', async () => {
+		const e = env();
+		e.subtitles.store.set(captionDraftKey('v1', 'en'), JSON.stringify(draft({ language: 'en', kind: 'translation', sourceLanguage: 'ar', sourceVersion: 1 })));
+		const en = (await (await app().request('/api/videos/v1/captions/drafts/en', {}, e as never)).json()) as any;
+		assert.deepEqual(en.data.quranEdition, { name: 'Saheeh International' }, 'the shipped default when neither the channel nor the site picked one');
+		const speechOnly = draft({ language: 'en', kind: 'translation', cues: [{ id: 'c1', startMs: 0, endMs: 1000, segments: [{ type: 'speech', text: 'hi' }] }] });
+		e.subtitles.store.set(captionDraftKey('v1', 'en'), JSON.stringify(speechOnly));
+		const plain = (await (await app().request('/api/videos/v1/captions/drafts/en', {}, e as never)).json()) as any;
+		assert.equal(plain.data.quranEdition, null);
 	});
 
 	it('saves over the loaded version; a stale editor gets 409 with the current version', async () => {
@@ -150,8 +162,9 @@ describe('caption drafts', () => {
 		// the reference-only cue has none
 		const blocks = vtt.split(/\n{2,}/);
 		const quranCue = blocks.find((b) => b.includes('﴿'))!;
-		assert.equal(quranCue.split('\n').at(-1), '\u200fبيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)');
-		assert.equal(vtt.split('بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)').length - 1, 1);
+		// No-break spaces keep «مؤسسة القرآن (https://…)» together when the cue wraps
+		assert.equal(quranCue.split('\n').at(-1), '\u200fبيانات القرآن مقدَّمة من مؤسسة\u00a0القرآن\u00a0(https://quran.foundation/\u200e)');
+		assert.equal(vtt.split('بيانات القرآن مقدَّمة من مؤسسة\u00a0القرآن\u00a0(https://quran.foundation/\u200e)').length - 1, 1);
 		assert.ok(!blocks.find((b) => b.includes('quran.com/112/2'))!.includes('quran.foundation'));
 		assert.match(vtt, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');

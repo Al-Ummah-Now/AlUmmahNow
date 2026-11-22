@@ -74,6 +74,23 @@ describe('CaptionDraftEditor', () => {
     expect(screen.getByText('Quran data provided by Quran Foundation (https://quran.foundation/)')).toBeTruthy();
   });
 
+  it('a translated draft names the Arabic text and the translation its viewers see', async () => {
+    const translated = { ...draft, language: 'en', kind: 'translation', quranEdition: { name: 'Saheeh International' }, cues: [{ ...draft.cues[1]!, segments: [{ type: 'quran', range: '112:1:1-112:1:4', status: 'accepted' }] }] };
+    getCaptionDraft.mockResolvedValue({ ok: true, data: translated });
+    render(<CaptionDraftEditor videoId="v1" language="en" languageLabel="English" open onClose={jest.fn()} onChanged={jest.fn()} />);
+    expect(await screen.findByText('Quran text: Uthmani (Hafs)')).toBeTruthy();
+    expect(screen.getByText('Saheeh International').closest('p')!.textContent).toBe('Translation shown to viewers: Saheeh International');
+  });
+
+  it('the preview has its own controls (the page’s digits), not the browser’s', async () => {
+    render(<CaptionDraftEditor videoId="v1" language="ar" languageLabel="Arabic" videoUrl="/clip.mp4" open onClose={jest.fn()} onChanged={jest.fn()} />);
+    await loaded();
+    const video = document.querySelector('video')!;
+    expect(video.hasAttribute('controls')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Play video' })).toBeTruthy();
+    expect(screen.getByRole('slider')).toBeTruthy();
+  });
+
   it('"Confirm all suggested" leaves possible Quran for a look; publish saves over the loaded version first', async () => {
     renderEditor();
     await loaded();

@@ -3,7 +3,7 @@
  * Quran spans are references: text edits never touch them, and "Not Quran" turns a span back
  * into what was heard, as ordinary speech.
  */
-import { acceptConfidentSuggestions, rejectQuranSegment, type CaptionCue, type CaptionSegment } from '@al-ummah/shared-types';
+import { acceptConfidentSuggestions, numberFormat, rejectQuranSegment, type CaptionCue, type CaptionSegment, type FormatLocale } from '@al-ummah/shared-types';
 
 export const NUDGE_MS = 100;
 const MIN_CUE_MS = 100;
@@ -173,15 +173,20 @@ export function rejectSpan(cues: CaptionCue[], id: string, seg: number): Caption
 export const confidentCount = (cues: CaptionCue[]) => acceptConfidentSuggestions(cues).accepted;
 export const acceptAllConfident = (cues: CaptionCue[]) => acceptConfidentSuggestions(cues).cues;
 
-/** `01:02:03.4` (hours only when needed). */
-export function formatCueTime(ms: number): string {
+/**
+ * `01:02:03.4` (hours only when needed), in the page's digits: «٠١:٠٢٫٤» on Arabic pages. Like the
+ * player's clock (#1541) it reads left to right in Arabic too, so it is shown in a `dir="ltr"` box.
+ */
+export function formatCueTime(ms: number, locale: FormatLocale = 'en'): string {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   const s = Math.floor((ms % 60_000) / 1000);
   const tenth = Math.floor((ms % 1000) / 100);
-  const mm = String(m).padStart(2, '0');
-  const ss = String(s).padStart(2, '0');
-  return h ? `${h}:${mm}:${ss}.${tenth}` : `${mm}:${ss}.${tenth}`;
+  const two = numberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false });
+  const one = numberFormat(locale, { useGrouping: false });
+  const decimal = locale === 'ar' ? '٫' : '.';
+  const tail = `${two.format(m)}:${two.format(s)}${decimal}${one.format(tenth)}`;
+  return h ? `${one.format(h)}:${tail}` : tail;
 }
 
 /** What a creator types in "Different reference": `3:166` or `3:166-167`, Arabic digits too. */

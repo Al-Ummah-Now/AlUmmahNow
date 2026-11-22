@@ -23,6 +23,7 @@ import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import { deleteDraft, listDrafts, publishDraft, readDraft, readTracks, saveDraftCues, summariseDraft } from '../../lib/captions/drafts';
+import { editionFor } from '../../lib/quran/translations';
 import { listClaims, queueClaim, reviewTranscriptKey, transcriptAvailable } from '../../lib/captions/claim';
 
 const Segment = z.union([
@@ -51,7 +52,12 @@ const Summary = z.object({
 	publishedAt: z.string().optional(),
 	track: z.enum(['none', 'machine', 'upload']).describe('The live track of this language, if any'),
 });
-const Draft = Summary.extend({ cues: z.array(Cue), cueCount: z.number() });
+const Draft = Summary.extend({
+	cues: z.array(Cue),
+	cueCount: z.number(),
+	/** A translated draft with Quran spans: the Quran Foundation translation its viewers see there (the channel's, else the site's) */
+	quranEdition: z.object({ name: z.string() }).nullable().optional(),
+});
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const params = z.object({ videoId: Str({ description: 'Video ID' }), language: Str({ description: 'ISO 639-1 code' }) });
 
@@ -139,7 +145,9 @@ export class CaptionDraftGet extends AuthenticatedRoute {
 		if (!draft) return c.json({ success: false, error: 'draft_not_found' }, 404);
 		const tracks = await readTracks(c.env.subtitles, params.videoId);
 		const summary = summariseDraft(draft, tracks.find((t) => t.language === draft.language));
-		return c.json({ success: true, data: { ...summary, cueCount: summary.cues, cues: draft.cues } });
+		const hasQuran = draft.cues.some((cue) => cue.segments.some((s) => s.type === 'quran'));
+		const edition = draft.kind === 'translation' && hasQuran ? await editionFor(c.env as never, access.video.channelId, draft.language) : null;
+		return c.json({ success: true, data: { ...summary, cueCount: summary.cues, cues: draft.cues, quranEdition: edition ? { name: edition.name } : null } });
 	}
 }
 
