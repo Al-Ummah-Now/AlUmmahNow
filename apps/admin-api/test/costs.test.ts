@@ -11,7 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { openCostCredential, type CostCredentialRow } from '@al-ummah/shared-types';
 import costsRouter from '../src/routers/costs.router';
-import { balanceTo, envLines, productLines, withCloudflareLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
+import { apportionCents, envLines, envsFromRows, productLines, resourceMtds, withCloudflareLines, runWeeklyDigest, testBunny, testCloudflare, testResend, topMovers, CF_API } from '../src/lib/costs';
 import { localTime, processCostAlertMailJob, queueCostEmails, renderCostEmail } from '../src/lib/cost-alert-mail';
 import { syncCostAlerts, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { billedCloudflare, meterUsageOf, type MeterUsage } from '../src/lib/cfBilling';
@@ -541,6 +541,11 @@ describe('every Costs tile equals the sum of its rows', () => {
     const productsTotal = sum(d.products.map((p) => p.mtd));
     near(productsTotal, d.budget.mtd + (d.cloudflare.listMtd - d.cloudflare.billedMtd), 0.06, 'products at list − included usage = billed month to date');
     near(sum(Object.values(d.envs)), productsTotal, 0.001, 'By environment = By product, to the cent');
+    // Drivers split like the totals: each product's resources and each env's rows add up to the tile
+    const cents = (x: number) => Math.round(x * 100);
+    const KIND: Record<string, string> = { worker: 'workers', d1: 'd1', r2: 'r2', kv: 'kv', queue: 'queues', do: 'durable_objects' };
+    for (const p of ['workers', 'd1', 'r2', 'kv', 'queues']) assert.equal(cents(sum(d.drivers.filter((x) => KIND[x.kind] === p).map((x) => x.mtdUsd))), cents(product(p)), `${p} drivers = ${p}`);
+    for (const e of ['production', 'stage', 'qa'] as const) assert.equal(cents(sum(d.drivers.filter((x) => x.env === e).map((x) => x.mtdUsd))), cents(d.envs[e]), `${e} drivers = ${e} tile`);
     // The sparkline is the two weeks Top movers compares: the 14 full days before today
     const spark = d.drivers[0]!.daily.days;
     assert.equal(spark.length, 14);
@@ -576,12 +581,27 @@ describe('rounding: lines are the source, totals are built from the parts shown'
     assert.deepEqual(out.map((p: { product: string; mtd: number }) => [p.product, p.mtd]), [['workers', 61.01], ['d1', 48.44], ['bunny', 5]]);
   });
 
-  it('balances rounded parts to their rounded total, only for a cent or two of drift', () => {
-    const parts = balanceTo({ production: 100.004, stage: 12.004, qa: 100.314 }, 212.33);
-    assert.deepEqual(parts, { production: 100, stage: 12, qa: 100.33 }, 'the 2¢ drift goes to the largest part');
-    assert.equal(Math.round(Object.values(parts).reduce((a, b) => a + b, 0) * 100) / 100, 212.33);
-    // A real gap is not hidden: past 5¢ the parts stay as they are
-    assert.deepEqual(balanceTo({ a: 10, b: 5 }, 16), { a: 10, b: 5 });
+  it('splits cents by largest remainder, adding up exactly', () => {
+    const out = apportionCents(100, new Map([['a', 1], ['b', 1], ['c', 1]]));
+    assert.deepEqual([...out.values()], [34, 33, 33]);
+    assert.equal([...apportionCents(2601, new Map([['x', 26.006]]))][0]![1], 2601, 'a lone resource is its product, to the cent');
+    assert.deepEqual([...apportionCents(5, new Map([['a', 0], ['b', 0]]))].map(([, c]) => c), [3, 2]);
+  });
+
+  it('a product\'s resources add up to it, and environments are the sums of their rows', () => {
+    const now = new Date('2026-11-21T12:00:00Z');
+    const rd = (id: string, kind: string, env: string, cost: number) => ({ day: '2026-11-05', resource_id: id, kind, env, name: id, cost }) as never;
+    const days = [rd('r2:videos', 'r2', 'production', 26.006), rd('w:p', 'worker', 'production', 20.004), rd('w:q', 'worker', 'qa', 20.004), rd('w:s', 'worker', 'stage', 0.546)];
+    const products = [{ product: 'r2', mtd: 26.0, projected: 0, last7: 0, prev7: 0 }, { product: 'workers', mtd: 40.55, projected: 0, last7: 0, prev7: 0 }, { product: 'containers', mtd: 8.7, projected: 0, last7: 0, prev7: 0 }, { product: 'bunny', mtd: 30, projected: 0, last7: 0, prev7: 0 }] as never[];
+    const rows = resourceMtds(days, products as never, now);
+    assert.equal(rows.get('r2:videos')!.usd, 26, 'the only R2 resource equals R2, not a cent more');
+    const workers = ['w:p', 'w:q', 'w:s'].map((id) => rows.get(id)!.usd);
+    assert.equal(Math.round(workers.reduce((a, b) => a + b, 0) * 100), 4055);
+    const envs = envsFromRows(rows, products as never, [], 'none', now);
+    assert.equal(Math.round((envs.production! - rows.get('r2:videos')!.usd - rows.get('w:p')!.usd - 8.7) * 100), 0, 'production = its rows + Containers');
+    assert.equal(envs.qa, rows.get('w:q')!.usd);
+    assert.equal(envs.account, 30);
+    assert.equal(Math.round(Object.values(envs).reduce((a, b) => a + b, 0) * 100), Math.round((26 + 40.55 + 8.7 + 30) * 100));
   });
 
   it('"Data as of" is the last collection that read Cloudflare, not a later refused one', async () => {

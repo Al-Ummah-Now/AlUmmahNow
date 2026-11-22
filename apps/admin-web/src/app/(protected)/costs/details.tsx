@@ -37,7 +37,8 @@ function usage(line: CostCloudflareLine, value: number, t: Translator, f: OpsFor
 /** Why a line is $0 or carries a caveat: no source of ours, not billed, or estimated. */
 function lineNote(line: CostCloudflareLine, t: Translator, f: OpsFormats): string | null {
   if (!line.billed) return t('costs.cloudflare.notBilled');
-  if (line.source === 'none') return t(`costs.cloudflare.none.${line.key}` as never);
+  // The allowance as the Included column shows it, so the note and the row use one form
+  if (line.source === 'none') return t(`costs.cloudflare.none.${line.key}` as never, { allowance: usage(line, line.included, t, f) } as never);
   const notes = [line.source === 'estimated' ? t('costs.cloudflare.estimated') : null, wholeUnits(line, t, f)].filter(Boolean);
   return notes.length ? notes.join(' ') : null;
 }

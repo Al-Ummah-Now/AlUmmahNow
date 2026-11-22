@@ -310,14 +310,14 @@ test.describe('costs (super admin)', () => {
       const banner = page.getByTestId('costs-token-banner');
       await expect(banner).toHaveAttribute('data-kind', 'refused');
       await expect(banner).toContainText('missing, not zero');
-      await expect(page.getByTestId('costs-token-permission')).toContainText('Account Analytics Read');
+      await expect(page.getByTestId('costs-token-permission')).toContainText(/Account\sAnalytics\sRead/);
       await page.getByTestId('costs-token-check').click();
       await expect(page.getByTestId('costs-token-check-feedback-ok')).toContainText('A collection is queued');
 
       await setPreferences(page, { locale: 'ar' });
       await page.goto('/costs');
       await expect(page.getByTestId('costs-token-banner')).toHaveAttribute('data-kind', 'refused');
-      await expect(page.getByTestId('costs-token-permission')).toContainText('Account Analytics Read');
+      await expect(page.getByTestId('costs-token-permission')).toContainText(/Account\sAnalytics\sRead/);
       await expect(page.getByTestId('costs-token-check')).toHaveText('افحص مجددًا');
     } finally {
       await setPreferences(page, { locale: 'en' }).catch(() => undefined);

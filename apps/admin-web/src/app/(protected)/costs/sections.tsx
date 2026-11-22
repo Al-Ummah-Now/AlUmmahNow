@@ -289,7 +289,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
           </p>
           <p className={`text-sm tabular-nums ${TONE_TEXT[m.projectedTone]}`}>
             {cap !== null && b.projectedShare !== null
-              ? t('costs.budget.forecastShort', { value: f.usd(d.forecast.trailing), percent: f.percent(b.projectedShare) })
+              ? t('costs.budget.forecastShort', { value: f.usd(d.forecast.trailing), percent: f.rate(b.projectedShare) })
               : t('costs.budget.forecastShortUnset', { value: f.usd(d.forecast.trailing) })}
           </p>
         </div>
@@ -343,7 +343,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
       </div>
 
       <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.percent(b.share) }) : t('costs.budget.spentSub')} tone={m.tone} testId="costs-spent" />
+        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.rate(b.share) }) : t('costs.budget.spentSub')} tone={m.tone} testId="costs-spent" />
         <Stat
           label={t('costs.budget.forecast')}
           value={f.usd(d.forecast.trailing)}
@@ -402,7 +402,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
                       <span aria-hidden="true" className={`cost-dot ${kind === 'spike' ? 'text-warning-fg' : 'text-danger-fg'}`} />
                       <bdi>{alertText(d, a.key, t, f)}</bdi>
                     </span>
-                    <span className="text-xs text-fg-muted tabular-nums">{fillNodes(t('costs.budget.opened'), { time: <LocalTime value={a.opened_at} withTime /> })}</span>
+                    <span className="text-xs text-fg-muted tabular-nums">{fillNodes(t('costs.budget.opened'), { time: <LocalTime value={a.opened_at} withTime className="whitespace-nowrap" /> })}</span>
                   </li>
                 );
               })}
@@ -454,7 +454,7 @@ function DeltaText({ last7, prev7, t, f, signed }: Common & { last7: number; pre
       <span aria-hidden="true">{DIRECTION_MARK[delta.direction]}</span>
       <span className="sr-only">{label}</span>
       <span aria-hidden="true">{delta.direction === 'flat' ? label : signed(delta.change)}</span>
-      {delta.share !== null && delta.direction !== 'flat' && <span className="text-xs text-fg-muted" aria-hidden="true">({f.percent(Math.abs(delta.share))})</span>}
+      {delta.share !== null && delta.direction !== 'flat' && <span className="text-xs text-fg-muted" aria-hidden="true">({f.rate(Math.abs(delta.share))})</span>}
     </span>
   );
 }
@@ -493,7 +493,7 @@ export function ProductsPanel({ d, t, f, locale }: Common & { d: CostsDashboard;
                   <div><dt className="text-fg-muted">{t('costs.breakdown.projected')}</dt><dd className="text-fg tabular-nums">{f.usd(p.projected)}</dd></div>
                   <div><dt className="text-fg-muted">{t('costs.breakdown.last7')}</dt><dd className="text-fg tabular-nums">{f.usd(p.last7)}</dd></div>
                   <div className="col-span-2 flex flex-wrap items-center justify-between gap-2">
-                    <dt className="text-fg-muted">{t('costs.breakdown.share', { percent: f.percent(share) })}</dt>
+                    <dt className="text-fg-muted">{t('costs.breakdown.share', { percent: f.rate(share) })}</dt>
                     <dd><DeltaText last7={p.last7} prev7={p.prev7} t={t} f={f} signed={signed} /></dd>
                   </div>
                 </dl>
@@ -524,7 +524,7 @@ export function ProductsPanel({ d, t, f, locale }: Common & { d: CostsDashboard;
                         <span className="cost-bar-track block h-1.5 w-20 shrink-0 overflow-hidden" aria-hidden="true">
                           <span className="cost-bar-fill block h-full" style={{ width: `${Math.max(share > 0 ? 3 : 0, share * 100)}%` }} />
                         </span>
-                        <span className="whitespace-nowrap text-xs text-fg-muted tabular-nums">{t('costs.breakdown.share', { percent: f.percent(share) })}</span>
+                        <span className="whitespace-nowrap text-xs text-fg-muted tabular-nums">{t('costs.breakdown.share', { percent: f.rate(share) })}</span>
                       </span>
                     </th>
                     <td className="px-3 py-2.5 text-end font-medium text-fg tabular-nums">{f.usd(p.mtd)}</td>
@@ -574,7 +574,7 @@ export function EnvsPanel({ d, t, f }: Common & { d: CostsDashboard }) {
               {t(`costs.envs.${v.env}`)}
             </dt>
             <dd className="mt-1 text-xl font-semibold text-fg tabular-nums">{f.usd(v.value)}</dd>
-            <dd className="text-xs text-fg-muted tabular-nums">{f.percent(shareOf(v.value, total))}</dd>
+            <dd className="text-xs text-fg-muted tabular-nums">{f.rate(shareOf(v.value, total))}</dd>
           </div>
         ))}
       </dl>

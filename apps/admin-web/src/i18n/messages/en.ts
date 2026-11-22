@@ -4122,7 +4122,7 @@ const en = {
       title: 'Open alerts',
       empty: 'No metric is over its threshold.',
       errorsLink: 'See them on the Errors page',
-      opened: 'Since {time}',
+      opened: 'Since\u00a0{time}',
     },
     charts: {
       requests: 'Requests',
@@ -4321,7 +4321,7 @@ const en = {
     sourceContainer: 'Container',
     tokenTitle: 'Cloudflare token',
     tokenIntro: 'A read-only Cloudflare API token lets this panel read the containers, the queues and the logs. It is stored encrypted and never shown again; only its last {#4} characters are.',
-    tokenNeeds: 'Give it read access to: Workers Observability, Containers, Queues and Account Analytics. Nothing that can change anything.',
+    tokenNeeds: 'Give it read access to: Workers Observability, Containers, Queues and Account\u00a0Analytics. Nothing that can change anything.',
     tokenNotSet: 'Not set.',
     tokenSet: 'Set, ending in {last4}.',
     tokenSetNoLast4: 'Set.',
@@ -4335,7 +4335,7 @@ const en = {
       observability: 'Workers Observability',
       containers: 'Containers',
       queues: 'Queues',
-      analytics: 'Account Analytics',
+      analytics: 'Account\u00a0Analytics',
     },
     checkOk: 'Has access',
     checkMissing: 'No access',
@@ -4375,7 +4375,7 @@ const en = {
       missingAdmin: 'The collector has no Cloudflare token, so every figure here stays at zero. A super admin has to set one under Connections on this page.',
       missingAction: 'Set the Cloudflare token',
       release: 'The collector is using the release token until a read-only Cloudflare token is set under Connections.',
-      permission: 'Account Analytics Read',
+      permission: 'Account\u00a0Analytics\u00a0Read',
       refusedTitle: 'Cloudflare refuses the collector’s token: Cloudflare costs are missing, not zero',
       refusedSharedToken: 'The shared token the collector uses lacks the {permission} permission, so Cloudflare answers every analytics read with “not authorized”. Add {permission} to that token in the Cloudflare dashboard, or set a read-only token with {permission} under Connections.',
       refusedAdminToken: 'The Cloudflare token set under Connections lacks the {permission} permission, so Cloudflare answers every analytics read with “not authorized”. Add {permission} to it in the Cloudflare dashboard, or replace it under Connections.',
@@ -4436,7 +4436,7 @@ const en = {
       alertsTitle: 'Open cost alerts',
       alertsEmpty: 'No cost alert is open.',
       alertsLink: 'Open them on the Errors page',
-      opened: 'Since {time}',
+      opened: 'Since\u00a0{time}',
       alert: {
         budget: '{percent} of the {month} budget used',
         budgetFull: 'The {month} budget is used up',
@@ -4526,7 +4526,7 @@ const en = {
       none: {
         browser_hours: 'No Al Ummah Now Worker uses Browser Run: the hours on the invoice belong to another project.',
         analytics_engine_writes: 'Not billed yet.',
-        images_transformations: 'Cloudflare reports no figure to read; the first {#5000} a month are free.',
+        images_transformations: 'Cloudflare reports no figure to read; the first {allowance} a month are free.',
       },
       meters: {
         workers_requests: 'Workers requests',
@@ -4707,9 +4707,9 @@ const en = {
       required: 'Required',
       optional: 'Optional',
       about: {
-        cloudflare: 'A read-only API token. It needs Account Analytics: Read. For full coverage also Workers Scripts, D1, Workers KV Storage, Workers R2 Storage, Queues and Containers: Read.',
+        cloudflare: 'A read-only API token. It needs Account\u00a0Analytics:\u00a0Read. For full coverage also Workers Scripts, D1, Workers KV Storage, Workers R2 Storage, Queues and Containers: Read.',
         bunny: 'The account API key, which reads billing. Without it, Bunny is estimated from delivery.',
-        resend: 'A full-access API key: a sending-only key cannot count the emails sent.',
+        resend: 'A full-access API key, which counts the emails sent (a sending-only key cannot). Without it, Resend shows no cost.',
       },
       status: {
         release: 'Not set here: the collector uses the shared release token',
@@ -4725,7 +4725,7 @@ const en = {
       tests: {
         cf_ok: 'Analytics and every listing are readable.',
         cf_partial: 'Analytics are readable, but some listings are not.',
-        cf_no_analytics: 'The token works but cannot read Account Analytics.',
+        cf_no_analytics: 'The token works but cannot read Account\u00a0Analytics.',
         cf_invalid: 'Cloudflare did not accept the token.',
         cf_inactive: 'The token is not active.',
         bunny_ok: 'Account billing is readable.',
