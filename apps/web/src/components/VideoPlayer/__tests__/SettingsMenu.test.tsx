@@ -4,7 +4,7 @@
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Player } from 'video.js';
-import { SettingsMenu } from '../SettingsMenu';
+import { SettingsMenu, wholeRowEndPadding } from '../SettingsMenu';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
 
 function fakePlayer({ live = false, tracked }: { live?: boolean; tracked?: boolean } = {}) {
@@ -271,5 +271,23 @@ describe('SettingsMenu', () => {
     fireEvent.click(document.querySelector('[data-row="shortcuts"]')!);
     expect(onShow).toHaveBeenCalled();
     expect(screen.queryByTestId('player-settings-menu')).toBeNull();
+  });
+});
+
+describe('wholeRowEndPadding', () => {
+  // Rows 44px apart starting under a 50px back row that sticks with its bottom at 44px
+  const rows = [50, 94, 138, 182, 226, 270];
+  it('adds just enough room that the furthest scroll puts a whole row under the pinned back row', () => {
+    // Row tops reach the back row's bottom at scrolls 6, 50, 94, 138…: a range of 60 left 10px of a
+    // row showing under the back row; 34px more ends the range at 94, the third row's top
+    expect(wholeRowEndPadding(rows, 44, 60)).toBe(34);
+  });
+  it('adds nothing when the range already ends on a row, or nothing scrolls', () => {
+    expect(wholeRowEndPadding(rows, 44, 94)).toBe(0);
+    expect(wholeRowEndPadding(rows, 44, 0)).toBe(0);
+  });
+  it('gives the same end in both languages for the same rows, whatever the leftover space', () => {
+    expect(70 + wholeRowEndPadding(rows, 44, 70)).toBe(94);
+    expect(57 + wholeRowEndPadding(rows, 44, 57)).toBe(94);
   });
 });
