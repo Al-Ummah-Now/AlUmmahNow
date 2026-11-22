@@ -66,12 +66,27 @@ export async function routeFixtures(page: Page, chapterTitles: [string, string, 
         success: true,
         data: {
           tracks: [
-            { language: 'en', label: 'English', url: '/__player-fixtures/en.vtt', status: 'ready' },
-            { language: 'ar', label: 'العربية', url: '/__player-fixtures/ar.vtt', status: 'ready' },
+            // The API's own track paths (the player derives the download link from them)
+            { language: 'en', label: 'English', url: `/api/videos/${videoIdOf(route.request().url())}/subtitles/en`, status: 'ready' },
+            { language: 'ar', label: 'العربية', url: `/api/videos/${videoIdOf(route.request().url())}/subtitles/ar`, status: 'ready' },
           ],
         },
       }),
     }),
+  );
+
+  await page.route(/\/api\/videos\/harness-[a-z]+\/subtitles\/(en|ar)$/, (route) => {
+    const lang = new URL(route.request().url()).pathname.split('/').pop();
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': TYPES['.vtt'] }, body: fs.readFileSync(path.join(FIXTURES, `${lang}.vtt`)) });
+  });
+}
+
+const videoIdOf = (url: string) => /\/videos\/([^/]+)\/subtitles/.exec(new URL(url).pathname)?.[1] ?? 'harness-bright';
+
+/** GET /api/me/features: every feature off unless the spec turns it on, never the real API's answer */
+async function routeFeatures(page: Page, features: Record<string, boolean>): Promise<void> {
+  await page.route(/\/api\/me\/features(\?|$)/, (route) =>
+    route.fulfill({ status: 200, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify({ success: true, features }) }),
   );
 }
 
@@ -93,6 +108,8 @@ export interface HarnessOptions {
   index?: number;
   /** "Autoplay next" synced with an account (the spec serves the token and playback settings) */
   account?: boolean;
+  /** The features answer (GET /api/me/features); every feature is off unless named here */
+  features?: Record<string, boolean>;
 }
 
 const THEMES_CSS = path.resolve(__dirname, '../../../../packages/fanous-tokens/generated-player');
@@ -145,6 +162,7 @@ async function keepDevBuildStill(page: Page): Promise<void> {
 
 export async function openHarness(page: Page, opts: HarnessOptions = {}): Promise<Locator> {
   await routeFixtures(page, opts.chapterTitles);
+  await routeFeatures(page, opts.features ?? {});
   await keepDevBuildStill(page);
   // A recorded consent choice keeps the consent banner out of the frame (lib/consent/consent-cookie.ts)
   const origin = new URL(process.env.PLAYER_BASE_URL || `http://localhost:${process.env.PLAYER_PORT || 3101}`).origin;

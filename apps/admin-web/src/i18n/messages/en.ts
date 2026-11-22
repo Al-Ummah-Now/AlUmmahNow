@@ -4826,6 +4826,8 @@ const en = {
     inlineBudget: 'Monthly budget (USD)',
     viewerTitles: 'Show viewers machine-translated titles',
     viewerTitlesHint: 'When a video has no title in the viewer’s language, the watch page shows a machine translation labelled “Auto-translated” with “Show original”. On by default; channels can opt out. Turn it off to switch it off for the whole site.',
+    viewerDownload: 'Let viewers download captions',
+    viewerDownloadHint: 'Adds “Download captions” to the player’s settings menu, so anyone watching can save the shown captions as a file. Off by default. While it is off, only the video’s owner, its channel’s caption editors and admins can download captions, from Studio.',
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved.',

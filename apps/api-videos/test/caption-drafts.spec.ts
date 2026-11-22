@@ -50,7 +50,7 @@ function draft(overrides: Partial<CaptionDraft> = {}): CaptionDraft {
 	};
 }
 
-function env(opts: { copy?: boolean; track?: 'upload' } = {}) {
+function env(opts: { copy?: boolean; track?: 'upload'; viewerDownload?: boolean } = {}) {
 	const subtitles = new MetaBucket();
 	subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(draft()));
 	if (opts.track) subtitles.store.set('v1/metadata.json', JSON.stringify({ videoId: 'v1', tracks: [{ id: 't0', language: 'ar', label: 'العربية', kind: 'subtitles', uploadedBy: 'owner', uploadedAt: 'x', fileSize: 1, format: 'srt', url: 'u', status: 'ready' }], dateCreated: 'x', dateModified: 'x' }));
@@ -71,10 +71,13 @@ function env(opts: { copy?: boolean; track?: 'upload' } = {}) {
 			}),
 		);
 	}
-	return { subtitles, MEDIA_PRIVATE, videos: new MemoryBucket({ v1: videoFixture() }), queue: new MemoryQueue(), Audience: 'https://api.test' };
+	// The admin's caption settings: viewer downloads are off unless a test turns them on
+	const global_settings = new MemoryBucket(opts.viewerDownload ? { 'captions/settings.json': { viewerDownload: { enabled: true } } } : {});
+	const channels = new MemoryBucket({ 'owner-ch': { id: 'owner-ch', userId: 'owner', members: [{ userId: 'ed', role: 'editor' }, { userId: 'mod', role: 'moderator' }] } });
+	return { subtitles, MEDIA_PRIVATE, videos: new MemoryBucket({ v1: videoFixture() }), channels, global_settings, queue: new MemoryQueue(), Audience: 'https://api.test' };
 }
 
-const app = (userId = 'owner') =>
+const app = (userId = 'owner', roles?: string[]) =>
 	buildApp((r) => {
 		r.get('/api/videos/:videoId/captions/drafts', CaptionDraftsList);
 		r.get('/api/videos/:videoId/captions/drafts/:language', CaptionDraftGet);
@@ -83,7 +86,7 @@ const app = (userId = 'owner') =>
 		r.post('/api/videos/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
 		r.get('/api/videos/:videoId/subtitles/:language', SubtitlesGet);
 		r.get('/api/videos/:videoId/subtitles/:language/download', SubtitlesDownload);
-	}, { userId });
+	}, userId ? { userId, roles } : null);
 const json = (method: string, body?: unknown) => ({ method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
 
 beforeEach(() => clearQuranCopyCache());
@@ -176,7 +179,7 @@ describe('caption drafts', () => {
 	});
 
 	it('a viewer downloads the track: verse text filled at download time, attribution and edition inside, nothing stored', async () => {
-		const e = env();
+		const e = env({ viewerDownload: true });
 		const accepted = draft().cues.map((c) => (c.id === 'c2' ? { ...c, segments: [{ ...(c.segments[0] as any), status: 'accepted' }] } : c));
 		await app().request('/api/videos/v1/captions/drafts/ar', json('PUT', { baseVersion: 1, cues: accepted }), e as never);
 		await app().request('/api/videos/v1/captions/drafts/ar/publish', json('POST', { baseVersion: 2 }), e as never);
@@ -209,12 +212,40 @@ describe('caption drafts', () => {
 	});
 
 	it('a track without Quran downloads as uploaded, with no attribution', async () => {
-		const e = env();
+		const e = env({ viewerDownload: true });
 		e.subtitles.store.set('v1/en.vtt', 'WEBVTT\n\n00:00.000 --> 00:02.500 align:start\n<v Speaker>Hello</v> <b>there</b>\n');
 		const vtt = await (await app('').request('/api/videos/v1/subtitles/en/download', {}, e as never)).text();
 		assert.equal(vtt, 'WEBVTT\n\n00:00.000 --> 00:02.500 align:start\n<v Speaker>Hello</v> <b>there</b>\n');
 		const srt = await (await app('').request('/api/videos/v1/subtitles/en/download?format=srt', {}, e as never)).text();
 		assert.equal(srt, '1\n00:00:00,000 --> 00:00:02,500\nHello <b>there</b>\n');
+	});
+
+	it('viewer downloads off (the default): only the owner, the channel\'s caption editors and admins get the file', async () => {
+		const e = env();
+		e.subtitles.store.set('v1/en.vtt', 'WEBVTT\n\n00:00.000 --> 00:02.500\nHello\n');
+		const get = (userId: string, roles?: string[], lang = 'en') => app(userId, roles).request(`/api/videos/v1/subtitles/${lang}/download`, {}, e as never);
+		// Anyone else: 404 feature_off, whether or not a track exists (nothing to learn from it)
+		for (const [who, roles] of [['', undefined], ['stranger', undefined], ['mod', undefined]] as const) {
+			for (const lang of ['en', 'fr']) {
+				const res = await get(who, roles as string[] | undefined, lang);
+				assert.equal(res.status, 404, `${who || 'anonymous'} ${lang}`);
+				assert.deepEqual(await res.json(), { success: false, code: 'feature_off' });
+			}
+		}
+		// The owner, an editor on the video's channel, and an admin: the file
+		for (const [who, roles] of [['owner', undefined], ['ed', undefined], ['staff', ['admin']], ['boss', ['super_admin']]] as const) {
+			const res = await get(who, roles as string[] | undefined);
+			assert.equal(res.status, 200, who);
+			assert.equal(await res.text(), 'WEBVTT\n\n00:00.000 --> 00:02.500\nHello\n');
+		}
+		// Allowed, but no such track: a plain 404
+		assert.equal((await get('owner', undefined, 'fr')).status, 404);
+	});
+
+	it('viewer downloads on: anyone gets the file', async () => {
+		const e = env({ viewerDownload: true });
+		e.subtitles.store.set('v1/en.vtt', 'WEBVTT\n\n00:00.000 --> 00:02.500\nHello\n');
+		for (const who of ['', 'stranger', 'mod']) assert.equal((await app(who).request('/api/videos/v1/subtitles/en/download', {}, e as never)).status, 200, who || 'anonymous');
 	});
 
 	it('with no fresh copy an accepted span is served as a reference', async () => {

@@ -121,6 +121,8 @@ jest.mock('@/lib/video/keyboard-shortcuts', () => ({
 }));
 
 jest.mock('@/hooks/useWatchProgress', () => ({ useWatchProgress: jest.fn() }));
+// The features answer (every feature off; useFeatures would fetch it)
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: {} }) }));
 const mockUseWatchProgress = useWatchProgress as jest.Mock;
 
 function progress(currentTime: number, completed = false, duration = 600) {

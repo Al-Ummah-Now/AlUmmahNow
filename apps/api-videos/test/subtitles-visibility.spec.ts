@@ -35,7 +35,10 @@ function env() {
 	const channels = new MemoryBucket({
 		team: { id: 'team', name: 'Team', userId: 'owner', members: [{ userId: 'ed', role: 'editor' }, { userId: 'mod', role: 'moderator' }] },
 	});
-	return { videos, subtitles, channels };
+	// Viewer downloads on, so the download follows only the video's read rule here; switched off
+	// (the default), see caption-drafts.spec.ts
+	const global_settings = new MemoryBucket({ 'captions/settings.json': { viewerDownload: { enabled: true } } });
+	return { videos, subtitles, channels, global_settings };
 }
 
 function app(userId?: string) {

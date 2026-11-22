@@ -119,6 +119,16 @@ describe('feature answer', () => {
 		assert.equal(f.aiCategorySuggest, false);
 	});
 
+	it('viewer caption download: off unless the admin turns it on, then on for everyone', async () => {
+		const { env, global } = await setup();
+		assert.equal((await computeFeatures(env, { userId: null })).viewerCaptionDownload, false);
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).viewerCaptionDownload, false);
+		await global.put('captions/settings.json', JSON.stringify({ viewerDownload: { enabled: true } }));
+		forgetFeatureCaches();
+		assert.equal((await computeFeatures(env, { userId: null })).viewerCaptionDownload, true);
+		assert.equal((await computeFeatures(env, { userId: 'carol', roles: ROLES_NONE }, 'ch1')).viewerCaptionDownload, true);
+	});
+
 	it('live: a provider over its budget hides live; one at its concurrency cap does not', async () => {
 		const { env, d1 } = await setup();
 		await writeLiveRouting(d1, { providers: { selfhosted: { monthlyBudgetUsd: 0 } } }, 'admin-1');
