@@ -57,17 +57,18 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
         )}
       </div>
 
-      <div className="min-w-0 w-full">
+      <div className="@container min-w-0 w-full">
         <h3 className="flex items-center justify-center gap-1 font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
           <span className="truncate">{name}</span>
           {channel.isVerified && (
             <BadgeCheck className="w-4 h-4 shrink-0 text-blue-500" aria-label={t.discovery.verified} />
           )}
         </h3>
-        {/* Each part stays whole; a narrow card breaks the line only at the dot (#1669 audit) */}
-        <p className="flex flex-wrap items-center justify-center gap-x-1 text-xs text-gray-600 dark:text-gray-400 mt-1">
+        {/* One line with the dot when the tile is wide enough; a narrow tile (phone) stacks the two
+            parts with no dot, so a separator never hangs at the end of a line (#1669 audit) */}
+        <p className="flex flex-col items-center justify-center gap-x-1 text-xs text-gray-600 dark:text-gray-400 mt-1 @[12rem]:flex-row">
           <span className="whitespace-nowrap">{subscribers}</span>
-          <MetaSep lang={lang} gap="0.25rem" />
+          <span className="hidden @[12rem]:contents"><MetaSep lang={lang} gap="0.25rem" /></span>
           <span className="whitespace-nowrap">{videos}</span>
         </p>
         {variant === 'card' && description && (
