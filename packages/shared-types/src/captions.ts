@@ -427,9 +427,7 @@ export function quranReferenceText(range: string, language: string): string {
   if (!r) return '';
   const url = quranComUrl(r).replace(/^https:\/\//, '');
   const label = quranAyahLabel(r);
-  // Arabic takes «،» (a dot reads as zero next to Arabic digits); English keeps «·»
-  if (language.startsWith('ar')) return `[القرآن ${toArabicDigits(label)}، ${url}]`;
-  return `[Quran ${label} · ${url}]`;
+  return language.startsWith('ar') ? `[القرآن ${toArabicDigits(label)} · ${url}]` : `[Quran ${label} · ${url}]`;
 }
 
 const toArabicDigits = (s: string) => s.replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!);

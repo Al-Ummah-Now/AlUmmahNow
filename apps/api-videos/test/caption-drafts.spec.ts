@@ -170,7 +170,7 @@ describe('caption drafts', () => {
 		assert.equal(vtt.split('المصدر: مؤسسة القرآن').length - 1, 1);
 		assert.ok(!vtt.includes('بيانات القرآن مقدَّمة'), 'the full line belongs on the Credits page and in downloads, not in a cue');
 		assert.ok(!blocks.find((b) => b.includes('quran.com/112/2'))!.includes('مؤسسة القرآن'));
-		assert.match(vtt, /\[القرآن ١١٢:٢، quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
+		assert.match(vtt, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');
 		assert.ok(!vtt.includes(HEARD));
 		assert.ok(!/[]/.test(vtt));
@@ -255,7 +255,7 @@ describe('caption drafts', () => {
 		await app().request('/api/videos/v1/captions/drafts/ar', json('PUT', { baseVersion: 1, cues: accepted }), e as never);
 		await app().request('/api/videos/v1/captions/drafts/ar/publish', json('POST', { baseVersion: 2 }), e as never);
 		const vtt = await (await app().request('/api/videos/v1/subtitles/ar', {}, e as never)).text();
-		assert.match(vtt, /\[القرآن ١١٢:١، quran\.com\/112\/1\]/);
+		assert.match(vtt, /\[القرآن ١١٢:١ · quran\.com\/112\/1\]/);
 		assert.ok(!vtt.includes(HEARD));
 		assert.ok(!vtt.includes('quran.foundation'), 'no Quran text shown, so no attribution');
 	});
