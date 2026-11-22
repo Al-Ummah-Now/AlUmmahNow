@@ -171,11 +171,42 @@ width from 320px (the language, light/dark and account controls never move):
   and Upload is a 40px icon (its label stays its name). Below 640px the drawer toggle and Upload
   leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
   the drawer; Upload only while a channel is active, so acting as yourself the bar has five tabs).
-- *Videos admin.* Full width over the sidebar: the ⌘K search is an icon below 1280px and the
-  breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out. Signed in to Al Ummah Now without the admin role (access denied), the bar shows the account menu, read from Auth (that person has no admin session), so they see who they are and can switch accounts; never Sign in.
+- *Videos admin.* Full width over the sidebar: the ⌘K search (the [search](#search) launcher) is an icon below
+  1024px, where the breadcrumbs leave; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out. Signed in to Al Ummah Now without the admin role (access denied), the bar shows the account menu, read from Auth (that person has no admin session), so they see who they are and can switch accounts; never Sign in.
 - *Status.* No drawer and no account: the page footer links Website and Videos.
 
 There is one sign-out entry, inside the account menu. The header has no separate "Log out" button.
+
+## Search
+
+One search control in every app whose header searches (videos web, videos admin, www, CMS), in
+`.aun-header-primary`. Classes in `aun-nav.css` ("header search"); markup from
+`nav/header.js` `searchHtml({ lang, action, name, value, placeholder, id })`, which needs no script.
+React renders the same elements (videos web: `HeaderSearch`, checked against the builder by
+`HeaderSearch.test.tsx`). Auth (profile, admin) and the scholar sites have no header search.
+
+```
+button.aun-icon-btn.aun-search-open[popovertarget=<id>]          the icon, below 1024px
+div.aun-search-slot#<id>[popover=auto]
+  button.aun-search-back[popovertarget=<id>][popovertargetaction=hide]   only in the sheet
+  form.aun-search[role=search]
+    input.aun-search-input[type=search]       (an app may wrap it in .aun-search-field with an .aun-search-clear)
+    button.aun-search-submit[type=submit]     the search icon
+```
+
+| Part | Spec |
+|---|---|
+| Slot | From 1024px in the bar, centred in the room the other groups leave, `width: 100%`, at most 40rem (640px) |
+| Pill | 2.5rem (40px) tall, fully round, 1px `--fanous-c-nav-search-border`, `--fanous-c-nav-search-bg` |
+| Focus | Inside the pill: border and a 1px inset ring in `--fanous-c-upload-focus` (2px of the focus colour) |
+| Field | Padding 16px start, 8px end; 15px; `--fanous-c-nav-search-text`, placeholder `--fanous-c-nav-search-placeholder`; the browser's clear button hidden (an app adds `.aun-search-clear`, 28px, `--fanous-c-nav-icon`) |
+| Submit | The end segment: 52px, 1px divider (`--fanous-c-nav-search-border`) at its start, 20px search icon in `--fanous-c-nav-icon`, hover `--fanous-c-nav-hover` |
+| Below 1024px | The slot leaves the bar; `.aun-search-open` (the 40px icon button) sits at the end of the primary area. It opens the slot as a sheet over the bar: the bar's height and material (`--aun-header-band`), 8px side padding, 4px gap, a 36px back arrow (mirrored in Arabic), then the pill. Escape or the back arrow closes it (videos: Escape first clears typed text) |
+| Launcher | An app whose search opens a palette (videos admin ⌘K) renders the pill as a button: `button.aun-search.aun-search-launch` > `span.aun-search-input` (the placeholder) + `kbd.aun-search-kbd` + `span.aun-search-submit`; below 1024px the same `.aun-search-open` icon opens the palette |
+
+The placeholder is the app's own (what it searches); the field's name, the icon button and the back
+arrow use the shared labels (`HEADER_LABELS.search`, `.back`). The suggestions list under the field is
+the app's (videos: the themed autocomplete).
 
 ## Account button
 

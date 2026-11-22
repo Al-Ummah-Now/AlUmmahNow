@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search } from 'lucide-react';
 import { SearchBar } from '@/components/search/SearchExperience/SearchBar';
@@ -15,6 +15,8 @@ import {
   type SearchHistoryEntry,
 } from '@/lib/search/history';
 
+const SLOT_ID = 'header-search';
+
 function HeaderSearchInner() {
   const router = useRouter();
   const pathname = usePathname();
@@ -27,7 +29,9 @@ function HeaderSearchInner() {
   const channelId = onSearchPage ? (params?.get('channelId') || undefined) : undefined;
   const [draft, setDraft] = useState(currentQuery);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
-  const [phoneOpen, setPhoneOpen] = useState(false);
+  // Below 1024px the slot is a popover sheet over the bar (docs/design/NAV.md "Search"): the icon opens it
+  const slot = useRef<HTMLDivElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => setDraft(currentQuery), [currentQuery]);
 
@@ -43,8 +47,16 @@ function HeaderSearchInner() {
     };
   }, []);
 
+  useEffect(() => {
+    const el = slot.current;
+    if (!el) return;
+    const onToggle = (event: Event) => setSheetOpen((event as ToggleEvent).newState === 'open');
+    el.addEventListener('toggle', onToggle);
+    return () => el.removeEventListener('toggle', onToggle);
+  }, []);
+
   const open = (next: URLSearchParams) => {
-    setPhoneOpen(false);
+    if (slot.current?.matches(':popover-open')) slot.current.hidePopover();
     router.push(`${page}?${next.toString()}`);
   };
   // On the search page a new query keeps the chosen type and filters
@@ -67,47 +79,42 @@ function HeaderSearchInner() {
     open(next);
   };
 
-  const bar = (autoFocus: boolean) => (
-    <SearchBar
-      variant="header"
-      value={draft}
-      onChange={setDraft}
-      onSubmit={submit}
-      onSelectCategory={selectCategory}
-      history={history}
-      onRemoveHistory={(query) => void removeSearchHistoryEntry(query)}
-      onClearHistory={() => void clearSearchHistory()}
-      autoFocus={autoFocus}
-      channelId={channelId}
-    />
-  );
-
   return (
     <>
-      <div className="ah-search-wrap hidden lg:block w-full max-w-md">{bar(false)}</div>
-      <button type="button" onClick={() => setPhoneOpen(true)} data-testid="header-search-open" aria-label={t.navigation.search} className="aun-icon-btn ah-search-phone lg:hidden">
+      <button type="button" popoverTarget={SLOT_ID} data-testid="header-search-open" aria-label={t.navigation.search} title={t.navigation.search} className="aun-icon-btn aun-search-open">
         <Search aria-hidden="true" />
       </button>
-      {phoneOpen && (
-        <div
-          data-testid="header-search-sheet"
-          className="ah-search-sheet fixed inset-x-0 top-0 z-[70] flex h-14 items-center gap-1 bg-[#093041] px-2 lg:hidden"
-          onKeyDown={(event) => { if (event.key === 'Escape' && !draft) setPhoneOpen(false); }}
-        >
-          <button type="button" onClick={() => setPhoneOpen(false)} data-testid="header-search-back" aria-label={t.common.back} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white hover:bg-white/10">
-            <ArrowLeft className="h-[18px] w-[18px] rtl:rotate-180" aria-hidden="true" />
-          </button>
-          {bar(true)}
-        </div>
-      )}
+      {/* Escape with text clears it (the autocomplete cancels the key), on an empty field it closes the sheet */}
+      <div ref={slot} id={SLOT_ID} popover="auto" data-testid="header-search-sheet" className="aun-search-slot ah-search-wrap">
+        <button type="button" popoverTarget={SLOT_ID} popoverTargetAction="hide" data-testid="header-search-back" aria-label={t.common.back} title={t.common.back} className="aun-search-back">
+          <ArrowLeft aria-hidden="true" />
+        </button>
+        <SearchBar
+          // a new input when the sheet opens, so it takes the focus
+          key={sheetOpen ? 'sheet' : 'bar'}
+          variant="header"
+          value={draft}
+          onChange={setDraft}
+          onSubmit={submit}
+          onSelectCategory={selectCategory}
+          history={history}
+          onRemoveHistory={(query) => void removeSearchHistoryEntry(query)}
+          onClearHistory={() => void clearSearchHistory()}
+          autoFocus={sheetOpen}
+          channelId={channelId}
+        />
+      </div>
     </>
   );
 }
 
-/** Search box with suggestions and history; below 1024px an icon opens it over the header (the tools need the room). */
+/**
+ * The shared header search (packages/fanous-tokens nav/aun-nav.css "header search", the same elements as
+ * header.js searchHtml()) with suggestions and history; below 1024px an icon opens it over the header.
+ */
 export function HeaderSearch() {
   return (
-    <Suspense fallback={<div className="hidden lg:block h-10 w-full max-w-md" />}>
+    <Suspense fallback={<div className="aun-search-slot" aria-hidden="true"><div className="aun-search" /></div>}>
       <HeaderSearchInner />
     </Suspense>
   );

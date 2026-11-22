@@ -17,10 +17,6 @@ h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h
    blur and control font come from the theme's header block there, the same in every app; here only that it stays above the rail */
 .ah.aun-header{z-index:50}
 .ah-primary{justify-content:center}
-.ah-search{display:flex;align-items:stretch;height:40px;border-radius:var(--r-pill);background:var(--fanous-c-nav-search-bg);box-shadow:inset 0 0 0 1px var(--fanous-c-nav-search-border);overflow:hidden;transition:box-shadow 140ms}.ah-search:focus-within{box-shadow:inset 0 0 0 2px var(--fanous-c-upload-focus)}
-.ah-search input{flex:1;min-width:0;padding-inline:var(--fanous-spacing-lg);border:0!important;outline:0!important;background:transparent!important;color:var(--fanous-c-nav-search-text)!important;box-shadow:none!important}.ah-search input::placeholder{color:var(--fanous-c-nav-search-placeholder)!important}
-.ah-search button{width:56px;display:grid;place-items:center;border:0;background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;border-inline-start:1px solid var(--fanous-c-nav-search-border)}@media(hover:hover){.ah-search button:hover{background:var(--fanous-c-nav-hover)}}.ah-search svg{width:20px;height:20px}
-.ah-search-phone{display:none}
 .ah button:not([class*=aun-]){color:var(--fanous-c-nav-icon)}.ah-end button:not([class*=aun-]){min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:not([class*=aun-]):hover{background:var(--fanous-c-nav-hover)}}.ah-end *:not(.aun-menu,.aun-menu *,.aun-avatar,.aun-signin){color:var(--fanous-c-nav-text)}
 /* Popovers opened from the header (notifications, menus, listboxes) sit on the dialog/menu surface, not the night bar:
    the nav colours above must not reach inside them. revert-layer hands colour back to the component's own classes
@@ -48,7 +44,6 @@ html[data-rail=open] .nv-panel{width:264px}html[data-rail=open] .nv{flex-directi
 @media(min-width:1024px){#page-content{padding-inline-start:var(--rail)}html[data-rail-moving] #page-content{transition:padding 220ms cubic-bezier(.2,0,0,1)}html[data-rail=open] #page-content{padding-inline-start:264px}}
 /* The rail, the drawer and the page padding animate only while the menu is toggled (html[data-rail-moving], rail-breakpoint.ts): never when the layout crosses the breakpoint (a rotation, a foldable unfolding), whatever order the browser reports the change in */
 @media(max-width:1023px){.nv-panel{width:300px;max-width:86vw;transform:translateX(-100%);padding-block-start:0;z-index:70}html[data-rail-moving] .nv-panel{transition:transform 240ms cubic-bezier(.2,0,0,1)}[dir=rtl] .nv-panel,html[dir=rtl] .nv-panel{transform:translateX(100%)}.nv-panel[data-open=true]{transform:none}.nv-panel .nv{flex-direction:row;gap:var(--fanous-spacing-md);padding:0 var(--fanous-spacing-md);height:48px;font-size:15px;text-align:start}.nv-panel .nv-heading{display:block}.nv-foot{flex-direction:row}.nv-panel .nv-lang{width:auto;padding-inline:var(--fanous-spacing-sm);gap:6px;font-size:13px}.nv-panel .nv-lang span{display:inline}.nv-close{display:inline-flex;margin-inline-start:auto}.nv-scrim{display:block;position:fixed;inset:0;z-index:65;border:0;background:rgb(9 21 30/.55)}.nv-scroll{padding-block-start:var(--fanous-spacing-lg)}.tabbar{position:fixed;z-index:44;inset-block-end:0;inset-inline:0;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--m-header);box-shadow:0 -1px 0 color-mix(in srgb,var(--fanous-color-primary) 30%,transparent);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);padding-block-end:env(safe-area-inset-bottom)}.tb{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;color:var(--fanous-c-nav-text)!important}.tb svg{width:22px;height:22px;stroke-width:1.75;color:var(--fanous-c-nav-icon)}.tb[aria-current=page]{color:var(--fanous-c-nav-active-text)!important;font-weight:600}.tb[aria-current=page] svg{color:var(--fanous-c-nav-active-text)}.tb[aria-current=page]::before{content:"";position:absolute;inset-block-start:0;inset-inline:28%;height:2px;background:var(--fanous-c-nav-indicator);box-shadow:0 0 10px var(--m-glow)}#page-content{padding-block-end:72px}}
-@media(max-width:1023px){.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-primary{justify-content:flex-end}}
 /* Buttons */
 .b{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:var(--fanous-spacing-sm);min-height:44px;padding-inline:var(--fanous-spacing-xl);border:1px solid transparent;border-radius:var(--r-pill);font:inherit;font-weight:600;cursor:pointer;transition:background 140ms,transform 120ms,box-shadow 140ms}.b svg{width:18px;height:18px}.b-sm{min-height:36px;padding-inline:var(--fanous-spacing-lg);font-size:14px}.b-lg{min-height:52px;padding-inline:var(--fanous-spacing-xxl);font-size:17px}.b-icon{width:44px;padding:0}
 .b-primary,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]),button:is([class^="bg-blue-"],[class*=" bg-blue-"]),a:is([class^="bg-blue-"],[class*=" bg-blue-"]),button:is([class^="bg-gray-7"],[class*=" bg-gray-7"]),button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]),button:is([class^="bg-gray-9"],[class*=" bg-gray-9"]),button:is([class^="bg-slate-"],[class*=" bg-slate-"]),button:is([class^="bg-black"],[class*=" bg-black"]),button:is([class^="bg-purple-"],[class*=" bg-purple-"]),button:is([class^="bg-indigo-"],[class*=" bg-indigo-"]){background:var(--aun-btn-filled-bg)!important;color:var(--aun-btn-filled-fg)!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:var(--aun-radius-button)}.b-primary.is-hover{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg))!important}@media(hover:hover){.b-primary:hover,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):hover,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,a:is([class^="bg-blue-"],[class*=" bg-blue-"]):hover,button:is([class^="bg-gray-8"],[class*=" bg-gray-8"]):hover{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-hover),var(--aun-btn-filled-bg))!important}}.b-primary:active,.b-primary.is-press,[data-slot=button]:is([class^="bg-primary"],[class*=" bg-primary"]):active,button:is([class^="bg-blue-"],[class*=" bg-blue-"]):active{background:color-mix(in srgb,var(--aun-btn-filled-fg) var(--aun-state-press),var(--aun-btn-filled-bg))!important}
@@ -181,10 +176,6 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 
 
 
-/* Header search: it takes the space the tools leave, at most 640px, centred in it */
-.ah-search{width:100%;max-width:640px;min-width:0}
-.ah-search input{padding-inline:16px 8px;font-size:15px}.ah-search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-inline-start:6px;cursor:pointer;background:var(--fanous-c-nav-icon);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}
-.ah-search button{flex:none;width:52px}
 
 
 /* Nothing square behind a rounded corner: wrappers around the player and thumbnails stay unpainted. */
@@ -417,8 +408,6 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
    theme), never the night header's nav colours: those are light text for a dark bar and vanished in light themes */
 .tabbar{background:var(--fanous-c-drawer-bg)!important}.tabbar .tb{color:var(--fanous-c-drawer-text)!important}.tabbar .tb svg{color:var(--fanous-c-drawer-icon)}
 .tabbar .tb[aria-current=page],.tabbar .tb[aria-current=page] svg{color:var(--fanous-c-drawer-active-text)!important}
-/* The header search has its own clear button (header-search-clear): the browser's one doubled it, and in RTL sat over the typed text */
-.ah-search input::-webkit-search-cancel-button,.ah-search-sheet input::-webkit-search-cancel-button{display:none;-webkit-appearance:none;appearance:none}
 
 html:not(.dark) main:has(.demo-gfx) input:not([type=checkbox]):not([type=radio]):not([type=range]){background:#fff!important}
 /* Playlist rows: quiet list, not stacked cards */
@@ -473,21 +462,13 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 @media(hover:hover){.pc .pc-end-b.b-secondary:hover{background:rgb(255 255 255/.22)!important}.pc .pc-end-b.b-ghost:hover{background:rgb(255 255 255/.12)!important}.pc .pc-startover:hover{filter:brightness(1.14)}}
 
 
-/* Header search: shared box, themed dropdown */
-.ah-search-wrap{margin-inline:auto;width:100%;max-width:640px;min-width:0}
-.ah-search-wrap>div{width:100%}
-.ah .ah-search{height:40px}.ah .ah-search>div{min-width:0}.ah .ah-search input{height:100%}
-.ah .ah-search [data-testid=header-search-clear]{width:28px;height:28px;border:0;inset-inline-end:6px}
+/* Header search: the box is the shared contract (aun-nav.css "header search"); the dropdown is themed here */
 .search-dd{background:var(--aun-glass-panel-surface)!important;border:1px solid var(--aun-glass-edge)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border-radius:var(--aun-radius-menu)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur);color:var(--fanous-color-text-primary)}
 .search-dd [role=option]{min-height:40px}.search-dd [role=option][aria-selected=true],.search-dd [role=option]:hover{background:var(--m-hover)!important}
 .search-dd :is(span,p,button){color:var(--fanous-color-text-primary)}.search-dd p,.search-dd .text-xs{color:var(--fanous-color-text-secondary)}
 /* Autocomplete (components/ui/Autocomplete): matched text is bold, not a yellow highlighter, in every theme */
 .ac-mark{background:transparent;color:inherit;font-weight:700}
 .ac-option[data-active]{background:var(--m-hover)}
-.ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:var(--aun-header-height,56px)!important}.ah-search-sheet>div{flex:1 1 auto}
-@media(max-width:1023px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-flex}
-/* The phone header hides the inline search form; the sheet the search icon opens shows its own copy */
-.ah-search-sheet .ah-search{display:flex}}
 
 /* Watch page skeleton: same boxes as the final layout */
 .wsk-b{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent)!important}

@@ -10,6 +10,7 @@ import {
   menuButtonHtml,
   modeButtonHtml,
   samePath,
+  searchHtml,
   signInHtml,
 } from '../nav/header.js';
 import * as header from '../nav/header.js';
@@ -175,4 +176,70 @@ test('the account name has one width, so switching who you act as never moves th
   // a longer name ends in an ellipsis on one line
   assert.match(name, /text-overflow: ellipsis;/);
   assert.match(name, /white-space: nowrap;/);
+});
+
+test('search: one control in every app, an icon below 1024px that opens it as a sheet (AUDIT-2 2026-11-22)', () => {
+  const html = searchHtml({ lang: 'en', action: '/en/search', placeholder: 'Search videos & more' });
+  const svg = (name: string, body: string) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-${name}" aria-hidden="true" focusable="false">${body}</svg>`;
+  const glass = svg('search', '<circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path>');
+  assert.equal(
+    html,
+    `<button type="button" class="aun-icon-btn aun-search-open" popovertarget="aun-search" data-testid="header-search-open" aria-label="Search" title="Search">${glass}</button>` +
+      '<div class="aun-search-slot" id="aun-search" popover="auto" data-testid="header-search-sheet">' +
+      '<button type="button" class="aun-search-back" popovertarget="aun-search" popovertargetaction="hide" data-testid="header-search-back" aria-label="Back" title="Back">' +
+      svg('arrow-left', '<path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path>') + '</button>' +
+      '<form class="aun-search" role="search" aria-label="Search" action="/en/search" method="get">' +
+      '<input class="aun-search-input" type="search" name="q" value="" placeholder="Search videos &amp; more" aria-label="Search" autocomplete="off" enterkeyhint="search" maxlength="200" data-testid="header-search-input">' +
+      `<button type="submit" class="aun-search-submit" aria-label="Search" data-testid="header-search-submit">${glass}</button>` +
+      '</form></div>'
+  );
+  const ar = searchHtml({ lang: 'ar', action: '/ar/pages', name: 's', value: '"x"', id: 'cms-search' });
+  assert.match(ar, /popovertarget="cms-search" data-testid="header-search-open" aria-label="بحث"/);
+  assert.match(ar, /aria-label="رجوع"/);
+  assert.match(ar, /name="s" value="&quot;x&quot;"/);
+});
+
+test('search: the videos header\'s pill, sizes and tokens, in the bar from 1024px and a sheet below', () => {
+  const rule = (sel: string) => {
+    const i = css.indexOf(`\n${sel} {`);
+    assert.ok(i >= 0, sel);
+    return css.slice(i, css.indexOf('}', i));
+  };
+  for (const cls of ['aun-search-slot', 'aun-search', 'aun-search-field', 'aun-search-input', 'aun-search-clear', 'aun-search-submit',
+    'aun-search-launch', 'aun-search-kbd', 'aun-search-back', 'aun-search-open']) {
+    assert.match(css, new RegExp(`\\.${cls}[\\s,{:]`), `.${cls} is styled`);
+  }
+  // centred in the room the other groups leave, at most 640px
+  const slot = rule('.aun-search-slot');
+  assert.match(slot, /max-width: 40rem;/);
+  assert.match(slot, /margin-inline: auto;/);
+  // a 40px pill: one 1px border, the search tokens; the focus ring is 2px of the focus colour
+  const pill = rule('.aun-search');
+  for (const re of [/height: 2\.5rem;/, /border: 1px solid var\(--fanous-c-nav-search-border\);/, /border-radius: var\(--fanous-radius-full, 999px\);/,
+    /background: var\(--fanous-c-nav-search-bg\);/]) assert.match(pill, re);
+  assert.match(css, /\.aun-search:focus-within,\n\.aun-search-launch:focus-visible \{\n  border-color: var\(--fanous-c-upload-focus\);\n  box-shadow: inset 0 0 0 1px var\(--fanous-c-upload-focus\);/);
+  const input = rule('.aun-search-input');
+  assert.match(input, /padding-inline: var\(--fanous-spacing-lg, 16px\) var\(--fanous-spacing-sm, 8px\);/);
+  assert.match(input, /font-size: 0\.9375rem;/);
+  assert.match(input, /color: var\(--fanous-c-nav-search-text\);/);
+  assert.match(css, /\.aun-search-input::placeholder,\n\.aun-search-launch \.aun-search-input \{\n  color: var\(--fanous-c-nav-search-placeholder\);/);
+  // typed text stops before the clear button (AUDIT frames 2026-11-22: long Arabic query under the ✕)
+  assert.match(css, /\.aun-search-field:has\(\.aun-search-clear\) \.aun-search-input \{\n  padding-inline-end: 2\.5rem;/);
+  // the launcher's ⌘K hint keeps its gap in Arabic too: on the segment, never on the dir=ltr hint
+  assert.match(css, /\.aun-search-kbd \+ \.aun-search-submit \{\n  margin-inline-start: var\(--fanous-spacing-sm, 8px\);/);
+  assert.doesNotMatch(rule('.aun-search-kbd'), /margin-inline/);
+  // the end segment: 52px behind a divider, a 20px icon
+  const submit = rule('.aun-search-submit');
+  assert.match(submit, /width: 3\.25rem;/);
+  assert.match(submit, /border-inline-start: 1px solid var\(--fanous-c-nav-search-border\);/);
+  assert.match(submit, /color: var\(--fanous-c-nav-icon\);/);
+  assert.match(rule('.aun-search-submit svg'), /width: 1\.25rem;/);
+  // below 1024px: the icon shows, the slot hides until it opens as the bar-high sheet in the bar's material
+  const narrow = css.slice(css.indexOf('@media (max-width: 63.99rem) {\n  .aun-search-open {'));
+  const sheet = narrow.slice(narrow.indexOf('.aun-search-slot:popover-open {'), narrow.indexOf('}', narrow.indexOf('.aun-search-slot:popover-open {')));
+  for (const re of [/position: fixed;/, /height: var\(--aun-header-height, 4rem\);/, /background: var\(--aun-header-bg, var\(--aun-header-band, var\(--fanous-c-nav-bg\)\)\);/])
+    assert.match(sheet, re);
+  assert.match(narrow, /^@media \(max-width: 63\.99rem\) \{\n  \.aun-search-open \{\n    display: inline-flex;/);
+  assert.match(narrow, /\n  \.aun-search-slot \{\n    display: none;/);
 });

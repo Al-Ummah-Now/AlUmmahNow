@@ -2,8 +2,8 @@
 // video cards, watch page, forms, menus, dialogs) styled by the site's real stylesheets
 // (/theme-kit/site.css, copied from apps/web at build) and the package's compiled CSS.
 // The header is the shared one (docs/design/NAV.md "Header"): packages/fanous-tokens/nav/header.js
-// builds the brand, language and light/dark pieces, styled by aun-nav.css (also in site.css).
-import { brandHtml, langButtonHtml, modeButtonHtml } from '../../../../../../../packages/fanous-tokens/nav/header.js';
+// builds the brand, search, language and light/dark pieces, styled by aun-nav.css (also in site.css).
+import { brandHtml, langButtonHtml, modeButtonHtml, searchHtml } from '../../../../../../../packages/fanous-tokens/nav/header.js';
 
 import { SIGN_IN_BANNER_AR, SIGN_IN_BANNER_EN } from '@al-ummah/shared-types';
 
@@ -14,7 +14,6 @@ const I = (d: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const ICON = {
   menu: I('<path d="M4 6h16M4 12h16M4 18h16"/>'),
   upload: I('<path d="M12 3v12M7 8l5-5 5 5M5 21h14"/>'),
-  search: I('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   bell: I('<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>'),
   home: I('<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>'),
   compass: I('<circle cx="12" cy="12" r="9"/><path d="m16 8-2 6-6 2 2-6z"/>'),
@@ -49,7 +48,7 @@ const HEADER_SLOT = '<!--pv-header-->';
 /** The videos header as the site renders it: drawer toggle, brand, search, Upload, bell, language, light/dark, account */
 function header(t: (typeof T)['en'], lang: 'en' | 'ar', mode: 'light' | 'dark'): string {
   return `<header class="ah aun-header"><button class="aun-icon-btn ah-menu" type="button">${ICON.menu}</button>${brandHtml({ lang, href: '#', app: t.appName })}
-<div class="aun-header-primary ah-primary"><div class="ah-search"><input placeholder="${esc(t.search)}"><button type="button">${ICON.search}</button></div></div>
+<div class="aun-header-primary ah-primary">${searchHtml({ lang, action: '#', placeholder: t.search })}</div>
 <div class="aun-header-tools ah-end"><button class="b b-secondary b-sm" type="button">${ICON.upload}${esc(t.upload)}</button><button class="aun-icon-btn" type="button">${ICON.bell}</button>${langButtonHtml({ lang, href: '#' })}${modeButtonHtml({ lang, dark: mode === 'dark' })}<span class="pv-avatar"></span></div></header>`;
 }
 
