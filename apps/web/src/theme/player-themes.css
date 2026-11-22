@@ -24,7 +24,7 @@ html[data-theme='lantern'] {
   --fanous-player-tip-edge: 0 4px 12px rgb(26 15 5/.45);
   --fanous-player-menu: linear-gradient(180deg,rgb(46 29 11/.97),rgb(26 15 5/.97));
   --fanous-player-menu-edge: 0 18px 40px rgb(0 0 0/.5),0 0 40px -14px rgb(232 180 119/.5);
-  --fanous-player-menu-hover: rgb(245 207 146/.18);
+  --fanous-player-menu-hover: rgb(245 207 146/.08);
   --fanous-player-menu-selected: rgb(245 207 146/.22);
   --fanous-player-accent: #f5cf92;
   --fanous-player-big: radial-gradient(circle at 50% 32%,#f8e8be,#e8b477 58%,#cf985d);
@@ -65,7 +65,7 @@ html[data-theme='zujaj'] {
   --fanous-player-tip-edge: 0 4px 12px rgb(3 30 36/.45);
   --fanous-player-menu: linear-gradient(135deg,rgb(255 255 255/.12),transparent 46%),rgb(8 58 69/.92);
   --fanous-player-menu-edge: inset 0 1px 0 rgb(255 255 255/.3),inset 0 0 0 1px rgb(255 255 255/.14),0 18px 36px rgb(3 30 36/.5);
-  --fanous-player-menu-hover: rgb(226 248 251/.18);
+  --fanous-player-menu-hover: rgb(226 248 251/.06);
   --fanous-player-menu-selected: rgb(226 248 251/.12);
   --fanous-player-accent: #8fd8e0;
   --fanous-player-big: linear-gradient(145deg,rgb(255 255 255/.3),transparent 52%),rgb(8 58 69/.82);
@@ -106,7 +106,7 @@ html[data-theme='nahas'] {
   --fanous-player-tip-edge: 0 4px 12px rgb(26 10 2/.5);
   --fanous-player-menu: linear-gradient(170deg,#553014,#2a1508);
   --fanous-player-menu-edge: inset 0 1px 0 rgb(255 211 154/.42),0 18px 36px rgb(26 10 2/.6);
-  --fanous-player-menu-hover: rgb(255 176 88/.2);
+  --fanous-player-menu-hover: rgb(255 176 88/.08);
   --fanous-player-menu-selected: rgb(255 176 88/.24);
   --fanous-player-accent: #ffb765;
   --fanous-player-big: linear-gradient(180deg,#ffe0b8 0%,#ffb765 20%,#ffa037 50%,#e08a24 53%,#ffa037 100%);
@@ -147,7 +147,7 @@ html[data-theme='fawanees'] {
   --fanous-player-tip-edge: 0 4px 14px rgb(5 12 20/.55);
   --fanous-player-menu: linear-gradient(180deg,#112a3b,#071119);
   --fanous-player-menu-edge: 0 18px 40px rgb(0 0 0/.55),0 0 46px -12px rgb(244 174 58/.6);
-  --fanous-player-menu-hover: rgb(251 198 97/.16);
+  --fanous-player-menu-hover: rgb(251 198 97/.07);
   --fanous-player-menu-selected: rgb(251 198 97/.2);
   --fanous-player-accent: #fbc661;
   --fanous-player-big: radial-gradient(circle at 50% 30%,#ffe6a8,#f4ae3a 60%,#e0962a);

@@ -24,7 +24,7 @@
   --fanous-player-tip-edge: 0 4px 14px rgb(5 12 20/.55);
   --fanous-player-menu: linear-gradient(180deg,#112a3b,#071119);
   --fanous-player-menu-edge: 0 18px 40px rgb(0 0 0/.55),0 0 46px -12px rgb(244 174 58/.6);
-  --fanous-player-menu-hover: rgb(251 198 97/.16);
+  --fanous-player-menu-hover: rgb(251 198 97/.07);
   --fanous-player-menu-selected: rgb(251 198 97/.2);
   --fanous-player-accent: #fbc661;
   --fanous-player-big: radial-gradient(circle at 50% 30%,#ffe6a8,#f4ae3a 60%,#e0962a);

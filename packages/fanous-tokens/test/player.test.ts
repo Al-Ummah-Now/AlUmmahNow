@@ -41,3 +41,15 @@ test('every theme carries the shared layer level, above the header, consent bann
   assert.ok(Number(PLAYER_SHARED_TOKENS.layer) > 1000);
   assert.deepEqual(validatePlayerTheme('x', { ...full, layer: '5' }), ['x: player.layer is not a player token']);
 });
+
+// A hovered menu row must not look selected (AUDIT-2 on #1735): the hover tint stays at most half
+// as strong as the selected tint, which also carries the check mark and bold text.
+test('menu hover is visibly lighter than the selected row in every theme', () => {
+  const alpha = (v: string) => Number(/\/\s*(\.?\d+(?:\.\d+)?)\s*\)$/.exec(v)?.[1] ?? NaN);
+  for (const [id, t] of Object.entries(loadPlayerThemes())) {
+    const hover = alpha(t['menu-hover']!);
+    const selected = alpha(t['menu-selected']!);
+    assert.ok(Number.isFinite(hover) && Number.isFinite(selected), `${id}: menu-hover and menu-selected are rgb(…/alpha)`);
+    assert.ok(hover * 2 <= selected, `${id}: menu-hover ${hover} must be at most half of menu-selected ${selected}`);
+  }
+});

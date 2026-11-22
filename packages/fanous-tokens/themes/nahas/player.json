@@ -25,7 +25,7 @@
     "tip-edge": "0 4px 12px rgb(26 10 2/.5)",
     "menu": "linear-gradient(170deg,#553014,#2a1508)",
     "menu-edge": "inset 0 1px 0 rgb(255 211 154/.42),0 18px 36px rgb(26 10 2/.6)",
-    "menu-hover": "rgb(255 176 88/.2)",
+    "menu-hover": "rgb(255 176 88/.08)",
     "accent": "#ffb765",
     "big": "linear-gradient(180deg,#ffe0b8 0%,#ffb765 20%,#ffa037 50%,#e08a24 53%,#ffa037 100%)",
     "big-icon": "#2a1508",
