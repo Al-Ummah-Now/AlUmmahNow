@@ -439,7 +439,7 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
               <OnTitle template={text.on} title={comment.targetTitle} />
             </Link>
           </p>
-          <p dir="auto" className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground [text-align:match-parent]" data-testid="studio-comment-text">{comment.text}</p>
+          <p dir="auto" className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground text-left [html[dir=rtl]_&]:text-right" data-testid="studio-comment-text">{comment.text}</p>
           {isTopLevel && comment.repliesCount > 0 && <p className="mt-1 text-xs text-muted-foreground">{replies}</p>}
           {heldByModeration && (
             <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground" data-testid="studio-comment-held-moderation">
