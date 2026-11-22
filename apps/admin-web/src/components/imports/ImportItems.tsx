@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import Link from '@/components/AppLink';
-import { formatBytes, intlLocale, isArabicLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
+import { formatBytes, intlLocale, type AdminContentPermission, type AdminImportItem, type AdminImportItemStatus, type ImportCaptionStatus, type ImportSidecarPart } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { pageStart } from '@/i18n/config';
 import { translateDynamic, type MessageKey } from '@/i18n/translate';
@@ -163,7 +163,7 @@ export function ImportItems({ items, statuses, permissions }: { items: AdminImpo
                     </span>
                     <span className="block text-xs text-fg-muted mt-0.5">
                       {/* File sizes stay exact; Arabic is never grouped and joins with «،» (number rule O38) */}
-                      {fillNodes(t('imports.fileMeta'), { size: formatBytes(locale, item.fileSize, isArabicLocale(locale) ? { useGrouping: false } : undefined), date: <LocalTime value={item.createdAt} /> })}
+                      {fillNodes(t('imports.fileMeta'), { size: formatBytes(locale, item.fileSize), date: <LocalTime value={item.createdAt} /> })}
                     </span>
                     <span className="block mt-1.5">
                       <Chip tone={STATE_TONE[item.state]} testId="import-item-state">
