@@ -91,7 +91,7 @@ function ConnectionCard({ view, releaseInUse = false }: { view: CostCredentialVi
             <h3 id={`${ids}-title`} className="text-base font-semibold text-fg">{name}</h3>
             <span className="rounded-full border border-border px-2 py-0.5 text-xs text-fg-muted">{p === 'cloudflare' ? t('costs.connections.required') : t('costs.connections.optional')}</span>
           </div>
-          <p className="cost-pill cost-pill-wrap mt-2" data-tone={p === 'cloudflare' || state !== 'unset' ? STATE_TONE[state] : undefined} data-testid={`costs-connection-${p}-status`}>
+          <p className="cost-pill cost-pill-wrap mt-2 text-balance" data-tone={p === 'cloudflare' || state !== 'unset' ? STATE_TONE[state] : undefined} data-testid={`costs-connection-${p}-status`}>
             <span aria-hidden="true" className={`cost-dot ${STATE_DOT[state]}`} />
             <span dir="auto">{statusText}</span>
           </p>
