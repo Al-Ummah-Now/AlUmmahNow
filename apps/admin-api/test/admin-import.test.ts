@@ -52,7 +52,7 @@ const post = (json: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
 describe('/api/admin/import', () => {
   it('refuses moderators on every route before calling api-videos', async () => {
     const { req, calls } = setup(['Moderator']);
-    for (const [path, init] of [['/api/admin/import/me'], ['/api/admin/import/encoding'], ['/api/admin/import/channels', post({ name: 'X' })]] as const) {
+    for (const [path, init] of [['/api/admin/import/me'], ['/api/admin/import/encoding'], ['/api/admin/import/quran-index'], ['/api/admin/import/channels', post({ name: 'X' })]] as const) {
       const res = await req(path, init);
       assert.equal(res.status, 403, path);
       assert.equal((await res.json()).code, 'forbidden');
@@ -76,6 +76,30 @@ describe('/api/admin/import', () => {
     const { result } = await (await setup(['Admin']).req('/api/admin/import/encoding')).json();
     assert.deepEqual(result.ladder, JSON.parse(JSON.stringify(ENCODE_LADDER)));
     assert.deepEqual(result.prebuiltLimits, JSON.parse(JSON.stringify(PREBUILT_LIMITS)));
+  });
+
+  it('GET /quran-index passes the index through as api-videos sends it, never cached', async () => {
+    const payload = { success: true, result: { index: { v: 1, version: 'v1', syncedAt: '2026-11-20T00:00:00.000Z', words: 'ابج دهو', locs: [1001001, 1001002] }, expiresAt: '2026-11-27T00:00:00.000Z' } };
+    const seen: string[] = [];
+    const app = new Hono();
+    app.use('*', async (c, next) => { c.set('auth' as never, { userId: ADMIN, roles: ['Admin'] } as never); await next(); });
+    app.route('/api/admin/import', adminImportRouter);
+    const env = { INTERNAL_API_KEY: 'k', VIDEOS: { async fetch(input: string, init?: RequestInit) { seen.push(`${new URL(input).pathname} ${new Headers(init?.headers).get('X-Admin-Actor')}`); return new Response(JSON.stringify(payload)); } } };
+    const res = await app.request('/api/admin/import/quran-index', {}, env as never);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('Cache-Control'), 'private, no-store');
+    assert.deepEqual(await res.json(), payload);
+    assert.deepEqual(seen, [`/internal/admin/import/quran-index ${ADMIN}`]);
+  });
+
+  it('GET /quran-index answers 503 quran_index_unavailable while there is no fresh copy', async () => {
+    const app = new Hono();
+    app.use('*', async (c, next) => { c.set('auth' as never, { userId: ADMIN, roles: ['Admin'] } as never); await next(); });
+    app.route('/api/admin/import', adminImportRouter);
+    const env = { INTERNAL_API_KEY: 'k', VIDEOS: { fetch: async () => new Response(JSON.stringify({ success: false, code: 'quran_index_unavailable', error: 'x' }), { status: 503 }) } };
+    const res = await app.request('/api/admin/import/quran-index', {}, env as never);
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).code, 'quran_index_unavailable');
   });
 
   it('POST /channels makes a channel for a chosen owner, audited under the channel id', async () => {
