@@ -163,7 +163,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
 
   const me: TeamMember | null = user ? { userId: user.id, role, isYou: true } : null;
   const roleBadge = (r: ChannelRole) => (
-    <span data-testid="team-member-role" className="c rounded-full px-2.5 py-0.5 text-xs font-medium text-[var(--fanous-color-text-secondary)]">
+    <span data-testid="team-member-role" className="inline-flex min-h-10 items-center rounded-full border border-[var(--fanous-color-outline)] px-4 text-sm font-medium text-[var(--fanous-color-text-secondary)]">
       {tr.roles[r]}
     </span>
   );
@@ -254,11 +254,11 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                               <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                             ) : (
                               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                                {avatarInitial(nameOf(m))}
+                                {avatarInitial(m.displayName, nameOf(m))}
                               </span>
                             )}
                             <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
-                              {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                              {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> (<bdi>{m.displayName}</bdi>)</span> : null}
                             </span>
                             {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
                             <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
@@ -348,11 +348,11 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                           <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                         ) : (
                           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                            {avatarInitial(nameOf(m))}
+                            {avatarInitial(m.displayName, nameOf(m))}
                           </span>
                         )}
                         <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
-                          {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                          {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> (<bdi>{m.displayName}</bdi>)</span> : null}
                         </span>
                         {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
                         <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
