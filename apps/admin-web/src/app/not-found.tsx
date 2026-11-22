@@ -19,9 +19,11 @@ export default async function NotFound() {
   const { locale } = await getI18n();
 
   return (
+    // The family card places itself as on every app: centred in the page on desktop, top-aligned 16px
+    // from each edge on a phone (aun-error-page.css). Not `inline`: that keeps it at the top at every width
     <PublicShell top>
       <div data-testid="not-found" className="w-full">
-        <FriendlyError locale={locale} kind="notFound" inline />
+        <FriendlyError locale={locale} kind="notFound" />
       </div>
     </PublicShell>
   );
