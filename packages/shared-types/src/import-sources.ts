@@ -145,3 +145,91 @@ export function isImportSourceSchedule(value: unknown): value is ImportSourceSch
 export function nextImportSyncAt(schedule: ImportSourceSchedule, from: number): number | null {
   return schedule === 'manual' ? null : from + IMPORT_SOURCE_INTERVAL_SECONDS[schedule] * 1000;
 }
+
+// --- YouTube Takeout files (wiki TOOLS-ADMIN TA-9/TA-13) -------------------------------------------
+//
+// A YouTube source's records wait for their file (`awaiting_file`, note `takeout_file`): YouTube's terms
+// forbid downloading, so the file comes from the owner's Google Takeout export. The app lists the export's
+// videos (with what its metadata says about each), the server's queued job 'import.takeout-match' matches
+// them to the records, the admin settles the ambiguous ones, the app uploads each matched file through the
+// normal upload, and the same job posts the record's video on the channel.
+
+/**
+ * new: listed, not matched yet. matched: one record (by `matchedBy`). unmatched: no record (see `note`).
+ * ambiguous: several records could be it (`candidates`); an admin picks one. uploading: the app has the
+ * upload open. uploaded: the app sent the whole file; the job posts it. attached: the record's video post
+ * exists. failed: the post could not be made (see `note`; Retry on the job).
+ */
+export const TAKEOUT_FILE_STATES = ['new', 'matched', 'unmatched', 'ambiguous', 'uploading', 'uploaded', 'attached', 'failed'] as const;
+export type TakeoutFileState = (typeof TAKEOUT_FILE_STATES)[number];
+
+/** How a file was matched: the Takeout video id, a video id in the file name, the title (and duration), or an admin's choice. */
+export type TakeoutMatchedBy = 'video_id' | 'file_name' | 'title' | 'admin';
+
+/**
+ * Why a file is unmatched, ambiguous or failed. no_record: no record of this source has that video.
+ * has_file: its record already has its video. several_records: more than one record fits.
+ * file_taken: another file of this export already matched that record. upload_incomplete: the video's
+ * upload has not finished. post_refused: the post or video was refused.
+ */
+export const TAKEOUT_FILE_NOTES = ['no_record', 'has_file', 'several_records', 'file_taken', 'upload_incomplete', 'post_refused'] as const;
+export type TakeoutFileNote = (typeof TAKEOUT_FILE_NOTES)[number];
+
+/** Files listed per request (a bigger export is listed in several requests). */
+export const TAKEOUT_MAX_FILES_PER_REQUEST = 500;
+/** Files matched per job step. */
+export const TAKEOUT_MATCH_PER_STEP = 100;
+/** Two durations within this many milliseconds are the same video (Takeout's duration is approximate). */
+export const TAKEOUT_DURATION_TOLERANCE_MS = 2000;
+
+/** One video file of the export, as the app read it (the file name and size, and its metadata row when found). */
+export interface TakeoutFileInput {
+  /** The file's name in the export (no folders), e.g. `My talk.mp4` */
+  name: string;
+  size: number;
+  /** The export metadata's "Video ID", when the app found the file's row */
+  videoId?: string | null;
+  /** The metadata's original title, else the file name without its extension */
+  title?: string | null;
+  /** The metadata's "Approx Duration (ms)", or the file's own duration */
+  durationMs?: number | null;
+  mimeType?: string | null;
+}
+
+/** A record a file could be: the source item, with what the admin needs to choose. */
+export interface TakeoutCandidate {
+  itemId: string;
+  title: string | null;
+  originalUrl: string | null;
+  originalAt: string | null;
+}
+
+export interface TakeoutFileView {
+  id: string;
+  sourceId: string;
+  name: string;
+  size: number;
+  videoId: string | null;
+  title: string | null;
+  durationMs: number | null;
+  state: TakeoutFileState;
+  matchedBy: TakeoutMatchedBy | null;
+  note: TakeoutFileNote | null;
+  /** The record it matched (matched and after) */
+  itemId: string | null;
+  /** The record's title and link, for the list */
+  item: TakeoutCandidate | null;
+  /** ambiguous: the records it could be */
+  candidates: TakeoutCandidate[];
+  /** The video made from the file (uploading and after) */
+  uploadVideoId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** GET …/takeout: the source's listed files, how many are in each state, and the latest match job. */
+export interface TakeoutReport {
+  files: TakeoutFileView[];
+  counts: Partial<Record<TakeoutFileState, number>>;
+  jobId: string | null;
+}

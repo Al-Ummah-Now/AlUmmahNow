@@ -1,5 +1,6 @@
 import { onImportAttachFailed } from './lib/admin/importAttach';
 import { onSourceSyncFailed, queueDueSources, SOURCE_SYNC_JOB_KIND } from './lib/importSources/job';
+import { onTakeoutFailed, TAKEOUT_JOB_KIND } from './lib/importSources/takeout';
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import attestationRouter from './routers/attestation.router';
 import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
@@ -995,7 +996,9 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 							? onImportAttachFailed(jobEnv, job, error)
 							: job.kind === SOURCE_SYNC_JOB_KIND
 								? onSourceSyncFailed(jobEnv, job, error)
-								: Promise.resolve(),
+								: job.kind === TAKEOUT_JOB_KIND
+									? onTakeoutFailed(jobEnv, job, error)
+									: Promise.resolve(),
 			);
 			return;
 		}

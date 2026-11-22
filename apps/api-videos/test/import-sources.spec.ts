@@ -17,6 +17,8 @@ import { recordTelegramPost, telegramItem } from '../src/lib/importSources/teleg
 import { insertSource, listItems, readSource, SourceError } from '../src/lib/importSources/store';
 import { resolveSourceUrl } from '../src/lib/importSources/media';
 import { queueDueSources, runSourceSync, startSourceSync } from '../src/lib/importSources/job';
+import { matchTakeoutFile, normalizeTitle, type MatchRecord } from '../src/lib/importSources/takeout';
+import { getJobWithLog } from '../src/lib/admin/jobs';
 import { planEvent } from '../src/lib/social/deliver';
 import importSourcesRouter from '../src/routers/importSources.router';
 
@@ -507,5 +509,192 @@ describe('internal routes', () => {
 		assert.deepEqual([off.body.result.source.enabled, off.body.result.source.nextSyncAt], [false, null]);
 		const deleted = await call(`/s/${source.id}`, { method: 'DELETE' });
 		assert.equal(deleted.body.result.deleted, true);
+	});
+});
+
+describe('cancelling a sync', () => {
+	beforeEach(() => stubNetwork());
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	function routes(env: unknown) {
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		return async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+	}
+
+	it('stops a queued sync as cancelled, says who did it, is idempotent, is no failure, and keeps the schedule', async () => {
+		const { env, posts } = harness();
+		const call = routes(env);
+		const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'daily', createdBy: ADMIN });
+		// The cron queued it and cleared its next time
+		await env.SEARCH_DB.prepare('UPDATE import_sources SET next_sync_at = NULL WHERE id = ?').bind(source.id).run();
+		const synced = await call(`/s/${source.id}/sync`, { method: 'POST' });
+		const jobId = synced.body.result.jobId;
+
+		const cancelled = await call(`/s/${source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId, byName: 'Amina Staff' }) });
+		assert.equal(cancelled.status, 200);
+		assert.equal(cancelled.body.result.job.status, 'cancelled');
+		const line = cancelled.body.result.job.log.at(-1);
+		assert.deepEqual([line.event, line.by], ['cancelled', { id: ADMIN, name: 'Amina Staff' }]);
+
+		await drainJobs(env as never);
+		assert.equal(posts().length, 0, 'the queued delivery was dropped');
+		const job = await getJobWithLog(env as never, jobId);
+		assert.equal(job!.status, 'cancelled');
+		assert.equal(job!.lastError, null);
+		assert.equal(job!.log!.some((l) => l.event === 'failed' || l.event === 'failed_attempt'), false, 'not a failure');
+		const row = await readSource(env, source.id);
+		assert.equal(row!.last_error, null, 'no error on the source');
+		assert.ok(row!.next_sync_at, 'the daily schedule continues');
+
+		const again = await call(`/s/${source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId }) });
+		assert.deepEqual([again.status, again.body.result.job.status], [200, 'cancelled']);
+		assert.equal(again.body.result.job.log.filter((l: { event: string }) => l.event === 'cancelled').length, 1, 'cancelled once');
+
+		// Sync now starts a new run
+		const next = await call(`/s/${source.id}/sync`, { method: 'POST' });
+		assert.notEqual(next.body.result.jobId, jobId);
+		await drainJobs(env as never);
+		assert.equal(posts().length, 4);
+		// A finished job: answered as it is
+		const done = await call(`/s/${source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId: next.body.result.jobId }) });
+		assert.deepEqual([done.status, done.body.result.job.status], [200, 'succeeded']);
+		// Not this source's job, or no such job
+		const other = await insertSource(env, { channelId: 'ch1', network: 'rss', address: 'https://feeds.example.org/other.xml', label: 'O', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const wrong = await call(`/s/${other.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId }) });
+		assert.deepEqual([wrong.status, wrong.body.code], [404, 'job_not_found']);
+	});
+
+	it('stops a running sync between items, and Retry after a cancel starts a new run', async () => {
+		const { env, posts, job } = harness();
+		const call = routes(env);
+		const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const started = await startSourceSync(env as never, source, ADMIN);
+		await call(`/s/${source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId: started.id }) });
+		// A delivery already running when the cancel landed: it posts nothing more
+		const out = await runSourceSync(env as never, { ...job({ sourceId: source.id, phase: 'fetch' }), id: started.id });
+		assert.deepEqual([out.done, (out as { result: { cancelled?: boolean } }).result.cancelled], [true, true]);
+		assert.equal(posts().length, 0);
+
+		const retried = await call('/s/retry', { method: 'POST', body: JSON.stringify({ jobId: started.id }) });
+		assert.equal(retried.status, 200);
+		assert.notEqual(retried.body.result.jobId, started.id, 'a new run');
+		await drainJobs(env as never);
+		assert.equal(posts().length, 4);
+	});
+});
+
+describe('YouTube Takeout files', () => {
+	const rec = (itemId: string, title: string | null, state: MatchRecord['state'] = 'awaiting_file', durationMs: number | null = null): MatchRecord => ({ itemId, title, state, durationMs });
+	const index = (records: MatchRecord[]) => {
+		const byId = new Map(records.map((r) => [r.itemId, r]));
+		const byTitle = new Map<string, MatchRecord[]>();
+		for (const r of records.filter((x) => x.state === 'awaiting_file')) byTitle.set(normalizeTitle(r.title), [...(byTitle.get(normalizeTitle(r.title)) ?? []), r]);
+		return { byId, byTitle };
+	};
+
+	it('matches by the Takeout video id, then a video id in the file name, then the title and duration', () => {
+		const { byId, byTitle } = index([rec('AAAAAAAAAAA', 'Friday talk'), rec('BBBBBBBBBBB', 'Tafsir: part 2'), rec('CCCCCCCCCCC', 'Q&A', 'awaiting_file', 600_000), rec('DDDDDDDDDDD', 'Q&A', 'awaiting_file', 900_000), rec('EEEEEEEEEEE', 'Old', 'posted')]);
+		const none = new Set<string>();
+		const m = (file: Partial<{ name: string; youtubeId: string | null; title: string | null; durationMs: number | null }>, taken = none) =>
+			matchTakeoutFile({ name: 'x.mp4', youtubeId: null, title: null, durationMs: null, ...file }, byId, byTitle, taken);
+		assert.deepEqual(m({ youtubeId: 'AAAAAAAAAAA' }), { state: 'matched', itemId: 'AAAAAAAAAAA', matchedBy: 'video_id' });
+		assert.deepEqual(m({ youtubeId: 'ZZZZZZZZZZZ', title: 'Friday talk' }), { state: 'unmatched', note: 'no_record' }, 'the export id is the answer');
+		assert.deepEqual(m({ name: 'Anything [BBBBBBBBBBB].mp4' }), { state: 'matched', itemId: 'BBBBBBBBBBB', matchedBy: 'file_name' });
+		assert.deepEqual(m({ name: 'Tafsir  part 2.mp4' }), { state: 'matched', itemId: 'BBBBBBBBBBB', matchedBy: 'title' }, 'punctuation and spacing do not count');
+		assert.deepEqual(m({ name: 'Q&A.mp4' }), { state: 'ambiguous', candidates: ['CCCCCCCCCCC', 'DDDDDDDDDDD'], note: 'several_records' });
+		assert.deepEqual(m({ name: 'Q&A.mp4', durationMs: 899_000 }), { state: 'matched', itemId: 'DDDDDDDDDDD', matchedBy: 'title' }, 'the duration settles it');
+		assert.deepEqual(m({ youtubeId: 'EEEEEEEEEEE' }), { state: 'unmatched', note: 'has_file' });
+		assert.deepEqual(m({ youtubeId: 'AAAAAAAAAAA' }, new Set(['AAAAAAAAAAA'])), { state: 'unmatched', note: 'file_taken' });
+		assert.deepEqual(m({ name: 'Friday talk.mp4' }, new Set(['AAAAAAAAAAA'])), { state: 'unmatched', note: 'file_taken' });
+		assert.deepEqual(m({ name: 'Unknown.mp4' }), { state: 'unmatched', note: 'no_record' });
+		assert.equal(normalizeTitle('  الدرس ١: التفسير '), 'الدرس ١ التفسير', 'Arabic titles keep their letters and digits');
+	});
+
+	it('lists, matches, settles an ambiguous file, uploads and posts the video; a job failure retries', async () => {
+		stubNetwork();
+		const { env, posts } = harness();
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const call = async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const source = await insertSource(env, { channelId: 'ch1', network: 'youtube', address: 'UCaaaaaaaaaaaaaaaaaaaaaa', label: 'YT', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const wait = async (itemId: string, title: string) =>
+			env.SEARCH_DB.prepare(`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at) VALUES (?, ?, NULL, 'awaiting_file', ?, ?, ?, 'takeout_file', 1, 1)`)
+				.bind(source.id, itemId, JSON.stringify({ itemId, url: `https://www.youtube.com/watch?v=${itemId}`, postedAt: Date.parse('2026-11-01T10:00:00Z'), title, text: `${title} description`, images: [], link: null, video: null, awaiting: 'takeout_file' }), `https://www.youtube.com/watch?v=${itemId}`, Date.parse('2026-11-01T10:00:00Z'))
+				.run();
+		await wait('AAAAAAAAAAA', 'Friday talk');
+		await wait('CCCCCCCCCCC', 'Q&A');
+		await wait('DDDDDDDDDDD', 'Q&A');
+
+		// Not a YouTube source
+		const rss = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		assert.deepEqual((await call(`/s/${rss.id}/takeout`)).body.code, 'not_youtube');
+
+		const files = [
+			{ name: 'Friday talk.mp4', size: 3000, videoId: 'AAAAAAAAAAA', title: 'Friday talk', durationMs: 60_000 },
+			{ name: 'Q&A.mp4', size: 4000 },
+			{ name: 'Holiday.mp4', size: 5000 },
+		];
+		const listed = await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files }) });
+		assert.deepEqual([listed.status, listed.body.result.added], [202, 3]);
+		const relisted = await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files }) });
+		assert.equal(relisted.body.result.added, 0, 'listing again finds the same rows');
+		assert.equal(relisted.body.result.jobId, listed.body.result.jobId, 'one match job per source at a time');
+		await drainJobs(env as never);
+
+		const report = (await call(`/s/${source.id}/takeout`)).body.result;
+		assert.deepEqual(report.counts, { matched: 1, ambiguous: 1, unmatched: 1 });
+		const byName = Object.fromEntries(report.files.map((f: any) => [f.name, f]));
+		assert.deepEqual([byName['Friday talk.mp4'].matchedBy, byName['Friday talk.mp4'].item.title], ['video_id', 'Friday talk']);
+		assert.deepEqual(byName['Q&A.mp4'].candidates.map((c: any) => c.itemId), ['CCCCCCCCCCC', 'DDDDDDDDDDD']);
+		assert.equal(byName['Holiday.mp4'].note, 'no_record');
+
+		const ambiguous = byName['Q&A.mp4'].id;
+		const notCandidate = await call(`/s/${source.id}/takeout/files/${ambiguous}/confirm`, { method: 'POST', body: JSON.stringify({ itemId: 'AAAAAAAAAAA' }) });
+		assert.deepEqual([notCandidate.status, notCandidate.body.code], [400, 'not_a_candidate']);
+		const confirmed = await call(`/s/${source.id}/takeout/files/${ambiguous}/confirm`, { method: 'POST', body: JSON.stringify({ itemId: 'DDDDDDDDDDD' }) });
+		assert.deepEqual([confirmed.body.result.file.state, confirmed.body.result.file.matchedBy], ['matched', 'admin']);
+		const unmatchedUpload = await call(`/s/${source.id}/takeout/files/${byName['Holiday.mp4'].id}/upload`, { method: 'POST' });
+		assert.deepEqual([unmatchedUpload.status, unmatchedUpload.body.code], [409, 'not_matched']);
+
+		// The app opens the upload, sends the file, then says so
+		const opened = await call(`/s/${source.id}/takeout/files/${byName['Friday talk.mp4'].id}/upload`, { method: 'POST' });
+		assert.equal(opened.status, 200);
+		const videoId = opened.body.result.upload.videoId;
+		assert.ok(videoId && opened.body.result.upload.tusSessionId, 'a resumable upload');
+		const reopened = await call(`/s/${source.id}/takeout/files/${byName['Friday talk.mp4'].id}/upload`, { method: 'POST' });
+		assert.equal(reopened.body.result.upload.videoId, videoId, 'opening it again resumes the same video');
+		const video = env.videos.read(videoId);
+		assert.deepEqual([video.userId, video.uploadedBy, video.importedFrom.platform, video.importedFrom.videoId], [OWNER, ADMIN, 'youtube', 'AAAAAAAAAAA']);
+
+		// Said uploaded before the file landed: the job retries, then fails (DLQ, Errors page with Retry)
+		const said = await call(`/s/${source.id}/takeout/files/${byName['Friday talk.mp4'].id}/uploaded`, { method: 'POST' });
+		assert.equal(said.status, 202);
+		await drainJobs(env as never);
+		const failed = await getJobWithLog(env as never, said.body.result.jobId);
+		assert.equal(failed!.status, 'failed');
+		assert.match(failed!.lastError!, /^upload_incomplete/);
+		assert.equal(posts().length, 0);
+
+		// The file lands (the TUS proxy completes the upload); Retry posts it
+		for (const [key, raw] of env.videos.store) if (key.includes(videoId)) env.videos.store.set(key, JSON.stringify({ ...JSON.parse(raw), uploadStatus: 'processing' }));
+		const retried = await call('/s/retry', { method: 'POST', body: JSON.stringify({ jobId: said.body.result.jobId }) });
+		assert.equal(retried.status, 200);
+		await drainJobs(env as never);
+		const [post] = posts();
+		assert.deepEqual([post!.type, post!.videoId, post!.importedFrom], ['video', videoId, undefined]);
+		const after = (await call(`/s/${source.id}/takeout`)).body.result;
+		assert.equal(after.files.find((f: any) => f.name === 'Friday talk.mp4').state, 'attached');
+		const item = (await listItems(env, source.id)).find((i) => i.itemId === 'AAAAAAAAAAA');
+		assert.deepEqual([item!.state, item!.videoId, item!.postId], ['posted', videoId, post!.id]);
+		assert.equal((await getJobWithLog(env as never, said.body.result.jobId))!.status, 'succeeded');
 	});
 });

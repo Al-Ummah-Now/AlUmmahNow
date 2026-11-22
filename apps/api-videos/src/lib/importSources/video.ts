@@ -11,7 +11,7 @@
  *                 stored original is then sent to Bunny in one PUT.
  *   3. complete   markUploadComplete, as when a TUS upload finishes: processing, transcode, review.
  */
-import { IMPORT_MAX_VIDEO_BYTES, originalPartKey, type SourceImportedFrom, type VideoObject } from '@al-ummah/shared-types';
+import { IMPORT_MAX_VIDEO_BYTES, originalPartKey, type ImportedFrom as YoutubeImportedFrom, type SourceImportedFrom, type VideoObject } from '@al-ummah/shared-types';
 import { checkUrl, PreviewError } from '../link-preview';
 import { r2UploadOffset, writeR2Part } from '../media/r2-tus';
 import { uploadsToBunny } from '../media/ingest';
@@ -117,7 +117,18 @@ export interface InitiateInput {
 }
 
 /** Makes (or, on a retry, finds again) the item's video. Throws SourceError with the route's code on a refusal. */
-export async function initiateImportVideo(env: ImportVideoEnv, ctx: ExecutionContext, input: InitiateInput): Promise<{ videoId: string }> {
+/** What the upload route answers: the video and its resumable upload (the TUS session belongs to the admin). */
+export interface ImportUpload {
+	videoId: string;
+	tusSessionId?: string;
+	tusUploadId?: string;
+	chunkSize?: number;
+	resumable?: boolean;
+	expiresAt?: string;
+	reused?: boolean;
+}
+
+export async function initiateImportVideo(env: ImportVideoEnv, ctx: ExecutionContext, input: InitiateInput): Promise<{ videoId: string; upload: ImportUpload }> {
 	// In process: the route is behind the INTERNAL_API_KEY check of /internal/* (src/index.ts), already passed here
 	const { default: adminInternalRouter } = await import('../../routers/admin.router');
 	const hash = await sha256Hex(`import-source:${input.sourceId}:${input.itemId}`);
@@ -139,16 +150,16 @@ export async function initiateImportVideo(env: ImportVideoEnv, ctx: ExecutionCon
 		env as never,
 		ctx,
 	);
-	const body = (await res.json().catch(() => ({}))) as { success?: boolean; code?: string; error?: string; result?: { videoId?: string } };
+	const body = (await res.json().catch(() => ({}))) as { success?: boolean; code?: string; error?: string; result?: ImportUpload };
 	if (!res.ok || !body.result?.videoId) {
 		if (res.status >= 500 || res.status === 429) throw new Error(`Video upload could not start (${res.status} ${body.code ?? body.error ?? ''})`.trim());
 		throw new SourceError(422, body.code ?? 'post_refused', body.error ?? 'The upload was refused');
 	}
-	return { videoId: body.result.videoId };
+	return { videoId: body.result.videoId, upload: body.result };
 }
 
 /** Marks the video with where it came from (the post carries the same marker). */
-export async function markVideoImported(env: ImportVideoEnv, videoId: string, ownerId: string, importedFrom: SourceImportedFrom): Promise<void> {
+export async function markVideoImported(env: ImportVideoEnv, videoId: string, ownerId: string, importedFrom: SourceImportedFrom | YoutubeImportedFrom): Promise<void> {
 	await patchVideo(
 		new R2Repository<VideoObject>(env.videos),
 		videoId,

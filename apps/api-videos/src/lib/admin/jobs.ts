@@ -111,12 +111,12 @@ export async function getJob(env: JobEnv, id: string): Promise<AdminJob | null> 
 
 const readRow = (env: JobEnv, id: string) => db(env).prepare(`SELECT ${COLUMNS} FROM admin_jobs WHERE id = ?`).bind(id).first<JobRow>();
 
-interface LogRow { at: string; event: string; attempt: number | null; error: string | null; delay_seconds: number | null; retried: number | null }
+interface LogRow { at: string; event: string; attempt: number | null; error: string | null; delay_seconds: number | null; retried: number | null; actor_id?: string | null; actor_name?: string | null }
 
 /** The job's log, oldest first. */
 export async function readJobLog(env: JobEnv, id: string): Promise<AdminJobLogEntry[]> {
 	const { results } = await db(env)
-		.prepare(`SELECT at, event, attempt, error, delay_seconds, retried FROM (SELECT * FROM admin_job_log WHERE job_id = ? ORDER BY id DESC LIMIT ${ADMIN_JOB_LOG_LIMIT}) ORDER BY id`)
+		.prepare(`SELECT at, event, attempt, error, delay_seconds, retried, actor_id, actor_name FROM (SELECT * FROM admin_job_log WHERE job_id = ? ORDER BY id DESC LIMIT ${ADMIN_JOB_LOG_LIMIT}) ORDER BY id`)
 		.bind(id)
 		.all<LogRow>();
 	return (results ?? []).map((r) => ({
@@ -126,6 +126,7 @@ export async function readJobLog(env: JobEnv, id: string): Promise<AdminJobLogEn
 		...(r.error ? { error: r.error } : {}),
 		...(r.delay_seconds != null ? { delaySeconds: Number(r.delay_seconds) } : {}),
 		...(r.retried ? { retried: true } : {}),
+		...(r.actor_id ? { by: { id: r.actor_id, name: r.actor_name ?? null } } : {}),
 	}));
 }
 
@@ -141,8 +142,21 @@ async function log(env: JobEnv, jobId: string, entry: Omit<AdminJobLogEntry, 'at
 		const store = db(env);
 		await store.batch([
 			store
-				.prepare('INSERT INTO admin_job_log (job_id, at, event, attempt, error, delay_seconds, retried) VALUES (?, ?, ?, ?, ?, ?, ?)')
-				.bind(jobId, now(), entry.event, entry.attempt ?? null, entry.error ? entry.error.slice(0, 2000) : null, entry.delaySeconds ?? null, entry.retried ? 1 : 0),
+				.prepare(
+					entry.by
+						? 'INSERT INTO admin_job_log (job_id, at, event, attempt, error, delay_seconds, retried, actor_id, actor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+						: 'INSERT INTO admin_job_log (job_id, at, event, attempt, error, delay_seconds, retried) VALUES (?, ?, ?, ?, ?, ?, ?)',
+				)
+				.bind(
+					jobId,
+					now(),
+					entry.event,
+					entry.attempt ?? null,
+					entry.error ? entry.error.slice(0, 2000) : null,
+					entry.delaySeconds ?? null,
+					entry.retried ? 1 : 0,
+					...(entry.by ? [entry.by.id.slice(0, 64), entry.by.name ? entry.by.name.slice(0, 200) : null] : []),
+				),
 			store
 				.prepare(`DELETE FROM admin_job_log WHERE job_id = ?1 AND id <= (SELECT id FROM admin_job_log WHERE job_id = ?1 ORDER BY id DESC LIMIT 1 OFFSET ${ADMIN_JOB_LOG_LIMIT})`)
 				.bind(jobId),
@@ -293,7 +307,7 @@ export async function retryJob(env: JobEnv, id: string, opts: { allowCancelled?:
  * delivery already running finishes its current step, and nothing after it runs. Retry starts it again
  * from the step it reached (handlers are idempotent and keep their progress in params).
  */
-export async function cancelJob(env: JobEnv, id: string): Promise<AdminJob | null> {
+export async function cancelJob(env: JobEnv, id: string, by?: AdminJobLogEntry['by']): Promise<AdminJob | null> {
 	const job = await getJob(env, id);
 	if (!job || !canCancel(job)) return job;
 	const at = now();
@@ -304,8 +318,21 @@ export async function cancelJob(env: JobEnv, id: string): Promise<AdminJob | nul
 		.run();
 	if (Number((out as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0) === 0) return getJob(env, id);
 	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'cancelled', job.attempts));
-	await log(env, job.id, { event: 'cancelled' });
+	await log(env, job.id, { event: 'cancelled', ...(by ? { by } : {}) });
 	return { ...job, status: 'cancelled', finishedAt: at, nextRunAt: null };
+}
+
+/**
+ * Whether an admin cancelled the job: long handlers check it between their own pieces of work (a sync
+ * between items), so a Cancel stops them before the step ends. A read error counts as not cancelled.
+ */
+export async function isCancelled(env: JobEnv, id: string): Promise<boolean> {
+	try {
+		const row = await db(env).prepare('SELECT status FROM admin_jobs WHERE id = ?').bind(id).first<{ status: string }>();
+		return row?.status === 'cancelled';
+	} catch {
+		return false;
+	}
 }
 
 /** Exponential backoff between deliveries: 10s, 20s, 40s … capped at 5 minutes. */

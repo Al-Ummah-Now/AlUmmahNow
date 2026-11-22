@@ -59,15 +59,22 @@ function postBody(item: FetchedItem, media: { images?: PostImage[]; videoId?: st
  */
 export async function postItem(env: PostItemEnv, ctx: ExecutionContext, source: SourceRow, row: ItemRow, actorId: string, f: typeof fetch = fetch): Promise<PostItemOutcome> {
 	const item = JSON.parse(row.payload ?? '{}') as FetchedItem;
-	if (!itemKind(item)) return { status: 'skipped', note: 'empty' };
+	// A YouTube record whose file came from the owner's Takeout export: the app uploaded it, the video
+	// exists (lib/importSources/takeout.ts); only its post is left
+	const takeoutVideoId = item.awaiting === 'takeout_file' && row.video_id ? row.video_id : null;
+	if (!takeoutVideoId && !itemKind(item)) return { status: 'skipped', note: 'empty' };
 	const channel = (await loadChannelRecord(env as never, source.channel_id)) as (Channel & { isDeleted?: boolean; isSuspended?: boolean }) | null;
 	if (!channel?.userId || channel.isDeleted || channel.isSuspended) throw new SourceError(409, 'channel_unavailable', 'The channel is deleted or suspended');
 	const ownerId = channel.userId;
 	const key = `${source.id}:${row.item_id}`;
 	const importedFrom: SourceImportedFrom = { platform: source.network as SourceImportedFrom['platform'], url: item.url, postedAt: item.postedAt ? new Date(item.postedAt).toISOString() : null, sourceId: source.id };
+	// A YouTube video carries the YouTube import's own marker (on the video); its post has none
+	const postOrigin = source.network === 'youtube' ? {} : { importedFrom };
 
 	const media: { images?: PostImage[]; videoId?: string; linkImage?: PostImage | null } = {};
-	if (item.video) {
+	if (takeoutVideoId) {
+		media.videoId = takeoutVideoId;
+	} else if (item.video) {
 		let videoId = row.video_id;
 		let size = item.video.bytes ?? null;
 		if (!size) {
@@ -112,7 +119,7 @@ export async function postItem(env: PostItemEnv, ctx: ExecutionContext, source: 
 		...channelNameFields(channel),
 		channelAvatar: channel.avatarUrl,
 		channelVerified: channel.isVerified || false,
-		importedFrom,
+		...postOrigin,
 	};
 	// A retry keeps the post as first written (its time, its counters)
 	const existing = await env.community_posts.get(`posts/${source.channel_id}/${postId}.json`);

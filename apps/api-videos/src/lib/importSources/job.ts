@@ -12,13 +12,14 @@
  * Idempotent and resumable: the phase is in the job's params, every item remembers what it produced.
  */
 import { featureGate, IMPORT_POSTS_PER_STEP, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
-import { createJob, getJob, type JobEnv, type JobOutcome } from '../admin/jobs';
+import { cancelJob, createJob, getJob, getJobWithLog, isCancelled, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { revokeSource, stillAuthorized } from './authorize';
 import { fetchSource, itemKind } from './fetchers';
 import { postItem, skipItem, type PostItemEnv } from './post';
 import {
 	dueSources,
 	insertItems,
+	markSyncCancelled,
 	markSyncFailed,
 	markSyncFinished,
 	markSyncStarted,
@@ -127,6 +128,11 @@ export async function runSourceSync(env: SourceSyncEnv, job: AdminJob, f: typeof
 	try {
 		const rows = await pendingItems(env, source.id, IMPORT_POSTS_PER_STEP);
 		for (const row of rows) {
+			// An admin's Cancel stops the sync between items (not only between steps): nothing more is posted
+			if (await isCancelled(env, job.id)) {
+				logger.info('[ImportSources] Sync cancelled', { jobId: job.id, sourceId: source.id, ...result() });
+				return { done: true, result: { ...result(), cancelled: true } };
+			}
 			let outcome;
 			try {
 				outcome = await postItem(env, ctx, source, row, job.actorId, f);
@@ -211,4 +217,36 @@ export async function queueDueSources(env: SourceSyncEnv, now = Date.now()): Pro
 		}
 	}
 	return queued;
+}
+
+/** The job kinds a source runs: its sync, and the Takeout match of a YouTube source (takeout.ts). */
+export const SOURCE_JOB_KINDS: readonly string[] = [SOURCE_SYNC_JOB_KIND, 'import.takeout-match'];
+
+/** The job, when it is one of this source's (its kind and its params name the source). */
+export async function sourceJob(env: JobEnv, sourceId: string, jobId: string): Promise<AdminJob | null> {
+	const job = await getJob(env, jobId);
+	if (!job || !SOURCE_JOB_KINDS.includes(job.kind) || (job.params as { sourceId?: unknown })?.sourceId !== sourceId) return null;
+	return job;
+}
+
+/**
+ * Cancels one of the source's jobs (admin-api: super admins, audited). Idempotent: a job already
+ * cancelled or finished is answered as it is. The job's status is the cancel flag (lib/admin/jobs.ts): a
+ * queued delivery is dropped, a running one stops between items and its step's result is not recorded.
+ * The log says who cancelled it. A cancel is not a failure: no DLQ, no Errors page item (an open one for
+ * the source is resolved), no error on the source, and a scheduled source keeps its schedule. Retry or
+ * Sync now afterwards starts a new run.
+ */
+export async function cancelSourceJob(env: SourceSyncEnv, source: Pick<SourceRow, 'id' | 'schedule' | 'enabled'>, jobId: string, by: { id: string; name: string | null }): Promise<AdminJob> {
+	const job = await sourceJob(env, source.id, jobId);
+	if (!job) throw new SourceError(404, 'job_not_found', 'No such job for this source');
+	const after = await cancelJob(env, job.id, by);
+	if (job.status !== 'cancelled' && after?.status === 'cancelled') {
+		if (job.kind === SOURCE_SYNC_JOB_KIND) {
+			await markSyncCancelled(env, source);
+			resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, sourceSyncNeedsActionKey(source.id));
+		}
+		logger.info('[ImportSources] Job cancelled', { jobId: job.id, kind: job.kind, sourceId: source.id, was: job.status, by: by.id });
+	}
+	return (await getJobWithLog(env, job.id)) ?? after ?? job;
 }

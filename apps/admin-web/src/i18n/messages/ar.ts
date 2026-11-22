@@ -980,6 +980,7 @@ const ar: Messages = {
       supportPayoutSend: 'إرسال تحويل',
       supportPayoutStatus: 'تحديث حالات التحويلات',
       importSourceSync: 'مزامنة مصدر استيراد اجتماعي',
+      importTakeoutMatch: 'مطابقة ملفات تصدير يوتيوب مع مصدر استيراد',
     },
     statuses: {
       queued: 'في الانتظار',

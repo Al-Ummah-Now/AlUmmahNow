@@ -996,7 +996,7 @@ const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
  * Kinds only a super admin may run again: CSAM takedowns, and social import syncs (their sources are
  * managed with import_sources:manage, a super admin permission; wiki TOOLS-ADMIN TA-9).
  */
-const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync']);
+const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync', 'import.takeout-match']);
 function redactJob(c: C, job: AdminJob): AdminJob {
   if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
   return {

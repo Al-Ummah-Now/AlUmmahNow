@@ -981,6 +981,7 @@ const en = {
       supportPayoutSend: 'Send a payout',
       supportPayoutStatus: 'Refresh payout statuses',
       importSourceSync: 'Sync a social import source',
+      importTakeoutMatch: 'Match YouTube Takeout files to a source',
     },
     statuses: {
       queued: 'Queued',
