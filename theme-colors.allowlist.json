@@ -119,7 +119,7 @@
   "apps/web/src/components/embed/EmbedPlayer.tsx": 20,
   "apps/web/src/components/explore/ExploreBody.tsx": 19,
   "apps/web/src/components/explore/ExploreSections.tsx": 37,
-  "apps/web/src/components/library/LibraryHub.tsx": 26,
+  "apps/web/src/components/library/LibraryHub.tsx": 23,
   "apps/web/src/components/library/LibraryVideoTile.tsx": 11,
   "apps/web/src/components/library/SavePostButton.tsx": 5,
   "apps/web/src/components/library/SavedPostCard.tsx": 7,
