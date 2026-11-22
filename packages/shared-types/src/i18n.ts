@@ -490,6 +490,8 @@ export interface AppTranslations {
     singleChannel: string;
     clickToChangeCover: string;
     clickToChangeAvatar: string;
+    /** Title of a channel with no name and no handle */
+    unnamed: string;
     changeCover: string;
     removeCover: string;
     changeAvatar: string;

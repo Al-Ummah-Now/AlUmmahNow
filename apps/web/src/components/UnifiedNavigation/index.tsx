@@ -48,6 +48,7 @@ import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
 import { identityInitial, identityName, lastIdentityName, rememberIdentityName } from '@/lib/navigation/identity-name';
 import { HeaderSignIn } from '@/components/Header/HeaderParts';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 type MenuView = 'main' | 'channels';
 
@@ -326,7 +327,7 @@ export function UnifiedNavigation() {
   const otherAccounts = accounts.filter((a) => !a.isActive);
   const initial = identityInitial(displayName);
   const nameLoading = !channel && !displayName;
-  const channelInitial = channel ? (getChannelName(channel.name, channel.nameLocalized)[0]?.toUpperCase() ?? '?') : initial;
+  const channelInitial = channel ? avatarInitial(getChannelName(channel.name, channel.nameLocalized)) : initial;
   const avatar = (src: string | undefined | null, letter: string, size = '') =>
     src ? (
       // eslint-disable-next-line @next/next/no-img-element
@@ -425,7 +426,7 @@ export function UnifiedNavigation() {
                   role="menuitem"
                 >
                   <span className="relative flex-none">
-                    {avatar(channel.avatarUrl, getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase())}
+                    {avatar(channel.avatarUrl, avatarInitial(getChannelName(channel.name, channel.nameLocalized)))}
                     {channel.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                   </span>
                   {identityText(getChannelName(channel.name, channel.nameLocalized), t.navigation.identityChannel)}
@@ -587,7 +588,7 @@ export function UnifiedNavigation() {
                     {section.items.map((ch) => (
                       <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
                         <span className="relative flex-none">
-                          {avatar(ch.avatarUrl, getChannelName(ch.name, ch.nameLocalized)[0]?.toUpperCase() ?? '?')}
+                          {avatar(ch.avatarUrl, avatarInitial(getChannelName(ch.name, ch.nameLocalized)))}
                           {ch.isMain && ch.role === 'owner' && (
                             <>
                               <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />

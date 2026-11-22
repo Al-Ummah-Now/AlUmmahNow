@@ -283,6 +283,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     singleChannel: 'Channel',
     clickToChangeCover: 'Click to change cover',
     clickToChangeAvatar: 'Click to change avatar',
+    unnamed: 'Unnamed channel',
     changeCover: 'Change cover',
     removeCover: 'Remove cover',
     changeAvatar: 'Change photo',

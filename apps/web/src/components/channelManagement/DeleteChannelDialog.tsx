@@ -31,6 +31,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { deleteOwnedChannel } from '@/lib/api/channel-profile';
 import { logger } from '@/lib/logger-client';
+import { channelOwnName } from '@/lib/channel-name';
 
 export interface DeletableChannel {
   id: string;
@@ -62,7 +63,8 @@ export function DeleteChannelDialog({ channel, open, onOpenChange, onDeleted, re
   const inputId = useId();
   const selectId = useId();
 
-  const displayName = channel.nameLocalized?.[lang] || channel.name;
+  // A channel with no name (names are not guaranteed) is confirmed by typing its id
+  const displayName = channelOwnName(channel, lang) || channel.id;
   const otherChannels = useMemo(
     () => (user?.channels || []).filter((ch) => ch.id !== channel.id),
     [user?.channels, channel.id],
@@ -81,9 +83,9 @@ export function DeleteChannelDialog({ channel, open, onOpenChange, onDeleted, re
     if (open) setNewMainId((current) => (current && otherChannels.some((ch) => ch.id === current) ? current : firstOtherId));
   }, [open, firstOtherId, otherChannels]);
 
-  const nameOf = (ch: { name: string; nameLocalized?: Record<string, string> }) => ch.nameLocalized?.[lang] || ch.name;
+  const nameOf = (ch: { id: string; name: string; nameLocalized?: Record<string, string> }) => channelOwnName(ch, lang) || ch.id;
   const typedValue = typed.trim();
-  const confirmed = typedValue.length > 0 && (typedValue === channel.name.trim() || typedValue === displayName.trim());
+  const confirmed = typedValue.length > 0 && (typedValue === (channel.name ?? '').trim() || typedValue === displayName);
 
   const handleDelete = async () => {
     if (!confirmed || submitting.current) return;

@@ -25,6 +25,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { channelLabel } from '@/lib/channel-name';
 import { MenuButton } from '@/components/common/MenuButton';
 import { MoreVertical, Pencil, Pin, Trash2 } from 'lucide-react';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 interface CommentProps {
   comment: PostComment;
@@ -265,7 +266,7 @@ export default function Comment({
           />
         ) : (
           <div className="w-full h-full rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center text-white font-bold text-sm">
-            {comment.deletedAt ? '?' : authorName.charAt(0).toUpperCase()}
+            {comment.deletedAt ? '?' : avatarInitial(authorName)}
           </div>
         )}
         {comment.channelVerified && !comment.deletedAt && (

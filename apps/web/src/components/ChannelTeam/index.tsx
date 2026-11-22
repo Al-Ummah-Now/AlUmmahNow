@@ -28,6 +28,7 @@ import TeamActivity from './TeamActivity';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { pluralText } from '@/lib/notifications/toast-queue';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 interface ChannelTeamProps {
   channelId: string;
@@ -252,7 +253,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                               <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                             ) : (
                               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                                {nameOf(m).charAt(0).toUpperCase()}
+                                {avatarInitial(nameOf(m))}
                               </span>
                             )}
                             <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
@@ -343,7 +344,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                           <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                         ) : (
                           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                            {nameOf(m).charAt(0).toUpperCase()}
+                            {avatarInitial(nameOf(m))}
                           </span>
                         )}
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">

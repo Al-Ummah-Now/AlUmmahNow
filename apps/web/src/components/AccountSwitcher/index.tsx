@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Plus, Check, LogOut, ChevronDown } from 'lucide-react';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 export function AccountSwitcher() {
   const { t } = useLanguage();
@@ -50,7 +51,7 @@ export function AccountSwitcher() {
         aria-haspopup="menu"
       >
         <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
-          {user.displayName?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+          {avatarInitial(user.displayName, user.email)}
         </div>
         <div className="hidden md:block text-left">
           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -103,7 +104,7 @@ export function AccountSwitcher() {
                     disabled={account.isActive}
                   >
                     <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                      {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                      {avatarInitial(account.displayName, account.email)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">

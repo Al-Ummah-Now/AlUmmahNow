@@ -23,6 +23,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { channelDisplayName, roleOn, type UploadChannelCandidate } from '@/lib/upload/upload-channel';
 
 import { joinMeta } from '@/lib/i18n/meta-separator';
+import { avatarInitial } from '@/lib/avatar-initial';
 export interface UploadChannelPickerProps {
   channels: UploadChannelCandidate[];
   value: string | null;
@@ -42,7 +43,7 @@ function ChannelAvatar({ channel, name, size }: { channel: UploadChannelCandidat
   }
   return (
     <span aria-hidden="true" className={`${box} flex flex-shrink-0 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] font-semibold text-[var(--fanous-c-button-primary-text)]`}>
-      {(name.trim()[0] ?? '?').toUpperCase()}
+      {avatarInitial(name, channel.handle)}
     </span>
   );
 }
@@ -71,7 +72,7 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
       // No avatar: the channel's initial, like the card and the account menu
       icon: (
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]">
-          {(name.trim()[0] ?? '?').toUpperCase()}
+          {avatarInitial(name, channel.handle)}
         </span>
       ),
       group: role && role !== 'owner' ? 'managed' : 'owned',

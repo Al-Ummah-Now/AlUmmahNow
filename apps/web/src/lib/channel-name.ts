@@ -21,3 +21,21 @@ export function channelLabel(item: ChannelNamed | null | undefined, lang: string
   for (const name of Object.values(names)) if (name?.trim()) return name.trim();
   return '';
 }
+
+/** A channel object's names (the `Channel` shape: `name` + `nameLocalized`). */
+export interface ChannelOwnNamed {
+  name?: string | null;
+  nameLocalized?: Record<string, string | null | undefined> | null;
+}
+
+/**
+ * A channel's name in `lang`, else its default name, trimmed; '' when it has neither. The types
+ * say `name: string`, but API responses are not validated against them: a stored channel without
+ * a name reached the channel header as `undefined` and its `name.charAt(0)` aborted the render.
+ */
+export function channelOwnName(channel: ChannelOwnNamed | null | undefined, lang: string): string {
+  if (!channel) return '';
+  const own = channel.nameLocalized?.[lang];
+  if (typeof own === 'string' && own.trim()) return own.trim();
+  return typeof channel.name === 'string' ? channel.name.trim() : '';
+}

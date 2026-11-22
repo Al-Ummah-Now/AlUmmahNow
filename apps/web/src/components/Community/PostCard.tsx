@@ -17,6 +17,7 @@ import LinkPost from './types/LinkPost';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -99,7 +100,7 @@ export default function PostCard({
             />
           ) : (
             <div className="w-full h-full rounded-full bg-[var(--aun-btn-filled-bg)] flex items-center justify-center text-[var(--aun-btn-filled-fg)] font-bold">
-              {channelLabel(post, locale).charAt(0).toUpperCase()}
+              {avatarInitial(channelLabel(post, locale))}
             </div>
           )}
           {post.channelVerified && (

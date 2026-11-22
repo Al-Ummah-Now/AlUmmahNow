@@ -12,6 +12,7 @@ import { channelPath } from '@/lib/channel-url';
 import { formatSubscribers, formatVideoCount } from '@/lib/format/videoMeta';
 
 import { MetaSep } from '@/components/ui/MetaSep';
+import { avatarInitial } from '@/lib/avatar-initial';
 interface ChannelTileProps {
   channel: ChannelSummary;
   /** 'card' for grids, 'compact' for horizontal section rows */
@@ -51,7 +52,7 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
           />
         ) : (
           <span className="text-2xl font-semibold text-gray-600 dark:text-gray-300" aria-hidden="true">
-            {name.charAt(0).toUpperCase()}
+            {avatarInitial(name, channel.handle)}
           </span>
         )}
       </div>

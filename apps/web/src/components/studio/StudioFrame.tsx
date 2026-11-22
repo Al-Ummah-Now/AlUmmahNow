@@ -22,6 +22,7 @@ import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { can, roleForChannel, type StudioRole } from '@/lib/studio/permissions';
 import { cn } from '@/lib/utils';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 export interface StudioChannel {
   id: string;
@@ -44,7 +45,7 @@ function Avatar({ url, name }: { url?: string; name: string }) {
   if (url) return <Image src={url} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-full object-cover" unoptimized />;
   return (
     <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
-      {name.charAt(0).toUpperCase()}
+      {avatarInitial(name)}
     </span>
   );
 }

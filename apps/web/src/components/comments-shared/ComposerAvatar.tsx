@@ -6,6 +6,7 @@
  * readers still say who it goes under.
  */
 import React from 'react';
+import { avatarInitial } from '@/lib/avatar-initial';
 
 export interface ComposerAvatarProps {
   /** The identity's picture; without one its first letter is shown */
@@ -32,7 +33,7 @@ export function ComposerAvatar({ src, name, as, className = 'w-8 h-8', testId = 
       className={`${className} flex-none rounded-full bg-[var(--fanous-color-primary)] text-[var(--fanous-color-on-primary)] flex items-center justify-center font-bold text-sm`}
       {...common}
     >
-      <span aria-hidden="true">{Array.from(name.trim())[0]?.toUpperCase() ?? '?'}</span>
+      <span aria-hidden="true">{avatarInitial(name)}</span>
     </span>
   );
 }

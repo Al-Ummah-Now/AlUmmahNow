@@ -1,3 +1,5 @@
+import { firstGrapheme } from '@/lib/avatar-initial';
+
 /**
  * The name the header shows for the signed-in person (the account pill, the
  * account menu, the phone sheet). Owner rule (2026-11-12): display name, else
@@ -21,7 +23,7 @@ export function identityName(candidates: ReadonlyArray<string | null | undefined
 
 /** The first letter of a name for a letter avatar; '' when there is no name (never the email's). */
 export function identityInitial(name: string): string {
-  return name ? Array.from(name)[0].toUpperCase() : '';
+  return name ? firstGrapheme(name).toUpperCase() : '';
 }
 
 // The last name each account showed, kept across header remounts and page loads
