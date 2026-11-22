@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
-import Link from '@/components/AppLink';
 import { getAdminSession } from '@/lib/auth';
 import { canManageEmails } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
-import { ErrorAlert, linkClass } from '@/components/ui';
+import { ErrorAlert } from '@/components/ui';
+import { BackLink } from '@/components/content/parts';
 import { logger } from '@/lib/logger';
 import { getEmailTemplate } from '@/lib/api/email-templates';
 import { getNames } from '@/lib/api/audit';
@@ -37,10 +37,8 @@ export default async function EmailTemplatePage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-6" data-testid="email-template-page">
-      <nav aria-label={t('nav.breadcrumbs')}>
-        <Link href="/settings/emails" className={linkClass} data-testid="email-template-back">
-          {t('emailTemplates.back')}
-        </Link>
+      <nav aria-label={t('nav.breadcrumbs')} className="-mb-6">
+        <BackLink href="/settings/emails" label={t('emailTemplates.back')} testId="email-template-back" />
       </nav>
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold text-fg">{t(`emailTemplates.keys.${key}` as MessageKey)}</h1>

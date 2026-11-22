@@ -10,6 +10,7 @@ import { getI18n } from '@/i18n/server';
 import { formatNumber, hourDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import { pageStart, type Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
+import { BackLink } from '@/components/content/parts';
 import { logger } from '@/lib/logger';
 import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName, platformName } from '../ui';
 import { countryName, sourceLabel } from '../origin';
@@ -52,13 +53,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
     else logger.error('[errors] Failed to load group', { id, error: e instanceof Error ? e.message : String(e) });
   }
 
-  const back = (
-    <Link href="/errors" className={`${linkClass} inline-block mb-4`}>
-      <span aria-hidden="true" className="rtl:hidden">← </span>
-      <span aria-hidden="true" className="ltr:hidden">→ </span>
-      {t('errorsPage.back')}
-    </Link>
-  );
+  const back = <BackLink href="/errors" label={t('errorsPage.back')} />;
   if (missing) return <div>{back}<ErrorAlert testId="error-group-missing">{t('errorsPage.notFound')}</ErrorAlert></div>;
   if (!data) return <div>{back}<ErrorAlert testId="error-group-error">{t('errorsPage.loadFailed')}</ErrorAlert></div>;
 

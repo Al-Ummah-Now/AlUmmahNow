@@ -8,6 +8,7 @@ import { canUseContactInbox } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ContactStatusChip, ErrorAlert, cardClass, linkClass } from '@/components/ui';
+import { BackLink } from '@/components/content/parts';
 import { logger } from '@/lib/logger';
 import { ContactActions } from './ContactActions';
 import { DeliveryRetry, RefreshWhileQueued } from './DeliveryRetry';
@@ -42,13 +43,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
     logger.error('[contact] Failed to load message', { id, error: e instanceof Error ? e.message : String(e) });
   }
 
-  const back = (
-    <div className="mb-6">
-      <Link href="/contact" className={linkClass}>
-        <span aria-hidden="true" className="inline-block rtl:rotate-180">&larr;</span> {t('contact.backToInbox')}
-      </Link>
-    </div>
-  );
+  const back = <BackLink href="/contact" label={t('contact.backToInbox')} />;
   if (!data) {
     return (
       <div>
