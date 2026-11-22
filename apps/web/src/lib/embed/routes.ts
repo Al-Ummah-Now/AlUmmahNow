@@ -24,7 +24,14 @@ export function isFeedPath(pathname: string): boolean {
   return /^\/feeds\/[A-Za-z0-9_-]+\/[a-z]+\.xml$/.test(pathname);
 }
 
-/** Studio share kit clip downloads: /studio-download/clip/<channelId>/<shortId>.mp4 (app/studio-download): no locale redirect */
+/**
+ * Studio downloads (app/studio-download), no locale redirect: share kit clips
+ * /studio-download/clip/<channelId>/<shortId>.mp4 and caption files
+ * /studio-download/captions/<videoId>/<track|draft>/<lang>.<vtt|srt>.
+ */
 export function isStudioDownloadPath(pathname: string): boolean {
-  return /^\/studio-download\/clip\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.mp4$/.test(pathname);
+  return (
+    /^\/studio-download\/clip\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.mp4$/.test(pathname) ||
+    /^\/studio-download\/captions\/[A-Za-z0-9_-]+\/(?:track|draft)\/[A-Za-z0-9-]+\.(?:vtt|srt)$/.test(pathname)
+  );
 }

@@ -28,6 +28,14 @@ export interface CaptionsTranslations {
   /** The draft changed elsewhere since it was opened */
   conflict: string;
   reload: string;
+  /** Saving a caption file in Studio (QF 2026-11-22: one video, one language per file) */
+  download: {
+    /** Same wording as the player's captions menu (#1735) */
+    action: string;
+    vtt: string;
+    srt: string;
+    failed: string;
+  };
   /** Claiming the video review's automatic transcript as a draft (#1296) */
   claim: {
     title: string;
@@ -291,6 +299,12 @@ export const CAPTIONS_EN: CaptionsTranslations = {
   loadFailed: "Couldn’t load the caption drafts.",
   conflict: 'This draft was changed in another window. Reload it to continue.',
   reload: 'Reload',
+  download: {
+    action: 'Download captions',
+    vtt: 'WebVTT (.vtt)',
+    srt: 'SubRip (.srt)',
+    failed: "Couldn’t download the captions. Try again.",
+  },
   claim: {
     title: 'Automatic transcript',
     body: 'Your video was transcribed automatically when it was checked. Use the transcript as a caption draft, check it and publish it. Quran in it is shown as the official text once you confirm it.',
@@ -511,6 +525,12 @@ export const CAPTIONS_AR: CaptionsTranslations = {
   loadFailed: 'تعذّر تحميل مسودات الترجمة.',
   conflict: 'عُدّلت هذه المسودة في نافذة أخرى. أعد تحميلها للمتابعة.',
   reload: 'إعادة التحميل',
+  download: {
+    action: 'تنزيل الترجمة',
+    vtt: 'WebVTT (.vtt)',
+    srt: 'SubRip (.srt)',
+    failed: 'تعذّر تنزيل الترجمة. حاول مرة أخرى.',
+  },
   claim: {
     title: 'النص التلقائي',
     body: 'فُرِّغ مرئيك تلقائيًا عند فحصه. استخدم النص مسودةً للترجمة، وراجعه ثم انشره. ويظهر القرآن فيه بالنص الرسمي بعد أن تؤكده.',

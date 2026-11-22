@@ -6,7 +6,7 @@
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { QURAN_CURRENT_KEY, captionDraftKey, quranTextKey, type CaptionDraft } from '@al-ummah/shared-types';
-import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../src/endpoints/captions/captionDrafts';
+import { CaptionDraftDelete, CaptionDraftDownload, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../src/endpoints/captions/captionDrafts';
 import { SubtitlesGet } from '../src/endpoints/video/subtitlesGet';
 import { SubtitlesDownload } from '../src/endpoints/video/subtitlesDownload';
 import { clearQuranCopyCache } from '../src/lib/quran/copy';
@@ -84,6 +84,7 @@ const app = (userId = 'owner', roles?: string[]) =>
 		r.put('/api/videos/:videoId/captions/drafts/:language', CaptionDraftSave);
 		r.delete('/api/videos/:videoId/captions/drafts/:language', CaptionDraftDelete);
 		r.post('/api/videos/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
+		r.get('/api/videos/:videoId/captions/drafts/:language/download', CaptionDraftDownload);
 		r.get('/api/videos/:videoId/subtitles/:language', SubtitlesGet);
 		r.get('/api/videos/:videoId/subtitles/:language/download', SubtitlesDownload);
 	}, userId ? { userId, roles } : null);
@@ -278,5 +279,65 @@ describe('caption drafts', () => {
 		assert.ok(!e.subtitles.store.has(captionDraftKey('v1', 'ar')));
 		assert.ok(!e.subtitles.store.has('v1/drafts/ar/v1.json'));
 		assert.ok(e.subtitles.store.has('v1/ar.vtt'));
+	});
+});
+
+describe('caption draft download (Studio, QF 2026-11-22)', () => {
+	const member = (userId: string, role: string) => ({ userId, role, addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' });
+	/** A private video of a channel with an editor and a moderator; the draft's first span accepted. */
+	function privateEnv() {
+		const e = env();
+		const accepted = draft().cues.map((c) => (c.id === 'c2' ? { ...c, segments: [{ ...(c.segments[0] as any), status: 'accepted' }] } : c));
+		e.subtitles.store.set(captionDraftKey('v1', 'ar'), JSON.stringify(draft({ cues: accepted, version: 3 })));
+		e.videos.store.set('v1', JSON.stringify(videoFixture({ isPublic: false, visibility: 'private' })));
+		const channels = new MemoryBucket({ 'owner-ch': { id: 'owner-ch', userId: 'owner', members: [member('ed', 'editor'), member('mod', 'moderator')] } });
+		return { ...e, channels };
+	}
+	const get = (userId: string, path: string, e: unknown) => app(userId).request(path, {}, e as never);
+
+	it('the owner downloads a private video\'s draft: accepted verse text filled, suggestion a reference, attribution inside, nothing stored', async () => {
+		const e = privateEnv();
+		const keys = [...e.subtitles.store.keys()].sort();
+		const res = await get('owner', '/api/videos/v1/captions/drafts/ar/download', e);
+		assert.equal(res.status, 200);
+		assert.equal(res.headers.get('content-type'), 'text/vtt; charset=utf-8');
+		assert.equal(res.headers.get('content-disposition'), 'attachment; filename="v1-ar-draft-v3.vtt"');
+		assert.equal(res.headers.get('cache-control'), 'no-store');
+		const file = await res.text();
+		assert.match(file, /^WEBVTT\n\nNOTE\nQuran data provided by Quran Foundation \(https:\/\/quran\.foundation\/\)\n/);
+		assert.match(file, /Quran text: Uthmani \(Hafs\)\nنص القرآن: الرسم العثماني \(حفص\)\n\n/);
+		// The official text exactly as our copy holds it, and only for the accepted span
+		assert.match(file, /﴿قُلْ هُوَ ٱللَّهُ أَحَدٌ﴾ \(الإخلاص ١١٢:١\)/);
+		assert.match(file, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/);
+		assert.ok(!file.includes('ٱلصَّمَدُ') && !file.includes(HEARD) && !/[\uE000\uE001]/.test(file));
+		assert.deepEqual([...e.subtitles.store.keys()].sort(), keys);
+
+		const srt = await get('owner', '/api/videos/v1/captions/drafts/ar/download?format=srt', e);
+		assert.equal(srt.headers.get('content-type'), 'application/x-subrip; charset=utf-8');
+		assert.equal(srt.headers.get('content-disposition'), 'attachment; filename="v1-ar-draft-v3.srt"');
+		const srtFile = await srt.text();
+		assert.match(srtFile, /^1\n00:00:00,000 --> 00:00:00,000\nQuran data provided by Quran Foundation/);
+		assert.match(srtFile, /\n3\n00:00:03,000 --> 00:00:06,000\n.*قُلْ هُوَ ٱللَّهُ أَحَدٌ/);
+	});
+
+	it('a channel editor may download; a moderator, a stranger or a signed-out caller may not', async () => {
+		const e = privateEnv();
+		assert.equal((await get('ed', '/api/videos/v1/captions/drafts/ar/download', e)).status, 200);
+		assert.equal((await get('mod', '/api/videos/v1/captions/drafts/ar/download', e)).status, 403);
+		assert.equal((await get('stranger', '/api/videos/v1/captions/drafts/ar/download', e)).status, 403);
+		// Signed out: the auth middleware answers 401 in the worker; here no user id is refused too
+		assert.ok([401, 403].includes((await get('', '/api/videos/v1/captions/drafts/ar/download', e)).status));
+	});
+
+	it('404 for a missing draft or video, 400 for a draft with no text, a draft without Quran has no attribution', async () => {
+		const e = privateEnv();
+		assert.equal((await get('owner', '/api/videos/v1/captions/drafts/en/download', e)).status, 404);
+		assert.equal((await get('owner', '/api/videos/v2/captions/drafts/ar/download', e)).status, 404);
+		e.subtitles.store.set(captionDraftKey('v1', 'en'), JSON.stringify(draft({ language: 'en', cues: [{ id: 'c1', startMs: 0, endMs: 1000, segments: [{ type: 'speech', text: '  ' }] }] })));
+		const empty = await get('owner', '/api/videos/v1/captions/drafts/en/download', e);
+		assert.equal(empty.status, 400);
+		assert.deepEqual(await empty.json(), { success: false, error: 'draft_empty' });
+		e.subtitles.store.set(captionDraftKey('v1', 'en'), JSON.stringify(draft({ language: 'en', cues: [{ id: 'c1', startMs: 0, endMs: 2500, segments: [{ type: 'speech', text: 'Hello & welcome' }] }] })));
+		assert.equal(await (await get('owner', '/api/videos/v1/captions/drafts/en/download', e)).text(), 'WEBVTT\n\nc1\n00:00:00.000 --> 00:00:02.500\nHello &amp; welcome\n');
 	});
 });

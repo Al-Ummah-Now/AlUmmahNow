@@ -52303,6 +52303,165 @@
         }
       }
     },
+    "/api/v1/videos/{videoId}/captions/drafts/{language}/download": {
+      "get": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Download a caption draft as a file",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe draft as it would be published, as an attachment (WebVTT or SubRip). Quran verse text the creator accepted is filled at download time from the Quran Foundation copy, unaltered, with the attribution and edition inside the file; unconfirmed suggestions are references. Owner or a channel role with `video.edit`. Never cached or stored. 400 `draft_empty` when no cue has text.",
+        "operationId": "get_CaptionDraftDownload",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "vtt",
+                "srt"
+              ],
+              "default": "vtt",
+              "description": "File format"
+            },
+            "required": false,
+            "description": "File format",
+            "name": "format",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft file (attachment)",
+            "content": {
+              "text/vtt": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/x-subrip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nothing in the draft yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video or draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{videoId}/captions/drafts/{language}/publish": {
       "post": {
         "tags": [

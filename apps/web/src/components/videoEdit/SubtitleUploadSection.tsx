@@ -14,6 +14,7 @@ import type { SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
 import CaptionDraftsPanel from './captions/CaptionDraftsPanel';
+import CaptionDownloadMenu from './captions/CaptionDownloadMenu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -36,7 +37,7 @@ interface SubtitleUploadSectionProps {
  * Manages subtitle tracks for a video in the video edit page:
  * - Lists all uploaded subtitle tracks
  * - Shows language, status, size, upload date, default indicator
- * - Actions: Set as default, Delete
+ * - Actions: Download (.vtt / .srt, Quran filled by the API), Set as default, Delete
  * - "Add Subtitle" button to open upload modal
  * - Empty state when no subtitles
  *
@@ -359,10 +360,21 @@ export default function SubtitleUploadSection({
                   {/* Right: Actions */}
                   <div className="
                     flex
+                    flex-wrap
                     items-center
                     gap-2
                     sm:flex-shrink-0
                   ">
+                    {subtitle.status === 'active' && (
+                      <CaptionDownloadMenu
+                        videoId={videoId}
+                        language={subtitle.language}
+                        languageLabel={lang === 'ar' ? langInfo.nameAr : langInfo.name}
+                        source="track"
+                        t={t.captions.download}
+                        className="inline-flex h-8 md:h-9 min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs md:text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                      />
+                    )}
                     {!subtitle.isDefault && subtitle.status === 'active' && (
                       <Button
                         variant="outline"

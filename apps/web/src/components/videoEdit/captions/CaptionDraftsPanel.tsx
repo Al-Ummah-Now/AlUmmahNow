@@ -3,7 +3,7 @@
 /**
  * Caption drafts in Studio's Subtitles section (AUN-CAPTIONS §3.1): each language's draft with
  * where it came from, Quran suggestions left to check and whether it is published, with Edit,
- * Publish and Delete; while the video review's automatic transcript is available, the offer to use
+ * Download (the draft as a file, Quran filled by the API), Publish and Delete; while the video review's automatic transcript is available, the offer to use
  * it as a draft (#1296); and Transcribe on request with the caption minutes (CaptionTranscribe).
  * Transcribe shows only while it is on for the channel, and Translate only while caption
  * translation is (GET /api/me/features `captionsTranscribe`, `captionsTranslate`): off, they are
@@ -30,6 +30,7 @@ import {
   type CaptionJobView,
 } from '@/lib/api/caption-drafts-client';
 import CaptionDraftEditor from './CaptionDraftEditor';
+import CaptionDownloadMenu from './CaptionDownloadMenu';
 import CaptionTranscribe, { visibleJobs, type CaptionMinutes } from './CaptionTranscribe';
 import CaptionTranslate, { TranslationJobs } from './CaptionTranslate';
 
@@ -362,6 +363,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     <FilePenLine className="h-4 w-4" aria-hidden />
                     {tc.edit}
                   </button>
+                  <CaptionDownloadMenu videoId={videoId} language={d.language} languageLabel={label(d.language)} source="draft" t={tc.download} />
                   {d.kind === 'source' && translateMinutes && (
                     <button
                       type="button"

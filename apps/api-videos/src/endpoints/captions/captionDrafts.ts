@@ -6,14 +6,15 @@
  *   PUT    /api/videos/:videoId/captions/drafts/:language            save edited cues over baseVersion
  *   DELETE /api/videos/:videoId/captions/drafts/:language            delete the draft (the live track stays)
  *   POST   /api/videos/:videoId/captions/drafts/:language/publish    publish baseVersion as the track
+ *   GET    /api/videos/:videoId/captions/drafts/:language/download   the draft as a file (WebVTT or SubRip), Quran filled
  *   POST   /api/videos/:videoId/review/transcript/claim               the review transcript → a draft (queued)
  *   POST   /api/videos/:videoId/captions/drafts/:language/transcript  an on-device transcript (desktop Studio, D10) → a draft (queued)
  *
  * Owner or a channel role with `video.edit`. Drafts are never shown to viewers.
  */
-import { Str } from '../../lib/chanfana-params';
+import { Enumeration, Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
-import { onDeviceTranscriptKey, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
+import { captionMarkerRanges, hasCaptionQuranMarkers, onDeviceTranscriptKey, renderCaptionVtt, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { canOnVideo } from '../../lib/channelAccess';
@@ -22,7 +23,8 @@ import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
-import { deleteDraft, listDrafts, publishDraft, readDraft, readTracks, saveDraftCues, summariseDraft } from '../../lib/captions/drafts';
+import { deleteDraft, fillServedTrack, listDrafts, publishDraft, readDraft, readTracks, saveDraftCues, summariseDraft } from '../../lib/captions/drafts';
+import { subtitleDownload, type SubtitleDownloadFormat } from '../../lib/captions/download';
 import { editionFor } from '../../lib/quran/translations';
 import { listClaims, queueClaim, reviewTranscriptKey, transcriptAvailable } from '../../lib/captions/claim';
 
@@ -281,6 +283,64 @@ export class CaptionDraftPublish extends AuthenticatedRoute {
 			language: params.language,
 		});
 		return c.json({ success: true, data: { draft: summariseDraft(ok.draft, ok.track), track: ok.track } });
+	}
+}
+
+/**
+ * A draft as a file for its editors (owner or `video.edit`), before or after it is published: rendered
+ * as publishing would render it (Quran as markers), then filled exactly as a served track is — accepted
+ * spans with the official text from our Quran Foundation copy (a translation draft with the channel's
+ * edition), unconfirmed suggestions as references — unaltered, the attribution and edition inside the
+ * file. One video, one language; built per request and never stored (QF 2026-11-22).
+ */
+export class CaptionDraftDownload extends AuthenticatedRoute {
+	schema = addAuthToSchema(
+		{
+			tags: ['Captions'],
+			summary: 'Download a caption draft as a file',
+			description:
+				'The draft as it would be published, as an attachment (WebVTT or SubRip). Quran verse text the creator accepted is filled at download time from the Quran Foundation copy, unaltered, with the attribution and edition inside the file; unconfirmed suggestions are references. Owner or a channel role with `video.edit`. Never cached or stored. 400 `draft_empty` when no cue has text.',
+			request: {
+				params,
+				query: z.object({ format: Enumeration({ description: 'File format', values: ['vtt', 'srt'], default: 'vtt' }) }),
+			},
+			responses: {
+				'200': { description: 'The draft file (attachment)', content: { 'text/vtt': { schema: z.string() }, 'application/x-subrip': { schema: z.string() } } },
+				'400': { description: 'Nothing in the draft yet', content: Err },
+				'403': { description: 'Not allowed', content: Err },
+				'404': { description: 'No such video or draft', content: Err },
+			},
+		},
+		'required',
+	);
+
+	async handle(c: AppContext) {
+		const { params, query } = await this.getValidatedData<typeof this.schema>();
+		const access = await editableVideo(c, params.videoId, this.getUserId(c));
+		if ('response' in access) return access.response;
+		const draft = validLanguage(params.language) ? await readDraft(c.env.subtitles, params.videoId, params.language) : null;
+		if (!draft) return c.json({ success: false, error: 'draft_not_found' }, 404);
+		const format = ((query.format as string) || 'vtt') as SubtitleDownloadFormat;
+		const vtt = renderCaptionVtt(draft);
+		if (!vtt.includes(' --> ')) return c.json({ success: false, error: 'draft_empty' }, 400);
+
+		const quran = hasCaptionQuranMarkers(vtt);
+		const translated = quran && draft.kind === 'translation';
+		const edition = translated ? await editionFor(c.env as never, access.video.channelId, draft.language) : null;
+		const filled = quran
+			? await fillServedTrack(vtt, draft.language, c.env.MEDIA_PRIVATE, translated && captionMarkerRanges(vtt).translation.length ? { env: c.env as never, edition } : undefined)
+			: vtt;
+		const body = subtitleDownload(filled, format, quran ? { edition: translated ? edition : null } : null);
+		const safe = (s: string) => s.replace(/[^\w.-]/g, '_');
+		return new Response(body, {
+			status: 200,
+			headers: {
+				'Content-Type': format === 'srt' ? 'application/x-subrip; charset=utf-8' : 'text/vtt; charset=utf-8',
+				'Content-Disposition': `attachment; filename="${safe(params.videoId)}-${safe(draft.language)}-draft-v${draft.version}.${format}"`,
+				// Filled per request from a copy that must stay within 7 days of QF: never kept anywhere
+				'Cache-Control': 'no-store',
+			},
+		});
 	}
 }
 
