@@ -90,7 +90,8 @@ export function CostsHeader({ d, t, now }: Common & { d: CostsDashboard | null; 
   const refused = d?.collector.analytics?.state === 'refused';
   const warn = !!age && (age.stale || refused);
   return (
-    <header className="cost-hero p-5 sm:p-6" data-testid="costs-header">
+    // An opaque card: its text needs no street plate (globals.css)
+    <header className="cost-hero p-5 sm:p-6" data-testid="costs-header" data-solid-surface="">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <h1 className="text-3xl font-bold text-fg">{t('costs.title')}</h1>
