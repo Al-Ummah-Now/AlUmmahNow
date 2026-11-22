@@ -58,8 +58,8 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
       <Download className="h-4 w-4 shrink-0" aria-hidden />
       {/* Phones: the icon alone keeps a row's actions on one line (the name stays in aria-label and title) */}
       <span className="hidden whitespace-nowrap sm:inline">{t.action}</span>
-      {/* Open: the chevron turns and the button looks pressed (aria-expanded) */}
-      <ChevronDown className="hidden h-4 w-4 shrink-0 transition-transform group-aria-expanded:rotate-180 sm:inline" aria-hidden />
+      {/* Open (aria-expanded): the chevron turns and the button takes the primary colour, on phones too */}
+      <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-aria-expanded:rotate-180" aria-hidden />
     </>
   );
   if (look === 'track') {
@@ -68,7 +68,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
         {...common}
         variant="outline"
         size="sm"
-        className="group h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm aria-expanded:!border-primary aria-expanded:!bg-muted"
+        className="group h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm aria-expanded:!border-brand-ink aria-expanded:!bg-primary/25 aria-expanded:outline aria-expanded:outline-1 aria-expanded:outline-brand-ink"
       >
         {content}
       </Button>
@@ -77,7 +77,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
   return (
     <button
       {...common}
-      className="group inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-0 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-expanded:border-primary aria-expanded:bg-muted sm:px-3"
+      className="group inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2 text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-expanded:border-brand-ink aria-expanded:bg-primary/25 aria-expanded:outline aria-expanded:outline-1 aria-expanded:outline-brand-ink sm:px-3"
     >
       {content}
     </button>

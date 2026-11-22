@@ -12,7 +12,7 @@
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { isCaptionJobActive, formatNumber } from '@al-ummah/shared-types';
-import { AudioLines, BookOpen, FilePenLine, Languages, Loader2, Trash2, UploadCloud } from 'lucide-react';
+import { AlertTriangle, AudioLines, BookOpen, FilePenLine, Languages, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { refreshFeatures, useFeatures } from '@/hooks/useFeatures';
@@ -329,7 +329,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     <span
                       data-testid="caption-draft-status"
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        !isPublished ? 'bg-muted text-foreground' : outdated ? 'bg-brand-soft text-brand-ink' : 'border border-current text-[var(--fanous-color-success-text)]'
+                        !isPublished ? 'border border-current bg-muted text-foreground' : outdated ? 'bg-brand-soft text-brand-ink' : 'border border-current text-[var(--fanous-color-success-text)]'
                       }`}
                     >
                       {statusLabel}
@@ -339,7 +339,9 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     {d.kind === 'translation' && d.sourceLanguage ? tc.translate.from.replace('{language}', label(d.sourceLanguage)) : tc.origin[d.origin]}
                   </p>
                   {d.kind === 'translation' && !isPublished && (
-                    <p data-testid="caption-draft-machine" className="text-xs font-medium text-brand-ink">
+                    // A warning in every theme, by its icon and tint as well as its colour (Zujaj's ink is close to its body text)
+                    <p data-testid="caption-draft-machine" className="inline-flex items-start gap-1.5 rounded-md bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
+                      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                       {tc.translate.review}
                     </p>
                   )}
