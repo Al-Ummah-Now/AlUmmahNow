@@ -66,7 +66,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
         {...common}
         variant="outline"
         size="sm"
-        className="h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm dark:border-gray-600 dark:text-white dark:hover:bg-gray-700"
+        className="h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm"
       >
         {content}
       </Button>

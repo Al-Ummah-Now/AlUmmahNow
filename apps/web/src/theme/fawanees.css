@@ -96,7 +96,7 @@ html.fanous-street .street-plate {
 /* Studio's video editor (components/videoEdit): the form panel and the cards inside it (published caption
    tracks, caption drafts) sit on solid surfaces blended over the page, so the street never shows through
    them (owner, 2026-11-22). Cards are a step lighter than the panel so they still read as cards. The
-   attribute selectors outrank system.css's glass rule for rounded bg-white / bg-card boxes. */
+   attribute selectors outrank system.css's glass rule for rounded white or card boxes. */
 html[data-theme='fawanees']:not(.dark) div.video-edit-form[data-testid][class*='rounded'][class*='shadow'] { background: color-mix(in srgb, white 80%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees']:not(.dark) .video-edit-form :is([data-slot='card'], [class*='bg-card'][class*='rounded'][class*='border']):not(button):not(a) { background: color-mix(in srgb, white 92%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
 html[data-theme='fawanees'].dark div.video-edit-form[data-testid][class*='rounded'][class*='shadow'] { background: color-mix(in srgb, var(--aun-glass-base-dark) 85%, var(--fanous-color-background)) !important; backdrop-filter: none !important; }
