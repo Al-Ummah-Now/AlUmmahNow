@@ -1,16 +1,17 @@
 /**
  * Shared by web and admin-web (worker.ts is identical in both apps).
  *
- * One robots meta on every error page (404, 410, 5xx), and the same one on every app of the family
- * (wiki guides/error-pages.md): "noindex, nofollow". Next adds its own `noindex` meta to any page
- * answered with a status above 400 (app-render NonIndex), next to the page's metadata robots, so
- * an error page would carry two. Here the first is kept with the family's value and the rest are
- * dropped (Workers HTMLRewriter; a runtime without it passes the page through).
+ * One robots meta on every error page (404, 410, 5xx), and the family's "noindex, nofollow" in the
+ * X-Robots-Tag header (wiki guides/error-pages.md). Next renders its own `noindex` meta on any page
+ * answered with a status above 400 (app-render NonIndex, and again in the HTML for a notFound()), and
+ * error routes set no robots of their own (lib/seo/not-found-metadata.ts). Here the first robots meta
+ * is kept exactly as it is and the rest are dropped (Workers HTMLRewriter; a runtime without it passes
+ * the page through). Never rewrite the kept one: React claims a server <meta> on hydration only when
+ * its content matches what it renders, so a rewritten one gets a fresh `noindex` twin beside it.
  */
 export const ERROR_ROBOTS = 'noindex, nofollow';
 
 interface RewriterElement {
-  setAttribute(n: string, v: string): void;
   remove(): void;
 }
 interface Rewriter {
@@ -35,7 +36,6 @@ export function withOneRobotsMeta(response: Response): Response {
           return;
         }
         seen = true;
-        el.setAttribute('content', ERROR_ROBOTS);
       },
     })
     .transform(tagged);

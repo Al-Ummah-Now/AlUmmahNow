@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 import { UpgradePage } from '@/components/upgrade/UpgradePage';
 import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 import { apiRequestServerResult, buildApiUrl } from '@/lib/api/api-client';
@@ -7,6 +9,8 @@ import { apiRequestServerResult, buildApiUrl } from '@/lib/api/api-client';
 /** /upgrade: request or buy a tier (wiki AUN-TIER-REQUESTS, AUN-SUBS). For signed-in viewers: never indexed. */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
+  // Off: the page is the 404, with its title and robots
+  if (await upgradeIsOff()) return notFoundMetadata();
   const t = getTranslations(locale === 'ar' ? 'ar' : 'en');
   return { title: t.upgrade.metaTitle, robots: { index: false, follow: false } };
 }
@@ -17,14 +21,14 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
  * The mode is site-wide, so the anonymous overview decides; any other failure still renders the page, which
  * shows its own error and retry.
  */
-async function upgradeIsOff(): Promise<boolean> {
+const upgradeIsOff = cache(async (): Promise<boolean> => {
   const res = await apiRequestServerResult<unknown>(
     { method: 'GET', url: buildApiUrl('/api/tiers/upgrade'), functionName: 'upgradePageMode' },
     async () => null,
     false,
   );
   return res.status === 404;
-}
+});
 
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;

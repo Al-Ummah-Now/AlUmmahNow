@@ -5,6 +5,7 @@ import { ERROR_KIND_STATUS, ERROR_PAGE_ICONS, errorCodeLabel, errorKindIcon, err
 import { boundaryOutcome, handleBoundaryError } from '@/lib/errors/boundary';
 import { reportError } from '@/lib/errors/reporter';
 import { recoverFromVersionSkew } from '@/lib/version-skew';
+import { useErrorTabTitle } from '@/hooks/useErrorTabTitle';
 
 interface FriendlyErrorProps {
   locale: string;
@@ -52,10 +53,9 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
     setCanGoBack(lost && window.history.length > 1);
     setContactHref(contactHrefFor(window.location, locale, reference));
   }, [lost, locale, reference]);
-  // The tab says what happened, in the family's format. React 19 hoists a rendered <title> ahead of the
-  // route's own (a document.title write lost to it); the 404 page's title is its metadata
-  // (app/not-found.tsx), so it never carries a second <title>.
-  const ownTitle = lost ? null : errorPageTitle(locale, copy.title);
+  // The tab says what happened, in the family's format, whatever title the route's metadata streams in
+  // (useErrorTabTitle); the 404 page's server HTML already carries it (app/not-found.tsx)
+  useErrorTabTitle(errorPageTitle(locale, copy.title));
 
   let primary: { label: string; icon: ErrorPageIcon; onClick?: () => void; href?: string };
   if (kind === 'update') primary = { label: s.reload, icon: 'update', onClick: reload };
@@ -71,8 +71,6 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
   );
 
   return (
-    <>
-    {ownTitle ? <title>{ownTitle}</title> : null}
     <div
       lang={locale}
       dir={dir}
@@ -126,7 +124,6 @@ export function FriendlyError({ locale, kind, reference, onRetry, inline = false
         </footer>
       </section>
     </div>
-    </>
   );
 }
 

@@ -35,8 +35,11 @@ describe('FriendlyError', () => {
     document.head.innerHTML = '<title>Error test | Al Ummah Now</title>';
     const { unmount } = render(<FriendlyError error={new Error(RAW)} reset={() => undefined} boundary="locale" />);
     await waitFor(() => expect(document.title).toBe('Something went wrong | Al Ummah Now'));
-    // A rendered <title>, hoisted ahead of the route's (never a document.title write that the route's metadata wins over)
-    expect(document.head.querySelectorAll('title')).toHaveLength(2);
+    // The route's metadata title streams in after the screen mounted: the screen's title still wins
+    const late = document.createElement('title');
+    late.textContent = 'Error test | Al Ummah Now';
+    document.head.insertBefore(late, document.head.firstChild);
+    await waitFor(() => expect(document.title).toBe('Something went wrong | Al Ummah Now'));
     unmount();
     expect(document.title).toBe('Error test | Al Ummah Now');
     document.head.innerHTML = '';

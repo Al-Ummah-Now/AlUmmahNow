@@ -7,7 +7,7 @@ describe('withOneRobotsMeta (one robots meta on an error page)', () => {
   const calls: string[] = [];
   class FakeRewriter {
     on(selector: string, h: { element(el: { setAttribute(n: string, v: string): void; remove(): void }): void }) {
-      // Two robots metas on the page: Next's own noindex, then the page's metadata
+      // Two robots metas on the page: Next's NonIndex and the one it adds to the HTML for a notFound()
       for (let i = 0; i < 2; i++) h.element({ setAttribute: (n, v) => calls.push(`${i} set ${n}=${v}`), remove: () => calls.push(`${i} removed`) });
       calls.push(`selector ${selector}`);
       return this;
@@ -22,14 +22,15 @@ describe('withOneRobotsMeta (one robots meta on an error page)', () => {
     calls.length = 0;
   });
 
-  it('keeps the first with "noindex, nofollow" and drops the rest on 404, 410 and 5xx', () => {
+  it('keeps the first exactly as it is (hydration claims it), drops the rest, and sends noindex, nofollow in the header', () => {
     (globalThis as { HTMLRewriter?: unknown }).HTMLRewriter = FakeRewriter;
     for (const status of [404, 410, 500, 503]) {
       calls.length = 0;
       const out = withOneRobotsMeta(html(status));
       expect(out.status).toBe(status);
       expect(out.headers.get('X-Robots-Tag')).toBe(ERROR_ROBOTS);
-      expect(calls).toEqual([`0 set content=${ERROR_ROBOTS}`, '1 removed', 'selector meta[name="robots"]']);
+      // Never rewritten: React adopts a server <meta> only when its content matches, else it adds a twin
+      expect(calls).toEqual(['1 removed', 'selector meta[name="robots"]']);
     }
     expect(ERROR_ROBOTS).toBe('noindex, nofollow');
   });

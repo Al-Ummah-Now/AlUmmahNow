@@ -14,6 +14,7 @@ import {
   type FriendlyErrorKind,
 } from '@al-ummah/shared-types';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
+import { useErrorTabTitle } from './useErrorTabTitle';
 
 /**
  * The error card every error screen on the site uses (404, 410, 500, a crashed page, sign-in failed):
@@ -141,11 +142,9 @@ export function ErrorScreen(props: ErrorScreenProps) {
   const head: Head = swapped ? { kind, title: s.kinds[kind].title, body: s.kinds[kind].body } : { kind, title: props.title ?? s.kinds[kind].title, body: props.body ?? s.kinds[kind].body };
   const status = ERROR_KIND_STATUS[kind];
   // The tab says what happened, in the family's one format ("Something went wrong | Al Ummah Now"),
-  // whatever route the error happened on. React 19 hoists a rendered <title> into <head> ahead of the
-  // route's own, so it wins while the screen is up and goes when it unmounts (a document.title write
-  // lost to the route's metadata title). The 404/410 page's title is its metadata (not-found-metadata,
-  // the Worker's 410 swap), so it never carries a second <title>.
-  const ownTitle = kind !== 'notFound' && kind !== 'gone' ? errorPageTitle(locale, head.title) : null;
+  // whatever route the error happened on and whatever title its metadata streams in (useErrorTabTitle).
+  // A 404/410's server HTML already carries it (not-found-metadata, the Worker's 410 swap).
+  useErrorTabTitle(errorPageTitle(locale, head.title));
   const [copied, setCopied] = useState(false);
   // After mount only (the server can't know the history): no hydration mismatch
   const [canGoBack, setCanGoBack] = useState(false);
@@ -163,8 +162,6 @@ export function ErrorScreen(props: ErrorScreenProps) {
   };
 
   return (
-    <>
-    {ownTitle ? <title>{ownTitle}</title> : null}
     <main
       id={MAIN_CONTENT_ID}
       className="ep"
@@ -221,6 +218,5 @@ export function ErrorScreen(props: ErrorScreenProps) {
         </footer>
       </section>
     </main>
-    </>
   );
 }

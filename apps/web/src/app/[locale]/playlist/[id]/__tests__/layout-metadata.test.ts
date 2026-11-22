@@ -13,6 +13,7 @@ jest.mock('@/lib/embed/content', () => ({ loadPublicPlaylistResult: jest.fn(), l
 
 import { generateMetadata } from '../layout';
 import { loadPublicPlaylistResult, loadPublicVideo } from '@/lib/embed/content';
+import { playlistAvailability } from '@/lib/seo/availability-server';
 
 const playlist = loadPublicPlaylistResult as jest.Mock;
 const video = loadPublicVideo as jest.Mock;
@@ -36,5 +37,23 @@ describe('playlist share card', () => {
     video.mockResolvedValue(null);
     const meta = await generateMetadata(params('en'));
     expect(meta.twitter).toMatchObject({ card: 'summary_large_image', images: [`${O}/og/c/c1.jpg`] });
+  });
+});
+
+describe('playlist the layout answers 404 for', () => {
+  beforeEach(() => jest.clearAllMocks());
+  const NOT_FOUND = { title: { absolute: 'Page not found | Al Ummah Now' }, robots: null };
+
+  it('missing (or purged, the Worker\'s 410): the 404 page\'s title and no robots of its own', async () => {
+    (playlistAvailability as jest.Mock).mockResolvedValueOnce('missing');
+    expect(await generateMetadata(params('en'))).toEqual(NOT_FOUND);
+    // Not an id at all
+    expect(await generateMetadata({ params: Promise.resolve({ locale: 'en', id: '../../etc' }) })).toEqual(NOT_FOUND);
+    expect(playlist).not.toHaveBeenCalled();
+  });
+
+  it('restricted (only the owner sees it): noindex, no share card', async () => {
+    (playlistAvailability as jest.Mock).mockResolvedValueOnce('restricted');
+    expect(await generateMetadata(params('en'))).toEqual({ robots: { index: false, follow: false } });
   });
 });
