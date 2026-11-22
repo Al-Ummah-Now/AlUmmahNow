@@ -147,7 +147,7 @@ export default function PostCard({
             </Link>
             {origin && (
               <>
-                <MetaSep lang={lang} gap="6px" />
+                <MetaSep lang={lang} spaced />
                 {origin.url ? (
                   <a
                     href={origin.url}
