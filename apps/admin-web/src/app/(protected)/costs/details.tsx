@@ -9,7 +9,7 @@
  *   price, its idle floor, an open jump and its last 14 days.
  */
 import Link from '@/components/AppLink';
-import { BreakAtHyphens } from '@/components/BreakAtHyphens';
+import { TruncatedName } from '@/components/TruncatedName';
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { CF_METERS } from '@al-ummah/shared-types';
@@ -171,9 +171,10 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
         <ul className="mt-4 space-y-3 sm:hidden" data-testid="costs-drivers-cards">
           {d.drivers.map((r) => (
             <li key={r.id} className="cost-tile p-3 text-sm" data-testid="costs-driver-card" data-env={r.env}>
-              <p className="font-medium text-fg">
-                <bdi><BreakAtHyphens name={r.name} /></bdi>
-                <span className="ms-2 text-xs font-normal text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
+              {/* The name on one line, never broken at its hyphens; too long, it ends in an ellipsis (full on tap) */}
+              <p className="flex min-w-0 items-baseline gap-2 font-medium text-fg">
+                <span className="min-w-0"><TruncatedName name={r.name} /></span>
+                <span className="shrink-0 text-xs font-normal text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
               </p>
               <p className="mt-1 inline-flex items-center gap-1.5 text-fg-muted">
                 <span aria-hidden="true" className="inline-block h-2 w-2 rounded-full" style={{ background: TREND_COLOR[r.env] }} />
@@ -219,12 +220,15 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
               {d.drivers.map((r) => {
                 return (
                   <tr key={r.id} className="border-t border-border" data-testid="costs-driver-row" data-env={r.env}>
-                    <th scope="row" className="px-3 py-2.5 text-start font-normal text-fg">
-                      {/* Isolated: a Latin name next to a Latin kind label would merge into one run in Arabic */}
-                      <bdi><BreakAtHyphens name={r.name} /></bdi>
-                      <span className="ms-2 text-xs text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
+                    {/* The name takes the row's spare width on one line (w-full max-w-0), never broken at its hyphens;
+                        isolated (dir=ltr) so a Latin name and a Latin kind label never merge into one run in Arabic */}
+                    <th scope="row" className="w-full max-w-0 px-3 py-2.5 text-start font-normal text-fg">
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <span className="min-w-0"><TruncatedName name={r.name} /></span>
+                        <span className="shrink-0 text-xs text-fg-muted"><bdi>{t(`operations.tabs.${r.kind}`)}</bdi></span>
+                      </div>
                       {r.spike && (
-                        <span className="ms-2 inline-block rounded-full border border-danger-border bg-danger-bg px-2 py-0.5 text-xs text-danger-fg" data-testid="costs-driver-spike">
+                        <span className="mt-1 inline-block rounded-full border border-danger-border bg-danger-bg px-2 py-0.5 text-xs text-danger-fg" data-testid="costs-driver-spike">
                           {t('costs.drivers.jump', { value: f.usd(r.spike.cost), baseline: f.usd(r.spike.baseline) })}
                         </span>
                       )}
@@ -235,7 +239,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                         {t(`costs.envs.${r.env}`)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-end tabular-nums text-fg">{f.usd(r.mtdUsd)}</td>
+                    <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg">{f.usd(r.mtdUsd)}</td>
                     <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg-muted">{t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) })}</td>
                     <td className="px-3 py-2.5 text-end">
                       <Spark r={r} f={f} sep={t('common.sep')} />

@@ -461,7 +461,7 @@ describe('costs audit fixes (AUDIT-2 2026-11-21)', () => {
     assert.ok(html.includes('$201.88') && html.includes('$55.67') && html.includes('$146.21'), 'list, included usage and billed');
   });
 
-  it('lists drivers as labelled cards on phones and wraps names only at hyphens', () => {
+  it('lists drivers as labelled cards on phones, each name whole on one line (AUDIT-2 round 15)', () => {
     const t = createTranslator('ar');
     const f = opsFormats('ar');
     const d = freshDashboard({
@@ -470,7 +470,8 @@ describe('costs audit fixes (AUDIT-2 2026-11-21)', () => {
     const html = render(h(details.DriversSection, { d, t, f }));
     assert.match(html, /class="[^"]*sm:hidden" data-testid="costs-drivers-cards"/);
     assert.match(html, /data-testid="costs-driver-card"/);
-    assert.ok(html.replace(/<\/?span>/g, '').includes('al-<wbr/>ummah-<wbr/>auth-<wbr/>qa'), 'breaks only after "-"');
+    assert.match(html, /<span dir="ltr" title="al-ummah-auth-qa" class="block rtl:text-right truncate">al-ummah-auth-qa<\/span>/, 'one line, never broken at its hyphens');
+    assert.ok(!html.includes('<wbr'));
     assert.ok(!html.includes('break-all'));
     assert.ok(!html.includes('أمريكي, '), 'the spoken list joins days with the Arabic separator');
     for (const key of ['mtd', 'idle', 'last14'] as const) assert.ok(html.includes(t(`costs.drivers.${key}`)), `card labels ${key}`);
@@ -777,5 +778,14 @@ describe('AUDIT-2 round 14: line breaks', () => {
     const loose = strings.filter((s) => /(^|[\s(])[Aa] [A-Za-z0-9{$]/.test(s) || /New York/.test(s));
     assert.deepEqual(loose, []);
     assert.equal(createTranslator('en')('costs.alerts.help.digest' as never, { day: 'Monday', hour: '9 AM' } as never).includes('New York'), true);
+  });
+});
+
+describe('AUDIT-2 round 15: resource names stay whole', () => {
+  it('a resource name is one LTR line with its full name as the title, never split at its hyphens', async () => {
+    const { TruncatedName } = await import('../src/components/TruncatedName');
+    const html = renderToStaticMarkup(React.createElement(TruncatedName, { name: 'al-ummah-api-videos-stage', testId: 'ops-resource-name' }));
+    assert.match(html, /^<span dir="ltr" title="al-ummah-api-videos-stage" class="block rtl:text-right truncate" data-testid="ops-resource-name">al-ummah-api-videos-stage<\/span>$/);
+    assert.ok(!html.includes('<wbr') && !html.includes('break-all'));
   });
 });

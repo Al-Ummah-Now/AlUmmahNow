@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import { BreakAtHyphens } from '@/components/BreakAtHyphens';
+import { TruncatedName } from '@/components/TruncatedName';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import { getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
@@ -65,42 +65,67 @@ function ResourcesTable({ kind, resources, t, f }: { kind: OpsKind; resources: O
   const spec = TAB_CHARTS[kind][0];
   const fmt = (v: number | null | undefined) => (v === null || v === undefined ? '—' : f[spec.format](v));
   if (resources.length === 0) return <p className="text-fg-muted" data-testid="ops-resources-empty">{t('operations.resources.empty')}</p>;
+  const metricLabel = t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) });
+  const spark = (r: OpsResource) => {
+    const max = Math.max(0, ...r.spark.values.map((v) => v ?? 0));
+    return (
+      <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(t('common.sep'))} role="img">
+        {r.spark.values.map((v, i) => (
+          <span key={r.spark.days[i]} className="w-1.5 bg-accent" style={{ height: `${max > 0 && v ? Math.max(8, (v / max) * 100) : 4}%`, opacity: v ? 1 : 0.3 }} />
+        ))}
+      </span>
+    );
+  };
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Phones: one row per resource, the name on its own full-width line (never broken at its hyphens),
+        today's figure and the week under it (AUDIT-2 round 15: three columns left the name ~120px) */}
+    <ul className="divide-y divide-border text-sm sm:hidden" data-testid="ops-resources-cards">
+      {resources.map((r) => (
+        <li key={r.id} className="py-2.5" data-testid="ops-resource-card">
+          <span className="block font-medium text-fg"><TruncatedName name={r.name} testId="ops-resource-card-name" /></span>
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <p className="text-fg-muted">
+              <span className="block text-xs">{metricLabel}</span>
+              <span className="tabular-nums text-fg">{fmt(r.metrics[spec.metric])}</span>
+            </p>
+            <div className="text-end">
+              <span className="block text-xs text-fg-muted">{t('operations.resources.last7')}</span>
+              {spark(r)}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto sm:block">
       <table className="w-full text-sm" data-testid="ops-resources">
         <caption className="sr-only">{t('operations.resources.title')}</caption>
         <thead>
           <tr className="text-fg-muted">
             <th scope="col" className="p-2 text-start font-medium">{t('operations.resources.name')}</th>
-            <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{t('operations.resources.metricToday', { metric: t(`operations.charts.${spec.label}`) })}</th>
+            <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{metricLabel}</th>
             <th scope="col" className="p-2 text-end font-medium whitespace-nowrap">{t('operations.resources.last7')}</th>
           </tr>
         </thead>
         <tbody>
           {resources.map((r) => {
-            const max = Math.max(0, ...r.spark.values.map((v) => v ?? 0));
             return (
               <tr key={r.id} className="border-t border-border" data-testid="ops-resource-row">
-                <th scope="row" className="p-2 text-start font-normal text-fg [overflow-wrap:normal] [word-break:normal]" data-testid="ops-resource-name">
-                  {/* The cell follows the page (an Arabic name column starts on the right); the Latin name keeps its own order */}
-                  <span dir="ltr">
-                    <BreakAtHyphens name={r.name} />
-                  </span>
+                {/* The name takes every spare pixel of the row (w-full max-w-0), on one line: never broken at its
+                    hyphens; a name that still does not fit ends in an ellipsis, full on hover or tap (AUDIT-2 round 15).
+                    The cell follows the page (an Arabic name column starts on the right). */}
+                <th scope="row" className="w-full max-w-0 p-2 text-start font-normal text-fg">
+                  <TruncatedName name={r.name} testId="ops-resource-name" />
                 </th>
-                <td className="p-2 text-end tabular-nums">{fmt(r.metrics[spec.metric])}</td>
-                <td className="p-2 text-end">
-                  <span className="inline-flex h-6 items-end gap-0.5" aria-label={r.spark.values.map((v, i) => `${f.day(r.spark.days[i])}: ${fmt(v)}`).join(t('common.sep'))} role="img">
-                    {r.spark.values.map((v, i) => (
-                      <span key={r.spark.days[i]} className="w-1.5 bg-accent" style={{ height: `${max > 0 && v ? Math.max(8, (v / max) * 100) : 4}%`, opacity: v ? 1 : 0.3 }} />
-                    ))}
-                  </span>
-                </td>
+                <td className="whitespace-nowrap p-2 text-end tabular-nums">{fmt(r.metrics[spec.metric])}</td>
+                <td className="whitespace-nowrap p-2 text-end">{spark(r)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
