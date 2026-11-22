@@ -154,6 +154,8 @@ export interface IdleProjection {
   parts: { cloudflare: number; bunny: number; containers: number; ai: number; plan: number; fixed: number };
   /** The biggest idle drivers, for the page's "what keeps costing" list. */
   top: { id: string; env: string; name: string; kind: string; monthlyUsd: number }[];
+  /** Every resource's idle cost a month (top keeps only the biggest), so each driver row shows its own. */
+  byResource: Record<string, number>;
   days: string[];
 }
 
@@ -180,9 +182,11 @@ export function idleProjection(
   const floor = (costs: Map<string, number>) => Math.min(...days.map((d) => costs.get(d) ?? 0));
   const byEnv: Record<string, number> = {};
   const top: IdleProjection['top'] = [];
+  const perResource: Record<string, number> = {};
   let cloudflare = 0;
   for (const [id, e] of byResource) {
     const monthly = floor(e.costs) * 30;
+    perResource[id] = round2(Math.max(0, monthly));
     if (monthly <= 0) continue;
     cloudflare += monthly;
     byEnv[e.env] = (byEnv[e.env] ?? 0) + monthly;
@@ -205,6 +209,7 @@ export function idleProjection(
     byEnv,
     parts,
     top: top.slice(0, 15),
+    byResource: perResource,
     days,
   };
 }
@@ -394,7 +399,8 @@ export function costDrivers(resourceDays: ResourceDay[], idle: IdleProjection, s
     d.byDay.set(r.day, (d.byDay.get(r.day) ?? 0) + num(r.cost));
     drivers.set(r.resource_id, d);
   }
-  const idleById = new Map(idle.top.map((t) => [t.id, t.monthlyUsd]));
+  // Every resource's own idle figure, not only the biggest few (a small Worker idles at cents, not nothing)
+  const idleById = new Map(Object.entries(idle.byResource ?? {}));
   // The month to date the page shows (its product's total split in cents), so drivers add up to their products
   if (shown) for (const d of drivers.values()) d.mtd = shown.get(d.id)?.usd ?? round2(d.mtd);
   return [...drivers.values()]

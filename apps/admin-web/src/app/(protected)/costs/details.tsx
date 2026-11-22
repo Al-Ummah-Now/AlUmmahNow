@@ -193,7 +193,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                 </div>
                 <div>
                   <dt className="text-xs text-fg-muted">{t('costs.drivers.idle')}</dt>
-                  <dd className="tabular-nums text-fg-muted">{r.idleMonthlyUsd > 0 ? t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) }) : '—'}</dd>
+                  <dd className="tabular-nums text-fg-muted">{t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) })}</dd>
                 </div>
                 <div className="col-span-2">
                   <dt className="text-xs text-fg-muted">{t('costs.drivers.last14')}</dt>
@@ -236,7 +236,7 @@ export function DriversSection({ d, t, f }: Common & { d: CostsDashboard }) {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-end tabular-nums text-fg">{f.usd(r.mtdUsd)}</td>
-                    <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg-muted">{r.idleMonthlyUsd > 0 ? t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) }) : '—'}</td>
+                    <td className="px-3 py-2.5 text-end tabular-nums whitespace-nowrap text-fg-muted">{t('costs.drivers.perMonth', { value: f.usd(r.idleMonthlyUsd) })}</td>
                     <td className="px-3 py-2.5 text-end">
                       <Spark r={r} f={f} sep={t('common.sep')} />
                     </td>
