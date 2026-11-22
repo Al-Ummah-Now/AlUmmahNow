@@ -46,11 +46,6 @@ export function keepNumbersWithUnits(text: string): string {
   return text.replace(/([0-9\u0660-\u0669][0-9\u0660-\u0669\u066b\u066c.,%\u066a]*) /g, '$1\u00a0').replace(/ (?=[0-9\u0660-\u0669])/g, '\u00a0');
 }
 
-/** Between the parts of a meta line: " • " in English, the Arabic comma «، » in Arabic (never • or ·) */
-export function metaSeparator(lang: MetaLang | string): string {
-  return lang === 'ar' ? '، ' : ' • ';
-}
-
 const toDate = (value: Date | string | number | null | undefined): Date | null => {
   if (value === null || value === undefined || value === '') return null;
   const date = value instanceof Date ? value : new Date(value);

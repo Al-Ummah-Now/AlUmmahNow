@@ -1,4 +1,4 @@
-import { keepNumbersWithUnits, metaSeparator } from '../videoMeta';
+import { keepNumbersWithUnits } from '../videoMeta';
 
 describe('keepNumbersWithUnits', () => {
   it('ties a number to its unit and the word before it, en and ar', () => {
@@ -14,9 +14,3 @@ describe('keepNumbersWithUnits', () => {
   });
 });
 
-describe('metaSeparator', () => {
-  it('is «، » in Arabic and " • " in English', () => {
-    expect(metaSeparator('ar')).toBe('، ');
-    expect(metaSeparator('en')).toBe(' • ');
-  });
-});

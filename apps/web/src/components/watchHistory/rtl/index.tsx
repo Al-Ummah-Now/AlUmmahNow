@@ -17,7 +17,6 @@ import { formatAbsoluteDate, formatRelativeTime, formatVideoCount, keepNumbersWi
 import { MetaParts } from '@/components/common/MetaParts';
 import { channelLabel } from '@/lib/channel-name';
 
-import { metaSeparator } from '@/lib/i18n/meta-separator';
 function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryProps) {
   const percent = Math.max(0, Math.min(100, Math.round(entry.percentageWatched || 0)));
   const watchedOn = formatRelativeTime(entry.lastWatchedAt, lang === 'ar' ? 'ar' : 'en');
