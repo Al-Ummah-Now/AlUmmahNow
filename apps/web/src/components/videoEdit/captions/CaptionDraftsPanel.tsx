@@ -228,7 +228,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
       {(!!drafts?.length || transcript || claims.length > 0) && (
         <div>
           <h4 className="text-base font-semibold text-foreground">{tc.draftsTitle}</h4>
-          <p className="text-xs text-muted-foreground">{tc.draftsHint}</p>
+          <p className="text-xs text-muted-foreground [text-wrap:balance]">{tc.draftsHint}</p>
         </div>
       )}
       {notice ? (
