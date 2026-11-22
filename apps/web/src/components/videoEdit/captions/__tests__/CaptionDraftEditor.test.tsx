@@ -89,6 +89,9 @@ describe('CaptionDraftEditor', () => {
     expect(video.hasAttribute('controls')).toBe(false);
     expect(screen.getByRole('button', { name: 'Play video' })).toBeTruthy();
     expect(screen.getByRole('slider')).toBeTruthy();
+    // Current time and duration each isolated left to right, so Arabic digits never swap them
+    const clock = screen.getByRole('slider').previousElementSibling!;
+    expect(Array.from(clock.querySelectorAll('span')).map((s) => s.getAttribute('dir'))).toEqual(['ltr', 'ltr']);
   });
 
   it('"Confirm all suggested" leaves possible Quran for a look; publish saves over the loaded version first', async () => {
