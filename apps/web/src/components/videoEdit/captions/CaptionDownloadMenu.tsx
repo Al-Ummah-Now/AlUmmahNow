@@ -68,7 +68,7 @@ export function CaptionDownloadButton({ language, languageLabel, source, expande
         {...common}
         variant="outline"
         size="sm"
-        className="group h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm aria-expanded:!border-brand-ink aria-expanded:!bg-primary/25 aria-expanded:outline aria-expanded:outline-1 aria-expanded:outline-brand-ink"
+        className="group h-8 min-w-[44px] gap-1.5 px-3 text-xs md:h-9 md:text-sm aria-expanded:!border-brand-ink aria-expanded:!bg-primary/25 aria-expanded:!outline-solid aria-expanded:!outline-1 aria-expanded:!outline-offset-0 aria-expanded:!outline-brand-ink"
       >
         {content}
       </Button>

@@ -339,8 +339,10 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     {d.kind === 'translation' && d.sourceLanguage ? tc.translate.from.replace('{language}', label(d.sourceLanguage)) : tc.origin[d.origin]}
                   </p>
                   {d.kind === 'translation' && !isPublished && (
-                    // A warning in every theme, by its icon and tint as well as its colour (Zujaj's ink is close to its body text)
-                    <p data-testid="caption-draft-machine" className="inline-flex items-start gap-1.5 rounded-md bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
+                    // A warning callout in every theme, by its icon, start bar and tint as well as its colour (Zujaj's ink is close
+                    // to its body text). Full width at every size: a wrapped box can't shrink to its lines, so it never hugs on
+                    // one screen and stretches on another
+                    <p data-testid="caption-draft-machine" className="flex w-full items-start gap-1.5 rounded-md border-s-2 border-brand-ink bg-brand-soft px-2 py-1.5 text-xs font-semibold text-brand-ink">
                       <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                       <span style={{ textWrap: 'balance' }}>{tc.translate.review}</span>
                     </p>
