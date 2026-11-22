@@ -34,8 +34,24 @@ describe('ChannelAboutFields look like the Profile form fields', () => {
     const { container } = render(
       <ChannelAboutFields channelId="ch1" currentHandle="halaqat.alfajr" value={{ handle: 'halaqat.alfajr', links: [], contactEmail: '', location: '' }} onChange={jest.fn()} />,
     );
-    const help = [...container.querySelectorAll('p')];
-    expect(help.length).toBeGreaterThanOrEqual(4);
+    const handleHelp = screen.getByTestId('channel-handle-help');
+    const help = [...container.querySelectorAll('p')].filter((p) => p !== handleHelp);
+    expect(help.length).toBeGreaterThanOrEqual(3);
     for (const p of help) expect(p).toHaveClass('text-balance');
+  });
+
+  it('the handle help puts the URL and the rule on their own lines, the URL isolated (no "… 3 / to 30")', () => {
+    render(
+      <ChannelAboutFields channelId="ch1" currentHandle="halaqat.alfajr" value={{ handle: 'halaqat.alfajr', links: [], contactEmail: '', location: '' }} onChange={jest.fn()} />,
+    );
+    const help = screen.getByTestId('channel-handle-help');
+    const lines = [...help.children] as HTMLElement[];
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line).toHaveClass('block');
+    expect(lines[0].textContent).toMatch(/^Your channel URL: \S+\/@halaqat\.alfajr\.$/);
+    expect(lines[0].querySelector('bdi')).toHaveAttribute('dir', 'ltr');
+    expect(lines[0].querySelector('bdi')?.textContent).toMatch(/\/@halaqat\.alfajr$/);
+    expect(lines[1].textContent).toBe('3 to 30 characters: Latin letters, digits, periods, underscores and hyphens.');
+    expect(lines[1]).toHaveClass('text-balance');
   });
 });

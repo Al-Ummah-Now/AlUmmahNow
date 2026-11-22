@@ -116,6 +116,12 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
   const previewUrl = `${origin}/${lang}/@${normalizedHandle || t.channel.handlePlaceholder}`;
   const emailInvalid = !isValidContactEmail(value.contactEmail);
 
+  // handleHelp is "<lead>{url}.<space><rule>": split it into the URL sentence and the rule
+  const [handleHelpLead, handleHelpAfterUrl = ''] = t.channel.handleHelp.split('{url}');
+  const tailMatch = /^(\S*)\s+([\s\S]*)$/.exec(handleHelpAfterUrl);
+  const handleHelpUrlTail = tailMatch ? tailMatch[1] : handleHelpAfterUrl;
+  const handleHelpRule = tailMatch ? tailMatch[2] : '';
+
   return (
     <div className="space-y-6" data-testid="channel-about-fields">
       {/* Handle */}
@@ -143,8 +149,15 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
             data-testid="channel-handle-input"
           />
         </div>
-        <p id={ids.handleHelp} className="text-balance text-sm text-muted-foreground mt-1 break-words">
-          {t.channel.handleHelp.replace('{url}', previewUrl)}
+        <p id={ids.handleHelp} className="text-sm text-muted-foreground mt-1 break-words" data-testid="channel-handle-help">
+          {/* The URL sentence and the handle rule each get their own line, so no break lands inside
+              "3 to 30"; the Latin URL is isolated so it never reorders inside Arabic. */}
+          <span className="block">
+            {handleHelpLead}
+            <bdi dir="ltr">{previewUrl}</bdi>
+            {handleHelpUrlTail}
+          </span>
+          {handleHelpRule && <span className="block text-balance">{handleHelpRule}</span>}
         </p>
         <p id={ids.handleStatus} className="text-balance text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
           {status.state === 'checking' && <span className="text-muted-foreground">{t.channel.handleChecking}</span>}
