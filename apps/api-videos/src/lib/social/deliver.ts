@@ -52,6 +52,7 @@ import { telegramAdapter } from './adapters/telegram';
 import { blueskyAdapter, blueskyRefresh } from './adapters/bluesky';
 import { mastodonAdapter } from './adapters/mastodon';
 import { logger } from '../logger';
+import { originOf } from '../importSources/store';
 
 async function enqueue(env: SocialEnv, payload: SocialDeliveryPayload, delaySeconds?: number): Promise<void> {
 	if (!env.queue) throw new Error('queue not bound');
@@ -69,7 +70,10 @@ export async function planEvent(env: SocialEnv, channelId: string, event: Social
 	const { results: hooks } = await db.prepare('SELECT id, events FROM social_webhooks WHERE channel_id = ? AND enabled = 1').bind(channelId).all<{ id: string; events: string }>();
 	const hookEvent = webhookEventFor(event);
 	const wantedHooks = (hooks ?? []).filter((h) => h.events.split(',').includes(hookEvent));
-	const rules = (await listRules(env, (accounts ?? []).map((a) => a.id))).filter((r) => r.event === event && r.enabled);
+	// An imported post or video never goes back to the account it came from (wiki TOOLS-ADMIN TA-9)
+	const origin = await originOf(env, entityId).catch(() => null);
+	const fromOrigin = (a: AccountRow) => !!origin && (a.id === origin.social_account_id || (a.network === origin.network && a.remote_id === origin.address));
+	const rules = (await listRules(env, (accounts ?? []).filter((a) => !fromOrigin(a)).map((a) => a.id))).filter((r) => r.event === event && r.enabled);
 	if (!rules.length && !wantedHooks.length) return { posts: 0, webhooks: 0 };
 
 	// Nothing is planned for content that isn't public (a private upload, a members-only post)

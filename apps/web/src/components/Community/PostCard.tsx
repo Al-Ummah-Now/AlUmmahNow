@@ -18,6 +18,9 @@ import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
 import { avatarInitial } from '@/lib/avatar-initial';
+import { useLanguage } from '@/hooks/useLanguage';
+import { MetaSep } from '@/components/ui/MetaSep';
+import { fromSourceShortText, fromSourceText, sourceOrigin } from '@/components/VideoDate';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -52,6 +55,11 @@ export default function PostCard({
 }: PostCardProps) {
   const [showComments, setShowComments] = useState(initialShowComments);
   const timeAgo = getTimeAgo(new Date(post.createdAt), isRTL);
+  const { t } = useLanguage();
+  // Brought from the channel's own social account or site (TOOLS-ADMIN TA-9): where it first came out
+  const origin = sourceOrigin(post.importedFrom);
+  const lang = locale === 'ar' ? 'ar' : 'en';
+  const dateLabels = t.video?.dateLabel as unknown as Record<string, string> | undefined;
 
   const handleToggleComments = () => {
     setShowComments((prev) => !prev);
@@ -137,6 +145,27 @@ export default function PostCard({
             >
               <time dateTime={post.createdAt}>{timeAgo}</time>
             </Link>
+            {origin && (
+              <>
+                <MetaSep lang={lang} gap="6px" />
+                {origin.url ? (
+                  <a
+                    href={origin.url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow ugc"
+                    className="hover:underline focus-visible:underline focus-visible:outline-none"
+                    title={fromSourceText(origin, lang, dateLabels)}
+                    data-testid="post-origin"
+                  >
+                    {fromSourceShortText(origin, dateLabels)}
+                  </a>
+                ) : (
+                  <span title={fromSourceText(origin, lang, dateLabels)} data-testid="post-origin">
+                    {fromSourceShortText(origin, dateLabels)}
+                  </span>
+                )}
+              </>
+            )}
           </p>
         </div>
 

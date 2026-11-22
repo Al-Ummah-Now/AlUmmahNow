@@ -91,6 +91,21 @@ describe('views and the watch page line', () => {
     expect(screen.getByTestId('watch-origin')).toHaveTextContent(/^نُشر أول مرة على يوتيوب في /);
   });
 
+  it('a video brought from a social source names it, links the original, and the date follows the Arabic number rule', () => {
+    mockLang = 'en';
+    const imported = { dateCreated: dayAgo, importedFrom: { platform: 'mastodon', postedAt: '2026-11-10T09:00:00Z', url: 'https://social.example/@scholar/199', sourceId: 'isrc_1' } };
+    const { unmount } = render(<details><WatchMetaSummary video={imported} views={5} lang="en" describedById="tip" /><WatchMetaDetail video={imported} views={5} lang="en" /></details>);
+    expect(screen.getByTestId('watch-origin-short')).toHaveTextContent('Originally on Mastodon');
+    expect(screen.getByTestId('watch-origin')).toHaveTextContent('Originally posted on Mastodon on November 10, 2026');
+    expect(screen.getByTestId('watch-origin').querySelector('a')).toHaveAttribute('href', 'https://social.example/@scholar/199');
+    unmount();
+    mockLang = 'ar';
+    render(<details><WatchMetaSummary video={{ ...imported, importedFrom: { ...imported.importedFrom, platform: 'rss', url: 'javascript:alert(1)' } }} views={5} lang="ar" describedById="tip" /><WatchMetaDetail video={{ ...imported, importedFrom: { ...imported.importedFrom, platform: 'rss', url: 'javascript:alert(1)' } }} views={5} lang="ar" /></details>);
+    const line = screen.getByTestId('watch-origin');
+    expect(line).toHaveTextContent(/^نُشر أول مرة على موقعه في ١٠ نوفمبر ٢٠٢٦$/);
+    expect(line.querySelector('a')).toBeNull();
+  });
+
   it('says nothing for videos uploaded here', () => {
     mockLang = 'en';
     render(<details><WatchMetaSummary video={{ dateCreated: dayAgo }} views={5} lang="en" describedById="tip" /><WatchMetaDetail video={{ dateCreated: dayAgo, importedFrom: { platform: 'youtube', publishedAt: 'not a date' } }} views={5} lang="en" /></details>);

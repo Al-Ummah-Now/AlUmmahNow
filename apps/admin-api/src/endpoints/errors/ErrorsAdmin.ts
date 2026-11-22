@@ -34,7 +34,7 @@ import {
   openActionCount,
   recordActionAttempt,
 } from '../../lib/errors-store';
-import { parseRetry, retryPermissions, runRetry } from '../../lib/errors-actions';
+import { parseRetry, retryPermissions, retrySitePermissions, runRetry } from '../../lib/errors-actions';
 import { hasContentPermission } from '@al-ummah/shared-types';
 
 const TAGS = ['Errors'];
@@ -314,6 +314,11 @@ export class ErrorActionRetry extends ErrorsRoute {
     if (!item) return c.json({ success: false, error: 'Item not found' }, 404);
     const spec = parseRetry(item.retry_json);
     if (!spec) return c.json({ success: false, error: 'This item has no retry action' }, 409);
+    for (const permission of retrySitePermissions(spec)) {
+      if (hasPermission(this.getRoles(c), permission)) continue;
+      logger.warn('[Errors] Retry permission denied', { userId: this.getUserId(c), permission, item: item.id });
+      return c.json({ success: false, error: `Permission required: ${permission}` }, 403);
+    }
     for (const permission of retryPermissions(spec)) {
       if (hasContentPermission(this.getRoles(c), permission)) continue;
       logger.warn('[Errors] Retry permission denied', { userId: this.getUserId(c), permission, item: item.id });

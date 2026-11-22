@@ -12,7 +12,7 @@ export interface PlayerOptions {
   /** When the video was first published (public and ready); the "Published" label shows it */
   publishedAt?: string;
   /** Moved from YouTube (wiki AUN-YT-IMPORT): the watch page says when it first came out there */
-  importedFrom?: { platform?: string; publishedAt?: string | null } | null;
+  importedFrom?: { platform?: string; publishedAt?: string | null; postedAt?: string | null; url?: string | null } | null;
   isLive?: boolean;
   channelAvatar: string;
   /** Channel has the scholar/institution badge (Epic 6.1) */

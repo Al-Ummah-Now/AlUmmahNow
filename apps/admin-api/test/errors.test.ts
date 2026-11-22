@@ -52,7 +52,7 @@ import {
 } from '../src/lib/errors-store';
 import { alertRecipient, isAlertWorthy, renderErrorAlert, sendErrorAlerts, ERROR_ALERT_LIMITS } from '../src/lib/errors-alerts';
 import { consumeErrorQueue, enqueueIngest, retryDelaySeconds, type ErrorIngestMessage } from '../src/endpoints/errors/ErrorsIngest';
-import { runRetry, SERVICE_RETRIES } from '../src/lib/errors-actions';
+import { retrySitePermissions, runRetry, SERVICE_RETRIES } from '../src/lib/errors-actions';
 import { contactMailItemKey, reportContactMailFailure } from '../src/lib/contact-mail-queue';
 import { deliveryStatus, insertContactMessage, recordDelivery } from '../src/lib/contact-store';
 import { ParsedSourceMap, decodeVlq, sourceMapKey, symbolicateFrames, clearSourceMapCache } from '../src/lib/sourcemaps';
@@ -697,5 +697,17 @@ describe('browser batches are constrained to what the proxy vouches for', () => 
     assert.equal(anon[0].userId, undefined, 'no session, no user, whatever the page claims');
     assert.equal(anon[0].test, true, 'test is honoured on QA/stage');
     assert.equal(constrainBrowserEvents(forged, { app: 'processor', environment: 'qa' }).length, 1, 'a bogus X-Report-App is ignored');
+  });
+});
+
+describe('Errors page Retry of a social import sync (TOOLS-ADMIN TA-9)', () => {
+  const spec = { kind: 'service' as const, service: 'api-videos' as const, path: '/internal/admin/import/sources/retry', body: { jobId: 'job-1' } };
+  it('is an allowed service retry that needs import_sources:manage, which only super admins hold', () => {
+    assert.ok(SERVICE_RETRIES['api-videos']!.paths.includes(spec.path));
+    assert.deepEqual(retrySitePermissions(spec as never), ['import_sources:manage']);
+    assert.equal(hasPermission(['admin'], 'import_sources:manage'), false);
+    assert.equal(hasPermission(['super_admin'], 'import_sources:manage'), true);
+    assert.deepEqual(retrySitePermissions({ ...spec, path: '/internal/billing/jobs/retry' } as never), []);
+    assert.deepEqual(retrySitePermissions(null), []);
   });
 });

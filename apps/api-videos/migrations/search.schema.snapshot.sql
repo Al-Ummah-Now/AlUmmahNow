@@ -55,6 +55,7 @@
 --   apps/api-videos/migrations/search/0076_creator_support.sql
 --   apps/api-videos/migrations/search/0077_feature_switches.sql
 --   apps/api-videos/migrations/search/0078_support_tech_staff.sql
+--   apps/api-videos/migrations/search/0079_import_sources.sql
 --   apps/api-videos/migrations/search/0079_offline_downloads.sql
 --   apps/api-videos/migrations/search/0080_channel_quran_translations_index.sql
 
@@ -104,6 +105,8 @@ CREATE TABLE download_licenses (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, devi
 CREATE TABLE feature_switch_changes (id TEXT PRIMARY KEY, key TEXT NOT NULL, version INTEGER NOT NULL, old_enabled INTEGER CHECK (old_enabled IS NULL OR old_enabled IN (0, 1)), new_enabled INTEGER NOT NULL CHECK (new_enabled IN (0, 1)), actor_id TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('features_page', 'undo', 'legacy_page', 'migration')), created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)), version INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE import_source_items (source_id TEXT NOT NULL, item_id TEXT NOT NULL, kind TEXT, state TEXT NOT NULL, payload TEXT, post_id TEXT, video_id TEXT, original_url TEXT, original_at INTEGER, note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (source_id, item_id));
+CREATE TABLE import_sources (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', auth_kind TEXT NOT NULL, social_account_id TEXT, yt_import_id TEXT, permission_by TEXT, permission_note TEXT, permission_at INTEGER, schedule TEXT NOT NULL DEFAULT 'manual', enabled INTEGER NOT NULL DEFAULT 1, cursor TEXT, next_sync_at INTEGER, last_sync_at INTEGER, last_job_id TEXT, last_error TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (channel_id, network, address));
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
@@ -295,6 +298,11 @@ CREATE INDEX idx_download_licenses_user_status ON download_licenses (user_id, st
 CREATE INDEX idx_download_licenses_video_status ON download_licenses (video_id, status);
 CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
+CREATE INDEX idx_import_source_items_post ON import_source_items (post_id);
+CREATE INDEX idx_import_source_items_state ON import_source_items (source_id, state, original_at);
+CREATE INDEX idx_import_source_items_video ON import_source_items (video_id);
+CREATE INDEX idx_import_sources_due ON import_sources (enabled, next_sync_at);
+CREATE INDEX idx_import_sources_network ON import_sources (network, address);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);

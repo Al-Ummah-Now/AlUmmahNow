@@ -13,6 +13,7 @@
  */
 import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type NeedsActionRetry, type NeedsActionStatus } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
+import type { Permission } from './roles';
 import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from './contact-mail-queue';
 import { getWarning, recordWarningEmail } from './content/warnings';
@@ -58,8 +59,10 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // (api-videos lib/support/jobs.ts, wiki AUN-MEMBERS; Retry needs support:manage).
   // An Admin Tools import's sidecars (captions, chapters, thumbnail) that could not be attached are
   // tried again (api-videos lib/admin/importAttach.ts, wiki TOOLS-ADMIN TA-6).
+  // A social import sync that gave up runs again (api-videos lib/importSources/job.ts, wiki TOOLS-ADMIN
+  // TA-9); its Retry also needs import_sources:manage (retrySitePermissions).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/support/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/support/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry', '/internal/admin/import/sources/retry'] },
 };
 
 /**
@@ -68,6 +71,11 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
  * unknown kind needs every billing permission (deny by default); api-videos also refuses a
  * retry whose kind is not the job's own.
  */
+/** Site permissions a Retry needs on top of errors:manage: a social import sync only for whoever manages sources (super admins). */
+export function retrySitePermissions(spec: NeedsActionRetry | null): Permission[] {
+  return spec?.kind === 'service' && spec.service === 'api-videos' && spec.path === '/internal/admin/import/sources/retry' ? ['import_sources:manage'] : [];
+}
+
 const ALL_BILLING: AdminContentPermission[] = ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers'];
 export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPermission[] {
   // Creator support jobs (api-videos lib/support/jobs.ts, wiki AUN-MEMBERS §9.6): support:manage. They book money

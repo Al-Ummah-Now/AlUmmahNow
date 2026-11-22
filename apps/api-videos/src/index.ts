@@ -1,4 +1,5 @@
 import { onImportAttachFailed } from './lib/admin/importAttach';
+import { onSourceSyncFailed, queueDueSources, SOURCE_SYNC_JOB_KIND } from './lib/importSources/job';
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import attestationRouter from './routers/attestation.router';
 import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
@@ -732,6 +733,15 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[UploadReaper] Sweep failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// Hourly: social import sources whose scheduled sync is due (wiki TOOLS-ADMIN TA-9, lib/importSources/job.ts)
+		ctx.waitUntil(
+			queueDueSources(withSearchSync(rawEnv, ctx) as never)
+				.then((queued) => (queued ? logger.info('[ImportSources] Due syncs queued', { queued }) : undefined))
+				.catch((error) => {
+					logger.error('[ImportSources] Due syncs not queued', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'import-sources-due', error);
+				}),
+		);
 		// Hourly: pre-encoded renditions from desktop Studio that were never finished or used (D11, lib/media/prebuilt.ts)
 		ctx.waitUntil(
 			sweepStaging(rawEnv as never)
@@ -983,7 +993,9 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 						? Promise.resolve(flagDiscoveryRankFailed(jobEnv, job, error))
 						: job.kind === 'import.attach'
 							? onImportAttachFailed(jobEnv, job, error)
-							: Promise.resolve(),
+							: job.kind === SOURCE_SYNC_JOB_KIND
+								? onSourceSyncFailed(jobEnv, job, error)
+								: Promise.resolve(),
 			);
 			return;
 		}

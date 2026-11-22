@@ -53,6 +53,9 @@ export interface CommunityPost extends SoftDelete, Moderation, Omit<PostV2Fields
   channelAvatar?: string;
   channelVerified: boolean;
 
+  /** Imported from a social source (wiki TOOLS-ADMIN TA-9): the original's link and publish time */
+  importedFrom?: import('./import-sources').SourceImportedFrom;
+
   // Viewer state (computed per request when authenticated, never stored)
   viewerHasLiked?: boolean;
   viewerPollVote?: string[];          // Option IDs the viewer voted for

@@ -26,7 +26,7 @@ interface RealtimeEnv {
   INTERNAL_API_KEY?: unknown;
 }
 
-interface WaitUntilContext {
+export interface WaitUntilContext {
   env: unknown;
   executionCtx?: { waitUntil(promise: Promise<unknown>): void };
 }
