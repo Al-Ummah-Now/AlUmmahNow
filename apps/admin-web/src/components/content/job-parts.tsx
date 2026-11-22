@@ -40,7 +40,7 @@ export function JobErrorText({ error, testId = 'job-error' }: { error: string; t
   );
 }
 
-/** "Attempt 2 of 6" and "Next try 2:20 PM UTC−5" (or the next step of resumable work). */
+/** "Attempt 2 of 6" and "Next try 2:20 PM EST" (or the next step of resumable work). */
 export function JobTiming({ job }: { job: Pick<AdminJob, 'attempts' | 'maxAttempts' | 'nextRunAt' | 'status'> }) {
   const { t, locale } = useLanguage();
   const max = job.maxAttempts || 0;

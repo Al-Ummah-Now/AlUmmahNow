@@ -1,9 +1,11 @@
 import Link from '@/components/AppLink';
+import { fillNodes } from '@/components/audit/fill';
+import { LocalTime } from '@/components/LocalTime';
 import { getProcessingErrors, listContactMessages, listFlaggedVideoFormats } from '@/lib/api/admin';
 import type { ContactListResponse, FlaggedVideoList, ProcessingErrorsResponse } from '@/lib/api/types';
 import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
 import type { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
+import { formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { getContentPermissions, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
@@ -160,7 +162,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-index" data-testid="errors-index-section">
           <div className="mb-3">
             <h2 id="errors-index" className="text-xl font-semibold text-fg">{t('errorsPage.indexTitle')}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.indexHint', { when: formatDate(data.indexDrift[0].at, locale, true) })}</p>
+            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.indexHint'), { when: <LocalTime value={data.indexDrift[0].at} /> })}</p>
           </div>
           <div className="bg-surface border border-border rounded-lg overflow-x-auto">
             <table className="w-full" data-testid="errors-index">
@@ -181,7 +183,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                   <tr key={d.kind} className="border-b border-border last:border-0" data-index-kind={d.kind}>
                     <td className={tdClass}>
                       <div className="text-fg">{t(INDEX_KIND_LABEL[d.kind])}</div>
-                      <div className="text-fg-muted text-xs">{formatDate(d.at, locale, true)}</div>
+                      <div className="text-fg-muted text-xs"><LocalTime value={d.at} /></div>
                     </td>
                     <td className={tdClass}>{d.stored}</td>
                     <td className={tdClass}>{d.indexed}</td>
@@ -223,7 +225,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-search-index" data-testid="errors-search-index-section">
           <div className="mb-3">
             <h2 id="errors-search-index" className="text-xl font-semibold text-fg">{t('errorsPage.searchIndexTitle')}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.searchIndexHint', { when: formatDate(data.searchDrift[0].at, locale, true) })}</p>
+            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.searchIndexHint'), { when: <LocalTime value={data.searchDrift[0].at} /> })}</p>
           </div>
           <div className="bg-surface border border-border rounded-lg overflow-x-auto">
             <table className="w-full" data-testid="errors-search-index">
@@ -243,7 +245,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                   <tr key={d.entity} className="border-b border-border last:border-0" data-search-entity={d.entity}>
                     <td className={tdClass}>
                       <div className="text-fg">{t(SEARCH_ENTITY_LABEL[d.entity])}</div>
-                      <div className="text-fg-muted text-xs">{formatDate(d.at, locale, true)}</div>
+                      <div className="text-fg-muted text-xs"><LocalTime value={d.at} /></div>
                     </td>
                     <td className={tdClass}>{d.expected}</td>
                     <td className={tdClass}>{d.indexed}</td>
@@ -312,7 +314,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     const href = repairHref(r.entity, r.id);
                     return (
                       <tr key={`${r.entity}:${r.id}`} className="border-b border-border last:border-0" data-repair={`${r.entity}:${r.id}`}>
-                        <td className={tdClass}>{formatDate(new Date(r.updatedAt).toISOString(), locale, true)}</td>
+                        <td className={tdClass}><LocalTime value={new Date(r.updatedAt).toISOString()} /></td>
                         <td className={tdClass}>{repairEntityLabel(t, r.entity)}</td>
                         <td className={tdClass}>
                           {href ? (
@@ -362,7 +364,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                       <td className={tdClass}>{indexLabel(t, m.index)}</td>
                       <td className={tdClass}>{t(JOB_STATUS_LABEL[m.job.status])}</td>
                       <td className={tdClass}>{t('errorsPage.maintenanceProgress', { scanned: progress.scanned, pages: progress.pages })}</td>
-                      <td className={tdClass}>{formatDate(m.job.updatedAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={m.job.updatedAt} /></td>
                     </tr>
                   );
                 })}
@@ -397,7 +399,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     const when = v.processingIssue?.at || v.dateModified;
                     return (
                       <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                        <td className={tdClass}>{when ? formatDate(when, locale, true) : '—'}</td>
+                        <td className={tdClass}>{when ? <LocalTime value={when} /> : '—'}</td>
                         <td className={tdClass}>
                           <div className="font-medium text-fg">{v.title || v.id}</div>
                           <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
@@ -436,7 +438,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {data.deadLetters.map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={d.receivedAt} /></td>
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>
@@ -471,7 +473,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {(data.erasureDeadLetters ?? []).map((d) => (
                     <tr key={d.id} className="border-b border-border last:border-0" data-dead-letter-id={d.id}>
-                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={d.receivedAt} /></td>
                       <td className={tdClass}>
                         {d.userId ? (
                           <Link href={`/users/${encodeURIComponent(d.userId)}`} className={linkClass} dir="ltr">{d.userId}</Link>
@@ -514,7 +516,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {(data.thumbnailRuns ?? []).map((r) => (
                     <tr key={r.id} className="border-b border-border last:border-0" data-run-id={r.id}>
-                      <td className={tdClass}>{formatDate(r.finishedAt || r.updatedAt, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={r.finishedAt || r.updatedAt} /></td>
                       <td className={tdClass}>
                         <div className="text-fg">{t(r.params.dryRun === false ? 'processing.thumbsModeFix' : 'processing.thumbsModeCheck')}</div>
                         <div className="text-fg-muted text-xs" dir="ltr">{r.id}</div>
@@ -534,7 +536,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-thumb-flagged">
           <div className="mb-3">
             <h2 id="errors-thumb-flagged" className="text-xl font-semibold text-fg">{t('errorsPage.thumbFlaggedTitle')}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.thumbFlaggedHint', { when: formatDate(data.thumbnailFlagged.checkedAt, locale, true) })}</p>
+            <p className="mt-1 text-sm text-fg-muted">{fillNodes(t('errorsPage.thumbFlaggedHint'), { when: <LocalTime value={data.thumbnailFlagged.checkedAt} /> })}</p>
           </div>
           {data.thumbnailFlagged.items.length === 0 ? (
             <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-thumb-flagged-empty">{t('errorsPage.thumbFlaggedEmpty')}</div>
@@ -589,7 +591,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {formatFlagged.items.map((v) => (
                     <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                      <td className={tdClass}>{v.formatIssue?.at ? formatDate(v.formatIssue.at, locale, true) : '—'}</td>
+                      <td className={tdClass}>{v.formatIssue?.at ? <LocalTime value={v.formatIssue.at} /> : '—'}</td>
                       <td className={tdClass}>
                         <div className="font-medium text-fg">{v.title || v.id}</div>
                         <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
@@ -627,7 +629,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                 <tbody>
                   {contactFailed.messages.map((m) => (
                     <tr key={m.id} className="border-b border-border last:border-0" data-message-id={m.id}>
-                      <td className={tdClass}>{formatDate(m.send_failed_at ?? m.updated_at, locale, true)}</td>
+                      <td className={tdClass}><LocalTime value={m.send_failed_at ?? m.updated_at} /></td>
                       <td className={tdClass}>
                         <Link href={`/contact/${encodeURIComponent(m.id)}`} className={linkClass} aria-label={t('contact.openMessage', { name: m.name })}>
                           <span dir="auto">{m.name}</span>

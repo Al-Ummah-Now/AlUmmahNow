@@ -1,26 +1,22 @@
 /**
  * Times in the videos admin (owner, 2026-11-21): the admin's own time zone with the zone shown
- * ("Nov 22, 2026, 2:20 PM UTC−5"; Arabic with Arabic digits and «غرينتش−٥»), and the UTC time for a
+ * ("Nov 22, 2026, 2:20 PM EST"; Arabic with Arabic digits and «غرينتش-٥»), and the UTC time for a
  * tooltip, to compare with logs. Pure (Intl only), so it is tested with a pinned zone.
  */
-import { dateTimeFormat, isArabicLocale, localizeDigits, numberFormat } from '@al-ummah/shared-types';
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 
-/** The zone's offset from UTC at that moment: "UTC−5", "UTC+5:30", "UTC" (Arabic: «غرينتش−٥»). */
+/**
+ * The zone's short name at that moment, as Intl writes it in the page language (orchestrator ruling
+ * 2026-11-22, from the owner's "9:41 AM EST"): "EST", "EDT", "GMT+5:30", "UTC"; Arabic «غرينتش-٥»,
+ * «غرينتش+٣». Never a hand-built offset, so every admin page and the Tools app read the same.
+ */
 export function zoneLabel(at: Date, timeZone: string, locale: Locale): string {
-  let raw = 'GMT';
   try {
-    raw = dateTimeFormat('en', { timeZone, timeZoneName: 'shortOffset' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+    return dateTimeFormat(locale, { timeZone, timeZoneName: 'short' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value || 'UTC';
   } catch {
-    raw = 'GMT';
+    return 'UTC';
   }
-  const m = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(raw);
-  const arabic = isArabicLocale(locale);
-  const base = arabic ? 'غرينتش' : 'UTC';
-  // Newer ICU writes UTC itself as "GMT+0": a zero offset is the plain name on every runtime
-  if (!m || (Number(m[2]) === 0 && !m[3])) return base;
-  const offset = `${m[1] === '-' ? '−' : '+'}${Number(m[2])}${m[3] && m[3] !== '00' ? `:${m[3]}` : ''}`;
-  return `${base}${arabic ? localizeDigits(locale, offset) : offset}`;
 }
 
 export interface LocalTime {

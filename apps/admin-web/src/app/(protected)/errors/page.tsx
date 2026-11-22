@@ -1,11 +1,12 @@
 import Link from '@/components/AppLink';
+import { LocalTime } from '@/components/LocalTime';
 import { redirect } from 'next/navigation';
 import { findErrorRef, getErrorCounts, getErrorFacets, listErrorGroups } from '@/lib/api/admin';
 import type { ErrorCounts, ErrorFacets, ErrorGroupList } from '@/lib/api/error-groups-types';
 import { getAdminSession } from '@/lib/auth';
 import { canReadErrors, canReadOps, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
+import { formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ErrorFilterBar } from './ErrorFilterBar';
@@ -194,8 +195,8 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
                       <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.occurrences, locale)}</td>
                       <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.users, locale)}</td>
                       <td className="px-4 py-4 align-top text-sm text-fg-muted whitespace-nowrap">
-                        <time dateTime={g.first_seen} className="block">{formatDate(g.first_seen, locale, true)}</time>
-                        <time dateTime={g.last_seen} className="block text-fg">{formatDate(g.last_seen, locale, true)}</time>
+                        <LocalTime value={g.first_seen} className="block" />
+                        <LocalTime value={g.last_seen} className="block text-fg" />
                       </td>
                       <td className="px-4 py-4 align-top text-sm font-mono text-fg-muted" dir="ltr">
                         {g.last_release ?? '—'}
