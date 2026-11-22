@@ -37,6 +37,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			query: z.object({
 				dateFrom: z.string().optional(),
 				dateTo: z.string().optional(),
+				tz: z.string().max(64).optional().describe("The viewer's IANA time zone; the default end date follows it"),
 				limit: Num({ required: false, default: 20 }),
 				cursor: z.string().regex(/^\d+$/).optional(),
 			}),
@@ -66,7 +67,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 		const indexComplete = rowsReady && read.complete;
 		if (!indexComplete) healLater(c);
 
-		const range = parseRange(query.dateFrom, query.dateTo);
+		const range = parseRange(query.dateFrom, query.dateTo, undefined, query.tz);
 		const days = new Set(daysInRange(range));
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(c.env.videos);

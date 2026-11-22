@@ -9,22 +9,50 @@ export const RANGE_PRESETS: readonly RangePreset[] = ['7', '28', '90', '365', 'a
 export interface DateWindow {
   dateFrom: string;
   dateTo: string;
+  /** The viewer's IANA zone: the API puts likes, comments and subscribers on their local day */
+  tz: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const day = (time: number) => new Date(time).toISOString().slice(0, 10);
 
-export function rangeDates(preset: RangePreset, now: Date, channelCreated?: string): { current: DateWindow; previous: DateWindow | null } {
-  const end = now.getTime();
+/** The browser's IANA time zone, UTC when it can't tell. */
+export function viewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** YYYY-MM-DD of `time` on the calendar of `timeZone` (en-CA formats dates as ISO). */
+export function localDay(time: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(time));
+  } catch {
+    return new Date(time).toISOString().slice(0, 10);
+  }
+}
+
+/** `day` moved by whole calendar days (date arithmetic at UTC midnight, so DST never shifts it). */
+const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * The range's calendar days in the viewer's time zone, the way admin times are shown: "today" is
+ * the viewer's today, so at 7:30 pm in New York the chart still ends on that date while UTC is
+ * already on the next one.
+ */
+export function rangeDates(preset: RangePreset, now: Date, channelCreated?: string, timeZone: string = viewerTimeZone()): { current: DateWindow; previous: DateWindow | null } {
+  const today = localDay(now.getTime(), timeZone);
   if (preset === 'all') {
     const created = channelCreated ? Date.parse(channelCreated) : NaN;
-    return { current: { dateFrom: day(Number.isFinite(created) ? created : end - 364 * DAY_MS), dateTo: day(end) }, previous: null };
+    const from = Number.isFinite(created) ? localDay(created, timeZone) : addDays(today, -364);
+    return { current: { dateFrom: from, dateTo: today, tz: timeZone }, previous: null };
   }
   const days = Number(preset);
-  const start = end - (days - 1) * DAY_MS;
+  const start = addDays(today, -(days - 1));
   return {
-    current: { dateFrom: day(start), dateTo: day(end) },
-    previous: { dateFrom: day(start - days * DAY_MS), dateTo: day(start - DAY_MS) },
+    current: { dateFrom: start, dateTo: today, tz: timeZone },
+    previous: { dateFrom: addDays(start, -days), dateTo: addDays(start, -1), tz: timeZone },
   };
 }
 

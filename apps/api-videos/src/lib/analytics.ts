@@ -20,6 +20,7 @@ import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/o
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
 import { subscriberDailyStats } from './subscription-store';
+import { localDayEnd, localDayKey, localDayStart, validTimeZone } from './local-day';
 
 export interface AnalyticsVideo {
   id: string;
@@ -43,7 +44,7 @@ export interface AnalyticsChannel {
   subscribers?: Array<{ dateCreated?: string }>;
   /** Legacy R2 subscriptions (channels not imported into D1 yet) */
   subscriptions?: Array<{ channelId?: string; userId?: string; dateCreated?: string }> | null;
-  /** New subscribers per UTC day, from the subscription store (attachSubscriberStats) */
+  /** New subscribers per day (the range's time zone), from the subscription store (attachSubscriberStats) */
   subscribersByDay?: Record<string, number>;
   /** Current subscriber count, from the subscription store (attachSubscriberStats) */
   subscriberTotal?: number;
@@ -79,30 +80,36 @@ export interface DailyMetric {
 export interface DateRange {
   from: Date;
   to: Date;
+  /** The viewer's IANA zone (Studio's `tz`): `from`/`to` are its calendar days and events fall on its local day. Absent = UTC. */
+  timeZone?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_RANGE_DAYS = 366;
 export const DEFAULT_RANGE_DAYS = 28;
 
-export function dayKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
+export function dayKey(date: Date, timeZone = 'UTC'): string {
+  return localDayKey(date.getTime(), timeZone);
 }
 
 /**
  * Parse `dateFrom`/`dateTo` (ISO dates). Defaults to the last 28 days and clamps
  * the range to one year so a single request stays bounded.
  */
-export function parseRange(dateFrom?: string, dateTo?: string, now: Date = new Date()): DateRange {
-  const toCandidate = dateTo ? new Date(dateTo) : now;
-  const to = Number.isFinite(toCandidate.getTime()) ? toCandidate : now;
+export function parseRange(dateFrom?: string, dateTo?: string, now: Date = new Date(), tz?: string): DateRange {
+  const timeZone = validTimeZone(tz);
+  // Without dateTo the range ends on the viewer's today, not the UTC one (after 7 pm in New York
+  // UTC is already tomorrow)
+  const today = timeZone === 'UTC' ? now : new Date(`${localDayKey(now.getTime(), timeZone)}T00:00:00Z`);
+  const toCandidate = dateTo ? new Date(dateTo) : today;
+  const to = Number.isFinite(toCandidate.getTime()) ? toCandidate : today;
   const fromCandidate = dateFrom ? new Date(dateFrom) : new Date(to.getTime() - (DEFAULT_RANGE_DAYS - 1) * DAY_MS);
   let from = Number.isFinite(fromCandidate.getTime()) ? fromCandidate : new Date(to.getTime() - (DEFAULT_RANGE_DAYS - 1) * DAY_MS);
   if (from > to) from = to;
   if ((to.getTime() - from.getTime()) / DAY_MS > MAX_RANGE_DAYS) {
     from = new Date(to.getTime() - MAX_RANGE_DAYS * DAY_MS);
   }
-  return { from, to };
+  return timeZone === 'UTC' ? { from, to } : { from, to, timeZone };
 }
 
 export function daysInRange(range: DateRange): string[] {
@@ -121,7 +128,7 @@ export function monthsInRange(range: DateRange): string[] {
 export function previousRange(range: DateRange): DateRange {
   const length = range.to.getTime() - range.from.getTime();
   const to = new Date(range.from.getTime() - DAY_MS);
-  return { from: new Date(to.getTime() - length), to };
+  return { from: new Date(to.getTime() - length), to, ...(range.timeZone ? { timeZone: range.timeZone } : {}) };
 }
 
 function emptySeries(days: string[]): Map<string, DailyMetric> {
@@ -131,19 +138,22 @@ function emptySeries(days: string[]): Map<string, DailyMetric> {
 function countByDay(
   series: Map<string, DailyMetric>,
   events: Array<{ dateCreated?: string; isDeleted?: boolean }> | undefined,
-  field: 'likes' | 'comments' | 'subscribers'
+  field: 'likes' | 'comments' | 'subscribers',
+  timeZone = 'UTC'
 ): void {
   for (const event of events || []) {
     if (!event?.dateCreated || event.isDeleted) continue;
     const date = new Date(event.dateCreated);
     if (!Number.isFinite(date.getTime())) continue;
-    const entry = series.get(dayKey(date));
+    const entry = series.get(dayKey(date, timeZone));
     if (entry) entry[field] += 1;
   }
 }
 
 /**
- * Pure: build a daily series from videos, channels and view rollups.
+ * Pure: build a daily series from videos, channels and view rollups. Likes, comments and
+ * subscribers fall on their day in `range.timeZone`; view and watch-time counters are stored per
+ * UTC day and keep their date (local-day.ts).
  */
 export function buildDailySeries(
   range: DateRange,
@@ -154,8 +164,8 @@ export function buildDailySeries(
   const days = daysInRange(range);
   const series = emptySeries(days);
   for (const video of videos) {
-    countByDay(series, video.likes, 'likes');
-    countByDay(series, video.comments, 'comments');
+    countByDay(series, video.likes, 'likes', range.timeZone);
+    countByDay(series, video.comments, 'comments', range.timeZone);
   }
   for (const channel of channels) {
     if (channel.subscribersByDay) {
@@ -164,7 +174,7 @@ export function buildDailySeries(
         if (entry) entry.subscribers += n;
       }
     } else {
-      countByDay(series, channel.subscribers, 'subscribers');
+      countByDay(series, channel.subscribers, 'subscribers', range.timeZone);
     }
   }
   for (const rollup of rollups) {
@@ -615,10 +625,13 @@ export async function attachSubscriberStats(
   range: DateRange,
 ): Promise<AnalyticsChannel[]> {
   if (channels.length === 0) return channels;
-  const from = Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), range.from.getUTCDate());
-  const to = Date.UTC(range.to.getUTCFullYear(), range.to.getUTCMonth(), range.to.getUTCDate()) + DAY_MS - 1;
+  const days = daysInRange(range);
+  const timeZone = range.timeZone ?? 'UTC';
+  // From the viewer's midnight on the first day to the end of their last day
+  const from = localDayStart(days[0], timeZone);
+  const to = localDayEnd(days[days.length - 1], timeZone);
   try {
-    const stats = await subscriberDailyStats(env.NOTIFICATIONS_DB, channels as never, from, to);
+    const stats = await subscriberDailyStats(env.NOTIFICATIONS_DB, channels as never, from, to, timeZone);
     return channels.map(channel => {
       const entry = stats.get(channel.id);
       return entry ? { ...channel, subscribersByDay: entry.byDay, subscriberTotal: entry.total } : channel;

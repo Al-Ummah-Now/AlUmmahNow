@@ -19,6 +19,10 @@
  */
 import { DEFAULT_CHANNEL_BELL } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
+import { localDayKey } from './local-day';
+
+/** Subscription times are grouped in 15-minute slots before they are put on a local day */
+const SLOT_MS = 15 * 60 * 1000;
 
 export interface LegacySubscription {
 	id?: string;
@@ -422,7 +426,7 @@ export async function eraseUserSubscriptions(db: D1Database, userId: string): Pr
 }
 
 /**
- * New subscriptions per UTC day (YYYY-MM-DD) for each channel, members and
+ * New subscriptions per day (YYYY-MM-DD) in `timeZone` (default UTC) for each channel, members and
  * channels alike (one row per subscriber identity), between `fromMs` and
  * `toMs` inclusive. Channels not imported yet count their legacy R2 array.
  * Also returns each channel's current total (subscriberCounts).
@@ -432,6 +436,7 @@ export async function subscriberDailyStats(
 	channels: ChannelWithLegacySubscriptions[],
 	fromMs: number,
 	toMs: number,
+	timeZone = 'UTC',
 ): Promise<Map<string, { byDay: Record<string, number>; total: number }>> {
 	const stats = new Map<string, { byDay: Record<string, number>; total: number }>();
 	const ids = [...new Set(channels.map((c) => c?.id).filter((id): id is string => !!id))];
@@ -444,16 +449,19 @@ export async function subscriberDailyStats(
 			db.prepare('SELECT j.value AS channel_id FROM json_each(?1) AS j JOIN channel_subscription_imports i ON i.channel_id = j.value').bind(JSON.stringify(ids)),
 			db
 				.prepare(
-					`SELECT s.channel_id AS channel_id, strftime('%Y-%m-%d', s.created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n
+					// 15-minute slots, so every zone's day boundary (also :30 and :45 offsets) falls between two
+					`SELECT s.channel_id AS channel_id, s.created_at / ${SLOT_MS} AS slot, COUNT(*) AS n
 					 FROM json_each(?1) AS j JOIN channel_subscriptions s ON s.channel_id = j.value
-					 WHERE s.created_at BETWEEN ?2 AND ?3 GROUP BY s.channel_id, day`,
+					 WHERE s.created_at BETWEEN ?2 AND ?3 GROUP BY s.channel_id, slot`,
 				)
 				.bind(JSON.stringify(ids), fromMs, toMs),
 		]);
 		for (const row of (marks?.results || []) as { channel_id: string }[]) imported.add(row.channel_id);
-		for (const row of (days?.results || []) as { channel_id: string; day: string; n: number }[]) {
+		for (const row of (days?.results || []) as { channel_id: string; slot: number; n: number }[]) {
 			const entry = stats.get(row.channel_id);
-			if (entry && imported.has(row.channel_id)) entry.byDay[row.day] = Number(row.n) || 0;
+			if (!entry || !imported.has(row.channel_id)) continue;
+			const day = localDayKey(Number(row.slot) * SLOT_MS, timeZone);
+			entry.byDay[day] = (entry.byDay[day] || 0) + (Number(row.n) || 0);
 		}
 	}
 	for (const channel of channels) {
@@ -461,7 +469,7 @@ export async function subscriberDailyStats(
 		const entry = stats.get(channel.id)!;
 		for (const row of legacyRows(channel.subscriptions, 0)) {
 			if (row.t < fromMs || row.t > toMs) continue;
-			const day = new Date(row.t).toISOString().slice(0, 10);
+			const day = localDayKey(row.t, timeZone);
 			entry.byDay[day] = (entry.byDay[day] || 0) + 1;
 		}
 	}

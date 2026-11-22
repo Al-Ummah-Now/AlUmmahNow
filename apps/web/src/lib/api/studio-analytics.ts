@@ -24,7 +24,7 @@ export interface StudioVideoAnalytics {
   rangeViews?: number;
   rangeLikes?: number;
   rangeComments?: number;
-  /** One entry per UTC day of the range. */
+  /** One entry per day of the range, on the viewer's calendar (DateWindow.tz). */
   recentMetrics?: DailyMetric[];
   traffic: TrafficData;
 }

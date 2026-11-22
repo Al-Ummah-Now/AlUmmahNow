@@ -301,8 +301,10 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
     // the player column takes what the side column leaves; the side column is
     // 300-402px of compact rows (thumbnail beside text).
     <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
-      <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
-        <div className={`flex flex-col w-full min-w-0 ${theatre ? '' : 'lg:flex-1'} overflow-hidden`} data-testid="watch-primary">
+      {/* overflow-x-clip, not overflow-hidden: wide content still never scrolls the page sideways, but the cards'
+          glow paints below and beside them (hidden clips both axes and cut it into hard-edged boxes) */}
+      <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-x-clip [overflow-clip-margin:1rem]`} data-theatre={theatre || undefined} data-testid="watch-layout">
+        <div className={`flex flex-col w-full min-w-0 ${theatre ? '' : 'lg:flex-1'} overflow-x-clip [overflow-clip-margin:1rem]`} data-testid="watch-primary">
           {!videoDetails && <div data-testid="watch-skeleton" className="watch-skeleton w-full">{skeleton ?? <WatchDetailsSkeleton />}</div>}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
@@ -392,7 +394,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
           {/* Below lg the playlist pane sits under the player, above the comments */}
           <div className="w-full mt-4 empty:hidden">{renderPane('below')}</div>
 
-          <div className="flex flex-col w-full mt-6 gap-6 overflow-auto">
+          <div className="flex flex-col w-full mt-6 gap-6">
             <div id={COMMENTS_ID} tabIndex={-1} className="w-full max-w-4xl mx-auto px-4">
               {videoDetails ? (
               <Comments

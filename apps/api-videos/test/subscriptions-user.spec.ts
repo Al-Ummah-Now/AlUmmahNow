@@ -25,6 +25,7 @@ import {
 	userSubscriberKey,
 } from '../src/lib/subscription-store';
 import { attachSubscriberStats, buildDailySeries, buildSummary } from '../src/lib/analytics';
+import { localDayKey } from '../src/lib/local-day';
 import { footprintsOf } from '../src/lib/privacy/footprints';
 import { MessageType } from '../src/lib/queue';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
@@ -256,6 +257,9 @@ describe('privacy and analytics see member subscriptions', () => {
 		const today = new Date(now).toISOString().slice(0, 10);
 		const stats = await subscriberDailyStats(e.NOTIFICATIONS_DB, [{ id: 'target' }], now - 86_400_000, now + 86_400_000);
 		assert.deepEqual(stats.get('target'), { byDay: { [today]: 2 }, total: 2 });
+		// The same D1 rows on the viewer's day in New York (15-minute slots, then the local date)
+		const ny = await subscriberDailyStats(e.NOTIFICATIONS_DB, [{ id: 'target' }], now - 86_400_000, now + 86_400_000, 'America/New_York');
+		assert.deepEqual(ny.get('target')?.byDay, { [localDayKey(now, 'America/New_York')]: 2 });
 
 		const range = { from: new Date(now - 6 * 86_400_000), to: new Date(now) };
 		const channels = await attachSubscriberStats(e, [{ id: 'target', userId: 'creator' }], range);
