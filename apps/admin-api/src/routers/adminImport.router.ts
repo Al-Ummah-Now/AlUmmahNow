@@ -9,7 +9,9 @@
  *                    permissions, contentPermissions }
  *   GET  /encoding   the server's HLS ladder and encode settings (shared-types ENCODE_LADDER, the same
  *                    values as the media container's ladder.mjs) and the limits of a pre-encoded
- *                    upload, so the app encodes exactly what the server checks
+ *                    upload, so the app encodes exactly what the server checks; with `?channelId=`
+ *                    also `takesRenditions`: whether R2 transcodes that channel's uploads (renditions
+ *                    are used only then)
  *   POST /channels   { name, handle?, description?, ownerId? } → 201 { channel } — a channel owned by
  *                    `ownerId` (a videos user; needs users:manage, as an invite does) or, without
  *                    one, by the acting admin; the same
@@ -41,6 +43,18 @@
  *   POST /items/:id/translations  { sourceLanguage, languages[], replace? } (TA-7) → { results[] }: a caption
  *                                 job per language from the source draft, no caption minutes. Audited per video.
  *   POST /items/:id/failed        { error } the app gave up on the file → { item }
+ *
+ * Renditions encoded on the admin's computer (TA-12), the D11 contract of desktop Studio for a video the
+ * admin does not own. Staged before the file's upload completes; the first transcode verifies them and
+ * encodes itself when they do not match (api-videos lib/media/prebuilt.ts):
+ *
+ *   POST   /items/:id/renditions                                { rungs, files: [{ path, bytes }], encoder? } → 201
+ *                                                               { stagingId, status, …, maxFileBytes }. Audited per video.
+ *   PUT    /items/:id/renditions/:stagingId/files/:rung/:file   raw body, exactly the declared size (≤ 32 MiB) → 204
+ *   POST   /items/:id/renditions/:stagingId/complete            → { status: 'ready' } or 409 files_missing { missing[] }
+ *   DELETE /items/:id/renditions/:stagingId                     drop them; the server encodes. Audited per video.
+ *   GET    /items/:id/delivery                                  { takesRenditions, staging, r2: { status, progress?,
+ *                                                               error?, prebuilt?: { used, reason?, rung? } } }
  *
  * Error reports (TA-11). The app has no browser proxy holding the internal key, so it reports here with
  * its own token; the events land on the Errors page under the app `tools`:
@@ -92,7 +106,8 @@ app.use('*', async (c, next) => {
 });
 
 app.onError((error, c) => {
-  if (error instanceof VideosError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
+  // Details stay next to the code (files_missing lists the files the app still has to send)
+  if (error instanceof VideosError) return c.json({ success: false, code: error.code, error: error.message, ...(error.details ?? {}) }, error.status as 400);
   logger.error('[AdminImport] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
 });
@@ -111,7 +126,14 @@ app.get('/me', (c) => {
   });
 });
 
-app.get('/encoding', (c) => c.json({ success: true, result: { ladder: ENCODE_LADDER, prebuiltLimits: PREBUILT_LIMITS } }));
+app.get('/encoding', async (c) => {
+  const channelId = c.req.query('channelId');
+  // With a channel: whether the server transcodes its uploads to R2, the only time renditions are used
+  const channel = channelId
+    ? await videos<{ takesRenditions: boolean }>(c, `/import/channels/${encodeURIComponent(channelId.slice(0, 200))}/delivery`)
+    : undefined;
+  return c.json({ success: true, result: { ladder: ENCODE_LADDER, prebuiltLimits: PREBUILT_LIMITS, ...(channel ? { takesRenditions: channel.takesRenditions } : {}) } });
+});
 
 const USER_ID = /^usr_[0-9a-f]{32}$/;
 const text = (v: unknown, max: number): string | null | undefined =>
@@ -403,6 +425,9 @@ const summarise = (b: Record<string, unknown>) => ({
   ...(typeof b.sourceLanguage === 'string' ? { sourceLanguage: b.sourceLanguage } : {}),
   ...(Array.isArray(b.languages) ? { languages: b.languages.filter((l) => typeof l === 'string').slice(0, 10) } : {}),
   ...(b.replace === true ? { replace: true } : {}),
+  ...(Array.isArray(b.rungs) ? { rungs: b.rungs.filter((r) => typeof r === 'string').slice(0, 8) } : {}),
+  ...(Array.isArray(b.files) ? { files: b.files.length } : {}),
+  ...(typeof b.encoder === 'string' ? { encoder: b.encoder.slice(0, 120) } : {}),
 });
 
 app.post('/items/:id/transcript', async (c) => {
@@ -421,6 +446,61 @@ app.post('/items/:id/translations', async (c) => {
   );
   if ('response' in out) return out.response;
   return c.json({ success: true, result: out.result });
+});
+// Renditions encoded on the admin's computer (TA-12): staged before the file's upload completes, then
+// verified by the first transcode, which encodes itself when they do not match (api-videos prebuilt.ts)
+const STAGING_ID = /^[a-f0-9]{16}$/;
+const RUNG = /^\d{3,4}p$/;
+const FILE = /^[A-Za-z0-9_.-]{1,64}$/;
+/** The item's video for a renditions call, or the answer when there is none. */
+async function renditionsVideo(c: C) {
+  const item = await readItem(c, c.req.param('id') ?? '');
+  if (!item) return { response: fail(c, 404, 'item_not_found', 'No such import item') };
+  if (!item.video_id) return { response: c.json({ success: false, code: 'no_video', error: 'This file has no video yet: open its upload first' }, 409) };
+  const stagingId = c.req.param('stagingId');
+  if (stagingId !== undefined && !STAGING_ID.test(stagingId)) return { response: fail(c, 404, 'staging_not_found', 'No such staged upload') };
+  return { item, path: `/import/videos/${encodeURIComponent(item.video_id)}${stagingId ? `/renditions/${stagingId}` : ''}` };
+}
+app.post('/items/:id/renditions', async (c) => {
+  const out = await forItemVideo(c, 'renditions:stage', (videoId, body) => videos<Record<string, unknown>>(c, `/import/videos/${encodeURIComponent(videoId)}/renditions`, { method: 'POST', json: body }));
+  if ('response' in out) return out.response;
+  return c.json({ success: true, result: out.result }, 201);
+});
+app.put('/items/:id/renditions/:stagingId/files/:rung/:file', async (c) => {
+  const found = await renditionsVideo(c);
+  if ('response' in found) return found.response;
+  const rung = c.req.param('rung');
+  const file = c.req.param('file');
+  if (!RUNG.test(rung) || !FILE.test(file) || file.startsWith('.')) return fail(c, 400, 'file_not_declared', 'Not a rendition file');
+  const length = c.req.header('content-length');
+  if (length && Number(length) > PREBUILT_LIMITS.maxFileBytes) return c.json({ success: false, code: 'file_too_large', error: `At most ${PREBUILT_LIMITS.maxFileBytes} bytes per file` }, 413);
+  // Streamed through: a segment is up to 32 MiB and the app sends several at once
+  await videos<undefined>(c, `${found.path}/files/${rung}/${file}`, { method: 'PUT', raw: { body: c.req.raw.body, contentType: c.req.header('content-type'), contentLength: length } });
+  return c.body(null, 204);
+});
+app.post('/items/:id/renditions/:stagingId/complete', async (c) => {
+  const found = await renditionsVideo(c);
+  if ('response' in found) return found.response;
+  return c.json({ success: true, result: await videos<Record<string, unknown>>(c, `${found.path}/complete`, { method: 'POST' }) });
+});
+app.delete('/items/:id/renditions/:stagingId', async (c) => {
+  const found = await renditionsVideo(c);
+  if ('response' in found) return found.response;
+  const db = c.env.REPORTS_DB;
+  const auditId = await writeAudit(db, { kind: 'import', id: found.item.video_id!, action: 'renditions:cancel', actorId: actorOf(c), details: { itemId: found.item.id, stagingId: c.req.param('stagingId') } });
+  try {
+    await videos(c, found.path, { method: 'DELETE' });
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[AdminImport] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
+  return c.json({ success: true, result: {} });
+});
+// Whether the server takes renditions for this file's video, and what its transcode did with them
+app.get('/items/:id/delivery', async (c) => {
+  const found = await renditionsVideo(c);
+  if ('response' in found) return found.response;
+  return c.json({ success: true, result: await videos<Record<string, unknown>>(c, `${found.path}/delivery`) });
 });
 app.post('/items/:id/failed', async (c) => {
   const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;

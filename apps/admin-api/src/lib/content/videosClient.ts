@@ -23,6 +23,8 @@ export interface VideosCall {
   query?: Record<string, string | number | boolean | string[] | undefined | null>;
   json?: unknown;
   form?: FormData;
+  /** A raw body passed through as it is (Admin Tools rendition files), with its type and length */
+  raw?: { body: ReadableStream | ArrayBuffer | null; contentType?: string; contentLength?: string | null };
   actorId?: string;
   /** Path prefix on api-videos (default /internal/admin; CSAM /internal/csam; Payments /internal/billing) */
   base?: '/internal/admin' | '/internal/csam' | '/internal/billing';
@@ -60,11 +62,17 @@ export async function callVideos<T>(env: VideosClientEnv, path: string, call: Vi
   if (call.actorId) headers['X-Admin-Actor'] = call.actorId;
   let body: BodyInit | undefined;
   if (call.form) body = call.form;
-  else if (call.json !== undefined) {
+  else if (call.raw) {
+    body = call.raw.body ?? undefined;
+    headers['Content-Type'] = call.raw.contentType ?? 'application/octet-stream';
+    if (call.raw.contentLength) headers['Content-Length'] = call.raw.contentLength;
+  } else if (call.json !== undefined) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(call.json);
   }
   const init: RequestInit = { method: call.method ?? 'GET', headers, body };
+  // A streamed body (Node's fetch in local dev wants it said; Workers ignore it)
+  if (body instanceof ReadableStream) (init as RequestInit & { duplex?: string }).duplex = 'half';
   const suffix = `${call.base ?? '/internal/admin'}${path}${queryString(call.query)}`;
 
   let response: Response;
@@ -72,6 +80,8 @@ export async function callVideos<T>(env: VideosClientEnv, path: string, call: Vi
   else if (env.VIDEOS_API_URL) response = await fetch(`${env.VIDEOS_API_URL.replace(/\/$/, '')}${suffix}`, init);
   else throw new VideosError(500, 'not_configured', 'The VIDEOS service binding is not configured');
 
+  // No content (a stored rendition file): nothing to read
+  if (response.status === 204) return undefined as T;
   const payload = (await response.json().catch(() => null)) as ({ success?: boolean; result?: T; code?: string; error?: string } & Record<string, unknown>) | null;
   if (!response.ok || !payload?.success) {
     // Counts and the like next to the code (a tier with users: { users }) reach the admin as they are
