@@ -286,13 +286,18 @@ export type CostTrendKey = (typeof COST_TREND_KEYS)[number];
  * Daily spend for the last 30 days, one series per env (Cloudflare at list price) and per other
  * source. Fixed costs are their month's share spread over the month's days.
  */
+/** UTC days the trend carries before today (the page shows 30 local days). */
+export const TREND_DAYS = 30;
+
 export function trendBySource(
   resourceDays: ResourceDay[],
   extras: { bunny: DayCost[]; containers: DayCost[]; ai: DayCost[]; resend: DayCost[] },
   fixedDaily: (day: string) => number,
   now: Date,
 ): { days: string[]; series: { key: CostTrendKey; values: number[] }[] } {
-  const days = [...fullDays(now, 29), now.toISOString().slice(0, 10)];
+  // 30 UTC days to today, plus the one before: the page draws the last 30 days on the viewer's
+  // calendar, and in the Americas' evening its window starts a UTC day earlier (admin-web localTrend)
+  const days = [...fullDays(now, TREND_DAYS), now.toISOString().slice(0, 10)];
   const perEnv = new Map<string, Map<string, number>>();
   for (const r of resourceDays) {
     const m = perEnv.get(r.env) ?? new Map<string, number>();

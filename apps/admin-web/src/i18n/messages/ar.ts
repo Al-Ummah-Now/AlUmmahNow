@@ -4468,7 +4468,8 @@ const ar: Messages = {
       reconcile: 'المجموع بسعر القائمة {list}، ناقص الاستخدام المشمول في Cloudflare {included}، يساوي {billed}: ما أُنفق هذا الشهر كما تحسبه الميزانية.',
       trendKeys: { production: 'الإنتاج', stage: 'التجهيز', qa: 'الاختبار', bunny: 'Bunny', containers: 'التحويل', ai: 'Workers\u00a0AI', resend: 'Resend', plan: 'خطة Workers', fixed: 'الثابتة وغيرها' },
       axisUnit: 'دولار',
-      trendNote: 'كل بيئة هي إنفاقها على Cloudflare بسعر القائمة؛ وبقية المصادر بما فُوتر أو قُدّر. الأيام بتوقيت غرينتش كما تعدّها Cloudflare وBunny وResend، فيبدأ عمود اليوم الجديد مساءً بتوقيت نيويورك.',
+      trendNote: 'كل بيئة هي إنفاقها على Cloudflare بسعر القائمة؛ وبقية المصادر بما فُوتر أو قُدّر. الأيام بتوقيتك المحلي وتنتهي باليوم. تُبلغ Cloudflare وBunny وResend وبقية المصادر عن كل يوم بتوقيت غرينتش: فيحمل كل عمود يوم غرينتش الذي يوافق تاريخه، ويحمل عمود اليوم أيضًا يوم غرينتش الذي بدأ. مرّر المؤشر فوق العمود لترى أيّها.',
+      utcDays: 'بيوم غرينتش: {days}',
     },
     products: {
       workers: 'Workers',

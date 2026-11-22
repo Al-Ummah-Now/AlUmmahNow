@@ -43,7 +43,9 @@ type Sections = typeof import('../src/app/(protected)/costs/sections');
 type Details = typeof import('../src/app/(protected)/costs/details');
 let sections: Sections;
 let details: Details;
+let TrendChartModule: typeof import('../src/app/(protected)/costs/TrendChart');
 before(async () => {
+  TrendChartModule = await import('../src/app/(protected)/costs/TrendChart');
   sections = await import('../src/app/(protected)/costs/sections');
   details = await import('../src/app/(protected)/costs/details');
 });
@@ -602,8 +604,10 @@ describe('costs audit fixes, round 5 (AUDIT-2 2026-11-21)', () => {
     assert.equal((html.match(/شهريًا/g) ?? []).length, 1, 'only the phone line repeats «شهريًا»');
   });
 
-  it('the daily chart says its days are UTC days', () => {
-    assert.ok(createTranslator('en')('costs.breakdown.trendNote').includes('UTC days'));
+  it('the daily chart says its days follow the viewer and its sources report by UTC day', () => {
+    assert.ok(createTranslator('en')('costs.breakdown.trendNote').includes('your time zone'));
+    assert.ok(createTranslator('en')('costs.breakdown.trendNote').includes('UTC day'));
+    assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('بتوقيتك المحلي'));
     assert.ok(createTranslator('ar')('costs.breakdown.trendNote').includes('غرينتش'));
   });
 });
@@ -623,5 +627,63 @@ describe('AUDIT-2 round 6', () => {
     assert.ok(ar('costs.thresholds.budgetLevels').includes('٪') && !ar('costs.thresholds.budgetLevels').includes('%'));
     assert.match(ar('costs.token.permission'), /Account Analytics: Read/);
     assert.match(createTranslator('en')('costs.token.permission'), /Account Analytics: Read/);
+  });
+});
+
+describe('daily chart on the viewer\'s calendar (as #1665 does for Studio)', () => {
+  // The API's 31 UTC days ending on UTC today; each day's value is its day of the month, so a bar shows which UTC days it holds
+  const utcDays = (today: string) => Array.from({ length: 31 }, (_, i) => new Date(Date.parse(`${today}T00:00:00Z`) - (30 - i) * 86_400_000).toISOString().slice(0, 10));
+  const sourceOf = (days: string[]) => [{ key: 'production', values: days.map((d) => Number(d.slice(8))) }, { key: 'plan', values: days.map(() => 0.17) }];
+  const total = (s: { values: readonly number[] }[], from: number) => Math.round(s.reduce((a, x) => a + x.values.slice(from).reduce((b, v) => b + v, 0), 0) * 100) / 100;
+
+  it('at 7:30 pm in New York (00:30 UTC on the 22nd) the last bar is the 21st and holds the UTC day already begun', async () => {
+    const { localTrend } = await import('../src/app/(protected)/costs/model');
+    const days = utcDays('2026-11-22');
+    const now = Date.parse('2026-11-22T00:30:00Z');
+    const t = localTrend(days, sourceOf(days), now, 'America/New_York');
+    assert.equal(t.days.length, 30);
+    assert.equal(t.days.at(-1), '2026-11-21', 'today is the viewer\'s today');
+    assert.equal(t.days[0], '2026-10-23', 'a full 30 days: the API\'s extra UTC day fills the first bar');
+    assert.deepEqual(t.utcDays.at(-1), ['2026-11-21', '2026-11-22']);
+    assert.equal(t.series[0]!.values.at(-1), 21 + 22);
+    assert.equal(t.series[0]!.values[0], 23, 'the first bar is not empty');
+    // Nothing lost: the bars hold every UTC day in the window, so the month still sums to the month to date
+    assert.equal(total(t.series, 0), total(sourceOf(days), 0));
+    // The server (no viewer zone) draws the UTC days: the last bar is UTC today
+    const utc = localTrend(days, sourceOf(days), now, 'UTC');
+    assert.equal(utc.days.at(-1), '2026-11-22');
+    assert.deepEqual(utc.utcDays.at(-1), ['2026-11-22']);
+  });
+
+  it('across the DST change (1 Nov in New York) every local day has one bar, none doubled or skipped', async () => {
+    const { localTrend } = await import('../src/app/(protected)/costs/model');
+    const days = utcDays('2026-11-02');
+    const t = localTrend(days, sourceOf(days), Date.parse('2026-11-02T03:30:00Z'), 'America/New_York');
+    assert.equal(t.days.at(-1), '2026-11-01');
+    assert.equal(new Set(t.days).size, 30);
+    assert.ok(t.days.includes('2026-11-01') && t.days.includes('2026-10-31'));
+    assert.deepEqual(t.utcDays.at(-1), ['2026-11-01', '2026-11-02']);
+  });
+
+  it('ahead of UTC (+5:30 at 2 am) today\'s bar is the viewer\'s date and waits for its UTC day', async () => {
+    const { localTrend } = await import('../src/app/(protected)/costs/model');
+    const days = utcDays('2026-11-21');
+    const t = localTrend(days, sourceOf(days), Date.parse('2026-11-21T20:30:00Z'), 'Asia/Kolkata');
+    assert.equal(t.days.at(-1), '2026-11-22');
+    assert.equal(t.series[0]!.values.at(-1), 0);
+    assert.deepEqual(t.utcDays.at(-1), []);
+    assert.equal(t.series[0]!.values.at(-2), 21);
+  });
+
+  it('each segment\'s title names the UTC days its bar holds', () => {
+    const days = utcDays('2026-11-22');
+    const html = renderToStaticMarkup(
+      React.createElement(TrendChartModule.TrendChart, {
+        days, series: sourceOf(days).map((s) => ({ ...s, label: s.key, color: 'red' })), now: Date.parse('2026-11-22T00:30:00Z'), locale: 'en', title: 'Daily spend',
+        labels: { chart: 'c', table: 't', day: 'd', total: 'x', empty: 'e' }, utcNote: createTranslator('en')('costs.breakdown.utcDays'), testId: 'costs-trend',
+      }),
+    );
+    // Server render: UTC days, each bar its own UTC day
+    assert.match(html, /Nov 22 • production: \$22\.00 \(by UTC day: Nov 22\)/);
   });
 });

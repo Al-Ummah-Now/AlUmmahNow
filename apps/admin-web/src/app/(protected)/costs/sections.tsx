@@ -9,7 +9,7 @@ import Link from '@/components/AppLink';
 
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
-import { StackedBarChart } from '@/components/charts/StackedBarChart';
+import { TrendChart } from './TrendChart';
 import { COST_TREND_KEYS, type CostBudgetPart, type CostEnvKey, type CostMover, type CostsDashboard, type CostTrendKey } from '@/lib/api/costs-types';
 import { budgetMeter, dailyBudget, idleStatus, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, listJoin, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
@@ -581,7 +581,7 @@ export function EnvsPanel({ d, t, f }: Common & { d: CostsDashboard }) {
   );
 }
 
-export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; locale: string }) {
+export function TrendPanel({ d, t, f, locale, now = Date.now() }: Common & { d: CostsDashboard; locale: string; now?: number }) {
   const cap = d.settings.budgetUsd ?? d.budget.capUsd;
   const daily = cap !== null ? dailyBudget(cap, d.budget.month) : null;
   const series = COST_TREND_KEYS.map((key) => ({
@@ -592,16 +592,17 @@ export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; lo
   })).filter((x) => x.values.some((v) => v > 0));
   return (
     <section className="cost-panel p-5 sm:p-6" aria-label={t('costs.breakdown.trendTitle')} data-testid="costs-trend-panel">
-      <StackedBarChart
+      {/* Days on the viewer's calendar: drawn in UTC on the server, local straight after hydration */}
+      <TrendChart
         title={t('costs.breakdown.trendTitle')}
         days={d.trend.days}
         series={series.length ? series : [{ key: 'total', label: t('costs.breakdown.total'), color: 'var(--accent)', values: d.trend.values }]}
+        now={now}
         locale={locale}
-        format={f.usd}
-        dayLabel={f.day}
         axisUnit={t('costs.breakdown.axisUnit')}
         reference={daily !== null ? { value: daily, label: t('costs.breakdown.dailyBudget', { value: f.usd(daily) }) } : undefined}
         labels={{ chart: t('costs.breakdown.trendTitle'), table: t('costs.breakdown.table'), day: t('costs.breakdown.day'), total: t('costs.breakdown.total'), empty: t('costs.breakdown.empty30') }}
+        utcNote={t('costs.breakdown.utcDays')}
         testId="costs-trend"
       />
       <p className="mt-2 text-xs text-fg-muted">{t('costs.breakdown.trendNote')}</p>

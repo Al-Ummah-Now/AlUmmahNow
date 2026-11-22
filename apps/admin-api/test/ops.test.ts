@@ -284,6 +284,9 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
     const plan = tr.series.find((x) => x.key === 'plan')!.values;
     const fixed = tr.series.find((x) => x.key === 'fixed')!.values;
     assert.equal(tr.days.at(-1), day(0));
+    // 30 UTC days before today and today: the page draws 30 days on the viewer's calendar
+    assert.equal(tr.days.length, 31);
+    assert.equal(tr.days[0], day(30));
     assert.equal(plan.at(-2), Math.round((PLAN_BASE_USD / 30) * 100) / 100);
     // now is 12:00 UTC: half of today's share
     assert.equal(plan.at(-1), Math.round((PLAN_BASE_USD / 30 / 2) * 100) / 100);

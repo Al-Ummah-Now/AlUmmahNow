@@ -304,3 +304,63 @@ export function localDate(d = new Date()): string {
 export function listJoin(items: readonly string[], sep: string): string {
   return items.join(sep.trim() === '•' ? ' • ' : sep);
 }
+
+const DAY_MS = 86_400_000;
+const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+
+/** YYYY-MM-DD of the instant `ms` on the calendar of `timeZone` (UTC when the zone is unknown). */
+export function dayInZone(ms: number, timeZone: string): string {
+  if (timeZone === 'UTC') return new Date(ms).toISOString().slice(0, 10);
+  try {
+    const p: Record<string, string> = {};
+    for (const part of dateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms))) p[part.type] = part.value;
+    return `${p.year}-${p.month}-${p.day}`;
+  } catch {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+}
+
+/** Days the daily chart shows. The API sends one UTC day more, so the window is full in the Americas' evening. */
+export const TREND_LENGTH = 30;
+
+export interface LocalTrend {
+  /** The viewer's calendar days, oldest first, ending on the viewer's today. */
+  days: string[];
+  series: { key: string; values: number[] }[];
+  /** The UTC days each local bar holds (for its tooltip): usually its own date, today also the UTC day already begun. */
+  utcDays: string[][];
+}
+
+/**
+ * The daily trend on the viewer's calendar (as #1665 does for Studio). Every source comes by UTC
+ * day: Cloudflare's GraphQL daily rows, Bunny's and Resend's daily figures, Containers and
+ * Workers AI per day, and the plan and fixed shares, which the API accrues per UTC date. A UTC day
+ * keeps its date, so it lands on the local day it mostly overlaps; a UTC day later than the
+ * viewer's today (the evening in the Americas: at 7:30 pm in New York, UTC is already on the next
+ * day) is added to today's bar, so the last bar is the viewer's today and the bars still sum to
+ * the month to date. Ahead of UTC (+5:30 early in the morning) today's bar waits for its UTC day.
+ */
+export function localTrend(days: readonly string[], series: readonly { key: string; values: readonly number[] }[], now: number, timeZone: string, length = TREND_LENGTH): LocalTrend {
+  const n = length;
+  const today = dayInZone(now, timeZone);
+  const out = Array.from({ length: n }, (_, i) => addDays(today, i - (n - 1)));
+  const index = new Map(out.map((d, i) => [d, i]));
+  const target = days.map((d) => index.get(d > today ? today : d));
+  const utcDays = out.map(() => [] as string[]);
+  days.forEach((d, i) => {
+    const t = target[i];
+    if (t !== undefined) utcDays[t]!.push(d);
+  });
+  return {
+    days: out,
+    series: series.map((s) => {
+      const values = out.map(() => 0);
+      s.values.forEach((v, i) => {
+        const t = target[i];
+        if (t !== undefined) values[t] = Math.round((values[t]! + v) * 100) / 100;
+      });
+      return { key: s.key, values };
+    }),
+    utcDays,
+  };
+}

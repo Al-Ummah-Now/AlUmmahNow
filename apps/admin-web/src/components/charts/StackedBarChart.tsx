@@ -32,6 +32,8 @@ export interface StackedBarChartProps {
    * name on every tick crowds and clips the axis in Arabic.
    */
   axisUnit?: string;
+  /** Appended to each segment's hover title for that day (e.g. which UTC days the bar holds). */
+  dayNote?: (index: number) => string | undefined;
   testId: string;
 }
 
@@ -54,7 +56,7 @@ const TOP = 12;
 const UNIT_TOP = 32;
 const BOTTOM = 26;
 
-export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, testId }: StackedBarChartProps) {
+export function StackedBarChart({ title, days, series, locale, format, dayLabel, labels, reference, axisUnit, dayNote, testId }: StackedBarChartProps) {
   const rtl = /^ar\b/.test(locale);
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
@@ -102,6 +104,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
         {!empty &&
           days.map((day, i) => {
             let base = 0;
+            const note = dayNote?.(i);
             return (
               <g key={day} data-testid={tid(`${testId}-bar`)} data-day={main ? day : undefined} data-total={main ? totals[i].toFixed(2) : undefined}>
                 {series.map((s) => {
@@ -112,7 +115,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
                   const y1 = y(base);
                   return (
                     <rect key={s.key} x={x(i)} y={y1} width={barW} height={Math.max(0.5, y0 - y1)} style={{ fill: s.color, stroke: 'var(--surface)' }} strokeWidth="0.75">
-                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}`}</title>
+                      <title>{`${dayLabel(day)}${metaSeparator(locale)}${s.label}: ${format(v)}${note ? ` (${note})` : ''}`}</title>
                     </rect>
                   );
                 })}
