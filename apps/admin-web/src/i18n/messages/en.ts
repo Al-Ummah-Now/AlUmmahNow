@@ -2613,6 +2613,23 @@ const en = {
   errorsPage: {
     openImport: 'Open the file in Imports',
     errorType: 'Error type',
+    platforms: {
+      Windows: 'Windows',
+      macOS: 'macOS',
+      'Mac OS': 'macOS',
+      iOS: 'iOS',
+      iPadOS: 'iPadOS',
+      Android: 'Android',
+      Linux: 'Linux',
+      'Chrome OS': 'ChromeOS',
+      ChromeOS: 'ChromeOS',
+      Chrome: 'Chrome',
+      Firefox: 'Firefox',
+      Safari: 'Safari',
+      Edge: 'Edge',
+      Opera: 'Opera',
+      'Samsung Internet': 'Samsung Internet',
+    },
     apps: {
       web: 'Videos site',
       'admin-web': 'Videos admin',

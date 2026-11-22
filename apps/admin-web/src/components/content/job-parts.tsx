@@ -9,6 +9,7 @@ import { useState } from 'react';
 import type { AdminContentPermission, AdminJob, AdminJobLogEntry } from '@al-ummah/shared-types';
 import { cancelJob, readJob, retryJob } from '@/lib/api/content';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { pageStart } from '@/i18n/config';
 import { formatNumber } from '@/i18n/translate';
 import { formatDuration } from '@/lib/local-time';
 import { LocalTime } from '@/components/LocalTime';
@@ -24,14 +25,15 @@ export type JobRef = Pick<AdminJob, 'id' | 'kind' | 'status'>;
 
 /** The error in plain words, then the job's own message (left to right: it is code and English). */
 export function JobErrorText({ error, testId = 'job-error' }: { error: string; testId?: string }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   return (
     <div className="text-xs break-words" data-testid={testId}>
       <p className="text-danger-fg [text-wrap:balance]">{t(jobErrorWords(error))}</p>
       {error !== 'hidden' && (
         <details className="mt-1 text-fg-muted">
           <summary className="cursor-pointer select-none hover:text-fg">{t('jobs.technical')}</summary>
-          <code dir="ltr" className="block mt-1 font-mono whitespace-pre-wrap text-start" data-testid={`${testId}-raw`}>
+          {/* Left to right (code and English), but on the page's start side like the summary above it */}
+          <code dir="ltr" className="block mt-1 font-mono whitespace-pre-wrap" style={{ textAlign: pageStart(locale) }} data-testid={`${testId}-raw`}>
             {error}
           </code>
         </details>

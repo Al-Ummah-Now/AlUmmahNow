@@ -11,7 +11,7 @@ import { formatNumber, hourDate, translateDynamic, type MessageKey, type Transla
 import { pageStart, type Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName } from '../ui';
+import { ErrorStatusChip, HourlyChart, TestChip, appName, environmentName, errorTitle, errorType, languageName, platformName } from '../ui';
 import { countryName, sourceLabel } from '../origin';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
 import { ErrorGroupActions } from './ErrorGroupActions';
@@ -365,7 +365,7 @@ function Sample({ event: e, app, t, locale, highlighted }: { event: ErrorEvent; 
     ]);
   }
   if (ctx?.origin) facts.push(...originFacts(ctx.origin, t, locale));
-  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ? languageName(e.locale, locale) : '—'], [t('errorsPage.theme'), e.theme ?? '—']);
+  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter((v): v is string => !!v).map((v) => platformName(t, locale, v)).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ? languageName(e.locale, locale) : '—'], [t('errorsPage.theme'), e.theme ?? '—']);
   const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
     <li className={`border rounded p-4 ${highlighted ? 'border-accent ring-1 ring-accent' : 'border-border'}`} data-testid="error-sample" data-ref={e.ref}>
