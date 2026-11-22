@@ -73,6 +73,19 @@ const DEFAULT_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 /** The leading icon of each root row: every row is [icon] label ... value > */
 /** Settings rows are a fixed 44px (docs/specs/VIDEO-PLAYER.md, Settings menu) */
 const ROW_HEIGHT = 44;
+
+/**
+ * Extra space at the end of a submenu that scrolls under its pinned back row, so that its furthest
+ * scroll puts a row's top exactly at the back row's bottom. Without it the end of the scroll is
+ * wherever the content runs out, and a few pixels of the row behind the back row show under it.
+ * `rowTops` are the rows' tops in the scroll content, `stuckBottom` where the pinned back row ends
+ * in the scrollport, `maxScroll` the current scroll range. 0 when it doesn't scroll.
+ */
+export function wholeRowEndPadding(rowTops: number[], stuckBottom: number, maxScroll: number): number {
+  if (maxScroll <= 0.5) return 0;
+  const stops = rowTops.map((top) => top - stuckBottom).filter((s) => s >= maxScroll - 0.5).sort((a, b) => a - b);
+  return stops.length ? Math.max(0, Math.round(stops[0] - maxScroll)) : 0;
+}
 /** Below this many rows of room above the bar, the panel covers the bar instead */
 const MIN_ROWS_ABOVE_BAR = 3;
 /** Frames narrower than this (phones) are small players: the panel fills the frame */
@@ -233,6 +246,22 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
       menu.style.height = `${height}px`;
       // The pinned back row's backdrop paints the panel's gradient at the panel's size
       menu.style.setProperty('--vjs-fanous-menu-h', `${height}px`);
+      // A submenu that scrolls under its pinned back row ends on a whole row: scrolled to the end,
+      // a row starts right under the back row, never a strip of a half-hidden row showing there
+      // (fit also runs on the panel's own scroll: the padding stays in place while measuring, so
+      // the scroll position is never clamped back under the user)
+      const backBar = view.querySelector<HTMLElement>('.vjs-fanous-mi-back-bar');
+      const padNow = parseFloat(view.style.paddingBottom) || 0;
+      let pad = 0;
+      if (backBar) {
+        const box = menu.getBoundingClientRect();
+        const contentTop = box.top + menu.clientTop - menu.scrollTop;
+        const rowTops = Array.from(view.querySelectorAll<HTMLElement>('.vjs-fanous-mi:not(.vjs-fanous-mi-back)')).map((r) => r.getBoundingClientRect().top - contentTop);
+        // Sticky offsets count from the panel's content edge, inside its padding
+        const stuckBottom = (parseFloat(cs.paddingTop) || 0) + (parseFloat(getComputedStyle(backBar).top) || 0) + backBar.offsetHeight;
+        pad = wholeRowEndPadding(rowTops, stuckBottom, menu.scrollHeight - padNow - menu.clientHeight);
+      }
+      if (pad !== padNow) view.style.paddingBottom = pad > 0 ? `${pad}px` : '';
     };
     fit();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
