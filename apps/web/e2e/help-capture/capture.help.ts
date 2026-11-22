@@ -2150,7 +2150,10 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
     try {
       await settle(page, `/video/${videoId}`, lang);
       await expect(page.getByTestId('comment-identity').first()).toHaveAttribute('data-as', 'channel', { timeout: 30_000 });
-      const header = page.locator('header.ah');
+      // A strip of the page, not the header element: the page refresh after a switch replaces it
+      const hb = (await page.locator('header.ah').boundingBox())!;
+      const vw = page.viewportSize()!.width;
+      const header = { screenshot: (o: { path: string }) => page.screenshot({ path: o.path, clip: { x: 0, y: 0, width: vw, height: Math.ceil(hb.y + hb.height) + 4 } }) };
       await expect(page.getByTestId('notification-badge')).toBeVisible({ timeout: 30_000 });
       await parkPointer(page);
       await page.waitForTimeout(800);
@@ -2169,6 +2172,9 @@ test('review 1730 badge and busy pill', async ({ browser }) => {
 
       // Quick switch (local stack, no delay): channel → personal, the header every 100 ms
       const menu = await openMenu(page, 'channels');
+      // The picker itself, header and menu (rows' columns)
+      const mb = (await menu.boundingBox())!;
+      await page.screenshot({ path: join(dir, `${name}.0-picker.png`), clip: { x: 0, y: 0, width: vw, height: Math.min(page.viewportSize()!.height, Math.ceil(mb.y + mb.height) + 12) } });
       await menu.getByTestId('nav-channel-option-none').click();
       for (let i = 0; i < 12; i++) {
         const s = await state();
