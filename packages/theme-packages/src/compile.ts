@@ -323,6 +323,9 @@ function standalone(pkg: ThemePackage, value: string, assetUrl: (p: string) => s
  */
 // summary: the CMS's account button is a <details> summary (its menu works without script)
 const navControls = (scope: string, suffix = '') => ['button', 'summary', 'input', 'select', 'textarea'].map((el) => `${scope} .aun-header ${el}${suffix}`).join(',');
+// every menu item and the account menu's name line, whatever the tag (a link, a button) and wherever the
+// menu is rendered: one menu font in every app (orchestrator ruling 2026-11-22)
+const navMenuText = (scope: string, suffix = '') => ['.aun-menu-item', '.aun-menu-who-name'].map((c) => `${scope} ${c}${suffix}`).join(',');
 
 /**
  * The shared header's look for this theme (docs/design/NAV.md "Theme"), read by
@@ -330,7 +333,7 @@ const navControls = (scope: string, suffix = '') => ['button', 'summary', 'input
  *   --aun-header-band   components.header.style.background, the bar's material
  *   --aun-header-edge   components.header.style.edge, its shadow/rule
  * and the theme's body font (typography.body) on the header's controls, as the videos app's body rule
- * gives its buttons and inputs. Light-only header styles use the videos app's html.dark marking,
+ * gives its buttons and inputs, and on every menu item and the menu's name line. Light-only header styles use the videos app's html.dark marking,
  * as the materials do.
  */
 function navCss(pkg: ThemePackage, assetUrl: (p: string) => string, isDefault: boolean): string {
@@ -348,8 +351,8 @@ function navCss(pkg: ThemePackage, assetUrl: (p: string) => string, isDefault: b
   return [
     `${top}{${base.join(';')}}`,
     light.length ? `${scope}:not(.dark){${light.join(';')}}` : '',
-    body ? `${navControls(scope)}{font-family:${bodyStack(body.latin)}}` : '',
-    body ? `${navControls(scope, ':lang(ar)')}{font-family:${bodyStack(body.arabic)}}` : '',
+    body ? `${navControls(scope)},${navMenuText(scope)}{font-family:${bodyStack(body.latin)}}` : '',
+    body ? `${navControls(scope, ':lang(ar)')},${navMenuText(scope, ':lang(ar)')}{font-family:${bodyStack(body.arabic)}}` : '',
   ].filter(Boolean).join('\n') + '\n';
 }
 
