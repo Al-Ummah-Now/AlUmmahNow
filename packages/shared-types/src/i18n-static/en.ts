@@ -2295,6 +2295,18 @@ export const EN_TRANSLATIONS: AppTranslations = {
     continueSubtitle: 'Videos you started and have not finished, newest first',
     allHistory: 'All history',
     continueEmpty: 'Nothing to continue. Videos you start and leave unfinished appear here.',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    searchLabel: 'Search watch history',
+    searchSubmit: 'Search',
+    searchClear: 'Clear search',
+    searchResultsFor: 'Results for “{query}”',
+    searchNoResults: 'No videos in your history match “{query}”.',
+    searchWindow: 'Searched your {count} most recent videos.',
+    manage: 'Manage history',
+    removed: 'Removed from watch history',
+    undo: 'Undo',
+    removeTitled: 'Remove “{title}” from watch history',
   },
 
   live: {

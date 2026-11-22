@@ -91,6 +91,25 @@ describe('Watch later page', () => {
     expect(screen.getAllByTestId('library-list-item')).toHaveLength(1);
   });
 
+  it('shows the playlist panel and shuffles from a random video (player per-tab shuffle)', async () => {
+    const push = jest.fn();
+    jest.spyOn(jest.requireMock('next/navigation'), 'useRouter').mockReturnValue({ push, replace: jest.fn(), prefetch: jest.fn(), back: jest.fn() });
+    jest.spyOn(Math, 'random').mockReturnValue(0.75);
+    render(<LibraryListPage kind="watch-later" dir="ltr" />);
+    await waitFor(() => expect(screen.getAllByTestId('library-list-item')).toHaveLength(2));
+    const panel = screen.getByTestId('library-panel');
+    expect(panel).toHaveTextContent('Watch later');
+    expect(panel).toHaveTextContent('Private');
+    expect(panel).toHaveTextContent('2 videos');
+    fireEvent.click(screen.getByTestId('library-shuffle'));
+    expect(push).toHaveBeenCalledWith('/en/video/b?list=WL&index=1');
+    const mode = jest.requireActual('@/lib/playlists/playback').readListMode('WL');
+    expect(mode.loop).toBe(false);
+    expect(mode.shuffleFirst).toBe(1);
+    expect(typeof mode.shuffleSeed).toBe('number');
+    (Math.random as jest.Mock).mockRestore();
+  });
+
   it('renders the Arabic RTL page with an empty state', async () => {
     mockLang = 'ar';
     service.liked.mockResolvedValue({ items: [], nextCursor: null, total: 0 });

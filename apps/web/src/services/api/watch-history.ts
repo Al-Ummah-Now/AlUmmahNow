@@ -56,6 +56,8 @@ export interface WatchHistoryPage {
   total: number;
   hasMore: boolean;
   cursor?: string;
+  /** A search (`q`): how many of the newest entries it covered (the API searches at most 200) */
+  searched?: number;
 }
 
 /**
@@ -458,12 +460,13 @@ export class WatchHistoryService {
    * Uses the browser auth token (cookies are httpOnly).
    */
   static async list(
-    params: { limit?: number; cursor?: string; completed?: boolean } = {}
+    params: { limit?: number; cursor?: string; completed?: boolean; q?: string } = {}
   ): Promise<WatchHistoryPage | null> {
     try {
       const query = new URLSearchParams({ sort: 'newest', limit: String(params.limit ?? 20) });
       if (params.cursor) query.set('cursor', params.cursor);
       if (params.completed !== undefined) query.set('completed', String(params.completed));
+      if (params.q && params.q.trim()) query.set('q', params.q.trim());
       const response = await fetch(`${apiBase()}/api/watch-history?${query.toString()}`, {
         headers: await getClientAuthHeaders(),
       });
@@ -483,9 +486,11 @@ export class WatchHistoryService {
    */
   static async remove(videoId: string): Promise<boolean> {
     try {
+      // keepalive: a remove made final as the page is left (the undo toast's time cut short) still reaches the API
       const response = await fetch(`${apiBase()}/api/watch-history/${encodeURIComponent(videoId)}`, {
         method: 'DELETE',
         headers: await getClientAuthHeaders(),
+        keepalive: true,
       });
       if (!response.ok) {
         logger.warn('[WatchHistoryService] Remove failed', { videoId, status: response.status });

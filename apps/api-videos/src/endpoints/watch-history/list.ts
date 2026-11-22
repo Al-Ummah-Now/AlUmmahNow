@@ -15,6 +15,7 @@ import type {
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
 import { withChannelNames, withLiveVideoFields } from "../../lib/watch-history";
+import { matchesSearch, searchWords, SEARCH_WINDOW } from "../../lib/watch-history-search";
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -32,6 +33,11 @@ const ListWatchHistoryQuery = z.object({
     .boolean()
     .optional()
     .describe("Filter by completion status"),
+  q: z
+    .string()
+    .max(200)
+    .optional()
+    .describe("Search: entries whose title (any language) or channel name holds every word; the newest 200 entries are searched"),
   sort: z
     .enum(["newest", "oldest", "alphabetical"])
     .default("newest")
@@ -62,6 +68,7 @@ const WatchHistoryResponseSchema = z.object({
   total: z.number(),
   hasMore: z.boolean(),
   cursor: z.string().optional(),
+  searched: z.number().optional().describe("With q: how many of the newest entries were searched (at most 200)"),
 });
 
 export class ListWatchHistory extends AuthenticatedRoute {
@@ -147,9 +154,27 @@ export class ListWatchHistory extends AuthenticatedRoute {
           break;
       }
 
-      // Apply pagination
       const startIndex = cursor ? parseInt(cursor, 10) : 0;
       const endIndex = startIndex + limit;
+      const words = searchWords(query.q);
+
+      if (words.length > 0) {
+        // Search: the newest entries with their live titles and channel names, filtered, then paged
+        const window = userEntries.slice(0, SEARCH_WINDOW);
+        const live = await withLiveVideoFields(c.env.videos, userId, await withChannelNames(c.env.channels, window));
+        const found = live.filter((entry) => matchesSearch(entry, words));
+        const hasMore = endIndex < found.length;
+        const response: WatchHistoryResponse & { searched: number } = {
+          entries: found.slice(startIndex, endIndex),
+          total: found.length,
+          hasMore,
+          cursor: hasMore ? String(endIndex) : undefined,
+          searched: window.length,
+        };
+        return c.json(response, 200);
+      }
+
+      // Apply pagination
       const paginatedEntries = await withLiveVideoFields(
         c.env.videos,
         userId,

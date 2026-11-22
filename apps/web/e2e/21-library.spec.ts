@@ -193,6 +193,10 @@ test.describe('Library (signed in)', () => {
     await page.goto('/en/library/liked');
     await expect(page.getByRole('heading', { level: 1, name: /Liked videos/ })).toBeVisible();
     await expect(page.locator(`[data-testid="library-list-item"][data-video-id="${video.id}"]`)).toBeVisible();
+    // YouTube's playlist layout: the panel plays the list in order or shuffled
+    const panel = page.getByTestId('library-panel');
+    await expect(panel.getByTestId('library-play-all')).toHaveAttribute('href', /\?list=LL&index=0$/);
+    await expect(panel.getByRole('button', { name: 'Shuffle' })).toBeVisible();
   });
 });
 
