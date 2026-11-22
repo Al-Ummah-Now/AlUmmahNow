@@ -21,7 +21,7 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
     >
       {channelLabel(post, lang) && <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{channelLabel(post, lang)}</p>}
       {/* The post's own language sets its direction (an Arabic post on the English page reads right to left) */}
-      <p dir="auto" className="line-clamp-3 text-sm text-gray-900 [text-wrap:balance] [text-align:match-parent] dark:text-gray-100">{stripHtml(post.content)}</p>
+      <p dir="auto" className="line-clamp-3 text-sm text-gray-900 [text-wrap:balance] text-left [html[dir=rtl]_&]:text-right dark:text-gray-100">{stripHtml(post.content)}</p>
     </Link>
   );
 }
