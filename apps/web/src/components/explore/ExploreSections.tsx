@@ -58,7 +58,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 
 export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id: string; icon: LucideIcon; title: string; subtitle?: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
+    <div className="relative z-10 mb-3 flex items-end justify-between gap-3">
       <div className="min-w-0">
         <h2 id={id} className="flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white">
           <Icon className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
@@ -73,7 +73,9 @@ export function SectionHeader({ id, icon: Icon, title, subtitle, action }: { id:
 
 function Rail({ children, testId }: { children: React.ReactNode; testId: string }) {
   return (
-    <ul data-testid={testId} className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
+    // Phones scroll sideways, and overflow-x clips both axes: the room above and below (cancelled by the
+    // negative margin) keeps the cards' glow whole instead of cut into a flat band
+    <ul data-testid={testId} className="-mx-4 -my-8 flex snap-x gap-4 overflow-x-auto px-4 pt-8 pb-10 sm:mx-0 sm:my-0 sm:pt-0 sm:pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-4">
       {children}
     </ul>
   );
@@ -221,7 +223,7 @@ export function NewChannelsSection({ channels }: { channels: SearchChannelPayloa
     <section aria-labelledby="explore-new-channels" data-testid="explore-new-channels">
       <SectionHeader id="explore-new-channels" icon={Users} title={t.explore.newChannels} />
       {channels.length === 0 ? <EmptyNote>{t.explore.noNewChannels}</EmptyNote> : (
-        <ul className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-6">
+        <ul className="-mx-4 -my-8 flex gap-3 overflow-x-auto px-4 pt-8 pb-10 sm:mx-0 sm:my-0 sm:pt-0 sm:pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-6">
           {channels.map(channel => (
             <li key={channel.id} className="w-40 shrink-0 sm:w-auto">
               <ChannelTile channel={channel} variant="compact" className="h-full" />
