@@ -13,9 +13,16 @@ describe('MetaSep', () => {
     const { container } = render(<MetaSep lang="ar" gap="0.5rem" />);
     const el = sep(container);
     expect(el.textContent).toBe('، ');
-    expect(el.style.marginInline).toBe('calc(-1 * 0.5rem)');
+    expect(el.style.marginInlineStart).toBe('calc(-1 * 0.5rem)');
+    expect(el.style.marginInlineEnd).toBe('calc(-1 * 0.5rem)');
     // The trailing space survives at the end of the flex item
     expect(el.style.whiteSpace).toBe('pre');
+  });
+
+  it('Arabic leading an item with a tighter row: cancels each side by its own gap, so one space follows «،»', () => {
+    const el = sep(render(<MetaSep lang="ar" gap="0.5rem" gapEnd="0.25rem" />).container);
+    expect(el.style.marginInlineStart).toBe('calc(-1 * 0.5rem)');
+    expect(el.style.marginInlineEnd).toBe('calc(-1 * 0.25rem)');
   });
 
   it('Arabic without a gap: no offset', () => {

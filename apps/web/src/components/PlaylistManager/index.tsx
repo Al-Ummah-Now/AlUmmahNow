@@ -166,12 +166,12 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                   <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`} data-testid="playlist-details">
                     <span>{formatVideoCount(count, lang)}</span>
                     <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
+                      <MetaSep lang={lang} gap="0.5rem" gapEnd="0.25rem" className="me-1" />
                       {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
                       {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
                     </span>
                     <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="playlist-sort-summary">
-                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
+                      <MetaSep lang={lang} gap="0.5rem" gapEnd="0.25rem" className="me-1" />
                       <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
                       {sort.sortMode === 'auto'
                         ? joinMeta(lang, [fieldLabel(sort.sortField, t), directionLabels(sort.sortField, t)[sort.sortDirection]], '·')

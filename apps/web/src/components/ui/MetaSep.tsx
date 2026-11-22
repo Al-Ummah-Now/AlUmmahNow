@@ -11,16 +11,18 @@ import { metaMark, metaSeparator, type MetaSeparatorLang } from '@/lib/i18n/meta
  *   space follows, exactly like a text-joined line (AUDIT-2 2026-11-21: the gap after «،» read as a
  *   double space next to the cards' lines). English keeps the row's gap around its dot.
  */
-export function MetaSep({ lang, en = '•', gap, spaced = false, className }: {
+export function MetaSep({ lang, en = '•', gap, gapEnd, spaced = false, className }: {
   lang: MetaSeparatorLang;
   en?: '•' | '·';
   /** The row's gap (a CSS length such as '0.25rem'), when the row spaces its children */
   gap?: string;
+  /** The gap after the separator, when it differs (the separator leads an item whose own row is tighter) */
+  gapEnd?: string;
   spaced?: boolean;
   className?: string;
 }) {
   const hug = lang === 'ar' && !!gap;
-  const style = hug ? { marginInline: `calc(-1 * ${gap})`, whiteSpace: 'pre' as const } : undefined;
+  const style = hug ? { marginInlineStart: `calc(-1 * ${gap})`, marginInlineEnd: `calc(-1 * ${gapEnd ?? gap})`, whiteSpace: 'pre' as const } : undefined;
   return (
     <span aria-hidden="true" data-meta-sep="" className={className} style={style}>
       {spaced || hug ? metaSeparator(lang, en) : metaMark(lang, en)}

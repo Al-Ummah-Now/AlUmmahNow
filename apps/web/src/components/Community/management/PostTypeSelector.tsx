@@ -101,8 +101,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
       className="
       grid
       grid-cols-2          /* Mobile: 2 columns */
-      sm:grid-cols-3       /* Tablet: 3 columns */
-      lg:grid-cols-5       /* Desktop: 5 a row (9 kinds) */
+      sm:grid-cols-3       /* 3 a row from tablet up: the selector sits in the form's two-thirds column, where 5 a row wrapped every word (9 kinds: 3 rows) */
       gap-3                /* Mobile: compact gaps */
       md:gap-4             /* Desktop: larger gaps */
     ">

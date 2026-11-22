@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
 import { useState } from 'react';
-import { CommunityPost, PostType, PostStatus, formatNumber, formatTimeAgo } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, PostStatus, formatCompact, formatCountNoun, formatTimeAgo } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -118,7 +118,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 )}
               </div>
 
-              <p className="text-sm md:text-base clamp-2 mb-2">
+              <p className="text-sm md:text-base clamp-2 mb-2" dir="auto">
                 {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 
@@ -127,17 +127,20 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                   <Calendar className="w-3 h-3 md:w-4 md:h-4" />
                   {timeAgo}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Eye className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.views)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.views, 'view')}>
+                  <Eye className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.views ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.views, 'view')}</span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <ThumbsUp className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.likes)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.likes, 'like')}>
+                  <ThumbsUp className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.likes ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.likes, 'like')}</span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.comments)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.comments, 'comment')}>
+                  <MessageSquare className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.comments ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.comments, 'comment')}</span>
                 </span>
               </div>
             </div>
