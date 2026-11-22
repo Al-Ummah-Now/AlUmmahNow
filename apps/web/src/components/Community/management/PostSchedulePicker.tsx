@@ -281,7 +281,8 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
                 label={texts.searchTimezone}
                 inputProps={{ type: 'search', placeholder: texts.searchTimezone, autoFocus: true }}
                 inputClassName="f-input w-full py-2 text-sm"
-                className="w-full"
+                // Clear of the zone name above: the field's focus ring draws outside it
+                className="w-full !mt-4"
                 onSelect={(option) => {
                   saveZone(option.id);
                   // The same wall-clock time, now read in the new zone
