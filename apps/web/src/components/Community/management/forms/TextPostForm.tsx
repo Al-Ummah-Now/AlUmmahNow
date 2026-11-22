@@ -33,7 +33,8 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
           ? 'شارك أفكارك مع مجتمعك...'
           : 'Share your thoughts with your community...'
         }
-        dir={isRTL ? 'rtl' : 'ltr'}
+        // The post's own direction, whatever the page's: an Arabic post edited on the English page reads RTL
+        dir="auto"
         // A full editor area (owner review), sized for the rich text editor that replaces it.
         // Inline: theme/system.css sets textarea { min-height: 44px } unlayered, above any utility.
         style={{ minHeight: 'clamp(16rem, 45vh, 28rem)', resize: 'none', fieldSizing: 'content' } as React.CSSProperties}
