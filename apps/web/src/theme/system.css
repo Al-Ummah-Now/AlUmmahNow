@@ -373,8 +373,6 @@ a.group svg.lucide-chevron-right{align-self:center}
 /* End screen on narrow players */
 @container (max-width:479px){.pc .pc-next{grid-template-columns:104px minmax(0,1fr);row-gap:6px;column-gap:10px}.pc .pc-next-b{display:contents}.pc .pc-next-t{width:auto}.pc .pc-next-a{grid-column:1/-1}.pc .pc-next-m strong{font-size:14px;line-height:18px}.pc .pc-end-b{flex:1 1 0;padding:0 8px;font-size:13px}}
 
-/* Shelves line up with the page grid */
-[data-testid=continue-watching] ul{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;overflow:visible;padding:0}[data-testid=continue-watching] li{width:auto}
 .home-hero{background:linear-gradient(var(--fanous-color-surface-raised),var(--fanous-color-surface-raised)) padding-box,var(--m-border) border-box}.home-hero-b{background:transparent}
 .video-card button{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){.video-card button:hover{background:var(--m-hover)!important}}

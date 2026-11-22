@@ -7,11 +7,18 @@ import { Play } from 'lucide-react';
  * "Play all" on a playlist card: a link of its own beside (never inside) the card's link, over the
  * cover's top start corner (docs/specs/PLAYLIST-PLAYBACK.md).
  */
-export function PlayAllOverlay({ href, label }: { href: string; label: string }) {
+export function PlayAllOverlay({ href, label, ariaLabel, testId = 'playlist-card-play-all' }: {
+  href: string;
+  label: string;
+  /** Names the list when several cards with Play all sit side by side ("Play all in Watch later") */
+  ariaLabel?: string;
+  testId?: string;
+}) {
   return (
     <Link
       href={href}
-      data-testid="playlist-card-play-all"
+      aria-label={ariaLabel}
+      data-testid={testId}
       className="absolute top-2 start-2 z-10 inline-flex items-center gap-1.5 rounded-full bg-[var(--fanous-color-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--fanous-color-on-primary)] shadow hover:bg-[var(--fanous-color-primary-hover)] hover:text-[var(--fanous-color-on-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
     >
       <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />

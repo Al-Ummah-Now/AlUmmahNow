@@ -114,6 +114,27 @@ test.describe('Library (signed in)', () => {
     if (seeded) await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/ar/library/watch-later');
   });
 
+  test('home "Your library" row: Watch later and Liked videos cards open their lists and play them', async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
+    await seedHub(request, cleanup, unlike);
+    const video = await ownVideo(request);
+    for (const [lang, heading, likedTitle] of [['en', 'Your library', 'Liked videos'], ['ar', 'مكتبتك', 'المرئيات التي أعجبتك']] as const) {
+      await page.goto(`/${lang}`);
+      const row = page.getByTestId('home-library');
+      await expect(row).toBeVisible({ timeout: 30_000 });
+      await expect(row.getByRole('heading', { level: 2, name: heading })).toBeVisible();
+      // The newest like is this file's video, on the Liked card's cover
+      const liked = row.getByTestId('home-library-liked');
+      await expect(liked).toHaveAttribute('data-video-id', video.id);
+      await expect(liked.getByTestId('home-library-liked-card')).toHaveAttribute('href', `/${lang}/library/liked`);
+      await expect(liked.getByRole('heading', { name: likedTitle })).toBeVisible();
+      await expect(row.getByTestId('home-library-watch-later-card')).toHaveAttribute('href', `/${lang}/library/watch-later`);
+      await expect(row.getByTestId('home-library-watch-later-play')).toHaveAttribute('href', new RegExp(`^/${lang}/video/[^?]+\\?list=WL&index=\\d+$`));
+      // Liked videos play newest first, in place (list LL)
+      await expect(liked.getByTestId('home-library-liked-play')).toHaveAttribute('href', `/${lang}/video/${video.id}?list=LL&index=0`);
+    }
+  });
+
   test('saves a video to Watch later from the watch page and removes it from the list', async ({ page, request }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
     const video = await ownVideo(request);

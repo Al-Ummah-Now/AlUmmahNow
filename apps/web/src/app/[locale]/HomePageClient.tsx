@@ -10,7 +10,7 @@ import { fetchVideosWithPagination } from "@/lib/api/videos";
 import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
-import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShelf";
+import { LibraryRow } from "@/components/home/LibraryRow";
 import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
 import { pickHomeFeatured } from "@/lib/video/hero";
 import type { PaginationResponse } from "@/lib/api/types";
@@ -147,7 +147,7 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
         >
 {/* Signed-out visitors only, decided on the server (no flash for the signed-in) */}
 <SignInBanner />
-<ContinueWatchingShelf />
+<LibraryRow />
 {featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
 <HomeRails rails={rails} />
 <h1 className="home-h text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>

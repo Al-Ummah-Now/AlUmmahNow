@@ -134,7 +134,7 @@ test.describe('Home - anonymous', () => {
     await page.goto('/en');
     // The grid's own column tracks, not the position of a second card: how many cards
     // QA's first page holds depends on its catalogue (it can be a single one)
-    // The home grid comes after the (signed-in only) continue-watching shelf
+    // The home grid comes after the (signed-in only) "Your library" row
     const grid = page.getByTestId('video-grid').last();
     await own.showCard(page);
     const { columns, gridWidth } = await grid.evaluate((el) => ({
