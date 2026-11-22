@@ -80,10 +80,13 @@ export function AppShell() {
     ] },
   ];
 
-  const isCurrent = (href: string) => {
+  const matches = (href: string) => {
     const clean = href.replace(/\/$/, '');
     return clean === base ? pathname === base || pathname === `${base}/` : pathname === clean || pathname.startsWith(`${clean}/`);
   };
+  // One current item per list: when a parent and its sub-page are both listed ("You" and Watch later), only the
+  // most specific match is the current page
+  const currentOf = (hrefs: string[]) => hrefs.filter(matches).sort((a, b) => b.length - a.length)[0];
 
   // The same page and query in the other language (the locale prefix swapped)
   const langHref = langSwitchHref(pathname, lang, params?.toString());
@@ -98,8 +101,10 @@ export function AppShell() {
   const dark = mounted && resolvedTheme === 'dark';
   const environment = getEnvironment();
   const tabs = groups.flatMap((g) => g.items).filter((i) => i.tab);
+  const currentRail = currentOf(groups.flatMap((g) => g.items).filter((i) => !i.external).map((i) => i.href));
+  const currentTab = currentOf(tabs.map((i) => i.href));
   const tab = (it: Item) => (
-    <Link key={it.href} href={it.href} className="tb" aria-current={isCurrent(it.href) ? 'page' : undefined}><it.icon aria-hidden="true" /><span>{it.label}</span></Link>
+    <Link key={it.href} href={it.href} className="tb" aria-current={it.href === currentTab ? 'page' : undefined}><it.icon aria-hidden="true" /><span>{it.label}</span></Link>
   );
 
   return (
@@ -136,7 +141,7 @@ export function AppShell() {
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                 </a>
               ) : (
-                <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : undefined} aria-current={isCurrent(it.href) ? 'page' : undefined} title={it.label}>
+                <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : undefined} aria-current={it.href === currentRail ? 'page' : undefined} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                   {it.hub && (rtl ? <ChevronLeft className="nv-chev" aria-hidden="true" /> : <ChevronRight className="nv-chev" aria-hidden="true" />)}
                 </Link>

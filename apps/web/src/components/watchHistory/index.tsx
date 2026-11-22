@@ -304,7 +304,7 @@ function HistoryListView({ history, lang, t, query, onSearch, onClear }: {
           <Loading t={t} />
         ) : history.entries.length === 0 ? (
           searching ? (
-            <p className="hx-empty" dir="auto">{t.watchHistory.searchNoResults.replace('{query}', query)}</p>
+            <p className="hx-empty" dir="auto">{keepLastWordsTogether(t.watchHistory.searchNoResults.replace('{query}', query))}</p>
           ) : (
             <Empty lang={lang} t={t} text={t.watchHistory.emptyDescription} />
           )
