@@ -321,7 +321,8 @@ function standalone(pkg: ThemePackage, value: string, assetUrl: (p: string) => s
  * The header controls the theme's body font reaches in the videos app (`body button`, `body input`…).
  * Written out: a vendoring app's minifier (the CMS) drops the space in "a :is(b)" (nav-lines.test.ts).
  */
-const navControls = (scope: string, suffix = '') => ['button', 'input', 'select', 'textarea'].map((el) => `${scope} .aun-header ${el}${suffix}`).join(',');
+// summary: the CMS's account button is a <details> summary (its menu works without script)
+const navControls = (scope: string, suffix = '') => ['button', 'summary', 'input', 'select', 'textarea'].map((el) => `${scope} .aun-header ${el}${suffix}`).join(',');
 
 /**
  * The shared header's look for this theme (docs/design/NAV.md "Theme"), read by
