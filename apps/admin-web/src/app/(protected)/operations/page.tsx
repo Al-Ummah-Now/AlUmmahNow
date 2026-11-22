@@ -198,7 +198,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
       ) : (
         <>
           {overview.cost.spendMtd !== null && overview.cost.spendMtd !== undefined && (
-            <p className="mb-4 text-sm text-fg-muted" data-testid="ops-spend-link">
+            // Page text on the street (not a sibling of the title block): its own plate
+            <p className="street-plate mb-4 text-sm text-fg-muted" data-testid="ops-spend-link">
               {t('operations.spendLine', { value: f.usd(overview.cost.spendMtd) })}{' '}
               <Link href="/costs" className={linkClass}>{t('operations.spendLink')}</Link>
             </p>
