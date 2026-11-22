@@ -337,6 +337,18 @@ body:lang(ar) {
    keeps 4.5:1 over it). */
 html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 
+/* Text that sits on the page itself (a page's title, its intro and the back link above it) rests
+   on a plate of page colour, so no lantern or string ever runs through its glyphs (owner
+   2026-11-22: the street never crosses text). Text inside cards already has a solid surface. */
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1)),
+html.fanous-street .street-plate {
+  width: fit-content;
+  max-width: 100%;
+  background: var(--color-bg);
+  border-radius: 14px;
+  box-shadow: 0 0 16px 14px var(--color-bg);
+}
+
 /* Costs page (COST-1): the theme's materials (materials.css) on its panels, so the page has the
    same depth as the site's cards in every theme; plain tokens when a custom package has none. */
 .cost-banner,
