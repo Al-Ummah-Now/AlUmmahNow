@@ -250,8 +250,8 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
           </button>
         </div>
 
-        {/* The list fades out at its bottom edge, so an item cut by the edge reads as "scroll for more"; the end padding lifts the last item clear of the fade */}
-        <div className="flex-1 overflow-y-auto px-2.5 pb-10 md:pt-3 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]">
+        {/* The list scrolls above the foot, never under it: no fade over the last items (AUDIT-2 2026-11-22: a dimmed item read as disabled) */}
+        <div className="flex-1 overflow-y-auto px-2.5 pb-3 md:pt-3">
           {groups.map((group) => (
             <div key={group.id} className="border-t border-drawer-divider py-2 first:border-t-0">
               <h2 className={`px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle rtl:text-xs rtl:normal-case rtl:tracking-normal ${railHide}`}>

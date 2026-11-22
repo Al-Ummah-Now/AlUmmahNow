@@ -69,7 +69,8 @@ export function formatDuration(seconds: number, locale: Locale): string {
   const s = Math.max(0, Math.floor(seconds));
   const [big, small]: [[number, string], [number, string]] =
     s < 60 ? [[s, 'second'], [0, 'second']] : s < 3600 ? [[Math.floor(s / 60), 'minute'], [s % 60, 'second']] : s < 86400 ? [[Math.floor(s / 3600), 'hour'], [Math.floor((s % 3600) / 60), 'minute']] : [[Math.floor(s / 86400), 'day'], [Math.floor((s % 86400) / 3600), 'hour']];
-  const unit = ([value, name]: [number, string]) => numberFormat(locale, { style: 'unit', unit: name, unitDisplay: 'long', useGrouping: false }).format(value);
+  // Each number stays with its unit ("20\u00A0seconds"): a narrow log line never leaves the unit alone (AUDIT-2)
+  const unit = ([value, name]: [number, string]) => glue(numberFormat(locale, { style: 'unit', unit: name, unitDisplay: 'long', useGrouping: false }).format(value));
   if (!small[0]) return unit(big);
   return isArabicLocale(locale) ? `${unit(big)} و${unit(small)}` : `${unit(big)} ${unit(small)}`;
 }

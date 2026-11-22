@@ -201,7 +201,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
         <h2 id={`${ids}-title`} className="text-lg font-semibold">
           {title}
         </h2>
-        <p id={`${ids}-body`} className="text-fg-muted text-sm">
+        <p id={`${ids}-body`} className="text-fg-muted text-sm [text-wrap:balance]">
           {body}
         </p>
         {withReason && (

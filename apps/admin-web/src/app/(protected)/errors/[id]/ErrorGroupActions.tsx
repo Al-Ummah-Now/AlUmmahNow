@@ -137,8 +137,9 @@ export function ErrorGroupActions({ id, actions, testRef = null }: { id: string;
             rows={3}
             maxLength={4000}
             placeholder={t('errorsPage.notePlaceholder')}
-            className={`${fieldClass} w-full resize-y`}
-            dir="auto"
+            className={`${fieldClass} w-full resize-y placeholder:[text-wrap:balance]`}
+            // Empty, it follows the page (an Arabic placeholder reads right to left); typed text takes its own direction
+            dir={note.trim() ? 'auto' : undefined}
             data-testid="error-note-input"
           />
           <div>

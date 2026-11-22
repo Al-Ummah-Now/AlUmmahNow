@@ -9,13 +9,14 @@ import { formatHour, hourDate } from '../src/i18n/translate';
 (globalThis as { React?: unknown }).React = React;
 type Chart = typeof import('../src/app/(protected)/errors/ui').HourlyChart;
 let HourlyChart: Chart;
+let hourTicks: typeof import('../src/app/(protected)/errors/ui').hourTicks;
 before(async () => {
-  ({ HourlyChart } = await import('../src/app/(protected)/errors/ui'));
+  ({ HourlyChart, hourTicks } = await import('../src/app/(protected)/errors/ui'));
 });
 
 const hours = (counts: number[]) => counts.map((occurrences, i) => ({ hour: `2026-11-11T${String(i).padStart(2, '0')}`, occurrences }));
 
-function render(counts: number[], locale: 'en' | 'ar' = 'en') {
+function render(counts: number[], locale: 'en' | 'ar' = 'en', axisNote?: string) {
   return renderToStaticMarkup(React.createElement(HourlyChart as unknown as React.FC<Parameters<Chart>[0]>, {
     hours: hours(counts),
     label: 'Occurrences',
@@ -26,6 +27,7 @@ function render(counts: number[], locale: 'en' | 'ar' = 'en') {
     hourHeading: 'Hour',
     countHeading: 'Occurrences',
     emptyText: 'No occurrences in the last 48 hours.',
+    axisNote,
   }));
 }
 
@@ -38,9 +40,20 @@ describe('HourlyChart', () => {
 
   it('labels hours on the time axis and in the table, never the raw bucket key', () => {
     const html = render([1, 2, 3, 4, 5, 6]);
-    assert.match(html, /data-testid="error-hourly-x-tick">Nov 11, 12 AM</);
+    assert.match(html, /data-testid="error-hourly-x-tick">Nov 11, 5 AM</, 'the latest hour is always labelled');
     assert.doesNotMatch(html, />2026-11-11T0\d</);
     assert.match(html, /<details/);
+  });
+
+  it('labels hours evenly apart, counted back from the latest (AUDIT-2: no 8/7/8-hour gaps)', () => {
+    assert.deepEqual(hourTicks(48), [11, 23, 35, 47]);
+    assert.deepEqual(hourTicks(24), [5, 11, 17, 23]);
+    assert.deepEqual(hourTicks(0), []);
+  });
+
+  it('says under the axis which zone its hours are in', () => {
+    assert.match(render([1, 2], 'en', 'Times in EST'), /data-testid="error-hourly-zone">Times in EST</);
+    assert.doesNotMatch(render([1, 2]), /error-hourly-zone/);
   });
 
   it('keeps the axis and says so when there were no occurrences', () => {
