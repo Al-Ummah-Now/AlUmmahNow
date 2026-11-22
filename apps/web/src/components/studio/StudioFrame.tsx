@@ -289,7 +289,7 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
         </DialogContent>
       </Dialog>
 
-      <main id="main-content" className="min-w-0 flex-1 px-4 py-4 md:px-6">
+      <main id="main-content" className="min-w-0 flex-1 px-4 pt-4 pb-10 md:px-6">
         {channel.isHidden && (
           <p role="status" className="mb-4 rounded-md border border-border bg-muted p-3 text-sm text-foreground">{t.studio.channelHidden}</p>
         )}
