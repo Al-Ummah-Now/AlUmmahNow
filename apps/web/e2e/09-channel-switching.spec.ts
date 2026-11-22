@@ -97,7 +97,9 @@ test.describe('Channel Switching - English', () => {
     await expect(trigger).toBeVisible();
     // The trigger shows the identity you act as (owner rule 8): the active channel's name (visually
     // hidden below 768px, still its accessible text), never your own name under a channel
-    await expect(trigger.getByTestId('nav-trigger-name')).toHaveText(main.name!);
+    // A long name is cut at a word for the eye (FitWords: the cut copy is aria-hidden) while the whole
+    // name stays in the slot for screen readers, so the slot's text holds the whole name, maybe after the cut
+    await expect(trigger.getByTestId('nav-trigger-name')).toContainText(main.name!);
     await expect(trigger.getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'channel');
     const menu = await openAccountMenu(page);
     await expect(menu.getByTestId('nav-active-channel')).toContainText(main.name!);
