@@ -3,7 +3,7 @@
  * processor's Content Sync job (`quran/current.json` → `quran/text/<version>/<surah>.json`).
  * A copy older than 7 days is never served (QF terms): callers get null and show references only.
  */
-import { QURAN_CURRENT_KEY, quranCopyFresh, quranPassage, quranTextKey, type QuranCurrent, type QuranRange, type QuranSurahFile } from '@al-ummah/shared-types';
+import { QURAN_CURRENT_KEY, QURAN_MAX_STALE_MS, quranCopyFresh, quranIndexKey, quranPassage, quranTextKey, type QuranCurrent, type QuranIndexFile, type QuranRange, type QuranSurahFile } from '@al-ummah/shared-types';
 
 type Bucket = { get(key: string): Promise<{ json<T>(): Promise<T> } | null> };
 
@@ -40,6 +40,22 @@ export async function readQuranSurah(bucket: Bucket | undefined, surah: number, 
     surahs.set(key, file);
   }
   return { current, file };
+}
+
+/**
+ * The matcher's index of the fresh copy (`quran/index/<version>.json`) for Admin Tools (TA-13), which
+ * turns Quran spans of a transcript made on the admin's computer into verse keys before saving or
+ * uploading anything. `expiresAt` is when the copy turns 7 days old: the app drops the index then.
+ * Null when there is no fresh copy or its index is missing.
+ */
+export async function readQuranIndex(bucket: Bucket | undefined, now = Date.now()): Promise<{ index: QuranIndexFile; expiresAt: string } | null> {
+  const current = await readQuranCurrent(bucket, now);
+  if (!current || !bucket) return null;
+  const obj = await bucket.get(quranIndexKey(current.version));
+  if (!obj) return null;
+  const index = await obj.json<QuranIndexFile>();
+  if (index.v !== 1 || index.version !== current.version) return null;
+  return { index, expiresAt: new Date(Date.parse(current.syncedAt) + QURAN_MAX_STALE_MS).toISOString() };
 }
 
 export type PassageResult =

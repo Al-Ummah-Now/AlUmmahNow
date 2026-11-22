@@ -12,6 +12,10 @@
  *                    upload, so the app encodes exactly what the server checks; with `?channelId=`
  *                    also `takesRenditions`: whether R2 transcodes that channel's uploads (renditions
  *                    are used only then)
+ *   GET  /quran-index the Quran matcher's index of the fresh Content Sync copy → { index: { v, version,
+ *                    syncedAt, words, locs }, expiresAt } (TA-13): the app turns Quran spans of a local
+ *                    transcript into verse keys with it before saving or uploading anything, and drops it
+ *                    at `expiresAt`; 503 quran_index_unavailable while there is no fresh copy
  *   POST /channels   { name, handle?, description?, ownerId? } → 201 { channel } — a channel owned by
  *                    `ownerId` (a videos user; needs users:manage, as an invite does) or, without
  *                    one, by the acting admin; the same
@@ -82,7 +86,7 @@ import { enqueueIngest } from '../endpoints/errors/ErrorsIngest';
 import { allowClientEvents } from '../lib/errors-store';
 import { hashIp } from '../lib/contact';
 import { hasPermission, normalizeRoles, permissionsFor } from '../lib/roles';
-import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
+import { callVideos, fetchVideosRaw, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, setAuditSubject, writeAudit } from '../lib/content/audit';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -133,6 +137,13 @@ app.get('/encoding', async (c) => {
     ? await videos<{ takesRenditions: boolean }>(c, `/import/channels/${encodeURIComponent(channelId.slice(0, 200))}/delivery`)
     : undefined;
   return c.json({ success: true, result: { ladder: ENCODE_LADDER, prebuiltLimits: PREBUILT_LIMITS, ...(channel ? { takesRenditions: channel.takesRenditions } : {}) } });
+});
+
+// The Quran matcher's index (TA-13), passed through as api-videos sends it (about a megabyte: not parsed here).
+// The app keeps it in memory until `expiresAt` (the copy's 7 days, QF terms) and holds no QF credentials.
+app.get('/quran-index', async (c) => {
+  const res = await fetchVideosRaw(c.env, '/import/quran-index', { actorId: actorOf(c) });
+  return new Response(res.body, { status: res.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' } });
 });
 
 const USER_ID = /^usr_[0-9a-f]{32}$/;

@@ -44,6 +44,7 @@ import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorIn
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
 import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs';
 import { listTranslationEditions } from '../lib/quran/translations';
+import { readQuranIndex } from '../lib/quran/copy';
 import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
 import { assignTier, createTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDefaultTierId, readDeletedTiers, readTier, readTiers, reorderTiers, requestTierPurge, restoreTier, saveTier, setDefaultTier } from '../lib/creatorTiers';
@@ -417,6 +418,12 @@ app.post('/import/videos/:videoId/renditions/:stagingId/complete', async (c) => 
 app.delete('/import/videos/:videoId/renditions/:stagingId', async (c) => importReply(c, await cancelRenditions(prebuiltEnv(c), (await importVideo(c)) as WithPrebuilt, c.req.param('stagingId'))));
 /** Whether R2 transcodes this channel's new uploads: only then are renditions worth encoding (r2-delivery.ts). */
 const channelTakesRenditions = async (c: Context<Env>, channelId: string | undefined) => ingestTargets(await readMediaSettings(c.env as never), channelId).includes('r2');
+// The Quran matcher's index for Admin Tools (TA-13): 503 quran_index_unavailable while there is no fresh copy
+app.get('/import/quran-index', async (c) => {
+	const out = await readQuranIndex(c.env.MEDIA_PRIVATE as never);
+	if (!out) return c.json({ success: false, code: 'quran_index_unavailable', error: 'The Quran index is not available right now' }, 503);
+	return ok(c, out);
+});
 app.get('/import/channels/:channelId/delivery', async (c) => ok(c, { takesRenditions: await channelTakesRenditions(c, c.req.param('channelId')) }));
 // What the server did with an imported video's renditions, for the app's queue and log: still staged,
 // used as they were, or encoded again and why (PREBUILT_REJECTIONS)
