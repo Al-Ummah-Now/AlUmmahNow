@@ -12,6 +12,7 @@ import { CommunityTabContent } from './CommunityTabContent';
 import { ChannelsTabContent } from './ChannelsTabContent';
 import { AboutTabContent } from './AboutTabContent';
 import { TabManageLink } from './TabManageLink';
+import { ChannelUpcomingEvents } from '@/components/events/ChannelUpcomingEvents';
 import type { ChannelTabInitial } from './initial';
 
 interface ChannelTabContentProps {
@@ -37,6 +38,9 @@ export function ChannelTabContent({
     <div className="p-5">
       {/* Manage link for people who run the channel (nothing for visitors) */}
       <TabManageLink channelId={channelId} tab={activeTab} />
+
+      {/* Upcoming online events schedule strip (hidden when eventCalendar is off or empty) */}
+      {(activeTab === 'home' || activeTab === 'live') && <ChannelUpcomingEvents channelId={channelId} />}
 
       {/* Home Tab */}
       {activeTab === 'home' && <HomeTabContent channelId={channelId} initialSections={seed?.sections} initialFallback={seed?.fallback} initialPartial={seed?.partial} />}

@@ -8,6 +8,7 @@ export const SIDEBAR_PATHS = {
   home: '/',
   explore: '/explore',
   subscriptions: '/subscriptions',
+  events: '/events',
   library: '/library',
   history: '/history',
   watchLater: '/library/watch-later',
