@@ -22,6 +22,7 @@ import { authorizeSource, channelConnections, normalizeAddress, stillAuthorized 
 import { resolveBlueskyAddress } from '../lib/importSources/fetchers';
 import { SOURCE_SYNC_JOB_KIND, startSourceSync } from '../lib/importSources/job';
 import { deleteSource, insertSource, listItems, listSources, readSource, SourceError, updateSource, viewSource } from '../lib/importSources/store';
+import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
 
 type Env = { Bindings: Record<string, unknown> };
@@ -42,9 +43,9 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 }
 
 app.onError((error, c) => {
-	if (error instanceof SourceError) return c.json({ success: false, code: error.code, error: error.message }, error.status);
+	if (error instanceof SourceError) return apiError(c, error.status, error.code, { error: error.message });
 	logger.error('[ImportSources] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
-	return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
+	return apiError(c, 500, 'internal_error', { error: 'Internal error' });
 });
 
 const Create = z.object({

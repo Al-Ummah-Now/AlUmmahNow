@@ -50,6 +50,8 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'POST', '/api/videos/tus', 'upload'),
   r('admin-api', 'POST', '/api/admin/import/batches', 'upload'),
   r('admin-api', 'POST', '/api/admin/import/batches/:id/items', 'upload'),
+  // Social import sources (TA-9): a sync makes new posts and videos on the channel
+  r('admin-api', 'POST', '/api/admin/import/sources/:id/sync', 'upload'),
   r('api-videos', 'POST', '/api/channels', 'createChannel'),
   r('api-videos', 'POST', '/api/youtube-import/oauth/start', 'youtubeImport'),
   r('api-videos', 'POST', '/api/youtube-import/:importId/start', 'youtubeImport'),
@@ -126,6 +128,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
 const FINISH = 'finishes work already started';
 const REMOVE = 'removing or cleaning up always works';
 const READ = 'reads what already exists';
+const SOURCES = 'manages a social import source (super admins); only its sync makes new posts';
 
 export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object.freeze([
   x('api-videos', 'POST', '/api/videos/upload/complete', FINISH),
@@ -186,6 +189,13 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
   x('admin-api', 'GET', '/api/admin/import/quran-index', READ),
   x('admin-api', 'POST', '/api/admin/import/channels', 'the import’s channel; its uploads are gated'),
   x('admin-api', 'POST', '/api/admin/import/errors', 'reports an import failure'),
+  x('admin-api', 'GET', '/api/admin/import/sources', READ),
+  x('admin-api', 'GET', '/api/admin/import/sources/channels/:channelId/connections', READ),
+  x('admin-api', 'GET', '/api/admin/import/sources/:id', READ),
+  x('admin-api', 'GET', '/api/admin/import/sources/:id/items', READ),
+  x('admin-api', 'POST', '/api/admin/import/sources', SOURCES),
+  x('admin-api', 'PATCH', '/api/admin/import/sources/:id', SOURCES),
+  x('admin-api', 'DELETE', '/api/admin/import/sources/:id', REMOVE),
   x('admin-api', 'POST', '/api/admin/import/items/:id/failed', FINISH),
   x('admin-api', 'POST', '/api/admin/import/items/:id/renditions', FINISH),
   x('admin-api', 'POST', '/api/admin/import/items/:id/renditions/:stagingId/complete', FINISH),
