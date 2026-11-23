@@ -705,42 +705,138 @@ export function publicAudioUrl(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: 
 	return path ? `https://${env.MEDIA_PUBLIC_HOST}/${path}` : null;
 }
 
+const AUDIO_EXTRACT_INFLIGHT_TTL_MS = 30 * 60 * 1000;
+const AUDIO_EXTRACT_FAILED_BACKOFF_MS = 6 * 60 * 60 * 1000;
+const audioExtractActionKey = (videoId: string) => `media:audio-extract:${videoId}`;
+
 /**
- * Queue an on-demand audio.m4a extraction for a ready R2 rendition that does not yet have one
- * (older videos transcoded before E14-S2). Stream copy only, no re-encode.
+ * Queue an idempotent on-demand audio.m4a extraction for a ready R2 rendition that does not yet
+ * have one (older videos transcoded before E14-S2). Stream copy only, no re-encode.
+ * Uses an atomic ETag-guarded marker on `r2.audioExtract` so at most one job per video can be in
+ * flight at a time, and failed extracts back off until an admin retries or the backoff window ends.
  */
 export async function enqueueAudioExtract(
-	env: Pick<MediaEnv, 'TRANSCODE_QUEUE'>,
+	env: Pick<MediaEnv, 'TRANSCODE_QUEUE' | 'videos'>,
 	video: Pick<MediaVideo, 'id' | 'r2'>,
-	opts: { now?: Date; runId?: string } = {},
+	opts: { now?: Date; runId?: string; force?: boolean } = {},
 ): Promise<{ queued: boolean; why?: string; jobId?: string }> {
 	if (!env.TRANSCODE_QUEUE) return { queued: false, why: 'transcode queue not bound' };
-	const r2 = video.r2;
-	if (!r2 || r2.status !== 'ready' || !r2.result) return { queued: false, why: 'not ready' };
-	if (r2.result.audio) return { queued: false, why: 'already has audio' };
-	if (r2.result.source && r2.result.source.hasAudio === false) return { queued: false, why: 'no audio stream' };
-	if (!r2.result.rungs.length) return { queued: false, why: 'no rungs' };
-	const job: AudioExtractJobMessage = {
-		kind: 'audio_extract',
-		videoId: video.id,
-		jobId: crypto.randomUUID(),
-		rev: r2.rev,
-		access: r2.access,
-		rungs: r2.result.rungs.map((r) => ({ name: r.name, width: r.width, height: r.height })),
-		queuedAt: (opts.now ?? new Date()).toISOString(),
-		...(opts.runId ? { runId: opts.runId } : {}),
-	};
-	await env.TRANSCODE_QUEUE.send(job);
-	return { queued: true, jobId: job.jobId };
+	const now = opts.now ?? new Date();
+	const nowMs = now.getTime();
+	const nowIso = now.toISOString();
+	const jobId = crypto.randomUUID();
+	let why: string | undefined;
+	let job: AudioExtractJobMessage | null = null;
+
+	const saved = await repo(env as MediaEnv).updateObject(video.id, (current) => {
+		why = undefined;
+		job = null;
+		const r2 = current.r2;
+		if (!r2 || r2.status !== 'ready' || !r2.result) {
+			why = 'not ready';
+			return false;
+		}
+		if (r2.result.audio) {
+			why = 'already has audio';
+			return false;
+		}
+		if (r2.result.source && r2.result.source.hasAudio === false) {
+			why = 'no audio stream';
+			return false;
+		}
+		if (!r2.result.rungs.length) {
+			why = 'no rungs';
+			return false;
+		}
+		const existing = r2.audioExtract;
+		if (!opts.force && existing && existing.rev === r2.rev) {
+			if (existing.status === 'queued') {
+				const queuedAtMs = Date.parse(existing.queuedAt);
+				if (Number.isFinite(queuedAtMs) && nowMs - queuedAtMs < AUDIO_EXTRACT_INFLIGHT_TTL_MS) {
+					why = 'already queued';
+					return false;
+				}
+			} else if (existing.status === 'failed') {
+				const failedAtMs = Date.parse(existing.failedAt ?? existing.queuedAt);
+				if (Number.isFinite(failedAtMs) && nowMs - failedAtMs < AUDIO_EXTRACT_FAILED_BACKOFF_MS) {
+					why = 'recently failed';
+					return false;
+				}
+			}
+		}
+		r2.audioExtract = { jobId, rev: r2.rev, queuedAt: nowIso, status: 'queued' };
+		job = {
+			kind: 'audio_extract',
+			videoId: current.id,
+			jobId,
+			rev: r2.rev,
+			access: r2.access,
+			rungs: r2.result.rungs.map((r) => ({ name: r.name, width: r.width, height: r.height })),
+			queuedAt: nowIso,
+			...(opts.runId ? { runId: opts.runId } : {}),
+		};
+		return true;
+	});
+	if (!saved) return { queued: false, why: 'video not found' };
+	if (why || !job) return { queued: false, why: why ?? 'not queued' };
+	try {
+		await env.TRANSCODE_QUEUE.send(job);
+	} catch (err) {
+		await repo(env as MediaEnv)
+			.updateObject(video.id, (current) => {
+				if (current.r2?.audioExtract?.jobId === jobId) {
+					delete current.r2.audioExtract;
+					return true;
+				}
+				return false;
+			})
+			.catch(() => undefined);
+		throw err;
+	}
+	return { queued: true, jobId };
 }
 
 /**
  * An audio-extract remux job's end (apps/media, E14-S2). Records `r2.result.audio` only on the
- * matching ready rev and access, and never overwrites an existing audio file.
+ * matching ready rev and access, and never overwrites an existing audio file. Permanent failures
+ * record a backoff marker and report to the admin Errors page (O26).
  */
-export async function applyAudioExtractEvent(env: Pick<MediaEnv, 'videos'>, ev: AudioExtractJobEvent): Promise<{ applied: boolean; why?: string }> {
+export async function applyAudioExtractEvent(
+	env: Pick<MediaEnv, 'videos'> & Partial<MediaEnv>,
+	ev: AudioExtractJobEvent,
+	ctx?: ExecutionContextLike,
+): Promise<{ applied: boolean; why?: string }> {
 	if (ev.type === 'failed') {
-		logger.warn('[Media] Audio extract failed', { videoId: ev.videoId, jobId: ev.jobId, rev: ev.rev, error: scrubMediaText(ev.error ?? 'failed', 300) });
+		const errText = scrubMediaText(ev.error ?? 'failed', 300);
+		logger.warn('[Media] Audio extract failed', { videoId: ev.videoId, jobId: ev.jobId, rev: ev.rev, error: errText });
+		await repo(env as MediaEnv).updateObject(ev.videoId, (video) => {
+			const r2 = video.r2;
+			if (!r2 || r2.status !== 'ready' || !r2.result) return false;
+			if (r2.rev !== ev.rev || r2.access !== ev.access) return false;
+			if (r2.result.audio) return false;
+			r2.audioExtract = {
+				jobId: ev.jobId,
+				rev: ev.rev,
+				queuedAt: r2.audioExtract?.queuedAt ?? ev.at,
+				status: 'failed',
+				failedAt: ev.at,
+				error: errText,
+			};
+			return true;
+		});
+		reportNeedsAction('api-videos', env as never, ctx, {
+			key: audioExtractActionKey(ev.videoId),
+			source: 'processing',
+			title: 'R2 audio.m4a extraction failed',
+			message: `Audio extraction failed for video ${ev.videoId}: ${errText}`,
+			error: errText,
+			itemType: 'video',
+			itemId: ev.videoId,
+			itemUrl: `/videos/${ev.videoId}`,
+			retry: { kind: 'service', service: 'api-videos', path: '/internal/media/audio-extract/retry', body: { ids: [ev.videoId] } },
+			retryLabel: 'Extract audio again',
+			extra: { jobId: ev.jobId, rev: ev.rev, access: ev.access },
+		});
 		return { applied: false, why: 'failed' };
 	}
 	const audio = sanitizeAudio(ev.audio);
@@ -762,9 +858,13 @@ export async function applyAudioExtractEvent(env: Pick<MediaEnv, 'videos'>, ev: 
 			return false;
 		}
 		r2.result.audio = audio;
+		delete r2.audioExtract;
 		return true;
 	});
 	if (!saved) return { applied: false, why: 'video not found' };
+	if (!why) {
+		resolveNeedsAction(env as never, ctx, audioExtractActionKey(ev.videoId));
+	}
 	return why ? { applied: false, why } : { applied: true };
 }
 

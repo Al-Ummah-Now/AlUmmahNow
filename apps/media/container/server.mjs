@@ -39,6 +39,7 @@ let sourceFile;
 let current = null;
 /** A live recording review, caption audio or audio track job is running (POST /review, /audio, /audio-*) */
 let reviewing = false;
+let sideJob = false;
 /** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
 let stage = { name: 'start', detail: undefined };
 let sourceBytesSoFar = 0;
@@ -657,7 +658,7 @@ async function readJson(req) {
 
 /** One side job at a time, never beside a transcode. */
 function busy() {
-	return reviewing || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status));
+	return reviewing || sideJob || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status));
 }
 
 /**
@@ -861,7 +862,7 @@ const server = createServer(async (req, res) => {
 		const job = await readJson(req);
 		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '') || !Array.isArray(job.rungs)) return send(400, { error: 'bad job' });
 		if (busy()) return send(409, { error: 'busy' });
-		reviewing = true;
+		sideJob = true;
 		const t0 = Date.now();
 		try {
 			const audio = await runAudioExtract(job);
@@ -872,7 +873,7 @@ const server = createServer(async (req, res) => {
 			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
 			return send(500, { error: errorReason(error), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
 		} finally {
-			reviewing = false;
+			sideJob = false;
 		}
 	}
 	// Live recording review (VR9): frames and audio from an HLS VOD read through vod.internal

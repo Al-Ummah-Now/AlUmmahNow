@@ -44,7 +44,7 @@ import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
-import { applyAudioExtractEvent, applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { applyAudioExtractEvent, applyJobEvent, applyMp4Event, enqueueAudioExtract, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 import { apiError } from '../../lib/api-error';
 
 const MAX_IDS = 50;
@@ -161,7 +161,25 @@ export function createMediaInternalRouter() {
 	app.post('/audio-extract', async (c) => {
 		const body = await c.req.json().catch(() => null);
 		if (!isAudioExtractEvent(body)) return apiError(c, 400, 'bad_request', { error: 'bad event' });
-		return c.json({ success: true, result: await applyAudioExtractEvent(c.env, body) });
+		return c.json({ success: true, result: await applyAudioExtractEvent(c.env, body, c.executionCtx as never) });
+	});
+
+	app.post('/audio-extract/retry', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { ids?: unknown } | null;
+		const ids = Array.isArray(body?.ids) ? body!.ids.filter((x): x is string => typeof x === 'string' && isMediaVideoId(x)).slice(0, MAX_IDS) : [];
+		if (!ids.length) return apiError(c, 400, 'bad_request', { error: `ids must be 1-${MAX_IDS} video ids` });
+		const videosRepo = new R2Repository<MediaVideo>(c.env.videos);
+		const results = [];
+		for (const id of ids) {
+			const video = await videosRepo.getObject(id);
+			if (!video) {
+				results.push({ videoId: id, queued: false, why: 'video not found' });
+				continue;
+			}
+			const r = await enqueueAudioExtract(c.env, video, { force: true });
+			results.push({ videoId: id, ...r });
+		}
+		return c.json({ success: true, result: { results } });
 	});
 
 	app.post('/retry', async (c) => {

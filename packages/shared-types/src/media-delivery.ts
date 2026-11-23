@@ -253,6 +253,8 @@ export interface VideoR2State {
 	startup?: TranscodeStartup;
 	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
 	previous?: { rev: string; access: MediaAccess };
+	/** On-demand audio.m4a extraction in-flight/backoff marker (E14-S2; cleared when result.audio lands) */
+	audioExtract?: { jobId: string; rev: string; queuedAt: string; status: 'queued' | 'failed'; failedAt?: string; error?: string };
 }
 
 /** Message on the transcode queue (api-videos → apps/media). */
