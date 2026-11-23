@@ -6,9 +6,12 @@
  * bar, under the header and modals: the message, Undo, and a close button. It goes after UNDO_TOAST_MS; hovering or
  * focusing it pauses the countdown so Undo is never pulled away from a keyboard or screen
  * reader user. Laid out by the page direction (Arabic: right to left).
+ *
+ * While it shows, the page gets the toast's own height of extra scroll room at its end, so the
+ * last post (or row) can always be scrolled clear above the toast instead of sitting under it.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { useTextDirection } from '@/hooks/useTextDirection';
@@ -21,6 +24,20 @@ export default function UndoToastHost() {
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(false);
   const left = useRef(UNDO_TOAST_MS);
+  const box = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState(0);
+
+  // Scroll room under the page while the toast shows: its height plus the gap above the tab bar or edge
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) { setRoom(0); return; }
+    const measure = () => setRoom(Math.ceil(el.getBoundingClientRect().height) + 16);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [toast?.id]);
 
   // A new toast starts fresh
   useEffect(() => {
@@ -58,7 +75,9 @@ export default function UndoToastHost() {
   const testId = toast.testId ?? 'undo-toast';
   return (
     <BodyPortal>
+      <div aria-hidden="true" data-testid={`${testId}-room`} style={{ height: room }} />
       <div
+        ref={box}
         dir={dir}
         role="status"
         aria-live="polite"

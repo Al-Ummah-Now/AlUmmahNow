@@ -19,7 +19,7 @@ import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
 import { avatarInitial } from '@/lib/avatar-initial';
 import { PostStatus } from '@al-ummah/shared-types';
-import PostManageMenu from './PostManageMenu';
+import PostActionsMenu from './PostActionsMenu';
 import { formatScheduledAt } from './management/PostSchedulePicker';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -99,8 +99,8 @@ export default function PostCard({
 
   return (
     <article id={`post-${post.id}`} data-post-id={post.id} className="aun-row-glass scroll-mt-24">
-      {/* Post Header */}
-      <div className={cn(
+      {/* Post Header: the ⋮ menu opens below this row, so it never sits on the channel name */}
+      <div data-menu-anchor className={cn(
         'flex items-start gap-3 p-4 border-b border-[var(--fanous-color-divider)]',
         // Direction comes from the RTL container (dir=rtl); no manual reversal
       )}>
@@ -133,7 +133,7 @@ export default function PostCard({
         {/* Channel Info and Timestamp */}
         <div className={cn('flex-1 min-w-0', isRTL && 'text-right')}>
           <div className={cn('flex items-center gap-2')}>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+            <h3 className="min-w-0 font-semibold text-gray-900 dark:text-gray-100 [overflow-wrap:break-word] [text-wrap:balance]">
               {channelLabel(post, locale)}
             </h3>
             {post.pinned && (
@@ -156,8 +156,8 @@ export default function PostCard({
           {upcoming && <ScheduledLabel at={post.scheduledAt!} locale={locale} />}
         </div>
 
-        {/* The owner's menu (Edit, Delete); nobody else has actions here */}
-        {canManage && <PostManageMenu post={post} onDeleted={onDeleted} onRestored={onRestored} />}
+        {/* ⋮ for everyone: Copy link and Report; the post's channel also gets Edit and Delete (#1515) */}
+        <PostActionsMenu post={post} canManage={canManage} onDeleted={onDeleted} onRestored={onRestored} />
       </div>
 
       {/* Post Content */}

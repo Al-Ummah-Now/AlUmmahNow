@@ -1,8 +1,8 @@
 /**
- * Story 29.4 on the post card: only the owner gets Edit and Delete (no dead menu for anyone else),
- * Delete removes the post at once (no confirm: a 30-day soft delete) and Undo brings it back, a
- * failure says so; a scheduled post shows
- * its time. And the composer's schedule window: 5 minutes to a year ahead.
+ * The post card's ⋮ menu (#1515, Story 29.4): everyone gets Copy link, a signed-in viewer also
+ * Report, and the post's channel Edit and Delete. Delete removes the post at once (no confirm: a
+ * 30-day soft delete) and Undo brings it back; a failure says so. A scheduled post shows its time.
+ * And the composer's schedule window, date, time and zone.
  */
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,7 +11,7 @@ import PostCard from '../PostCard';
 import { PostSchedulePicker, formatSlot, joinLocal, scheduleProblem, scheduledIso, scheduleStateFrom, timeSlots, toLocalInput } from '../management/PostSchedulePicker';
 import { formatPickedDate } from '@/components/ui/LocalizedDatePicker';
 import { offsetLabel, wallTimeToDate, zoneLabel } from '@/lib/time/zones';
-import { editPostHref } from '../PostManageMenu';
+import { editPostHref } from '../PostActionsMenu';
 import UndoToastHost from '@/components/common/UndoToastHost';
 
 import { dismissUndoToast } from '@/lib/undo-toast';
@@ -23,6 +23,17 @@ jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', locale: 'en', isRTL: false, dir: 'ltr' }),
 }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
+const push = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => '/en/channels/c1' }));
+let viewer: { id: string } | null = null;
+jest.mock('@/components/AuthProvider/authContext', () => ({ useOptionalAuth: () => ({ user: viewer }), useAuth: () => ({ user: viewer }) }));
+jest.mock('@/components/moderation/ReportContentButton', () => ({
+  __esModule: true,
+  default: ({ open, contentType, contentId }: { open?: boolean; contentType: string; contentId: string }) =>
+    open ? <div role="dialog" data-testid="report-dialog">{`${contentType}:${contentId}`}</div> : null,
+}));
+const copyText = jest.fn(async () => true);
+jest.mock('@/lib/share/copy', () => ({ copyText: (...args: unknown[]) => copyText(...(args as [])) }));
 const deleteCommunityPost = jest.fn();
 const restoreCommunityPost = jest.fn();
 jest.mock('@/lib/api/community-posts', () => ({
@@ -45,14 +56,49 @@ describe('post card owner menu', () => {
   beforeEach(() => {
     deleteCommunityPost.mockReset();
     restoreCommunityPost.mockReset();
+    push.mockReset();
+    copyText.mockClear();
+    viewer = null;
     act(() => dismissUndoToast());
   });
   const withToast = (ui: React.ReactElement) => render(<>{ui}<UndoToastHost /></>);
 
-  it('has no actions button for visitors', () => {
-    render(<PostCard post={post} />);
-    expect(screen.queryByRole('button', { name: 'Post actions' })).toBeNull();
+  const names = () => screen.getAllByRole('menuitem').map((i) => i.textContent);
+
+  it('gives a signed-out visitor Copy link only, which copies the post link', async () => {
+    withToast(<PostCard post={post} />);
     expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
+    await openMenu();
+    expect(names()).toEqual(['Copy link']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(expect.stringMatching(/\/en\/post\/p1$/)));
+    expect(await screen.findByTestId('post-link-toast')).toHaveTextContent('Link copied');
+  });
+
+  it('gives a signed-in viewer Copy link and Report, which opens the shared report dialog for the post', async () => {
+    viewer = { id: 'someone' };
+    render(<PostCard post={post} />);
+    await openMenu();
+    expect(names()).toEqual(['Copy link', 'Report']);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Report' }));
+    expect(await screen.findByTestId('report-dialog')).toHaveTextContent('post:p1');
+  });
+
+  it('never offers Report on the viewer\'s own post', async () => {
+    viewer = { id: 'u1' };
+    render(<PostCard post={post} />);
+    await openMenu();
+    expect(names()).toEqual(['Copy link']);
+  });
+
+  it('the post\'s channel gets Edit and a danger Delete; Edit opens the editor', async () => {
+    viewer = { id: 'u1' };
+    render(<PostCard post={post} canManage />);
+    await openMenu();
+    expect(names()).toEqual(['Copy link', 'Edit', 'Delete']);
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toHaveAttribute('data-danger');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    expect(push).toHaveBeenCalledWith('/en/studio/c1/content/posts/p1/edit');
   });
 
   it('gives the owner Edit (the editor) and Delete (at once, no confirm), and Undo brings the post back', async () => {
@@ -62,7 +108,6 @@ describe('post card owner menu', () => {
     restoreCommunityPost.mockResolvedValue({ success: true });
     withToast(<PostCard post={post} canManage onDeleted={onDeleted} onRestored={onRestored} />);
     await openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', '/en/studio/c1/content/posts/p1/edit');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('p1'));
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -169,6 +214,9 @@ describe('localized date, time and zone', () => {
     // The offset is a left-to-right isolate, so it never reads «(٥−GMT)»
     expect(ar).toContain('(\u2066GMT−٥\u2069)');
     expect(ar).not.toContain('America/New_York');
+    // The same name as English: «التوقيت الشرقي», without CLDR's «لأمريكا الشمالية» that "Eastern Time" doesn't say
+    expect(ar).toBe('التوقيت الشرقي\u00a0(\u2066GMT−٥\u2069)');
+    expect(zoneLabel('America/Chicago', 'ar', winter)).toBe('التوقيت المركزي\u00a0(\u2066GMT−٦\u2069)');
     expect(offsetLabel('Asia/Kolkata', 'ar', winter)).toBe('GMT+٥:٣٠');
     expect(offsetLabel('UTC', 'en', winter)).toBe('GMT');
   });
@@ -189,6 +237,16 @@ describe('localized date, time and zone', () => {
     expect(calendar).toHaveAttribute('role', 'dialog');
     fireEvent.click(screen.getByRole('button', { name: /November 21, 2026/ }));
     expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-21T09:15', zone: 'America/New_York' });
+  });
+
+  it('Escape closes the calendar while focus is still on the date button', () => {
+    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15', zone: 'America/New_York' }} onChange={jest.fn()} timeOnly />);
+    const button = screen.getByTestId('post-schedule-date-button');
+    fireEvent.click(button);
+    expect(screen.getByTestId('post-schedule-date-calendar')).toBeInTheDocument();
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(screen.queryByTestId('post-schedule-date-calendar')).toBeNull();
+    expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('the calendar moves by keyboard and never picks a day out of range', () => {

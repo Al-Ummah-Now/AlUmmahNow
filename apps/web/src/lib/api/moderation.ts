@@ -6,7 +6,7 @@ import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
 /** Entity types accepted by api-videos ReportInput */
-export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream';
+export type ReportContentType = 'video' | 'comment' | 'channel' | 'livestream' | 'post';
 
 /** Reasons accepted by api-videos ReportInput */
 export type ReportReason = 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';

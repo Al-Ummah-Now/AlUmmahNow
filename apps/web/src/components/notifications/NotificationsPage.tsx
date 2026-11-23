@@ -139,11 +139,11 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
     <main dir={dir} className="mx-auto max-w-3xl px-4 py-8" data-testid="notifications-page">
       {confirmDialog}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 className="street-plate flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white">
           <Bell className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
           {texts.title}
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="street-plate flex items-center gap-2">
           <button
             type="button"
             onClick={() => void markAll()}
@@ -163,7 +163,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
         </div>
       </div>
 
-      <div role="tablist" aria-label={texts.title} className="mb-4 flex gap-2">
+      <div role="tablist" aria-label={texts.title} className="street-plate mb-4 flex gap-2">
         {(['all', 'unread'] as const).map((value) => (
           <button
             key={value}

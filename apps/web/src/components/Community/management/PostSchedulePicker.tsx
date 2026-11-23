@@ -16,7 +16,7 @@ import { LocalizedDatePicker, isoDay } from '@/components/ui/LocalizedDatePicker
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/hooks/useLanguage';
 import { formatDateTime, formatTime } from '@al-ummah/shared-types';
-import { allZones, browserZone, dateToWallTime, isZone, offsetLabel, wallTimeToDate, zoneCity, zoneLabel, zoneName } from '@/lib/time/zones';
+import { allZones, browserZone, dateToWallTime, isZone, offsetLabel, wallTimeToDate, zoneCity, zoneLabel, zoneName, zonePlace } from '@/lib/time/zones';
 
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000;
 export const SCHEDULE_MAX_LEAD_MS = 365 * 24 * 60 * 60 * 1000;
@@ -53,6 +53,13 @@ export function toLocalInput(date: Date, zone = browserZone()): string {
   return dateToWallTime(date, zone);
 }
 
+/** "New York · America/New_York" / «نيويورك · ⁦America/New_York⁩»: the place, then the zone id. */
+export function zoneSubtitle(zone: string, locale: string, at = new Date()): string {
+  const place = zonePlace(zone, locale, at);
+  const id = locale === 'ar' ? `\u2066${zone}\u2069` : zone;
+  return place ? `${place} · ${id}` : id;
+}
+
 /** A post's scheduled time in the viewer's language, digits and zone. */
 /**
  * "Nov 27, 2026, 8:14 PM (GMT−5)" / «٢٧ نوفمبر ٢٠٢٦، ٨:١٤ م (GMT−٥)»: the viewer's local time with its
@@ -62,8 +69,9 @@ export function toLocalInput(date: Date, zone = browserZone()): string {
 export function formatScheduledAt(iso: string, locale: string, zone = browserZone()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  // The shared formatter: Arabic ٠–٩, English 0–9, the same on the server and in every browser
-  const when = formatDateTime(locale, date, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone });
+  // The shared formatter: Arabic ٠–٩, English 0–9, the same on the server and in every browser. The
+  // month by name in both languages: Arabic's medium date style is all digits («٢٨/١١/٢٠٢٦»)
+  const when = formatDateTime(locale, date, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: zone });
   const offset = offsetLabel(zone, locale, date);
   return `${when} (${locale === 'ar' ? `\u2066${offset}\u2069` : offset})`;
 }
@@ -166,10 +174,10 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
     return allZones().map((z) => ({
       id: z,
       label: zoneLabel(z, locale, at),
-      // The zone id (a code, Latin in both languages); the Latin city name only on the English page
-      // The city and zone id in both languages (Latin, in an isolate in Arabic): the city is how people search
-      subtitle: z === 'UTC' ? 'UTC' : `${zoneCity(z)} · ${z}`,
-      keywords: [z, zoneCity(z), zoneName(z, 'en', at), zoneName(z, 'ar', at)],
+      // The place in the page's language («نيويورك» / "New York"), then the zone id: a code, Latin in
+      // both languages and a left-to-right isolate in Arabic. People search by either
+      subtitle: z === 'UTC' ? 'UTC' : zoneSubtitle(z, locale, at),
+      keywords: [z, zoneCity(z), zonePlace(z, 'ar', at) ?? '', zoneName(z, 'en', at), zoneName(z, 'ar', at)],
       selected: z === zone,
     }));
   }, [pickingZone, locale, zone]);

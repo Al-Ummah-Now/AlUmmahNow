@@ -37,7 +37,7 @@ export default function CommentForm({
   onCancel,
   autoFocus = false,
 }: CommentFormProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { ensureHuman } = useHumanCheck();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,22 +59,18 @@ export default function CommentForm({
     setError('');
 
     if (!content.trim()) {
-      setError(isRTL ? 'الرجاء إدخال تعليق' : 'Please enter a comment');
+      setError(t.comments.enterComment);
       return;
     }
 
     if (content.length > MAX_COMMENT_LENGTH) {
-      setError(
-        isRTL
-          ? `التعليق طويل جداً (${formatNumber('ar', MAX_COMMENT_LENGTH)} حرف كحد أقصى)`
-          : `Comment is too long (${MAX_COMMENT_LENGTH} characters max)`
-      );
+      setError(t.comments.tooLong.replace('{max}', formatNumber(lang, MAX_COMMENT_LENGTH)));
       return;
     }
 
     // No active channel: the member comments as themselves (the API reads no header as no channel)
     if (!userId) {
-      setError(isRTL ? 'يجب تسجيل الدخول للتعليق' : 'You must be logged in to comment');
+      setError(t.comments.signInToComment);
       return;
     }
 
@@ -102,11 +98,11 @@ export default function CommentForm({
           onCommentCreated(result.comment);
         }
       } else {
-        setError(isRTL ? 'فشل نشر التعليق' : 'Failed to post comment');
+        setError(t.comments.postFailed);
       }
     } catch (err) {
       logger.error('Failed to create comment:', err);
-      setError(isRTL ? 'حدث خطأ أثناء نشر التعليق' : 'An error occurred while posting your comment');
+      setError(t.comments.postFailed);
     } finally {
       setLoading(false);
     }
@@ -145,11 +141,7 @@ export default function CommentForm({
             value={content}
             onChange={handleTextareaChange}
             onFocus={() => setIsFocused(true)}
-            placeholder={
-              isRTL
-                ? 'أضف تعليقاً عاماً...'
-                : 'Add a public comment...'
-            }
+            placeholder={t.comments.addPublicComment}
             // The shared field (theme/system.css .f-input: the theme's control surface, edge and
             // focus ring), not a fill or underline of its own
             className="f-input w-full resize-none py-2 text-start"
@@ -173,10 +165,10 @@ export default function CommentForm({
             >
               {remainingChars < 0 ? (
                 <span className="font-semibold">
-                  {isRTL ? `${formatNumber('ar', Math.abs(remainingChars))} حرف زيادة` : `${Math.abs(remainingChars)} characters over`}
+                  {t.comments.charsOver.replace('{count}', formatNumber(lang, Math.abs(remainingChars)))}
                 </span>
               ) : (
-                `${formatNumber(isRTL ? 'ar' : 'en', remainingChars)} ${isRTL ? 'حرف متبقي' : 'characters remaining'}`
+                t.comments.charsRemaining.replace('{count}', formatNumber(lang, remainingChars))
               )}
             </div>
           )}
@@ -211,12 +203,12 @@ export default function CommentForm({
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
-              {isRTL ? 'إلغاء' : 'Cancel'}
+              {t.comments.cancel}
             </button>
 
             <button
               type="submit"
-              disabled={loading || !content.trim() || remainingChars < 0 || !channelId || !userId}
+              disabled={loading || !content.trim() || remainingChars < 0 || !userId}
               className={cn(
                 'px-4 py-2 rounded-full text-sm font-medium transition-colors',
                 'bg-blue-600 text-white',
@@ -224,13 +216,7 @@ export default function CommentForm({
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
-              {loading
-                ? isRTL
-                  ? 'جارٍ النشر...'
-                  : 'Posting...'
-                : isRTL
-                ? 'تعليق'
-                : 'Comment'}
+              {loading ? t.comments.commenting : t.comments.comment}
             </button>
           </div>
         )}

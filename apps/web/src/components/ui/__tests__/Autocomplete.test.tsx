@@ -302,6 +302,25 @@ describe('Autocomplete popupHost', () => {
 });
 
 describe('Highlight', () => {
+  it('fades the list out at its bottom edge only while more rows lie below', () => {
+    const sizes = { scrollHeight: 600, clientHeight: 320 };
+    const spies = (['scrollHeight', 'clientHeight'] as const).map((k) =>
+      jest.spyOn(HTMLElement.prototype, k, 'get').mockImplementation(function (this: HTMLElement) {
+        return this.getAttribute('role') === 'listbox' ? sizes[k] : 0;
+      }));
+    try {
+      render(<Harness />);
+      fireEvent.focus(input());
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
+      expect(listbox()).toHaveAttribute('data-more-below', 'true');
+      listbox().scrollTop = 280;
+      fireEvent.scroll(listbox());
+      expect(listbox()).not.toHaveAttribute('data-more-below');
+    } finally {
+      spies.forEach((s) => s.mockRestore());
+    }
+  });
+
   it('marks the matched words of the original text', () => {
     const { container } = render(<Highlight text="École normale" query="ecole" />);
     expect(container.querySelector('mark')).toHaveTextContent('École');

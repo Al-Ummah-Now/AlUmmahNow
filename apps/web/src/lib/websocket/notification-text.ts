@@ -50,6 +50,19 @@ export function localizeParams(params: Record<string, string | number> | undefin
   return out;
 }
 
+/** Free text quoted into a line (a post or comment excerpt): it carries its own punctuation */
+const EXCERPT_KEY = /excerpt|snippet|preview/i;
+
+/** Excerpt params wrapped in First Strong Isolate … Pop Directional Isolate; names, words and numbers stay as they are. */
+export function isolateParams(params?: Record<string, string | number>): Record<string, string | number> | undefined {
+  if (!params) return params;
+  const out: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(params)) {
+    out[key] = typeof value === 'string' && value !== '' && EXCERPT_KEY.test(key) ? `\u2068${value}\u2069` : value;
+  }
+  return out;
+}
+
 /**
  * Render a server-pushed notification in the viewer's language.
  * Servers send `notificationKey` + `params`; legacy events with pre-rendered
@@ -61,7 +74,9 @@ export function resolveNotificationText(
   t: AppTranslations,
   lang?: string
 ): { title: string; message: string } {
-  const fill = (template: string, params?: Record<string, string | number>) => interpolate(template, params, lang);
+  // An excerpt is its own bidi isolate (FSI…PDI): an English post excerpt in an Arabic line
+  // (or the reverse) keeps its punctuation at its own end instead of the line's
+  const fill = (template: string, params?: Record<string, string | number>) => interpolate(template, isolateParams(params), lang);
   const event: NotificationEvent = { ...input, params: localizeParams(input.params as Record<string, string | number> | undefined, lang) as NotificationEvent['params'] };
   // Upload results read the current copy (uploadStatus.notification): stored
   // translation files keep older values for the realtime.* keys

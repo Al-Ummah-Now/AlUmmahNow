@@ -209,8 +209,12 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                   )}
 
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      {t.reportContent.reporting} <strong>{contentTitle || contentTypeLabel}</strong>
+                    {/* The label, then the whole text on its own line in its own direction (an English post on
+                        an Arabic page reads left to right), clamped to two lines: the browser ends it with an
+                        ellipsis at the text's own end instead of a mid-word cut */}
+                    <p className="text-sm text-[var(--fanous-c-dialog-muted)]">{t.reportContent.reporting}</p>
+                    <p dir="auto" className="text-sm font-semibold text-[var(--fanous-c-dialog-muted)] mb-2 line-clamp-2 text-start [overflow-wrap:anywhere]" data-testid="report-quote">
+                      {contentTitle || contentTypeLabel}
                     </p>
                   </div>
 

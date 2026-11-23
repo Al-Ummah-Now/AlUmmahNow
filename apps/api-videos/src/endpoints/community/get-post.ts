@@ -77,7 +77,10 @@ export class GetCommunityPost extends OptionalAuthRoute {
       // deletes, edits and the like / comment / poll counters.
       // The view counter batches the D1 writes (AV-17); its unflushed views are
       // added so the viewer sees their own view at once.
-      const view = await recordPostView(c.env, post.id || postId);
+      // A post nobody else can see yet (scheduled, or held for review) counts no views: only its
+      // channel opens it, in the editor, and those opens were showing up as views in Studio
+      const unseen = isUpcoming(post) || isPostHeldByReview(post as never);
+      const view = unseen ? { counted: false, unflushed: 0 } : await recordPostView(c.env, post.id || postId);
       await withPostViews(c.env.NOTIFICATIONS_DB, [post]);
       post.views = (Number(post.views) || 0) + view.unflushed;
 

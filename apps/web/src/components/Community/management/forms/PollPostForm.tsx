@@ -76,7 +76,7 @@ export function PollPostForm({ data, onChange, locale, error }: PollPostFormProp
           id="poll-question"
           value={data.question}
           onChange={(e) => handleQuestionChange(e.target.value)}
-          placeholder={isRTL ? 'اسأل جمهورك سؤالاً...' : 'Ask your audience a question...'}
+          placeholder={isRTL ? 'اسأل جمهورك سؤالًا...' : 'Ask your audience a question...'}
           dir={isRTL ? 'rtl' : 'ltr'}
           className="mt-2 text-sm md:text-base"
         />

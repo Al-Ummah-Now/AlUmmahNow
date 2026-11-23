@@ -71,6 +71,14 @@ describe('community post views (AV-8)', () => {
 		assert.equal(listed.posts[0].views, 206, 'the list shows the same total');
 	});
 
+	it('a scheduled post opened by its channel counts no view', async () => {
+		const e = env(post({ status: 'scheduled', scheduledAt: '2099-01-01T00:00:00.000Z', views: 0 }));
+		for (let i = 0; i < 3; i++) assert.equal((await as(OWNER).request(`/api/channels/${CH}/posts/p1`, {}, e)).status, 200);
+		const view = (await (await as(OWNER).request(`/api/channels/${CH}/posts/p1`, {}, e)).json()) as any;
+		assert.equal(view.views, 0, 'the editor opening it is no view');
+		assert.equal(await d1Views(e.NOTIFICATIONS_DB as unknown as D1Database), 0);
+	});
+
 	it('views during a delete and an edit never undo them', async () => {
 		const e = env();
 		await Promise.all([

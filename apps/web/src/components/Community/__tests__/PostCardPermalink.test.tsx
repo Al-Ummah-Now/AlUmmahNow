@@ -10,6 +10,11 @@ import PostCard from '../PostCard';
 jest.mock('../PostEngagement', () => ({ __esModule: true, default: () => null }));
 jest.mock('../CommentsSection', () => ({ __esModule: true, default: () => <div data-testid="comments" /> }));
 jest.mock('next/image', () => ({ __esModule: true, default: () => null }));
+// The card's ⋮ menu (#1515) reads the language, the router and the (optional) signed-in user
+jest.mock('@/hooks/useLanguage', () => ({
+  useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', locale: 'en', isRTL: false, dir: 'ltr' }),
+}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }), usePathname: () => '/en/post/p1' }));
 
 const post = { id: 'p 1', channelId: 'c1', userId: 'u1', type: 'text', content: 'Hello', createdAt: new Date(Date.now() - 3 * 3600_000).toISOString(), likes: 0, comments: 0, shares: 0, views: 0, pinned: false, status: 'published', visibility: 'public', commentsEnabled: true, channelName: 'Noor', channelVerified: false } as unknown as CommunityPost;
 

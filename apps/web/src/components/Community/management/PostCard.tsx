@@ -1,7 +1,8 @@
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { CommunityPost, PostType, PostStatus, formatCompact, formatCountNoun, formatTimeAgo } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,19 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
   const { t } = useLanguage();
   const [deleting, setDeleting] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Whether the text is cut at two lines (measured, and again when the card's width changes)
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [post.content]);
   const isScheduled = post.status === PostStatus.SCHEDULED && !!post.scheduledAt;
   const publishNow = async () => {
     if (!onPublishNow) return;
@@ -133,7 +147,8 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                 </Button>
               </DropdownMenuTrigger>
               {/* Below the button (never over the author line), its end edge on the button's: inside the screen in both directions */}
-              <DropdownMenuContent side="bottom" align="end">
+              {/* Opaque: it opens over the next card, whose text must not show through */}
+              <DropdownMenuContent side="bottom" align="end" className="menu-solid">
                 <DropdownMenuItem onClick={() => onView(post)}>
                   <Eye className="w-4 h-4 me-2" aria-hidden="true" />
                   {t.community.viewPost}
@@ -158,9 +173,13 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
           </div>
         </div>
 
-        {/* Its own direction for the words, the page's edge for the line (like Studio comments), and two
-            lines that end in an ellipsis: the fading clamp left a short second line looking cut off */}
-        <p className="text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] text-left [html[dir=rtl]_&]:text-right" dir="auto" data-testid="post-card-text">
+        {/* Two lines, ended by an ellipsis at the text's own end: the shared fade (clamp-2) fades the box's
+            last 3em, which is empty when line 2 breaks early, so the cut never showed (AUDIT-2). It lines up with
+            the page (text-left, text-right under <html dir="rtl">), not its own script's side, until it is cut:
+            Chromium draws the ellipsis of a line aligned away from its own end outside the box (an English post
+            in the Arabic Studio showed "the…" past the card's text edge), so a cut text takes its own start
+            (text-start with dir=auto). Two cut lines fill the width, so they still read as lined up */}
+        <p ref={textRef} className={cn('line-clamp-2 text-sm [overflow-wrap:anywhere] md:text-base', clamped ? 'text-start' : 'text-left [html[dir=rtl]_&]:text-right')} dir="auto" data-testid="managed-post-text" data-clamped={clamped || undefined}>
           {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
         </p>
 

@@ -68,7 +68,7 @@ export default function ReplyForm({
     if (content.length > MAX_COMMENT_LENGTH) {
       setError(
         isRTL
-          ? `الرد طويل جداً (${formatNumber('ar', MAX_COMMENT_LENGTH, { useGrouping: false })} حرف كحد أقصى)`
+          ? `الرد طويل جدًا (${formatNumber('ar', MAX_COMMENT_LENGTH, { useGrouping: false })} حرف كحد أقصى)`
           : `Reply is too long (${MAX_COMMENT_LENGTH} characters max)`
       );
       return;
