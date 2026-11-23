@@ -18,12 +18,13 @@
  * to MAX_COVER_R2_READS per response.
  */
 
-import { SEARCH_TABLES, type SearchDb } from "@al-ummah/shared-types";
+import { OWNERSHIP_TABLE, SEARCH_TABLES, type SearchDb } from "@al-ummah/shared-types";
 import R2Repository from "./r2Repo";
 import { logger } from "./logger";
 import type { VideoType } from "./playlists";
 import { canManagePlaylist, memoChannels } from "./channelAccess";
 import { videoViewer } from "./videoViewer";
+import { isOwnershipComplete, READY_SQL } from "./search/ownership";
 
 export interface PlaylistCover {
     videoId: string;
@@ -51,6 +52,9 @@ export interface PlaylistCoverEnv {
 /** Videos considered per playlist before it falls back to the placeholder */
 export const COVER_CANDIDATES = 5;
 export const MAX_COVER_R2_READS = 24;
+/** Upper bound on distinct R2 reads when resolving visible playlist counts without the ownership index */
+export const MAX_COUNT_R2_READS = 200;
+const COUNT_R2_CONCURRENCY = 25;
 /** D1 allows 100 bound parameters per statement */
 const INDEX_CHUNK_SIZE = 90;
 
@@ -90,14 +94,18 @@ async function readIndexedThumbnails(db: SearchDb | undefined, ids: string[]): P
     return thumbnails;
 }
 
-async function readVideos(bucket: R2Bucket, ids: string[]): Promise<Map<string, VideoType | null>> {
+/** Per-request memo of R2 video reads so cover and visibility checks never read the same video twice. */
+export type VideoReadCache = Map<string, Promise<VideoType | null>>;
+
+async function readVideos(bucket: R2Bucket, ids: string[], cache?: VideoReadCache): Promise<Map<string, VideoType | null>> {
     const repository = new R2Repository<VideoType>(bucket);
     const entries = await Promise.all(ids.map(async (id) => {
-        try {
-            return [id, await repository.getObject(id)] as const;
-        } catch {
-            return [id, null] as const;
+        let pending = cache?.get(id);
+        if (!pending) {
+            pending = repository.getObject(id).catch(() => null);
+            cache?.set(id, pending);
         }
+        return [id, await pending] as const;
     }));
     return new Map(entries);
 }
@@ -107,6 +115,7 @@ export async function resolvePlaylistCovers(
     env: PlaylistCoverEnv,
     playlists: PlaylistCoverSource[],
     userId?: string | null,
+    cache?: VideoReadCache,
 ): Promise<Map<string, PlaylistCover>> {
     const pending = playlists.filter((playlist) => playlist.id && !playlist.thumbnailUrl && candidatesOf(playlist).length > 0);
     const covers = new Map<string, PlaylistCover>();
@@ -130,7 +139,7 @@ export async function resolvePlaylistCovers(
         const missing = firstIndexed === -1 ? candidates : manages ? candidates.slice(0, firstIndexed) : [];
         for (const id of missing) toRead.add(id);
     }
-    const stored = await readVideos(env.videos, [...toRead].slice(0, MAX_COVER_R2_READS));
+    const stored = await readVideos(env.videos, [...toRead].slice(0, MAX_COVER_R2_READS), cache);
 
     for (const playlist of pending) {
         for (const id of candidatesOf(playlist)) {
@@ -154,15 +163,94 @@ export async function resolvePlaylistCovers(
     return covers;
 }
 
-/** Copies of `playlists` with `cover` set wherever one could be derived. */
+/**
+ * Subset of `videoIds` that `userId` may watch (using the playlist viewer rules):
+ * excludes deleted, hidden, missing, scheduled, processing, and other users' private videos (#941).
+ *
+ * Uses primary-key lookups on content_ownership when the video index is complete.
+ * Non-public videos require the live channel role check for signed-in viewers.
+ * Returns null when neither source can safely answer (caller keeps the raw list).
+ */
+export async function resolveViewableVideoIds(
+    env: Partial<PlaylistCoverEnv> | undefined,
+    videoIds: readonly string[],
+    userId?: string | null,
+    cache?: VideoReadCache,
+): Promise<Set<string> | null> {
+    const unique = [...new Set(videoIds.filter((id): id is string => typeof id === "string" && id.length > 0))];
+    if (unique.length === 0) return new Set();
+    if (!env) return null;
+
+    const visible = new Set<string>();
+    let toRead = unique;
+    const db = env.SEARCH_DB as SearchDb | undefined;
+    if (db) {
+        try {
+            if (await isOwnershipComplete(db, "video")) {
+                const nonPublic: string[] = [];
+                const publicClause = `is_public = 1 AND ${READY_SQL}
+                    AND (schedule_status IS NULL OR schedule_status NOT IN ('scheduled', 'publishing'))
+                    AND (studio_status IS NULL OR studio_status NOT IN ('scheduled', 'drafts', 'in_review', 'not_approved'))`;
+                for (let i = 0; i < unique.length; i += INDEX_CHUNK_SIZE) {
+                    const chunk = unique.slice(i, i + INDEX_CHUNK_SIZE);
+                    const { results } = await db
+                        .prepare(
+                            `SELECT id, (${publicClause}) AS public FROM ${OWNERSHIP_TABLE}
+                             WHERE kind = 'video' AND id IN (${chunk.map(() => "?").join(",")})
+                               AND is_deleted = 0 AND is_hidden = 0`,
+                        )
+                        .bind(...chunk)
+                        .all<{ id: string; public: number }>();
+                    for (const row of results ?? []) {
+                        if (row.public) visible.add(row.id);
+                        else if (userId) nonPublic.push(row.id);
+                    }
+                }
+                toRead = nonPublic;
+                if (!env.videos || toRead.length > MAX_COUNT_R2_READS) return visible;
+            }
+        } catch (error) {
+            visible.clear();
+            logger.warn("[PlaylistVideos] Ownership visibility lookup failed; falling back to R2", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    if (!env.videos || toRead.length > MAX_COUNT_R2_READS) return null;
+    const sees = videoViewer({ channels: env.channels }, userId);
+    for (let i = 0; i < toRead.length; i += COUNT_R2_CONCURRENCY) {
+        const batch = toRead.slice(i, i + COUNT_R2_CONCURRENCY);
+        const loaded = await readVideos(env.videos, batch, cache);
+        await Promise.all(batch.map(async (id) => {
+            if (await sees(loaded.get(id) as never)) visible.add(id);
+        }));
+    }
+    return visible;
+}
+
+/**
+ * Copies of `playlists` with `cover` set wherever one could be derived, and
+ * `videos`/`videosCount` filtered to the videos `userId` can actually view (#941).
+ */
 export async function withPlaylistCovers<T extends PlaylistCoverSource>(
     env: PlaylistCoverEnv,
     playlists: T[],
     userId?: string | null,
 ): Promise<Array<T & { cover?: PlaylistCover }>> {
-    const covers = await resolvePlaylistCovers(env, playlists, userId);
+    const allIds = playlists.flatMap((playlist) => ("videosCount" in playlist && Array.isArray(playlist.videos) ? playlist.videos : []));
+    const cache: VideoReadCache = new Map();
+    const [covers, viewable] = await Promise.all([
+        resolvePlaylistCovers(env, playlists, userId, cache),
+        allIds.length > 0 ? resolveViewableVideoIds(env, allIds, userId, cache) : Promise.resolve(null),
+    ]);
     return playlists.map((playlist) => {
         const cover = playlist.id ? covers.get(playlist.id) : undefined;
-        return cover ? { ...playlist, cover } : playlist;
+        let next: T & { cover?: PlaylistCover } = cover ? { ...playlist, cover } : playlist;
+        if (viewable !== null && "videosCount" in playlist && Array.isArray(playlist.videos)) {
+            const visible = playlist.videos.filter((id) => viewable.has(id));
+            next = { ...next, videos: visible, videosCount: visible.length };
+        }
+        return next;
     });
 }

@@ -177,8 +177,10 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>,
 // Transform a business playlist to a view model
 export function transformPlaylistToView(
     playlist: z.infer<typeof BusinessPlaylist>,
-    channel?: z.infer<typeof BusinessChannel> | null
+    channel?: z.infer<typeof BusinessChannel> | null,
+    visibleVideos?: string[],
 ): z.infer<typeof PlaylistView> {
+    const videos = visibleVideos ?? playlist.videos ?? [];
     return {
         id: playlist.id,
         title: playlist.title,
@@ -191,12 +193,12 @@ export function transformPlaylistToView(
         ...channelNameFields(channel),
         dateCreated: playlist.dateCreated,
         dateModified: playlist.dateModified,
-        videosCount: playlist.videos?.length || 0,
+        videosCount: videos.length,
         isPublic: playlist.isPublic,
         ...(playlist.isUnlisted ? { isUnlisted: true } : {}),
         visibility: playlist.isPublic !== false ? 'public' : playlist.isUnlisted === true ? 'unlisted' : 'private',
         name: playlist.title,
-        videos: playlist.videos || [],
+        videos,
     };
 }
 
