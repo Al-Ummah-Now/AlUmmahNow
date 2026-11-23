@@ -26,6 +26,7 @@ import { QoeLive, type QoeStorage } from './qoe-live';
 import { LiveViewers, isNet, isViewerId } from './live-viewers';
 import { adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
+import { channelFeatureOff } from './lib/feature-gate';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
 const SOCKET_TAG = 'socket';
@@ -262,6 +263,15 @@ export class WebSocketDurableObject extends DurableObject {
       // A socket stays signed in only as long as its token (#437). Before a
       // re-auth too, so a failed one leaves the socket signed out.
       this.expireAuthIfNeeded(ws, { notify: clientMessage.type !== 'authenticate' });
+
+      // Feature switches (FEAT-2): a channel of a switched-off feature is refused (none in version 1)
+      if (clientMessage.type === 'subscribe' || clientMessage.type === 'message') {
+        const off = await channelFeatureOff(this.env as never, clientMessage.channel);
+        if (off) {
+          this.sendMessage(ws, { type: 'error', error: 'Feature off', code: 'feature_off', feature: off } as never);
+          return;
+        }
+      }
 
       switch (clientMessage.type) {
         case 'authenticate':

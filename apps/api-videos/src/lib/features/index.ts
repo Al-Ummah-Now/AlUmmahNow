@@ -21,6 +21,7 @@ import {
 	NO_FEATURES,
 	FEATURE_REGISTRY,
 	applySwitchesToUserFeatures,
+	featureGate,
 	type FeatureKey,
 	type FeatureStateReport,
 	CATEGORIZE_VISIBILITY_KEY,
@@ -399,6 +400,8 @@ export async function siteDomainsFor(env: FeaturesEnv, channelId: string): Promi
 export async function captionFeatureFor(env: FeaturesEnv, kind: 'transcribe' | 'translate', who: { userId: string; roles?: readonly string[] | null; channelOwnerId?: string | null }): Promise<boolean> {
 	const db = env.SEARCH_DB;
 	if (!db) return false;
+	// The Features page switch first (the route gate can't read the job's kind from the body)
+	if (!(await featureGate(env, kind === 'transcribe' ? 'captionsTranscribe' : 'captionsTranslate').catch(() => ({ on: true as const }))).on) return false;
 	const settings = await readCaptionSettings(env);
 	if (kind === 'transcribe' ? !transcribeConfigured(env, settings) : !captionTranslateConfigured(env, settings)) return false;
 	const creator = await resolveCreator(db, who);
