@@ -340,7 +340,7 @@ export async function ourRemoteIds(env: SourceDbEnv, network: ImportSourceNetwor
 	const ids = remoteIds.filter(Boolean);
 	if (!ids.length || network === 'rss' || network === 'youtube') return new Set();
 	const { results } = await sourceDb(env)
-		.prepare(`SELECT remote_id FROM social_deliveries WHERE network = ? AND remote_id IN (${ids.map(() => '?').join(',')})`)
+		.prepare(`SELECT remote_id FROM social_deliveries WHERE network = ? AND remote_id IS NOT NULL AND remote_id IN (${ids.map(() => '?').join(',')})`)
 		.bind(network, ...ids)
 		.all<{ remote_id: string }>();
 	return new Set((results ?? []).map((r) => r.remote_id));

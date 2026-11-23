@@ -283,7 +283,18 @@ describe('syncing a source', () => {
 		assert.deepEqual(posts().map((p) => p.content), ['A thought']);
 		const items = await listItems(env, source.id);
 		assert.deepEqual(Object.fromEntries(items.map((i) => [i.itemId, i.note])), { '200': 'posted_by_us', '199': null, '198': 'reply_or_repost' });
-		assert.equal((await readSource(env, source.id))!.cursor, '200', 'the next fetch starts after the newest');
+		assert.equal((await readSource(env, source.id))!.cursor, '42:200', 'the next fetch starts after the newest, with the account id kept');
+		// The next sync reuses the account id: no lookup, and it asks only for what came after
+		const seen: string[] = [];
+		stubNetwork((url) => {
+			seen.push(url);
+			if (url.startsWith('https://social.example/api/v1/accounts/42/statuses')) return Response.json([]);
+			return null;
+		});
+		await runSourceSync(env as never, job({ sourceId: source.id, phase: 'fetch' }));
+		assert.ok(!seen.some((u) => u.includes('/accounts/lookup')), 'no lookup once the id is known');
+		assert.ok(seen.some((u) => u.includes('since_id=200')));
+		assert.equal((await readSource(env, source.id))!.cursor, '42:200', 'nothing new keeps the cursor');
 	});
 
 	it('brings a video through the upload path: stored original, Bunny copy, upload complete, video post', async () => {
@@ -320,6 +331,46 @@ describe('syncing a source', () => {
 		assert.ok(row!.last_job_id);
 		const again = await startSourceSync(env as never, row!, ADMIN);
 		assert.equal(again.id, row!.last_job_id, 'one sync per source at a time');
+	});
+
+	it('spreads a tick’s syncs over the hour: each waits its turn before the first fetch', async () => {
+		const { env, job } = harness();
+		for (const n of [1, 2, 3]) {
+			await insertSource(env, { channelId: 'ch1', network: 'rss', address: `https://feeds.example.org/${n}.xml`, label: `F${n}`, auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'hourly', createdBy: ADMIN }, Date.now() - 2 * 3600_000);
+		}
+		assert.equal(await queueDueSources(env as never), 3);
+		const { results } = await env.SEARCH_DB.prepare("SELECT params FROM admin_jobs WHERE kind = 'import.source-sync'").all<{ params: string }>();
+		const waits = results.map((r) => (JSON.parse(r.params) as { waitSeconds?: number }).waitSeconds ?? 0).sort((a, b) => a - b);
+		assert.deepEqual(waits, [0, 900, 1800]);
+		// The first step of a waiting sync only waits: nothing is fetched yet
+		const sourceId = (JSON.parse(results[0]!.params) as { sourceId: string }).sourceId;
+		const out = await runSourceSync(env as never, job({ sourceId, phase: 'fetch', fetched: 0, posted: 0, skipped: 0, waitSeconds: 900 }));
+		assert.equal(out.done, false);
+		assert.equal((out as { delaySeconds?: number }).delaySeconds, 900);
+		assert.equal((out as { params: { waitSeconds?: number } }).params.waitSeconds, undefined);
+	});
+
+	it('queues no scheduled sync while uploads are off, and the source stays due', async () => {
+		const { env } = harness();
+		const due = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'hourly', createdBy: ADMIN }, Date.now() - 2 * 3600_000);
+		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
+		assert.equal(await queueDueSources(off as never), 0);
+		assert.equal(env.ADMIN_JOBS_QUEUE.sent.length, 0);
+		assert.ok((await readSource(env, due.id))!.next_sync_at, 'still due');
+		assert.equal(await queueDueSources(env as never), 1, 'queued once uploads are back on');
+	});
+
+	it('the sync’s lookups on shared tables use indexes, never a scan', async () => {
+		const { env } = harness();
+		const plan = async (sql: string, ...args: unknown[]) =>
+			(await env.SEARCH_DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...args).all<{ detail: string }>()).results.map((r) => r.detail).join(' | ');
+		const ours = await plan("SELECT remote_id FROM social_deliveries WHERE network = ? AND remote_id IS NOT NULL AND remote_id IN (?, ?)", 'mastodon', '1', '2');
+		assert.match(ours, /USING (COVERING )?INDEX idx_social_deliveries_network_remote/);
+		const yts = await plan('SELECT id, yt_channel_json FROM yt_imports WHERE channel_id = ? AND yt_channel_json IS NOT NULL ORDER BY created_at DESC', 'ch1');
+		assert.match(yts, /USING INDEX idx_yt_imports_channel/);
+		assert.doesNotMatch(yts, /TEMP B-TREE/);
+		const all = await plan('SELECT * FROM import_sources ORDER BY created_at DESC LIMIT 200');
+		assert.match(all, /USING INDEX idx_import_sources_created/);
 	});
 });
 

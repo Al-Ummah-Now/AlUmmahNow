@@ -84,8 +84,10 @@ export async function callVideos<T>(env: VideosClientEnv, path: string, call: Vi
   if (response.status === 204) return undefined as T;
   const payload = (await response.json().catch(() => null)) as ({ success?: boolean; result?: T; code?: string; error?: string } & Record<string, unknown>) | null;
   if (!response.ok || !payload?.success) {
-    // Counts and the like next to the code (a tier with users: { users }) reach the admin as they are
-    const { success: _s, result: _r, code: _c, error: _e, ...details } = payload ?? {};
+    // Counts and the like next to the code (a tier with users: { users }) reach the admin as they are.
+    // api-videos' own envelope fields (message, lang, action) are left behind: it answered in English
+    // (no X-App-Locale on a service call), and admin-api's envelope writes them in the caller's language
+    const { success: _s, result: _r, code: _c, error: _e, message: _m, lang: _l, action: _a, ...details } = payload ?? {};
     throw new VideosError(
       response.ok ? 502 : response.status,
       payload?.code ?? 'videos_error',

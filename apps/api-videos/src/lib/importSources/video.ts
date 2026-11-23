@@ -36,8 +36,43 @@ async function sha256Hex(text: string): Promise<string> {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Follows redirects through the public-address check; never a private or internal host. */
+/** How long a video server has to answer, and to send the next bytes once it does. */
+const ANSWER_TIMEOUT_MS = 30_000;
+const IDLE_TIMEOUT_MS = 60_000;
+
+/**
+ * Follows redirects through the public-address check; never a private or internal host. A server that
+ * doesn't answer within ANSWER_TIMEOUT_MS is given up on (the job step retries with backoff).
+ */
 async function fetchPublic(url: string, init: RequestInit, f: typeof fetch): Promise<Response> {
+	const ctl = new AbortController();
+	const timer = setTimeout(() => ctl.abort(), ANSWER_TIMEOUT_MS);
+	try {
+		return await followPublic(url, { ...init, signal: ctl.signal }, f);
+	} catch (error) {
+		if (ctl.signal.aborted) throw new Error('The video server did not answer in time');
+		throw error;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** The next bytes of a download, or an error when none come for IDLE_TIMEOUT_MS (the caller cancels the reader). */
+async function readWithin(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<ReadableStreamReadResult<Uint8Array>> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			reader.read(),
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error('The video stopped arriving')), IDLE_TIMEOUT_MS);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function followPublic(url: string, init: RequestInit, f: typeof fetch): Promise<Response> {
 	let next = checkUrl(url);
 	for (let hop = 0; hop <= 5; hop++) {
 		const res = await f(next.toString(), { ...init, redirect: 'manual' });
@@ -146,8 +181,14 @@ export async function transferImportVideo(
 		const source = await resolveSourceUrl(env, input.network, input.video.url, f);
 		if (!source) return { status: 'skipped', note: 'media_unavailable' };
 		const res = await fetchPublic(source.url, { headers: offset > 0 ? { Range: `bytes=${offset}-` } : {} }, f);
-		if (res.status === 404 || res.status === 410) return { status: 'skipped', note: 'media_unavailable' };
-		if (!res.ok || !res.body) throw new Error(`The video could not be read (${res.status})`);
+		if (res.status === 404 || res.status === 410) {
+			await res.body?.cancel().catch(() => undefined);
+			return { status: 'skipped', note: 'media_unavailable' };
+		}
+		if (!res.ok || !res.body) {
+			await res.body?.cancel().catch(() => undefined);
+			throw new Error(`The video could not be read (${res.status})`);
+		}
 		// A server without ranges sends it all again: skip what is stored
 		let skip = offset > 0 && res.status === 200 ? offset : 0;
 		const reader = res.body.getReader();
@@ -164,7 +205,7 @@ export async function transferImportVideo(
 		};
 		try {
 			while (offset + filled < stepEnd) {
-				const { done, value } = await reader.read();
+				const { done, value } = await readWithin(reader);
 				if (done) break;
 				let chunk = value;
 				if (skip) {

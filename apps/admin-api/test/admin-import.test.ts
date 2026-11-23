@@ -615,7 +615,7 @@ describe('/api/admin/import/sources (TA-9)', () => {
           const method = init?.method ?? 'GET';
           calls.push({ path: url.pathname + url.search, method, body: init?.body ? JSON.parse(String(init.body)) : null, actor: new Headers(init?.headers).get('X-Admin-Actor') });
           const json = (status: number, payload: unknown) => new Response(JSON.stringify(payload), { status });
-          if (refuse) return json(refuse.status, { success: false, code: refuse.code, error: 'refused' });
+          if (refuse) return json(refuse.status, { success: false, code: refuse.code, error: 'refused', message: 'An English sentence from api-videos.', lang: 'en', action: 'none', users: 3 });
           if (method === 'POST' && url.pathname.endsWith('/sync')) return json(202, { success: true, result: { jobId: 'job-1', status: 'queued' } });
           if (method === 'POST') return json(201, { success: true, result: { source: { id: SOURCE, auth: 'recorded' } } });
           return json(200, { success: true, result: { sources: [], source: { id: SOURCE }, items: [], deleted: true } });
@@ -661,6 +661,16 @@ describe('/api/admin/import/sources (TA-9)', () => {
     assert.equal(res.status, 403);
     assert.equal((await res.json()).code, 'permission_required');
     assert.deepEqual(await audit(), []);
+  });
+
+  it('leaves api-videos’ English envelope behind, so admin-api’s envelope answers in the caller’s language', async () => {
+    const { req } = sources(['Super Admin'], { status: 409, code: 'source_exists' });
+    const res = await req('/api/admin/import/sources', post(create));
+    assert.equal(res.status, 409);
+    const body = await res.json();
+    assert.equal(body.code, 'source_exists');
+    assert.equal(body.users, 3, 'other details still reach the admin');
+    for (const field of ['message', 'lang', 'action']) assert.equal(body[field], undefined, field);
   });
 
   it('forwards sync, update, delete and items for a well-formed id only, each audited', async () => {

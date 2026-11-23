@@ -114,6 +114,17 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   support_wrong_status: { action: 'retry', en: 'This changed while you were looking at it. Reload and try again.', ar: 'تغيّر هذا أثناء اطلاعك عليه. أعد التحميل وحاول مرة أخرى.' },
   support_exists: { action: 'none', en: 'A payout batch for this period already exists.', ar: 'توجد دفعة تحويلات لهذه الفترة بالفعل.' },
   support_not_built: { action: 'none', en: 'This option isn’t available yet.', ar: 'هذا الخيار غير متاح بعد.' },
+  // Social import sources (wiki TOOLS-ADMIN TA-9, super admins)
+  invalid_address: { action: 'none', en: 'We can’t import from this address. Check it and try again.', ar: 'لا يمكن الاستيراد من هذا العنوان. راجعه وحاول مرة أخرى.' },
+  not_connected: { action: 'none', en: 'The channel’s owner hasn’t connected this account.', ar: 'لم يربط صاحب القناة هذا الحساب.' },
+  permission_required: { action: 'none', en: 'Record whose written permission you have, with a note.', ar: 'سجّل صاحب الإذن الكتابي الذي لديك، مع ملاحظة.' },
+  source_exists: { action: 'none', en: 'This channel already imports from this address.', ar: 'تستورد هذه القناة من هذا العنوان بالفعل.' },
+  source_not_found: { action: 'none', en: 'We couldn’t find this source.', ar: 'لم نعثر على هذا المصدر.' },
+  job_not_found: { action: 'none', en: 'This job isn’t available.', ar: 'هذه المهمة غير متاحة.' },
+  channel_unavailable: { action: 'none', en: 'This channel can’t take imports right now.', ar: 'لا يمكن لهذه القناة استقبال الاستيراد الآن.' },
+  source_unreachable: { action: 'retry', en: 'The source didn’t answer. Please try again later.', ar: 'لم يستجب المصدر. يُرجى المحاولة لاحقًا.' },
+  source_bad_response: { action: 'retry', en: 'The source sent an answer we can’t use.', ar: 'أرسل المصدر ردًّا لا يمكننا استخدامه.' },
+  source_not_a_feed: { action: 'none', en: 'This address isn’t an RSS or Atom feed.', ar: 'هذا العنوان ليس موجزًا يمكن الاستيراد منه.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
