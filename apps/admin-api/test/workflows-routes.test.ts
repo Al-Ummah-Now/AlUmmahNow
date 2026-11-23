@@ -87,7 +87,6 @@ const featureRule = (approvalsNeeded: number) => ({
   exclusions: { subject: true, techStaff: false, owner: false, oneStepPerPerson: true },
   stepUp: 'approve',
   expiryHours: 168,
-  effectiveDate: { allowed: false, maxDaysAhead: 0 },
   notify: { email: true, extra: [] },
 });
 
@@ -136,7 +135,6 @@ describe('money rules', () => {
     exclusions: { subject: true, techStaff: true, owner: true, oneStepPerPerson: true },
     stepUp: 'propose_and_approve',
     expiryHours: 168,
-    effectiveDate: { allowed: true, maxDaysAhead: 90 },
     notify: { email: true, extra: [] },
   });
 
@@ -217,8 +215,7 @@ describe('review fixes (#1827)', () => {
     exclusions: { subject: true, techStaff: true, owner: true, oneStepPerPerson: true },
     stepUp: 'approve',
     expiryHours: 168,
-    effectiveDate: { allowed: false, maxDaysAhead: 0 },
-    notify: { email: true, extra: [] },
+      notify: { email: true, extra: [] },
   });
 
   it('the creatorSupport switch rule is a money rule: super admins and the owner cannot change it, the floor holds', async () => {
