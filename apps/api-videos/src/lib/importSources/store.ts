@@ -57,7 +57,7 @@ export interface SourceRow {
 	next_sync_at: number | null;
 	last_sync_at: number | null;
 	last_job_id: string | null;
-	/** The latest Takeout match job (search/0080; undefined before it) */
+	/** The latest Takeout match job (search/0081; undefined before it) */
 	takeout_job_id?: string | null;
 	last_error: string | null;
 	created_by: string;
