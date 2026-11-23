@@ -77,6 +77,22 @@ function seed() {
       .prepare(`INSERT INTO billing_checkouts (id, user_id, tier_id, price_id, provider, mode, created_at) VALUES (?, ?, 'creator', 'bpr_1', 'paygood', 'test', ?)`)
       .run(`bco_${userId}`, userId, now);
   }
+  // Creator support (wiki AUN-MEMBERS §9.8): money rows stay under the marker; messages and payloads go
+  for (const userId of [USER, OTHER]) {
+    search.raw
+      .prepare(`INSERT INTO support_payments (id, supporter_user_id, channel_id, collector, mode, collector_payment_ref, gross, currency, status, message, created_at, updated_at) VALUES (?, ?, 'ch_1', 'test', 'test', ?, 500, 'USD', 'succeeded', 'JazakAllah khair', ?, ?)`)
+      .run(`sp_${userId}`, userId, `tpay_${userId}`, now, now);
+    search.raw
+      .prepare(`INSERT INTO support_pledges (id, supporter_user_id, channel_id, collector, mode, collector_pledge_ref, amount, currency, status, started_at, created_at, updated_at) VALUES (?, ?, 'ch_1', 'test', 'test', ?, 500, 'USD', 'active', ?, ?, ?)`)
+      .run(`spl_${userId}`, userId, `tpl_${userId}`, now, now, now);
+    search.raw
+      .prepare(`INSERT INTO support_checkouts (id, supporter_user_id, channel_id, kind, collector, mode, gift, charged, currency, status, message, created_at) VALUES (?, ?, 'ch_1', 'one_time', 'test', 'test', 500, 545, 'USD', 'open', 'hi', ?)`)
+      .run(`sco_${userId}`, userId, now);
+    search.raw
+      .prepare(`INSERT INTO support_events (id, vendor, mode, event_id, type, user_id, payload, status, received_at) VALUES (?, 'test', 'test', ?, 'test.events', ?, '{"email":"x@example.com"}', 'processed', ?)`)
+      .run(`sev_${userId}`, `tevt_${userId}`, userId, now);
+    search.raw.prepare(`INSERT INTO support_finance_members (user_id, added_by, added_at) VALUES (?, 'usr_board', ?)`).run(userId, now);
+  }
   // A comp the erased user granted as staff: the grant stays, the granter becomes the placeholder
   search.raw.prepare(`UPDATE billing_subscriptions SET comp_by = ? WHERE user_id = ?`).run(USER, OTHER);
   return { reports, search };
@@ -86,7 +102,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, tierRequests: 2, billing: 6, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, tierRequests: 2, billing: 6, support: 5, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -119,12 +135,20 @@ describe('eraseUserTraces (#1059)', () => {
     expect(search.raw.prepare("SELECT payload FROM billing_events WHERE user_id = ?").get(ERASED)).toEqual({ payload: '{}' });
     expect(search.raw.prepare('SELECT user_id FROM billing_customers').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM billing_checkouts').all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare('SELECT supporter_user_id, gross, message FROM support_payments ORDER BY id').all()).toEqual([
+      { supporter_user_id: ERASED, gross: 500, message: null },
+      { supporter_user_id: OTHER, gross: 500, message: 'JazakAllah khair' },
+    ]);
+    expect(search.raw.prepare('SELECT status, cancel_reason FROM support_pledges WHERE supporter_user_id = ?').get(ERASED)).toEqual({ status: 'canceled', cancel_reason: 'erasure' });
+    expect(search.raw.prepare('SELECT supporter_user_id FROM support_checkouts').all()).toEqual([{ supporter_user_id: OTHER }]);
+    expect(search.raw.prepare('SELECT payload FROM support_events WHERE user_id = ?').get(ERASED)).toEqual({ payload: '{}' });
+    expect(search.raw.prepare('SELECT user_id FROM support_finance_members').all()).toEqual([{ user_id: OTHER }]);
   });
 
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, tierRequests: 0, billing: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, tierRequests: 0, billing: 0, support: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });
