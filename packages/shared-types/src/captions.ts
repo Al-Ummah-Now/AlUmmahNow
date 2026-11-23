@@ -599,3 +599,33 @@ export function captionMarkerRanges(vtt: string): { text: string[]; translation:
   for (const m of vtt.matchAll(MARKER)) (m[1] === 't' ? out.text : m[1] === 'x' ? out.translation : out.reference).add(m[2]!);
   return { text: [...out.text], translation: [...out.translation], reference: [...out.reference] };
 }
+
+export interface CaptionRecitationSpan {
+  range: string;
+  startMs: number;
+  endMs: number;
+  /** The published cue's timing; exact ayah boundaries are a separate creator confirmation (E21-D6). */
+  boundary: 'cue';
+}
+
+/** Accepted Arabic text markers and their published cue timings; never the marker's or ASR's text. */
+export function captionAcceptedRecitationSpans(vtt: string): CaptionRecitationSpan[] {
+  const out: CaptionRecitationSpan[] = [];
+  const seen = new Set<string>();
+  for (const block of vtt.split(/\r?\n\r?\n/)) {
+    const timing = block.split(/\r?\n/).find((line) => line.includes(' --> '));
+    const times = timing?.match(/^(\S+) --> (\S+)(?:\s|$)/);
+    if (!times) continue;
+    const startMs = vttMs(times[1]!);
+    const endMs = vttMs(times[2]!);
+    if (startMs === null || endMs === null || startMs < 0 || endMs <= startMs) continue;
+    for (const marker of block.matchAll(MARKER)) {
+      if (marker[1] !== 't' || !parseQuranRange(marker[2]!)) continue;
+      const key = `${marker[2]}:${startMs}:${endMs}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ range: marker[2]!, startMs, endMs, boundary: 'cue' });
+    }
+  }
+  return out.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs || a.range.localeCompare(b.range));
+}

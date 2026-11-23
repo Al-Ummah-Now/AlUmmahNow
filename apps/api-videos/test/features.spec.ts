@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, QURAN_CURRENT_KEY, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
@@ -181,6 +181,28 @@ describe('feature answer', () => {
 		clearQuranCopyCache();
 		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).quranText, false, 'older than 7 days');
 		clearQuranCopyCache();
+	});
+
+	it('recitation follows its switch, fresh text, the channel owner tier and the caller role', async () => {
+		const bucket = new MemoryBucket();
+		const { env, d1 } = await setup({ MEDIA_PRIVATE: bucket });
+		const now = new Date().toISOString();
+		await bucket.put(QURAN_CURRENT_KEY, JSON.stringify({ v: 1, version: 'fixture', syncedAt: now, builtAt: now, surahs: 114, words: 77429 }));
+		clearQuranCopyCache();
+		assert.equal((await computeFeatures(env, { userId: null })).recitationTools, false, 'switch off by default');
+
+		await writeFeatureSwitch(env, { key: 'recitationTools', enabled: true, expectedVersion: 0, actorId: 'usr_admin1', currentStored: false });
+		forgetFeatureCaches();
+		assert.equal((await computeFeatures(env, { userId: null })).recitationTools, true);
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: [] })).recitationMetadata, true, 'own videos need no channel scope');
+		const editor = await computeFeatures(env, { userId: 'bob', roles: [] }, 'ch1');
+		assert.equal(editor.recitationMetadata, true, 'editor works under the channel owner tier');
+		assert.equal((await computeFeatures(env, { userId: 'carol', roles: [] }, 'ch1')).recitationMetadata, false, 'not a channel member');
+
+		await saveTier(d1, 'full', { recitationMetadata: false }, 'admin-1');
+		forgetFeatureCaches();
+		assert.equal((await computeFeatures(env, { userId: 'bob', roles: [] }, 'ch1')).recitationMetadata, false);
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: [] })).recitationMetadata, false);
 	});
 
 	it('Quran editions, social, YouTube import and AI categories follow their configuration', async () => {

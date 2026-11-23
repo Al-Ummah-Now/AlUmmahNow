@@ -126,6 +126,8 @@ export interface CreatorTier {
    * 0 = none; ignored when `unlimited` (still bounded by AUDIO_TRACKS_HARD_MAX).
    */
   audioTracksPerVideo: number;
+  /** May edit human-supplied reciter metadata (E21); the channel owner's tier applies. */
+  recitationMetadata: boolean;
   /**
    * May go live (Studio Live, D3). The limits below apply unless `unlimited`.
    * The tier that applies is the channel OWNER's, like uploads.
@@ -201,6 +203,7 @@ export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> =
   maxChannels: 1,
   captionMinutesMonth: 0,
   audioTracksPerVideo: 0,
+  recitationMetadata: true,
   // No live: Member has no channels to stream on (migration 0060's column defaults)
   live: false,
   liveHoursMonth: 20,
@@ -232,6 +235,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
   audioTracksPerVideo: 0,
+  recitationMetadata: true,
   // Live (owner 2026-11-14): on, 20 h a month, one stream at a time, 4 h per stream.
   // Self-hosted live costs Workers requests + R2 (no egress): about $0.01 per stream-hour
   // at 100 viewers, so a full month of every Creator's hours stays far inside the budget.
@@ -264,6 +268,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
   audioTracksPerVideo: 0,
+  recitationMetadata: true,
   live: true,
   liveHoursMonth: 0,
   liveMaxConcurrent: 0,

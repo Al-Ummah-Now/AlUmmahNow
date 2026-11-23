@@ -811,6 +811,7 @@ export const FEATURE_SETUP_NOTES: Readonly<Partial<Record<FeatureKey, FeatureTex
   inlineTranslate: { en: 'Needs a daily allowance and a monthly budget.', ar: 'يحتاج إلى حصة يومية وميزانية شهرية.' },
   viewerTranslatedTitles: { en: 'Needs a monthly translation budget.', ar: 'يحتاج إلى ميزانية شهرية للترجمة.' },
   quranEditions: { en: 'Needs the Quran Foundation credentials.', ar: 'يحتاج إلى بيانات اعتماد مؤسسة القرآن.' },
+  recitationTools: { en: 'Needs a fresh Quran Foundation copy.', ar: 'يحتاج إلى نسخة حديثة من مؤسسة القرآن.' },
   socialAutopost: { en: 'Needs at least one network connected and on.', ar: 'يحتاج إلى شبكة واحدة على الأقل مربوطة ومفعّلة.' },
   aiCategorySuggest: { en: 'Needs the category suggestion queue.', ar: 'يحتاج إلى طابور اقتراح التصنيفات.' },
   siteDomains: { en: 'Needs own-domain hosting set up.', ar: 'يحتاج إلى إعداد استضافة النطاقات الخاصة.' },
