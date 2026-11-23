@@ -199,7 +199,9 @@
 		{ "name": "LIVE_VIEWER_LIMITER", "namespace_id": "2321", "simple": { "limit": 60, "period": 60 } },
 		// Live chat messages per person, and per address (wiki E17)
 		{ "name": "LIVE_CHAT_LIMITER", "namespace_id": "2331", "simple": { "limit": 30, "period": 60 } },
-		{ "name": "LIVE_CHAT_IP_LIMITER", "namespace_id": "2341", "simple": { "limit": 120, "period": 60 } }
+		{ "name": "LIVE_CHAT_IP_LIMITER", "namespace_id": "2341", "simple": { "limit": 120, "period": 60 } },
+		// Anonymous prayer-time and Hijri reads per IP (wiki Epic 21 §3); edge-cached, so a miss is rare
+		{ "name": "PRAYER_LIMITER", "namespace_id": "2351", "simple": { "limit": 60, "period": 60 } }
 	],
 	// Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
 	"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse" }],
@@ -604,7 +606,9 @@
 				{ "name": "LIVE_VIEWER_LIMITER", "namespace_id": "2322", "simple": { "limit": 60, "period": 60 } },
 				// Live chat messages per person, and per address (wiki E17)
 				{ "name": "LIVE_CHAT_LIMITER", "namespace_id": "2332", "simple": { "limit": 30, "period": 60 } },
-				{ "name": "LIVE_CHAT_IP_LIMITER", "namespace_id": "2342", "simple": { "limit": 120, "period": 60 } }
+				{ "name": "LIVE_CHAT_IP_LIMITER", "namespace_id": "2342", "simple": { "limit": 120, "period": 60 } },
+				// Anonymous prayer-time and Hijri reads per IP (wiki Epic 21 §3)
+				{ "name": "PRAYER_LIMITER", "namespace_id": "2352", "simple": { "limit": 60, "period": 60 } }
 			],
 			"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_stage" }],
 			"kv_namespaces": [

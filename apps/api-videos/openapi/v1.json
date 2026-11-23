@@ -18836,6 +18836,38 @@
         }
       }
     },
+    "/api/v1/hijri": {
+      "get": {
+        "tags": [
+          "Prayer"
+        ],
+        "summary": "Hijri dates for a Gregorian month (anonymous)",
+        "description": "The same provider, gate and cache as prayer times, without a city. The device applies the viewer's Hijri shift and formats the numeric parts.",
+        "operationId": "get_HijriMonthGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+            },
+            "required": true,
+            "name": "month",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One row per day: date and Hijri day, month and year"
+          },
+          "400": {
+            "description": "A month outside the window"
+          },
+          "503": {
+            "description": "prayer_provider_unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/i18n/config": {
       "get": {
         "tags": [
@@ -29076,6 +29108,207 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/prayer-times": {
+      "get": {
+        "tags": [
+          "Prayer"
+        ],
+        "summary": "Prayer times and Hijri dates for a city and month (anonymous)",
+        "description": "Send only a catalogue city id, a calendar month (last month to 12 months ahead), a method and the Asr method. No account, cookie or location is read. Times are UTC instants; the device applies minute adjustments and the Hijri shift. 503 `prayer_provider_unavailable` when no known answer exists; times are never invented.",
+        "operationId": "get_PrayerTimesGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,9}$",
+              "description": "Catalogue city id (GeoNames)"
+            },
+            "required": true,
+            "description": "Catalogue city id (GeoNames)",
+            "name": "city",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "description": "YYYY-MM; other windows are refused"
+            },
+            "required": true,
+            "description": "YYYY-MM; other windows are refused",
+            "name": "month",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(auto|[0-9]{1,2})$",
+              "default": "auto"
+            },
+            "required": false,
+            "name": "method",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "standard",
+                "hanafi"
+              ],
+              "default": "standard"
+            },
+            "required": false,
+            "name": "asr",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One row per day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "city": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "timeZone": {
+                              "type": "string"
+                            },
+                            "latitude": {
+                              "type": "number"
+                            },
+                            "longitude": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "country",
+                            "timeZone",
+                            "latitude",
+                            "longitude"
+                          ]
+                        },
+                        "month": {
+                          "type": "string"
+                        },
+                        "method": {
+                          "type": "integer"
+                        },
+                        "asr": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "hanafi"
+                          ]
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "hijriSource": {
+                          "type": "string"
+                        },
+                        "stale": {
+                          "type": "boolean"
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "days": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "date": {
+                                "type": "string"
+                              },
+                              "times": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "hijri": {
+                                "type": "object",
+                                "properties": {
+                                  "day": {
+                                    "type": "integer"
+                                  },
+                                  "month": {
+                                    "type": "integer"
+                                  },
+                                  "year": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "day",
+                                  "month",
+                                  "year"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "date",
+                              "times",
+                              "hijri"
+                            ]
+                          }
+                        },
+                        "credits": {}
+                      },
+                      "required": [
+                        "city",
+                        "month",
+                        "method",
+                        "asr",
+                        "provider",
+                        "hijriSource",
+                        "stale",
+                        "fetchedAt",
+                        "days"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown city, method or a month outside the window"
+          },
+          "503": {
+            "description": "prayer_provider_unavailable"
           }
         }
       }
