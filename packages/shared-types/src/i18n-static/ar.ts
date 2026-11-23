@@ -702,7 +702,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     privateVideo: 'خاص - يمكنك فقط المشاهدة',
     allowDownloadsLabel: 'التنزيل دون اتصال',
     allowDownloadsToggle: 'السماح للمشاهدين بحفظ هذا المرئي للتشغيل دون اتصال',
-    allowDownloadsHelp: 'يمنع إيقاف هذا الخيار التنزيلات الجديدة ويلغي النسخ المحفوظة دون اتصال عند التحقق التالي من الرخصة.',
+    allowDownloadsHelp: 'يمنع إيقاف هذا الخيار التنزيلات الجديدة ويزيل النسخ المحفوظة دون اتصال عند المزامنة التالية.',
     nextShort: 'المقطع القصير التالي',
     previousShort: 'المقطع القصير السابق',
     unlisted: 'غير مدرج',

@@ -704,7 +704,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     privateVideo: 'Private - Only you can watch',
     allowDownloadsLabel: 'Offline downloads',
     allowDownloadsToggle: 'Allow viewers to save this video for offline playback',
-    allowDownloadsHelp: 'Turning this off prevents new downloads and revokes active offline copies on the next license check.',
+    allowDownloadsHelp: 'Turning this off prevents new downloads and removes saved offline copies on the next sync.',
     nextShort: 'Next Short',
     previousShort: 'Previous Short',
     unlisted: 'Unlisted',
