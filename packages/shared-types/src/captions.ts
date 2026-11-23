@@ -604,7 +604,7 @@ export interface CaptionRecitationSpan {
   range: string;
   startMs: number;
   endMs: number;
-  /** The published cue's timing; exact ayah boundaries are a separate creator confirmation (E21-D6). */
+  /** The published cue's timing; no ayah-boundary claim is made from it. */
   boundary: 'cue';
 }
 

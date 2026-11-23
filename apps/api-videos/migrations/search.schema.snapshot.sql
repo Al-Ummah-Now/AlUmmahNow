@@ -56,7 +56,8 @@
 --   apps/api-videos/migrations/search/0077_feature_switches.sql
 --   apps/api-videos/migrations/search/0078_support_tech_staff.sql
 --   apps/api-videos/migrations/search/0079_offline_downloads.sql
---   apps/api-videos/migrations/search/0080_recitation_metadata.sql
+--   apps/api-videos/migrations/search/0080_channel_quran_translations_index.sql
+--   apps/api-videos/migrations/search/0081_recitation_metadata.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -268,6 +269,7 @@ CREATE INDEX idx_channel_invites_invitee_email ON channel_invites (invitee_email
 CREATE INDEX idx_channel_invites_invitee_user ON channel_invites (invitee_user_id, status);
 CREATE INDEX idx_channel_invites_inviter ON channel_invites (invited_by, created_at);
 CREATE UNIQUE INDEX idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
+CREATE INDEX idx_channel_quran_translations_edition ON channel_quran_translations (lang, qf_translation_id, name);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
 CREATE INDEX idx_content_ownership_channel_feed ON content_ownership (kind, channel_id, COALESCE(created_at, 0), id);
