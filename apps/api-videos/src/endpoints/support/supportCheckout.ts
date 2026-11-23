@@ -145,6 +145,7 @@ export async function handleSupportCheckout(c: Context) {
 				ageConfirmed: body.ageConfirmed === true,
 				consent: body.consent === true,
 				locale: body.locale === 'ar' ? 'ar' : 'en',
+				method: typeof body.method === 'string' && /^[a-z_]{1,30}$/.test(body.method) ? body.method : null,
 				returnUrl: `${web}${path}${path.includes('?') ? '&' : '?'}support=`,
 			},
 			vendorContext(env, config.mode, () => now),

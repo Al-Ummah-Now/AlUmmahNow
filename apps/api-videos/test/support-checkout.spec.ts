@@ -318,4 +318,35 @@ describe('owner decisions O43 (MEM-D3, D4, fee settings)', () => {
 		assert.equal(q.collectorFee.amount, 29 + 30, 'the rate in force today, not the future one');
 		await assert.rejects(t.db.prepare('DELETE FROM support_fee_schedules').run(), /append-only/);
 	});
+
+	it('the checkout charges the fee for the method the quote was for (cross-provider review of #1810)', async () => {
+		const t = await setup();
+		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.collectorFeePayer', 'supporterAlways')").run();
+		const { testCollector } = await import('../src/lib/support/test-collector');
+		const original = testCollector.liveFee;
+		testCollector.liveFee = async (_ctx, currency, method) => ({ basisPoints: method === 'bank_transfer' ? 100 : 290, fixed: { amount: method === 'bank_transfer' ? 0 : 30, currency } });
+		try {
+			const fan = t.as(FAN);
+			const q = await fan('GET', `/api/channels/${CH}/support/quote?amount=1000&method=bank_transfer`);
+			const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, amount: 1000, method: 'bank_transfer' });
+			assert.equal(r.status, 200);
+			assert.equal(r.body.result.quote.charged.amount, q.body.result.charged.amount);
+			const card = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, amount: 1000 });
+			assert.notEqual(card.body.result.quote.charged.amount, r.body.result.quote.charged.amount, 'a different method, a different fee');
+		} finally {
+			testCollector.liveFee = original;
+		}
+	});
+
+	it('the owner’s presets follow the currency’s configured minimum, not a USD default (cross-provider review of #1810)', async () => {
+		const t = await setup();
+		const owner = t.as(OWNER);
+		assert.equal((await owner('PUT', `/api/channels/${CH}/support/settings`, { currency: 'EUR', presets: [500] })).status, 400, 'no EUR amounts set');
+		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.amounts.EUR', json('{\"minimum\":200,\"presets\":[200]}'))").run();
+		assert.equal((await owner('PUT', `/api/channels/${CH}/support/settings`, { currency: 'EUR', presets: [150] })).status, 400, 'under the EUR minimum');
+		const ok = await owner('PUT', `/api/channels/${CH}/support/settings`, { currency: 'EUR', presets: [250, 1_500_000] });
+		assert.equal(ok.status, 200, 'over the old fixed ceiling is fine');
+		assert.equal((await t.db.prepare('SELECT currency FROM support_settings WHERE channel_id = ?').bind(CH).first<{ currency: string }>())!.currency, 'EUR');
+		assert.equal((await owner('PUT', `/api/channels/${CH}/support/settings`, { presets: [2_000_000_000] })).status, 400);
+	});
 });
