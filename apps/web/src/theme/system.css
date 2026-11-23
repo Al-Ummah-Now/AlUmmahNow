@@ -12,7 +12,8 @@ html body{background:var(--m-page)!important;background-attachment:fixed!importa
 h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h3{letter-spacing:0}
 /* A name in the other script keeps its own tracking: Latin inside an Arabic page's heading keeps the Latin -.01em (so it wraps as on the English page: the channel tile's "Seerah Notes for / Young Muslims"), and Arabic is never tracked, on any page (it breaks the joins) */
 html[lang=ar] :is(h1,h2,h3) [dir=auto]:dir(ltr){letter-spacing:-.01em}:is(h1,h2,h3) [dir=auto]:dir(rtl){letter-spacing:0}
-#page-content h1:not(.watch-title){font-weight:700;line-height:1.2}
+/* The error card's heading keeps the family sheet's line height (1.25, Arabic 1.45), the same as on www, Auth and the CMS (AUDIT-2 error family #8) */
+#page-content h1:not(.watch-title,.ep-title){font-weight:700;line-height:1.2}
 .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;transition:background-color 140ms,color 140ms}.ic svg{width:22px;height:22px;stroke-width:1.75}@media(hover:hover){.ic:hover{background:var(--fanous-c-nav-hover)}}
 /* Header */
 /* The bar is the shared header (packages/fanous-tokens/nav/aun-nav.css .aun-header, docs/design/NAV.md "Header"); here only the theme material, and it stays above the rail */
