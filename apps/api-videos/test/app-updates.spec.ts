@@ -3,6 +3,7 @@
  * Keys are generated per run; no real key is in the repo.
  */
 import { before, describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { APP_CONFIG_SEMVER, appReleaseKeyId, appReleaseTrustFrom, compareAppVersions, verifyAppReleaseManifest, verifyAppUpdateKeyList, type AppReleaseTrust } from '@al-ummah/shared-types';
 
@@ -227,5 +228,29 @@ describe('key lists: rotation and revocation (AUN-APP-UPDATES §3.5)', () => {
 		assert.deepEqual(t2.yanked, ['2026.11.22']);
 		const m = enc.encode(JSON.stringify(manifest()));
 		assert.deepEqual(await verifyAppReleaseManifest(m, await sign(m, oldKey), t2, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'unknown_key' });
+	});
+});
+
+describe('shared vectors with aun-core (AlUmmahNowCore spec/app-updates, copied verbatim)', () => {
+	const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/app-updates/${name}`, import.meta.url), 'utf8'));
+
+	it('the version table', () => {
+		const v = fixture('versions.json');
+		for (const [a, b, want] of v.cases as [string, string, number][]) assert.equal(compareAppVersions(a, b), want, `${a} vs ${b}`);
+		for (const ok of v.valid as string[]) assert.ok(APP_CONFIG_SEMVER.test(ok), ok);
+		for (const bad of v.invalid as string[]) assert.ok(!APP_CONFIG_SEMVER.test(bad), bad);
+	});
+
+	it('the signed key list and manifest verify; changes are refused', async () => {
+		const v = fixture('signed-vector.json');
+		const list = await verifyAppUpdateKeyList(enc.encode(v.keyList), v.keyListSig, [v.rootPublicKey], { repo: 'AlUmmahNowTools' });
+		assert.equal(list.ok, true);
+		const trust = appReleaseTrustFrom((list as { list: never }).list);
+		const ok = await verifyAppReleaseManifest(enc.encode(v.manifest), v.manifestSig, trust, { repo: 'AlUmmahNowTools', tag: 'v2026.11.23', channels: ['stable'], newerThan: '2026.11.22' });
+		assert.equal(ok.ok, true);
+		const tampered = await verifyAppReleaseManifest(enc.encode(v.manifest.replace('Faster', 'Slower')), v.manifestSig, trust, { repo: 'AlUmmahNowTools' });
+		assert.equal(tampered.ok ? 'ok' : tampered.reason, 'bad_signature');
+		const byRoot = await verifyAppReleaseManifest(enc.encode(v.manifest), v.manifestSigByRoot, trust, { repo: 'AlUmmahNowTools' });
+		assert.equal(byRoot.ok ? 'ok' : byRoot.reason, 'unknown_key');
 	});
 });
