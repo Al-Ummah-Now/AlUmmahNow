@@ -104,11 +104,10 @@ export async function unsuspendChannel(id: string): Promise<ActionResult<JobResu
   return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}/unsuspend`, json('POST')));
 }
 
-/** What a channel move keeps (wiki AUN-CHANNEL-CLAIM §3.4, §3.5); each is off unless the admin ticks it. */
+/** What a channel move keeps (wiki AUN-CHANNEL-CLAIM §3.4); each is off unless the admin ticks it. The verification badge always stays with the channel (CC-D8). */
 export interface TransferOptions {
   keepPreviousOwnerAsAdmin: boolean;
   keepContactEmail: boolean;
-  keepBadge: boolean;
 }
 
 export async function transferChannel(id: string, newOwnerId: string, reason: string, options: TransferOptions): Promise<ActionResult<JobResult>> {

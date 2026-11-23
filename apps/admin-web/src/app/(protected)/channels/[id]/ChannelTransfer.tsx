@@ -30,7 +30,7 @@ const POLL_MS = 2000;
 const POLL_LIMIT_MS = 5 * 60 * 1000;
 
 interface Props {
-  channel: { id: string; name: string; handle: string | null; ownerId: string | null; videos: number; playlists: number; isVerified: boolean };
+  channel: { id: string; name: string; handle: string | null; ownerId: string | null; videos: number; playlists: number };
 }
 
 interface Followed {
@@ -119,7 +119,6 @@ export function ChannelTransfer({ channel }: Props) {
   const consequences = [
     t(options.keepPreviousOwnerAsAdmin ? 'channels.transferKeepsOldOwner' : 'channels.transferOldOwnerLoses'),
     ...(options.keepContactEmail ? [] : [t('channels.transferClearsContact')]),
-    ...(channel.isVerified && !options.keepBadge ? [t('channels.transferDropsBadge')] : []),
     t('channels.transferLiveKeys'),
   ];
   const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
@@ -168,9 +167,6 @@ export function ChannelTransfer({ channel }: Props) {
           <legend className="text-sm text-fg-muted mb-1">{t('channels.transferOptions')}</legend>
           <TransferOption id={`${ids}-keep-admin`} checked={options.keepPreviousOwnerAsAdmin} onChange={toggle('keepPreviousOwnerAsAdmin')} label={t('channels.transferKeepOldOwner')} testId="channel-transfer-keep-admin" />
           <TransferOption id={`${ids}-keep-contact`} checked={options.keepContactEmail} onChange={toggle('keepContactEmail')} label={t('channels.transferKeepContact')} testId="channel-transfer-keep-contact" />
-          {channel.isVerified && (
-            <TransferOption id={`${ids}-keep-badge`} checked={options.keepBadge} onChange={toggle('keepBadge')} label={t('channels.transferKeepBadge')} testId="channel-transfer-keep-badge" />
-          )}
         </fieldset>
         <div>
           <ConfirmButton
@@ -206,7 +202,7 @@ export function ChannelTransfer({ channel }: Props) {
   );
 }
 
-const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false, keepBadge: false };
+const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false };
 
 function TransferOption({ id, checked, onChange, label, testId }: { id: string; checked: boolean; onChange: (e: ChangeEvent<HTMLInputElement>) => void; label: string; testId: string }) {
   return (

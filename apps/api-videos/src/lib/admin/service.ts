@@ -58,7 +58,7 @@ import { endSession, ensureProviderStopped } from '../live/service';
 import type { LiveSessionRow } from '../live/store';
 import { notifyTeam, recordTeamActivity } from '../channelTeam';
 import { channelParams } from '../channelName';
-import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
+import { countChannelSlots, readAssignment, removeTierOfErasedAccount, resolveCreator } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
@@ -87,7 +87,7 @@ import {
 	type AdminEnv,
 	adminR2Detail,
 } from './directory';
-import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { resolveDisplayName, tierAllowsChannels, type NameFields } from '@al-ummah/shared-types';
 import { markPublished, type PublishableState } from '../published';
 import { runContainStep, type ContainEnv } from '../csam/contain';
 import { backfillImageOwnersStep } from '../csam/imageOwners';
@@ -436,6 +436,8 @@ async function promoteNextMain(env: AdminServiceEnv, userId: string, leavingId: 
 export interface TransferOptions {
 	keepPreviousOwnerAsAdmin?: boolean;
 	keepContactEmail?: boolean;
+	/** The admin's reason, shown to the previous owner with the notice (CC-D11) */
+	reason?: string;
 }
 
 export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
@@ -449,6 +451,8 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	// One move of a channel at a time: a second would race the first's records
 	// A broadcast on air keeps its ingest; the move would end it mid-stream
 	if (await channelIsLive(env, id)) throw new AdminError(409, 'channel_is_live');
+	// The receiver's tier must have room for one more channel, admin moves included (CC-D12)
+	if (env.SEARCH_DB && !(await hasChannelRoom(env.SEARCH_DB as D1Database, newOwnerId))) throw new AdminError(409, 'new_owner_channel_limit');
 	// Creator support stays with the person supporters chose: until CC-D10 is decided a supported channel is not moved (#1812)
 	if (await channelHasSupport(env, id)) throw new AdminError(409, 'channel_has_support');
 	logger.info('[Admin] Channel transfer queued', { channelId: id, newOwnerId, previousOwnerId: channel.userId ?? null, actorId });
@@ -464,7 +468,7 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
-			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true },
+			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}) },
 		});
 	} catch (error) {
 		await releaseTransferLock(env, id, '');
@@ -527,6 +531,14 @@ async function setTransferLockJob(env: AdminServiceEnv, channelId: string, jobId
 
 async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobId: string): Promise<void> {
 	await (env.SEARCH_DB as D1Database | undefined)?.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id IN (?, \'\')').bind(channelId, jobId).run();
+}
+
+/** Whether the user's creator tier lets them own one more channel (the same rule as creating one). */
+async function hasChannelRoom(db: D1Database, userId: string): Promise<boolean> {
+	const creator = await resolveCreator(db, { userId });
+	if (!creator.tier || !tierAllowsChannels(creator.tier)) return false;
+	const max = creator.tier.unlimited ? null : creator.tier.maxChannels;
+	return max === null || (await countChannelSlots(db, userId)) < max;
 }
 
 /**
@@ -816,7 +828,15 @@ async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, fro
 	const actionUrl = `/channels/${job.targetId}`;
 	try {
 		await notifyTeam(env as never, to, job.actorId, { notificationKey: 'channelMovedIn', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:in` });
-		await notifyTeam(env as never, from, job.actorId, { notificationKey: 'channelMovedOutByTeam', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:out` });
+		// The admin's reason goes to the previous owner when there is one (CC-D11); invite hand-overs have none
+		const reason = typeof job.params.reason === 'string' && job.params.reason.trim() ? job.params.reason.trim() : null;
+		await notifyTeam(env as never, from, job.actorId, {
+			notificationKey: reason ? 'channelMovedOutByTeamWithReason' : 'channelMovedOutByTeam',
+			params: reason ? { ...params, reason } : params,
+			actionUrl,
+			entityId: job.targetId,
+			dedupeKey: `move:${job.id}:out`,
+		});
 	} catch (error) {
 		// The move is done; a lost notice is not worth undoing or repeating it
 		logger.warn('[Admin] Channel move notice failed', { channelId: job.targetId, jobId: job.id, error: error instanceof Error ? error.message : String(error) });

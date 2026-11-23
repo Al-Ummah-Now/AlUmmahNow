@@ -81,6 +81,12 @@ test.describe('channel transfer', () => {
       }, { timeout: RUN_ID ? 90_000 : 10_000, intervals: [2_000, 5_000] })
       .toBe(true);
     creator = found!;
+    // A move needs room in the receiver's tier (AUN-CHANNEL-CLAIM CC-D12): this run's own creator gets
+    // Unlimited for the channels these tests move to it (never the shared seeded account)
+    if (RUN_ID) {
+      const tier = await adminApi(`/api/content/users/${encodeURIComponent(creator.id)}/creator-tier`, { method: 'PUT', token: superToken(), body: JSON.stringify({ tierId: 'unlimited', source: 'admin', quiet: true }) });
+      expect(tier.status, 'the run creator gets a tier with room for channels').toBe(200);
+    }
   });
 
   test.afterAll(async () => {

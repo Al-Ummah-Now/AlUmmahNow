@@ -130,6 +130,10 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 		bunny_stream_library_id: '7',
 	};
 	for (const kind of ['video', 'channel', 'profile'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
+	// Every seeded account may own channels (a move refuses a receiver with no room, CC-D12)
+	for (const id of raw.profiles.store.keys()) {
+		db.db.prepare(`INSERT OR IGNORE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'unlimited', 'admin', 'test', '2026-01-01T00:00:00.000Z')`).run(id);
+	}
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter);
@@ -789,6 +793,27 @@ describe('channel actions', () => {
 		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
 		assert.equal(refused.body.code, 'channel_has_support');
 		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+	});
+
+	it("a move is refused when the receiver's tier has no room for another channel, admin moves too (CC-D12)", async () => {
+		const { raw, call, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { channels: ['ch2'] }) },
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER }) },
+		});
+		db.db.prepare(`UPDATE creator_tiers SET max_channels = 1 WHERE id = 'creator'`).run();
+		db.db.prepare(`UPDATE creator_tier_assignments SET tier_id = 'creator' WHERE user_id = ?`).run(OTHER);
+		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'new_owner_channel_limit');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+	});
+
+	it("the previous owner's notice carries the admin's reason (CC-D11)", async () => {
+		const { raw, call, jobOf } = await setup();
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, reason: 'Requested by the scholar' }));
+		assert.equal(job.status, 'succeeded');
+		const out = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.recipientUserId === OWNER && String(p?.notificationKey).startsWith('channelMovedOut'));
+		assert.deepEqual([out?.notificationKey, out?.params?.reason], ['channelMovedOutByTeamWithReason', 'Requested by the scholar']);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {

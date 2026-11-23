@@ -132,6 +132,8 @@ describe('invited users in videos', () => {
 		const { call } = await setup();
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: INVITED })).body.code, 'new_owner_not_found');
 		await call('POST', '/users/provision', { userId: INVITED, email: 'new@example.com' });
+		// The invite gives the tier first (admin-api invites.router), then hands channels over
+		await call('PUT', `/users/${INVITED}/creator-tier`, { tierId: 'creator', source: 'admin', quiet: true });
 		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: INVITED });
 		assert.equal(res.status, 200);
 		const ch = await call('GET', '/channels/ch1');
