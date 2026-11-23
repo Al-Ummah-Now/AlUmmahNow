@@ -25,6 +25,34 @@ export const APP_RELEASE_REPOS = ['AlUmmahNowDesktop', 'AlUmmahNowTools', 'AlUmm
 export type AppReleaseRepo = (typeof APP_RELEASE_REPOS)[number];
 
 export const APP_RELEASE_NOTES_MAX = 1500;
+
+/**
+ * Release tag prefixes (wiki AUN-APP-UPDATES §2.1), longest first: `v` for any app, `admin-v` for AlUmmahNowApple's
+ * staff Admin app, `admin-windows-v` for AlUmmahNowDesktop's Admin for Windows. aun-core `parse_release_tag` and the
+ * release tool follow the same rule (shared cases: AlUmmahNowCore spec/app-updates/tags.json).
+ */
+export const APP_RELEASE_TAG_PREFIXES = ['admin-windows-v', 'admin-v', 'v'] as const;
+export type AppReleaseTagPrefix = (typeof APP_RELEASE_TAG_PREFIXES)[number];
+export const APP_RELEASE_TAG = /^(?:admin-windows-v|admin-v|v)[0-9A-Za-z.+-]{1,64}$/;
+
+export interface AppReleaseTag {
+  prefix: AppReleaseTagPrefix;
+  /** The tag's app version (`admin-v1.2.3-2` → `1.2.3.2`) */
+  version: string;
+  /** An `admin-` tag releases only the staff Admin app */
+  adminOnly: boolean;
+}
+
+/** A release tag's prefix and version; null when it isn't one. A trailing `-N` (one or two digits) is the 4th part. */
+export function parseAppReleaseTag(tag: string): AppReleaseTag | null {
+  if (!APP_RELEASE_TAG.test(tag)) return null;
+  const prefix = APP_RELEASE_TAG_PREFIXES.find((p) => tag.startsWith(p))!;
+  const bare = tag.slice(prefix.length);
+  const rebuild = /^(\d+\.\d+\.\d+)-(\d{1,2})$/.exec(bare);
+  const version = rebuild ? `${rebuild[1]}.${rebuild[2]}` : bare;
+  if (!APP_CONFIG_SEMVER.test(version)) return null;
+  return { prefix, version, adminOnly: prefix !== 'v' };
+}
 export const APP_RELEASE_MANIFEST_MAX_BYTES = 256 * 1024;
 
 const notesText = z.string().trim().min(1).max(APP_RELEASE_NOTES_MAX);
@@ -57,7 +85,7 @@ export const AppReleaseManifestSchema = z
   .object({
     schema: z.literal(1),
     repo: z.enum(APP_RELEASE_REPOS),
-    tag: z.string().regex(/^v[0-9A-Za-z.+-]{1,64}$/),
+    tag: z.string().regex(APP_RELEASE_TAG),
     version: z.string().regex(APP_CONFIG_SEMVER),
     channel: z.enum(APP_UPDATE_CHANNELS),
     publishedAt: z.string().datetime(),
@@ -69,6 +97,17 @@ export const AppReleaseManifestSchema = z
   })
   .strict()
   .superRefine((m, ctx) => {
+    // The tag says what the release is: its version, and an admin- tag ships only the Admin app
+    const tag = parseAppReleaseTag(m.tag);
+    if (!tag) ctx.addIssue({ code: 'custom', path: ['tag'], message: 'not a release tag' });
+    else {
+      if (!APP_CONFIG_SEMVER.test(m.version) || compareAppVersions(tag.version, m.version) !== 0) ctx.addIssue({ code: 'custom', path: ['version'], message: `must be the tag's version ${tag.version}` });
+      if (tag.adminOnly) {
+        [...m.artifacts, ...m.stores].forEach((x, i) => {
+          if (x.app !== 'admin') ctx.addIssue({ code: 'custom', path: ['artifacts', i, 'app'], message: 'an admin- tag releases only the Admin app' });
+        });
+      }
+    }
     // Every file comes from this repo's release for this tag, over HTTPS: a manifest can never
     // point an app at another host, another repo or another release.
     const prefix = appReleaseDownloadPrefix(m.repo, m.tag);
