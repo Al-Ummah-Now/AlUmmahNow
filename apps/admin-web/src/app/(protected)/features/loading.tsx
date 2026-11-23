@@ -18,18 +18,18 @@ export default async function FeaturesLoading() {
         {FEATURE_GROUPS.map((group) => (
           <div key={group} className="overflow-hidden rounded-xl border border-border bg-surface" data-solid-surface>
             <div className="flex items-center justify-between border-b border-border bg-surface-2 px-5 py-3.5">
-              <div className="h-4 w-40 animate-pulse rounded bg-surface-hover" />
-              <div className="h-3.5 w-20 animate-pulse rounded bg-surface-hover" />
+              <div className="h-4 w-40 animate-pulse rounded bg-fg/10" />
+              <div className="h-3.5 w-20 animate-pulse rounded bg-fg/10" />
             </div>
             <ul className="divide-y divide-border">
               {FEATURE_REGISTRY.filter((d) => d.group === group).map((d) => (
                 <li key={d.key} className="flex items-start justify-between gap-4 px-5 py-5">
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-44 animate-pulse rounded bg-surface-2" />
-                    <div className="h-3.5 w-full max-w-2xl animate-pulse rounded bg-surface-2" />
-                    <div className="h-3.5 w-2/3 max-w-xl animate-pulse rounded bg-surface-2" />
+                    <div className="h-4 w-44 animate-pulse rounded bg-fg/10" />
+                    <div className="h-3.5 w-full max-w-2xl animate-pulse rounded bg-fg/10" />
+                    <div className="h-3.5 w-2/3 max-w-xl animate-pulse rounded bg-fg/10" />
                   </div>
-                  <div className="mt-1 h-6 w-24 animate-pulse rounded-full bg-surface-2" />
+                  <div className="mt-1 h-6 w-24 animate-pulse rounded-full bg-fg/10" />
                 </li>
               ))}
             </ul>
