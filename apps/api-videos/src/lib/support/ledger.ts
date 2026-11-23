@@ -227,6 +227,11 @@ export function payoutSentLines(channelId: string, amount: Money): LedgerLine[] 
  * amount − fee; the supporter-covers option books the same way, the estimate was charged up front)
  * or by the organization from its own funds (the creator receives the whole amount).
  */
+/** MEM-D22: an unclaimed available balance moves to the Waqf (owed to the Waqf instead of the creator). */
+export function dormantTransferLines(channelId: string, owed: Money): LedgerLine[] {
+	return [line(creatorAccount(channelId, 'available'), owed.amount, owed.currency), line('org:waqf_dormant', -owed.amount, owed.currency)];
+}
+
 export function payoutPaidLines(channelId: string, amount: Money, railFee: Money, bearer: PayoutFeeBearer | null): LedgerLine[] {
 	const c = amount.currency;
 	if (bearer === null) throw new LedgerError('decision_open', 'MEM-D20 is open: no rule for who bears the payout fee');

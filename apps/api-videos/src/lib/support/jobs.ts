@@ -10,7 +10,7 @@
  *   support.reconcile        daily: the three-way check (reconcile.ts)
  *   support.payee-sync       a payee's state from the rail (after onboarding, on payee events, daily)
  *   support.dispute-deadline daily: disputes whose evidence is due within 3 days → Errors page
- *   support.dormant          monthly: balances with no active payee (MEM-D22 decides what follows)
+ *   support.dormant          monthly: unclaimed balances: reminders, then the transfer to the Waqf (MEM-D22, dormant.ts)
  *
  * Webhooks keep working while the `creatorSupport` switch is off: money already moving (renewals of
  * existing pledges, refunds, disputes, payouts) belongs to creators and must still be booked.
@@ -28,6 +28,7 @@ import { testStateFor } from './d1-test-state';
 import { applyCollectorEvents, applyRailEvents, releaseDueGifts, UnmatchedSupportEventError } from './events';
 import { LedgerError } from './ledger';
 import { RailError, type RailContext, type RailEvent } from './rail';
+import { runDormant } from './dormant';
 import { reconcileDay } from './reconcile';
 import { finishBatchIfDone, fundingShortfall, PayoutError, planBatch, refreshPayoutStatuses, sendOnePayout } from './payouts';
 import { CollectorError } from './collector';
@@ -304,21 +305,9 @@ export async function runSupportDisputeDeadlineJob(env: SupportJobEnv, _job: Adm
  * money follows the decision; while it is open this only lists them.
  */
 export async function runSupportDormantJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
-	const store = db(env);
-	const config = await readSupportConfig(store);
-	const months = config.policy.dormantReminderMonths ?? [];
-	const oldest = Math.min(...(months.length ? months : [6]));
-	const before = new Date(now.getTime() - oldest * 30 * 86_400_000).toISOString();
-	// Channels whose first gift is older than the window and who have no active payee (keyed reads per channel, bounded)
-	const rows = await store
-		.prepare(
-			`SELECT p.channel_id, MIN(p.created_at) AS first_at FROM support_payments p
-			 WHERE p.created_at <= ? AND NOT EXISTS (SELECT 1 FROM support_payees y WHERE y.channel_id = p.channel_id AND y.status = 'active')
-			 GROUP BY p.channel_id LIMIT 500`,
-		)
-		.bind(before)
-		.all<{ channel_id: string; first_at: string }>();
-	return { done: true, result: { channels: rows.results?.length ?? 0, decision: config.policy.dormantPolicy ?? 'open' } };
+	const config = await readSupportConfig(db(env));
+	// MEM-D22: reminders, then (separate switch, counsel first) the transfer to the Waqf (dormant.ts)
+	return { done: true, result: { ...(await runDormant(env as never, config.policy, now)) } };
 }
 
 // ---------------------------------------------------------------------------
