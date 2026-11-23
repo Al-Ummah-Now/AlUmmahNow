@@ -352,6 +352,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		...NO_FEATURES,
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
 		viewerCaptionDownload: viewerCaptionDownloadConfigured(settings),
+		quranEditions: quran,
 		quranText,
 		// Listen mode works for signed-out and signed-in viewers once the admin switch is on (wiki E14-D3)
 		listenMode: true,
@@ -412,7 +413,6 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.captionsTranscribe = transcribeConfigured(env, settings) && minutes;
 	features.captionsTranslate = translate && minutes;
 	features.inlineTranslate = inlineTranslateConfigured(env, settings);
-	features.quranEditions = quran;
 	features.audioTracks = !!env.MEDIA_ORIGINALS && !!env.TRANSCODE_QUEUE && roleMay(scope, 'video.edit') && (unlimited || (tier?.audioTracksPerVideo ?? 0) > 0);
 	features.siteDomains = siteDomains;
 	features.socialAutopost = social && roleMay(scope, 'channel.edit');

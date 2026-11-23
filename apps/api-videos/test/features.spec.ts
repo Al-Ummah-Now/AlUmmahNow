@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey } from '@al-ummah/shared-types';
+import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
@@ -196,6 +196,14 @@ describe('feature answer', () => {
 		assert.equal(f.quranEditions, true);
 		assert.equal(f.socialAutopost, true);
 		assert.equal(f.youtubeImport, true);
+		// Signed-out visitors also see quranEditions so the Credits page link follows the same switch
+		assert.equal((await computeFeatures(on.env, { userId: null })).quranEditions, true);
+
+		// Turning the quranEditions admin switch off hides it for both signed-in and signed-out visitors
+		await writeFeatureSwitch(on.env as never, { key: 'quranEditions', enabled: false, expectedVersion: 0, actorId: 'admin-1' });
+		forgetFeatureCaches();
+		assert.equal((await computeFeatures(on.env, { userId: null })).quranEditions, false);
+		assert.equal((await computeFeatures(on.env, { userId: 'alice', roles: ROLES_NONE })).quranEditions, false);
 
 		// The placeholder secret is no secret; the admin switch off hides AI categories
 		on.env.GOOGLE_OAUTH_CLIENT_SECRET = 'unset';

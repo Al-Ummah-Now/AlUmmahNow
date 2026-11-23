@@ -18,6 +18,7 @@ import { listTranslationEditions } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
 import { featureOff } from '../../lib/features/off';
 import { quranEditionsConfigured } from '../../lib/features';
+import { invalidateQuranCreditsCache } from './quranCredits';
 const Edition = z.object({ id: z.number(), name: z.string(), author: z.string().optional(), language: z.string() });
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const LANG = /^[a-z]{2,3}$/;
@@ -153,6 +154,7 @@ export class ChannelQuranTranslationSet extends AuthenticatedRoute {
 			)
 			.bind(params.channelId, language, edition.id, edition.name.slice(0, 200), userId, new Date().toISOString())
 			.run();
+		await invalidateQuranCreditsCache();
 		logger.info('[Quran] Channel edition set', { channelId: params.channelId, language, edition: edition.id });
 		return c.json({ success: true, data: { editions: await channelEditions(db(c), params.channelId) } });
 	}
@@ -180,6 +182,7 @@ export class ChannelQuranTranslationReset extends AuthenticatedRoute {
 		const access = await channelAccess(c, params.channelId, this.getUserId(c));
 		if ('response' in access) return access.response;
 		await db(c).prepare('DELETE FROM channel_quran_translations WHERE channel_id = ? AND lang = ?').bind(params.channelId, params.language.toLowerCase()).run();
+		await invalidateQuranCreditsCache();
 		return c.json({ success: true, data: { editions: await channelEditions(db(c), params.channelId) } });
 	}
 }
