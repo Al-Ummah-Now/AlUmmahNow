@@ -141,8 +141,10 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
             channel={{
               id: ch.id,
               name: ch.name,
+              nameLocalized: ch.nameLocalized,
               handle: ch.handle,
               description: ch.description,
+              descriptionLocalized: ch.descriptionLocalized,
               isVerified: ch.isVerified,
               isSuspended: ch.isSuspended,
               isDeleted: ch.isDeleted,

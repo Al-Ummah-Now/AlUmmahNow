@@ -22,6 +22,8 @@ import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLangu
 import { localizeDigits, parseDigits } from '@al-ummah/shared-types';
 import { tierLabel } from '@/lib/creator-tiers';
 import { Select } from '@/components/select/Select';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
+import type { LocalizedPair } from '@/lib/localized';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
 function isEmailAddress(value: string): boolean {
@@ -65,7 +67,7 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
   // The link's days as typed, in the page's digits (٠–٩ in Arabic; either digit set accepted), clamped to 1–90 when sent
   const [daysText, setDaysText] = useState(() => localizeDigits(uiLocale, 14));
   const days = Math.min(90, Math.max(1, Math.round(Number(parseDigits(daysText.trim()))) || 14));
-  const [newChannels, setNewChannels] = useState<Array<{ key: number; name: string; handle: string }>>([]);
+  const [newChannels, setNewChannels] = useState<Array<{ key: number; name: LocalizedPair; handle: string; errors?: { en?: string; ar?: string } }>>([]);
   const [existing, setExisting] = useState<AdminSuggestion[]>([]);
   const [pickerRound, setPickerRound] = useState(0);
   const [lookup, setLookup] = useState<InviteLookup | null>(null);
@@ -113,6 +115,19 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
       onSubmit={async (e) => {
         e.preventDefault();
         if (blocked) return;
+        let hasChannelErrors = false;
+        const validated = newChannels.map((ch) => {
+          const en = ch.name.en.trim();
+          const ar = ch.name.ar.trim();
+          if (!en && !ar) return { ...ch, errors: undefined };
+          const errors: { en?: string; ar?: string } = {};
+          if (!en) errors.en = t('localized.required', { lang: t('localized.langEnglish') });
+          if (!ar) errors.ar = t('localized.required', { lang: t('localized.langArabic') });
+          if (errors.en || errors.ar) hasChannelErrors = true;
+          return { ...ch, errors };
+        });
+        setNewChannels(validated);
+        if (hasChannelErrors) return;
         const data = await run(
           'invite',
           () =>
@@ -127,7 +142,13 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
               note: note.trim() || undefined,
               expiresInDays: days,
               channels: {
-                create: newChannels.filter((ch) => ch.name.trim()).map((ch) => ({ name: ch.name.trim(), ...(ch.handle.trim() ? { handle: ch.handle.trim().replace(/^@/, '') } : {}) })),
+                create: validated
+                  .filter((ch) => ch.name.en.trim() && ch.name.ar.trim())
+                  .map((ch) => ({
+                    name: ch.name.en.trim(),
+                    nameLocalized: { en: ch.name.en.trim(), ar: ch.name.ar.trim() },
+                    ...(ch.handle.trim() ? { handle: ch.handle.trim().replace(/^@/, '') } : {}),
+                  })),
                 transfer: existing.map((ch) => ch.id),
               },
             }),
@@ -217,38 +238,41 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
         <SectionCard title={t('invites.channelsTitle')} testId="invite-channels">
           <div className="space-y-4">
             {newChannels.map((ch, index) => (
-              <div key={ch.key} className="flex flex-col sm:flex-row sm:items-end gap-2" data-testid="invite-new-channel">
-                <div className="flex flex-col gap-1 flex-1">
-                  <label htmlFor={`${ids}-ch-${ch.key}`} className="text-sm text-fg-muted">{t('invites.channelName')}</label>
-                  <input
-                    id={`${ids}-ch-${ch.key}`}
-                    value={ch.name}
-                    onChange={(e) => setNewChannels((list) => list.map((c, i) => (i === index ? { ...c, name: e.target.value } : c)))}
-                    dir="auto"
-                    maxLength={100}
-                    className={fieldClass}
-                    data-testid="invite-channel-name"
-                  />
+              <div key={ch.key} className="space-y-3 rounded border border-border p-3" data-testid="invite-new-channel">
+                <LocalizedFieldPair
+                  id={`${ids}-ch-${ch.key}`}
+                  label={t('invites.channelName')}
+                  field="channels.name"
+                  value={ch.name}
+                  onChange={(next) => setNewChannels((list) => list.map((c, i) => (i === index ? { ...c, name: next, errors: undefined } : c)))}
+                  errors={ch.errors}
+                  maxLength={100}
+                  required
+                  disabled={!!busy}
+                  testId={`invite-channel-name-${index}`}
+                  inputTestIds={{ en: 'invite-channel-name', ar: 'invite-channel-name-ar' }}
+                />
+                <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                  <div className="flex flex-col gap-1 sm:w-64">
+                    <label htmlFor={`${ids}-h-${ch.key}`} className="text-sm text-fg-muted">{t('invites.channelHandle')}</label>
+                    <input
+                      id={`${ids}-h-${ch.key}`}
+                      value={ch.handle}
+                      onChange={(e) => setNewChannels((list) => list.map((c, i) => (i === index ? { ...c, handle: e.target.value } : c)))}
+                      dir="ltr"
+                      maxLength={31}
+                      className={fieldClass}
+                      data-testid="invite-channel-handle"
+                    />
+                  </div>
+                  <button type="button" className={smallButtonClass} onClick={() => setNewChannels((list) => list.filter((_, i) => i !== index))}>
+                    {t('invites.removeChannel')}
+                  </button>
                 </div>
-                <div className="flex flex-col gap-1 sm:w-56">
-                  <label htmlFor={`${ids}-h-${ch.key}`} className="text-sm text-fg-muted">{t('invites.channelHandle')}</label>
-                  <input
-                    id={`${ids}-h-${ch.key}`}
-                    value={ch.handle}
-                    onChange={(e) => setNewChannels((list) => list.map((c, i) => (i === index ? { ...c, handle: e.target.value } : c)))}
-                    dir="ltr"
-                    maxLength={31}
-                    className={fieldClass}
-                    data-testid="invite-channel-handle"
-                  />
-                </div>
-                <button type="button" className={smallButtonClass} onClick={() => setNewChannels((list) => list.filter((_, i) => i !== index))}>
-                  {t('invites.removeChannel')}
-                </button>
               </div>
             ))}
             {canCreateChannels && newChannels.length + existing.length < 10 && (
-              <button type="button" className={smallButtonClass} onClick={() => setNewChannels((list) => [...list, { key: Date.now(), name: '', handle: '' }])} data-testid="invite-add-channel">
+              <button type="button" className={smallButtonClass} onClick={() => setNewChannels((list) => [...list, { key: Date.now(), name: { en: '', ar: '' }, handle: '' }])} data-testid="invite-add-channel">
                 {t('invites.addChannel')}
               </button>
             )}
