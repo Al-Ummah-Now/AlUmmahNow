@@ -25,7 +25,9 @@ export function ChannelHandleTools({ channel }: { channel: { id: string; handle:
   const { run, busy, error, message } = useContentAction();
   const current = channel.handle ?? '';
   const choices = OFFICIAL_CHANNEL_HANDLES.filter((h) => h !== current.toLowerCase());
-  const [official, setOfficial] = useState<string>(choices[0] ?? '');
+  const [picked, setPicked] = useState<string>(choices[0] ?? '');
+  // After a take the page refreshes with the new current handle, which leaves the list: fall back to the first choice
+  const official = (choices as readonly string[]).includes(picked) ? picked : (choices[0] ?? '');
   const at = (handle: string) => bidiIsolate(`@${handle}`, locale);
 
   return (
@@ -44,10 +46,11 @@ export function ChannelHandleTools({ channel }: { channel: { id: string; handle:
             <label htmlFor={`${ids}-official`} className="text-sm text-fg-muted">
               {t('channels.handleTools.officialLabel')}
             </label>
-            <Select id={`${ids}-official`} value={official} onChange={(e) => setOfficial(e.target.value)} className={`${fieldClass} min-w-48`} disabled={!!busy} data-testid="channel-handle-official">
+            <Select id={`${ids}-official`} value={official} onChange={(e) => setPicked(e.target.value)} className={`${fieldClass} min-w-48`} disabled={!!busy} data-testid="channel-handle-official">
               {choices.map((h) => (
+                // Isolated so the @ stays in front in Arabic
                 <option key={h} value={h}>
-                  @{h}
+                  {at(h)}
                 </option>
               ))}
             </Select>
