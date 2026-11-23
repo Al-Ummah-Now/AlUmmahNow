@@ -758,8 +758,9 @@ export interface AppTranslations {
     videoComments: string;
     videoShares: string;
     relatedVideos: string;
-    relatedEmpty: string;
-    relatedEmptyRetry: string;
+    /** The related shelf could not be loaded (never shown for an empty answer, which hides the shelf) */
+    relatedFailed: string;
+    relatedRetry: string;
     watchLater: string;
     addToPlaylist: string;
     noVideoSelected: string;

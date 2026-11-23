@@ -699,6 +699,16 @@ export async function getTrendingVideos(
   limit: number = 20,
   language?: string
 ): Promise<VideoObject[]> {
+  return (await requestTrendingVideos(period, category, limit, language)) ?? [];
+}
+
+/** GET /api/trending: the list (empty when nothing is trending), or undefined when the request failed. */
+async function requestTrendingVideos(
+  period: 'hour' | 'day' | 'week' | 'month',
+  category: string | undefined,
+  limit: number,
+  language?: string
+): Promise<VideoObject[] | undefined> {
   try {
     const queryParams = new URLSearchParams({
       period,
@@ -719,14 +729,14 @@ export async function getTrendingVideos(
 
     if (!response.ok) {
       logger.warn('[getTrendingVideos] API error', { status: response.status });
-      return [];
+      return undefined;
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.data || data.videos || [];
   } catch (error) {
     logger.error('[getTrendingVideos] Request failed', { error });
-    return [];
+    return undefined;
   }
 }
 
@@ -765,6 +775,14 @@ export async function getRecommendedVideos(
   request: RecommendationRequest,
   headers?: ApiHeaders
 ): Promise<VideoObject[]> {
+  return (await requestRecommendedVideos(request, headers)) ?? [];
+}
+
+/** GET /api/recommendations: the list (empty when there are none), or undefined when the request failed. */
+async function requestRecommendedVideos(
+  request: RecommendationRequest,
+  headers?: ApiHeaders
+): Promise<VideoObject[] | undefined> {
   try {
     const queryParams = new URLSearchParams();
 
@@ -785,14 +803,14 @@ export async function getRecommendedVideos(
 
     if (!response.ok) {
       logger.warn('[getRecommendedVideos] API error', { status: response.status });
-      return [];
+      return undefined;
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.data || data.videos || [];
   } catch (error) {
     logger.error('[getRecommendedVideos] Request failed', { error });
-    return [];
+    return undefined;
   }
 }
 
@@ -1058,19 +1076,28 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
  * topped up from the general feed, without the current video. If those stay
  * empty after a retry: trending, then the last shelf this tab loaded.
  */
+/**
+ * The watch page's related shelf. Resolves an empty list when the API answered with nothing to
+ * show; rejects with RelatedUnavailableError when no source could be reached (#1552).
+ */
 export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
     let recommendedCount = 0;
+    // Each source resolves undefined when its request failed, so a failure is not mistaken for an empty answer
     const related = await loadRelated(videoId, {
         recommended: async () => {
-            const recommended = await getRecommendedVideos({ videoId, limit: RELATED_LIMIT });
-            recommendedCount = recommended.length;
-            return recommended.map(v => toVideoInfo(v as never));
+            const recommended = await requestRecommendedVideos({ videoId, limit: RELATED_LIMIT });
+            recommendedCount = recommended?.length ?? 0;
+            return recommended?.map(v => toVideoInfo(v as never));
         },
         feed: () => fetchVideos(null),
         lastResort: [
             // The widest period: a quiet day must not leave the shelf empty.
-            async () => (await getTrendingVideos('month', undefined, RELATED_LIMIT)).map(v => toVideoInfo(v as never)),
-            async () => readLastGoodShelf(),
+            async () => (await requestTrendingVideos('month', undefined, RELATED_LIMIT))?.map(v => toVideoInfo(v as never)),
+            // A remembered shelf is not an answer from the API: none remembered is no answer
+            async () => {
+                const saved = readLastGoodShelf();
+                return saved.length > 0 ? saved : undefined;
+            },
         ],
     });
     saveLastGoodShelf(related);
