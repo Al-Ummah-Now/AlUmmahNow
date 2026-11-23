@@ -22,6 +22,11 @@ export const KIDS_DECISION_IDS = [
   'KIDS-D10',
   'KIDS-D11',
   'KIDS-D12',
+  'KIDS-D13',
+  'KIDS-D14',
+  'KIDS-D15',
+  'KIDS-D16',
+  'KIDS-D17',
 ] as const;
 
 export type KidsDecisionId = (typeof KIDS_DECISION_IDS)[number];
