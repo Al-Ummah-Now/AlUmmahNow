@@ -60526,7 +60526,8 @@
               "eventCalendar",
               "newsletter",
               "listenMode",
-              "offlineDownloads"
+              "offlineDownloads",
+              "ummahKids"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
