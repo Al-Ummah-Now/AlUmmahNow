@@ -1,5 +1,5 @@
 /**
- * SEARCH_DB access for social import sources (migration search/0080_import_sources.sql; wiki
+ * SEARCH_DB access for social import sources (migration search/0081_import_sources.sql; wiki
  * TOOLS-ADMIN TA-9). Rows in, views out; no network calls here.
  */
 import {
