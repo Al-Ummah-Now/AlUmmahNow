@@ -359,6 +359,8 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		// Listen mode works for signed-out and signed-in viewers once the admin switch is on (wiki E14-D3)
 		listenMode: true,
 		eventCalendar: !kidsClient,
+		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)
+		intentionalViewing: true,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -503,6 +505,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			siteDomains: saas,
 			newsletter: null,
 			listenMode: true,
+			intentionalViewing: true,
 			offlineDownloads: !!env.SEARCH_DB,
 		},
 	};

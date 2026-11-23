@@ -74,6 +74,8 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'PUT', '/api/channels/:channelId/quran-translations/:language', 'quranEditions'),
   // The channel's owner and caption editors and admins still download (QF1)
   r('api-videos', 'GET', '/api/videos/:videoId/subtitles/:language/download', 'viewerCaptionDownload', 'handler'),
+  r('api-videos', 'GET', '/api/profile/intentional', 'intentionalViewing'),
+  r('api-videos', 'PUT', '/api/profile/intentional', 'intentionalViewing'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect', 'socialAutopost'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect/confirm', 'socialAutopost'),
   r('api-videos', 'GET', '/api/videos/category-suggestions', 'aiCategorySuggest'),
@@ -247,7 +249,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   hijriCalendar: 'E21.2 adds the season and preference routes and maps them here',
   ramadanMode: 'E21.2 adds the season routes and maps them here',
   recitationTools: 'E21.4a adds the recitation reference routes and maps them here',
-  intentionalViewing: 'E21.6 adds the intentional-viewing routes and maps them here',
   studyNotes: 'E21.8a adds the private-notes routes and maps them here',
 });
 
