@@ -16,7 +16,7 @@
 import type { Context } from 'hono';
 import { CLIENT_HEADER } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
-import { checkHuman } from '../../lib/bot-guard';
+import { checkHuman, TURNSTILE_HEADER } from '../../lib/bot-guard';
 import { loadChannelRecord, roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
 import { resolveCreator } from '../../lib/creatorTiers';
 import { featureOff } from '../../lib/features/off';
@@ -105,7 +105,7 @@ export async function handleSupportCheckout(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return apiError(c, 401, 'authentication_required');
 	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
-	const human = await checkHuman(env as never, c.req.raw, typeof body.turnstileToken === 'string' ? body.turnstileToken : null, 'support-checkout');
+	const human = await checkHuman(env as never, c.req.raw, typeof body.turnstileToken === 'string' ? body.turnstileToken : (c.req.header(TURNSTILE_HEADER) ?? null), 'support-checkout');
 	if (!human.allowed) return apiError(c, 403, 'human_check_failed');
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
