@@ -8,6 +8,7 @@ import { readSessionValue } from '@/lib/auth/session-cookie';
 import {
   SessionInfrastructureError,
   isNextControlFlowError,
+  isOutsideRequestScopeError,
   reportWebServerError,
   safeErrorMeta,
 } from '@/lib/errors/server-report';
@@ -45,7 +46,16 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
   }
 
   // Only fall back to legacy cookies when there is no al_ummah_session cookie
-  const cookieStore = await cookies();
+  let cookieStore;
+  try {
+    cookieStore = await cookies();
+  } catch (cookieError) {
+    if (isNextControlFlowError(cookieError)) throw cookieError;
+    if (isOutsideRequestScopeError(cookieError)) return null;
+    logger.error('[getServerAuthContext] Failed to read cookies for legacy fallback', safeErrorMeta(cookieError));
+    await reportWebServerError(cookieError, { route: 'auth:server-context', extra: { stage: 'legacy_cookies' } });
+    throw new SessionInfrastructureError('Failed to read cookies', cookieError);
+  }
   if (readSessionValue(cookieStore)) {
     return null;
   }

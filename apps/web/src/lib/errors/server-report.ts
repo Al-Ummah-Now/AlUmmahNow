@@ -27,6 +27,19 @@ export function isNextControlFlowError(error: unknown): boolean {
 }
 
 /**
+ * True when Next.js `cookies()` / `headers()` was called outside an HTTP request
+ * scope (static build or client/jsdom test harness). There is no request cookie
+ * jar in that context, so callers treat it as signed out rather than an outage.
+ */
+export function isOutsideRequestScopeError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes('was called outside a request scope')
+    || error.message.includes('next-dynamic-api-wrong-context')
+  );
+}
+
+/**
  * Thrown when reading the server-side auth session fails due to an infrastructure
  * or runtime error rather than a genuinely signed-out user (#302).
  * Carries `reported: true` once logged/reported so outer helpers do not double-report.

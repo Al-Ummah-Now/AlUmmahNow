@@ -114,17 +114,28 @@ describe('web auth error handling (#302)', () => {
     expect(mockVerify).not.toHaveBeenCalled();
   });
 
-  it('reports and throws when legacy token verification fails due to an infrastructure error, but returns false on invalid token', async () => {
+  it('logs, reports, and refuses when legacy token verification throws, and returns false quietly on invalid token', async () => {
     cookiesImpl = jarCookies({ access_token: 'legacy-jwt' });
     mockVerify.mockResolvedValue({ err: new Error('InvalidAccessTokenError') });
     expect(await authenticated()).toBe(false);
     expect(mockReportServerError).not.toHaveBeenCalled();
 
-    // Now simulate JWKS / network outage throwing inside verify()
+    // When verify() throws (e.g. bad signature or JWKS failure): log, report, and refuse
     mockVerify.mockRejectedValue(new TypeError('fetch failed'));
-    await expect(authenticated()).rejects.toBeInstanceOf(SessionInfrastructureError);
-    expect(mockLogger.error).toHaveBeenCalledTimes(1);
+    expect(await authenticated()).toBe(false);
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
     expect(mockReportServerError).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns signed-out quietly when cookies() is called outside a Next.js request scope', async () => {
+    cookiesImpl = async () => {
+      throw new Error('`cookies` was called outside a request scope. Read more: https://nextjs.org/docs/messages/next-dynamic-api-wrong-context');
+    };
+
+    expect(await authenticated()).toBe(false);
+    expect(await getServerAuthContext()).toBeNull();
+    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockReportServerError).not.toHaveBeenCalled();
   });
 
   it('rethrows Next.js control flow errors untouched without logging or reporting', async () => {
