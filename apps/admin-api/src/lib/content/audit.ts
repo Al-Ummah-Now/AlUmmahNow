@@ -48,6 +48,15 @@ export type ContentKind =
   | 'billing'
   /** Creator support (wiki AUN-MEMBERS): a support job retried or cancelled from the Jobs page (id = the job's target). */
   | 'support'
+  /** Creator support: the organization's finance list (id = user id) and tech-staff marks */
+  | 'support-finance'
+  | 'support-tech-staff'
+  /** Creator support: owner decisions and the organization / hold fields (id 'policy' or 'fields') */
+  | 'support-settings'
+  /** Creator support: a payout batch planned, approved or stopped (id = batch id or period) */
+  | 'support-batch'
+  /** Creator support: a country rule (id = ISO country code) */
+  | 'support-country'
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
   | 'import';
 

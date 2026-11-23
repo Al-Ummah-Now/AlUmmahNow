@@ -8,8 +8,16 @@
  *   POST /batches/:id/approve { actorId }           one approval (MEM-D24); the last one queues the funding check
  *   POST /batches/:id/stop { actorId, reason }      stops a batch; payouts not sent yet are canceled
  *
- * admin-api allows the batch routes only to people on the organization's finance list, with a
- * step-up, and audits them; approve checks the finance list again here.
+ *   GET  /overview                                   counts for the Support overview page
+ *   GET  /settings                                   the settings, open decisions and readiness
+ *   PUT  /settings/policy { patch, expectedVersion, actorId }       records owner decisions
+ *   PUT  /settings/fields { fields, expectedVersion, actorId }      organization formed, emergency stop, hold all payouts
+ *   GET  /batches                                    the newest payout batches
+ *   GET  /countries                                  the Countries page
+ *   PUT  /countries/:country { supporters, creators, reason, actorId }
+ *
+ * admin-api allows the money routes (settings, batches) only to people on the organization's
+ * finance list, with a step-up, and audits them; approve checks the finance list again here.
  */
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
@@ -17,6 +25,10 @@ import { createJob, getJob, retryJob } from '../lib/admin/jobs';
 import { apiError } from '../lib/api-error';
 import type { SupportJobEnv } from '../lib/support/jobs';
 import { approveBatch, PayoutError, stopBatch } from '../lib/support/payouts';
+import { readSupportConfig, SupportConfigError, writeSupportConfigFields, writeSupportPolicy } from '../lib/support/config';
+import { undecidedSupportDecisions } from '@al-ummah/shared-types';
+import { supportCanTurnOn } from '../lib/support/readiness';
+import { accountTotal } from '../lib/support/ledger';
 
 const app = new Hono<{ Bindings: SupportJobEnv }>();
 
@@ -88,6 +100,106 @@ app.post('/batches/:id/stop', async (c) => {
 	const parsed = StopBody.safeParse(await c.req.json().catch(() => null));
 	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	return c.json({ success: true, result: await stopBatch(c.env.SEARCH_DB!, c.req.param('id'), parsed.data.reason, new Date()) });
+});
+
+// ---------------------------------------------------------------------------
+// Settings, overview, batches and countries (wiki AUN-MEMBERS §9.6)
+// ---------------------------------------------------------------------------
+
+const db = (c: { env: SupportJobEnv }) => c.env.SEARCH_DB!;
+const stale = (c: Context, error: unknown) => {
+	if (error instanceof SupportConfigError) return apiError(c, error.code === 'stale' ? 409 : 400, error.code === 'stale' ? 'feature_changed' : 'invalid_request', { problems: error.problems } as never);
+	throw error;
+};
+
+app.get('/overview', async (c) => {
+	const d = db(c);
+	const config = await readSupportConfig(d);
+	const since = new Date(Date.now() - 86_400_000).toISOString();
+	const [today, failures, disputes, recon, batch, held] = await Promise.all([
+		d.prepare("SELECT COUNT(*) AS n FROM support_payments WHERE created_at >= ? AND channel_id IS NOT NULL").bind(since).first<{ n: number }>(),
+		d.prepare("SELECT COUNT(*) AS n FROM support_events WHERE status = 'failed'").first<{ n: number }>(),
+		d.prepare("SELECT COUNT(*) AS n FROM support_disputes WHERE status = 'open'").first<{ n: number }>(),
+		d.prepare('SELECT date, currency, status, gap FROM support_reconciliations ORDER BY date DESC LIMIT 5').all<{ date: string; currency: string; status: string; gap: number }>(),
+		d.prepare("SELECT id, period, status, totals, count FROM support_payout_batches WHERE status NOT IN ('done', 'stopped') ORDER BY created_at DESC LIMIT 1").first<Record<string, unknown>>(),
+		Promise.all([accountTotal(d, 'bank:creator_funds', 'USD'), accountTotal(d, 'rail:funding', 'USD'), accountTotal(d, 'clearing:collector', 'USD')]),
+	]);
+	return c.json({
+		success: true,
+		result: {
+			paymentsLastDay: Number(today?.n ?? 0),
+			failedEvents: Number(failures?.n ?? 0),
+			openDisputes: Number(disputes?.n ?? 0),
+			reconciliations: recon.results ?? [],
+			openBatch: batch ?? null,
+			heldUsdMinor: { bank: held[0], rail: held[1], clearing: held[2] },
+			emergencyStop: config.emergencyStop,
+			holdAllPayouts: config.holdAllPayouts,
+		},
+	});
+});
+
+app.get('/settings', async (c) => {
+	const config = await readSupportConfig(db(c));
+	const readiness = await supportCanTurnOn(c.env);
+	return c.json({ success: true, result: { ...config, openDecisions: undecidedSupportDecisions(config.policy), readiness } });
+});
+
+const PolicyBody = z.object({ patch: z.record(z.string(), z.unknown()), expectedVersion: z.number().int().min(0), actorId: Actor }).strict();
+app.put('/settings/policy', async (c) => {
+	const parsed = PolicyBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
+	try {
+		return c.json({ success: true, result: await writeSupportPolicy(db(c), parsed.data.patch as never, parsed.data.actorId, parsed.data.expectedVersion) });
+	} catch (error) {
+		return stale(c as never, error);
+	}
+});
+
+const FieldsBody = z
+	.object({
+		fields: z.object({ organizationFormed: z.boolean().optional(), organizationName: z.string().max(200).nullable().optional(), emergencyStop: z.boolean().optional(), holdAllPayouts: z.boolean().optional() }).strict(),
+		expectedVersion: z.number().int().min(0),
+		actorId: Actor,
+	})
+	.strict();
+app.put('/settings/fields', async (c) => {
+	const parsed = FieldsBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
+	try {
+		return c.json({ success: true, result: await writeSupportConfigFields(db(c), parsed.data.fields, parsed.data.actorId, parsed.data.expectedVersion) });
+	} catch (error) {
+		return stale(c as never, error);
+	}
+});
+
+app.get('/batches', async (c) => {
+	const rows = await db(c).prepare('SELECT id, period, status, totals, count, prepared_by, approvals, approved_at, stopped_reason, created_at, updated_at FROM support_payout_batches ORDER BY created_at DESC LIMIT 50').all<Record<string, unknown>>();
+	return c.json({ success: true, result: { batches: rows.results ?? [] } });
+});
+
+app.get('/countries', async (c) => {
+	const rows = await db(c).prepare('SELECT country, supporters, creators, reason, changed_by, changed_at FROM support_country_rules ORDER BY country LIMIT 300').all<Record<string, unknown>>();
+	return c.json({ success: true, result: { countries: rows.results ?? [] } });
+});
+
+const CountryBody = z
+	.object({ supporters: z.enum(['allowed', 'blocked']), creators: z.enum(['allowed', 'blocked', 'waitlist', 'external_link_only']), reason: z.enum(['sanctions', 'rail_unsupported', 'legal_review', 'admin']), actorId: Actor })
+	.strict();
+app.put('/countries/:country', async (c) => {
+	const country = (c.req.param('country') ?? '').toUpperCase();
+	const parsed = CountryBody.safeParse(await c.req.json().catch(() => null));
+	if (!/^[A-Z]{2}$/.test(country) || !parsed.success) return apiError(c, 400, 'invalid_request');
+	const before = await db(c).prepare('SELECT supporters, creators, reason FROM support_country_rules WHERE country = ?').bind(country).first<Record<string, unknown>>();
+	const { supporters, creators, reason, actorId } = parsed.data;
+	await db(c)
+		.prepare(
+			`INSERT INTO support_country_rules (country, supporters, creators, reason, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(country) DO UPDATE SET supporters = excluded.supporters, creators = excluded.creators, reason = excluded.reason, changed_by = excluded.changed_by, changed_at = excluded.changed_at`,
+		)
+		.bind(country, supporters, creators, reason, actorId, new Date().toISOString())
+		.run();
+	return c.json({ success: true, result: { country, before: before ?? null, after: { supporters, creators, reason } } });
 });
 
 export default app;

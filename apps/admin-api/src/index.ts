@@ -55,6 +55,7 @@ import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import csamRouter from './routers/csam.router';
 import billingRouter from './routers/billing.router';
+import supportRouter from './routers/support.router';
 import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from './lib/csam';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
@@ -320,6 +321,8 @@ app.route('/api/csam', csamRouter as never);
 
 // Payments (wiki AUN-SUBS): providers, prices, subscriptions; billing:* permissions, audited, credentials to Secrets Store
 app.route('/api/billing', billingRouter as never);
+// Creator support (wiki AUN-MEMBERS): finance list, decisions, payout batches, countries; money actions only for the finance list
+app.route('/api/support', supportRouter as never);
 
 // ==========================================
 // HEALTH CHECK

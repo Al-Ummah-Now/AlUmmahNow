@@ -27,7 +27,7 @@ export interface VideosCall {
   raw?: { body: ReadableStream | ArrayBuffer | null; contentType?: string; contentLength?: string | null };
   actorId?: string;
   /** Path prefix on api-videos (default /internal/admin; CSAM /internal/csam; Payments /internal/billing) */
-  base?: '/internal/admin' | '/internal/csam' | '/internal/billing';
+  base?: '/internal/admin' | '/internal/csam' | '/internal/billing' | '/internal/support';
 }
 
 async function internalKey(env: VideosClientEnv): Promise<string> {

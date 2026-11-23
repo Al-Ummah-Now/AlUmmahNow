@@ -111,3 +111,49 @@ export async function writeSupportPolicy(db: SearchDb, patch: Partial<Record<key
 	if (!res.meta?.changes) throw new SupportConfigError('stale');
 	return { before: current.policy, after: policy, version };
 }
+
+/** Fields of the settings row other than the policy, written with the same version check. */
+export interface SupportConfigFields {
+	organizationFormed?: boolean;
+	organizationName?: string | null;
+	emergencyStop?: boolean;
+	holdAllPayouts?: boolean;
+}
+
+const FIELD_COLUMNS: Record<keyof SupportConfigFields, string> = {
+	organizationFormed: 'organisation_formed',
+	organizationName: 'organisation_name',
+	emergencyStop: 'emergency_stop',
+	holdAllPayouts: 'hold_all_payouts',
+};
+
+/**
+ * Records the organization's state and the stops (§9.7). Refuses a stale version. Returns the
+ * values before and after for the audit log.
+ */
+export async function writeSupportConfigFields(db: SearchDb, fields: SupportConfigFields, actor: string, expectedVersion: number, now = new Date()): Promise<{ before: SupportConfigFields; after: SupportConfigFields; version: number }> {
+	const current = await readSupportConfig(db);
+	if (current.version !== expectedVersion) throw new SupportConfigError('stale');
+	const keys = (Object.keys(fields) as (keyof SupportConfigFields)[]).filter((k) => fields[k] !== undefined);
+	if (!keys.length) throw new SupportConfigError('invalid');
+	if (fields.organizationName !== undefined && fields.organizationName !== null && (typeof fields.organizationName !== 'string' || fields.organizationName.length > 200)) throw new SupportConfigError('invalid');
+	const before: SupportConfigFields = {};
+	const after: SupportConfigFields = {};
+	for (const k of keys) {
+		(before as Record<string, unknown>)[k] = current[k];
+		(after as Record<string, unknown>)[k] = fields[k];
+	}
+	const value = (k: keyof SupportConfigFields) => (typeof fields[k] === 'boolean' ? (fields[k] ? 1 : 0) : (fields[k] ?? null));
+	const version = current.version + 1;
+	const cols = keys.map((k) => FIELD_COLUMNS[k]);
+	const res = (await db
+		.prepare(
+			`INSERT INTO support_config (id, ${cols.join(', ')}, version, updated_at, updated_by) VALUES (?, ${cols.map(() => '?').join(', ')}, ?, ?, ?)
+			 ON CONFLICT(id) DO UPDATE SET ${cols.map((c) => `${c} = excluded.${c}`).join(', ')}, version = excluded.version, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+			 WHERE support_config.version = ?`,
+		)
+		.bind(ID, ...keys.map(value), version, now.toISOString(), actor, expectedVersion)
+		.run()) as { meta?: { changes?: number } };
+	if (!res.meta?.changes) throw new SupportConfigError('stale');
+	return { before, after, version };
+}

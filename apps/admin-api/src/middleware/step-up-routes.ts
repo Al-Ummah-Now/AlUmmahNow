@@ -56,6 +56,19 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/billing/payments/:id/refund', what: 'Refund a payment' },
   { method: 'POST', path: '/api/billing/subscriptions/:id/cancel', what: 'Cancel a subscription' },
   { method: 'POST', path: '/api/billing/comps', what: 'Grant a complimentary tier' },
+  // Creator support (wiki AUN-MEMBERS §9.6): the finance list, tech-staff marks, owner decisions and holds,
+  // payout batches and country rules
+  { method: 'POST', path: '/api/support/finance', what: 'Propose someone for the finance list' },
+  { method: 'POST', path: '/api/support/finance/:userId/approve', what: 'Approve a finance-list change' },
+  { method: 'DELETE', path: '/api/support/finance/:userId', what: 'Remove someone from the finance list' },
+  { method: 'POST', path: '/api/support/tech-staff', what: 'Mark an account as tech staff' },
+  { method: 'DELETE', path: '/api/support/tech-staff/:userId', what: 'Remove a tech-staff mark' },
+  { method: 'PUT', path: '/api/support/settings/policy', what: 'Record creator-support decisions' },
+  { method: 'PUT', path: '/api/support/settings/fields', what: 'Organization formed, emergency stop, hold all payouts' },
+  { method: 'POST', path: '/api/support/batches/plan', what: 'Plan a payout batch' },
+  { method: 'POST', path: '/api/support/batches/:id/approve', what: 'Approve a payout batch' },
+  { method: 'POST', path: '/api/support/batches/:id/stop', what: 'Stop a payout batch' },
+  { method: 'PUT', path: '/api/support/countries/:country', what: 'Change a creator-support country rule' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {
