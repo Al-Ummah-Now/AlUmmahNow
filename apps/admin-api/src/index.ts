@@ -67,6 +67,7 @@ import { runErrorRetention } from './lib/errors-retention';
 import { purgeE2eReports } from './lib/report-stats';
 import { errorEnvelope } from './middleware/error-envelope';
 import featuresRouter from './routers/features.router';
+import { applyFeatureGates } from './middleware/require-feature';
 
 // ==========================================
 // APP SETUP
@@ -85,6 +86,10 @@ app.onError((err, c) => {
 
 // Error answers carry the shared envelope (outermost: sees X-Error-Ref and onError's answers)
 app.use('*', errorEnvelope);
+
+// Feature switches (FEAT-2): mapped routes answer 404 feature_off while their switch is off.
+// Registered before every route (the /internal routes come before the auth block below).
+applyFeatureGates(app, 'admin-api');
 
 // 5xx answers that did not throw are recorded too
 app.use('*', async (c, next) => {

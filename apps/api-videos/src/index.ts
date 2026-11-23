@@ -122,6 +122,7 @@ import handleChannelAvatarUpdate from "./endpoints/channel/channelAvatarUpdate";
 import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 import { errorEnvelope } from './middleware/error-envelope';
+import { applyFeatureGates } from './middleware/require-feature';
 
 // ==========================================
 // APP SETUP
@@ -224,6 +225,8 @@ app.options('/api/*', (c) => {
 // Use optionalAuthMiddleware for GET endpoints (allow both authenticated and public access)
 // Use authMiddleware for CUD operations (require authentication)
 app.use('/api/*', optionalAuthMiddleware);
+// Feature switches (FEAT-2): mapped routes answer 404 feature_off while their switch is off
+applyFeatureGates(app, 'api-videos');
 
 // Videos bans (admin-web Users): a banned usr_ id reads like a visitor and changes nothing.
 app.use('/api/*', videosBanMiddleware);

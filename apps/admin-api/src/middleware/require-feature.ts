@@ -1,0 +1,30 @@
+/**
+ * The server feature gate (FEAT-2, wiki AUN-FEATURES §5.1): while a switch is off (or a switch it
+ * needs is off, or FEATURES_FORCE_OFF names it) its routes answer 404 feature_off with the error
+ * envelope, before validation. Applied from FEATURE_ROUTES (shared-types feature-routes.ts), never
+ * by hand; an unreadable switch table lets the request through (the handler's own checks remain).
+ */
+import type { Hono, MiddlewareHandler } from 'hono';
+import { featureGate, middlewareFeatureRoutes, type FeatureApp, type FeatureKey } from '@al-ummah/shared-types';
+import { FEATURE_OFF_BODY } from '@al-ummah/shared-types';
+import { logger } from '../lib/logger';
+
+export function requireFeature(key: FeatureKey): MiddlewareHandler {
+	return async (c, next) => {
+		let gate;
+		try {
+			gate = await featureGate(c.env as never, key);
+		} catch (error) {
+			logger.warn('[FeatureGate] Switches unreadable; request passed to its handler', { key, error: error instanceof Error ? error.message : String(error) });
+			return next();
+		}
+		if (gate.on) return next();
+		logger.debug('[FeatureGate] Refused', { key, reason: gate.reason, method: c.req.method, path: c.req.path });
+		return c.json({ ...FEATURE_OFF_BODY, feature: key }, 404, { 'Cache-Control': 'private, no-store' });
+	};
+}
+
+/** Registers the gate on every route this worker owns in the map. */
+export function applyFeatureGates(app: Hono<any>, worker: FeatureApp): void {
+	for (const route of middlewareFeatureRoutes(worker)) app.on(route.method, route.path, requireFeature(route.key));
+}

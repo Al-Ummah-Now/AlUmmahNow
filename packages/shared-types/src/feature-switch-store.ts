@@ -11,6 +11,7 @@
 import {
   FEATURE_KEYS,
   DEFAULT_FEATURE_SWITCHES,
+  FEATURE_REGISTRY,
   effectiveSwitches,
   isFeatureKey,
   type FeatureKey,
@@ -234,3 +235,26 @@ export async function readSwitchHistory(env: SwitchesEnv, key: string, cursor?: 
   }
 }
 
+
+export type FeatureGateResult = { on: true } | { on: false; reason: 'switched_off' | 'required_off' | 'env_override' };
+
+/**
+ * The server gate as a function (wiki §5.1): routes use it through `requireFeature`, and queue
+ * consumers, crons and Durable Objects call it directly. Switches with an old setting count as on
+ * while they have no row: the old reader (api-videos overlaySwitch) still decides those.
+ */
+export async function featureGate(env: SwitchesEnv, key: FeatureKey): Promise<FeatureGateResult> {
+  if (forcedOff(env).has(key)) return { on: false, reason: 'env_override' };
+  const rows = await readSwitchRows(env);
+  const stored = { ...DEFAULT_FEATURE_SWITCHES };
+  for (const k of FEATURE_KEYS) {
+    const row = rows.get(k);
+    if (row) stored[k] = row.enabled;
+    else if (LEGACY_KEYS.has(k)) stored[k] = true;
+  }
+  if (!stored[key]) return { on: false, reason: 'switched_off' };
+  if (!effectiveSwitches(stored)[key]) return { on: false, reason: 'required_off' };
+  return { on: true };
+}
+
+const LEGACY_KEYS: ReadonlySet<FeatureKey> = new Set(FEATURE_REGISTRY.filter((d) => d.legacy).map((d) => d.key));

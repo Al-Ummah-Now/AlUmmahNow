@@ -7,11 +7,11 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { writeFeatureSwitch } from '@al-ummah/shared-types';
+import { featureGate, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
-import { computeFeatures, featureSwitchState, forgetFeatureCaches, type FeaturesEnv } from '../src/lib/features';
+import { captionFeatureFor, computeFeatures, featureSwitchState, forgetFeatureCaches, type FeaturesEnv } from '../src/lib/features';
 import { overlaySwitch, readSwitchRows, forgetFeatureSwitches } from '../src/lib/features/switches';
 import { readCaptionSettings, writeCaptionSettings } from '../src/lib/captions/jobs';
 import { readYtSettings } from '../src/lib/youtube-import/settings';
@@ -176,5 +176,31 @@ describe('the admin state report', () => {
 		assert.equal(report.ready.audioTracks, true);
 		assert.equal(report.ready.youtubeImport, false);
 		assert.equal(report.ready.newsletter, null);
+	});
+});
+
+describe('featureGate', () => {
+	it('says why a switch is off: its own row, a required switch, or the override', async () => {
+		const { env, set } = await setup();
+		assert.deepEqual(await featureGate(env, 'live'), { on: true });
+		await set('live', false);
+		assert.deepEqual(await featureGate(env, 'live'), { on: false, reason: 'switched_off' });
+		await set('upload', false);
+		assert.deepEqual(await featureGate(env, 'audioTracks'), { on: false, reason: 'required_off' });
+		assert.deepEqual(await featureGate({ ...env, FEATURES_FORCE_OFF: 'bulkSchedule' }, 'bulkSchedule'), { on: false, reason: 'env_override' });
+	});
+
+	it('a switch with an old setting and no row counts as on (its old reader decides)', async () => {
+		const { env } = await setup();
+		assert.deepEqual(await featureGate(env, 'viewerCaptionDownload'), { on: true });
+	});
+
+	it('caption jobs: the handler check follows the transcribe and translate switches', async () => {
+		const { env, set } = await setup();
+		await writeCaptionSettings(env as never, { monthlyBudgetUsd: 5 });
+		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'alice' }), true);
+		await set('captionsTranscribe', false);
+		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'alice' }), false);
+		assert.equal(await captionFeatureFor(env, 'translate', { userId: 'alice' }), true);
 	});
 });
