@@ -172,3 +172,4 @@ export * from './page-blocks.sample';
 // Admin-editable system emails (Settings › Emails): fields, placeholders, versions
 export * from './email-templates';
 export * from './i18n-youtube-import';
+export * from './feature-registry';
