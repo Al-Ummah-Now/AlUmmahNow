@@ -92,6 +92,12 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'GET', '/api/profile/intentional', 'intentionalViewing'),
   r('api-videos', 'PUT', '/api/profile/intentional', 'intentionalViewing'),
   r('api-videos', 'GET', '/api/videos/:videoId/recitation', 'recitationTools'),
+  r('api-videos', 'GET', '/api/library/notes', 'studyNotes'),
+  r('api-videos', 'GET', '/api/library/notes/export.md', 'studyNotes'),
+  r('api-videos', 'POST', '/api/library/notes', 'studyNotes'),
+  r('api-videos', 'DELETE', '/api/library/notes', 'studyNotes'),
+  r('api-videos', 'PUT', '/api/library/notes/:id', 'studyNotes'),
+  r('api-videos', 'DELETE', '/api/library/notes/:id', 'studyNotes'),
   r('api-videos', 'PUT', '/api/videos/:videoId/recitation-metadata', 'recitationTools'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect', 'socialAutopost'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect/confirm', 'socialAutopost'),
@@ -134,6 +140,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'api-videos', prefix: '/api/channels/:channelId/quran-translations', key: 'quranEditions' },
   { app: 'api-videos', prefix: '/api/videos/:videoId/subtitles/:language/download', key: 'viewerCaptionDownload' },
   { app: 'api-videos', prefix: '/api/videos/:videoId/recitation', key: 'recitationTools' },
+  { app: 'api-videos', prefix: '/api/library/notes', key: 'studyNotes' },
   { app: 'api-videos', prefix: '/api/social/channel', key: 'socialAutopost' },
   { app: 'api-videos', prefix: '/api/videos/category-suggestions', key: 'aiCategorySuggest' },
   { app: 'admin-api', prefix: '/api/sites/:channelId/domains', key: 'siteDomains' },
@@ -267,7 +274,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   hijriCalendar: 'E21.2 adds the season and preference routes and maps them here',
   ramadanMode: 'E21.2 adds the season routes and maps them here',
-  studyNotes: 'E21.8a adds the private-notes routes and maps them here',
   appUpdates: 'GET /api/v1/app-config stays public while off and answers update.enabled false with no notice (wiki AUN-APP-UPDATES §4.1); it also serves flags and config',
 });
 

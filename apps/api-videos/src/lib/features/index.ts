@@ -438,6 +438,8 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.aiCategorySuggest = aiCategory;
 	features.bulkSchedule = bulk && roleMay(scope, 'video.schedule');
 	features.offlineDownloads = !pending && tierAllowsOfflineDownloads(tier);
+	// Private notes (E21-D9): every signed-in account; the note limit is the tier's
+	features.studyNotes = !pending;
 	return features;
 }
 
@@ -522,6 +524,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			listenMode: true,
 			intentionalViewing: true,
 			offlineDownloads: !!env.SEARCH_DB,
+			studyNotes: !!env.SEARCH_DB,
 		},
 	};
 }
