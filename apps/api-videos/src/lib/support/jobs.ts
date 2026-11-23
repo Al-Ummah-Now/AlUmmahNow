@@ -307,7 +307,7 @@ export async function runSupportDisputeDeadlineJob(env: SupportJobEnv, _job: Adm
 export async function runSupportDormantJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
 	const config = await readSupportConfig(db(env));
 	// MEM-D22: reminders, then (separate switch, counsel first) the transfer to the Waqf (dormant.ts)
-	return { done: true, result: { ...(await runDormant(env as never, config.policy, now)) } };
+	return { done: true, result: { ...(await runDormant(env as never, config.policy, config.mode, now)) } };
 }
 
 // ---------------------------------------------------------------------------

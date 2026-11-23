@@ -2,8 +2,11 @@
  * Unclaimed creator balances (wiki AUN-MEMBERS MEM-D22, owner 2026-11-23: "goes to the waqf, which is
  * a charity, after 12 months").
  *
- * A channel is dormant while it has gifts but no active payee. Its unclaimed period starts at its
- * oldest gift since its last transfer (`cycle_start`). Each month the job:
+ * A channel is dormant while it has gifts but no active payee (both in the support mode, test or
+ * live). Its unclaimed period starts at its oldest gift that still counts (`cycle_start`): not
+ * refunded, failed or lost in a dispute, and not already covered by a transfer (released before it).
+ * A gift still on hold at a transfer stays with the creator and starts the next period. Each month
+ * the job:
  *
  *   1. records a reminder for every reminder month the period has reached (3, 6, 12 by default) in
  *      support_dormant_notices as 'due'. Delivering them (in-app and email, en or ar) is the Studio
@@ -39,21 +42,24 @@ interface DormantEnv {
 	[k: string]: unknown;
 }
 
-export async function runDormant(env: DormantEnv, policy: SupportPolicy, now: Date): Promise<DormantRun> {
+export async function runDormant(env: DormantEnv, policy: SupportPolicy, mode: 'test' | 'live', now: Date): Promise<DormantRun> {
 	const db = env.SEARCH_DB!;
 	const reminders = [...(policy.dormantReminderMonths ?? [])].sort((a, b) => a - b);
 	const out: DormantRun = { channels: 0, remindersDue: 0, transfers: 0, waiting: 0, decision: policy.dormantPolicy ?? 'open' };
 	const first = Math.min(...(reminders.length ? reminders : [policy.dormantTransferMonths ?? 6]));
 	const before = new Date(now.getTime() - first * MONTH).toISOString();
-	// Channels with no active payee and a gift since their last transfer older than the first reminder (bounded)
+	// Channels with no active payee and a counting gift older than the first reminder (bounded: the date
+	// bound is in the WHERE, so only old enough gifts are read)
 	const rows = await db
 		.prepare(
 			`SELECT p.channel_id, MIN(p.created_at) AS cycle_start FROM support_payments p
-			 WHERE NOT EXISTS (SELECT 1 FROM support_payees y WHERE y.channel_id = p.channel_id AND y.status = 'active')
-			   AND p.created_at > COALESCE((SELECT MAX(t.created_at) FROM support_dormant_transfers t WHERE t.channel_id = p.channel_id), '')
-			 GROUP BY p.channel_id HAVING MIN(p.created_at) <= ? LIMIT 500`,
+			 WHERE p.mode = ? AND p.created_at <= ?
+			   AND p.status NOT IN ('failed', 'refunded', 'dispute_lost')
+			   AND NOT EXISTS (SELECT 1 FROM support_payees y WHERE y.channel_id = p.channel_id AND y.mode = ? AND y.status = 'active')
+			   AND (p.released_at IS NULL OR p.released_at > COALESCE((SELECT MAX(t.created_at) FROM support_dormant_transfers t WHERE t.channel_id = p.channel_id), ''))
+			 GROUP BY p.channel_id LIMIT 500`,
 		)
-		.bind(before)
+		.bind(mode, before, mode)
 		.all<{ channel_id: string; cycle_start: string }>();
 	const at = now.toISOString();
 	let transferOn: boolean | null = null;
