@@ -230,7 +230,7 @@ describe('caption drafts', () => {
 			for (const lang of ['en', 'fr']) {
 				const res = await get(who, roles as string[] | undefined, lang);
 				assert.equal(res.status, 404, `${who || 'anonymous'} ${lang}`);
-				assert.deepEqual(await res.json(), { success: false, code: 'feature_off' });
+				assert.deepEqual(await res.json(), { success: false, code: 'feature_off', feature: 'viewerCaptionDownload' });
 			}
 		}
 		// The owner, an editor on the video's channel, and an admin: the file

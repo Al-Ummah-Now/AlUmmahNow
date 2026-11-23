@@ -259,7 +259,7 @@ function creatorUploadMiddleware(options: GateOptions) {
     if (!creator.tier || !tierAllowsUploads(creator.tier)) {
       logger.info('[Uploads] Upload refused: the tier allows no uploads', { userId, subjectId: creator.subjectId, tierId: creator.tier?.id ?? null, path: c.req.path });
       // Live is hidden without uploads, so its create answers like any other feature that is off
-      if (/^\/api\/live-streams\/?$/.test(c.req.path)) return featureOff(c);
+      if (/^\/api\/live-streams\/?$/.test(c.req.path)) return featureOff(c, 'live');
       return invitationOnly(c);
     }
     c.set('creatorTier', creator);

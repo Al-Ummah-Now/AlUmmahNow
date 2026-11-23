@@ -63,7 +63,7 @@ export class SubtitlesDownload extends OptionalAuthRoute {
 			if (!viewerCaptionDownloadConfigured(await readCaptionSettings(c.env as never))) {
 				const roles = getAuthContext(c)?.payload?.roles as string[] | undefined;
 				const allowed = !!userId && (isAdminRole(roles) || (!!video && (await canOnVideo(c.env as never, video, userId, 'video.edit'))));
-				if (!allowed) return featureOff(c);
+				if (!allowed) return featureOff(c, 'viewerCaptionDownload');
 			}
 			const track = await c.env.subtitles.get(`${videoId}/${language}.vtt`);
 			if (!track) return c.json({ success: false, error: `Subtitle not found for language: ${language}` }, 404);

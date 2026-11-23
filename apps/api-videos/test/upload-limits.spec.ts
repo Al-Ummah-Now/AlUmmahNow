@@ -234,7 +234,7 @@ describe('creator tiers: who may upload', () => {
     const h = await harness();
     const res = await h.request('nobody', '/api/live-streams', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
     assert.equal(res.status, 404);
-    assert.deepEqual(await res.json(), { success: false, code: 'feature_off' });
+    assert.deepEqual(await res.json(), { success: false, code: 'feature_off', feature: 'live' });
     assert.equal(h.db.count('upload_rate_windows'), 0);
     assert.equal((await h.request('alice', '/api/live-streams', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })).status, 200);
   });

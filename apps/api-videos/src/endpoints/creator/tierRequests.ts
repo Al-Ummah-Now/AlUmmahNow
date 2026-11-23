@@ -41,7 +41,7 @@ export async function handleUpgradeOverview(c: Context) {
 		const siteKey = turnstileMode(c.env) === 'off' ? null : (c.env.TURNSTILE_SITE_KEY as string | undefined) || null;
 		const [{ mode }, sold] = await Promise.all([upgradeMode(c.env), soldTierIds(c.env as ServiceEnv)]);
 		// Closed (requests off, no provider): the page vanishes like any off feature (owner 2026-11-19)
-		if (mode === 'closed') return featureOff(c);
+		if (mode === 'closed') return featureOff(c, 'tierRequests');
 		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey, mode, sold);
 		// Per viewer when signed in; the tier list alone is the same for everyone
 		return c.json({ success: true, result }, 200, { 'Cache-Control': userId ? 'private, no-store' : 'public, max-age=60' });
@@ -71,7 +71,7 @@ export async function handleCreateTierRequest(c: Context) {
 	try {
 		// Only in request mode: no provider enabled and the admin allows requests (owner rule 2026-11-15)
 		const { mode } = await upgradeMode(c.env);
-		if (mode === 'closed') return featureOff(c);
+		if (mode === 'closed') return featureOff(c, 'tierRequests');
 		if (mode !== 'request') {
 			logger.info('[TierRequests] Request refused: requests are off', { userId, mode });
 			return c.json({ success: false, code: TIER_REQUEST_ERRORS.requestsOff, error: mode === 'pay' ? 'Tiers are sold on the Upgrade page; requests are off' : 'Upgrades are not available right now', mode }, 403);

@@ -227,6 +227,32 @@ dismisses it. Every attempt is in the group's timeline.
   skew-recovery flow (event `aun:version-skew`): reload, but never during an
   upload.
 
+## API error envelope
+
+Every 4xx/5xx JSON answer from api-videos and admin-api leaves in one shape
+(`packages/shared-types/src/api-error.ts`; wiki AUN-FEATURES §5.2, decision O40):
+
+```json
+{ "success": false, "code": "feature_off", "message": "Live streaming isn’t available right now.",
+  "lang": "en", "action": "none", "feature": "live", "error": "…old value…" }
+```
+
+- `middleware/error-envelope.ts` (registered outermost in both workers) fills it in for every
+  error answer, old endpoints included, and the onError answer. Endpoints keep returning
+  `{ success: false, code }` (or the old `error`); the middleware adds the rest.
+- `message` comes from `API_ERROR_CATALOGUE` (en + ar) for a known `code`; `feature_off` takes the
+  feature's own message from the registry. An uncatalogued `code` keeps the endpoint's English
+  `message` for English callers only; everyone else gets the status fallback. A 5xx never carries
+  exception text (the legacy `error` is "Internal server error" outside development).
+- Language: the first `ar`/`en` tag of `Accept-Language` by quality, else `X-App-Locale`, else
+  English. Answers send `Vary: Accept-Language, X-App-Locale` and `Content-Language`. Clients send
+  their interface language in `Accept-Language`.
+- `action`: `retry`, `sign_in`, `update_app`, `contact_support` or `none`. `retryAfter` mirrors
+  `Retry-After`; `reference` mirrors `X-Error-Ref`.
+- Clients read it with `parseApiError(status, body)`: branch on `code`, and for a code they don't
+  know show `message` as sent. Add a code to the catalogue rather than writing text in an endpoint;
+  codes are never renamed. The OpenAPI contract documents the shape as `ApiError`.
+
 ## Release wiring
 
 - `scripts/release/ensure-resources.ts --env <env>` creates the error queues

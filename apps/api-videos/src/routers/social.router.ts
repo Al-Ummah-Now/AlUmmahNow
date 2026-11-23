@@ -164,7 +164,7 @@ export const socialRouter = new Hono<Env>();
 // Removing an account already connected stays possible.
 const autopostOff = async (c: Context<Env>, next: () => Promise<void>) => {
 	if (c.req.method === 'DELETE' || (await socialConfigured(c.env as never))) return next();
-	return featureOff(c as never);
+	return featureOff(c as never, 'socialAutopost');
 };
 for (const path of ['/channel/:channelId/connect', '/channel/:channelId/connect/*', '/channel/:channelId/telegram/*', '/channel/:channelId/accounts/*', '/channel/:channelId/templates']) {
 	socialRouter.use(path, autopostOff);
@@ -215,7 +215,7 @@ socialRouter.post('/channel/:channelId/connect', async (c) => {
 		const b = await body<{ network: string; language: string; handle: string; instance: string; returnLang: string }>(c);
 		if (!isSocialNetwork(b.network)) throw new SocialError(400, 'invalid_network');
 		const [readiness, settings] = await Promise.all([networkReadiness(c.env), readPlatformSettings(c.env)]);
-		if (!readiness[b.network].configured || !settings.enabled || !settings.networks[b.network].enabled) return featureOff(c as never);
+		if (!readiness[b.network].configured || !settings.enabled || !settings.networks[b.network].enabled) return featureOff(c as never, 'socialAutopost');
 		const result = await startConnect(c.env, { network: b.network, channelId, userId, language: lang(b.language), returnLang: lang(b.returnLang), handle: b.handle, instance: b.instance });
 		return c.json(result);
 	} catch (error) {
@@ -334,7 +334,7 @@ socialRouter.post('/channel/:channelId/webhooks', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
-		if (!(await socialCryptoReady(c.env))) return featureOff(c as never);
+		if (!(await socialCryptoReady(c.env))) return featureOff(c as never, 'socialAutopost');
 		const b = await body<{ url: string; events: string[] }>(c);
 		const url = String(b.url ?? '').trim();
 		const problem = webhookUrlProblem(url, webhookHostsAllowed(c.env));
