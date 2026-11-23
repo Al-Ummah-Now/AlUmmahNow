@@ -4,7 +4,7 @@
  */
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { APP_CONFIG_SEMVER, appReleaseKeyId, compareAppVersions, verifyAppReleaseManifest, type AppReleaseTrustedKeys } from '@al-ummah/shared-types';
+import { APP_CONFIG_SEMVER, appReleaseKeyId, appReleaseTrustFrom, compareAppVersions, verifyAppReleaseManifest, verifyAppUpdateKeyList, type AppReleaseTrust } from '@al-ummah/shared-types';
 
 const b64 = (bytes: ArrayBuffer | Uint8Array) => Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).toString('base64');
 const enc = new TextEncoder();
@@ -15,9 +15,11 @@ async function keyPair() {
 	return { pair, pub, keyId: await appReleaseKeyId(pub) };
 }
 
-async function sign(bytes: Uint8Array, k: Awaited<ReturnType<typeof keyPair>>) {
-	const sig = await crypto.subtle.sign({ name: 'Ed25519' }, k.pair.privateKey, bytes);
-	return JSON.stringify({ keyId: k.keyId, sig: b64(sig) });
+type Key = Awaited<ReturnType<typeof keyPair>>;
+async function sign(bytes: Uint8Array, ...ks: Key[]) {
+	const signatures = [];
+	for (const k of ks) signatures.push({ keyId: k.keyId, sig: b64(await crypto.subtle.sign({ name: 'Ed25519' }, k.pair.privateKey, bytes)) });
+	return JSON.stringify({ signatures });
 }
 
 const TAG = 'v2026.11.23';
@@ -33,6 +35,7 @@ function manifest(over: Record<string, unknown> = {}) {
 		notes: { en: 'Faster folder scans.', ar: 'فحص أسرع للمجلدات.' },
 		artifacts: [{ app: 'tools', platform: 'windows', arch: 'x64', kind: 'velopack-full', url: `${PREFIX}AlUmmahNow.Tools-2026.11.23-win-full.nupkg`, sha256: 'a'.repeat(64), size: 81234567 }],
 		stores: [],
+		yanked: [],
 		...over,
 	};
 }
@@ -67,18 +70,19 @@ describe('compareAppVersions (AUN-APP-UPDATES §2.1)', () => {
 });
 
 describe('verifyAppReleaseManifest (AUN-APP-UPDATES §3.1, §5.3)', () => {
-	let k: Awaited<ReturnType<typeof keyPair>>;
-	let other: Awaited<ReturnType<typeof keyPair>>;
-	let trusted: AppReleaseTrustedKeys;
+	let k: Key;
+	let other: Key;
+	let trust: AppReleaseTrust;
 	before(async () => {
 		k = await keyPair();
 		other = await keyPair();
-		trusted = { AlUmmahNowTools: [other.pub, k.pub] };
+		trust = { keys: [other.pub, k.pub] };
 	});
+	const bytesOf = (m: unknown) => enc.encode(JSON.stringify(m));
 
 	it('accepts a correctly signed manifest', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
-		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trusted, { repo: 'AlUmmahNowTools', tag: TAG, newerThan: '2026.11.22' });
+		const bytes = bytesOf(manifest());
+		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trust, { repo: 'AlUmmahNowTools', tag: TAG, channels: ['stable'], newerThan: '2026.11.22' });
 		assert.equal(r.ok, true);
 		if (r.ok) {
 			assert.equal(r.manifest.version, '2026.11.23');
@@ -87,46 +91,55 @@ describe('verifyAppReleaseManifest (AUN-APP-UPDATES §3.1, §5.3)', () => {
 	});
 
 	it('refuses a tampered manifest (one byte changed after signing)', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
+		const bytes = bytesOf(manifest());
 		const sig = await sign(bytes, k);
 		const tampered = bytes.slice();
-		const at = new TextDecoder().decode(bytes).indexOf('"a');
+		const at = new TextDecoder().decode(bytes).indexOf('"aaaa');
 		tampered[at + 1] = 'b'.charCodeAt(0); // first character of the sha256
-		const r = await verifyAppReleaseManifest(tampered, sig, trusted, { repo: 'AlUmmahNowTools' });
-		assert.deepEqual(r, { ok: false, reason: 'bad_signature' });
+		assert.deepEqual(await verifyAppReleaseManifest(tampered, sig, trust, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'bad_signature' });
 	});
 
-	it('refuses a key the app does not trust', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
-		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), { AlUmmahNowTools: [other.pub] }, { repo: 'AlUmmahNowTools' });
-		assert.deepEqual(r, { ok: false, reason: 'unknown_key' });
-		const r2 = await verifyAppReleaseManifest(bytes, await sign(bytes, k), { AlUmmahNowDesktop: [k.pub] }, { repo: 'AlUmmahNowTools' });
-		assert.deepEqual(r2, { ok: false, reason: 'unknown_key' });
-	});
-
-	it('refuses a signature made by another key under a trusted key id', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
+	it('refuses a key the app does not trust, and a forged signature under a trusted key id', async () => {
+		const bytes = bytesOf(manifest());
+		assert.deepEqual(await verifyAppReleaseManifest(bytes, await sign(bytes, k), { keys: [other.pub] }, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'unknown_key' });
 		const forged = JSON.parse(await sign(bytes, other));
-		forged.keyId = k.keyId;
-		const r = await verifyAppReleaseManifest(bytes, JSON.stringify(forged), { AlUmmahNowTools: [k.pub] }, { repo: 'AlUmmahNowTools' });
-		assert.deepEqual(r, { ok: false, reason: 'bad_signature' });
+		forged.signatures[0].keyId = k.keyId;
+		assert.deepEqual(await verifyAppReleaseManifest(bytes, JSON.stringify(forged), { keys: [k.pub] }, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'bad_signature' });
+	});
+
+	it('refuses a revoked key; a manifest dual-signed with a revoked and a good key passes on the good one', async () => {
+		const bytes = bytesOf(manifest());
+		const revoked = { keys: [k.pub, other.pub], revoked: [k.keyId] };
+		assert.deepEqual(await verifyAppReleaseManifest(bytes, await sign(bytes, k), revoked, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'unknown_key' });
+		const both = await verifyAppReleaseManifest(bytes, await sign(bytes, k, other), revoked, { repo: 'AlUmmahNowTools' });
+		assert.equal(both.ok && both.keyId, other.keyId);
 	});
 
 	it('refuses a malformed or missing signature file', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
-		for (const s of ['', 'null', '{}', '{"keyId":"zz","sig":"x"}', 'not json']) {
-			assert.deepEqual(await verifyAppReleaseManifest(bytes, s, trusted, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'bad_signature_file' }, s);
+		const bytes = bytesOf(manifest());
+		for (const s of ['', 'null', '{}', '{"signatures":[]}', '{"keyId":"zz","sig":"x"}', 'not json']) {
+			assert.deepEqual(await verifyAppReleaseManifest(bytes, s, trust, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'bad_signature_file' }, s);
 		}
 	});
 
-	it('refuses another repo, another tag, and older or equal versions (replay, downgrade)', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest()));
+	it('refuses another repo, tag or channel, a downgrade, a replay below the floor, and a yanked version', async () => {
+		const bytes = bytesOf(manifest());
 		const sig = await sign(bytes, k);
-		const t = { AlUmmahNowDesktop: [k.pub], AlUmmahNowTools: [k.pub] };
-		assert.deepEqual(await verifyAppReleaseManifest(bytes, sig, t, { repo: 'AlUmmahNowDesktop' }), { ok: false, reason: 'wrong_repo' });
-		assert.deepEqual(await verifyAppReleaseManifest(bytes, sig, t, { repo: 'AlUmmahNowTools', tag: 'v2026.11.24' }), { ok: false, reason: 'wrong_tag' });
-		assert.deepEqual(await verifyAppReleaseManifest(bytes, sig, t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.23' }), { ok: false, reason: 'not_newer' });
-		assert.deepEqual(await verifyAppReleaseManifest(bytes, sig, t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.23.1' }), { ok: false, reason: 'not_newer' });
+		const t = { keys: [k.pub] };
+		const reason = async (trustArg: AppReleaseTrust, expect: Parameters<typeof verifyAppReleaseManifest>[3]) => {
+			const r = await verifyAppReleaseManifest(bytes, sig, trustArg, expect);
+			return r.ok ? 'ok' : r.reason;
+		};
+		assert.equal(await reason(t, { repo: 'AlUmmahNowDesktop' }), 'wrong_repo');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', tag: 'v2026.11.24' }), 'wrong_tag');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', channels: ['beta'] }), 'wrong_channel');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', channels: ['beta', 'stable'] }), 'ok');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.23' }), 'not_newer');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.23.1' }), 'not_newer');
+		// Installed 2026.11.20; the app has already verified 2026.11.24, so the older 2026.11.23 is a replay
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.20', floor: '2026.11.24' }), 'below_floor');
+		assert.equal(await reason(t, { repo: 'AlUmmahNowTools', newerThan: '2026.11.20', floor: '2026.11.23' }), 'ok');
+		assert.equal(await reason({ keys: [k.pub], yanked: ['2026.11.23.0'] }, { repo: 'AlUmmahNowTools' }), 'yanked');
 	});
 
 	it('refuses a signed manifest that points at another host, repo or release, or over HTTP', async () => {
@@ -139,21 +152,80 @@ describe('verifyAppReleaseManifest (AUN-APP-UPDATES §3.1, §5.3)', () => {
 		]) {
 			const m = manifest();
 			(m.artifacts as { url: string }[])[0].url = url;
-			const bytes = enc.encode(JSON.stringify(m));
-			const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trusted, { repo: 'AlUmmahNowTools' });
-			assert.equal(r.ok, false, url);
-			if (!r.ok) assert.equal(r.reason, 'bad_manifest', url);
+			const bytes = bytesOf(m);
+			const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trust, { repo: 'AlUmmahNowTools' });
+			assert.equal(r.ok ? 'ok' : r.reason, 'bad_manifest', url);
 		}
 	});
 
 	it('requires English and Arabic notes', async () => {
-		const bytes = enc.encode(JSON.stringify(manifest({ notes: { en: 'Only English.' } })));
-		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trusted, { repo: 'AlUmmahNowTools' });
+		const bytes = bytesOf(manifest({ notes: { en: 'Only English.' } }));
+		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trust, { repo: 'AlUmmahNowTools' });
 		assert.equal(r.ok ? 'ok' : r.reason, 'bad_manifest');
 	});
 
 	it('refuses an oversized manifest before checking anything else', async () => {
 		const bytes = new Uint8Array(256 * 1024 + 1);
-		assert.deepEqual(await verifyAppReleaseManifest(bytes, '', trusted, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'too_large' });
+		assert.deepEqual(await verifyAppReleaseManifest(bytes, '', trust, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'too_large' });
+	});
+});
+
+describe('key lists: rotation and revocation (AUN-APP-UPDATES §3.5)', () => {
+	let root: Key;
+	let oldKey: Key;
+	let newKey: Key;
+	let attacker: Key;
+	before(async () => {
+		[root, oldKey, newKey, attacker] = await Promise.all([keyPair(), keyPair(), keyPair(), keyPair()]);
+	});
+	const list = (serial: number, keys: Key[], revoked: string[] = [], yanked: string[] = []) =>
+		enc.encode(JSON.stringify({ schema: 1, repo: 'AlUmmahNowTools', serial, keys: keys.map((x) => ({ keyId: x.keyId, publicKey: x.pub })), revoked, yanked }));
+
+	it('accepts a root-signed list with a higher serial only', async () => {
+		const bytes = list(2, [oldKey]);
+		const ok = await verifyAppUpdateKeyList(bytes, await sign(bytes, root), [root.pub], { repo: 'AlUmmahNowTools', storedSerial: 1 });
+		assert.equal(ok.ok, true);
+		const replay = await verifyAppUpdateKeyList(bytes, await sign(bytes, root), [root.pub], { repo: 'AlUmmahNowTools', storedSerial: 2 });
+		assert.deepEqual(replay, { ok: false, reason: 'not_newer' });
+	});
+
+	it('a stolen release key cannot sign a key list', async () => {
+		const bytes = list(9, [attacker]);
+		assert.deepEqual(await verifyAppUpdateKeyList(bytes, await sign(bytes, oldKey), [root.pub], { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'unknown_key' });
+	});
+
+	it('refuses a list whose key ids do not match their keys, or for another repo', async () => {
+		const bad = JSON.parse(new TextDecoder().decode(list(3, [newKey])));
+		bad.keys[0].keyId = oldKey.keyId;
+		const bytes = enc.encode(JSON.stringify(bad));
+		const r = await verifyAppUpdateKeyList(bytes, await sign(bytes, root), [root.pub], { repo: 'AlUmmahNowTools' });
+		assert.equal(r.ok ? 'ok' : r.reason, 'bad_list');
+		const other = list(3, [newKey]);
+		assert.equal((await verifyAppUpdateKeyList(other, await sign(other, root), [root.pub], { repo: 'AlUmmahNowDesktop' })).ok, false);
+	});
+
+	it('skip-safe rotation: a build that only knew the old key accepts a release signed only with the new key', async () => {
+		// The old build carries the root key and serial 1 (old key only). It skipped every release since.
+		const rotated = list(2, [newKey]);
+		const accepted = await verifyAppUpdateKeyList(rotated, await sign(rotated, root), [root.pub], { repo: 'AlUmmahNowTools', storedSerial: 1 });
+		assert.ok(accepted.ok);
+		const trust = appReleaseTrustFrom((accepted as { list: never }).list);
+		const m = enc.encode(JSON.stringify(manifest()));
+		const r = await verifyAppReleaseManifest(m, await sign(m, newKey), trust, { repo: 'AlUmmahNowTools', newerThan: '2026.11.01' });
+		assert.equal(r.ok, true);
+	});
+
+	it('revocation is remembered: a later list that omits it does not bring the key back', async () => {
+		const revoking = list(5, [newKey], [oldKey.keyId], ['2026.11.22']);
+		const r1 = await verifyAppUpdateKeyList(revoking, await sign(revoking, root), [root.pub], { repo: 'AlUmmahNowTools', storedSerial: 4 });
+		const t1 = appReleaseTrustFrom((r1 as { list: never }).list);
+		const later = list(6, [newKey, oldKey]);
+		const r2 = await verifyAppUpdateKeyList(later, await sign(later, root), [root.pub], { repo: 'AlUmmahNowTools', storedSerial: 5 });
+		const t2 = appReleaseTrustFrom((r2 as { list: never }).list, t1);
+		assert.deepEqual(t2.revoked, [oldKey.keyId]);
+		assert.deepEqual(t2.keys, [newKey.pub]);
+		assert.deepEqual(t2.yanked, ['2026.11.22']);
+		const m = enc.encode(JSON.stringify(manifest()));
+		assert.deepEqual(await verifyAppReleaseManifest(m, await sign(m, oldKey), t2, { repo: 'AlUmmahNowTools' }), { ok: false, reason: 'unknown_key' });
 	});
 });

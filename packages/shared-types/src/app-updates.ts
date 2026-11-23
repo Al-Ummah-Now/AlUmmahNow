@@ -64,6 +64,8 @@ export const AppReleaseManifestSchema = z
     notes: AppReleaseNotesSchema,
     artifacts: z.array(AppReleaseArtifactSchema).max(200),
     stores: z.array(AppReleaseStoreSchema).max(50).default([]),
+    /** Earlier versions of this repo that must never be offered again (wiki §3.1) */
+    yanked: z.array(z.string().regex(APP_CONFIG_SEMVER)).max(200).default([]),
   })
   .strict()
   .superRefine((m, ctx) => {
@@ -76,21 +78,49 @@ export const AppReleaseManifestSchema = z
   });
 export type AppReleaseManifest = z.infer<typeof AppReleaseManifestSchema>;
 
-/** `app-release.json.sig` */
+const KEY_ID = /^[0-9a-f]{8}$/;
+const PUBLIC_KEY = /^[A-Za-z0-9+/]{43}=$/;
+
+/**
+ * `app-release.json.sig` and `update-keys.json.sig`: one signature normally, two while a key is
+ * being replaced (wiki §3.1, §3.5).
+ */
 export const AppReleaseSignatureSchema = z
   .object({
-    keyId: z.string().regex(/^[0-9a-f]{8}$/),
-    sig: z.string().regex(/^[A-Za-z0-9+/]{86}==$/),
+    signatures: z
+      .array(z.object({ keyId: z.string().regex(KEY_ID), sig: z.string().regex(/^[A-Za-z0-9+/]{86}==$/) }).strict())
+      .min(1)
+      .max(4),
   })
   .strict();
 export type AppReleaseSignature = z.infer<typeof AppReleaseSignatureSchema>;
+
+/** `update-keys.json`, signed by the repo's offline root key (wiki §3.5). */
+export const AppUpdateKeyListSchema = z
+  .object({
+    schema: z.literal(1),
+    repo: z.enum(APP_RELEASE_REPOS),
+    serial: z.number().int().min(1).max(1_000_000),
+    keys: z.array(z.object({ keyId: z.string().regex(KEY_ID), publicKey: z.string().regex(PUBLIC_KEY) }).strict()).min(1).max(4),
+    revoked: z.array(z.string().regex(KEY_ID)).max(100).default([]),
+    yanked: z.array(z.string().regex(APP_CONFIG_SEMVER)).max(200).default([]),
+  })
+  .strict();
+export type AppUpdateKeyList = z.infer<typeof AppUpdateKeyListSchema>;
 
 export function appReleaseDownloadPrefix(repo: string, tag: string): string {
   return `https://github.com/Al-Ummah-Now/${repo}/releases/download/${tag}/`;
 }
 
-/** Public keys a verifier trusts: base64 of the raw 32-byte ed25519 key. One or two per repo (rotation). */
-export type AppReleaseTrustedKeys = Partial<Record<AppReleaseRepo, readonly string[]>>;
+/** The release keys a verifier trusts for one repo, and what it has learned to refuse. */
+export interface AppReleaseTrust {
+  /** base64 raw 32-byte ed25519 public keys */
+  keys: readonly string[];
+  /** key ids never to trust again, even if listed in `keys` */
+  revoked?: readonly string[];
+  /** versions never to accept */
+  yanked?: readonly string[];
+}
 
 export type AppReleaseVerifyFailure =
   | 'too_large'
@@ -101,17 +131,24 @@ export type AppReleaseVerifyFailure =
   | 'bad_manifest'
   | 'wrong_repo'
   | 'wrong_tag'
-  | 'not_newer';
+  | 'wrong_channel'
+  | 'not_newer'
+  | 'below_floor'
+  | 'yanked';
 
 export type AppReleaseVerifyResult = { ok: true; manifest: AppReleaseManifest; keyId: string } | { ok: false; reason: AppReleaseVerifyFailure; detail?: string };
 
 export interface AppReleaseVerifyExpect {
   /** The repo the manifest was fetched from. */
   repo: AppReleaseRepo;
-  /** The tag it was fetched from, when known. */
+  /** The tag the API (or the feed) named. */
   tag?: string;
-  /** Refuse a manifest whose version is not above this one (no downgrades, no replays of older manifests). */
+  /** Channels this build accepts: a beta build takes beta and stable. */
+  channels?: readonly AppUpdateChannel[];
+  /** Refuse a manifest whose version is not above this one (the installed build): no downgrade. */
   newerThan?: string;
+  /** Refuse a manifest below this version (the highest this app has ever verified): no replay of superseded releases. */
+  floor?: string;
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -131,50 +168,109 @@ export async function appReleaseKeyId(publicKeyBase64: string): Promise<string> 
   return toHex(await crypto.subtle.digest('SHA-256', raw as BufferSource)).slice(0, 8);
 }
 
-/**
- * Checks the ed25519 signature over the exact manifest bytes, then the manifest itself. The
- * signature is checked first, so nothing in an unsigned or tampered file is ever parsed or trusted.
- */
-export async function verifyAppReleaseManifest(
-  manifestBytes: Uint8Array,
-  signatureText: string,
-  trusted: AppReleaseTrustedKeys,
-  expect: AppReleaseVerifyExpect,
-): Promise<AppReleaseVerifyResult> {
-  if (manifestBytes.byteLength > APP_RELEASE_MANIFEST_MAX_BYTES) return { ok: false, reason: 'too_large' };
-  let sig: AppReleaseSignature;
+type SignatureCheck = { ok: true; keyId: string } | { ok: false; reason: 'too_large' | 'bad_signature_file' | 'unknown_key' | 'bad_signature' };
+
+/** Any one signature valid under a trusted, non-revoked key passes. */
+async function checkSignatures(bytes: Uint8Array, signatureText: string, keys: readonly string[], revoked: readonly string[]): Promise<SignatureCheck> {
+  if (bytes.byteLength > APP_RELEASE_MANIFEST_MAX_BYTES) return { ok: false, reason: 'too_large' };
+  let file: AppReleaseSignature;
   try {
     const parsed = AppReleaseSignatureSchema.safeParse(JSON.parse(signatureText));
     if (!parsed.success) return { ok: false, reason: 'bad_signature_file' };
-    sig = parsed.data;
+    file = parsed.data;
   } catch {
     return { ok: false, reason: 'bad_signature_file' };
   }
-  let key: string | undefined;
-  for (const k of trusted[expect.repo] ?? []) {
-    if ((await appReleaseKeyId(k)) === sig.keyId) key = k;
+  const byId = new Map<string, string>();
+  for (const k of keys) {
+    const id = await appReleaseKeyId(k);
+    if (!revoked.includes(id)) byId.set(id, k);
   }
-  if (!key) return { ok: false, reason: 'unknown_key' };
-  let valid = false;
-  try {
-    const pub = await crypto.subtle.importKey('raw', base64ToBytes(key) as BufferSource, { name: 'Ed25519' }, false, ['verify']);
-    valid = await crypto.subtle.verify({ name: 'Ed25519' }, pub, base64ToBytes(sig.sig) as BufferSource, manifestBytes as BufferSource);
-  } catch {
-    valid = false;
+  let candidate = false;
+  for (const s of file.signatures) {
+    const key = byId.get(s.keyId);
+    if (!key) continue;
+    candidate = true;
+    try {
+      const pub = await crypto.subtle.importKey('raw', base64ToBytes(key) as BufferSource, { name: 'Ed25519' }, false, ['verify']);
+      if (await crypto.subtle.verify({ name: 'Ed25519' }, pub, base64ToBytes(s.sig) as BufferSource, bytes as BufferSource)) return { ok: true, keyId: s.keyId };
+    } catch {
+      // a malformed key or signature is simply not a valid signature
+    }
   }
-  if (!valid) return { ok: false, reason: 'bad_signature' };
+  return { ok: false, reason: candidate ? 'bad_signature' : 'unknown_key' };
+}
 
-  let json: unknown;
+function parseJson(bytes: Uint8Array): { ok: true; json: unknown } | { ok: false } {
   try {
-    json = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(manifestBytes));
+    return { ok: true, json: JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes)) };
   } catch {
-    return { ok: false, reason: 'bad_json' };
+    return { ok: false };
   }
-  const parsed = AppReleaseManifestSchema.safeParse(json);
-  if (!parsed.success) return { ok: false, reason: 'bad_manifest', detail: parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
-  const manifest = parsed.data;
-  if (manifest.repo !== expect.repo) return { ok: false, reason: 'wrong_repo' };
-  if (expect.tag !== undefined && manifest.tag !== expect.tag) return { ok: false, reason: 'wrong_tag' };
-  if (expect.newerThan !== undefined && compareAppVersions(manifest.version, expect.newerThan) <= 0) return { ok: false, reason: 'not_newer' };
-  return { ok: true, manifest, keyId: sig.keyId };
+}
+
+const issuesText = (issues: readonly { path: readonly PropertyKey[]; message: string }[]) =>
+  issues
+    .slice(0, 5)
+    .map((i) => `${i.path.map(String).join('.')}: ${i.message}`)
+    .join('; ');
+
+/**
+ * Checks a release manifest: a valid signature under a trusted, non-revoked key first (nothing in
+ * an unsigned or tampered file is parsed or trusted), then its contents, repo, tag, channel, and
+ * the no-downgrade, floor and yanked rules (wiki §5.3).
+ */
+export async function verifyAppReleaseManifest(manifestBytes: Uint8Array, signatureText: string, trust: AppReleaseTrust, expect: AppReleaseVerifyExpect): Promise<AppReleaseVerifyResult> {
+  const sig = await checkSignatures(manifestBytes, signatureText, trust.keys, trust.revoked ?? []);
+  if (sig.ok === false) return { ok: false, reason: (sig as Extract<SignatureCheck, { ok: false }>).reason };
+  const json = parseJson(manifestBytes);
+  if (json.ok === false) return { ok: false, reason: 'bad_json' };
+  const parsed = AppReleaseManifestSchema.safeParse((json as { json: unknown }).json);
+  if (!parsed.success) return { ok: false, reason: 'bad_manifest', detail: issuesText(parsed.error.issues) };
+  const m = parsed.data;
+  if (m.repo !== expect.repo) return { ok: false, reason: 'wrong_repo' };
+  if (expect.tag !== undefined && m.tag !== expect.tag) return { ok: false, reason: 'wrong_tag' };
+  if (expect.channels !== undefined && !expect.channels.includes(m.channel)) return { ok: false, reason: 'wrong_channel' };
+  if (expect.newerThan !== undefined && compareAppVersions(m.version, expect.newerThan) <= 0) return { ok: false, reason: 'not_newer' };
+  if (expect.floor !== undefined && compareAppVersions(m.version, expect.floor) < 0) return { ok: false, reason: 'below_floor' };
+  if ((trust.yanked ?? []).some((v) => compareAppVersions(v, m.version) === 0)) return { ok: false, reason: 'yanked' };
+  return { ok: true, manifest: m, keyId: (sig as { keyId: string }).keyId };
+}
+
+export type AppKeyListVerifyFailure = 'too_large' | 'bad_signature_file' | 'unknown_key' | 'bad_signature' | 'bad_json' | 'bad_list' | 'wrong_repo' | 'not_newer';
+export type AppKeyListVerifyResult = { ok: true; list: AppUpdateKeyList } | { ok: false; reason: AppKeyListVerifyFailure; detail?: string };
+
+/**
+ * Checks a key list against the repo's root public keys. Accepted only with a serial above the one
+ * already stored, so an old list (with a key since revoked) can't be replayed (wiki §3.5).
+ */
+export async function verifyAppUpdateKeyList(
+  listBytes: Uint8Array,
+  signatureText: string,
+  rootKeys: readonly string[],
+  expect: { repo: AppReleaseRepo; storedSerial?: number },
+): Promise<AppKeyListVerifyResult> {
+  const sig = await checkSignatures(listBytes, signatureText, rootKeys, []);
+  if (sig.ok === false) return { ok: false, reason: (sig as Extract<SignatureCheck, { ok: false }>).reason };
+  const json = parseJson(listBytes);
+  if (json.ok === false) return { ok: false, reason: 'bad_json' };
+  const parsed = AppUpdateKeyListSchema.safeParse((json as { json: unknown }).json);
+  if (!parsed.success) return { ok: false, reason: 'bad_list', detail: issuesText(parsed.error.issues) };
+  const list = parsed.data;
+  for (const k of list.keys) {
+    if ((await appReleaseKeyId(k.publicKey)) !== k.keyId) return { ok: false, reason: 'bad_list', detail: `keyId ${k.keyId} does not match its key` };
+  }
+  if (list.repo !== expect.repo) return { ok: false, reason: 'wrong_repo' };
+  if (expect.storedSerial !== undefined && list.serial <= expect.storedSerial) return { ok: false, reason: 'not_newer' };
+  return { ok: true, list };
+}
+
+/**
+ * What a verifier trusts after accepting a key list: its keys minus every key ever revoked (the
+ * new list's and the ones remembered from earlier lists), and every version ever yanked.
+ */
+export function appReleaseTrustFrom(list: AppUpdateKeyList, remembered: { revoked?: readonly string[]; yanked?: readonly string[] } = {}): AppReleaseTrust & { revoked: string[]; yanked: string[] } {
+  const revoked = [...new Set([...(remembered.revoked ?? []), ...list.revoked])];
+  const yanked = [...new Set([...(remembered.yanked ?? []), ...list.yanked])];
+  return { keys: list.keys.filter((k) => !revoked.includes(k.keyId)).map((k) => k.publicKey), revoked, yanked };
 }
