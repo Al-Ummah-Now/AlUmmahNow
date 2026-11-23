@@ -10,7 +10,8 @@
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { runTranscodeAction } from '../media/troubleshoot';
 import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
-import { runSupportDisputeDeadlineJob, runSupportDormantJob, runSupportPayeeSyncJob, runSupportPayoutFundJob, runSupportPayoutPlanJob, runSupportPayoutSendJob, runSupportPayoutStatusJob, runSupportReconcileJob, runSupportReleaseJob, runSupportWebhookJob } from '../support/jobs';
+import { stopSupportBeforeErasure } from '../support/erasure';
+import { runSupportDisputeDeadlineJob, runSupportDormantJob, runSupportPayeeSyncJob, runSupportPayoutFundJob, runSupportPayoutPlanJob, runSupportPayoutSendJob, runSupportPayoutStatusJob, runSupportReconcileJob, runSupportReleaseJob, runSupportWebhookJob, vendorContext } from '../support/jobs';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1991,6 +1992,8 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 	for (const videoId of step.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId: job.targetId, reason: 'admin-erasure' });
 	const result = { deletedVideos: previous + step.deletedVideoIds.length };
 	if (!step.complete) return { done: false, params: { step: step.step }, result };
+	// Monthly support stops at the collector before the erasure (wiki AUN-MEMBERS §9.8)
+	await stopSupportBeforeErasure(env as never, job.targetId, (mode) => vendorContext(env as never, mode));
 	await send(env, MessageType.UserDataErased, { userId: job.targetId });
 	return { done: true, result };
 }
@@ -2037,7 +2040,11 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 	}
 	// Upload markers and TUS sessions that name the user (#1059)
 	await eraseUploadTraces(env as never, userId, summary.deletedVideoIds);
-	if (summary.complete) await send(env, MessageType.UserDataErased, { userId });
+	if (summary.complete) {
+		// Monthly support stops at the collector before the erasure (wiki AUN-MEMBERS §9.8)
+		await stopSupportBeforeErasure(env as never, userId, (mode) => vendorContext(env as never, mode));
+		await send(env, MessageType.UserDataErased, { userId });
+	}
 	for (const videoId of summary.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId, reason: 'admin-erasure' });
 	return summary;
 }
