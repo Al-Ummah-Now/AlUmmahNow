@@ -22,6 +22,12 @@
  *   payments are kept with the user id replaced by the erased marker (comp reasons, provider customer ids and receipt links dropped, a comp
  *   the user granted as staff keeps the grant with the granter scrubbed). Webhook payloads (they can
  *   hold the email) are emptied; customer links and checkouts are deleted.
+ * - SEARCH_DB support_* (wiki AUN-MEMBERS §9.8): gifts, pledges, refunds and payouts are financial
+ *   records, kept with the user id replaced by the erased marker; private messages to creators are
+ *   dropped, webhook payloads emptied, open checkouts deleted and finance-list membership removed.
+ *   Active pledges are marked canceled ('erasure'); a later renewal from the collector for a canceled
+ *   pledge is refused and canceled at the collector by the support webhook job. The creator's payee
+ *   row keeps the rail's payee reference (money still owed is paid out first, §9.8) under the marker.
  * - SEARCH_DB admin_deletions / admin_jobs: kept as action records, the user scrubbed to
  *   placeholders (#1253, admin-history.ts).
  *
@@ -44,6 +50,7 @@ export interface UserTracesResult {
   captionMinutes: number;
   tierRequests: number;
   billing: number;
+  support: number;
   adminDeletions: number;
   adminJobs: number;
 }
@@ -93,6 +100,21 @@ export async function eraseUserTraces(
         search.prepare('DELETE FROM billing_checkouts WHERE user_id = ? RETURNING id').bind(userId),
       ])
     : [];
+  const support = search
+    ? await search.batch([
+        search.prepare('UPDATE support_payments SET supporter_user_id = ?, message = NULL WHERE supporter_user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search
+          .prepare(`UPDATE support_pledges SET supporter_user_id = ?, status = CASE WHEN status IN ('active', 'past_due') THEN 'canceled' ELSE status END, cancel_reason = CASE WHEN status IN ('active', 'past_due') THEN 'erasure' ELSE cancel_reason END WHERE supporter_user_id = ? RETURNING id`)
+          .bind(erasedMarker, userId),
+        search.prepare("DELETE FROM support_checkouts WHERE supporter_user_id = ? AND status <> 'completed' RETURNING id").bind(userId),
+        search.prepare('UPDATE support_checkouts SET supporter_user_id = ?, message = NULL WHERE supporter_user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare(`UPDATE support_events SET user_id = ?, payload = '{}' WHERE user_id = ? RETURNING id`).bind(erasedMarker, userId),
+        search.prepare('UPDATE support_refunds SET requested_by_user = ? WHERE requested_by_user = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE support_reports SET reporter_user_id = ? WHERE reporter_user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE support_payees SET owner_user_id = ? WHERE owner_user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('DELETE FROM support_finance_members WHERE user_id = ? RETURNING user_id').bind(userId),
+      ])
+    : [];
   const history = search ? await eraseUserAdminHistory(search, userId, erasedMarker) : { deletions: 0, jobs: 0 };
   return {
     invites: count(invites),
@@ -104,6 +126,7 @@ export async function eraseUserTraces(
     captionMinutes: captions.reduce((n: number, r) => n + count(r), 0),
     tierRequests: count(requests) + count(decided),
     billing: billing.reduce((n, r) => n + count(r), 0),
+    support: support.reduce((n, r) => n + count(r), 0),
     adminDeletions: history.deletions,
     adminJobs: history.jobs,
   };
