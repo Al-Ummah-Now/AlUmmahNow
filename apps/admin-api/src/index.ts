@@ -65,6 +65,7 @@ import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoint
 import { statusNotifyConsumer } from './lib/status-notify';
 import { runErrorRetention } from './lib/errors-retention';
 import { purgeE2eReports } from './lib/report-stats';
+import { errorEnvelope } from './middleware/error-envelope';
 
 // ==========================================
 // APP SETUP
@@ -80,6 +81,9 @@ app.onError((err, c) => {
   const reference = reportAdminApiError(c as never, err, 500);
   return c.json({ success: false, error: 'Internal server error', reference }, 500, reference ? { 'X-Error-Ref': reference } : {});
 });
+
+// Error answers carry the shared envelope (outermost: sees X-Error-Ref and onError's answers)
+app.use('*', errorEnvelope);
 
 // 5xx answers that did not throw are recorded too
 app.use('*', async (c, next) => {
@@ -124,8 +128,8 @@ const isAllowedOrigin = (origin: string): boolean => {
 app.use('*', cors({
   origin: (origin) => isAllowedOrigin(origin) ? origin : '',
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposeHeaders: ['Content-Length'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-App-Locale'],
+  exposeHeaders: ['Content-Length', 'Content-Language', 'Retry-After', 'X-Error-Ref'],
   maxAge: 600,
   credentials: false,
 }));

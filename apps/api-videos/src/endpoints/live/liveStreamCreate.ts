@@ -133,7 +133,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 			await repository.deleteObject(`livestream:${liveStream.id}`).catch(() => undefined);
 			if (error instanceof LiveRefusedError) {
 				// No provider may take streams (off, unconfigured or over budget): live is hidden
-				if (error.code !== 'live_capacity') return featureOff(c);
+				if (error.code !== 'live_capacity') return featureOff(c, 'live');
 				return c.json({ success: false, code: error.code, error: 'Live streaming is at capacity right now. Try again in a few minutes.' }, 503);
 			}
 			logger.error('[Live] Provisioning the first session failed', { streamId: liveStream.id, error: error instanceof Error ? error.message : String(error) });

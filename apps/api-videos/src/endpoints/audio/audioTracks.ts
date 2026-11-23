@@ -155,7 +155,7 @@ export class AudioTrackCreate extends AuthenticatedRoute {
 			const uploadUrl = track.source.type === 'upload' ? `/api/videos/${encodeURIComponent(params.videoId)}/audio-tracks/${track.id}/upload` : undefined;
 			return c.json({ success: true, data: { track: studioTrack(track, track.source.type === 'upload' ? 0 : undefined), ...(uploadUrl ? { uploadUrl } : {}) } }, 201);
 		} catch (error) {
-			if (error instanceof AudioTrackError && error.code === FEATURE_OFF_CODE) return featureOff(c);
+			if (error instanceof AudioTrackError && error.code === FEATURE_OFF_CODE) return featureOff(c, 'audioTracks');
 			if (error instanceof AudioTrackError && error.status === 402) {
 				return c.json({ success: false, error: 'upgrade_required', entitlement: AUDIO_TRACKS_ENTITLEMENT, ...error.extra }, 402);
 			}

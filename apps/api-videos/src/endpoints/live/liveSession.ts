@@ -108,7 +108,7 @@ export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord,
 		if ('code' in result) {
 			logger.info('[Live] Refused by the creator tier', { streamId: stream.id, op, code: result.code, subjectId: result.subjectId });
 			// Not in the tier: live is hidden for this channel, so its API answers quietly
-			if (result.code === LIVE_TIER_ERROR_CODES.notInTier) return featureOff(c);
+			if (result.code === LIVE_TIER_ERROR_CODES.notInTier) return featureOff(c, 'live');
 			return c.json({ success: false, code: result.code, error: result.error, ...result.details }, result.status);
 		}
 		return { ownerId: result.subjectId, limitMinutes: result.limitMinutes };
@@ -121,7 +121,7 @@ export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord,
 function providerFailure(c: AppContext, error: unknown, where: string) {
 	if (error instanceof LiveRefusedError) {
 		// No provider may take streams (off, unconfigured or over budget): live is hidden
-		if (error.code !== 'live_capacity') return featureOff(c);
+		if (error.code !== 'live_capacity') return featureOff(c, 'live');
 		return fail(c, 503, error.code, 'Live streaming is at capacity right now. Try again in a few minutes.');
 	}
 	if (error instanceof LiveProviderError) {

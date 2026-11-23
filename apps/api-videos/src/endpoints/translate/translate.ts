@@ -92,7 +92,7 @@ export class TranslateCreate extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		if (!inlineTranslateConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c);
+		if (!inlineTranslateConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c, 'inlineTranslate');
 		let context: { title?: string } | undefined;
 		if (body.videoId) {
 			const access = await editableVideo(c, body.videoId, userId);
@@ -232,7 +232,7 @@ export class ChannelTranslationSettingsSet extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const denied = await channelEditor(c, params.channelId, userId);
 		if (denied) return denied;
-		if (!viewerTitlesConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c);
+		if (!viewerTitlesConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c, 'viewerTranslatedTitles');
 		await setChannelViewerTitles(c.env as never, params.channelId, body.viewerTitles, userId);
 		const settings = await readCaptionSettings(c.env as never);
 		return c.json({ success: true, data: { viewerTitles: body.viewerTitles, platformEnabled: viewerTitlesConfigured(c.env as never, settings) } });

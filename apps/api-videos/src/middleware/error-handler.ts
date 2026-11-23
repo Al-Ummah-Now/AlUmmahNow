@@ -177,7 +177,9 @@ export function errorHandler(err: Error, c: Context) {
 		c.header('X-Error-Ref', reference);
 	}
 
-	// Format and return error response
-	const response = formatErrorResponse(err, isDev);
+	// Format and return error response. A 5xx never carries the exception's text outside
+	// development: the envelope gives the person a catalogue message and the reference.
+	const formatted = formatErrorResponse(err, isDev);
+	const response = statusCode >= 500 && !isDev ? { ...formatted, error: 'Internal server error' } : formatted;
 	return c.json(reference ? { ...response, reference } : response, statusCode as any);
 }

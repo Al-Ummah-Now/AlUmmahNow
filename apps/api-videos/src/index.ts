@@ -1,7 +1,7 @@
 import { onImportAttachFailed } from './lib/admin/importAttach';
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import attestationRouter from './routers/attestation.router';
-import { batchJob, constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
@@ -118,6 +118,7 @@ import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
 import handleChannelAvatarUpdate from "./endpoints/channel/channelAvatarUpdate";
 import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
+import { errorEnvelope } from './middleware/error-envelope';
 
 // ==========================================
 // APP SETUP
@@ -127,6 +128,8 @@ const app = new Hono<{ Bindings: AppBindings }>();
 
 // Register global error handler (catches all unhandled errors)
 app.onError(errorHandler);
+// Error answers carry the shared envelope (outermost, so onError's answers are wrapped too)
+app.use('*', errorEnvelope);
 
 // ==========================================
 // GLOBAL MIDDLEWARE
@@ -141,8 +144,8 @@ app.use('*', cors({
 	// origin callback receives (origin, context) - context has env access
 	origin: (origin, c) => allowOrigin(origin, c as never),
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
-	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat', 'X-App-Locale'],
+	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date', 'Content-Language', 'X-Error-Ref'],
 	maxAge: 600,
 	credentials: false,
 }));
@@ -892,7 +895,7 @@ export async function getContractDocument(): Promise<any> {
  */
 async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
 	const resolved = resolveApiVersion(request);
-	if (resolved.kind === 'unsupported') return unsupportedVersionResponse(resolved.version);
+	if (resolved.kind === 'unsupported') return envelopeResponse(unsupportedVersionResponse(resolved.version), request);
 	// Content buckets are wrapped so every R2 write also updates the search index (lib/search/sync.ts).
 	const response = await app.fetch(resolved.request, withSearchSync(env, ctx), ctx);
 	const deprecation = findDeprecation(request.method, new URL(resolved.request.url).pathname);

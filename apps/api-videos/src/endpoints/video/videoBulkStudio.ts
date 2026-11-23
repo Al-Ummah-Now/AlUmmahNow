@@ -60,7 +60,7 @@ export class VideoBulkSchedule extends AuthenticatedRoute {
 		const ids = Array.from(new Set(body.videoIds));
 		const userId = this.getUserId(c) as string;
 		// Not in the entitlements: bulk scheduling is hidden in Studio (404 feature_off)
-		if (await checkBulkScheduleAllowed(c.env, userId)) return featureOff(c);
+		if (await checkBulkScheduleAllowed(c.env, userId)) return featureOff(c, 'bulkSchedule');
 		const repository = new R2Repository<VideoObject>(c.env.videos);
 		const now = new Date();
 		const start = new Date(body.startAt).getTime();

@@ -36,7 +36,7 @@ export class QuranTranslationsList extends PublicRoute {
 
 	async handle(c: AppContext) {
 		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
-		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c, 'quranEditions');
 		const { query } = await this.getValidatedData<typeof this.schema>();
 		const language = query.language?.toLowerCase();
 		if (language && !LANG.test(language)) return c.json({ success: false, error: 'invalid_language' }, 400);
@@ -104,7 +104,7 @@ export class ChannelQuranTranslationsGet extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
-		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c, 'quranEditions');
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await channelAccess(c, params.channelId, this.getUserId(c));
 		if ('response' in access) return access.response;
@@ -135,7 +135,7 @@ export class ChannelQuranTranslationSet extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
-		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c, 'quranEditions');
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const access = await channelAccess(c, params.channelId, userId);
@@ -175,7 +175,7 @@ export class ChannelQuranTranslationReset extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
-		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c, 'quranEditions');
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await channelAccess(c, params.channelId, this.getUserId(c));
 		if ('response' in access) return access.response;

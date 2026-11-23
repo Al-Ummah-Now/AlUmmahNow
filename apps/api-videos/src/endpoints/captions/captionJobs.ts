@@ -128,7 +128,7 @@ export class CaptionJobCreate extends AuthenticatedRoute {
 		if (!new SubtitleService().validateLanguage(language)) return c.json({ success: false, error: 'unsupported_language' }, 400);
 		try {
 			// Off, unconfigured or no caption minutes in the owner's plan: hidden in Studio (404 feature_off)
-			if (!(await captionFeatureFor(c.env as never, 'transcribe', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
+			if (!(await captionFeatureFor(c.env as never, 'transcribe', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c, 'captionsTranscribe');
 			const outcome = await requestCaptionJob(c.env as never, { video: access.video, userId, roles: rolesOf(c), language, replace: body.replace === true });
 			if ('refused' in outcome) {
 				return c.json({ success: false, error: 'upgrade_required', entitlement: CAPTION_MINUTES_ENTITLEMENT, minutesNeeded: outcome.minutes, usage: outcome.usage }, 402);
@@ -221,7 +221,7 @@ export class CaptionMinutesGet extends AuthenticatedRoute {
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
-			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
+			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c, 'captionsTranslate');
 			const usage = await minutesForVideo(c.env as never, access.video, userId, rolesOf(c));
 			const duration = access.video.duration;
 			return c.json({ success: true, data: { usage, minutesNeeded: typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : null } });
@@ -284,7 +284,7 @@ export class CaptionTranslateCreate extends AuthenticatedRoute {
 		if (![sourceLanguage, ...languages].every((l) => service.validateLanguage(l))) return c.json({ success: false, error: 'unsupported_language' }, 400);
 		if (languages.includes(sourceLanguage)) return c.json({ success: false, error: 'same_language' }, 400);
 		try {
-			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
+			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c, 'captionsTranslate');
 			const usage = await minutesForVideo(c.env as never, access.video, userId, rolesOf(c));
 			const duration = access.video.duration;
 			const each = typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : 1;

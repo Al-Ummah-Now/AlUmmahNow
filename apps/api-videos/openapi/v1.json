@@ -60247,6 +60247,92 @@
             }
           }
         }
+      },
+      "ApiError": {
+        "type": "object",
+        "description": "Every 4xx/5xx JSON answer. `code` is stable snake_case; `message` is a whole sentence for a person in `lang`, never internals. Unknown `code`: show `message` and the control for `action`. `feature_off` (404) names `feature`: show the message once, then hide that entry point.",
+        "required": [
+          "success",
+          "code",
+          "message",
+          "lang",
+          "action"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          },
+          "message": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ar"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "retry",
+              "sign_in",
+              "update_app",
+              "contact_support",
+              "none"
+            ]
+          },
+          "retryAfter": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Seconds to wait before retrying (also the Retry-After header)"
+          },
+          "helpUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          },
+          "reference": {
+            "type": "string",
+            "description": "ERR-XXXX-XXXX: quote it to support (also the X-Error-Ref header)"
+          },
+          "feature": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "createChannel",
+              "youtubeImport",
+              "bulkSchedule",
+              "audioTracks",
+              "live",
+              "captionsTranscribe",
+              "captionsTranslate",
+              "inlineTranslate",
+              "viewerTranslatedTitles",
+              "quranEditions",
+              "viewerCaptionDownload",
+              "socialAutopost",
+              "aiCategorySuggest",
+              "siteDomains",
+              "tierRequests",
+              "newsletter"
+            ],
+            "description": "With `feature_off`: the switched-off feature"
+          },
+          "error": {
+            "description": "Kept for clients written before the envelope"
+          },
+          "errors": {
+            "type": "array",
+            "description": "Field errors on a 400 validation failure",
+            "items": {}
+          }
+        }
       }
     },
     "securitySchemes": {

@@ -14,7 +14,7 @@
  * `openapi/v1.json` is generated from this (`pnpm openapi:generate`) and a unit
  * test fails when it drifts from the routes.
  */
-import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import { API_ERROR_ACTIONS, FEATURE_KEYS, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { CONTRACT_VERSION, CURRENT_API_VERSION, DEPRECATIONS } from './api-version';
 
 /**
@@ -39,6 +39,33 @@ const ACCOUNT_STATE_ERROR = {
 			type: 'object',
 			properties: { deletedAt: { type: 'string', format: 'date-time' }, purgeAfter: { type: 'string', format: 'date-time', description: 'When the data is erased unless restored first' } },
 		},
+	},
+} as const;
+
+/**
+ * The body of every error answer (middleware/error-envelope.ts; wiki AUN-FEATURES §5.2, decision
+ * O40). Clients branch on `code`; for a code they don't know they show `message` as sent, with the
+ * control `action` names. The message's language follows Accept-Language, else X-App-Locale.
+ */
+const API_ERROR = {
+	type: 'object',
+	description:
+		'Every 4xx/5xx JSON answer. `code` is stable snake_case; `message` is a whole sentence for a person in `lang`, ' +
+		'never internals. Unknown `code`: show `message` and the control for `action`. `feature_off` (404) names `feature`: ' +
+		'show the message once, then hide that entry point.',
+	required: ['success', 'code', 'message', 'lang', 'action'],
+	properties: {
+		success: { type: 'boolean', const: false },
+		code: { type: 'string', pattern: '^[a-z][a-z0-9_]{1,63}$' },
+		message: { type: 'string' },
+		lang: { type: 'string', enum: ['en', 'ar'] },
+		action: { type: 'string', enum: [...API_ERROR_ACTIONS] },
+		retryAfter: { type: 'integer', minimum: 1, description: 'Seconds to wait before retrying (also the Retry-After header)' },
+		helpUrl: { type: 'string', format: 'uri', pattern: '^https://' },
+		reference: { type: 'string', description: 'ERR-XXXX-XXXX: quote it to support (also the X-Error-Ref header)' },
+		feature: { type: 'string', enum: [...FEATURE_KEYS], description: 'With `feature_off`: the switched-off feature' },
+		error: { description: 'Kept for clients written before the envelope' },
+		errors: { type: 'array', description: 'Field errors on a 400 validation failure', items: {} },
 	},
 } as const;
 
@@ -105,7 +132,7 @@ export function buildContractDocument(rawDoc: any, options: ContractOptions = {}
 	};
 
 	// Answers any signed-in route can give that are not in a route's own responses
-	components.schemas = { ...(components.schemas ?? {}), AccountStateError: ACCOUNT_STATE_ERROR };
+	components.schemas = { ...(components.schemas ?? {}), AccountStateError: ACCOUNT_STATE_ERROR, ApiError: API_ERROR };
 
 	return {
 		openapi: rawDoc.openapi ?? '3.1.0',
