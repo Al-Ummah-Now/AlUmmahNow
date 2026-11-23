@@ -10,6 +10,12 @@
  */
 import type { SupportPermission } from './support';
 
+/**
+ * The money permissions a finance-list approver set may name. Same list as FINANCE_ONLY_SUPPORT_PERMISSIONS
+ * in ./support (kept here without a runtime import; a test checks they match).
+ */
+export const WORKFLOW_FINANCE_PERMISSIONS: readonly SupportPermission[] = Object.freeze(['support:refund', 'support:disputes', 'support:payouts', 'support:ledger', 'support:providers'] as SupportPermission[]);
+
 export type WorkflowLocalized = { en: string; ar: string };
 
 // ---------------------------------------------------------------------------------------------------
@@ -152,7 +158,8 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
   }),
   'support.financeList.add': def({
     type: 'support.financeList.add',
-    domain: 'money',
+    // About who holds money permissions, decided by super admins (not the finance list): people domain
+    domain: 'people',
     label: { en: 'Add someone to the finance list', ar: 'إضافة شخص إلى قائمة المالية' },
     scoped: false,
     floor: { minApprovals: 1, money: false, minStepUp: 'approve' },
@@ -160,7 +167,8 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
   }),
   'support.techStaff.unmark': def({
     type: 'support.techStaff.unmark',
-    domain: 'money',
+    // About who holds money permissions, decided by super admins (not the finance list): people domain
+    domain: 'people',
     label: { en: 'Remove a tech-staff mark', ar: 'إزالة علامة الفريق التقني' },
     scoped: false,
     floor: { minApprovals: 1, money: false, minStepUp: 'approve' },
@@ -248,6 +256,33 @@ export const WORKFLOW_MONEY_RULE_CHANGE_DEFAULT: WorkflowRuleConfig = moneyRule(
 /** WF-D9: switching creator support on is a money action; its features.set scope is seeded with this rule. */
 export const WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE: WorkflowRuleConfig = moneyRule(1, undefined, { stepUp: 'approve' });
 
+/** Scopes with their own seeded rule and floor (shown on the rules page even before anyone edits them). */
+export const WORKFLOW_SEEDED_SCOPES: Readonly<Partial<Record<WorkflowActionType, readonly string[]>>> = Object.freeze({
+  'features.set': ['creatorSupport'],
+  'workflows.rule.set': [WORKFLOW_RULE_CHANGE_MONEY_SCOPE],
+});
+
+/**
+ * The floor for an action in a scope. Two scopes carry the money floor although their action doesn't:
+ * the creatorSupport switch (turning it on starts taking money, WF-D9) and changes to money rules
+ * (rule-change scope 'money'), so neither can be lowered or approved by tech staff or the owner.
+ */
+export function workflowFloorFor(type: WorkflowActionType, scope: string): WorkflowFloor {
+  if (type === 'features.set' && scope === 'creatorSupport') return MONEY_FLOOR(1);
+  if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return MONEY_FLOOR(1);
+  return WORKFLOW_ACTIONS[type].floor;
+}
+
+/** The default rule for a scope with no stored version. */
+export function workflowDefaultRuleFor(type: WorkflowActionType, scope: string): WorkflowRuleConfig {
+  if (type === 'features.set' && scope === 'creatorSupport') return WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE;
+  if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return WORKFLOW_MONEY_RULE_CHANGE_DEFAULT;
+  return WORKFLOW_ACTIONS[type].defaultRule;
+}
+
+/** Whether a rule (action + scope) is a money rule: changes to it are approved by the finance list. */
+export const isMoneyRule = (type: WorkflowActionType, scope: string) => workflowFloorFor(type, scope).money;
+
 // ---------------------------------------------------------------------------------------------------
 // Rule validation and floors (§4.1, §4.3)
 // ---------------------------------------------------------------------------------------------------
@@ -290,7 +325,7 @@ function cleanApproverSet(v: unknown): WorkflowApproverSet | null {
   if (v.kind === 'role') return (WORKFLOW_ROLES as readonly unknown[]).includes(v.role) ? { kind: 'role', role: v.role as WorkflowRole } : null;
   if (v.kind === 'finance') {
     if (v.permission === undefined || v.permission === null) return { kind: 'finance' };
-    return typeof v.permission === 'string' && v.permission.startsWith('support:') && v.permission.length <= 40 ? { kind: 'finance', permission: v.permission as SupportPermission } : null;
+    return typeof v.permission === 'string' && (WORKFLOW_FINANCE_PERMISSIONS as readonly string[]).includes(v.permission) ? { kind: 'finance', permission: v.permission as SupportPermission } : null;
   }
   if (v.kind === 'people') {
     if (!Array.isArray(v.userIds) || !v.userIds.length || v.userIds.length > WORKFLOW_LIMITS.maxNamedPeople) return null;
@@ -305,7 +340,7 @@ function cleanApproverSet(v: unknown): WorkflowApproverSet | null {
  * Validates a rule from the rules page against its shape, the limits and the action's floor.
  * `minApprovals` raises the floor for this call (payout batches and ledger adjustments: MEM-D24, WF-D3).
  */
-export function validateWorkflowRule(type: WorkflowActionType, input: unknown, opts: { minApprovals?: number } = {}): WorkflowRuleResult {
+export function validateWorkflowRule(type: WorkflowActionType, input: unknown, opts: { minApprovals?: number; scope?: string } = {}): WorkflowRuleResult {
   const action = WORKFLOW_ACTIONS[type];
   if (!action || !isObj(input)) return { ok: false, problems: ['invalid_shape'] };
   const problems = new Set<WorkflowRuleProblem>();
@@ -340,7 +375,7 @@ export function validateWorkflowRule(type: WorkflowActionType, input: unknown, o
     effectiveDate: { allowed: eff.allowed as boolean, maxDaysAhead: eff.maxDaysAhead as number },
     notify: { email: notify.email as boolean, extra: extra as WorkflowApproverSet[] },
   };
-  const floorProblems = checkWorkflowFloor(action.floor, candidate, opts.minApprovals);
+  const floorProblems = checkWorkflowFloor(workflowFloorFor(type, opts.scope ?? ''), candidate, opts.minApprovals);
   return floorProblems.length ? { ok: false, problems: floorProblems } : { ok: true, rule: candidate };
 }
 

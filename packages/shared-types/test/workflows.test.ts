@@ -187,3 +187,38 @@ test('messages exist in English and Arabic, with Arabic commas only and no Weste
   }
   for (const code of w.WORKFLOW_ERROR_CODES) assert.ok(w.WORKFLOW_ERROR_MESSAGES[code]);
 });
+
+test('finance approver sets name only real money permissions, the same list as support.ts', async () => {
+  const support = await import('../src/support.ts');
+  assert.deepEqual([...w.WORKFLOW_FINANCE_PERMISSIONS], [...support.FINANCE_ONLY_SUPPORT_PERMISSIONS]);
+  const r = clone(w.WORKFLOW_ACTIONS['support.fees.set'].defaultRule) as unknown as Record<string, unknown>;
+  r.approvers = [{ kind: 'finance', permission: 'support:read' }];
+  const res = w.validateWorkflowRule('support.fees.set', r);
+  assert.ok(!res.ok && res.problems.includes('approvers_invalid'), 'support:read is not a money permission');
+});
+
+test('WF-D9: the creatorSupport switch and money rule changes carry the money floor', () => {
+  assert.ok(w.workflowFloorFor('features.set', 'creatorSupport').money);
+  assert.ok(w.workflowFloorFor('workflows.rule.set', w.WORKFLOW_RULE_CHANGE_MONEY_SCOPE).money);
+  assert.ok(!w.workflowFloorFor('features.set', 'uploads').money);
+  assert.ok(w.isMoneyRule('support.fees.set', ''));
+  const lowered = clone(w.workflowDefaultRuleFor('features.set', 'creatorSupport'));
+  lowered.approvalsNeeded = 0;
+  const res = w.validateWorkflowRule('features.set', lowered, { scope: 'creatorSupport' });
+  assert.ok(!res.ok && res.problems.includes('below_floor_approvals'));
+  assert.ok(w.validateWorkflowRule('features.set', w.workflowDefaultRuleFor('features.set', 'creatorSupport'), { scope: 'creatorSupport' }).ok);
+  const supers = { ...clone(w.workflowDefaultRuleFor('features.set', 'creatorSupport')), approvers: [{ kind: 'role' as const, role: 'super_admin' as const }] };
+  const res2 = w.validateWorkflowRule('features.set', supers, { scope: 'creatorSupport' });
+  assert.ok(!res2.ok && res2.problems.includes('below_floor_money_approvers'));
+  assert.deepEqual(w.WORKFLOW_SEEDED_SCOPES['features.set'], ['creatorSupport']);
+});
+
+test('the finance list and tech-staff marks are people actions decided by super admins, with their own floor', () => {
+  for (const type of ['support.financeList.add', 'support.techStaff.unmark'] as const) {
+    const def = w.WORKFLOW_ACTIONS[type];
+    assert.equal(def.domain, 'people');
+    assert.equal(def.floor.money, false);
+    assert.equal(def.floor.minApprovals, 1);
+    assert.deepEqual(def.defaultRule.approvers, [{ kind: 'role', role: 'super_admin' }]);
+  }
+});
