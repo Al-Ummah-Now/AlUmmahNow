@@ -19,7 +19,7 @@ import { renderEmail, type EmailBlock, type EmailDoc, type EmailLocale } from '.
 import type { QueueMessageLike } from '../contact-mail-queue';
 import { logger } from '../logger';
 import { createWorkflowDirectory, ownerIdsFrom } from './directory';
-import { getRequestView } from './engine';
+import { getRequestView, WorkflowError } from './engine';
 import type { WorkflowEvent } from './types';
 import type { D1Database } from '../types';
 
@@ -131,6 +131,16 @@ const COPY = {
   },
 } as const;
 
+/** Decimal places of a currency's minor unit (ISO 4217 via Intl); 2 when unknown. */
+export function currencyExponent(currency: string | undefined): number {
+  if (!currency) return 2;
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
 /** Eastern Arabic digits, never grouped (O35, O38). */
 export function arDigits(v: number | string): string {
   return String(v).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
@@ -152,10 +162,16 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
   if (Array.isArray(v)) return v.map(label).join(locale === 'ar' ? '، ' : ', ');
   if (f.kind === 'enum') return label(v);
   if (f.kind === 'money' && typeof v === 'number') {
-    const s = `${(v / 100).toFixed(2)} ${f.currency ?? ''}`.trim();
+    // Minor units with the currency's own exponent (JPY 0, USD 2, KWD 3)
+    const exp = currencyExponent(f.currency);
+    const s = `${(v / 10 ** exp).toFixed(exp)} ${f.currency ?? ''}`.trim();
     return locale === 'ar' ? arDigits(s.replace('.', '٫')) : s;
   }
-  if (f.kind === 'bps' && typeof v === 'number') return locale === 'ar' ? `٪${arDigits((v / 100).toString().replace('.', '٫'))}` : `${v / 100}%`;
+  // bps: basis points (290 = 2.9%); percent: the number itself (2.9 = 2.9%)
+  if ((f.kind === 'bps' || f.kind === 'percent') && typeof v === 'number') {
+    const pct = String(f.kind === 'bps' ? v / 100 : v);
+    return locale === 'ar' ? `٪${arDigits(pct.replace('.', '٫'))}` : `${pct}%`;
+  }
   if (f.kind === 'date') return dateText(String(v), locale);
   return locale === 'ar' ? arDigits(String(v)) : String(v);
 }
@@ -223,8 +239,10 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
     let request: WorkflowRequestView;
     try {
       request = await getRequestView(ctx, job.requestId);
-    } catch {
-      return 'done';
+    } catch (error) {
+      // Only a request that no longer exists ends the job; anything else (D1 unavailable) retries
+      if (error instanceof WorkflowError && error.code === 'not_found') return 'done';
+      throw error;
     }
     const ruleRow = await db.prepare('SELECT rule FROM workflow_requests WHERE id = ?').bind(job.requestId).first<{ rule: string }>();
     const rule = ruleRow ? (JSON.parse(ruleRow.rule) as { notify?: { email?: boolean; extra?: unknown[] } }) : null;

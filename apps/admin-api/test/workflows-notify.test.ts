@@ -186,3 +186,23 @@ describe('delivery', () => {
     assert.equal(sent.length, 0);
   });
 });
+
+describe('review fixes (#1832)', () => {
+  const f = (kind: 'money' | 'percent' | 'bps', currency?: string) => ({ key: 'k', label: { en: 'K', ar: 'ك' }, kind, currency, before: null, after: null });
+  it('money uses the currency exponent', () => {
+    assert.equal(fieldValue(f('money', 'USD'), 1234, 'en', new Map()), '12.34 USD');
+    assert.equal(fieldValue(f('money', 'JPY'), 500, 'en', new Map()), '500 JPY');
+    assert.equal(fieldValue(f('money', 'KWD'), 1500, 'en', new Map()), '1.500 KWD');
+    assert.equal(fieldValue(f('money', 'KWD'), 1500, 'ar', new Map()), '١٫٥٠٠ KWD');
+  });
+  it('a transient D1 error retries the job instead of dropping it', async () => {
+    const broken = { prepare() { throw new Error('D1_ERROR: network connection lost'); } };
+    const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: 'wfr_x', event: 'proposed', actor: 'a', recipients: ['b'] };
+    assert.equal(await processWorkflowNotifyJob({ SEARCH_DB: broken } as never, { id: 'm', body: job, attempts: 1, ack() {}, retry() {} }), 'retry');
+  });
+  it('percent and bps show % and ٪', () => {
+    assert.equal(fieldValue(f('percent'), 2.9, 'en', new Map()), '2.9%');
+    assert.equal(fieldValue(f('percent'), 2.9, 'ar', new Map()), '٪٢٫٩');
+    assert.equal(fieldValue(f('bps'), 290, 'en', new Map()), '2.9%');
+  });
+});
