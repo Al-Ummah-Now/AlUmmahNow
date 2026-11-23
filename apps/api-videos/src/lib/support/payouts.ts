@@ -20,7 +20,7 @@ import { type SearchDb, type SupportCurrency, type SupportPolicy } from '@al-umm
 import { railFor, type SupportAdapterEnv } from './adapters';
 import { readSupportConfig } from './config';
 import { applyRailEvents } from './events';
-import { creatorBalance, payoutSentLines, postEntry } from './ledger';
+import { creatorBalance, payoutFailedLines, payoutSentLines, postEntry } from './ledger';
 import { RailError, type PayoutRail, type RailContext } from './rail';
 import { lastReconcileOk } from './reconcile';
 
@@ -92,6 +92,9 @@ export async function planBatch(
 	if (!(await lastReconcileOk(db))) throw new PayoutError('not_clean', 'The last reconciliation has a gap or never ran');
 	const existing = await db.prepare("SELECT id FROM support_payout_batches WHERE period = ? AND status <> 'stopped'").bind(input.period).first<{ id: string }>();
 	if (existing) throw new PayoutError('exists', `A batch for ${input.period} exists`, { batchId: existing.id });
+	// One batch in flight at a time: balances are planned once, never by two batches
+	const inFlight = await db.prepare("SELECT id FROM support_payout_batches WHERE status IN ('awaiting_approval', 'approved', 'funding', 'sending') LIMIT 1").first<{ id: string }>();
+	if (inFlight) throw new PayoutError('exists', 'Another payout batch is still open', { batchId: inFlight.id });
 
 	const payees = await db
 		.prepare("SELECT id, channel_id, rail, mode, rail_payee_ref, country FROM support_payees WHERE status = 'active' AND sanctions_status = 'clear' AND payouts_held = 0 AND tax_form <> 'none' AND rail_payee_ref IS NOT NULL ORDER BY channel_id LIMIT 1000")
@@ -125,6 +128,8 @@ export async function planBatch(
 			payouts.push({ payoutId: newId('spo'), payeeId: payee.id, channelId: payee.channel_id, amount: bal.available, currency, railFee: quote.fee.amount });
 		}
 	}
+	// Nobody to pay: no batch (an empty one would hold the period and never finish)
+	if (!payouts.length) return { batchId: null, payouts, skipped };
 	const at = input.now.toISOString();
 	const totals: Record<string, number> = {};
 	for (const po of payouts) totals[po.currency] = (totals[po.currency] ?? 0) + po.amount;
@@ -141,9 +146,20 @@ export async function planBatch(
 	return { batchId, payouts, skipped };
 }
 
-/** Whether `userId` is on the organization's finance list (active and approved by the board). */
+/**
+ * Whether `userId` may approve payouts: on the organization's finance list (active, approved by a
+ * second person), holding `support:payouts`, and not marked as tech staff (the same rule as admin-api's
+ * financeAllows).
+ */
 export async function isFinanceMember(db: SearchDb, userId: string): Promise<boolean> {
-	const r = await db.prepare('SELECT 1 AS x FROM support_finance_members WHERE user_id = ? AND removed_at IS NULL AND approved_by IS NOT NULL').bind(userId).first<{ x: number }>();
+	const r = await db
+		.prepare(
+			`SELECT 1 AS x FROM support_finance_members m WHERE m.user_id = ? AND m.removed_at IS NULL AND m.approved_by IS NOT NULL
+			 AND EXISTS (SELECT 1 FROM json_each(m.roles) WHERE value = 'support:payouts')
+			 AND NOT EXISTS (SELECT 1 FROM support_tech_staff t WHERE t.user_id = m.user_id)`,
+		)
+		.bind(userId)
+		.first<{ x: number }>();
 	return !!r;
 }
 
@@ -239,35 +255,48 @@ export async function sendOnePayout(env: SupportAdapterEnv & { SEARCH_DB?: Searc
 		const state = await rail.getPayout(ctx, po.id);
 		if (state) {
 			if (state.status === 'paid' || state.status === 'failed' || state.status === 'sent') {
+				await ensureSent(db, po, now);
 				await apply(state.status, state.railPayoutRef, state.failureCode);
 				await finishBatchIfDone(db, po.batch_id, now);
 				return state.status;
 			}
 			if (state.status === 'returned') {
+				await ensureSent(db, po, now);
 				await apply('paid', state.railPayoutRef, null);
 				await applyRailEvents({ db, collector: '', mode: po.mode, policy: config.policy, now, rail: po.rail }, [{ type: 'payout.updated', payoutId: po.id, railPayoutRef: state.railPayoutRef, status: 'returned', failureCode: state.failureCode, occurredAt: at }]);
 				await finishBatchIfDone(db, po.batch_id, now);
 				return 'failed';
 			}
 		}
-		// The rail never got it: safe to send with the same id (the rail dedupes on it anyway)
-	} else {
-		const batch = await db.prepare('SELECT status FROM support_payout_batches WHERE id = ?').bind(po.batch_id).first<{ status: string }>();
-		const stopped = !batch || batch.status === 'stopped' || config.holdAllPayouts || config.emergencyStop;
-		const payeeBad = !payee?.rail_payee_ref || payee.status !== 'active' || payee.sanctions_status !== 'clear' || payee.payouts_held === 1;
-		const owed = (await creatorBalance(db, po.channel_id))[po.currency]?.available ?? 0;
-		if (stopped || payeeBad || owed < po.amount) {
-			// Refunds since planning, a held payee or a stopped batch: nothing leaves, nothing was booked
-			const code = stopped ? 'held' : payeeBad ? 'payee_not_ready' : 'balance_changed';
-			await db.prepare("UPDATE support_payouts SET status = 'canceled', failure_code = ?, updated_at = ? WHERE id = ? AND status = 'queued'").bind(code, at, po.id).run();
-			await finishBatchIfDone(db, po.batch_id, now);
-			return 'canceled';
-		}
-		// The money leaves the creator's available balance before the call (key per payout: once)
-		await postEntry(db, { entryKey: `payout:${po.id}:sent`, kind: 'payout', lines: payoutSentLines(po.channel_id, { amount: po.amount, currency: po.currency }), channelId: po.channel_id, refTable: 'support_payouts', refId: po.id, createdBy: 'system', now });
+		// The rail never got it: it may be sent again with the same id, after the same checks as a first send
 	}
 
-	await db.prepare('UPDATE support_payouts SET attempts = attempts + 1, updated_at = ? WHERE id = ?').bind(at, po.id).run();
+	// Every send (a first one, or a retry the rail never saw) is checked again: a stopped batch, a held
+	// payee or a balance that dropped since planning sends nothing
+	const sentKey = `payout:${po.id}:sent`;
+	const sentPosted = await entryExists(db, sentKey);
+	const batch = await db.prepare('SELECT status FROM support_payout_batches WHERE id = ?').bind(po.batch_id).first<{ status: string }>();
+	const stopped = !batch || batch.status === 'stopped' || config.holdAllPayouts || config.emergencyStop;
+	const payeeBad = !payee?.rail_payee_ref || payee.status !== 'active' || payee.sanctions_status !== 'clear' || payee.payouts_held === 1;
+	const owed = (await creatorBalance(db, po.channel_id))[po.currency]?.available ?? 0;
+	if (stopped || payeeBad || (!sentPosted && owed < po.amount)) {
+		const code = stopped ? 'held' : payeeBad ? 'payee_not_ready' : 'balance_changed';
+		// Money already moved to "in payout" by an earlier attempt goes back to available (key: once)
+		if (sentPosted) await postEntry(db, { entryKey: `payout:${po.id}:failed`, kind: 'payout_return', lines: payoutFailedLines(po.channel_id, { amount: po.amount, currency: po.currency }), channelId: po.channel_id, refTable: 'support_payouts', refId: po.id, createdBy: 'system', now });
+		await db.prepare("UPDATE support_payouts SET status = 'canceled', failure_code = ?, updated_at = ? WHERE id = ? AND status IN ('queued', 'unknown')").bind(code, at, po.id).run();
+		await finishBatchIfDone(db, po.batch_id, now);
+		return 'canceled';
+	}
+
+	// Claim the payout before anything moves: it reads 'unknown' from here on, so a crash at any later
+	// point makes the retry ask the rail first, and a second worker on the same payout stops here
+	const claimed = (await db
+		.prepare("UPDATE support_payouts SET status = 'unknown', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = ?")
+		.bind(at, po.id, po.status)
+		.run()) as { meta?: { changes?: number } };
+	if (!claimed.meta?.changes) return 'skipped';
+	// The money leaves the creator's available balance before the call (key per payout: once)
+	await ensureSent(db, po, now);
 	try {
 		const ack = await rail.sendPayout(ctx, { payoutId: po.id, railPayeeRef: payee!.rail_payee_ref as string, amount: { amount: po.amount, currency: po.currency } });
 		const status = ack.status === 'unknown' || ack.status === 'returned' ? 'sent' : ack.status;
@@ -281,10 +310,18 @@ export async function sendOnePayout(env: SupportAdapterEnv & { SEARCH_DB?: Searc
 			await finishBatchIfDone(db, po.batch_id, now);
 			throw error;
 		}
-		// Lost answer: the next attempt asks before sending
-		await db.prepare("UPDATE support_payouts SET status = 'unknown', updated_at = ? WHERE id = ?").bind(at, po.id).run();
+		// Lost answer: the payout stays 'unknown'; the next attempt asks before sending
 		throw error;
 	}
+}
+
+async function entryExists(db: SearchDb, entryKey: string): Promise<boolean> {
+	return !!(await db.prepare('SELECT 1 AS x FROM support_ledger_entries WHERE entry_key = ?').bind(entryKey).first<{ x: number }>());
+}
+
+/** available → in payout for this payout, once. */
+async function ensureSent(db: SearchDb, po: PayoutRow, now: Date): Promise<void> {
+	await postEntry(db, { entryKey: `payout:${po.id}:sent`, kind: 'payout', lines: payoutSentLines(po.channel_id, { amount: po.amount, currency: po.currency }), channelId: po.channel_id, refTable: 'support_payouts', refId: po.id, createdBy: 'system', now });
 }
 
 /** A batch whose payouts all reached an end is done. */

@@ -45,8 +45,10 @@ app.post('/jobs/retry', async (c) => {
 		// A webhook job that gave up early (event marked failed) finished "succeeded": queue it again from its event
 		const eventId = job.kind === 'support.webhook' ? String(job.params.eventId ?? job.targetId) : null;
 		const event = eventId ? await store.prepare('SELECT id, status FROM support_events WHERE id = ?').bind(eventId).first<{ id: string; status: string }>() : null;
-		// Reconcile "Check again" runs a fresh pass even when the last one succeeded
-		if (event?.status !== 'failed' && job.kind !== 'support.reconcile') return c.json({ success: true, result: { ok: true, status: job.status, result: 'Nothing to retry' } });
+		// Reconcile "Check again" runs a fresh pass even when the last one succeeded; a payout job that
+		// finished by flagging the Errors page (refused plan, refused send, refused funding) runs again too
+		const flagged = (job.kind === 'support.payout-plan' || job.kind === 'support.payout-send' || job.kind === 'support.payout-fund') && job.status === 'succeeded' && !!(job.result && ('refused' in job.result || 'failed' in job.result));
+		if (event?.status !== 'failed' && job.kind !== 'support.reconcile' && !flagged) return c.json({ success: true, result: { ok: true, status: job.status, result: 'Nothing to retry' } });
 		if (event) await store.prepare(`UPDATE support_events SET status = 'queued', error = NULL WHERE id = ?`).bind(event.id).run();
 		await store.prepare(`UPDATE admin_jobs SET status = 'failed' WHERE id = ?`).bind(job.id).run();
 	}

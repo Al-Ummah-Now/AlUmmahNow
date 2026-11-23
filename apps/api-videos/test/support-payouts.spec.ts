@@ -64,7 +64,7 @@ async function setup(opts: { decided?: boolean; clean?: boolean } = {}) {
 	const queue = new JobsQueue();
 	const env = { SEARCH_DB: sql, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1', VIDEOS_API_URL: 'https://videos.api.qa.example', ADMIN_JOBS_QUEUE: queue, ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors/ingest', INTERNAL_API_KEY: 'k' } as unknown as SupportJobEnv;
 	if (opts.decided !== false) await writeSupportPolicy(sql as never, DECIDED, FIN_A, 0);
-	for (const u of [FIN_A, FIN_B]) await sql.prepare("INSERT INTO support_finance_members (user_id, added_by, approved_by, added_at) VALUES (?, 'board_1', 'board_2', 'now')").bind(u).run();
+	for (const u of [FIN_A, FIN_B]) await sql.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES (?, '[\"support:payouts\"]', 'board_1', 'board_2', 'now')").bind(u).run();
 	if (opts.clean !== false) await sql.prepare("INSERT INTO support_reconciliations (id, date, currency, ledger_bank, ledger_rail, ledger_clearing, gap, status, created_at) VALUES ('r1', '2026-12-14', 'USD', 0, 0, 0, 0, 'ok', 'now')").run();
 	return { sql, queue, env, drain: () => queue.drain(env), ctx: vendorContext(env, 'test', () => NOW) };
 }
@@ -209,5 +209,91 @@ describe('the plan job', () => {
 		assert.equal(job!.status, 'succeeded');
 		assert.match(job!.result, /decision_open/);
 		assert.ok(reported.some((r) => r.includes('MEM-D17')));
+	});
+});
+
+describe('review fixes (cross-provider review of #1763)', () => {
+	async function approvedBatch(t: Awaited<ReturnType<typeof setup>>) {
+		const { batchId, payouts } = await plan(t, FIN_A);
+		await approveBatch(t.sql as never, batchId!, FIN_B, NOW);
+		return { batchId: batchId!, payouts };
+	}
+
+	it('a crash after the money moved to "in payout" but before the payout left "queued" never traps it: the retry pays', async () => {
+		const t = await setup();
+		await creator(t, 'ch_crash', 4000);
+		await testRailFund(t.ctx, usd(10_000));
+		const { payouts } = await approvedBatch(t);
+		const id = payouts[0].payoutId;
+		// The state an older build could leave: sent entry posted, payout still 'queued'
+		await postEntry(t.sql as never, { entryKey: `payout:${id}:sent`, kind: 'payout', createdBy: 'system', channelId: 'ch_crash', lines: [{ account: 'creator:ch_crash:available', amount: 4000, currency: 'USD' }, { account: 'creator:ch_crash:in_payout', amount: -4000, currency: 'USD' }] });
+		assert.equal(await sendOnePayout(t.env, id, () => t.ctx, NOW), 'paid');
+		assert.deepEqual((await creatorBalance(t.sql as never, 'ch_crash')).USD, { pending: 0, available: 0, in_payout: 0, reserve: 0 });
+	});
+
+	it('a crash right after the claim (unknown, nothing posted, the rail never got it): the retry checks again, posts once and pays', async () => {
+		const t = await setup();
+		await creator(t, 'ch_claim', 4000);
+		await testRailFund(t.ctx, usd(10_000));
+		const { payouts } = await approvedBatch(t);
+		const id = payouts[0].payoutId;
+		await t.sql.prepare("UPDATE support_payouts SET status = 'unknown', attempts = 1 WHERE id = ?").bind(id).run();
+		assert.equal(await sendOnePayout(t.env, id, () => t.ctx, NOW), 'paid');
+		assert.equal(t.sql.count('support_ledger_entries'), 2 + 2);
+		assert.deepEqual(await testRail.getFundingBalance(t.ctx), [usd(6000)]);
+	});
+
+	it('an unknown payout the rail never got is not sent once its batch is stopped or its payee held; the money goes back', async () => {
+		const t = await setup();
+		await creator(t, 'ch_stop', 4000);
+		await testRailFund(t.ctx, usd(10_000));
+		const { batchId, payouts } = await approvedBatch(t);
+		const id = payouts[0].payoutId;
+		await t.sql.prepare("UPDATE support_payouts SET status = 'unknown' WHERE id = ?").bind(id).run();
+		await postEntry(t.sql as never, { entryKey: `payout:${id}:sent`, kind: 'payout', createdBy: 'system', channelId: 'ch_stop', lines: [{ account: 'creator:ch_stop:available', amount: 4000, currency: 'USD' }, { account: 'creator:ch_stop:in_payout', amount: -4000, currency: 'USD' }] });
+		await t.sql.prepare("UPDATE support_payout_batches SET status = 'stopped' WHERE id = ?").bind(batchId).run();
+		assert.equal(await sendOnePayout(t.env, id, () => t.ctx, NOW), 'canceled');
+		assert.deepEqual((await creatorBalance(t.sql as never, 'ch_stop')).USD, { pending: 0, available: 4000, in_payout: 0, reserve: 0 });
+		assert.deepEqual(await testRail.getFundingBalance(t.ctx), [usd(10_000)]);
+	});
+
+	it('two workers on the same payout: only one claims it', async () => {
+		const t = await setup();
+		await creator(t, 'ch_twice', 4000);
+		await testRailFund(t.ctx, usd(10_000));
+		const { payouts } = await approvedBatch(t);
+		const outcomes = await Promise.all([sendOnePayout(t.env, payouts[0].payoutId, () => t.ctx, NOW), sendOnePayout(t.env, payouts[0].payoutId, () => t.ctx, NOW)]);
+		assert.ok(outcomes.includes('paid'));
+		assert.deepEqual(await testRail.getFundingBalance(t.ctx), [usd(6000)], 'paid once');
+		assert.equal((await creatorBalance(t.sql as never, 'ch_twice')).USD!.in_payout, 0);
+	});
+
+	it('approvers need support:payouts on the finance list and are never tech staff', async () => {
+		const t = await setup();
+		await creator(t, 'ch_perm', 4000);
+		const { batchId } = await plan(t, 'system');
+		await t.sql.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('usr_refunds_only', '[\"support:refund\"]', 'b1', 'b2', 'now')").run();
+		await assert.rejects(approveBatch(t.sql as never, batchId!, 'usr_refunds_only', NOW), (e: PayoutError) => e.code === 'not_finance');
+		await t.sql.prepare("INSERT INTO support_tech_staff (user_id, marked_by, marked_at) VALUES (?, 'b1', 'now')").bind(FIN_A).run();
+		await assert.rejects(approveBatch(t.sql as never, batchId!, FIN_A, NOW), (e: PayoutError) => e.code === 'not_finance');
+	});
+
+	it('one batch in flight at a time, and no empty batches', async () => {
+		const t = await setup();
+		assert.deepEqual(await plan(t), { batchId: null, payouts: [], skipped: [] });
+		await creator(t, 'ch_one', 4000);
+		await plan(t);
+		await assert.rejects(planBatch(t.env, { period: 'manual-20261215T010000', preparedBy: FIN_A, now: NOW, ctxFor: () => t.ctx }), (e: PayoutError) => e.code === 'exists');
+	});
+
+	it('a funded batch whose payouts were all canceled is done, not stuck sending', async () => {
+		const t = await setup();
+		await creator(t, 'ch_gone', 4000);
+		const { batchId, payouts } = await approvedBatch(t);
+		await t.sql.prepare("UPDATE support_payouts SET status = 'canceled' WHERE id = ?").bind(payouts[0].payoutId).run();
+		const { createJob } = await import('../src/lib/admin/jobs');
+		await createJob(t.env, { kind: 'support.payout-fund', targetKind: 'support', targetId: batchId, params: { batchId }, actorId: 'test' });
+		await t.drain();
+		assert.equal((await t.sql.prepare('SELECT status FROM support_payout_batches WHERE id = ?').bind(batchId).first<{ status: string }>())!.status, 'done');
 	});
 });

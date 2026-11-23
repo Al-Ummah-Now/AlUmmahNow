@@ -37,8 +37,22 @@ const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organization_not_formed', 'no_fin
 export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadiness> {
   const db = env.SEARCH_DB;
   if (!db) return { ready: false, blockers: [...ALL_BLOCKERS], openDecisions: [] };
-  const row = await db.prepare("SELECT policy, collector, organisation_formed FROM support_config WHERE id = 'default'").first<{ policy: string; collector: SupportCollectorId; organisation_formed: number }>();
-  const members = await db.prepare('SELECT COUNT(*) AS n FROM support_finance_members WHERE removed_at IS NULL AND approved_by IS NOT NULL').first<{ n: number }>();
+  let row: { policy: string; collector: SupportCollectorId; organisation_formed: number } | null;
+  let members: { n: number } | null;
+  try {
+    row = await db.prepare("SELECT policy, collector, organisation_formed FROM support_config WHERE id = 'default'").first<{ policy: string; collector: SupportCollectorId; organisation_formed: number }>();
+    // Approvers: approved by a second person, holding support:payouts, never tech staff (admin-api financeAllows)
+    members = await db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM support_finance_members m WHERE m.removed_at IS NULL AND m.approved_by IS NOT NULL
+         AND EXISTS (SELECT 1 FROM json_each(m.roles) WHERE value = 'support:payouts')
+         AND NOT EXISTS (SELECT 1 FROM support_tech_staff t WHERE t.user_id = m.user_id)`,
+      )
+      .first<{ n: number }>();
+  } catch {
+    // Unreadable: not ready (fails closed)
+    return { ready: false, blockers: [...ALL_BLOCKERS], openDecisions: [] };
+  }
   let raw: unknown = {};
   try {
     raw = row?.policy ? JSON.parse(row.policy) : {};

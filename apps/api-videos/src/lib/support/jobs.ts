@@ -29,7 +29,7 @@ import { applyCollectorEvents, applyRailEvents, releaseDueGifts, UnmatchedSuppor
 import { LedgerError } from './ledger';
 import { RailError, type RailContext } from './rail';
 import { reconcileDay } from './reconcile';
-import { fundingShortfall, PayoutError, planBatch, refreshPayoutStatuses, sendOnePayout } from './payouts';
+import { finishBatchIfDone, fundingShortfall, PayoutError, planBatch, refreshPayoutStatuses, sendOnePayout } from './payouts';
 import { CollectorError } from './collector';
 
 export interface SupportJobEnv extends Omit<JobEnv, 'INTERNAL_API_KEY'>, SupportAdapterEnv, ErrorReporterEnv {
@@ -270,12 +270,25 @@ export async function runSupportPayoutFundJob(env: SupportJobEnv, job: AdminJob,
 	const batchId = String(job.params.batchId ?? job.targetId);
 	const batch = await store.prepare('SELECT id, status, totals FROM support_payout_batches WHERE id = ?').bind(batchId).first<{ id: string; status: string; totals: string }>();
 	if (!batch || (batch.status !== 'approved' && batch.status !== 'funding')) return { done: true, result: { skipped: batch?.status ?? 'gone' } };
-	const rail = await store.prepare("SELECT DISTINCT rail, mode FROM support_payouts WHERE batch_id = ? AND status = 'queued'").bind(batchId).all<{ rail: string; mode: 'test' | 'live' }>();
-	const totals = JSON.parse(batch.totals || '{}') as Record<string, number>;
-	for (const r of rail.results ?? []) {
+	// What each rail needs, from the payouts still to send: their amounts, plus the rail's fee when the
+	// organization bears it (MEM-D20), per rail, mode and currency
+	const config = await readSupportConfig(store);
+	const feeOnTop = config.policy.payoutFeeBearer === 'organization' ? ' + COALESCE(SUM(rail_fee), 0)' : '';
+	const needs = await store
+		.prepare(`SELECT rail, mode, currency, SUM(amount)${feeOnTop} AS total FROM support_payouts WHERE batch_id = ? AND status = 'queued' GROUP BY rail, mode, currency`)
+		.bind(batchId)
+		.all<{ rail: string; mode: 'test' | 'live'; currency: string; total: number }>();
+	const byRail = new Map<string, { rail: string; mode: 'test' | 'live'; totals: Record<string, number> }>();
+	for (const n of needs.results ?? []) {
+		const k = `${n.rail}:${n.mode}`;
+		const entry = byRail.get(k) ?? { rail: n.rail, mode: n.mode, totals: {} };
+		entry.totals[n.currency] = Number(n.total);
+		byRail.set(k, entry);
+	}
+	for (const r of byRail.values()) {
 		const adapter = railFor(env, r.rail as never);
 		if (!adapter) throw new RailError(`Payout service ${r.rail} is not available here`, null, true);
-		const short = await fundingShortfall(adapter, vendorContext(env, r.mode, () => now), totals);
+		const short = await fundingShortfall(adapter, vendorContext(env, r.mode, () => now), r.totals);
 		if (Object.keys(short).length) {
 			await store.prepare("UPDATE support_payout_batches SET status = 'funding', updated_at = ? WHERE id = ?").bind(now.toISOString(), batchId).run();
 			reportNeedsAction('api-videos', env, undefined, { key: `support-fund:${batchId}`, source: 'admin-job', title: 'Fund the payout service', message: `Payout batch ${batchId} needs ${Object.entries(short).map(([c, a]) => `${a} ${c} (minor units)`).join(', ')} more at ${r.rail} before it can be sent. The organization’s finance person moves it from the creator-funds account; payouts start once it arrives.`, itemType: 'support-batch', itemId: batchId, itemUrl: '/support/payouts' });
@@ -286,6 +299,8 @@ export async function runSupportPayoutFundJob(env: SupportJobEnv, job: AdminJob,
 	await store.prepare("UPDATE support_payout_batches SET status = 'sending', updated_at = ? WHERE id = ?").bind(now.toISOString(), batchId).run();
 	const payouts = await store.prepare("SELECT id FROM support_payouts WHERE batch_id = ? AND status = 'queued'").bind(batchId).all<{ id: string }>();
 	for (const po of payouts.results ?? []) await createJob(env, { kind: 'support.payout-send', targetKind: 'support', targetId: po.id, params: { payoutId: po.id }, actorId: `batch:${batchId}` });
+	// Nothing left to send (every payout canceled meanwhile): the batch is done, not stuck in 'sending'
+	if (!payouts.results?.length) await finishBatchIfDone(store, batchId, now);
 	return { done: true, result: { queued: payouts.results?.length ?? 0 } };
 }
 
