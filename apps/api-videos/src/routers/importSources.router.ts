@@ -15,7 +15,7 @@
  */
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { IMPORT_SOURCE_NETWORKS, IMPORT_SOURCE_SCHEDULES, type ImportItemState } from '@al-ummah/shared-types';
+import { IMPORT_SOURCE_NETWORKS, IMPORT_SOURCE_SCHEDULES, type SourceItemState } from '@al-ummah/shared-types';
 import { getJob, retryJob } from '../lib/admin/jobs';
 import { loadChannelRecord } from '../lib/channelAccess';
 import { authorizeSource, channelConnections, normalizeAddress, stillAuthorized } from '../lib/importSources/authorize';
@@ -129,7 +129,7 @@ app.post('/:id/sync', async (c) => {
 app.get('/:id/items', async (c) => {
 	const row = await sourceOr404(c);
 	const q = parse(ItemsQuery, { state: c.req.query('state'), limit: c.req.query('limit') });
-	return ok(c, { items: await listItems(c.env, row.id, { state: q.state as ImportItemState | undefined, limit: q.limit }) });
+	return ok(c, { items: await listItems(c.env, row.id, { state: q.state as SourceItemState | undefined, limit: q.limit }) });
 });
 
 export default app;
