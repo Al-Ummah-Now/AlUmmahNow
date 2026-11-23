@@ -77,6 +77,10 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'POST', '/api/videos/category-suggestions', 'aiCategorySuggest'),
   r('admin-api', 'POST', '/api/sites/:channelId/domains', 'siteDomains'),
   r('admin-api', 'POST', '/internal/site-domains/:channelId/domains', 'siteDomains'),
+  // Creator support (wiki AUN-MEMBERS): Studio › Support payee; the handler also checks the channel owner
+  r('api-videos', 'GET', '/api/channels/:channelId/support/payee', 'creatorSupport', 'handler'),
+  r('api-videos', 'POST', '/api/channels/:channelId/support/payee/onboard', 'creatorSupport', 'handler'),
+  r('api-videos', 'POST', '/api/channels/:channelId/support/payee/refresh', 'creatorSupport', 'handler'),
   // Upgrade mode (O37): the page shows "not available" rather than refusing
   r('api-videos', 'GET', '/api/tiers/upgrade', 'tierRequests', 'handler'),
   r('api-videos', 'POST', '/api/me/tier-requests', 'tierRequests', 'handler'),
@@ -104,6 +108,8 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'admin-api', prefix: '/api/sites/:channelId/domains', key: 'siteDomains' },
   { app: 'admin-api', prefix: '/internal/site-domains', key: 'siteDomains' },
   { app: 'api-videos', prefix: '/api/me/tier-requests', key: 'tierRequests' },
+  // Creator support (wiki AUN-MEMBERS): every channel support route is the switch's
+  { app: 'api-videos', prefix: '/api/channels/:channelId/support', key: 'creatorSupport' },
   { app: 'admin-api', prefix: '/internal/newsletter', key: 'newsletter' },
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
 ]);
@@ -201,11 +207,10 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
 ]);
 
 /**
- * Switches with no route of their own yet, and why (the route test accepts these). Creator support
- * routes arrive with MEMBERS and are mapped then.
+ * Switches with no route of their own yet, and why (the route test accepts these). The rest of
+ * creator support's routes arrive with their MEMBERS stories and are mapped then.
  */
 export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, string>>> = Object.freeze({
-  creatorSupport: 'MEMBERS adds its routes and maps them here',
   supportExternalLinks: 'MEMBERS adds its routes and maps them here',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportPerks: 'MEMBERS adds its routes and maps them here',

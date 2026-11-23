@@ -11,6 +11,7 @@
 import type { Context } from 'hono';
 import { roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
 import { featureOff } from '../../lib/features/off';
+import { apiError } from '../../lib/api-error';
 import { createJob } from '../../lib/admin/jobs';
 import { logger } from '../../lib/logger';
 import { vendorContext, type SupportJobEnv } from '../../lib/support/jobs';
@@ -35,12 +36,12 @@ async function gate(c: Context, need: 'read' | 'owner'): Promise<Response | { en
 	const env = c.env as Env;
 	if (!(await supportSwitch(env)).on) return featureOff(c, 'creatorSupport');
 	const userId = c.get('userId') as string | undefined;
-	if (!userId) return c.json({ success: false, code: 'unauthorized' }, 401);
+	if (!userId) return apiError(c, 401, 'unauthorized');
 	const channelId = c.req.param('channelId') ?? '';
 	const role = await roleOnChannel(env as unknown as ChannelAccessEnv, channelId, userId).catch(() => null);
 	const allowed = need === 'owner' ? role === 'owner' : role === 'owner' || role === 'admin';
-	if (!allowed) return c.json({ success: false, code: 'not_found' }, 404);
-	if (!env.SEARCH_DB) return c.json({ success: false, code: 'unavailable' }, 503);
+	if (!allowed) return apiError(c, 404, 'channel_not_found');
+	if (!env.SEARCH_DB) return apiError(c, 503, 'service_unavailable');
 	return { env, channelId, userId };
 }
 
@@ -69,10 +70,10 @@ export async function handleSupportPayeeOnboard(c: Context) {
 		const r = await startPayeeOnboarding(g.env, { channelId: g.channelId, ownerUserId: g.userId, country, locale: body?.locale === 'ar' ? 'ar' : 'en', returnUrl: `${web}${returnPath(body?.returnPath, g.channelId)}`, ctx: vendorContext(g.env, mode, () => now), now });
 		return c.json({ success: true, result: { url: r.url, expiresAt: r.expiresAt } });
 	} catch (error) {
-		if (error instanceof PayeeError) return c.json({ success: false, code: `support_${error.code}` }, PAYEE_ERROR_STATUS[error.code]);
+		if (error instanceof PayeeError) return apiError(c, PAYEE_ERROR_STATUS[error.code], `support_${error.code}`);
 		if (error instanceof RailError) {
 			logger.warn('[Support] Payee onboarding link failed', { channelId: g.channelId, error: error.message });
-			return c.json({ success: false, code: 'support_rail_unavailable' }, 503);
+			return apiError(c, 503, 'support_rail_unavailable');
 		}
 		throw error;
 	}
@@ -82,7 +83,7 @@ export async function handleSupportPayeeRefresh(c: Context) {
 	const g = await gate(c, 'owner');
 	if (g instanceof Response) return g;
 	const row = await g.env.SEARCH_DB!.prepare('SELECT id FROM support_payees WHERE channel_id = ? ORDER BY updated_at DESC LIMIT 1').bind(g.channelId).first<{ id: string }>();
-	if (!row) return c.json({ success: false, code: 'support_no_payee' }, 404);
+	if (!row) return apiError(c, 404, 'support_no_payee');
 	const job = await createJob(g.env, { kind: 'support.payee-sync', targetKind: 'support', targetId: row.id, params: { payeeId: row.id }, actorId: g.userId });
 	return c.json({ success: true, result: { jobId: job.id } }, 202);
 }

@@ -88,6 +88,15 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   app_update_required: { action: 'update_app', en: 'Please update the app to continue.', ar: 'يُرجى تحديث التطبيق للمتابعة.' },
   // Feature switches (the message comes from the registry entry; this is the fallback)
   feature_off: { action: 'none', en: 'This feature isn’t available right now.', ar: 'هذه الميزة غير متاحة الآن.' },
+  // Creator support (wiki AUN-MEMBERS): Studio › Support payout setup
+  support_invalid_country: { action: 'none', en: 'Choose the country your bank account or wallet is in.', ar: 'اختر الدولة التي يوجد فيها حسابك المصرفي أو محفظتك.' },
+  support_decision_open: { action: 'none', en: 'Payouts can’t be set up yet.', ar: 'لا يمكن إعداد استلام الدفعات بعد.' },
+  support_country_blocked: { action: 'none', en: 'Payouts aren’t available in this country.', ar: 'استلام الدفعات غير متاح في هذه الدولة.' },
+  support_country_waitlist: { action: 'none', en: 'Payouts aren’t available in this country yet. We’ll let you know when they are.', ar: 'استلام الدفعات غير متاح في هذه الدولة بعد. سنخبرك عندما يتاح.' },
+  support_country_external_link_only: { action: 'none', en: 'Payouts through Al Ummah Now aren’t available in this country.', ar: 'استلام الدفعات عبر الأمة الآن غير متاح في هذه الدولة.' },
+  support_no_rail_for_country: { action: 'none', en: 'No payout service we use reaches this country yet.', ar: 'لا تصل أيٌّ من خدمات الدفع التي نستخدمها إلى هذه الدولة بعد.' },
+  support_rail_unavailable: { action: 'retry', en: 'The payout service didn’t answer. Please try again in a moment.', ar: 'لم تستجب خدمة الدفع. يُرجى المحاولة بعد قليل.' },
+  support_no_payee: { action: 'none', en: 'Set up payouts first.', ar: 'أعدّ استلام الدفعات أولًا.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
