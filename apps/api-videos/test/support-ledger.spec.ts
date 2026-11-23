@@ -197,7 +197,7 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 		const d = db();
 		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }, 'usr_fin', 0);
 		await d.prepare("UPDATE support_config SET organisation_formed = 1 WHERE id = 'default'").run();
-		await d.prepare("INSERT INTO support_finance_members (user_id, added_by, approved_by, added_at) VALUES ('usr_fin', 'usr_board', 'usr_board2', 'now')").run();
+		await d.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('usr_fin', '[\"support:payouts\"]', 'usr_board', 'usr_board2', 'now')").run();
 		assert.equal((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).ready, true);
 		assert.deepEqual((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'production', SUPPORT_TEST_PROVIDERS: '1' })).blockers, ['no_collector', 'no_rail']);
 	});
@@ -214,5 +214,21 @@ describe('the FEAT-4 hook shape', () => {
 			assert.doesNotMatch(t.ar, /[0-9]|فيديو/);
 			assert.doesNotMatch(t.en, /'/);
 		}
+	});
+});
+
+describe('readiness counts only real approvers (cross-provider review of #1757, #1773)', () => {
+	it('members without support:payouts, or marked tech staff, don’t count', async () => {
+		const { supportCanTurnOn } = await import('../src/lib/support/readiness');
+		const d = db();
+		await d.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('a', '[\"support:refund\"]', 'x', 'y', 'now'), ('b', '[\"support:payouts\"]', 'x', 'y', 'now')").run();
+		await d.prepare("INSERT INTO support_tech_staff (user_id, marked_by, marked_at) VALUES ('b', 'x', 'now')").run();
+		assert.ok((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).blockers.includes('no_finance_approver'));
+	});
+
+	it('an unreadable database is not ready (fails closed)', async () => {
+		const { supportCanTurnOn } = await import('../src/lib/support/readiness');
+		const broken = { prepare: () => { throw new Error('D1 down'); }, batch: async () => [] };
+		assert.equal((await supportCanTurnOn({ SEARCH_DB: broken as never, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).ready, false);
 	});
 });
