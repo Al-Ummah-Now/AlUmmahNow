@@ -1898,8 +1898,8 @@
         "tags": [
           "App config"
         ],
-        "summary": "App configuration, update notice and minimum supported version",
-        "description": "🌐 Public. Called by native and desktop apps at start-up and every `checkHours`. Returns the supported API versions, whether this build must (`required`) or should (`recommended`) be updated and how (wiki AUN-APP-UPDATES), and its remote config.",
+        "summary": "App configuration and minimum supported version",
+        "description": "🌐 Public. Called by native apps at start-up. Returns the supported API versions and whether this build must (`required`) or should (`recommended`) be updated.",
         "operationId": "get_AppConfigGet",
         "parameters": [
           {
@@ -1930,6 +1930,7 @@
               "enum": [
                 "viewer",
                 "studio",
+                "kids",
                 "tools",
                 "admin"
               ]
@@ -1942,58 +1943,11 @@
             "schema": {
               "type": "string",
               "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:\\.(\\d{1,6}))?(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z.-]+)?$",
-              "description": "Version of the running build (1.4.2, 2026.11.22.2; Apple: X.Y.Z.N with the rebuild number)"
+              "description": "Version of the running build (semver, e.g. 1.4.2)"
             },
             "required": true,
-            "description": "Version of the running build (1.4.2, 2026.11.22.2; Apple: X.Y.Z.N with the rebuild number)",
+            "description": "Version of the running build (semver, e.g. 1.4.2)",
             "name": "version",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "stable",
-                "beta"
-              ],
-              "description": "beta for TestFlight, Play testing and preview builds"
-            },
-            "required": false,
-            "description": "beta for TestFlight, Play testing and preview builds",
-            "name": "channel",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "appstore",
-                "testflight",
-                "play",
-                "amazon",
-                "msstore",
-                "direct",
-                "managed",
-                "samsung"
-              ],
-              "description": "Where this build was installed from"
-            },
-            "required": false,
-            "description": "Where this build was installed from",
-            "name": "source",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "x64",
-                "arm64",
-                "universal"
-              ]
-            },
-            "required": false,
-            "name": "arch",
             "in": "query"
           },
           {
@@ -2050,10 +2004,6 @@
                     "update": {
                       "type": "object",
                       "properties": {
-                        "enabled": {
-                          "type": "boolean",
-                          "description": "The appUpdates switch; false: show nothing and require nothing"
-                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -2061,7 +2011,7 @@
                             "recommended",
                             "required"
                           ],
-                          "description": "required: below the minimum version; recommended: a newer version this build can get"
+                          "description": "required: block with an update screen; recommended: suggest updating"
                         },
                         "minimumVersion": {
                           "type": "string"
@@ -2070,157 +2020,20 @@
                           "type": [
                             "string",
                             "null"
-                          ],
-                          "description": "The newest version this build’s install source can get"
+                          ]
                         },
                         "storeUrl": {
                           "type": [
                             "string",
                             "null"
                           ]
-                        },
-                        "channel": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "enum": [
-                            "stable",
-                            "beta",
-                            null
-                          ]
-                        },
-                        "publishedAt": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "notes": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "properties": {
-                            "en": {
-                              "type": "string"
-                            },
-                            "ar": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "en",
-                            "ar"
-                          ],
-                          "description": "Release notes in English and Arabic; the app shows its own UI language"
-                        },
-                        "message": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "properties": {
-                            "en": {
-                              "type": "string"
-                            },
-                            "ar": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "en",
-                            "ar"
-                          ],
-                          "description": "Admin text for the forced screen (only when required)"
-                        },
-                        "action": {
-                          "type": "string",
-                          "enum": [
-                            "store",
-                            "install",
-                            "download",
-                            "none"
-                          ],
-                          "description": "store: open the store; install: self-update from manifestUrl; download: open url"
-                        },
-                        "url": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "manifestUrl": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "description": "Signed app-release.json; verify it with the key list before installing"
-                        },
-                        "tag": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "description": "The release tag the signed manifest must name"
-                        },
-                        "signed": {
-                          "type": [
-                            "boolean",
-                            "null"
-                          ]
-                        },
-                        "available": {
-                          "type": [
-                            "boolean",
-                            "null"
-                          ],
-                          "description": "null: ask the device store (Play, Microsoft Store)"
-                        },
-                        "checkHours": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "keys": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "properties": {
-                            "list": {
-                              "type": "string"
-                            },
-                            "sig": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "list",
-                            "sig"
-                          ],
-                          "description": "The repo’s root-signed key list (update-keys.json and its .sig), verbatim"
                         }
                       },
                       "required": [
-                        "enabled",
                         "status",
                         "minimumVersion",
                         "latestVersion",
-                        "storeUrl",
-                        "channel",
-                        "publishedAt",
-                        "notes",
-                        "message",
-                        "action",
-                        "url",
-                        "manifestUrl",
-                        "tag",
-                        "signed",
-                        "available",
-                        "checkHours",
-                        "keys"
+                        "storeUrl"
                       ]
                     },
                     "flags": {
@@ -2246,109 +2059,6 @@
           },
           "400": {
             "description": "Invalid platform, app or version"
-          }
-        }
-      }
-    },
-    "/api/v1/app-config/update-failure": {
-      "post": {
-        "tags": [
-          "App config"
-        ],
-        "summary": "Report an update that failed verification",
-        "description": "🌐 Public, rate-limited, no user data. The app installed nothing; this tells the admins why.",
-        "operationId": "post_AppUpdateFailurePost",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "app": {
-                    "type": "string",
-                    "enum": [
-                      "viewer",
-                      "studio",
-                      "tools",
-                      "admin"
-                    ]
-                  },
-                  "platform": {
-                    "type": "string",
-                    "enum": [
-                      "ios",
-                      "ipados",
-                      "tvos",
-                      "macos",
-                      "android",
-                      "androidtv",
-                      "firetv",
-                      "windows",
-                      "linux",
-                      "tizen",
-                      "webos",
-                      "web"
-                    ]
-                  },
-                  "version": {
-                    "type": "string",
-                    "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:\\.(\\d{1,6}))?(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z.-]+)?$"
-                  },
-                  "repo": {
-                    "type": "string",
-                    "enum": [
-                      "AlUmmahNowDesktop",
-                      "AlUmmahNowTools",
-                      "AlUmmahNowApple",
-                      "AlUmmahNowAndroid"
-                    ]
-                  },
-                  "tag": {
-                    "type": "string",
-                    "pattern": "^(?:admin-windows-v|admin-v|v)[0-9A-Za-z.+-]{1,64}$"
-                  },
-                  "reason": {
-                    "type": "string",
-                    "enum": [
-                      "bad_signature_file",
-                      "unknown_key",
-                      "bad_signature",
-                      "bad_json",
-                      "bad_manifest",
-                      "wrong_repo",
-                      "wrong_tag",
-                      "wrong_channel",
-                      "not_newer",
-                      "below_floor",
-                      "yanked",
-                      "key_list",
-                      "host",
-                      "hash",
-                      "code_signature"
-                    ]
-                  }
-                },
-                "required": [
-                  "app",
-                  "platform",
-                  "version",
-                  "repo",
-                  "tag",
-                  "reason"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Noted"
-          },
-          "400": {
-            "description": "Invalid body"
-          },
-          "429": {
-            "description": "Too many reports"
           }
         }
       }
@@ -2770,33 +2480,6 @@
                           },
                           "isVerified": {
                             "type": "boolean"
-                          },
-                          "verification": {
-                            "type": "object",
-                            "properties": {
-                              "kind": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "enum": [
-                                  "scholar",
-                                  "institution",
-                                  null
-                                ]
-                              },
-                              "verifiedAt": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "kind",
-                              "verifiedAt"
-                            ],
-                            "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                           },
                           "avatarUrl": {
                             "type": "string"
@@ -3391,33 +3074,6 @@
                     },
                     "isVerified": {
                       "type": "boolean"
-                    },
-                    "verification": {
-                      "type": "object",
-                      "properties": {
-                        "kind": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "enum": [
-                            "scholar",
-                            "institution",
-                            null
-                          ]
-                        },
-                        "verifiedAt": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "kind",
-                        "verifiedAt"
-                      ],
-                      "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                     },
                     "avatarUrl": {
                       "type": "string"
@@ -5862,33 +5518,6 @@
                     },
                     "isVerified": {
                       "type": "boolean"
-                    },
-                    "verification": {
-                      "type": "object",
-                      "properties": {
-                        "kind": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
-                          "enum": [
-                            "scholar",
-                            "institution",
-                            null
-                          ]
-                        },
-                        "verifiedAt": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "kind",
-                        "verifiedAt"
-                      ],
-                      "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                     },
                     "avatarUrl": {
                       "type": "string"
@@ -19182,772 +18811,6 @@
         }
       }
     },
-    "/api/v1/library/notes": {
-      "get": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "List private video notes",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nWith `videoId`: that video's notes in time order. With `since`: every change after that time, oldest first, deleted notes included (`deleted: true`), for sync; omit both `since` and `videoId` with `sync=true` to read every note from the start. Otherwise the most recently changed notes first. Notes are private to the signed-in user.",
-        "operationId": "get_NotesList",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "required": false,
-            "name": "videoId",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            },
-            "required": false,
-            "name": "since",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            },
-            "required": false,
-            "name": "sync",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 512
-            },
-            "required": false,
-            "name": "cursor",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 50
-            },
-            "required": false,
-            "name": "limit",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A page of notes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "items": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "videoId": {
-                                "type": "string"
-                              },
-                              "startMs": {
-                                "type": "integer"
-                              },
-                              "endMs": {
-                                "type": [
-                                  "integer",
-                                  "null"
-                                ]
-                              },
-                              "body": {
-                                "type": "string"
-                              },
-                              "createdAt": {
-                                "type": "string"
-                              },
-                              "updatedAt": {
-                                "type": "string"
-                              },
-                              "deleted": {
-                                "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "videoId",
-                              "startMs",
-                              "endMs",
-                              "body",
-                              "createdAt",
-                              "updatedAt",
-                              "deleted"
-                            ]
-                          }
-                        },
-                        "nextCursor": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "items",
-                        "nextCursor"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "Add a private note at a time in a video",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n`id` may be chosen by the client (8 to 64 of A–Z, a–z, 0–9, _ and -) so an offline device can retry safely; sending it again applies as an edit when newer. The note limit comes from the account's tier.",
-        "operationId": "post_NoteCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^[A-Za-z0-9_-]{8,64}$"
-                  },
-                  "videoId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64
-                  },
-                  "startMs": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "endMs": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "minimum": 0
-                  },
-                  "body": {
-                    "type": "string",
-                    "maxLength": 4000
-                  },
-                  "updatedAt": {
-                    "type": "string",
-                    "format": "date-time",
-                    "description": "When the edit was made on the device; last write wins"
-                  }
-                },
-                "required": [
-                  "videoId",
-                  "startMs",
-                  "body"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The stored note",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "videoId": {
-                          "type": "string"
-                        },
-                        "startMs": {
-                          "type": "integer"
-                        },
-                        "endMs": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
-                        },
-                        "body": {
-                          "type": "string"
-                        },
-                        "createdAt": {
-                          "type": "string"
-                        },
-                        "updatedAt": {
-                          "type": "string"
-                        },
-                        "deleted": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "videoId",
-                        "startMs",
-                        "endMs",
-                        "body",
-                        "createdAt",
-                        "updatedAt",
-                        "deleted"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "invalid_time or invalid_body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The video is not available to this user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "notes_limit: the tier's note limit is reached",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "Delete all private notes, or one video's",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
-        "operationId": "delete_NotesDeleteAll",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "required": false,
-            "name": "videoId",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "How many notes were deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "deleted": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "deleted"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/library/notes/export.md": {
-      "get": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "Export private notes as Markdown",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nVideo titles, links, timestamps with seek links and note text. Generated on demand and never stored. `lang=ar` writes the headings in Arabic.",
-        "operationId": "get_NotesExport",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "required": false,
-            "name": "videoId",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "en",
-                "ar"
-              ]
-            },
-            "required": false,
-            "name": "lang",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "text/markdown attachment"
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/library/notes/{id}": {
-      "put": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "Edit a private note (last write wins)",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe edit applies only when its `updatedAt` is newer than the stored change; the response is the stored note and `applied`.",
-        "operationId": "put_NoteUpdate",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_-]{8,64}$"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "startMs": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "endMs": {
-                    "type": [
-                      "integer",
-                      "null"
-                    ],
-                    "minimum": 0
-                  },
-                  "body": {
-                    "type": "string",
-                    "maxLength": 4000
-                  },
-                  "updatedAt": {
-                    "type": "string",
-                    "format": "date-time",
-                    "description": "When the edit was made on the device; last write wins"
-                  }
-                },
-                "required": [
-                  "startMs",
-                  "body"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The stored note",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "videoId": {
-                          "type": "string"
-                        },
-                        "startMs": {
-                          "type": "integer"
-                        },
-                        "endMs": {
-                          "type": [
-                            "integer",
-                            "null"
-                          ]
-                        },
-                        "body": {
-                          "type": "string"
-                        },
-                        "createdAt": {
-                          "type": "string"
-                        },
-                        "updatedAt": {
-                          "type": "string"
-                        },
-                        "deleted": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "videoId",
-                        "startMs",
-                        "endMs",
-                        "body",
-                        "createdAt",
-                        "updatedAt",
-                        "deleted"
-                      ]
-                    },
-                    "applied": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data",
-                    "applied"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "invalid_time or invalid_body",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such note for this user",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Library"
-        ],
-        "summary": "Delete a private note",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
-        "operationId": "delete_NoteDelete",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_-]{8,64}$"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deleted (or already deleted)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "deleted": {
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "deleted"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/library/saved-posts": {
       "get": {
         "tags": [
@@ -20814,36 +19677,6 @@
           },
           {
             "schema": {
-              "type": "string",
-              "enum": [
-                "live",
-                "premiere"
-              ],
-              "description": "Live streams or premieres only"
-            },
-            "required": false,
-            "description": "Live streams or premieres only",
-            "name": "kind",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "jumuah",
-                "taraweeh",
-                "conference",
-                "halqa"
-              ],
-              "description": "Streams with this event tag (404 feature_off while event tags are off)"
-            },
-            "required": false,
-            "description": "Streams with this event tag (404 feature_off while event tags are off)",
-            "name": "eventType",
-            "in": "query"
-          },
-          {
-            "schema": {
               "type": [
                 "string",
                 "null"
@@ -20969,32 +19802,6 @@
                               "duration": {
                                 "type": "number",
                                 "description": "Stream duration in seconds"
-                              },
-                              "kind": {
-                                "type": "string",
-                                "enum": [
-                                  "live",
-                                  "premiere"
-                                ],
-                                "description": "A live stream unless it says premiere"
-                              },
-                              "eventType": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "enum": [
-                                  "jumuah",
-                                  "taraweeh",
-                                  "conference",
-                                  "halqa",
-                                  null
-                                ],
-                                "description": "Event tag; null while event tags are off"
-                              },
-                              "reminderCount": {
-                                "type": "integer",
-                                "description": "People who asked to be reminded; 0 while reminders are off"
                               },
                               "isDeleted": {
                                 "type": "boolean"
@@ -21157,31 +19964,6 @@
                   "allowChat": {
                     "type": "boolean"
                   },
-                  "chatReplay": {
-                    "type": "boolean"
-                  },
-                  "slowModeSeconds": {
-                    "type": "integer"
-                  },
-                  "subscribersOnly": {
-                    "type": "boolean"
-                  },
-                  "madeForKids": {
-                    "type": "boolean"
-                  },
-                  "eventType": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "jumuah",
-                      "taraweeh",
-                      "conference",
-                      "halqa",
-                      null
-                    ]
-                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21303,32 +20085,6 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
-                            },
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "live",
-                                "premiere"
-                              ],
-                              "description": "A live stream unless it says premiere"
-                            },
-                            "eventType": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "enum": [
-                                "jumuah",
-                                "taraweeh",
-                                "conference",
-                                "halqa",
-                                null
-                              ],
-                              "description": "Event tag; null while event tags are off"
-                            },
-                            "reminderCount": {
-                              "type": "integer",
-                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -21770,31 +20526,6 @@
                   "allowChat": {
                     "type": "boolean"
                   },
-                  "chatReplay": {
-                    "type": "boolean"
-                  },
-                  "slowModeSeconds": {
-                    "type": "integer"
-                  },
-                  "subscribersOnly": {
-                    "type": "boolean"
-                  },
-                  "madeForKids": {
-                    "type": "boolean"
-                  },
-                  "eventType": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "jumuah",
-                      "taraweeh",
-                      "conference",
-                      "halqa",
-                      null
-                    ]
-                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21923,32 +20654,6 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
-                            },
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "live",
-                                "premiere"
-                              ],
-                              "description": "A live stream unless it says premiere"
-                            },
-                            "eventType": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "enum": [
-                                "jumuah",
-                                "taraweeh",
-                                "conference",
-                                "halqa",
-                                null
-                              ],
-                              "description": "Event tag; null while event tags are off"
-                            },
-                            "reminderCount": {
-                              "type": "integer",
-                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -22124,940 +20829,6 @@
                     }
                   },
                   "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/live-streams/{id}/chat": {
-      "get": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Live chat messages",
-        "description": "Published messages, oldest first. Without a cursor: the latest. `afterId`: those after that message (`resync: true` when it is gone; start over from this page). `before`: those before that message. `fromMs` (and `toMs`, at most 60 s later), on an ended stream: the replay beside the recording, by the time since the start; `truncated` when one window held more than fits. Poll only while the realtime channel `live:<id>` is not connected, every 10 s.",
-        "operationId": "get_LiveChatList",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "required": false,
-            "name": "afterId",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "maxLength": 64
-            },
-            "required": false,
-            "name": "before",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "required": false,
-            "name": "fromMs",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
-              "minimum": 0
-            },
-            "required": false,
-            "name": "toMs",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "required": false,
-            "name": "limit",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Messages",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "messages": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "streamId": {
-                                "type": "string"
-                              },
-                              "userId": {
-                                "type": "string"
-                              },
-                              "authorName": {
-                                "type": "string"
-                              },
-                              "authorHandle": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "authorAvatar": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "authorRole": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "enum": [
-                                  "owner",
-                                  "moderator",
-                                  null
-                                ]
-                              },
-                              "text": {
-                                "type": "string"
-                              },
-                              "offsetMs": {
-                                "type": "integer"
-                              },
-                              "isPinned": {
-                                "type": "boolean"
-                              },
-                              "createdAt": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "streamId",
-                              "userId",
-                              "authorName",
-                              "authorHandle",
-                              "authorAvatar",
-                              "authorRole",
-                              "text",
-                              "offsetMs",
-                              "isPinned",
-                              "createdAt"
-                            ]
-                          }
-                        },
-                        "pinned": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "streamId": {
-                              "type": "string"
-                            },
-                            "userId": {
-                              "type": "string"
-                            },
-                            "authorName": {
-                              "type": "string"
-                            },
-                            "authorHandle": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "authorAvatar": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "authorRole": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "enum": [
-                                "owner",
-                                "moderator",
-                                null
-                              ]
-                            },
-                            "text": {
-                              "type": "string"
-                            },
-                            "offsetMs": {
-                              "type": "integer"
-                            },
-                            "isPinned": {
-                              "type": "boolean"
-                            },
-                            "createdAt": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "streamId",
-                            "userId",
-                            "authorName",
-                            "authorHandle",
-                            "authorAvatar",
-                            "authorRole",
-                            "text",
-                            "offsetMs",
-                            "isPinned",
-                            "createdAt"
-                          ]
-                        },
-                        "resync": {
-                          "type": "boolean"
-                        },
-                        "hasMore": {
-                          "type": "boolean"
-                        },
-                        "truncated": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "messages",
-                        "pinned",
-                        "resync",
-                        "hasMore"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such stream, or its chat is off",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Post in a live chat",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 At most 500 characters; links only from the stream’s team. As the channel in the channelId header, or as yourself.",
-        "operationId": "post_LiveChatPost",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Post as this channel"
-            },
-            "required": false,
-            "description": "Post as this channel",
-            "name": "channelId",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "maxLength": 4000
-                  }
-                },
-                "required": [
-                  "text"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Posted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "streamId": {
-                              "type": "string"
-                            },
-                            "userId": {
-                              "type": "string"
-                            },
-                            "authorName": {
-                              "type": "string"
-                            },
-                            "authorHandle": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "authorAvatar": {
-                              "type": [
-                                "string",
-                                "null"
-                              ]
-                            },
-                            "authorRole": {
-                              "type": [
-                                "string",
-                                "null"
-                              ],
-                              "enum": [
-                                "owner",
-                                "moderator",
-                                null
-                              ]
-                            },
-                            "text": {
-                              "type": "string"
-                            },
-                            "offsetMs": {
-                              "type": "integer"
-                            },
-                            "isPinned": {
-                              "type": "boolean"
-                            },
-                            "createdAt": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "streamId",
-                            "userId",
-                            "authorName",
-                            "authorHandle",
-                            "authorAvatar",
-                            "authorRole",
-                            "text",
-                            "offsetMs",
-                            "isPinned",
-                            "createdAt"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "live_chat_empty, live_chat_too_long, live_chat_link or live_chat_blocked_word",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "live_chat_subscribers_only",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such stream, or its chat is off or not open yet",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "live_chat_slow_mode or live_chat_duplicate (with retryAfter), or rate_limited",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/live-streams/{id}/chat/settings": {
-      "patch": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Live chat settings",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 The stream’s owner, or live.manage or live.moderate on its channel.",
-        "operationId": "patch_LiveChatSettingsUpdate",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "allowChat": {
-                    "type": "boolean"
-                  },
-                  "chatReplay": {
-                    "type": "boolean"
-                  },
-                  "slowModeSeconds": {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "enum": [
-                          0
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          5
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          10
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          30
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          60
-                        ]
-                      }
-                    ],
-                    "description": "0, 5, 10, 30 or 60"
-                  },
-                  "subscribersOnly": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "settings": {
-                          "type": "object",
-                          "properties": {
-                            "allowChat": {
-                              "type": "boolean"
-                            },
-                            "chatReplay": {
-                              "type": "boolean"
-                            },
-                            "slowModeSeconds": {
-                              "type": "number"
-                            },
-                            "subscribersOnly": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "allowChat",
-                            "chatReplay",
-                            "slowModeSeconds",
-                            "subscribersOnly"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "settings"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not allowed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/live-streams/{id}/chat/{messageId}/moderate": {
-      "post": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Moderate a live chat message",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 The stream’s owner, or live.manage, live.moderate or comment.moderate on its channel. An author may `remove` their own message. `block_author` also removes what they wrote on this stream; they are not told.",
-        "operationId": "post_LiveChatModerate",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "Message id"
-            },
-            "required": true,
-            "description": "Message id",
-            "name": "messageId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "action": {
-                    "type": "string",
-                    "enum": [
-                      "remove",
-                      "restore",
-                      "pin",
-                      "unpin",
-                      "block_author"
-                    ]
-                  }
-                },
-                "required": [
-                  "action"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Done",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "messageId": {
-                          "type": "string"
-                        },
-                        "action": {
-                          "type": "string",
-                          "enum": [
-                            "remove",
-                            "restore",
-                            "pin",
-                            "unpin",
-                            "block_author"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "messageId",
-                        "action"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not yours to moderate",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Already so",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
                     "error"
                   ]
                 }
@@ -23351,200 +21122,6 @@
         }
       }
     },
-    "/api/v1/live-streams/{id}/premiere": {
-      "patch": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Show another video in a premiere",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Before it starts. The new video must be on the same channel and meet the same rules; the old one is free again.",
-        "operationId": "patch_PremiereSwap",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "videoId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
-                  }
-                },
-                "required": [
-                  "videoId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The premiere",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "stream": {
-                          "type": "object",
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "stream"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "premiere_bad_time or premiere_video_unsuitable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not allowed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found, or the feature is off",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "premiere_video_not_ready, premiere_video_already_open, premiere_video_scheduled, premiere_exists or premiere_started",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/live-streams/{id}/qoe": {
       "post": {
         "tags": [
@@ -23588,212 +21165,6 @@
                   },
                   "required": [
                     "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/live-streams/{id}/reminders": {
-      "post": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Remind me of a live stream",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 15 minutes before and when it starts, within the person’s notification settings and quiet hours.",
-        "operationId": "post_LiveReminderSet",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "set": {
-                          "type": "boolean"
-                        },
-                        "count": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "set",
-                        "count"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Nothing to be reminded of",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "code",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Do not remind me of a live stream",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A public stream or premiere that has not started. 15 minutes before and when it starts, within the person’s notification settings and quiet hours.",
-        "operationId": "delete_LiveReminderClear",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Live stream id"
-            },
-            "required": true,
-            "description": "Live stream id",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "set": {
-                          "type": "boolean"
-                        },
-                        "count": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "set",
-                        "count"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Nothing to be reminded of",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "code",
                     "error"
                   ]
                 }
@@ -23919,31 +21290,6 @@
           },
           "404": {
             "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "The channel is being moved to another account (transfer_in_progress)",
             "content": {
               "application/json": {
                 "schema": {
@@ -24234,8 +21580,7 @@
                       "video",
                       "comment",
                       "channel",
-                      "livestream",
-                      "live_chat"
+                      "livestream"
                     ]
                   },
                   "entityId": {
@@ -24293,8 +21638,7 @@
                                 "video",
                                 "comment",
                                 "channel",
-                                "livestream",
-                                "live_chat"
+                                "livestream"
                               ]
                             },
                             "entityId": {
@@ -24417,31 +21761,6 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "A live chat message that is not there for this person, or live chat is off (feature_off)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
                 }
               }
             }
@@ -29388,6 +26707,7 @@
                           },
                           "required": [
                             "id",
+                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -29475,7 +26795,7 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Ignored: the profile's email is the signed-in account's"
+                    "description": "User email address"
                   },
                   "userName": {
                     "type": "string",
@@ -29683,6 +27003,7 @@
                           },
                           "required": [
                             "id",
+                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -29894,14 +27215,14 @@
         }
       }
     },
-    "/api/v1/profile/intentional": {
+    "/api/v1/profile/islamic": {
       "get": {
         "tags": [
           "Profiles"
         ],
-        "summary": "Get the current user's intentional-viewing preferences",
+        "summary": "Get the current user's prayer, Qibla and Hijri preferences",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
-        "operationId": "get_IntentionalPreferencesGet",
+        "operationId": "get_IslamicPreferencesGet",
         "responses": {
           "200": {
             "description": "Preferences",
@@ -29910,14 +27231,97 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "dailyLimitMinutes": {
+                    "version": {
+                      "type": "integer",
+                      "description": "Send it back with a change; a different stored version answers 409"
+                    },
+                    "cityId": {
                       "type": [
-                        "integer",
+                        "string",
                         "null"
                       ],
-                      "description": "null = no daily reminder"
+                      "description": "Catalogue city id (GeoNames); the only location value that leaves the device"
                     },
-                    "finiteLamahat": {
+                    "calculationMethod": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "auto"
+                          ]
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99
+                        }
+                      ],
+                      "description": "'auto' = the city's country default, else a provider method id"
+                    },
+                    "asrMethod": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "hanafi"
+                      ]
+                    },
+                    "adjustmentsMinutes": {
+                      "type": "object",
+                      "properties": {
+                        "fajr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "sunrise": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "dhuhr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "asr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "maghrib": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "isha": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        }
+                      },
+                      "required": [
+                        "fajr",
+                        "sunrise",
+                        "dhuhr",
+                        "asr",
+                        "maghrib",
+                        "isha"
+                      ],
+                      "description": "Applied on the device, never sent to the prayer API"
+                    },
+                    "hijriEnabled": {
+                      "type": "boolean"
+                    },
+                    "hijriShiftDays": {
+                      "type": "integer",
+                      "minimum": -2,
+                      "maximum": 2,
+                      "description": "Applied on the device to the provider date"
+                    },
+                    "ramadanMode": {
+                      "type": "boolean"
+                    },
+                    "jumuahReminder": {
                       "type": "boolean"
                     },
                     "updatedAt": {
@@ -29928,8 +27332,15 @@
                     }
                   },
                   "required": [
-                    "dailyLimitMinutes",
-                    "finiteLamahat",
+                    "version",
+                    "cityId",
+                    "calculationMethod",
+                    "asrMethod",
+                    "adjustmentsMinutes",
+                    "hijriEnabled",
+                    "hijriShiftDays",
+                    "ramadanMode",
+                    "jumuahReminder",
                     "updatedAt"
                   ]
                 }
@@ -29965,27 +27376,101 @@
         "tags": [
           "Profiles"
         ],
-        "summary": "Update the current user's intentional-viewing preferences",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
-        "operationId": "put_IntentionalPreferencesUpdate",
+        "summary": "Update the current user's prayer, Qibla and Hijri preferences",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nSend the `version` you read with the fields to change. Exact coordinates are never accepted: only a catalogue city id.",
+        "operationId": "put_IslamicPreferencesUpdate",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "dailyLimitMinutes": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cityId": {
                     "type": [
-                      "integer",
+                      "string",
                       "null"
                     ],
-                    "minimum": 5,
-                    "maximum": 600
+                    "pattern": "^[1-9][0-9]{0,9}$"
                   },
-                  "finiteLamahat": {
+                  "calculationMethod": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "auto"
+                        ]
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 99
+                      }
+                    ]
+                  },
+                  "asrMethod": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "hanafi"
+                    ]
+                  },
+                  "adjustmentsMinutes": {
+                    "type": "object",
+                    "properties": {
+                      "fajr": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      },
+                      "sunrise": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      },
+                      "dhuhr": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      },
+                      "asr": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      },
+                      "maghrib": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      },
+                      "isha": {
+                        "type": "integer",
+                        "minimum": -60,
+                        "maximum": 60
+                      }
+                    }
+                  },
+                  "hijriEnabled": {
+                    "type": "boolean"
+                  },
+                  "hijriShiftDays": {
+                    "type": "integer",
+                    "minimum": -2,
+                    "maximum": 2
+                  },
+                  "ramadanMode": {
+                    "type": "boolean"
+                  },
+                  "jumuahReminder": {
                     "type": "boolean"
                   }
                 },
+                "required": [
+                  "version"
+                ],
                 "additionalProperties": false
               }
             }
@@ -29999,14 +27484,97 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "dailyLimitMinutes": {
+                    "version": {
+                      "type": "integer",
+                      "description": "Send it back with a change; a different stored version answers 409"
+                    },
+                    "cityId": {
                       "type": [
-                        "integer",
+                        "string",
                         "null"
                       ],
-                      "description": "null = no daily reminder"
+                      "description": "Catalogue city id (GeoNames); the only location value that leaves the device"
                     },
-                    "finiteLamahat": {
+                    "calculationMethod": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "auto"
+                          ]
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99
+                        }
+                      ],
+                      "description": "'auto' = the city's country default, else a provider method id"
+                    },
+                    "asrMethod": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "hanafi"
+                      ]
+                    },
+                    "adjustmentsMinutes": {
+                      "type": "object",
+                      "properties": {
+                        "fajr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "sunrise": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "dhuhr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "asr": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "maghrib": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        },
+                        "isha": {
+                          "type": "integer",
+                          "minimum": -60,
+                          "maximum": 60
+                        }
+                      },
+                      "required": [
+                        "fajr",
+                        "sunrise",
+                        "dhuhr",
+                        "asr",
+                        "maghrib",
+                        "isha"
+                      ],
+                      "description": "Applied on the device, never sent to the prayer API"
+                    },
+                    "hijriEnabled": {
+                      "type": "boolean"
+                    },
+                    "hijriShiftDays": {
+                      "type": "integer",
+                      "minimum": -2,
+                      "maximum": 2,
+                      "description": "Applied on the device to the provider date"
+                    },
+                    "ramadanMode": {
+                      "type": "boolean"
+                    },
+                    "jumuahReminder": {
                       "type": "boolean"
                     },
                     "updatedAt": {
@@ -30017,8 +27585,15 @@
                     }
                   },
                   "required": [
-                    "dailyLimitMinutes",
-                    "finiteLamahat",
+                    "version",
+                    "cityId",
+                    "calculationMethod",
+                    "asrMethod",
+                    "adjustmentsMinutes",
+                    "hijriEnabled",
+                    "hijriShiftDays",
+                    "ramadanMode",
+                    "jumuahReminder",
                     "updatedAt"
                   ]
                 }
@@ -30050,6 +27625,9 @@
           },
           "404": {
             "description": "feature_off"
+          },
+          "409": {
+            "description": "version_conflict: the stored preferences are returned in `current`"
           }
         }
       }
@@ -30486,6 +28064,7 @@
                           },
                           "required": [
                             "id",
+                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -30680,33 +28259,6 @@
                           },
                           "isVerified": {
                             "type": "boolean"
-                          },
-                          "verification": {
-                            "type": "object",
-                            "properties": {
-                              "kind": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ],
-                                "enum": [
-                                  "scholar",
-                                  "institution",
-                                  null
-                                ]
-                              },
-                              "verifiedAt": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "kind",
-                              "verifiedAt"
-                            ],
-                            "description": "The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"
                           },
                           "avatarUrl": {
                             "type": "string"
@@ -31164,7 +28716,8 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "Ignored: the profile's email is the signed-in account's"
+                    "format": "email",
+                    "description": "User email address"
                   },
                   "userName": {
                     "type": "string",
@@ -31226,7 +28779,10 @@
                     "type": "string",
                     "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
                   }
-                }
+                },
+                "required": [
+                  "email"
+                ]
               }
             }
           }
@@ -31372,6 +28928,7 @@
                           },
                           "required": [
                             "id",
+                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -49617,264 +47174,6 @@
         }
       }
     },
-    "/api/v1/videos/{id}/premiere": {
-      "post": {
-        "tags": [
-          "Live Streams"
-        ],
-        "summary": "Schedule a premiere",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; cancelling leaves it as it was.",
-        "operationId": "post_VideoPremiereCreate",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Video id"
-            },
-            "required": true,
-            "description": "Video id",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "scheduledStartTime": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
-                  "description": {
-                    "type": "string",
-                    "maxLength": 5000
-                  },
-                  "eventType": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "enum": [
-                      "jumuah",
-                      "taraweeh",
-                      "conference",
-                      "halqa",
-                      null
-                    ]
-                  },
-                  "allowChat": {
-                    "type": "boolean"
-                  },
-                  "chatReplay": {
-                    "type": "boolean"
-                  },
-                  "slowModeSeconds": {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "enum": [
-                          0
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          5
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          10
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          30
-                        ]
-                      },
-                      {
-                        "type": "number",
-                        "enum": [
-                          60
-                        ]
-                      }
-                    ],
-                    "description": "0, 5, 10, 30 or 60"
-                  },
-                  "subscribersOnly": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "scheduledStartTime"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The premiere",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "stream": {
-                          "type": "object",
-                          "additionalProperties": {}
-                        }
-                      },
-                      "required": [
-                        "stream"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "premiere_bad_time or premiere_video_unsuitable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not allowed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found, or the feature is off",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "premiere_video_not_ready, premiere_video_already_open, premiere_video_scheduled, premiere_exists or premiere_started",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/videos/{id}/publish-now": {
       "post": {
         "tags": [
@@ -58439,403 +55738,6 @@
         }
       }
     },
-    "/api/v1/videos/{videoId}/recitation": {
-      "get": {
-        "tags": [
-          "Recitation"
-        ],
-        "summary": "A video's confirmed recitation references and reciter metadata",
-        "description": "References and published cue timings only. No Quran or ASR text is returned. Official Uthmani text and recognized translations use the existing Quran Foundation passage and edition APIs. Hidden videos use the video read rule; a fresh Quran copy is required.",
-        "operationId": "get_VideoRecitationGet",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Video ID"
-            },
-            "required": true,
-            "description": "Video ID",
-            "name": "videoId",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Recitation references and attribution",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "videoId": {
-                          "type": "string"
-                        },
-                        "reciter": {
-                          "type": [
-                            "object",
-                            "null"
-                          ],
-                          "properties": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "nameLocalized": {
-                              "type": "object",
-                              "properties": {
-                                "en": {
-                                  "type": "string"
-                                },
-                                "ar": {
-                                  "type": "string"
-                                }
-                              }
-                            },
-                            "riwayah": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "name"
-                          ]
-                        },
-                        "items": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "range": {
-                                "type": "string"
-                              },
-                              "startMs": {
-                                "type": "number"
-                              },
-                              "endMs": {
-                                "type": "number"
-                              },
-                              "boundary": {
-                                "type": "string",
-                                "enum": [
-                                  "cue"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "range",
-                              "startMs",
-                              "endMs",
-                              "boundary"
-                            ]
-                          }
-                        },
-                        "credit": {
-                          "type": "object",
-                          "properties": {
-                            "en": {
-                              "type": "string"
-                            },
-                            "ar": {
-                              "type": "string"
-                            },
-                            "url": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "en",
-                            "ar",
-                            "url"
-                          ]
-                        },
-                        "creditsPath": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "videoId",
-                        "reciter",
-                        "items",
-                        "credit",
-                        "creditsPath"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Video not found, hidden, or recitation is off",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/videos/{videoId}/recitation-metadata": {
-      "put": {
-        "tags": [
-          "Recitation"
-        ],
-        "summary": "Set a video's human-supplied reciter metadata",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nOwner or video.edit, under the channel owner’s admin-managed tier. No Quran text or ASR inference is accepted.",
-        "operationId": "put_VideoRecitationMetadataPut",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Video ID"
-            },
-            "required": true,
-            "description": "Video ID",
-            "name": "videoId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "reciter": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "properties": {
-                      "nameLocalized": {
-                        "type": "object",
-                        "properties": {
-                          "en": {
-                            "type": "string",
-                            "maxLength": 200
-                          },
-                          "ar": {
-                            "type": "string",
-                            "maxLength": 200
-                          }
-                        }
-                      },
-                      "riwayah": {
-                        "type": "string",
-                        "maxLength": 80
-                      }
-                    }
-                  }
-                },
-                "required": [
-                  "reciter"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "recitation": {
-                          "type": "object",
-                          "properties": {
-                            "reciter": {
-                              "type": [
-                                "object",
-                                "null"
-                              ],
-                              "properties": {
-                                "name": {
-                                  "type": "string"
-                                },
-                                "nameLocalized": {
-                                  "type": "object",
-                                  "properties": {
-                                    "en": {
-                                      "type": "string"
-                                    },
-                                    "ar": {
-                                      "type": "string"
-                                    }
-                                  }
-                                },
-                                "riwayah": {
-                                  "type": "string"
-                                }
-                              },
-                              "required": [
-                                "name"
-                              ]
-                            },
-                            "updatedAt": {
-                              "type": "string"
-                            },
-                            "updatedBy": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "reciter",
-                            "updatedAt",
-                            "updatedBy"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "recitation"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "A reciter needs an English or Arabic name",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - missing or invalid authentication token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": false
-                    },
-                    "error": {
-                      "type": "string",
-                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not allowed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Video not found or the feature is off for this tier",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/videos/{videoId}/renditions": {
       "post": {
         "tags": [
@@ -64195,10 +61097,6 @@
               "bulkSchedule",
               "audioTracks",
               "live",
-              "liveChat",
-              "livePremieres",
-              "liveReminders",
-              "liveEvents",
               "captionsTranscribe",
               "captionsTranslate",
               "inlineTranslate",
@@ -64224,8 +61122,7 @@
               "quietHours",
               "newsletter",
               "listenMode",
-              "offlineDownloads",
-              "appUpdates"
+              "offlineDownloads"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
