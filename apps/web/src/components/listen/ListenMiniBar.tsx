@@ -84,7 +84,11 @@ export function ListenMiniBar() {
       dir={isRTL ? 'rtl' : 'ltr'}
       aria-label={labels.listenMode}
       data-testid="listen-mini-bar"
-      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-[55] border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg"
+      style={{
+        backgroundColor: 'var(--fanous-color-surface, #ffffff)',
+        borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+      }}
+      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-[55] border-t shadow-lg"
     >
       {/* Sleep timer popover */}
       {showSleep && (
@@ -92,7 +96,11 @@ export function ListenMiniBar() {
           role="dialog"
           aria-label={labels.sleepTimer}
           data-testid="listen-sleep-popover"
-          className="absolute bottom-full end-4 mb-2 w-56 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-2"
+          style={{
+            backgroundColor: 'var(--fanous-color-surface, #ffffff)',
+            borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+          }}
+          className="absolute bottom-full end-4 mb-2 w-56 rounded-lg border shadow-xl p-2"
         >
           <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{labels.sleepTimer}</div>
           <div className="flex flex-col gap-1">
@@ -127,7 +135,11 @@ export function ListenMiniBar() {
           role="dialog"
           aria-label={labels.queue}
           data-testid="listen-queue-drawer"
-          className="absolute bottom-full end-4 mb-2 w-80 max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3"
+          style={{
+            backgroundColor: 'var(--fanous-color-surface, #ffffff)',
+            borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+          }}
+          className="absolute bottom-full end-4 mb-2 w-80 max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto rounded-lg border shadow-xl p-3"
         >
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-200 dark:border-gray-700">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
