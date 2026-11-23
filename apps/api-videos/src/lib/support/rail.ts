@@ -102,7 +102,7 @@ export interface PayoutRail {
 	/** Idempotent on payoutId. */
 	sendPayout(ctx: RailContext, p: { payoutId: string; railPayeeRef: string; amount: Money }): Promise<PayoutAck>;
 	getPayout(ctx: RailContext, payoutId: string): Promise<PayoutState | null>;
-	/** The organisation's pre-funded balance at the rail, per currency */
+	/** The organization's pre-funded balance at the rail, per currency */
 	getFundingBalance(ctx: RailContext): Promise<Money[]>;
 	verifyWebhook(ctx: RailContext, rawBody: string, headers: Headers): Promise<RailDelivery | null>;
 	normalize(ctx: RailContext, delivery: RailDelivery): Promise<RailEvent[]>;

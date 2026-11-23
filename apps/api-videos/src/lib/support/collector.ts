@@ -2,7 +2,7 @@
  * Collecting gifts from supporters (wiki AUN-MEMBERS §9.2; O42: PayGood collects, never pays).
  *
  * One interface for every collector. Adapters: `test-collector.ts` (QA and the local stack only,
- * moves no money). The PayGood adapter on the organisation's merchant account is story MEM-10
+ * moves no money). The PayGood adapter on the organization's merchant account is story MEM-10
  * (AUN-622); until it exists `collectorFor` refuses 'paygood'.
  *
  * Every call that moves or could move money takes an idempotency key: a retry with the same key
@@ -89,11 +89,11 @@ export interface SupportCollector {
 	createCheckout(ctx: CollectorContext, input: SupportCheckoutInput): Promise<{ url: string; checkoutRef: string }>;
 	/** Stops a monthly pledge at once (no further charges). Idempotent. */
 	cancelPledge(ctx: CollectorContext, pledgeRef: string, reason: CancelReason): Promise<void>;
-	/** Refund from the organisation's merchant account. `amount` omitted = the rest of the payment. */
+	/** Refund from the organization's merchant account. `amount` omitted = the rest of the payment. */
 	refund(ctx: CollectorContext, input: { paymentRef: string; amount: Money | null; idempotencyKey: string; reason: string }): Promise<RefundResult>;
 	/** Checks the signature on the raw body; null when it is wrong or stale. */
 	verifyWebhook(ctx: CollectorContext, rawBody: string, headers: Headers): Promise<VerifiedDelivery | null>;
 	normalize(ctx: CollectorContext, delivery: VerifiedDelivery): Promise<CollectorEvent[]>;
-	/** Payouts from the collector to the organisation's creator-funds bank account, for reconciliation. */
+	/** Payouts from the collector to the organization's creator-funds bank account, for reconciliation. */
 	listSettlements(ctx: CollectorContext, sinceIso: string): Promise<Settlement[]>;
 }

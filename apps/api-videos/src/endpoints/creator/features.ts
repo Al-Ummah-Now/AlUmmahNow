@@ -7,7 +7,7 @@
  * ETag is a hash of the body; a matching If-None-Match gets 304 (wiki AUN-FEATURES §5.3).
  */
 import type { Context } from 'hono';
-import { NO_FEATURES, USER_FEATURES_VERSION, type UserFeaturesResponse } from '@al-ummah/shared-types';
+import { CLIENT_HEADER, NO_FEATURES, USER_FEATURES_VERSION, type UserFeaturesResponse } from '@al-ummah/shared-types';
 import { computeFeatures, type FeaturesEnv } from '../../lib/features';
 import { logger } from '../../lib/logger';
 
@@ -20,7 +20,8 @@ export async function handleUserFeatures(c: Context) {
 	const channelId = raw && CHANNEL_ID.test(raw) ? raw : null;
 	const headers = { 'Cache-Control': 'private, no-store', Vary: 'Authorization' };
 	try {
-		const features = await computeFeatures(c.env as FeaturesEnv, { userId, roles }, channelId);
+		const country = ((c.req.raw as { cf?: { country?: unknown } }).cf?.country as string | undefined) ?? null;
+		const features = await computeFeatures(c.env as FeaturesEnv, { userId, roles }, channelId, { country, client: c.req.header(CLIENT_HEADER) ?? null });
 		const body: UserFeaturesResponse = { success: true, version: USER_FEATURES_VERSION, features };
 		const json = JSON.stringify(body);
 		const etag = await bodyEtag(json);

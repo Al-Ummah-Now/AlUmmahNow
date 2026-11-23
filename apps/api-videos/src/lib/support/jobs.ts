@@ -204,7 +204,7 @@ export async function runSupportPayeeSyncJob(env: SupportJobEnv, job: AdminJob, 
 	if (state.sanctions === 'hold') {
 		// A screening hit holds the balance and never auto-releases (§4.3)
 		await store.prepare('UPDATE support_payees SET payouts_held = 1 WHERE id = ?').bind(row.id).run();
-		reportNeedsAction('api-videos', env, undefined, { key: `support-sanctions:${row.id}`, source: 'admin-job', title: 'Payee held by sanctions screening', message: `Payee ${row.id}: the payout service reports a screening hold. Payouts are held until the organisation’s compliance person reviews it.`, itemType: 'support-payee', itemId: row.id, itemUrl: '/support/creators' });
+		reportNeedsAction('api-videos', env, undefined, { key: `support-sanctions:${row.id}`, source: 'admin-job', title: 'Payee held by sanctions screening', message: `Payee ${row.id}: the payout service reports a screening hold. Payouts are held until the organization’s compliance person reviews it.`, itemType: 'support-payee', itemId: row.id, itemUrl: '/support/creators' });
 	}
 	return { done: true, result: { status: state.status, taxForm: state.taxForm } };
 }
@@ -251,7 +251,7 @@ export async function runSupportPayoutPlanJob(env: SupportJobEnv, job: AdminJob,
 	try {
 		const r = await planBatch(env, { period, preparedBy, now, ctxFor: (mode) => vendorContext(env, mode, () => now) });
 		if (r.payouts.length) {
-			reportNeedsAction('api-videos', env, undefined, { key: `support-batch:${r.batchId}`, source: 'admin-job', title: 'Payout batch waiting for approval', message: `${r.payouts.length} payouts for ${period} are ready. People on the organisation’s finance list approve them on the Payouts page.`, itemType: 'support-batch', itemId: r.batchId ?? '', itemUrl: '/support/payouts' });
+			reportNeedsAction('api-videos', env, undefined, { key: `support-batch:${r.batchId}`, source: 'admin-job', title: 'Payout batch waiting for approval', message: `${r.payouts.length} payouts for ${period} are ready. People on the organization’s finance list approve them on the Payouts page.`, itemType: 'support-batch', itemId: r.batchId ?? '', itemUrl: '/support/payouts' });
 		}
 		return { done: true, result: { batchId: r.batchId, payouts: r.payouts.length, skipped: r.skipped.length } };
 	} catch (error) {
@@ -278,7 +278,7 @@ export async function runSupportPayoutFundJob(env: SupportJobEnv, job: AdminJob,
 		const short = await fundingShortfall(adapter, vendorContext(env, r.mode, () => now), totals);
 		if (Object.keys(short).length) {
 			await store.prepare("UPDATE support_payout_batches SET status = 'funding', updated_at = ? WHERE id = ?").bind(now.toISOString(), batchId).run();
-			reportNeedsAction('api-videos', env, undefined, { key: `support-fund:${batchId}`, source: 'admin-job', title: 'Fund the payout service', message: `Payout batch ${batchId} needs ${Object.entries(short).map(([c, a]) => `${a} ${c} (minor units)`).join(', ')} more at ${r.rail} before it can be sent. The organisation’s finance person moves it from the creator-funds account; payouts start once it arrives.`, itemType: 'support-batch', itemId: batchId, itemUrl: '/support/payouts' });
+			reportNeedsAction('api-videos', env, undefined, { key: `support-fund:${batchId}`, source: 'admin-job', title: 'Fund the payout service', message: `Payout batch ${batchId} needs ${Object.entries(short).map(([c, a]) => `${a} ${c} (minor units)`).join(', ')} more at ${r.rail} before it can be sent. The organization’s finance person moves it from the creator-funds account; payouts start once it arrives.`, itemType: 'support-batch', itemId: batchId, itemUrl: '/support/payouts' });
 			return { done: false, params: { batchId }, delaySeconds: 3600, result: { short } };
 		}
 	}

@@ -1,10 +1,10 @@
 # Supporting creators (wiki AUN-MEMBERS)
 
 Viewers give a creator a one-time or monthly gift. **PayGood only collects** into the
-organisation's merchant account; creators are paid through a **separate payout rail**. The
+organization's merchant account; creators are paid through a **separate payout rail**. The
 platform takes 0%. Spec: AlUmmahNowWiki `epics/AUN-MEMBERS-creator-support.md` (Linear AUN-612).
 
-**Status: built behind a switch that is OFF everywhere.** It stays off until the organisation
+**Status: built behind a switch that is OFF everywhere.** It stays off until the organization
 exists and the lawyer, PayGood, Wise and PayPal have signed off. Nothing here can make a live
 payment call: only the test collector and test rail exist, and only where
 `SUPPORT_TEST_PROVIDERS=1` outside production.
@@ -52,7 +52,7 @@ Never Stripe (decision T2), including payout services built on Stripe.
   (`/internal/support/jobs/retry`, which needs `support:manage`). So does an event that depends on
   an open decision.
 - `reconcile.ts`: the ledger against the collector's settlements, the bank statement the
-  organisation enters, and the rail's funding balance. A gap, or an entry that doesn't balance,
+  organization enters, and the rail's funding balance. A gap, or an entry that doesn't balance,
   stops new payout batches (`lastReconcileOk`; never reconciled counts as not clean).
 
 ## Payee onboarding (MEM-22)
@@ -89,6 +89,26 @@ Never Stripe (decision T2), including payout services built on Stripe.
   - A stopped batch, a held payee or a balance that dropped since planning cancels the payout without paying.
 - **Status** (`support.payout-status`, every 6 hours while payouts are in flight). Paid, failed and returned payouts are booked, and failed ones put the money back.
 
+## Server checks (MEM-5)
+
+`lib/support/eligibility.ts` gives one answer each to `/api/me/features` and to every support API, so a hidden button and its API always agree. The keys are computed only while `creatorSupport` is on, so nothing is read while support is off.
+
+- **`support`**: may this person support creators from here?
+  - They're signed in.
+  - The decisions the support sheet needs are recorded: MEM-D3, D4, D9 and D15.
+  - There's no emergency stop, and a collector exists here.
+  - Their country (`cf.country`) isn't blocked for supporters on the Countries page.
+  - A native app (`X-AUN-Client`) qualifies only once MEM-D15 allows the apps.
+  - With `?channelId=`: that channel can receive, and the caller isn't on its team.
+- **`supportReceive`**: may this channel receive?
+  - MEM-D5, D17 and D23 are recorded.
+  - The channel exists and isn't suspended.
+  - The owner switched support on, and no admin paused it.
+  - The payee is active, clear of screening and has a tax form on file, unless MEM-D23 allows gifts before the payee is active. A screening hold always stops new gifts.
+  - The payee's country is allowed for creators.
+  - Under MEM-D5 `tierCapability`, the owner's tier has `supportReceive`.
+  - Signed-out viewers also get this key, because they see the button and sign in first.
+
 ## Owner decisions are settings, never code
 
 Every open decision is a field of `SupportPolicy`, stored in `support_config.policy` and read as
@@ -104,11 +124,13 @@ guessing.
 | MEM-D20 payout and FX fees | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
 | MEM-D21 chargebacks after payout | `negativeBalancePolicy`, `reserveBasisPoints`, `reserveDays` | `ledger.ts` `debitCreator` (refunds, disputes) |
 | MEM-D22 dormant balances | `dormantPolicy`, `dormantReminderMonths` | `jobs.ts` `runSupportDormantJob` (lists only while open) |
-| MEM-D23 gifts before payee active | `collectBeforePayeeActive` | server checks (MEM-5) |
+| MEM-D23 gifts before payee active | `collectBeforePayeeActive` | `eligibility.ts` `receiverEligibility` |
 | MEM-D24 approvals | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
 | MEM-D3 card fee payer | `collectorFeePayer` | `effectiveCoverFees` (shared-types) |
 | MEM-D4 minimum and presets | `minimumUsdMinor`, `presetsUsdMinor` | support sheet (MEM-7) |
-| MEM-D9 ages | `minSupporterAge`, `minCreatorAge` | server checks (MEM-5) |
+| MEM-D9 ages | `minSupporterAge`, `minCreatorAge` | `eligibility.ts` (must be recorded); the age confirmation on the support sheet (MEM-7) |
+| MEM-D5 who may receive | `receiversRule` (+ `CreatorTier.supportReceive`) | `eligibility.ts` `receiverEligibility` |
+| MEM-D15 apps | `appsEnabled` | `eligibility.ts` `supporterEligibility` (`X-AUN-Client`) |
 
 ## Tests
 
@@ -121,4 +143,5 @@ guessing.
 - `apps/api-videos/test/support-jobs.spec.ts`: signed webhooks through the queue to the ledger, redelivery, refunds and disputes, release, rail payout events, reconciliation, crons.
 - `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
 - `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
+- `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps, payee state and pauses.
 - `apps/processor/src/__tests__/user-traces-erase.test.ts`: erasure of support rows.

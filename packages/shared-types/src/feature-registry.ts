@@ -361,7 +361,7 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     group: 'grow',
     name: { en: 'Creator support', ar: 'دعم صنّاع المحتوى' },
     help: {
-      en: 'Viewers can’t send creators one-time or monthly support, and creators can’t receive it. The platform takes nothing from support. Turning it on needs the organisation formed and a finance approver.',
+      en: 'Viewers can’t send creators one-time or monthly support, and creators can’t receive it. The platform takes nothing from support. Turning it on needs the organization formed and a finance approver.',
       ar: 'لا يستطيع المشاهدون إرسال دعم لمرة واحدة أو شهري لصنّاع المحتوى، ولا يستقبل صنّاع المحتوى أي دعم. لا تأخذ المنصة شيئًا من الدعم. يتطلب التشغيل تأسيس المنظمة وتعيين معتمِد مالي.',
     },
     default: false,

@@ -2,7 +2,7 @@
  * The one seam between creator support and the AUN-FEATURES switch `creatorSupport` (wiki
  * AUN-MEMBERS §9.5, §9.7; AUN-FEATURES §2, §5.1).
  *
- * Owner decision 2026-11-22: support stays OFF in every environment until the organisation exists
+ * Owner decision 2026-11-22: support stays OFF in every environment until the organization exists
  * and the lawyer, PayGood, Wise and PayPal sign off. The switch defaults off, and the Features page
  * refuses to turn it on until `supportCanTurnOnHook` passes (admin-api feature-preconditions.ts).
  *

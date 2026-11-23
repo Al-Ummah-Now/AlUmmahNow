@@ -1,6 +1,6 @@
 /**
  * Daily three-way reconciliation (wiki AUN-MEMBERS §9.1): the ledger against the collector's
- * settlements, the creator-funds bank statement (entered or imported by the organisation's finance
+ * settlements, the creator-funds bank statement (entered or imported by the organization's finance
  * person) and the payout rail's funding balance. Any gap, or any entry that doesn't balance, is
  * written down and stops new payout batches (`lastReconcileOk`), and the admin Errors page says
  * so. Never moves money and never edits the ledger, except to post a settlement the collector

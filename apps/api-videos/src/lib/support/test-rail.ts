@@ -55,7 +55,7 @@ export async function testRailOnboard(ctx: RailContext, railPayeeRef: string, ou
 	await s.put<TestPayee>(`rail:payee:${railPayeeRef}`, { ...p, status: outcome.status, country: outcome.country, taxForm: outcome.taxForm, sanctions: outcome.sanctions ?? 'clear', requirements: outcome.requirements ?? [], payoutCurrency: outcome.payoutCurrency ?? 'USD' });
 }
 
-/** The organisation tops up its (test) funding balance at the rail. */
+/** The organization tops up its (test) funding balance at the rail. */
 export async function testRailFund(ctx: RailContext, amount: Money): Promise<void> {
 	const s = state(ctx);
 	const key = `rail:funding:${amount.currency}`;

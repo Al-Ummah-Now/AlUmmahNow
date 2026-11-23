@@ -206,7 +206,7 @@ export async function applyRailEvents(c: ApplyContext & { rail: string }, events
 			await c.db.prepare("UPDATE support_payouts SET status = 'failed', failure_code = ?, updated_at = ? WHERE id = ?").bind(e.failureCode, at, po.id).run();
 		} else if (e.status === 'returned' && po.status === 'paid') {
 			// What comes back is what the creator received (the fee stays with the rail, MEM-D20)
-			const back = c.policy.payoutFeeBearer === 'organisation' ? po.amount : po.amount - (po.rail_fee ?? 0);
+			const back = c.policy.payoutFeeBearer === 'organization' ? po.amount : po.amount - (po.rail_fee ?? 0);
 			await postEntry(c.db, { entryKey: `payout:${po.id}:returned`, kind: 'payout_return', lines: payoutReturnedLines(po.channel_id, { amount: back, currency: po.currency }), channelId: po.channel_id, refTable: 'support_payouts', refId: po.id, createdBy: 'system', now: c.now });
 			await c.db.prepare("UPDATE support_payouts SET status = 'returned', failure_code = ?, updated_at = ? WHERE id = ?").bind(e.failureCode, at, po.id).run();
 		} else {

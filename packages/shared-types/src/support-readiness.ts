@@ -32,7 +32,7 @@ export function payoutRailAvailable(env: SupportEnv, id: PayoutRailId): boolean 
   return BUILT_PAYOUT_RAILS.includes(id) && (id !== 'test' || testAllowed(env));
 }
 
-const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organisation_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail'];
+const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail'];
 
 export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadiness> {
   const db = env.SEARCH_DB;
@@ -47,7 +47,7 @@ export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadines
   }
   const policy = parseSupportPolicy(raw).policy;
   return supportReadiness({
-    organisationFormed: row?.organisation_formed === 1,
+    organizationFormed: row?.organisation_formed === 1,
     financeApprovers: Number(members?.n ?? 0),
     policy,
     collectorAvailable: supportCollectorAvailable(env, row?.collector ?? 'test'),
