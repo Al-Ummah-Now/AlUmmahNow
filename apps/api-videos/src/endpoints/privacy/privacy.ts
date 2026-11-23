@@ -1,4 +1,6 @@
 import { bunnyRef } from '../../lib/media/providers';
+import { stopSupportBeforeErasure } from '../../lib/support/erasure';
+import { vendorContext } from '../../lib/support/jobs';
 import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
 import { removeCollectionsFor } from '../../lib/channelCollection';
 import { eraseChannelSocial } from '../../lib/social/connect';
@@ -148,6 +150,10 @@ export class PrivacyErase extends AuthenticatedRoute {
 		try {
 			const queue = new Queue(c.env.queue);
 			if (summary.complete) {
+				// Monthly support stops at the collector before the erasure (wiki AUN-MEMBERS §9.8)
+				await stopSupportBeforeErasure(env as never, userId, (mode) => vendorContext(env as never, mode)).catch((error) =>
+					logger.warn('[Privacy] Support not stopped before erasure; the processor marks it canceled', { userId, error: error instanceof Error ? error.message : String(error) }),
+				);
 				// Lets the processor anonymise copies it owns (D1 moderation reports).
 				await queue.send(MessageType.UserDataErased, { userId, timestamp: new Date().toISOString() });
 			}
