@@ -58,7 +58,10 @@ async function expectLiveHidden(page: Page, user: WebUser, channelId: string, lo
     body: JSON.stringify({ title: 'Hidden when off', isPrivate: true }),
   });
   expect(create.status, 'creating a stream while live is off').toBe(404);
-  expect(await create.json()).toEqual({ success: false, code: 'feature_off' });
+  // The error envelope (FEAT-3): code, the switched-off feature and a message for a person
+  const off = await create.json();
+  expect(off).toMatchObject({ success: false, code: 'feature_off', feature: 'live', action: 'none' });
+  expect(typeof off.message === 'string' && off.message.length > 0).toBe(true);
 }
 
 test.describe('Release: hidden when off, Studio Live', () => {

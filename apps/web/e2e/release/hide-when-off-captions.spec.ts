@@ -75,7 +75,10 @@ test.describe('Release: hidden when off, captions and audio tracks', () => {
     if (on.captionsTranscribe) {
       const job = await apiFetch(user, `/api/videos/${video}/captions/jobs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'ar' }) });
       expect(job.status, 'starting a transcription with the Creator tier').toBe(404);
-      expect(await job.json()).toEqual({ success: false, code: 'feature_off' });
+      // The error envelope (FEAT-3): code, the switched-off feature and a message for a person
+      const off = await job.json();
+      expect(off).toMatchObject({ success: false, code: 'feature_off', feature: 'captionsTranscribe', action: 'none' });
+      expect(typeof off.message === 'string' && off.message.length > 0).toBe(true);
     }
     if (on.audioTracks) {
       const track = await apiFetch(user, `/api/videos/${video}/audio-tracks`, {
