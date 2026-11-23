@@ -11,7 +11,7 @@
  *
  * Idempotent and resumable: the phase is in the job's params, every item remembers what it produced.
  */
-import { IMPORT_POSTS_PER_STEP, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { featureGate, IMPORT_POSTS_PER_STEP, reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { createJob, getJob, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { revokeSource, stillAuthorized } from './authorize';
 import { fetchSource, itemKind } from './fetchers';
@@ -35,6 +35,8 @@ import { logger } from '../logger';
 export const SOURCE_SYNC_JOB_KIND = 'import.source-sync' as const;
 /** Due sources queued per cron tick. */
 const DUE_PER_TICK = 100;
+/** A tick's syncs start spread over this many seconds, so they never all reach the networks at once. */
+const DUE_SPREAD_SECONDS = 45 * 60;
 
 export type SourceSyncEnv = JobEnv & PostItemEnv;
 
@@ -44,6 +46,8 @@ interface SyncParams {
 	fetched: number;
 	posted: number;
 	skipped: number;
+	/** Seconds to wait before the first step (the cron spreads a tick's syncs over the hour) */
+	waitSeconds?: number;
 }
 
 export const sourceSyncNeedsActionKey = (sourceId: string) => `import-source:${sourceId}`;
@@ -52,12 +56,18 @@ export const sourceSyncNeedsActionKey = (sourceId: string) => `import-source:${s
  * Queues a sync of the source, or returns the one already waiting or running (one sync per source at a
  * time). `actorId` is the admin the posts and uploads are recorded under.
  */
-export async function startSourceSync(env: SourceSyncEnv, source: Pick<SourceRow, 'id' | 'channel_id' | 'last_job_id'>, actorId: string, phase: 'fetch' | 'post' = 'fetch'): Promise<AdminJob> {
+export async function startSourceSync(
+	env: SourceSyncEnv,
+	source: Pick<SourceRow, 'id' | 'channel_id' | 'last_job_id'>,
+	actorId: string,
+	phase: 'fetch' | 'post' = 'fetch',
+	waitSeconds = 0,
+): Promise<AdminJob> {
 	if (source.last_job_id) {
 		const running = await getJob(env, source.last_job_id);
 		if (running && ['queued', 'running', 'retrying'].includes(running.status)) return running;
 	}
-	const params: SyncParams = { sourceId: source.id, phase, fetched: 0, posted: 0, skipped: 0 };
+	const params: SyncParams = { sourceId: source.id, phase, fetched: 0, posted: 0, skipped: 0, ...(waitSeconds > 0 ? { waitSeconds } : {}) };
 	const job = await createJob(env, { kind: SOURCE_SYNC_JOB_KIND, targetKind: 'channel', targetId: source.channel_id, params: params as unknown as Record<string, unknown>, actorId });
 	await markSyncStarted(env, source.id, job.id);
 	return job;
@@ -95,6 +105,12 @@ export async function runSourceSync(env: SourceSyncEnv, job: AdminJob, f: typeof
 	const source = await readSource(env, params.sourceId);
 	const result = () => ({ sourceId: params.sourceId, fetched: params.fetched, posted: params.posted, skipped: params.skipped });
 	if (!source) return { done: true, result: { ...result(), skipped: 'source_deleted' } };
+	// A cron sync's place in the tick's spread: the first step only waits
+	if (params.waitSeconds && params.waitSeconds > 0) {
+		const delaySeconds = params.waitSeconds;
+		delete params.waitSeconds;
+		return { done: false, params: params as unknown as Record<string, unknown>, result: result(), delaySeconds };
+	}
 	// A connected source stops when the owner's connection is gone (the source shows why; nothing is posted)
 	if (!(await stillAuthorized(env, source))) {
 		await revokeSource(env, source.id);
@@ -164,17 +180,29 @@ export async function onSourceSyncFailed(env: SourceSyncEnv, job: AdminJob, erro
 	});
 }
 
+/** The upload switch (Features page): a sync makes new posts and videos, so it needs uploads on. */
+export async function uploadsOn(env: SourceSyncEnv): Promise<boolean> {
+	return (await featureGate(env as never, 'upload').catch(() => ({ on: true as const }))).on;
+}
+
 /**
  * The hourly cron: a sync for every enabled source whose time has come. Its next sync time is cleared
  * once queued (the sync sets it when it ends), so a slow queue never queues the same source twice.
  */
 export async function queueDueSources(env: SourceSyncEnv, now = Date.now()): Promise<number> {
 	if (!env.SEARCH_DB) return 0;
+	// A sync makes new posts and videos: while uploads are off (Features page) nothing is queued, and the
+	// due sources stay due for the first tick after they are back on
+	if (!(await uploadsOn(env))) {
+		logger.info('[ImportSources] Uploads are off: no scheduled syncs this tick');
+		return 0;
+	}
 	const due = await dueSources(env, now, DUE_PER_TICK);
 	let queued = 0;
-	for (const source of due) {
+	for (const [i, source] of due.entries()) {
 		try {
-			await startSourceSync(env, source, source.created_by);
+			// Spread over the hour: never a burst on one network's API (feeds, Bluesky, a Mastodon server)
+			await startSourceSync(env, source, source.created_by, 'fetch', due.length > 1 ? Math.floor((i * DUE_SPREAD_SECONDS) / due.length) : 0);
 			// Unless the sync already finished and set the next time itself
 			await sourceDb(env).prepare('UPDATE import_sources SET next_sync_at = NULL, updated_at = ? WHERE id = ? AND next_sync_at = ?').bind(now, source.id, source.next_sync_at).run();
 			queued++;

@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS import_sources (
 );
 CREATE INDEX IF NOT EXISTS idx_import_sources_due ON import_sources (enabled, next_sync_at);
 CREATE INDEX IF NOT EXISTS idx_import_sources_network ON import_sources (network, address);
+-- the sources page's list of every channel's sources, newest first (store.ts listSources)
+CREATE INDEX IF NOT EXISTS idx_import_sources_created ON import_sources (created_at DESC);
 
 -- One item of a source, recorded once (a re-sync skips it) with what it produced.
 CREATE TABLE IF NOT EXISTS import_source_items (
@@ -49,3 +51,9 @@ CREATE TABLE IF NOT EXISTS import_source_items (
 CREATE INDEX IF NOT EXISTS idx_import_source_items_state ON import_source_items (source_id, state, original_at);
 CREATE INDEX IF NOT EXISTS idx_import_source_items_post ON import_source_items (post_id);
 CREATE INDEX IF NOT EXISTS idx_import_source_items_video ON import_source_items (video_id);
+
+-- Lookups the sync makes on tables it shares (no scan on any of them):
+-- a fetched item our own auto-post sent to that network is never imported back (store.ts ourRemoteIds)
+CREATE INDEX IF NOT EXISTS idx_social_deliveries_network_remote ON social_deliveries (network, remote_id) WHERE remote_id IS NOT NULL;
+-- the YouTube accounts a channel's owner connected (authorize.ts channelConnections)
+CREATE INDEX IF NOT EXISTS idx_yt_imports_channel ON yt_imports (channel_id, created_at DESC);

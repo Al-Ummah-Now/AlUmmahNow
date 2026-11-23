@@ -19,7 +19,7 @@ import { tgCall, tgGetMe, tgSetWebhook } from './adapters/telegram';
 import { logger } from '../logger';
 import { recordTelegramPost, type TgChannelPost } from '../importSources/telegram';
 import { readSource } from '../importSources/store';
-import { startSourceSync } from '../importSources/job';
+import { startSourceSync, uploadsOn } from '../importSources/job';
 
 const OAUTH_TTL_MS = 10 * 60_000;
 const TELEGRAM_CODE_TTL_MS = 30 * 60_000;
@@ -286,6 +286,8 @@ export function telegramCode(): string {
 async function importTelegramPost(env: SocialEnv, post: TgChannelPost): Promise<number> {
 	try {
 		const queued = await recordTelegramPost(env, post);
+		// While uploads are off (Features page) the post waits as a pending item for the next sync
+		if (queued.length && !(await uploadsOn(env as never))) return 0;
 		for (const sourceId of queued) {
 			const source = await readSource(env, sourceId);
 			if (source) await startSourceSync(env as never, source, source.created_by, 'post');

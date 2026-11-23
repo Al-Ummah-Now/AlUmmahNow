@@ -337,10 +337,17 @@ async function fetchMastodon(address: string, cursor: string | null, f: typeof f
 	const origin = safeUrl(`https://${instance}`);
 	if (!user || !origin) throw new SourceError(400, 'invalid_address');
 	const base = origin.replace(/\/$/, '');
-	const account = await getJson<{ id?: string }>(`${base}/api/v1/accounts/lookup?acct=${encodeURIComponent(user)}`, f);
-	if (!account.id) throw new SourceError(422, 'source_not_found', 'No account with that name on that server');
+	// The cursor keeps the account's id with the newest status seen («accountId:sinceId»), so a sync looks
+	// the account up only the first time
+	const [cachedId, since] = mastodonCursor(cursor);
+	let accountId = cachedId;
+	if (!accountId) {
+		const account = await getJson<{ id?: string }>(`${base}/api/v1/accounts/lookup?acct=${encodeURIComponent(user)}`, f);
+		if (!account.id) throw new SourceError(422, 'source_not_found', 'No account with that name on that server');
+		accountId = String(account.id);
+	}
 	const statuses = await getJson<MastoStatus[]>(
-		`${base}/api/v1/accounts/${encodeURIComponent(account.id)}/statuses?exclude_replies=true&exclude_reblogs=true&limit=40${cursor ? `&since_id=${encodeURIComponent(cursor)}` : ''}`,
+		`${base}/api/v1/accounts/${encodeURIComponent(accountId)}/statuses?exclude_replies=true&exclude_reblogs=true&limit=40${since ? `&since_id=${encodeURIComponent(since)}` : ''}`,
 		f,
 	);
 	const items: FetchedItem[] = [];
@@ -367,8 +374,16 @@ async function fetchMastodon(address: string, cursor: string | null, f: typeof f
 		items.push(item);
 	}
 	// Status ids grow with time: the largest is the newest
-	const newest = items.map((i) => i.itemId).sort((a, b) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0)).pop() ?? null;
-	return { items, cursor: newest };
+	const newest = items.map((i) => i.itemId).sort((a, b) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0)).pop() ?? since;
+	return { items, cursor: `${accountId}:${newest ?? ''}` };
+}
+
+/** A Mastodon cursor «accountId:sinceId» (either part may be empty); an id alone is an old since-id. */
+export function mastodonCursor(cursor: string | null): [accountId: string | null, since: string | null] {
+	if (!cursor) return [null, null];
+	const at = cursor.indexOf(':');
+	if (at < 0) return [null, cursor];
+	return [cursor.slice(0, at) || null, cursor.slice(at + 1) || null];
 }
 
 // --- YouTube ------------------------------------------------------------------------------------

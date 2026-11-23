@@ -81,17 +81,24 @@ function accountAddress(a: SocialAccountLite): string | null {
 	return null;
 }
 
-/** Everything the channel's owner connected that can be imported from. */
-export async function channelConnections(env: SourceDbEnv, channelId: string): Promise<ImportSourceConnection[]> {
+/**
+ * Everything the channel's owner connected that can be imported from; with `network`, only that
+ * network's (a sync checks its own source: social_accounts by channel, or yt_imports by channel, both indexed).
+ */
+export async function channelConnections(env: SourceDbEnv, channelId: string, network?: ImportSourceNetwork): Promise<ImportSourceConnection[]> {
 	const db = sourceDb(env);
 	const out: ImportSourceConnection[] = [];
-	const { results: accounts } = await db
-		.prepare(`SELECT id, network, remote_id, handle, display_name, instance FROM social_accounts WHERE channel_id = ? AND status = 'active' AND network IN ('bluesky', 'mastodon', 'telegram')`)
-		.bind(channelId)
-		.all<SocialAccountLite>();
-	for (const a of accounts ?? []) {
-		const address = accountAddress(a);
-		if (address) out.push({ network: a.network as ImportSourceNetwork, address, label: a.display_name || a.handle || address, socialAccountId: a.id, ytImportId: null });
+	if (network === 'rss') return out;
+	if (network !== 'youtube') {
+		const { results: accounts } = await db
+			.prepare(`SELECT id, network, remote_id, handle, display_name, instance FROM social_accounts WHERE channel_id = ? AND status = 'active' AND network IN ('bluesky', 'mastodon', 'telegram')`)
+			.bind(channelId)
+			.all<SocialAccountLite>();
+		for (const a of accounts ?? []) {
+			const address = accountAddress(a);
+			if (address && (!network || a.network === network)) out.push({ network: a.network as ImportSourceNetwork, address, label: a.display_name || a.handle || address, socialAccountId: a.id, ytImportId: null });
+		}
+		if (network) return out;
 	}
 	const { results: yts } = await db
 		.prepare(`SELECT id, yt_channel_json FROM yt_imports WHERE channel_id = ? AND yt_channel_json IS NOT NULL ORDER BY created_at DESC`)
@@ -128,7 +135,7 @@ export async function authorizeSource(
 	env: SourceDbEnv,
 	input: { channelId: string; network: ImportSourceNetwork; address: string; permission?: { by?: string; note?: string } | null },
 ): Promise<Authorization> {
-	const connection = (await channelConnections(env, input.channelId)).find((c) => c.network === input.network && c.address === input.address);
+	const connection = (await channelConnections(env, input.channelId, input.network)).find((c) => c.network === input.network && c.address === input.address);
 	if (connection) return { auth: 'connected', socialAccountId: connection.socialAccountId, ytImportId: connection.ytImportId, permission: null, label: connection.label };
 	if (input.network === 'telegram') throw new SourceError(403, 'not_connected', 'Telegram channels are imported only once the owner connected them in Studio (our bot reads the posts)');
 	const by = input.permission?.by?.trim();
@@ -147,7 +154,7 @@ export const NOT_CONNECTED_ERROR = "not_connected: the owner's connection to thi
  */
 export async function stillAuthorized(env: SourceDbEnv, source: Pick<SourceRow, 'channel_id' | 'network' | 'address' | 'auth_kind'>): Promise<boolean> {
 	if (source.auth_kind !== 'connected') return true;
-	return (await channelConnections(env, source.channel_id)).some((c) => c.network === source.network && c.address === source.address);
+	return (await channelConnections(env, source.channel_id, source.network)).some((c) => c.network === source.network && c.address === source.address);
 }
 
 /** Turns a source whose connection went away off (no schedule), with the reason shown on it. */
