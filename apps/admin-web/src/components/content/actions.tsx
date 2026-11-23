@@ -99,6 +99,8 @@ interface ConfirmDialogContent {
   reasonHint?: string;
   /** The reason's length limit (default 1000) */
   reasonMaxLength?: number;
+  /** With a reason: the shortest one accepted (confirm stays disabled until then); default any, even none */
+  reasonMinLength?: number;
   /** The exact text the admin must type to enable the confirm button. */
   /** The text the admin must type to enable the confirm button; with several, any one of them (emails ignore case). */
   typeToConfirm?: string | readonly string[];
@@ -138,7 +140,7 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
  * change by accident); the reason and type-to-confirm fields are one Tab away.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, cancelLabel, withReason, reasonHint, reasonMaxLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, cancelLabel, withReason, reasonHint, reasonMaxLength, reasonMinLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -158,7 +160,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const ready = typedMatches(typed, typeToConfirm);
+  const ready = typedMatches(typed, typeToConfirm) && (!withReason || !reasonMinLength || reason.trim().length >= reasonMinLength);
   const reset = () => {
     setReason('');
     setTyped('');
@@ -209,8 +211,8 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
             <label htmlFor={`${ids}-reason`} className="text-sm text-fg-muted">
               {t('content.reason')}
             </label>
-            <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={reasonMaxLength ?? 1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
-            <span className="text-xs text-fg-subtle">{reasonHint ?? t('content.reasonHint')}</span>
+            <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={reasonMaxLength ?? 1000} minLength={reasonMinLength} required={!!reasonMinLength} aria-describedby={`${ids}-reason-hint`} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
+            <span id={`${ids}-reason-hint`} className="text-xs text-fg-subtle">{reasonHint ?? t('content.reasonHint')}</span>
           </div>
         )}
         {confirmValues.length > 0 && (

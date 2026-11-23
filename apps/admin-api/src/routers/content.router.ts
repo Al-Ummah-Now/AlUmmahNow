@@ -76,6 +76,9 @@ import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
+import { writeVerification } from '../lib/channelVerification';
+import { type CasBucket } from '../lib/r2Cas';
+import Queue, { MessageType } from '../lib/queue';
 import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
@@ -251,15 +254,56 @@ app.post('/channels/:id/unsuspend', async (c) => {
     videos(c, `/channels/${encodeURIComponent(id)}/unsuspend`, { method: 'POST' })));
 });
 
+const TRANSFER_REASON_MIN = 10;
+const TRANSFER_REASON_MAX = 500;
+
+/**
+ * Removes a moved channel's verification badge, logged in channel_verification_log like any other
+ * decision. A failure is reported, not thrown: the move has already started.
+ */
+async function dropBadgeOnTransfer(c: C, channelId: string): Promise<void> {
+  if (!c.env.channels || !c.env.REPORTS_DB) return;
+  try {
+    const result = await writeVerification<{ id?: string; isVerified?: boolean }>(c.env.REPORTS_DB, c.env.channels as unknown as CasBucket, channelId, {
+      verified: false,
+      note: 'Removed when the channel moved to another owner',
+      actorId: auth(c).userId,
+      now: new Date().toISOString(),
+      id: crypto.randomUUID(),
+    });
+    if (result?.changed) {
+      await new Queue(c.env.queue).send(MessageType.SearchIndexSync, { entity: 'channel', id: channelId, object: result.channel, version: result.version ?? Date.now() });
+    }
+  } catch (error) {
+    logger.error('[Content] Badge removal after a channel move failed', { channelId, error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 app.post('/channels/:id/transfer', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');
-  const raw = (await body(c)).newOwnerId;
-  const newOwnerId = typeof raw === 'string' ? raw.trim() : '';
+  const input = await body(c);
+  const newOwnerId = typeof input.newOwnerId === 'string' ? input.newOwnerId.trim() : '';
   if (!newOwnerId) return c.json({ success: false, code: 'invalid_new_owner', error: 'newOwnerId (a user id) is required' }, 400);
+  // A reason is kept in the audit log (wiki AUN-CHANNEL-CLAIM §3.7)
+  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+  if (reason.length < TRANSFER_REASON_MIN || reason.length > TRANSFER_REASON_MAX) {
+    return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  }
+  const options = {
+    keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true,
+    keepContactEmail: input.keepContactEmail === true,
+    keepBadge: input.keepBadge === true,
+  };
   const current = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
-  return ok(c, await audited(c, { kind: 'channel', id, action: 'transfer', details: { newOwnerId }, previous: { ownerId: current.ownerId } }, () =>
-    videos(c, `/channels/${encodeURIComponent(id)}/transfer`, { method: 'POST', json: { newOwnerId } })));
+  const started = await audited(c, { kind: 'channel', id, action: 'transfer', details: { newOwnerId, reason, ...options }, previous: { ownerId: current.ownerId } }, () =>
+    videos(c, `/channels/${encodeURIComponent(id)}/transfer`, {
+      method: 'POST',
+      json: { newOwnerId, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail },
+    }));
+  // The badge vouches for the person behind the channel: it goes unless the admin keeps it (CC-D8)
+  if (!options.keepBadge) await dropBadgeOnTransfer(c, id);
+  return ok(c, started);
 });
 
 app.delete('/channels/:id', async (c) => {

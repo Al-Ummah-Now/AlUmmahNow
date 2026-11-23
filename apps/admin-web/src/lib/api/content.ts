@@ -104,8 +104,15 @@ export async function unsuspendChannel(id: string): Promise<ActionResult<JobResu
   return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}/unsuspend`, json('POST')));
 }
 
-export async function transferChannel(id: string, newOwnerId: string): Promise<ActionResult<JobResult>> {
-  return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}/transfer`, json('POST', { newOwnerId })));
+/** What a channel move keeps (wiki AUN-CHANNEL-CLAIM §3.4, §3.5); each is off unless the admin ticks it. */
+export interface TransferOptions {
+  keepPreviousOwnerAsAdmin: boolean;
+  keepContactEmail: boolean;
+  keepBadge: boolean;
+}
+
+export async function transferChannel(id: string, newOwnerId: string, reason: string, options: TransferOptions): Promise<ActionResult<JobResult>> {
+  return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}/transfer`, json('POST', { newOwnerId, reason, ...options })));
 }
 
 /**

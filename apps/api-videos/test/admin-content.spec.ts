@@ -580,6 +580,20 @@ describe('channel actions', () => {
 		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
 	});
 
+	it('the previous owner stays on as channel admin only when the admin chose it, and the team log says so (CC-3)', async () => {
+		const { raw, call, jobOf, db } = await setup();
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, keepPreviousOwnerAsAdmin: true, keepContactEmail: true }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		const moved = JSON.parse(raw.channels.store.get('ch1')!);
+		assert.deepEqual(moved.members.map((m: any) => `${m.userId}:${m.role}:${m.addedBy}`), [`${OWNER}:admin:usr_admin`]);
+		const log = db.db.prepare(`SELECT action, target_user_id, new_role FROM channel_audit WHERE channel_id = 'ch1'`).all() as any[];
+		assert.deepEqual(log.map((r) => `${r.action}:${r.target_user_id}:${r.new_role}`), [`transfer_kept_old_owner:${OWNER}:admin`]);
+
+		const second = await setup();
+		await second.jobOf(await second.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.deepEqual(JSON.parse(second.raw.channels.store.get('ch1')!).members ?? [], [], 'by default the previous owner loses access');
+	});
+
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
 		const { raw, env, jobs, call } = await setup({
 			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
