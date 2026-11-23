@@ -168,7 +168,7 @@ const trimNumber = (v: number) => String(Math.round(v * 100) / 100);
 
 export function settingsToForm(s: CostAlertSettings): SettingsForm {
   return {
-    budgetUsd: trimNumber(s.budgetUsd),
+    budgetUsd: s.budgetUsd === null ? '' : trimNumber(s.budgetUsd),
     budgetLevels: s.budgetLevels.map((l) => trimNumber(l * 100)).join(', '),
     projectedAlert: s.projectedAlert,
     spikeFactor: trimNumber(s.spikeFactor),
@@ -215,7 +215,7 @@ export function validateSettingsForm(form: SettingsForm): { errors: Partial<Reco
     if (n === null || n < min || n > max) errors[field] = { key: 'costs.thresholds.errors.range', params: { min, max } };
     return n ?? 0;
   };
-  const budgetUsd = num('budgetUsd');
+  const budgetUsd = form.budgetUsd.trim() === '' ? null : num('budgetUsd');
   const spikeFactor = num('spikeFactor');
   const spikeMinUsd = num('spikeMinUsd');
   const spikeTotalMinUsd = num('spikeTotalMinUsd');

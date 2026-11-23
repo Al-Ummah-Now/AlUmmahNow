@@ -131,8 +131,8 @@ export function validateCostCredential(provider: CostProvider, value: unknown): 
 // ---------------------------------------------------------------------------------------------
 
 export interface CostAlertSettings {
-  /** Admin-configured monthly spend alert threshold for the platform. */
-  budgetUsd: number;
+  /** Admin-configured monthly spend alert threshold for the platform; null until a super admin sets it. */
+  budgetUsd: number | null;
   /** Shares of the budget that open an alert, ascending, e.g. [0.5, 0.8, 1]. */
   budgetLevels: number[];
   /** Alert when the month-end projection goes over the budget. */
@@ -151,13 +151,6 @@ export interface CostAlertSettings {
   resendPlan: ResendPlan;
 }
 
-/**
- * The platform's monthly budget is ONE admin-managed value (#1427): Costs → Alert settings saves
- * it to COSTS_DB cost_settings, and the Costs page, Operations, Delivery's projection and the alert
- * tick all read it from there. This default only applies until a super admin saves one.
- */
-export const DEFAULT_MONTHLY_BUDGET_USD = 500;
-
 /** Allowed ranges for the alert settings (#1427); budget levels are shares (0.1 = 10%). */
 export const COST_ALERT_RANGES = {
   budgetUsd: { min: 50, max: 5000 },
@@ -169,7 +162,7 @@ export const COST_ALERT_RANGES = {
 } as const;
 
 export const COST_ALERT_DEFAULTS: CostAlertSettings = {
-  budgetUsd: DEFAULT_MONTHLY_BUDGET_USD,
+  budgetUsd: null,
   budgetLevels: [0.5, 0.8, 1],
   projectedAlert: true,
   spikeFactor: 2,
@@ -210,8 +203,13 @@ export function mergeCostAlertSettings(current: CostAlertSettings, input: unknow
   const known = new Set(Object.keys(COST_ALERT_DEFAULTS));
   for (const k of Object.keys(b)) if (!known.has(k)) return `Unknown setting ${k}`;
   const R = COST_ALERT_RANGES;
+  if (b.budgetUsd === null) {
+    out.budgetUsd = null;
+  } else if (b.budgetUsd !== undefined) {
+    const budgetErr = numIn('budgetUsd', R.budgetUsd.min, R.budgetUsd.max);
+    if (budgetErr) return budgetErr;
+  }
   const err =
-    numIn('budgetUsd', R.budgetUsd.min, R.budgetUsd.max) ??
     numIn('spikeFactor', R.spikeFactor.min, R.spikeFactor.max) ??
     numIn('spikeMinUsd', R.spikeMinUsd.min, R.spikeMinUsd.max) ??
     numIn('spikeTotalMinUsd', R.spikeTotalMinUsd.min, R.spikeTotalMinUsd.max) ??

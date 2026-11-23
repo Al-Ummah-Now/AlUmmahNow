@@ -14,7 +14,7 @@
  *   PUT    /subscriptions/me         { kinds: ['budget'|'spike'|'digest'], locale }
  */
 import { Hono, type Context } from 'hono';
-import { DEFAULT_MONTHLY_BUDGET_USD, isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
+import { isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { loadCostSettings } from '../lib/opsCost';
 import { logger } from '../lib/logger';
@@ -47,14 +47,14 @@ export function actorOf(auth: AuthContext | undefined): Actor {
 /**
  * The platform's monthly budget, the one admin-set value (#1427), for pages that project against
  * it without the Costs page's ops:read (Delivery's projection is for media managers). Only the
- * number; the default when COSTS_DB is missing or nothing is saved yet.
+ * number, or null when COSTS_DB is missing or no budget is set yet.
  */
 app.get('/budget', async (c) => {
   c.header('Cache-Control', 'private, no-store');
   if (!hasPermission(roles(c), 'ops:read') && !hasPermission(roles(c), 'media:manage')) {
     return c.json({ success: false, code: 'forbidden', error: 'The ops:read or media:manage permission is required' }, 403);
   }
-  const budgetUsd = c.env.COSTS_DB ? (await loadCostSettings(c.env.COSTS_DB)).budgetUsd : DEFAULT_MONTHLY_BUDGET_USD;
+  const budgetUsd = c.env.COSTS_DB ? (await loadCostSettings(c.env.COSTS_DB)).budgetUsd : null;
   return c.json({ success: true, result: { budgetUsd } });
 });
 

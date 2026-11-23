@@ -91,7 +91,7 @@ export function MyCostAlerts({ me, accountEmail, digest }: { me: CostSubscriptio
   );
 }
 
-function ThresholdField({ field, label, help, value, error, onChange, step, ids }: { field: SettingsField; label: string; help?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string }) {
+function ThresholdField({ field, label, help, placeholder, value, error, onChange, step, ids }: { field: SettingsField; label: string; help?: string; placeholder?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string }) {
   const id = `${ids}-${field}`;
   const describedBy = [help ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined;
   return (
@@ -101,6 +101,7 @@ function ThresholdField({ field, label, help, value, error, onChange, step, ids 
         id={id}
         dir="ltr"
         autoComplete="off"
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
@@ -153,7 +154,7 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
   const groupTitle = 'mb-1 text-sm font-semibold text-fg';
 
   return (
-    <section className="cost-panel min-w-0 p-5 sm:p-6" aria-labelledby="costs-thresholds-title" data-testid="costs-thresholds">
+    <section id="thresholds" className="cost-panel min-w-0 scroll-mt-24 p-5 sm:p-6" aria-labelledby="costs-thresholds-title" data-testid="costs-thresholds">
       <h2 id="costs-thresholds-title" className="text-lg font-semibold text-fg">{t('costs.thresholds.title')}</h2>
       <p className="mt-1 text-sm text-fg-muted">{t('costs.thresholds.note')}</p>
       <form onSubmit={submit} noValidate className="mt-4 space-y-4" data-testid="costs-thresholds-form">
@@ -161,7 +162,7 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
           <legend className="sr-only">{t('costs.thresholds.budgetTitle')}</legend>
           <p aria-hidden="true" className={groupTitle}>{t('costs.thresholds.budgetTitle')}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ThresholdField ids={ids} field="budgetUsd" label={t('costs.thresholds.budgetUsd')} value={form.budgetUsd} error={err('budgetUsd')} onChange={(v) => set('budgetUsd', v)} step="1" />
+            <ThresholdField ids={ids} field="budgetUsd" label={t('costs.thresholds.budgetUsd')} help={t('costs.thresholds.budgetUsdHelp')} placeholder={t('costs.budget.notSet')} value={form.budgetUsd} error={err('budgetUsd')} onChange={(v) => set('budgetUsd', v)} step="1" />
             <ThresholdField ids={ids} field="budgetLevels" label={t('costs.thresholds.budgetLevels')} help={t('costs.thresholds.budgetLevelsHelp')} value={form.budgetLevels} error={err('budgetLevels')} onChange={(v) => set('budgetLevels', v)} step="1" />
           </div>
           <label className="flex items-start gap-3 text-sm text-fg">

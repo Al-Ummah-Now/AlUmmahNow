@@ -9,7 +9,6 @@ import { join } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { DEFAULT_MONTHLY_BUDGET_USD } from '@al-ummah/shared-types';
 import opsRouter, { parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
 import { budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
@@ -116,17 +115,17 @@ describe('/api/ops reads', () => {
     assert.equal(result.d1.latencyP99, 5.2);
     assert.deepEqual(result.queues.worst, { name: 'al-ummah-now-videos-qa', backlog: 12 });
     assert.equal(result.queues.dlqMessages, 3);
-    assert.equal(result.cost.capUsd, DEFAULT_MONTHLY_BUDGET_USD);
+    assert.equal(result.cost.capUsd, null);
     assert.ok(result.cost.all.mtd >= result.cost.env.mtd);
     assert.equal(result.stale, false);
     assert.equal(result.alerts.length, 1);
   });
 
-  it('overview: the cap is the budget saved in Costs → Alert settings, not a constant (#1427)', async () => {
+  it('overview: the cap is unset until saved in Costs → Alert settings, not a constant (#1427)', async () => {
     const { req, env } = setup(['Admin']);
     await seed(env.COSTS_DB!);
     const cap = async () => ((await (await req('/api/ops/overview?env=qa')).json()) as { result: any }).result.cost.capUsd;
-    assert.equal(await cap(), DEFAULT_MONTHLY_BUDGET_USD);
+    assert.equal(await cap(), null);
     await env.COSTS_DB!.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, ?)").bind(JSON.stringify({ budgetUsd: 750 }), new Date().toISOString()).run();
     assert.equal(await cap(), 750);
   });
@@ -221,8 +220,14 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
 
   it('budget: every source plus the plan, month to date and projected to the end of the month', () => {
     const cloudflare = Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 10 }));
-    const b = budgetStatus({ cloudflare, bunny: [{ day: day(1), cost: 1 }], containers: [], ai: [{ day: day(2), cost: 0.5 }] }, now);
-    assert.equal(b.capUsd, 500);
+    const unset = budgetStatus({ cloudflare, bunny: [{ day: day(1), cost: 1 }], containers: [], ai: [{ day: day(2), cost: 0.5 }] }, now);
+    assert.equal(unset.capUsd, null);
+    assert.equal(unset.share, null);
+    assert.equal(unset.projectedShare, null);
+    assert.equal(unset.level, 'ok');
+    assert.equal(unset.projectedLevel, 'ok');
+    const b = budgetStatus({ cloudflare, bunny: [{ day: day(1), cost: 1 }], containers: [], ai: [{ day: day(2), cost: 0.5 }] }, now, 600);
+    assert.equal(b.capUsd, 600);
     assert.equal(b.month, '2026-11');
     // 15 days of $10 (1st..15th), $1 Bunny, $0.50 AI, the plan's 14.5/30 of $5
     assert.equal(b.parts.cloudflare.mtd, 150);
@@ -266,13 +271,15 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
   });
 
   it('alerts: budget levels crossed and a projected overrun, keyed by month; jumps keyed by env and driver', () => {
-    const b = budgetStatus({ cloudflare: Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 20 })), bunny: [], containers: [], ai: [] }, now);
+    const unset = budgetStatus({ cloudflare: Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 20 })), bunny: [], containers: [], ai: [] }, now, null);
+    assert.deepEqual(wantedAlerts(unset, []), [], 'budget alerts stay quiet while no budget is set');
+    const b = budgetStatus({ cloudflare: Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 20 })), bunny: [], containers: [], ai: [] }, now, 400);
     const keys = wantedAlerts(b, []).map((a) => a.key);
     assert.deepEqual(keys, ['ops-cost:budget:2026-11:50', 'ops-cost:projected:2026-11']);
     assert.deepEqual(wantedAlerts(null, []), []);
   });
 
-  it('sync: reports a new alert once, resolves it when it clears; budget only on production', async () => {
+  it('sync: reports a new alert once, resolves it when it clears; budget only on production and when set', async () => {
     const db = costsD1();
     const ins = (row: Record<string, unknown>) =>
       db.prepare(`INSERT INTO ops_daily (${Object.keys(row).join(', ')}) VALUES (${Object.keys(row).map(() => '?').join(', ')})`).bind(...Object.values(row)).run();
@@ -283,6 +290,9 @@ describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
       report: async (events) => void reported.push(...events.map((e) => (e as { action: { key: string } }).action.key)),
       resolve: async (keys) => void resolved.push(...keys),
     };
+    await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' }, sink, now);
+    assert.deepEqual(reported, [], 'no budget alerts before a super admin sets the monthly budget');
+    await db.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, 'x')").bind(JSON.stringify({ budgetUsd: 400 })).run();
     await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'qa' }, sink, now);
     assert.deepEqual(reported, []);
     await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' }, sink, now);
@@ -302,7 +312,7 @@ describe('/api/ops/costs', () => {
     const r = await req('/api/ops/costs');
     assert.equal(r.status, 200);
     const { result } = (await r.json()) as { result: any };
-    assert.equal(result.budget.capUsd, 500);
+    assert.equal(result.budget.capUsd, null);
     assert.deepEqual(result.budget.levels, [0.5, 0.8, 1]);
     assert.equal(result.trend.days.length, 30);
     assert.deepEqual(result.trend.series.map((s: any) => s.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai']);

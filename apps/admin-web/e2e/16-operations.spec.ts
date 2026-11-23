@@ -11,7 +11,7 @@ import { adminApi, readTokens } from './support/api';
 interface Overview {
   workers: { requests: number };
   queues: { dlqMessages: number };
-  cost: { capUsd: number };
+  cost: { capUsd: number | null };
 }
 
 test.describe('operations', () => {
@@ -45,10 +45,14 @@ test.describe('operations', () => {
     await expect(page.getByTestId('ops-tiles')).toBeVisible();
     await expect(page.getByTestId('ops-tile-dlq')).toHaveText(String(overview.body.result!.queues.dlqMessages));
     // One budget (Costs → Alert settings, #1427): the overview cap and the spend meter agree
-    const costs = await adminApi<{ budget: { capUsd: number } }>('/api/ops/costs?env=all');
+    const costs = await adminApi<{ budget: { capUsd: number | null } }>('/api/ops/costs?env=all');
     if (costs.status === 200) {
       expect(costs.body.result!.budget.capUsd).toBe(overview.body.result!.cost.capUsd);
-      await expect(page.getByTestId('ops-budget-meter')).toHaveAttribute('aria-valuemax', String(overview.body.result!.cost.capUsd));
+      if (overview.body.result!.cost.capUsd !== null) {
+        await expect(page.getByTestId('ops-budget-meter')).toHaveAttribute('aria-valuemax', String(overview.body.result!.cost.capUsd));
+      } else {
+        await expect(page.getByTestId('ops-budget-unset')).toBeVisible();
+      }
     }
     await expect(page.getByTestId('ops-chart-requests')).toBeVisible();
   });

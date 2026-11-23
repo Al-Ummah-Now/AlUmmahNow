@@ -100,7 +100,7 @@ describe('playback measurements', () => {
 
 describe('cost', () => {
   it('reproduces the plan table with the assumed unit costs', () => {
-    const [small, medium, large] = SCALES.map((s) => projectMonthlyCost(s, assumed, 500));
+    const [small, medium, large] = SCALES.map((s) => projectMonthlyCost(s, assumed, 400));
     // Small: transcode ~$6, storage ~$9, both fit; Bunny $21-30
     near(small.r2.transcode, 6.02);
     near(small.r2.storage, 8.64);
@@ -121,6 +121,8 @@ describe('cost', () => {
     near(large.bunny.deliveryLow, 2250);
     assert.deepEqual(large.fits, { r2: false, bunny: false, both: false });
     near(large.both.high, large.r2.total + large.bunny.totalHigh);
+    // When no monthly budget is set, fits is null
+    assert.equal(projectMonthlyCost(SCALES[0], assumed, null).fits, null);
   });
 
   it('uses measured unit costs when the period has them, and says which', () => {
@@ -138,7 +140,7 @@ describe('cost', () => {
     assert.equal(unit.classAPerVideoMinute, ASSUMED.classAPerVideoMinute);
     assert.deepEqual(unit.measured, { transcode: true, storage: true, classA: false, classB: true, delivery: true });
     // Cheaper transcode than assumed: 30 s x $0.0001114 per video-minute
-    near(projectMonthlyCost(SCALES[0], unit, 500).r2.transcode, 1200 * 30 * 0.0001114);
+    near(projectMonthlyCost(SCALES[0], unit, 400).r2.transcode, 1200 * 30 * 0.0001114);
   });
 
   it('a sample too small to be a rate falls back to the plan (prod 2026-11-15: 12.5 video-minutes, 0.25 R2 viewer-hours)', () => {
@@ -152,7 +154,7 @@ describe('cost', () => {
     ];
     const unit = unitCosts(jobs, costs, plays);
     assert.deepEqual(unit.measured, { transcode: false, storage: false, classA: false, classB: false, delivery: false });
-    const medium = projectMonthlyCost(SCALES[1], unit, 500);
+    const medium = projectMonthlyCost(SCALES[1], unit, 400);
     // R2 wins with the plan's units: about $150 against Bunny's $340–565
     near(medium.r2.total, 150, 1);
     near(medium.bunny.totalLow, 340, 1);

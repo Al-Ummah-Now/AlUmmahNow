@@ -37,7 +37,7 @@ export interface CostDigest {
   type: 'digest';
   week: string;
   mtd: number;
-  cap: number;
+  cap: number | null;
   projected: number;
   lastWeek: number;
   weekBefore: number;
@@ -74,6 +74,7 @@ const COPY = {
     digestHeading: 'Your weekly cost digest',
     spent: 'Spent this month',
     budget: 'Monthly budget',
+    budgetUnset: 'Not set',
     projected: 'Projected for the month',
     month: 'Month',
     what: 'What',
@@ -106,6 +107,7 @@ const COPY = {
     digestHeading: 'ملخص التكاليف الأسبوعي',
     spent: 'المُنفق هذا الشهر',
     budget: 'الميزانية الشهرية',
+    budgetUnset: 'غير محددة',
     projected: 'المتوقع للشهر',
     month: 'الشهر',
     what: 'البند',
@@ -187,7 +189,7 @@ export function renderCostEmail(input: CostEmailInput): RenderedEmail {
     const days = formatNumber(l, WEEK_DAYS);
     subject = s.digestSubject(isoLabel(p.week, l));
     heading = s.digestHeading;
-    blocks.push({ kind: 'facts', rows: [[s.spent, money(p.mtd, l)], [s.budget, money(p.cap, l)], [s.projected, money(p.projected, l)], [s.lastWeek(days), money(p.lastWeek, l)], [s.weekBefore(days), money(p.weekBefore, l)], [s.openAlerts, formatInteger(l, p.openAlerts)]] });
+    blocks.push({ kind: 'facts', rows: [[s.spent, money(p.mtd, l)], [s.budget, p.cap === null ? s.budgetUnset : money(p.cap, l)], [s.projected, money(p.projected, l)], [s.lastWeek(days), money(p.lastWeek, l)], [s.weekBefore(days), money(p.weekBefore, l)], [s.openAlerts, formatInteger(l, p.openAlerts)]] });
     if (p.products.length) {
       blocks.push({ kind: 'p', text: s.byProduct });
       blocks.push({ kind: 'facts', rows: p.products.slice(0, 5).map((x) => [product(x.product), money(x.mtd, l)] as [string, string]) });

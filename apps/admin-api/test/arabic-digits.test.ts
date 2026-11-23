@@ -19,7 +19,7 @@ const digest = {
   type: 'digest' as const,
   week: '2026-11-16',
   mtd: 120.5,
-  cap: 500,
+  cap: 400,
   projected: 1310.25,
   lastWeek: 50,
   weekBefore: 40,
@@ -31,11 +31,11 @@ const digest = {
 
 describe('Arabic emails use ٠–٩', () => {
   it('cost alerts and the digest: money as «… دولار أمريكي», percentages, months and counts', () => {
-    const budget = renderCostEmail({ to: 'a@example.com', locale: 'ar', payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 400, cap: 500, projected: 520 } });
+    const budget = renderCostEmail({ to: 'a@example.com', locale: 'ar', payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 320, cap: 400, projected: 420 } });
     noAsciiDigits('budget subject', budget.subject);
     noAsciiDigits('budget text', budget.text);
     assert.match(budget.subject, /٨٠٪/);
-    assert.match(budget.text, /٤٠٠٫٠٠ دولار أمريكي/);
+    assert.match(budget.text, /٣٢٠٫٠٠ دولار أمريكي/);
     assert.match(budget.text, /نوفمبر ٢٠٢٦/);
 
     const d = renderCostEmail({ to: 'a@example.com', locale: 'ar', payload: digest, adminUrl: 'https://admin.example.com' });
@@ -70,9 +70,9 @@ describe('Arabic emails use ٠–٩', () => {
 
 describe('English emails keep 0–9', () => {
   it('money, percentages and day counts read as before', () => {
-    const budget = renderCostEmail({ to: 'a@example.com', locale: 'en', payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 400, cap: 500, projected: 520 } });
+    const budget = renderCostEmail({ to: 'a@example.com', locale: 'en', payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 320, cap: 400, projected: 420 } });
     assert.equal(budget.subject, 'Costs: 80% of the monthly budget used');
-    assert.match(budget.text, /\$400\.00/);
+    assert.match(budget.text, /\$320\.00/);
     assert.match(budget.text, /2026-11/);
     const d = renderCostEmail({ to: 'a@example.com', locale: 'en', payload: digest });
     assert.match(d.text, /Last 7 days/);

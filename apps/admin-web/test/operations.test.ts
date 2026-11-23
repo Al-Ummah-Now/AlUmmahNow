@@ -97,9 +97,9 @@ describe('model', () => {
   });
 
   it('fills the cap bar and flags 80% and over', () => {
-    assert.deepEqual(capShare(100, 500), { share: 0.2, over: false, warn: false });
-    assert.deepEqual(capShare(450, 500), { share: 0.9, over: false, warn: true });
-    assert.deepEqual(capShare(900, 500), { share: 1, over: true, warn: true });
+    assert.deepEqual(capShare(120, 600), { share: 0.2, over: false, warn: false });
+    assert.deepEqual(capShare(540, 600), { share: 0.9, over: false, warn: true });
+    assert.deepEqual(capShare(900, 600), { share: 1, over: true, warn: true });
   });
 
   it('parses params with safe defaults', () => {
@@ -117,11 +117,12 @@ describe('model', () => {
 });
 
 describe('spend', () => {
-  const budget = (share: number, projectedShare: number, level: string, projectedLevel: string) =>
-    ({ capUsd: 500, month: '2026-11', mtd: share * 500, projected: projectedShare * 500, share, projectedShare, level, projectedLevel, parts: {}, levels: [0.5, 0.8, 1] }) as never;
+  const budget = (share: number | null, projectedShare: number | null, level: string, projectedLevel: string, capUsd: number | null = 600) =>
+    ({ capUsd, month: '2026-11', mtd: (share ?? 0) * (capUsd ?? 0), projected: (projectedShare ?? 0) * (capUsd ?? 0), share, projectedShare, level, projectedLevel, parts: {}, levels: [0.5, 0.8, 1] }) as never;
 
   it('meter: spent and projected shares, ticks at 50% and 80%, tone by level', () => {
     assert.deepEqual(budgetMeter(budget(0.2, 0.45, 'ok', 'ok')), { spentPct: 20, projectedPct: 45, ticks: [50, 80], tone: 'ok', projectedTone: 'ok', over: false, projectedOver: false });
+    assert.deepEqual(budgetMeter(budget(null, null, 'ok', 'ok', null)), { spentPct: 0, projectedPct: 0, ticks: [50, 80], tone: 'ok', projectedTone: 'ok', over: false, projectedOver: false });
     const m = budgetMeter(budget(0.6, 1.3, 'warn50', 'over'));
     assert.equal(m.tone, 'warn');
     assert.equal(m.projectedTone, 'danger');
@@ -133,8 +134,8 @@ describe('spend', () => {
   it('idle status against the $50 target, and the daily budget line', () => {
     assert.deepEqual(idleStatus({ monthlyUsd: 31.5, targetUsd: 50 }), { under: true, overBy: 0 });
     assert.deepEqual(idleStatus({ monthlyUsd: 212.25, targetUsd: 50 }), { under: false, overBy: 162.25 });
-    assert.equal(dailyBudget(500, '2026-11'), 16.67);
-    assert.equal(dailyBudget(500, '2026-02'), 17.86);
+    assert.equal(dailyBudget(600, '2026-11'), 20);
+    assert.equal(dailyBudget(600, '2026-02'), 21.43);
   });
 
   function stacked(locale: 'en' | 'ar' = 'en', values = [[1, 2, 0], [0.5, 0, 3]]) {

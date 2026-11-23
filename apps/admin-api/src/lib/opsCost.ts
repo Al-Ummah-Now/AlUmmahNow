@@ -63,14 +63,14 @@ export type BudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend'
 export type BudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
 
 export interface BudgetStatus {
-  capUsd: number;
+  capUsd: number | null;
   month: string;
   /** Spent so far this month, every source, including the plan's share of the days elapsed. */
   mtd: number;
   /** End-of-month estimate: month so far plus the trailing 7-day average for the days left. */
   projected: number;
-  share: number;
-  projectedShare: number;
+  share: number | null;
+  projectedShare: number | null;
   level: BudgetLevel;
   projectedLevel: BudgetLevel;
   parts: Record<BudgetPart, { mtd: number; projected: number }>;
@@ -88,8 +88,8 @@ export function levelOf(share: number): BudgetLevel {
 export function budgetStatus(
   sources: Omit<Record<BudgetPart, DayCost[]>, 'plan' | 'resend'> & { resend?: DayCost[] },
   now: Date,
-  /** The admin-set budget (loadCostSettings); never a constant here (#1427). */
-  capUsd = COST_ALERT_DEFAULTS.budgetUsd,
+  /** The admin-set budget (loadCostSettings); null until a super admin sets one (#1427). */
+  capUsd: number | null = COST_ALERT_DEFAULTS.budgetUsd,
   /** The alert levels set in Costs → Alert settings; the meter draws its marks at these shares. */
   levels: readonly number[] = COST_ALERT_DEFAULTS.budgetLevels,
 ): BudgetStatus {
@@ -102,17 +102,18 @@ export function budgetStatus(
   parts.plan = { mtd: round2((PLAN_BASE_USD * p.daysElapsed) / p.daysInMonth), projected: PLAN_BASE_USD };
   const mtd = round2(Object.values(parts).reduce((s, x) => s + x.mtd, 0));
   const projected = round2(Object.values(parts).reduce((s, x) => s + x.projected, 0));
-  const share = mtd / capUsd;
-  const projectedShare = projected / capUsd;
+  const hasCap = capUsd !== null && Number.isFinite(capUsd) && capUsd > 0;
+  const share = hasCap ? mtd / capUsd : null;
+  const projectedShare = hasCap ? projected / capUsd : null;
   return {
-    capUsd,
+    capUsd: hasCap ? capUsd : null,
     month: now.toISOString().slice(0, 7),
     mtd,
     projected,
-    share: Math.round(share * 1000) / 1000,
-    projectedShare: Math.round(projectedShare * 1000) / 1000,
-    level: levelOf(share),
-    projectedLevel: levelOf(projectedShare),
+    share: share === null ? null : Math.round(share * 1000) / 1000,
+    projectedShare: projectedShare === null ? null : Math.round(projectedShare * 1000) / 1000,
+    level: share === null ? 'ok' : levelOf(share),
+    projectedLevel: projectedShare === null ? 'ok' : levelOf(projectedShare),
     parts,
     levels: [...levels].sort((a, b) => a - b),
   };
@@ -374,7 +375,7 @@ export function wantedAlerts(
   settings: Pick<CostAlertSettings, 'budgetLevels' | 'projectedAlert'> = COST_ALERT_DEFAULTS,
 ): CostAlert[] {
   const out: CostAlert[] = [];
-  if (budget) {
+  if (budget && budget.capUsd !== null && budget.share !== null && budget.projectedShare !== null) {
     for (const level of settings.budgetLevels) {
       if (budget.share < level) continue;
       const pct = Math.round(level * 100);

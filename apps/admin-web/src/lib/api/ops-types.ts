@@ -23,7 +23,7 @@ export interface OpsOverview {
   workers: { requests: number; requestsBefore: number; errorRate: number | null; errorRateBefore: number | null; cpuP99: number | null };
   d1: { latencyP99: number | null; latencyP99Before: number | null };
   queues: { worst: { name: string; backlog: number } | null; dlqMessages: number; at: string | null };
-  cost: { env: OpsProjection; all: OpsProjection; capUsd: number; estimated: boolean };
+  cost: { env: OpsProjection; all: OpsProjection; capUsd: number | null; estimated: boolean };
   dataAsOf: string | null;
   stale: boolean;
   alerts: { key: string; rule_id: string; resource_id: string; value: number | null; opened_at: string }[];
@@ -69,12 +69,12 @@ export interface OpsSpike {
 export interface OpsCosts {
   env: 'all' | OpsEnv;
   budget: {
-    capUsd: number;
+    capUsd: number | null;
     month: string;
     mtd: number;
     projected: number;
-    share: number;
-    projectedShare: number;
+    share: number | null;
+    projectedShare: number | null;
     level: OpsBudgetLevel;
     projectedLevel: OpsBudgetLevel;
     parts: Record<OpsCostPart, { mtd: number; projected: number }>;

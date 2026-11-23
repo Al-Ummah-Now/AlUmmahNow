@@ -224,7 +224,7 @@ Unit assumptions (list prices, 2026-11):
 
 What this means at each scale:
 
-- **Small:** both paths cost under $40/month combined.
+- **Small:** both paths cost about $40/month combined.
 - **Medium:** running both in parallel adds ~$340–565/month for Bunny alone, so keep the dual-write trial short or dual-write a sample.
 - **Large:** R2 eliminates delivery egress ($2,250–4,500/month on Bunny). At this scale R2 cost is dominated by storage and transcode. The levers
   are lifecycle rules on old renditions, dropping 1080p for audio-led lectures, and the desktop
