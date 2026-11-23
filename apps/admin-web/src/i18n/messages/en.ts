@@ -5663,6 +5663,7 @@ const en = {
       purge_requested: 'Permanent deletion requested',
       move: 'Moved',
       transfer: 'Ownership transferred',
+      'transfer-refused': 'Ownership transfer refused',
       transferred: 'Ownership transferred',
       suspend: 'Suspended',
       suspended: 'Suspended',
