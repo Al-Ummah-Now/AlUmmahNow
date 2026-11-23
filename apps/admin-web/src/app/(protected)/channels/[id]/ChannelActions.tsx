@@ -18,6 +18,7 @@ import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/co
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { ChannelTransfer } from './ChannelTransfer';
 import { ScholarLabelDialog, type LabelKind, type LabelMode } from './ScholarLabelDialog';
+import { ChannelHandleTools } from './ChannelHandleTools';
 
 interface Props {
   channel: {
@@ -201,6 +202,8 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
           channel={{ id: channel.id, name: channel.name, handle: channel.handle, ownerId: channel.ownerId, videos: channel.videos, playlists: channel.playlists }}
         />
       )}
+
+      {can('channels:transfer') && <ChannelHandleTools channel={{ id: channel.id, handle: channel.handle }} />}
 
       {can('content:delete') && (
         <SectionCard title={t('channels.dangerTitle')} id={`${ids}-delete`}>
