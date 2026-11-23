@@ -23,9 +23,7 @@ import {
   workflowFloorFor,
   isWorkflowOpen,
   WORKFLOW_OPEN_STATUSES,
-  workflowApplyAt,
   workflowApprovalBlocks,
-  workflowEffectiveDateProblem,
   workflowExpiresAt,
   workflowOpenKey,
   workflowProposeBlocks,
@@ -155,13 +153,11 @@ interface RequestRow {
   reason: string;
   proposed_by: string;
   proposed_at: string;
-  effective_at: string | null;
   expires_at: string;
   status: WorkflowStatus;
   approvals_needed: number;
   approvals_count: number;
   version: number;
-  apply_at: string | null;
   applied_at: string | null;
   result: string | null;
   error: string | null;
@@ -177,7 +173,7 @@ interface StepRow {
 }
 
 const REQUEST_COLUMNS =
-  'id, action_type, scope, domain, rule, target_kind, target_id, subject_user_id, payload, diff, base_version, reason, proposed_by, proposed_at, effective_at, expires_at, status, approvals_needed, approvals_count, version, apply_at, applied_at, result, error';
+  'id, action_type, scope, domain, rule, target_kind, target_id, subject_user_id, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, approvals_count, version, applied_at, result, error';
 
 async function loadRow(ctx: WorkflowCtx, id: string): Promise<RequestRow> {
   const row = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE id = ?`).bind(id).first<RequestRow>();
@@ -258,10 +254,9 @@ export interface ProposeInput {
   type: WorkflowActionType;
   payload: unknown;
   reason: unknown;
-  effectiveAt?: string | null;
 }
 
-export type ProposeOutcome = { status: 'applied'; requestId: string; result: unknown } | { status: 'scheduled' | 'pending_approval' | 'failed'; request: WorkflowRequestView };
+export type ProposeOutcome = { status: 'applied'; requestId: string; result: unknown } | { status: 'pending_approval' | 'failed'; request: WorkflowRequestView };
 
 export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, input: ProposeInput): Promise<ProposeOutcome> {
   const executor = executorFor(input.type);
@@ -280,8 +275,6 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
   if (rule.stepUp === 'propose_and_approve' && !ctx.steppedUp) throw new WorkflowError(403, 'propose_not_allowed', { stepUp: true });
 
   const now = ctx.now();
-  const effectiveAt = input.effectiveAt ? new Date(input.effectiveAt) : null;
-  if (workflowEffectiveDateProblem(rule, effectiveAt, now)) throw new WorkflowError(400, 'effective_date_not_allowed', { maxDaysAhead: rule.effectiveDate.maxDaysAhead });
 
   const target = executor.target(payload);
   const description = await executor.describe(ctx, payload);
@@ -289,16 +282,15 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
   const id = newId();
   const at = now.toISOString();
   const direct = rule.approvalsNeeded === 0;
-  const applyAt = direct ? workflowApplyAt(effectiveAt, now) : null;
-  const scheduled = direct && applyAt!.getTime() > now.getTime();
-  const status: WorkflowStatus = direct ? (scheduled ? 'scheduled' : 'applying') : 'pending';
+  // An approved change takes effect at once: there are no scheduled dates (owner, WF-D6)
+  const status: WorkflowStatus = direct ? 'applying' : 'pending';
   const openKey = workflowOpenKey(input.type, target.kind, target.id);
 
   const insert = ctx.db
     .prepare(
       `INSERT INTO workflow_requests (id, action_type, scope, domain, rule_id, rule, target_kind, target_id, open_key, subject_user_id, payload, diff, base_version, reason,
-         proposed_by, proposed_at, effective_at, expires_at, status, approvals_needed, approvals_count, version, apply_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`,
+         proposed_by, proposed_at, expires_at, status, approvals_needed, approvals_count, version, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)`,
     )
     .bind(
       id,
@@ -317,11 +309,9 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
       reason,
       actor.userId,
       at,
-      effectiveAt ? effectiveAt.toISOString() : null,
       workflowExpiresAt(now, rule).toISOString(),
       status,
       rule.approvalsNeeded,
-      applyAt ? applyAt.toISOString() : null,
       at,
     );
   const approvers = direct ? [] : await eligibleApprovers(ctx, floor, rule, actor.userId, subject, [actor.userId], []);
@@ -345,7 +335,7 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
     return { status: 'failed', request: await getRequestView(ctx, id, actor) };
   }
   const view = await getRequestView(ctx, id, actor);
-  return { status: status === 'scheduled' ? 'scheduled' : 'pending_approval', request: view };
+  return { status: 'pending_approval', request: view };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -405,13 +395,12 @@ export async function approveRequest(ctx: WorkflowCtx, actor: WorkflowActor, id:
   const at = now.toISOString();
   const count = row.approvals_count + 1;
   const done = count >= row.approvals_needed;
-  const applyAt = done ? workflowApplyAt(row.effective_at ? new Date(row.effective_at) : null, now) : null;
-  const next: WorkflowStatus = !done ? 'pending' : applyAt!.getTime() > now.getTime() ? 'scheduled' : 'applying';
+  const next: WorkflowStatus = done ? 'applying' : 'pending';
   const results = await ctx.db.batch([
     stepStatement(ctx, id, row.version, actor.userId, 'approve', note, at),
     ctx.db
-      .prepare('UPDATE workflow_requests SET approvals_count = ?, status = ?, apply_at = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?')
-      .bind(count, next, applyAt ? applyAt.toISOString() : null, at, id, row.version),
+      .prepare('UPDATE workflow_requests SET approvals_count = ?, status = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?')
+      .bind(count, next, at, id, row.version),
     ctx.db.prepare(done ? 'DELETE FROM workflow_inbox WHERE request_id = ?' : 'DELETE FROM workflow_inbox WHERE request_id = ? AND user_id = ?').bind(...(done ? [id] : [id, actor.userId])),
   ]).catch((e: unknown) => {
     // the one-approval-per-person index: a double click
@@ -452,7 +441,7 @@ export async function rejectRequest(ctx: WorkflowCtx, actor: WorkflowActor, id: 
 export async function withdrawRequest(ctx: WorkflowCtx, actor: WorkflowActor, id: string, input: { version?: number }): Promise<WorkflowRequestView> {
   const row = await loadRow(ctx, id);
   if (row.proposed_by !== actor.userId) throw new WorkflowError(403, 'approval_not_allowed', { blocks: ['not_proposer'] });
-  if (!['pending', 'scheduled', 'failed'].includes(row.status)) throw new WorkflowError(409, 'request_closed', { status: row.status });
+  if (!['pending', 'failed'].includes(row.status)) throw new WorkflowError(409, 'request_closed', { status: row.status });
   needVersion(row, input.version);
   const recipients = (await ctx.db.prepare('SELECT user_id FROM workflow_inbox WHERE request_id = ?').bind(id).all<{ user_id: string }>()).results?.map((r) => r.user_id) ?? [];
   if (!(await close(ctx, row, actor.userId, 'withdraw', 'withdrawn', null))) throw new WorkflowError(409, 'version_conflict');
@@ -480,7 +469,7 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
   let current = row;
   if (current.status !== 'applying') {
     const at = ctx.now().toISOString();
-    const r = await ctx.db.prepare("UPDATE workflow_requests SET status = 'applying', version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND status IN ('scheduled', 'failed')").bind(at, row.id, row.version).run();
+    const r = await ctx.db.prepare("UPDATE workflow_requests SET status = 'applying', version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND status = 'failed'").bind(at, row.id, row.version).run();
     if (!changes(r)) return { status: 'skipped' };
     current = await loadRow(ctx, row.id);
   }
@@ -548,12 +537,12 @@ export async function retryRequest(ctx: WorkflowCtx, actor: WorkflowActor, id: s
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Cron: expiry and scheduled apply
+// Cron: expiry
 // ---------------------------------------------------------------------------------------------------
 
-export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; applied: number; failed: number; errors: number }> {
+export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; errors: number }> {
   const now = ctx.now().toISOString();
-  const out = { expired: 0, applied: 0, failed: 0, errors: 0 };
+  const out = { expired: 0, errors: 0 };
   const expiring = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE status = 'pending' AND expires_at <= ? ORDER BY expires_at LIMIT ?`).bind(now, limit).all<RequestRow>();
   for (const row of expiring.results ?? []) {
     try {
@@ -565,17 +554,6 @@ export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ e
     } catch (error) {
       out.errors++;
       logger.error('[Workflows] Expiring a request failed', { requestId: row.id, error: String(error) });
-    }
-  }
-  const due = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE status = 'scheduled' AND apply_at <= ? ORDER BY apply_at LIMIT ?`).bind(now, limit).all<RequestRow>();
-  for (const row of due.results ?? []) {
-    try {
-      const r = await runApply(ctx, row);
-      if (r.status === 'applied') out.applied++;
-      if (r.status === 'failed') out.failed++;
-    } catch (error) {
-      out.errors++;
-      logger.error('[Workflows] Applying a scheduled request failed', { requestId: row.id, error: String(error) });
     }
   }
   return out;
@@ -600,7 +578,6 @@ export async function getRequestView(ctx: WorkflowCtx, id: string, viewer?: Work
     reason: row.reason,
     proposedBy: row.proposed_by,
     proposedAt: row.proposed_at,
-    effectiveAt: row.effective_at,
     expiresAt: row.expires_at,
     status: row.status,
     approvalsNeeded: row.approvals_needed,
@@ -615,7 +592,7 @@ export async function getRequestView(ctx: WorkflowCtx, id: string, viewer?: Work
     view.can = {
       approve: open && !blocks.length,
       reject: open && !blocks.filter((b) => b !== 'already_approved' && b !== 'one_step_per_person').length,
-      withdraw: viewer.userId === row.proposed_by && ['pending', 'scheduled', 'failed'].includes(row.status),
+      withdraw: viewer.userId === row.proposed_by && ['pending', 'failed'].includes(row.status),
       blocks,
     };
   }
@@ -633,7 +610,6 @@ export interface RequestListItem {
   status: WorkflowStatus;
   proposedBy: string;
   proposedAt: string;
-  effectiveAt: string | null;
   expiresAt: string;
   approvalsNeeded: number;
   approvalsCount: number;
@@ -653,7 +629,7 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   const typeArgs = opts.type ? [opts.type] : [];
   let sql: string;
   let args: unknown[];
-  const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.effective_at, r.expires_at, r.approvals_needed, r.approvals_count';
+  const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.expires_at, r.approvals_needed, r.approvals_count';
   switch (opts.view) {
     case 'waiting':
       sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
@@ -693,7 +669,6 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
     status: r.status,
     proposedBy: r.proposed_by,
     proposedAt: r.proposed_at,
-    effectiveAt: r.effective_at,
     expiresAt: r.expires_at,
     approvalsNeeded: r.approvals_needed,
     approvalsCount: r.approvals_count,

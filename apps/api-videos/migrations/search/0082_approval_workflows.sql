@@ -42,22 +42,19 @@ CREATE TABLE IF NOT EXISTS workflow_requests (
   reason TEXT NOT NULL,
   proposed_by TEXT NOT NULL,
   proposed_at TEXT NOT NULL,
-  effective_at TEXT,
   expires_at TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'scheduled', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale')),
   approvals_needed INTEGER NOT NULL CHECK (approvals_needed >= 0),
   approvals_count INTEGER NOT NULL DEFAULT 0,
   version INTEGER NOT NULL DEFAULT 1,
-  apply_at TEXT,
   applied_at TEXT,
   result TEXT,
   error TEXT,
   updated_at TEXT NOT NULL
 ) WITHOUT ROWID;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_requests_open ON workflow_requests (open_key) WHERE open_key IS NOT NULL;
--- cron: pending requests past expiry; scheduled requests whose date has come
+-- cron: pending requests past expiry (an approved change applies at once: no scheduled dates, WF-D6)
 CREATE INDEX IF NOT EXISTS idx_workflow_requests_expiry ON workflow_requests (status, expires_at);
-CREATE INDEX IF NOT EXISTS idx_workflow_requests_apply ON workflow_requests (status, apply_at);
 -- lists: by action, by proposer, by target, all by status
 CREATE INDEX IF NOT EXISTS idx_workflow_requests_action ON workflow_requests (action_type, proposed_at);
 CREATE INDEX IF NOT EXISTS idx_workflow_requests_status ON workflow_requests (status, proposed_at);
@@ -69,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_requests_proposed ON workflow_requests (
 CREATE TABLE IF NOT EXISTS workflow_steps (
   request_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
-  -- an account id, or 'system' (expiry, scheduled apply, stale check)
+  -- an account id, or 'system' (expiry, apply, stale check)
   actor TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('propose', 'approve', 'reject', 'withdraw', 'comment', 'apply', 'fail', 'expire', 'stale', 'retry')),
   note TEXT,

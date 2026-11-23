@@ -1,6 +1,6 @@
 /**
  * The approval workflow engine (wiki AUN-WORKFLOWS §5, §7): direct and governed changes, floors and
- * exclusions, one open request per target, stale checks, expiry and scheduled apply, exactly-once
+ * exclusions, one open request per target, stale checks, expiry, exactly-once
  * apply under races, append-only steps and rules, and that every query uses an index.
  * Real SQL: the search migrations on node:sqlite, and this app's migrations for the staff list.
  */
@@ -76,6 +76,8 @@ let reports: D1Database;
 let events: WorkflowEvent[];
 let failNextApply = false;
 let throwOnVersion = false;
+let versionCalls = 0;
+let throwAfterCalls = Infinity;
 
 const ctx = (over: Partial<WorkflowCtx> = {}): WorkflowCtx => ({
   db: search as unknown as D1Database,
@@ -110,7 +112,7 @@ function settingExecutor(type: WorkflowActionType, can: (a: WorkflowActor) => bo
       subjectUserId: p.key === 'about-u-sa2' ? 'u-sa2' : null,
     }),
     currentVersion: async (_c, p) => {
-      if (throwOnVersion) throw new Error('D1 is unavailable');
+      if (throwOnVersion || ++versionCalls > throwAfterCalls) throw new Error('D1 is unavailable');
       return value(p.key) ?? '';
     },
     applyStatements: async (c, p) => {
@@ -147,6 +149,8 @@ beforeEach(async () => {
   events = [];
   failNextApply = false;
   throwOnVersion = false;
+  versionCalls = 0;
+  throwAfterCalls = Infinity;
   clearWorkflowExecutors();
   settingExecutor('features.set');
   settingExecutor('support.fees.set', (a) => a.financePermissions.includes('support:providers'));
@@ -172,20 +176,11 @@ describe('direct rules', () => {
     assert.equal(search.raw.prepare('SELECT open_key FROM workflow_requests').get()!.open_key, null, 'the lock is released');
   });
 
-  it('a future effective date schedules it; the cron applies it on the day', async () => {
-    await setRule('features.set', 'banner', { effectiveDate: { allowed: true, maxDaysAhead: 30 } });
-    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'banner', value: 'eid' }, reason: 'Eid', effectiveAt: '2026-11-25T00:00:00Z' });
-    assert.equal(out.status, 'scheduled');
-    assert.equal(value('banner'), null);
-    clock = new Date('2026-11-24T23:59:00Z');
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 0, failed: 0, errors: 0 });
-    clock = new Date('2026-11-25T00:00:00Z');
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 1, failed: 0, errors: 0 });
+  it('an approved change takes effect at once: there is no schedule (WF-D6)', async () => {
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'banner', value: 'eid' }, reason: 'Eid' });
+    assert.equal(out.status, 'applied');
     assert.equal(value('banner'), 'eid');
-  });
-
-  it('refuses an effective date the rule does not allow', async () => {
-    await rejects(proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'x', value: '1' }, reason: 'r', effectiveAt: '2026-12-01T00:00:00Z' }), 'effective_date_not_allowed');
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, errors: 0 });
   });
 });
 
@@ -378,10 +373,9 @@ describe('rules and storage', () => {
       "SELECT seq FROM workflow_steps WHERE request_id = 'x' ORDER BY seq",
       "SELECT COALESCE(MAX(seq), 0) + 1 FROM workflow_steps WHERE request_id = 'x'",
       "SELECT id FROM workflow_requests WHERE status = 'pending' AND expires_at <= 'x' ORDER BY expires_at LIMIT 50",
-      "SELECT id FROM workflow_requests WHERE status = 'scheduled' AND apply_at <= 'x' ORDER BY apply_at LIMIT 50",
       "SELECT r.id FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = 'u' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE r.proposed_by = 'u' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
-      "SELECT r.id FROM workflow_requests r WHERE r.status IN ('pending', 'scheduled') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
+      "SELECT r.id FROM workflow_requests r WHERE r.status IN ('pending', 'approved') ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE r.action_type = 'a' ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT r.id FROM workflow_requests r WHERE 1 = 1 ORDER BY r.proposed_at DESC, r.id DESC LIMIT 51",
       "SELECT COUNT(*) FROM workflow_inbox WHERE user_id = 'u'",
@@ -400,16 +394,22 @@ describe('rules and storage', () => {
 
 describe('review fixes (#1825)', () => {
   it('an error in the stale check while applying ends in failed (lock released for retry), never stuck in applying', async () => {
-    await setRule('features.set', 'banner', { effectiveDate: { allowed: true, maxDaysAhead: 30 } });
-    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'banner', value: 'eid' }, reason: 'Eid', effectiveAt: '2026-11-25T00:00:00Z' });
-    const id = out.status === 'scheduled' ? out.request.id : '';
-    clock = new Date('2026-11-25T00:00:00Z');
-    throwOnVersion = true;
-    const r = await runDueWorkflows(ctx());
-    assert.deepEqual(r, { expired: 0, applied: 0, failed: 1, errors: 0 });
-    assert.equal((await getRequestView(ctx(), id)).status, 'failed');
-    throwOnVersion = false;
+    await setRule('features.set', 'live', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }], stepUp: 'approve' });
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'live', value: 'on' }, reason: 'r' });
+    const id = out.status === 'pending_approval' ? out.request.id : '';
+    versionCalls = 0;
+    throwAfterCalls = 1; // the approval's stale check passes, the apply's stale check throws
+    assert.equal((await approveRequest(ctx(), await actor('u-sa2', ['super_admin']), id, {})).status, 'failed');
+    throwAfterCalls = Infinity;
     assert.equal((await retryRequest(ctx(), await actor('u-sa2', ['super_admin']), id)).status, 'applied');
+    assert.equal(value('live'), 'on');
+  });
+
+  it('the cron expires every due request', async () => {
+    await setRule('features.set', '', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] });
+    for (const k of ['a', 'b']) await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: k, value: '1' }, reason: 'r' });
+    clock = new Date(T0.getTime() + 8 * 24 * 3600_000);
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 2, errors: 0 });
   });
 
   it('a failed direct change says failed, not pending_approval', async () => {
