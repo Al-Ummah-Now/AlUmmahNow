@@ -51,7 +51,7 @@ function BudgetMeterBar({ c, t, f }: { c: OpsCosts; t: Translator; f: OpsFormats
         </div>
         <p className="rounded-lg border border-border border-s-4 border-s-warning-fg bg-surface-2 px-4 py-3 text-sm text-fg" role="status" data-testid="ops-budget-unset">
           {t('operations.spend.unsetBanner')}{' '}
-          <Link href="/costs#thresholds" className={linkClass}>{t('operations.spend.setBudgetLink')}</Link>
+          <Link href="/costs#thresholds" className={`${linkClass} underline`}>{t('operations.spend.setBudgetLink')}</Link>
         </p>
       </div>
     );

@@ -240,7 +240,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
         ) : (
           <p className="cost-note px-4 py-3 text-sm text-fg" data-testid="costs-budget-unset">
             {d.canManage ? t('costs.budget.unsetNoteManage') : t('costs.budget.unsetNoteAdmin')}{' '}
-            {d.canManage && <a href="#thresholds" className={linkClass}>{t('costs.budget.setPrompt')}</a>}
+            {d.canManage && <a href="#thresholds" className={`${linkClass} underline`}>{t('costs.budget.setPrompt')}</a>}
           </p>
         )}
       </div>

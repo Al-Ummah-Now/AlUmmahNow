@@ -204,7 +204,7 @@ export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { 
           <>
             {' '}
             {t('mediaDelivery.projectionBudgetUnset')}{' '}
-            <Link href="/costs#thresholds" className={linkClass}>{t('mediaDelivery.projectionSetBudget')}</Link>
+            <Link href="/costs#thresholds" className={`${linkClass} underline`}>{t('mediaDelivery.projectionSetBudget')}</Link>
           </>
         )}
       </p>
