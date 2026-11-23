@@ -45,6 +45,7 @@ import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
 import { applyAudioExtractEvent, applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { apiError } from '../../lib/api-error';
 
 const MAX_IDS = 50;
 
@@ -159,7 +160,7 @@ export function createMediaInternalRouter() {
 
 	app.post('/audio-extract', async (c) => {
 		const body = await c.req.json().catch(() => null);
-		if (!isAudioExtractEvent(body)) return c.json({ success: false, error: 'bad event' }, 400);
+		if (!isAudioExtractEvent(body)) return apiError(c, 400, 'bad_request', { error: 'bad event' });
 		return c.json({ success: true, result: await applyAudioExtractEvent(c.env, body) });
 	});
 
