@@ -146,6 +146,23 @@ describe('/api/me/features', () => {
 		);
 	});
 
+	it('live app features: off by default; viewers follow the switch, Studio also the tier and role', async () => {
+		const { env, set } = await setup();
+		const keys = ['liveChat', 'livePremieres', 'liveReminders', 'liveEvents'] as const;
+		const off = await computeFeatures(env, { userId: 'alice', roles: [] });
+		for (const key of keys) assert.equal(off[key], false, key);
+		for (const key of keys) await set(key, true);
+		// Signed out, with live switched off and no provider: streams on air and recordings go on
+		await set('live', false);
+		const anonymous = await computeFeatures(env, { userId: null });
+		for (const key of keys) assert.equal(anonymous[key], true, key);
+		// Asked about a channel the caller has no role on: nothing to set up there
+		for (const who of [{ userId: null }, { userId: 'stranger', roles: [] }]) {
+			const scoped = await computeFeatures(env, who, 'no-such-channel');
+			assert.deepEqual([scoped.liveChat, scoped.livePremieres, scoped.liveEvents], [false, false, false]);
+		}
+	});
+
 	it('has a body ETag: a match gets 304; signed out is public for 30 s', async () => {
 		const { env, set } = await setup();
 		const get = app(env, 'alice');

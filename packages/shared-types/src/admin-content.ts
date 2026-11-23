@@ -644,6 +644,11 @@ export const ADMIN_JOB_KINDS = [
    */
   'search.reconcile',
   /**
+   * Deleted live streams: their chat and reminders, then the stream's row (wiki E17 §4.4; api-videos
+   * lib/live/metadata.ts). One job at a time, target 'live-streams'.
+   */
+  'live.purge-streams',
+  /**
    * Creator support (wiki AUN-MEMBERS §9.4; api-videos lib/support/jobs.ts). Target kind 'support':
    * a vendor event id, a payee id or the day. Every job is idempotent; the ledger posts once per key.
    */
@@ -753,6 +758,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'discovery.rank': ['videos:manage'],
   'search.repair-objects': ['videos:manage'],
   'search.reconcile': ['videos:manage'],
+  'live.purge-streams': ['videos:manage'],
   // Support jobs book money that has already moved; retrying them moves none (wiki AUN-MEMBERS §9.6 Jobs)
   'support.webhook': ['support:manage'],
   'support.release': ['support:manage'],

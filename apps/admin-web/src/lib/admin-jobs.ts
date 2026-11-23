@@ -30,6 +30,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'discovery.rank': 'adminJobs.kinds.discoveryRank',
   'search.repair-objects': 'adminJobs.kinds.searchRepairObjects',
   'search.reconcile': 'adminJobs.kinds.searchReconcile',
+  'live.purge-streams': 'adminJobs.kinds.livePurgeStreams',
   'support.webhook': 'adminJobs.kinds.supportWebhook',
   'support.release': 'adminJobs.kinds.supportRelease',
   'support.reconcile': 'adminJobs.kinds.supportReconcile',

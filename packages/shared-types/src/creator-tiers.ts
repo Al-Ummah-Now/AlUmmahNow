@@ -137,6 +137,12 @@ export interface CreatorTier {
   liveMaxConcurrent: number;
   /** Longest single stream, in minutes; a longer one is ended (the recording is kept) */
   liveMaxStreamMinutes: number;
+  /** Live chat on the holder's streams and premieres (wiki E17). Absent = the same as `live` */
+  liveChat?: boolean;
+  /** Show a finished video as a premiere (wiki E17). Absent = the same as `live` */
+  livePremieres?: boolean;
+  /** Event tags on streams (wiki E17). Absent = the same as `live` */
+  liveEvents?: boolean;
   /** Offline downloads (wiki E14): whether holders of this tier may download videos/audio */
   offlineDownloads?: boolean;
   /** Highest downloadable quality ('audio' = audio-only); unlimited tiers allow '1080p' */
@@ -499,4 +505,13 @@ export interface CreatorTierBulkResult {
   unchanged: string[];
   /** Super admins: their automatic Unlimited is never changed in bulk */
   skippedSuperAdmin: string[];
+}
+
+/** The live capabilities a tier may set on its own; unset, they follow `live` (wiki E17 §3.2). */
+export const TIER_LIVE_CAPABILITIES = ['liveChat', 'livePremieres', 'liveEvents'] as const;
+export type TierLiveCapability = (typeof TIER_LIVE_CAPABILITIES)[number];
+
+/** Whether a tier includes one of them: never without `live`; unlimited tiers have them all. */
+export function tierAllowsLiveCapability(tier: Pick<CreatorTier, 'unlimited' | 'live' | TierLiveCapability> | null | undefined, capability: TierLiveCapability): boolean {
+  return !!tier && (tier.unlimited || (tier.live && tier[capability] !== false));
 }

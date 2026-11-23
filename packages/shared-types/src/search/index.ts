@@ -8,4 +8,5 @@ export * from './suggest';
 export * from './transcripts';
 export * from './subscribers';
 export * from './repairs';
+export * from './live-metadata';
 export * from './views';

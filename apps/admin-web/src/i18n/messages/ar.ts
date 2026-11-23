@@ -969,6 +969,7 @@ const ar: Messages = {
       discoveryRank: 'ترتيب المرئيات للاستكشاف',
       searchRepairObjects: 'إصلاح عناصر الفهرس',
       searchReconcile: 'فحص فهرس البحث',
+      livePurgeStreams: 'إزالة محادثات البث المحذوف',
       supportWebhook: 'حدث دفع للدعم',
       supportRelease: 'إتاحة الهدايا المحجوزة',
       supportReconcile: 'مطابقة أموال الدعم مع البنك وخدمة الدفع',

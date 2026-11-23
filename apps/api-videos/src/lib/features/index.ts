@@ -33,6 +33,7 @@ import {
 	liveIneligibility,
 	tierAllowsChannels,
 	tierAllowsLive,
+	tierAllowsLiveCapability,
 	tierAllowsOfflineDownloads,
 	tierAllowsUploads,
 	type ChannelCapability,
@@ -361,6 +362,12 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		eventCalendar: !kidsClient,
 		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)
 		intentionalViewing: true,
+		// Viewers follow the switch alone: no tier, and no provider (streams on air and recordings go on).
+		// With a channel these say what the caller may set up there (below), so they start off
+		liveChat: !channelId && !kidsClient,
+		livePremieres: !channelId,
+		liveEvents: !channelId,
+		liveReminders: !kidsClient,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -415,6 +422,12 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.upload = !pending && (scope ? tierAllowsUploads(tier) && can(scope.role, 'video.upload') : tierAllowsUploads(tier) || uploadElsewhere);
 	features.createChannel = !pending && !scope && tierAllowsChannels(tier);
 	features.live = !pending && live;
+	if (scope) {
+		// Studio: what the caller may set up on this channel
+		features.liveChat = !pending && tierAllowsLiveCapability(tier, 'liveChat') && roleMay(scope, 'live.manage', 'live.moderate');
+		features.livePremieres = !pending && tierAllowsLiveCapability(tier, 'livePremieres') && roleMay(scope, 'live.manage');
+		features.liveEvents = !pending && tierAllowsLiveCapability(tier, 'liveEvents') && roleMay(scope, 'live.manage');
+	}
 	features.captionsTranscribe = transcribeConfigured(env, settings) && minutes;
 	features.captionsTranslate = translate && minutes;
 	features.inlineTranslate = inlineTranslateConfigured(env, settings);

@@ -2,25 +2,14 @@
  * Text preparation for AI moderation: normalisation and language detection.
  * Pure functions (unit tested without the Workers runtime).
  */
+import { normalizeModerationText } from '@al-ummah/shared-types';
 
-const ARABIC_DIACRITICS = /[ؐ-ًؚ-ٰٟۖ-ۭ]/g;
-const TATWEEL = /ـ/g;
 // eslint-disable-next-line no-irregular-whitespace -- \uFEFF is the end of the Arabic Presentation Forms-B block
 const ARABIC_LETTER = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g;
 const LATIN_LETTER = /[A-Za-zÀ-ɏ]/g;
-// eslint-disable-next-line no-irregular-whitespace -- stripping these characters is the point
-const ZERO_WIDTH = /[​-‏‪-‮⁦-⁩﻿]/g;
 
-/** Strip Arabic diacritics and tatweel (kashida), zero-width/bidi controls, collapse whitespace. */
-export function normalizeText(text: string): string {
-  return text
-    .normalize('NFKC')
-    .replace(ZERO_WIDTH, '')
-    .replace(ARABIC_DIACRITICS, '')
-    .replace(TATWEEL, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+/** The shared normalizer (shared-types live-apps.ts), so the chat filter and the AI scan read the same text. */
+export const normalizeText = normalizeModerationText;
 
 export type DetectedLanguage = 'ar' | 'en' | 'other';
 

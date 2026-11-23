@@ -78,9 +78,13 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (caption download, creator support, offline/listen, event calendar, E21 and app update notices start off)', () => {
+test('defaults keep today’s behaviour (the live app features, caption download, creator support, offline/listen, event calendar, E21 and app update notices start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
   assert.deepEqual(off, [
+    'liveChat',
+    'livePremieres',
+    'liveReminders',
+    'liveEvents',
     'viewerCaptionDownload',
     'creatorSupport',
     'supportExternalLinks',
@@ -103,7 +107,7 @@ test('defaults keep today’s behaviour (caption download, creator support, offl
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools'],
+    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools'],
   );
 });
 

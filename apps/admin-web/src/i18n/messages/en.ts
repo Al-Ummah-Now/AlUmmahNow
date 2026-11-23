@@ -970,6 +970,7 @@ const en = {
       discoveryRank: 'Rank videos for discovery',
       searchRepairObjects: 'Repair index entries',
       searchReconcile: 'Check the search index',
+      livePurgeStreams: 'Remove deleted live streams’ chat',
       supportWebhook: 'Support payment event',
       supportRelease: 'Release held gifts',
       supportReconcile: 'Check support money against bank and payout service',

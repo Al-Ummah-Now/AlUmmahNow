@@ -33,6 +33,7 @@ import {
   recordIndexRepair,
   type IndexRepairEntity,
   type IndexRepairReason,
+  syncLiveMetadata,
   syncOwnership,
   r2Version,
   syncSearchDocument,
@@ -46,6 +47,7 @@ import { syncCommentIndex } from '../admin/commentIndex';
 import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../channelComments';
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 import { kickRepairJob, type RepairJobEnv } from './repairs';
+import { kickLivePurge } from '../live/metadata';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -206,10 +208,16 @@ function streamIdForKey(key: string): string | null {
   return id && !id.includes('/') && !id.includes(':') ? id : null;
 }
 
-/** Ownership row of one live stream (never searchable). A failed write is repaired per object. */
+/**
+ * Ownership row and upcoming-model row (live_stream_metadata, wiki E17) of one live stream (never
+ * searchable). A failed write of either is repaired per object. A deleted stream's chat and reminders
+ * are removed by a job.
+ */
 async function syncStreamInline(ctx: RepairContext, id: string, key: string, object: unknown, version: number): Promise<void> {
   try {
     await syncOwnership(ctx.db, 'stream', id, object, Date.now(), version);
+    await syncLiveMetadata(ctx.db, id, object, version);
+    if (object == null) ctx.waitUntil(kickLivePurge(ctx.jobs).catch(error => logger.warn('[SearchSync] Could not start the live purge job', { error: error instanceof Error ? error.message : String(error) })));
   } catch (error) {
     await repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });
   }

@@ -238,6 +238,10 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
  * creator support's routes arrive with their MEMBERS stories and are mapped then.
  */
 export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, string>>> = Object.freeze({
+  liveChat: 'E17 maps its live chat routes here when registered',
+  livePremieres: 'E17 maps its premiere routes here when registered',
+  liveReminders: 'E17 maps its reminder routes here when registered',
+  liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   supportExternalLinks: 'MEMBERS adds its routes and maps them here',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportPerks: 'MEMBERS adds its routes and maps them here',

@@ -730,3 +730,15 @@ export interface LiveVodReviewMediaRequest {
   manifestKey?: string;
   error?: string;
 }
+
+/**
+ * The stream whose recording a person must decide (or rejected) reaches its owner only. Never tied
+ * to `status` or a provisioned session (the owner controls both): only the current session really
+ * going live (markStreamLive: first segment, or Bunny publishing) makes it public again, since live
+ * is never pre-reviewed (VR9).
+ */
+export function liveRecordingWithheld(stream: object): boolean {
+	const s = stream as { sessionId?: string | null; review?: { status?: string }; liveAgainSessionId?: string };
+	if (!isLiveVodWithheld(s.review)) return false;
+	return !s.sessionId || s.liveAgainSessionId !== s.sessionId;
+}

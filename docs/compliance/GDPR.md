@@ -33,6 +33,7 @@ that product/legal should confirm.
 | `subtitles/{videoId}/on-device/{lang}.json` | A transcript made on the creator's computer, until it becomes a caption draft | Contract (b) | Deleted once drafted; with the video |
 | `reports/report:{entityId}:{reportId}:{reporterId}` | Who reported what | Legitimate interest (f): platform safety and moderation history | Kept; reporter identity removed on erasure |
 | D1 notifications DB `notification_settings`, `notification_email_prefs`, `notification_seen` | Category switches, email preferences, when the user last opened the notification menu (the bell's badge) | Contract (b) | Until erasure; exported (`notificationState`) and erased with the account |
+| D1 search DB `live_chat_messages`; notifications DB `live_reminders` (wiki E17) | Live chat messages the person wrote; streams they asked to be reminded of | Contract (b) | Published messages stay beside the recording until it or the account is deleted, held and removed ones 30 days; reminders until the stream or account is deleted. Exported (`liveChatMessages`, `liveReminders`) and erased with the account |
 | KV `RATE_LIMIT_KV` `rate_limit:{op}:{userId}` | Counters | Legitimate interest (f): abuse prevention | ~25 h TTL |
 | KV `TUS_SESSIONS` | Upload session to user mapping | Contract (b) | 1 h TTL |
 
