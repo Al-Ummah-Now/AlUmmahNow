@@ -45,6 +45,8 @@ export const MobileAppsSettingsSchema = z
     apple: z.object({
       /** 10-character Apple Developer Team ID; '' until the owner has one. */
       teamId: z.union([z.literal(''), z.string().regex(APPLE_TEAM_ID, 'Team ID is 10 capital letters or digits')]),
+      /** Optional App Clip bundle id (E22-D8, e.g. net.alummahnow.viewer.clip); '' disables AASA appclips. */
+      appClipBundleId: z.union([z.literal(''), z.string().regex(APPLE_BUNDLE_ID, 'Not a bundle id')]).optional(),
       apps: z.array(z.object({ role: Role, bundleId: z.string().regex(APPLE_BUNDLE_ID, 'Not a bundle id') })).max(20),
       appAttest: z.object({
         enabled: z.boolean(),
@@ -92,6 +94,9 @@ export const MobileAppsSettingsSchema = z
     }
     const bundles = s.apple.apps.map((a) => a.bundleId);
     if (new Set(bundles).size !== bundles.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['apple', 'apps'], message: 'A bundle id is listed twice' });
+    if (s.apple.appClipBundleId && bundles.includes(s.apple.appClipBundleId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['apple', 'appClipBundleId'], message: 'The App Clip needs its own bundle id' });
+    }
     const packages = s.android.apps.map((a) => a.packageName);
     if (new Set(packages).size !== packages.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['android', 'apps'], message: 'A package is listed twice' });
   });
@@ -110,6 +115,7 @@ export function defaultMobileAppsSettings(environment: MobileAppsEnvironment): M
   return {
     apple: {
       teamId: '',
+      appClipBundleId: `net.alummahnow.viewer.clip${suffix}`,
       apps: [
         { role: 'viewer', bundleId: `net.alummahnow.viewer${suffix}` },
         { role: 'viewer', bundleId: `net.alummahnow.viewer.mac${suffix}` },
@@ -149,8 +155,13 @@ export function parseMobileAppsSettings(raw: unknown, environment: MobileAppsEnv
 
 /** Fingerprints in AA:BB form without duplicates, ids trimmed: the form that is stored and compared. */
 export function canonicalMobileAppsSettings(s: MobileAppsSettings): MobileAppsSettings {
+  const clip = s.apple.appClipBundleId?.trim();
   return {
-    apple: { ...s.apple, apps: s.apple.apps.map((a) => ({ role: a.role, bundleId: a.bundleId.trim() })) },
+    apple: {
+      ...s.apple,
+      ...(clip !== undefined ? { appClipBundleId: clip } : {}),
+      apps: s.apple.apps.map((a) => ({ role: a.role, bundleId: a.bundleId.trim() })),
+    },
     android: {
       ...s.android,
       apps: s.android.apps.map((a) => ({
@@ -185,15 +196,19 @@ export const MOBILE_APP_LINK_PATHS: Record<MobileAppRole, readonly string[]> = {
   admin: [],
 };
 
+/** Short-link paths on alummahnow.link that open the Viewer app (and App Clip for /v/* and /s/*). */
+export const SHORT_LINK_APP_PATHS: readonly string[] = Object.freeze(['/v/*', '/s/*', '/@*', '/c/*', '/p/*', '/l/*', '/e/*']);
+
 /** Roles that sign in with passkeys in the native apps (AUTH-PASSKEYS "Native apps"). */
 const PASSKEY_ROLES: readonly MobileAppRole[] = ['studio', 'admin'];
 
 export interface AppleAppSiteAssociation {
   applinks?: { details: { appIDs: string[]; components: { '/': string }[] }[] };
   webcredentials?: { apps: string[] };
+  appclips?: { apps: string[] };
 }
 
-/** The AASA document, or null when there is nothing to publish (no Team ID or no app). */
+/** The AASA document for the videos site, or null when there is nothing to publish (no Team ID or no app). */
 export function appleAppSiteAssociation(s: MobileAppsSettings): AppleAppSiteAssociation | null {
   const team = s.apple.teamId;
   if (!APPLE_TEAM_ID.test(team)) return null;
@@ -204,11 +219,41 @@ export function appleAppSiteAssociation(s: MobileAppsSettings): AppleAppSiteAsso
     if (paths.length && ids.length) details.push({ appIDs: ids, components: paths.map((p) => ({ '/': p })) });
   }
   const webcredentials = s.apple.apps.filter((a) => PASSKEY_ROLES.includes(a.role)).map((a) => `${team}.${a.bundleId}`);
+  const hasViewer = s.apple.apps.some((a) => a.role === 'viewer');
+  const clipBundle = s.apple.appClipBundleId?.trim() ?? '';
+  const appclips = hasViewer && APPLE_BUNDLE_ID.test(clipBundle) ? [`${team}.${clipBundle}`] : [];
   if (!details.length && !webcredentials.length) return null;
   const doc: AppleAppSiteAssociation = {};
   if (details.length) doc.applinks = { details };
   if (webcredentials.length) doc.webcredentials = { apps: webcredentials };
+  if (appclips.length) doc.appclips = { apps: appclips };
   return doc;
+}
+
+/** The AASA document for alummahnow.link (Viewer universal links + App Clips; no webcredentials on short-links). */
+export function shortLinksAppleAppSiteAssociation(s: MobileAppsSettings): AppleAppSiteAssociation | null {
+  const team = s.apple.teamId;
+  if (!APPLE_TEAM_ID.test(team)) return null;
+  const viewerIds = s.apple.apps.filter((a) => a.role === 'viewer').map((a) => `${team}.${a.bundleId}`);
+  if (!viewerIds.length) return null;
+  const clipBundle = s.apple.appClipBundleId?.trim() ?? '';
+  const doc: AppleAppSiteAssociation = {
+    applinks: { details: [{ appIDs: viewerIds, components: SHORT_LINK_APP_PATHS.map((p) => ({ '/': p })) }] },
+  };
+  if (APPLE_BUNDLE_ID.test(clipBundle)) doc.appclips = { apps: [`${team}.${clipBundle}`] };
+  return doc;
+}
+
+/** Android Digital Asset Links for alummahnow.link (Viewer handle_all_urls only; no passkey get_login_creds). */
+export function shortLinksAssetLinks(s: MobileAppsSettings): AssetLinkStatement[] | null {
+  const statements: AssetLinkStatement[] = [];
+  for (const app of s.android.apps) {
+    if (app.role !== 'viewer') continue;
+    const fingerprints = [...new Set(app.sha256Fingerprints.map(normaliseSha256Fingerprint).filter((f): f is string => !!f))];
+    if (!fingerprints.length) continue;
+    statements.push({ relation: [HANDLE_ALL_URLS], target: { namespace: 'android_app', package_name: app.packageName, sha256_cert_fingerprints: fingerprints } });
+  }
+  return statements.length ? statements : null;
 }
 
 export interface AssetLinkStatement {

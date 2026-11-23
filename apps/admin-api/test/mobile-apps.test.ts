@@ -91,6 +91,7 @@ describe('mobile apps settings', () => {
       assert.equal(body.result.updatedBy, 'actor-1');
       assert.equal(body.result.settings.android.apps[0].sha256Fingerprints[0], 'AA:'.repeat(31) + 'AA');
       assert.ok(body.result.preview.appleAppSiteAssociation.applinks.details[0].appIDs.includes('ABCDE12345.net.alummahnow.viewer.qa'));
+      assert.deepEqual(body.result.preview.appleAppSiteAssociation.appclips, { apps: ['ABCDE12345.net.alummahnow.viewer.clip.qa'] });
       assert.equal(body.result.preview.assetLinks[0].target.package_name, 'net.alummahnow.app.qa');
       assert.equal(log.length, 1);
       assert.equal(log[0].key, 'mobile_apps');

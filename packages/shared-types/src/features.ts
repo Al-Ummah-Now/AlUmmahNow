@@ -62,6 +62,8 @@ export const USER_FEATURE_KEYS = [
   'supportReceive',
   /** Supporter perks can be offered and shown (switch supportPerks) */
   'supportPerks',
+  /** Viewers may browse the upcoming event calendar and calendar feeds (switch eventCalendar, off in Kids apps) */
+  'eventCalendar',
   /** Settings › Billing: a payment provider is on, or the account has subscriptions or payments (wiki AUN-SUBS) */
   'billing',
   /** Audio-first Listen mode, mini audio bar, sleep timer and background audio (wiki E14) */
