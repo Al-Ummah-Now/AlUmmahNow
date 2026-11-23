@@ -10,6 +10,12 @@
 import { SessionManager, type SessionContext } from '../auth/session-manager';
 import { AuthContext } from './api-client';
 import { logger } from '@/lib/logger-server';
+import {
+  SessionInfrastructureError,
+  isNextControlFlowError,
+  reportWebServerError,
+  safeErrorMeta,
+} from '@/lib/errors/server-report';
 
 
 /**
@@ -39,8 +45,14 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
       channelId: session.channelId, // Now includes active channel
     };
   } catch (error) {
-    logger.error('[getServerAuthContext] Error:', error);
-    return null;
+    if (isNextControlFlowError(error)) throw error;
+    if (!(error instanceof SessionInfrastructureError && error.reported)) {
+      logger.error('[getServerAuthContext] Error resolving active session', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:server-context-v2', extra: { stage: 'session_manager' } });
+    }
+    throw error instanceof SessionInfrastructureError
+      ? error
+      : new SessionInfrastructureError('Failed to resolve active session', error);
   }
 }
 

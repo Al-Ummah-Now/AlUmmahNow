@@ -11,73 +11,98 @@ import { verificationFailed } from "./auth/verify-result"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 import { RETURN_COOKIE, returnPathFromReferer } from "./auth/silent-sign-in"
 import { safeSignInReturn } from "@/lib/auth/sign-in-return"
+import { logger } from "@/lib/logger-server"
+import { readSessionValue } from "./auth/session-cookie"
+import {
+  SessionInfrastructureError,
+  isNextControlFlowError,
+  reportWebServerError,
+  safeErrorMeta,
+} from "@/lib/errors/server-report"
 
 export async function getClient() {
   return getOpenAuthClient();
 }
 
 export async function authenticated(): Promise<AuthSubject | false> {
+  // Try SessionManager first (multi-account system). Infrastructure errors are
+  // logged, reported to the admin Errors page and propagated instead of
+  // silently signing the user out (#302).
+  let session;
   try {
-    // Try SessionManager first (new multi-account system)
-    try {
-      const { SessionManager } = await import('./auth/session-manager');
-      const session = await SessionManager.getActiveSession();
+    const { SessionManager } = await import('./auth/session-manager');
+    session = await SessionManager.getActiveSession();
+  } catch (sessionError) {
+    if (isNextControlFlowError(sessionError)) throw sessionError;
+    if (!(sessionError instanceof SessionInfrastructureError && sessionError.reported)) {
+      logger.error('[authenticated] Failed to resolve active session', safeErrorMeta(sessionError));
+      await reportWebServerError(sessionError, { route: 'auth:authenticated', extra: { stage: 'session_manager' } });
+    }
+    throw sessionError instanceof SessionInfrastructureError
+      ? sessionError
+      : new SessionInfrastructureError('Failed to resolve active session', sessionError);
+  }
 
-      if (session) {
-        // Return AuthSubject from SessionManager
-        return {
-          type: "user",
-          properties: {
-            id: session.userId,
-            email: session.email,
-            displayName: session.displayName,
-            // Role names from the session's access token (verified when the session was made). UI
-            // hints only (e.g. the Scholar's "Write article"); every app checks roles itself.
-            roles: sessionRoles(session.accessToken),
-          }
-        } as AuthSubject;
+  if (session) {
+    return {
+      type: "user",
+      properties: {
+        id: session.userId,
+        email: session.email,
+        displayName: session.displayName,
+        // Role names from the session's access token (verified when the session was made). UI
+        // hints only (e.g. the Scholar's "Write article"); every app checks roles itself.
+        roles: sessionRoles(session.accessToken),
       }
-    } catch (_sessionError) {
-      // SessionManager not available, fall through to legacy
-    }
+    } as AuthSubject;
+  }
 
-    // Fall back to legacy cookies
-    const cookies = await getCookies()
-    const accessToken = cookies.get("access_token")
-    const refreshToken = cookies.get("refresh_token")
-
-    if (!accessToken?.value) {
-      return false
-    }
-
-    const client = await getClient();
-
-    let verified;
-    try {
-      verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
-    } catch (_verifyError) {
-      return false;
-    }
-
-    // Any error is a failed verification. (openauth's errors are Error subclasses with no
-    // enumerable keys, so the old `Object.keys(err).length > 0` test never saw one.)
-    if (verificationFailed(verified)) {
-      return false;
-    }
-
-    if ('tokens' in verified) {
-      await setTokens(verified.tokens!.access, verified.tokens!.refresh);
-    }
-
-    // Only the verified subject: never the token's payload read without its signature
-    if ('subject' in verified && verified.subject) {
-      return verified.subject;
-    }
-
-    return false;
-  } catch (_error) {
+  // Only fall back to legacy cookies when there is no al_ummah_session cookie
+  const cookies = await getCookies();
+  if (readSessionValue(cookies)) {
     return false;
   }
+
+  const accessToken = cookies.get("access_token");
+  const refreshToken = cookies.get("refresh_token");
+  if (!accessToken?.value) {
+    return false;
+  }
+
+  const client = await getClient();
+
+  let verified;
+  try {
+    verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
+  } catch (verifyError) {
+    if (isNextControlFlowError(verifyError)) throw verifyError;
+    logger.error('[authenticated] Legacy token verification failed unexpectedly', safeErrorMeta(verifyError));
+    await reportWebServerError(verifyError, { route: 'auth:authenticated', extra: { stage: 'legacy_verify' } });
+    throw new SessionInfrastructureError('Failed to verify legacy auth session', verifyError);
+  }
+
+  // Any error is a failed verification. (openauth's errors are Error subclasses with no
+  // enumerable keys, so the old `Object.keys(err).length > 0` test never saw one.)
+  if (verificationFailed(verified)) {
+    return false;
+  }
+
+  if ('tokens' in verified) {
+    try {
+      await setTokens(verified.tokens!.access, verified.tokens!.refresh);
+    } catch (setTokenError) {
+      // Server Component renders have read-only cookies; log a warning without failing a valid verification
+      if (isNextControlFlowError(setTokenError)) throw setTokenError;
+      logger.warn('[authenticated] Could not persist rotated legacy tokens', safeErrorMeta(setTokenError));
+    }
+  }
+
+  // Only the verified subject: never the token's payload read without its signature
+  if ('subject' in verified && verified.subject) {
+    return verified.subject;
+  }
+
+  return false;
 }
 
 export async function login(locale: string = 'en', returnTo?: unknown) {
@@ -98,8 +123,12 @@ export async function login(locale: string = 'en', returnTo?: unknown) {
     if (session) {
       redirect(home);
     }
-  } catch (_sessionError) {
-    // SessionManager not available, continue with legacy check
+  } catch (sessionError) {
+    if (isNextControlFlowError(sessionError)) throw sessionError;
+    if (!(sessionError instanceof SessionInfrastructureError && sessionError.reported)) {
+      logger.warn('[login] Failed to inspect existing session before sign-in', safeErrorMeta(sessionError));
+      await reportWebServerError(sessionError, { route: 'auth:login', extra: { stage: 'session_manager' } });
+    }
   }
 
   // Check legacy cookies

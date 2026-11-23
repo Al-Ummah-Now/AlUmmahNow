@@ -3,56 +3,69 @@
 import { cookies } from 'next/headers';
 import { authenticated } from '@/lib/actions';
 import { AuthContext } from './api-client';
-import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger-server';
+import { readSessionValue } from '@/lib/auth/session-cookie';
+import {
+  SessionInfrastructureError,
+  isNextControlFlowError,
+  reportWebServerError,
+  safeErrorMeta,
+} from '@/lib/errors/server-report';
 
 /**
- * Get authentication context from server-side cookies
- * This is a server action that can be used by all server-side API clients
+ * Get authentication context from server-side cookies.
  *
- * DUAL-MODE SUPPORT:
- * - Tries new SessionManager first (multi-account support)
- * - Falls back to legacy cookies for backward compatibility
- * - Auto-migrates legacy users to new system
+ * - Tries SessionManager first (multi-account support).
+ * - Only falls back to legacy cookies when no `al_ummah_session` cookie exists.
+ * - Logs, reports to the admin Errors page, and propagates infrastructure errors
+ *   instead of silently treating the request as anonymous (#302).
  */
 export async function getServerAuthContext(): Promise<AuthContext | null> {
-  // Try new SessionManager first
+  let session;
   try {
     const { SessionManager } = await import('../auth/session-manager');
-    const session = await SessionManager.getActiveSession();
-
-    if (session) {
-      return {
-        userId: session.userId,
-        accessToken: session.accessToken,
-        channelId: session.channelId, // ✅ Now includes channelId!
-      };
+    session = await SessionManager.getActiveSession();
+  } catch (error) {
+    if (isNextControlFlowError(error)) throw error;
+    if (!(error instanceof SessionInfrastructureError && error.reported)) {
+      logger.error('[getServerAuthContext] Failed to resolve active session', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:server-context', extra: { stage: 'session_manager' } });
     }
-  } catch (_error) {
-    // SessionManager not available or error - fall back to legacy
-    logger.debug('[getServerAuthContext] SessionManager not available, using legacy auth');
+    throw error instanceof SessionInfrastructureError
+      ? error
+      : new SessionInfrastructureError('Failed to resolve active session', error);
   }
 
-  // Fall back to legacy cookies
-  const auth = await authenticated();
+  if (session) {
+    return {
+      userId: session.userId,
+      accessToken: session.accessToken,
+      channelId: session.channelId,
+    };
+  }
 
-  if (!auth) {
+  // Only fall back to legacy cookies when there is no al_ummah_session cookie
+  const cookieStore = await cookies();
+  if (readSessionValue(cookieStore)) {
     return null;
   }
 
-  const cookieStore = await cookies();
   const accessToken = cookieStore.get('access_token');
   const refreshToken = cookieStore.get('refresh_token');
-
   if (!accessToken?.value) {
     return null;
   }
 
-  const userId = auth.properties.id; // Extract userId from auth properties
+  const auth = await authenticated();
+  if (!auth) {
+    return null;
+  }
+
+  const userId = auth.properties.id;
 
   // Auto-migrate legacy user to SessionManager
   try {
     const { SessionManager } = await import('../auth/session-manager');
-    // Note: OpenAuth JWT only includes id and email (see subjects.ts)
     await SessionManager.addAccount(
       {
         accessToken: accessToken.value,
@@ -61,20 +74,19 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
       {
         id: userId,
         email: auth.properties.email,
-        displayName: auth.properties.email, // Use email as fallback, profile API will provide actual displayName
+        displayName: auth.properties.email,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      }
+      },
     );
     logger.debug('[getServerAuthContext] Auto-migrated user to SessionManager', { userId });
   } catch (migrationError) {
-    // Migration failed, continue with legacy auth
-    logger.error('[getServerAuthContext] Auto-migration failed', migrationError);
+    logger.warn('[getServerAuthContext] Auto-migration failed', safeErrorMeta(migrationError));
   }
 
   return {
     userId,
     accessToken: accessToken.value,
-    channelId: '' // Legacy users don't have channelId yet - will be set after profile creation
+    channelId: '',
   };
 }
