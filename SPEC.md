@@ -36,7 +36,8 @@ Keep the heading as an `h2`. Skeleton rows remain hidden from assistive technolo
 - Unit-test the related loader: initial loading, loaded data, successful empty, rejection, retry, and stale-response protection.
 - Unit-test both shelf variants: loading skeleton, failed message/retry, empty returning no markup, loaded cards, localized heading, and filled-button/focus classes.
 - Update the watch-page regression suite so empty success never shows an error and only failure can retry.
-- Run the affected Jest suites, web/shared-types type-checks, and ESLint on changed files under the shared build lock. No existing E2E assertion of the old empty-as-error behavior was found in `apps/web/e2e`; release recommendation behavior remains unchanged.
+- Update the Arabic watch-page E2E so it accepts a successful empty shelf without an error and checks the localized heading when a related list is present.
+- Run the affected Jest suites, web/shared-types type-checks, and ESLint on changed files under the shared build lock. Release recommendation behavior remains unchanged.
 
 ## Risks
 

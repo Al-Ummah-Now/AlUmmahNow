@@ -66,7 +66,14 @@ test.describe('watch page - anonymous', () => {
       await expect(page.getByRole('heading', { level: 1, name: arTitle })).toBeVisible();
       await expect(page.getByTestId('video-metrics-views')).toHaveText(/مشاهد/);
       await expect(page.getByTestId('video-metrics')).toHaveAccessibleName('إحصائيات المرئي');
-      await expect(page.getByRole('heading', { name: /ذات الصلة/ }).first()).toBeAttached();
+      await expect(page.getByTestId('related-videos-skeleton')).toHaveCount(0);
+      const relatedHeading = page.getByRole('heading', { name: 'مرئيات ذات صلة' });
+      if (await page.getByTestId('related-videos-list').count() > 0) {
+        await expect(relatedHeading.first()).toBeAttached();
+      } else {
+        await expect(relatedHeading).toHaveCount(0);
+      }
+      await expect(page.getByTestId('related-videos-error')).toHaveCount(0);
     });
   }
 
