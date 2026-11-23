@@ -526,6 +526,9 @@ a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-se
 [dir=rtl] .nv-panel{box-shadow:inset 1px 0 0 var(--aun-glass-edge)}
 /* Studio's own nav column: the same rail glass as the site rail (no glass on any ancestor of a fixed element) */
 .studio-rail{background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+/* Zujaj night: the glass rail lets the lit page through, so the translucent active wash over it measured 3.71:1 under #bfeaee.
+   An opaque night base under the wash and the rail's own text colour keep the current page at 5.3:1 or better wherever it sits. */
+html[data-theme='zujaj'].dark [data-testid^=studio-nav-][aria-current=page]{background:var(--m-active),var(--fanous-color-background);color:var(--fanous-c-drawer-text)}
 /* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
    (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
 :where(article) [dir=auto]:not(input,textarea){text-align:start}
