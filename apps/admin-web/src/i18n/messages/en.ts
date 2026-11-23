@@ -1952,6 +1952,7 @@ const en = {
       new_owner_banned: 'That user is banned on videos.',
       transfer_in_progress: 'This channel is already being moved. Wait until that move finishes.',
       channel_is_live: 'This channel is live now. Move it after the broadcast ends.',
+      transfer_unfinished: 'An earlier move of this channel failed part way. Finish it with Retry on the Errors page first.',
       channel_has_support: 'This channel receives creator support. It can’t be moved until its support is ended.',
       invalid_new_owner: 'Choose the new owner from the search results.',
       new_owner_not_found: 'That user has no videos profile (or it was deleted).',

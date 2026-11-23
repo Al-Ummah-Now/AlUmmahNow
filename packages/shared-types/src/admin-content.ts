@@ -717,7 +717,8 @@ export const ADMIN_JOB_LOG_LIMIT = 50;
  * Kinds Cancel never applies to: a data erasure, once asked for, runs to the end (a cancel arriving
  * after its last step would leave the person's id in the job's own records).
  */
-export const ADMIN_JOB_UNCANCELLABLE_KINDS: readonly AdminJobKind[] = ['user.delete-data', 'user.erase-run'];
+/** A channel move can't be cancelled half way: a failed one is finished with Retry (wiki AUN-CHANNEL-CLAIM §3.3). */
+export const ADMIN_JOB_UNCANCELLABLE_KINDS: readonly AdminJobKind[] = ['user.delete-data', 'user.erase-run', 'channel.transfer'];
 
 /** The permission an admin needs to retry a job of each kind (the same one that started it). */
 export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly AdminContentPermission[]>> = {

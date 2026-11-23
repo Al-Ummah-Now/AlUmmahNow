@@ -207,6 +207,18 @@ export async function endSession(env: LiveEnv, session: LiveSessionRow, reason: 
 	return (await readSession(d1, session.id))!;
 }
 
+/**
+ * A session ended on our side whose provider stop failed (endSession records the error and moves
+ * on) is stopped at the provider again; throws while the provider still refuses, so a caller that
+ * must know the old ingest key is dead (a channel move) retries. Self-hosted ingest checks the
+ * session status, so an ended self-hosted session is already closed.
+ */
+export async function ensureProviderStopped(env: LiveEnv, session: LiveSessionRow): Promise<void> {
+	if (session.status !== 'ended' || !session.error || session.provider !== 'bunny') return;
+	await LIVE_ADAPTERS.bunny.stop(env, session);
+	await updateSession(db(env), session.id, { error: null });
+}
+
 const RECEIVING_WINDOW_MS = 15_000;
 
 /**

@@ -464,7 +464,7 @@ describe('channel actions', () => {
 		assert.equal(read(scheduled, '2030-01-02/03/later.json').userId, OTHER);
 		assert.equal(read(raw.videos, 'livestream:ls1').userId, OTHER);
 		const session = db.db.prepare(`SELECT status, end_reason FROM live_sessions WHERE id = 'sess1'`).get() as { status: string; end_reason: string };
-		assert.deepEqual([session.status, session.end_reason], ['ended', 'key_rotated'], 'the ingest key the previous owner knows stops working');
+		assert.deepEqual([session.status, session.end_reason], ['ended', 'channel_transferred'], 'the ingest key the previous owner knows stops working');
 		assert.equal(job.result.liveSessionsEnded, 1);
 	});
 
@@ -511,6 +511,78 @@ describe('channel actions', () => {
 		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OWNER });
 		assert.equal(refused.status, 409);
 		assert.equal(refused.body.code, 'channel_has_support');
+	});
+
+	it('the move lock is atomic, and a failed move keeps the channel from a third account until it is finished (review fixes)', async () => {
+		const { raw, env, jobs, call, jobOf } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+		});
+		// Two requests at the same moment: exactly one starts a move
+		const both = await Promise.all([
+			call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true }),
+			call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }, { hold: true }),
+		]);
+		assert.deepEqual(both.map((r) => r.status).sort(), [200, 409]);
+		const started = both.find((r) => r.status === 200)!;
+		// The move fails part way (a video write keeps failing): the lock stays with the failed job
+		const put = raw.videos.put.bind(raw.videos);
+		raw.videos.put = (async (key: string, value: unknown, opts?: unknown) => {
+			if (key === 'v1') throw new Error('R2 write failed');
+			return put(key, value as never, opts as never);
+		}) as typeof raw.videos.put;
+		for (let i = 0; i < 10 && jobs.pending.length; i++) {
+			jobs.pending.forEach((p: any) => { delete p.delaySeconds; });
+			await jobs.drain(env);
+		}
+		const failedJob = await jobOf(started);
+		assert.equal(failedJob.status, 'failed', JSON.stringify(failedJob));
+		const third = await call('POST', '/channels/ch1/transfer', { newOwnerId: OWNER });
+		assert.equal(third.status, 409);
+		assert.equal(third.body.code, 'transfer_unfinished', 'no new destination while records sit on the first owner');
+		assert.equal((await call('POST', `/jobs/${failedJob.id}/cancel`, {})).status >= 400, true, 'a move cannot be cancelled half way');
+		// Retry once the cause is gone: the move finishes and the lock is released
+		raw.videos.put = put as typeof raw.videos.put;
+		await call('POST', `/jobs/${failedJob.id}/retry`, {});
+		assert.equal((await jobOf(started)).status, 'succeeded');
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' })).status, 200);
+	});
+
+	it('a move ends every session that is not over, on air too, and waits until the provider confirms the stop (review fixes)', async () => {
+		const { raw, call, jobOf, db } = await setup({
+			videos: {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				'livestream:a': { id: 'a', title: 'A', userId: OWNER, channelId: 'ch1', status: 'scheduled', sessionId: 's-bunny' },
+			},
+		});
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, provider_ref, status, reason, created_at) VALUES ('s-bunny', 'a', 'ch1', 'bunny', 'ref1', 'provisioned', 'test', 1)`).run();
+		// A session that went on air in the moment between the job's live check and the flip
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-air', 'a', 'ch1', 'selfhosted', 'live', 'test', 2)`).run();
+		const realFetch = globalThis.fetch;
+		let bunnyUp = false;
+		let stops = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.includes('/live/ref1/stop')) {
+				stops++;
+				return new Response(bunnyUp ? '{}' : 'down', { status: bunnyUp ? 200 : 500 });
+			}
+			return realFetch(input, init);
+		}) as typeof fetch;
+		try {
+			const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+			let job = await jobOf(res);
+			assert.notEqual(job.status, 'succeeded', 'not done while the provider still accepts the old key');
+			assert.ok(stops >= 1);
+			bunnyUp = true;
+			await call('POST', `/jobs/${job.id}/retry`, {});
+			job = await jobOf(res);
+			assert.equal(job.status, 'succeeded', JSON.stringify(job));
+			const row = db.db.prepare(`SELECT status, error FROM live_sessions WHERE id = 's-bunny'`).get() as { status: string; error: string | null };
+			assert.deepEqual([row.status, row.error], ['ended', null]);
+			assert.equal((db.db.prepare(`SELECT status FROM live_sessions WHERE id = 's-air'`).get() as { status: string }).status, 'ended');
+		} finally {
+			globalThis.fetch = realFetch;
+		}
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
