@@ -82,6 +82,10 @@ describe('caption jobs', () => {
 		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ monthlyBudgetUsd: 40, model: 'not a model' });
 		const read = await readCaptionSettings(asEnv);
 		assert.equal(read.monthlyBudgetUsd, 40);
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ monthlyBudgetUsd: 1000 });
+		assert.equal((await readCaptionSettings(asEnv)).monthlyBudgetUsd, 1000);
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ monthlyBudgetUsd: 10_001 });
+		assert.equal((await readCaptionSettings(asEnv)).monthlyBudgetUsd, 5, 'over-ceiling budget keeps the default');
 		assert.equal(read.model, '@cf/openai/whisper-large-v3-turbo');
 		assert.deepEqual(read.viewerTitles, { enabled: true }, 'viewer-side titles are on (O6); an admin can pause them');
 		assert.equal(read.translation.deepl, false, 'DeepL is off by default');

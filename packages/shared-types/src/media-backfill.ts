@@ -220,7 +220,7 @@ export const BACKFILL_LIMITS = {
 	maxConcurrency: 20,
 	maxSpacingSeconds: 3600,
 	maxVideoIds: 500,
-	maxBudgetUsd: 500,
+	maxBudgetUsd: 10_000,
 	/** Bunny removal grace period, days */
 	minGraceDays: 7,
 	maxGraceDays: 90,

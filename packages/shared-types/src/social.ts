@@ -332,7 +332,7 @@ export const DEFAULT_SOCIAL_SETTINGS: SocialPlatformSettings = {
   xMonthlyCapUsd: 0,
 };
 
-export const X_MONTHLY_CAP_MAX_USD = 500;
+export const X_MONTHLY_CAP_MAX_USD = 10_000;
 
 /** Merges a stored or submitted settings object onto the defaults; anything malformed is ignored. */
 export function normalizeSocialSettings(input: unknown): SocialPlatformSettings {
