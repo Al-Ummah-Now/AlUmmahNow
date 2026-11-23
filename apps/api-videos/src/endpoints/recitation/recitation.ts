@@ -14,6 +14,7 @@ import { Str } from '../../lib/chanfana-params';
 import { loadVideoRecord, videoReadAccess, VIDEO_NOT_FOUND } from '../../lib/videoReadAccess';
 import { readTracks } from '../../lib/captions/drafts';
 import { featureOff, quranTextAvailable } from '../../lib/features';
+import { apiError } from '../../lib/api-error';
 import { editableVideo } from '../captions/captionDrafts';
 import { resolveCreator } from '../../lib/creatorTiers';
 import R2Repository from '../../lib/r2Repo';
@@ -154,7 +155,7 @@ export class VideoRecitationMetadataPut extends AuthenticatedRoute {
     const access = await editableVideo(c, path.videoId, userId);
     if ('response' in access) return access.response;
     const reciter = reciterInput(body.reciter);
-    if (reciter === 'invalid') return c.json({ success: false, error: 'invalid_reciter' }, 400);
+    if (reciter === 'invalid') return apiError(c, 400, 'invalid_request', { error: 'invalid_reciter', field: 'reciter' });
     if (!c.env.SEARCH_DB) return featureOff(c, 'recitationTools');
     const roles = (this.getAuth(c) as { payload?: { roles?: string[] } }).payload?.roles ?? null;
     const creator = await resolveCreator(c.env.SEARCH_DB, { userId, roles, channelOwnerId: access.video.userId });
@@ -167,8 +168,8 @@ export class VideoRecitationMetadataPut extends AuthenticatedRoute {
       { recitation, dateModified: now },
       { ownerId: access.video.userId },
     );
-    if (saved.status === 'missing') return c.json({ success: false, error: 'video_not_found' }, 404);
-    if (saved.status === 'forbidden') return c.json({ success: false, error: 'forbidden' }, 403);
+    if (saved.status === 'missing') return apiError(c, 404, 'video_not_found', { error: 'video_not_found' });
+    if (saved.status === 'forbidden') return apiError(c, 403, 'forbidden', { error: 'forbidden' });
     return c.json({ success: true as const, data: { recitation: (saved.video as VideoObject).recitation } });
   }
 }
