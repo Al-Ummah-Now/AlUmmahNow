@@ -97,6 +97,13 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   support_no_rail_for_country: { action: 'none', en: 'No payout service we use reaches this country yet.', ar: 'لا تصل أيٌّ من خدمات الدفع التي نستخدمها إلى هذه الدولة بعد.' },
   support_rail_unavailable: { action: 'retry', en: 'The payout service didn’t answer. Please try again in a moment.', ar: 'لم تستجب خدمة الدفع. يُرجى المحاولة بعد قليل.' },
   support_no_payee: { action: 'none', en: 'Set up payouts first.', ar: 'أعدّ استلام الدفعات أولًا.' },
+  // Creator support: the support sheet and Settings › Support (wiki AUN-MEMBERS §11)
+  support_amount_too_small: { action: 'none', en: 'Choose a larger amount.', ar: 'اختر مبلغًا أكبر.' },
+  support_currency_unavailable: { action: 'none', en: 'Support isn’t available in this currency.', ar: 'الدعم غير متاح بهذه العملة.' },
+  support_age_required: { action: 'none', en: 'Confirm you’re old enough to send support.', ar: 'أكّد أنك بلغت السن التي تسمح لك بإرسال الدعم.' },
+  support_consent_required: { action: 'none', en: 'Tick the box to agree to the monthly charge.', ar: 'حدّد المربع للموافقة على الاقتطاع الشهري.' },
+  support_message_too_long: { action: 'none', en: 'Your message is too long.', ar: 'رسالتك طويلة جدًا.' },
+  support_pledge_ended: { action: 'retry', en: 'We couldn’t stop this monthly support right now. Please try again in a moment.', ar: 'تعذّر إيقاف هذا الدعم الشهري الآن. يُرجى المحاولة بعد قليل.' },
   // Creator support admin (wiki AUN-MEMBERS §9.6): finance list, payouts, settings
   support_not_finance: { action: 'none', en: 'Only people on the organization’s finance list can do this.', ar: 'لا يقوم بهذا إلا من هم في قائمة المالية في المؤسسة.' },
   support_tech_staff: { action: 'none', en: 'Tech staff can’t be on the finance list or hold money permissions.', ar: 'لا يمكن أن يكون فريق التقنية في قائمة المالية أو أن يملك صلاحيات الأموال.' },

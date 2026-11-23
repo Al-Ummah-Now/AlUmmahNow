@@ -72,6 +72,8 @@ import supportInternalRouter from "./routers/support.router";
 import { handleSupportWebhook } from "./endpoints/support/supportWebhooks";
 import { handleSupportPayee, handleSupportPayeeOnboard, handleSupportPayeeRefresh } from "./endpoints/support/supportPayee";
 import { handleTestRailOnboardPage, handleTestRailOnboardSubmit } from "./endpoints/support/supportTestRail";
+import { handleTestCheckoutPage, handleTestCheckoutSubmit } from "./endpoints/support/supportTestCheckout";
+import { handleMySupport, handleMySupportCheckout, handleStopMyPledge, handleSupportCheckout, handleSupportQuote, handleSupportSettingsSave, handleSupportSheet } from "./endpoints/support/supportCheckout";
 import { onSupportJobFailed, queueSupportCron } from "./lib/support/jobs";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
 import { DISCOVERY_RANK_JOB, flagDiscoveryRankFailed, startDiscoveryRank } from "./lib/ranking/job";
@@ -333,7 +335,17 @@ app.post('/webhooks/billing/:provider', handleWebhook);
 // The test rail's hosted onboarding page (QA and local only; registered before the webhook route)
 app.get('/webhooks/support/rail/test/onboard/:ref', handleTestRailOnboardPage);
 app.post('/webhooks/support/rail/test/onboard/:ref', handleTestRailOnboardSubmit);
+app.get('/webhooks/support/test/checkout/:id', handleTestCheckoutPage);
+app.post('/webhooks/support/test/checkout/:id', handleTestCheckoutSubmit);
 app.post('/webhooks/support/:side/:vendor', handleSupportWebhook);
+// The support sheet, the channel's own settings and Settings › Support (lib/support/checkout.ts); 404 feature_off while support is off
+app.get('/api/channels/:channelId/support', handleSupportSheet);
+app.get('/api/channels/:channelId/support/quote', handleSupportQuote);
+app.post('/api/channels/:channelId/support/checkout', authMiddleware, handleSupportCheckout);
+app.put('/api/channels/:channelId/support/settings', authMiddleware, handleSupportSettingsSave);
+app.get('/api/me/support', authMiddleware, handleMySupport);
+app.get('/api/me/support/checkouts/:id', authMiddleware, handleMySupportCheckout);
+app.post('/api/me/support/pledges/:id/stop', authMiddleware, handleStopMyPledge);
 // Studio › Support payee (lib/support/payees.ts): owner sets up payouts through the rail's hosted onboarding; 404 feature_off while support is off
 app.get('/api/channels/:channelId/support/payee', authMiddleware, handleSupportPayee);
 app.post('/api/channels/:channelId/support/payee/onboard', authMiddleware, handleSupportPayeeOnboard);

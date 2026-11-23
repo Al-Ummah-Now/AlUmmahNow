@@ -1,0 +1,188 @@
+/**
+ * Supporting a channel (wiki AUN-MEMBERS §2.1, §2.2, §5.4; MEM-7): the sheet, the breakdown, the
+ * hosted test checkout through the signed webhook to the ledger, monthly consent kept word for word,
+ * stopping a pledge at the collector, the owner's settings, and every refusal (switch off, ineligible,
+ * self-support, age, consent, minimum, rate limit). Real SQL; no network, no money.
+ */
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { Hono } from 'hono';
+import { forgetFeatureSwitches, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { SqliteD1 } from './search-sqlite-d1';
+import { MemoryBucket } from './helpers';
+import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
+import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { writeSupportPolicy } from '../src/lib/support/config';
+import { creatorBalance } from '../src/lib/support/ledger';
+import { onSupportJobFailed, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
+import { handleMySupport, handleMySupportCheckout, handleStopMyPledge, handleSupportCheckout, handleSupportQuote, handleSupportSettingsSave, handleSupportSheet } from '../src/endpoints/support/supportCheckout';
+import { handleTestCheckoutPage, handleTestCheckoutSubmit } from '../src/endpoints/support/supportTestCheckout';
+
+const OWNER = 'usr_owner';
+const FAN = 'usr_fan';
+const CH = 'ch_amina';
+const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000, 2500], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
+
+class JobsQueue {
+	pending: unknown[] = [];
+	async send(body: unknown) {
+		this.pending.push(body);
+	}
+	async drain(env: unknown) {
+		while (this.pending.length) {
+			const body = this.pending.shift();
+			const msg: JobMessage = { body, attempts: 1, ack: () => undefined, retry: () => undefined };
+			await handleAdminJobBatch({ messages: [msg] }, env as never, ADMIN_JOB_HANDLERS, (job, error) => onSupportJobFailed(env as SupportJobEnv, job, error));
+		}
+	}
+}
+
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+	forgetFeatureSwitches();
+	globalThis.fetch = (async () => new Response('{}', { status: 202 })) as typeof fetch;
+});
+afterEach(() => {
+	globalThis.fetch = realFetch;
+	forgetFeatureSwitches();
+});
+
+async function setup(opts: { switchOn?: boolean } = {}) {
+	const db = new SqliteD1();
+	const queue = new JobsQueue();
+	const channels = new MemoryBucket();
+	await channels.put(CH, JSON.stringify({ id: CH, userId: OWNER, members: [] }));
+	const env = { SEARCH_DB: db, channels, ADMIN_JOBS_QUEUE: queue, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1', VIDEOS_API_URL: 'https://videos.api.qa.example', VIDEOS_WEB_URL: 'https://qa.example', ERRORS_INGEST_URL: 'https://admin.api.qa.example/x', INTERNAL_API_KEY: 'k' } as unknown as SupportJobEnv;
+	if (opts.switchOn !== false) await writeFeatureSwitch(env as never, { key: 'creatorSupport', enabled: true, expectedVersion: 0, actorId: 'usr_super', currentStored: false });
+	await writeSupportPolicy(db as never, DECIDED, 'usr_fin', 0);
+	await db.prepare("INSERT INTO support_settings (channel_id, enabled, one_time_enabled, monthly_enabled, presets, updated_at, updated_by) VALUES (?, 1, 1, 1, '[500,1500]', 'now', ?)").bind(CH, OWNER).run();
+	await db.prepare("INSERT INTO support_payees (id, channel_id, owner_user_id, rail, mode, rail_payee_ref, country, status, tax_form, sanctions_status, created_at, updated_at) VALUES ('pe1', ?, ?, 'test', 'test', 'trpe_x', 'GB', 'active', 'w8ben', 'clear', 'now', 'now')").bind(CH, OWNER).run();
+	forgetFeatureSwitches();
+	const as = (userId: string | null) => {
+		const app = new Hono();
+		app.use('*', async (c, next) => {
+			if (userId) c.set('userId' as never, userId as never);
+			await next();
+		});
+		app.get('/api/channels/:channelId/support', handleSupportSheet);
+		app.get('/api/channels/:channelId/support/quote', handleSupportQuote);
+		app.post('/api/channels/:channelId/support/checkout', handleSupportCheckout);
+		app.put('/api/channels/:channelId/support/settings', handleSupportSettingsSave);
+		app.get('/api/me/support', handleMySupport);
+		app.get('/api/me/support/checkouts/:id', handleMySupportCheckout);
+		app.post('/api/me/support/pledges/:id/stop', handleStopMyPledge);
+		app.get('/webhooks/support/test/checkout/:id', handleTestCheckoutPage);
+		app.post('/webhooks/support/test/checkout/:id', handleTestCheckoutSubmit);
+		return async (method: string, path: string, json?: unknown, form?: Record<string, string>) => {
+			const res = await app.request(path, { method, body: form ? new URLSearchParams(form) : json === undefined ? undefined : JSON.stringify(json), headers: form ? {} : { 'Content-Type': 'application/json' } }, env as never);
+			const text = await res.text();
+			let body: any = null;
+			try {
+				body = JSON.parse(text);
+			} catch {
+				body = text;
+			}
+			return { status: res.status, body, location: res.headers.get('Location') };
+		};
+	};
+	return { db, env, queue, as, drain: () => queue.drain(env) };
+}
+
+const GIFT = { kind: 'one_time', amount: 500, currency: 'USD', ageConfirmed: true, locale: 'en', message: 'JazakAllah khair' };
+
+describe('the sheet and the breakdown', () => {
+	it('answers feature_off while the switch is off', async () => {
+		const t = await setup({ switchOn: false });
+		const r = await t.as(FAN)('GET', `/api/channels/${CH}/support`);
+		assert.equal(r.status, 404);
+		assert.equal(r.body.code, 'feature_off');
+	});
+
+	it('shows the channel’s presets and the rules; the breakdown says the platform takes nothing', async () => {
+		const t = await setup();
+		const sheet = await t.as(null)('GET', `/api/channels/${CH}/support`);
+		assert.deepEqual({ presets: sheet.body.result.presets, minimum: sheet.body.result.minimum, coverFeesChoice: sheet.body.result.coverFeesChoice }, { presets: [500, 1500], minimum: 300, coverFeesChoice: true });
+		const q = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&currency=USD&lang=ar`);
+		assert.equal(q.body.result.creatorReceives.amount, 455);
+		assert.equal(q.body.result.platformFee.amount, 0);
+		assert.match(q.body.result.text.platformFee, /٠٫٠٠/);
+		const covered = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&coverFees=1`);
+		assert.ok(covered.body.result.creatorReceives.amount >= 500);
+		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=100`)).body.code, 'support_amount_too_small');
+		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&currency=EUR`)).body.code, 'support_currency_unavailable');
+	});
+});
+
+describe('checkout', () => {
+	it('a one-time gift: hosted test checkout → Pay → webhook → ledger; the supporter sees it', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, returnPath: '/channel/ch_amina' });
+		assert.equal(r.status, 200, JSON.stringify(r.body));
+		const { checkoutId, url } = r.body.result;
+		const path = new URL(url).pathname;
+		const page = await fan('GET', path);
+		assert.match(page.body, /No card is asked for/);
+		const paid = await fan('POST', path, undefined, { action: 'pay' });
+		assert.equal(paid.status, 303);
+		assert.equal(paid.location, `https://qa.example/channel/ch_amina?support=${checkoutId}`);
+		await t.drain();
+		assert.equal((await fan('GET', `/api/me/support/checkouts/${checkoutId}`)).body.result.status, 'completed');
+		assert.equal((await creatorBalance(t.db as never, CH)).USD!.pending, 455);
+		const mine = await fan('GET', '/api/me/support');
+		assert.equal(mine.body.result.payments.length, 1);
+		// Another person can't read this checkout
+		assert.equal((await t.as('usr_other')('GET', `/api/me/support/checkouts/${checkoutId}`)).status, 404);
+	});
+
+	it('monthly: the consent line is kept word for word; stopping cancels at the collector at once', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly' })).body.code, 'support_consent_required');
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', amount: 1000, consent: true });
+		const row = await t.db.prepare('SELECT consent_text FROM support_checkouts WHERE id = ?').bind(r.body.result.checkoutId).first<{ consent_text: string }>();
+		assert.equal(row!.consent_text, 'Charge me $10.00 every month until I stop.');
+		await fan('POST', new URL(r.body.result.url).pathname, undefined, { action: 'pay' });
+		await t.drain();
+		const pledge = (await fan('GET', '/api/me/support')).body.result.pledges[0];
+		assert.equal(pledge.status, 'active');
+		assert.equal((await fan('POST', `/api/me/support/pledges/${pledge.id}/stop`)).body.result.status, 'canceled');
+		const ref = await t.db.prepare('SELECT collector_pledge_ref FROM support_pledges').first<{ collector_pledge_ref: string }>();
+		assert.equal((await vendorContext(t.env, 'test').testState!.get<{ status: string }>(`collector:pledge:${ref!.collector_pledge_ref}`))!.status, 'canceled');
+		// Stopping is never taken away, even after the switch goes off
+		await writeFeatureSwitch(t.env as never, { key: 'creatorSupport', enabled: false, expectedVersion: 1, actorId: 'usr_super', currentStored: true });
+		forgetFeatureSwitches();
+		assert.equal((await fan('GET', '/api/me/support')).status, 200);
+		assert.equal((await t.as('usr_nobody')('GET', '/api/me/support')).body.code, 'feature_off');
+	});
+
+	it('refusals: signed out, own channel, age, minimum, closed kind, too many', async () => {
+		const t = await setup();
+		assert.equal((await t.as(null)('POST', `/api/channels/${CH}/support/checkout`, GIFT)).status, 401);
+		assert.equal((await t.as(OWNER)('POST', `/api/channels/${CH}/support/checkout`, GIFT)).body.code, 'feature_off');
+		const fan = t.as(FAN);
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, ageConfirmed: false })).body.code, 'support_age_required');
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, amount: 200 })).body.code, 'support_amount_too_small');
+		await t.db.prepare('UPDATE support_settings SET monthly_enabled = 0').run();
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', consent: true })).status, 400);
+		for (let i = 0; i < 10; i++) assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, GIFT)).status, 200);
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, GIFT)).status, 429);
+	});
+
+	it('a channel that can’t receive (payee not ready) answers feature_off', async () => {
+		const t = await setup();
+		await t.db.prepare("UPDATE support_payees SET status = 'pending'").run();
+		assert.equal((await t.as(FAN)('POST', `/api/channels/${CH}/support/checkout`, GIFT)).body.code, 'feature_off');
+	});
+});
+
+describe('the owner’s settings', () => {
+	it('only the owner saves; presets must be at or above the minimum', async () => {
+		const t = await setup();
+		assert.equal((await t.as(FAN)('PUT', `/api/channels/${CH}/support/settings`, { enabled: false })).status, 404);
+		assert.equal((await t.as(OWNER)('PUT', `/api/channels/${CH}/support/settings`, { presets: [100] })).status, 400);
+		const ok = await t.as(OWNER)('PUT', `/api/channels/${CH}/support/settings`, { presets: [500, 2000], thankYouNote: 'Thank you' });
+		assert.deepEqual(ok.body.result.presets, [500, 2000]);
+		assert.equal(ok.body.result.thankYouNote, 'Thank you');
+	});
+});
