@@ -38,6 +38,11 @@ export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'channelMovedOutByTeam',
   'channelMovedOutByTeamWithReason',
   'channelHandleChangedByTeam',
+  'channelMoveOffered',
+  'channelMoveAccepted',
+  'channelMoveDeclined',
+  'channelMoveCancelled',
+  'channelMoveStopped',
   'youtubeImportFinished',
 ];
 

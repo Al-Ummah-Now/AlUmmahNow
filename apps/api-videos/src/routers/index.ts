@@ -26,6 +26,7 @@ import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 import { devicesRouter } from './devices.router';
 import { youtubeImportRouter } from './youtube-import.router';
 import { channelInvitesRouter } from './channel-invites.router';
+import { moveOffersRouter } from './move-offers.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -63,6 +64,8 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/api/channels', channelRouter);
   // My channel invitations (accept, decline)
   openapi.route('/api/channel-invites', channelInvitesRouter);
+  // Channel offers from an owner to one of the channel's admins (wiki AUN-CHANNEL-CLAIM §5)
+  openapi.route('/api/move-offers', moveOffersRouter);
 
   // Playlist domain - playlist CRUD, video management
   openapi.route('/api/playlists', playlistRouter);

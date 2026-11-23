@@ -109,6 +109,7 @@ export const FEATURE_KEYS = [
   'appUpdates',
   'ageRules',
   'parentsGuide',
+  'channelMove',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -740,6 +741,22 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'never',
     requires: [],
     userFeatureKeys: ['parentsGuide'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    // Wiki AUN-CHANNEL-CLAIM §5: an owner hands their channel to one of its channel admins, who accepts
+    key: 'channelMove',
+    group: 'create',
+    name: { en: 'Channel moves by owners', ar: 'نقل القنوات من مالكيها' },
+    help: {
+      en: 'Channel owners can’t hand their channel to one of its admins, and the Move channel option disappears. Admin moves still work.',
+      ar: 'لا يستطيع مالكو القنوات تسليم قناتهم لأحد مشرفيها، ويختفي خيار نقل القناة. يبقى نقل المشرفين للقنوات متاحًا.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'off',
+    requires: [],
+    userFeatureKeys: ['channelMove'],
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);

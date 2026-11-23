@@ -633,7 +633,7 @@ async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobI
 }
 
 /** Whether the user's creator tier lets them own one more channel (the same rule as creating one). */
-async function hasChannelRoom(db: D1Database, userId: string): Promise<boolean> {
+export async function hasChannelRoom(db: D1Database, userId: string): Promise<boolean> {
 	// Read only: resolveCreator without the caller's roles would drop a super admin's automatic
 	// Unlimited assignment. channelOwnerTier reads the stored assignment and writes nothing.
 	const tier = await channelOwnerTier(db, userId);
@@ -647,7 +647,7 @@ async function hasChannelRoom(db: D1Database, userId: string): Promise<boolean> 
  * active, a live pledge, or a creator balance that isn't zero in any currency (support_ledger by
  * channel, idx_support_ledger_channel), even when the payee is disabled or closed.
  */
-async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promise<boolean> {
+export async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promise<boolean> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return false;
 	try {
@@ -676,7 +676,7 @@ async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promi
  * index-backed (content_ownership kind 'stream' by channel, live_sessions by channel); an incomplete
  * stream index falls back to the full R2 scan, which fails loudly rather than missing a stream.
  */
-async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<boolean> {
+export async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<boolean> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (db) {
 		const session = await db.prepare(`SELECT 1 AS live FROM live_sessions WHERE channel_id = ? AND status = 'live' LIMIT 1`).bind(channelId).first<{ live: number }>();

@@ -78,7 +78,7 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (the live app features, caption download, creator support, offline/listen, event calendar, quiet hours, E21 and app update notices start off)', () => {
+test('defaults keep today’s behaviour (the live app features, caption download, creator support, offline/listen, event calendar, quiet hours, E21, app update notices and channel moves start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
   assert.deepEqual(off, [
     'liveChat',
@@ -103,6 +103,7 @@ test('defaults keep today’s behaviour (the live app features, caption download
     'appUpdates',
     'ageRules',
     'parentsGuide',
+    'channelMove',
   ]);
 });
 

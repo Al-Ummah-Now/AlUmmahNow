@@ -131,6 +131,13 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('admin-api', 'POST', '/internal/newsletter/subscribe', 'newsletter'),
   r('admin-api', 'POST', '/internal/newsletter/confirm', 'newsletter', 'handler'),
   r('admin-api', 'POST', '/api/newsletter/issues/:id/send', 'newsletter'),
+  // Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5)
+  r('api-videos', 'GET', '/api/channels/:id/move-receivers', 'channelMove'),
+  r('api-videos', 'POST', '/api/channels/:id/move-offers', 'channelMove'),
+  r('api-videos', 'GET', '/api/move-offers', 'channelMove'),
+  r('api-videos', 'POST', '/api/move-offers/:id/accept', 'channelMove'),
+  r('api-videos', 'POST', '/api/move-offers/:id/decline', 'channelMove'),
+  r('api-videos', 'DELETE', '/api/move-offers/:id', 'channelMove'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -163,6 +170,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'api-videos', prefix: '/api/me/support', key: 'creatorSupport' },
   { app: 'admin-api', prefix: '/internal/newsletter', key: 'newsletter' },
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
+  { app: 'api-videos', prefix: '/api/move-offers', key: 'channelMove' },
 ]);
 
 const FINISH = 'finishes work already started';

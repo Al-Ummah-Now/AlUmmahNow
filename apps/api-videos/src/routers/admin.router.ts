@@ -6,6 +6,7 @@
  * passes the acting admin's id in X-Admin-Actor (recorded on suspensions and
  * bans) and writes the audit log itself.
  */
+import { MoveError, stopMoveOffer } from '../lib/channelMoves';
 import { DEFAULT_TIER_ID } from '@al-ummah/shared-types';
 import { readTierChange, recordTierChange, recordTierChangeEmail } from '../lib/tierChanges';
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upgradeMode';
@@ -325,6 +326,15 @@ app.post('/channels/:id/transfer', async (c) => {
 app.post('/channels/:id/handle/take', async (c) => {
 	const { handle } = parse(z.object({ handle: z.string().trim().min(1).max(60) }), await body(c));
 	return ok(c, await admin.takeOfficialHandle(c.env, c.req.param('id'), handle, actor(c)));
+});
+// An admin stops an owner's open channel offer (wiki AUN-CHANNEL-CLAIM §5, CC-D1)
+app.post('/move-offers/:id/stop', async (c) => {
+	try {
+		return ok(c, await stopMoveOffer(c.env as never, c.req.param('id')));
+	} catch (error) {
+		if (error instanceof MoveError) throw new admin.AdminError(error.status === 503 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code);
+		throw error;
+	}
 });
 app.post('/channels/:id/handle/release', async (c) => ok(c, await admin.releaseChannelHandle(c.env, c.req.param('id'), actor(c))));
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));

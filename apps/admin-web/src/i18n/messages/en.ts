@@ -6069,6 +6069,7 @@ const en = {
       'handle-take': 'Official handle taken back',
       'handle-release': 'Handle released',
       'handle-taken-away': 'Official handle taken for another channel',
+      'move-offer-stop': 'Channel offer stopped',
       transferred: 'Ownership transferred',
       suspend: 'Suspended',
       suspended: 'Suspended',
