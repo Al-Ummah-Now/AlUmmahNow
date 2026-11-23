@@ -116,7 +116,6 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   version_conflict: { action: 'retry', en: 'Someone else acted on this request a moment ago. It has been refreshed.', ar: 'تصرّف شخص آخر في هذا الطلب قبل لحظات. جرى تحديثه.' },
   rule_below_floor: { action: 'none', en: 'This rule can’t be set lower than its minimum.', ar: 'لا يمكن ضبط هذه القاعدة أقل من حدّها الأدنى.' },
   rule_invalid: { action: 'none', en: 'Check the rule’s values.', ar: 'راجِع قيم القاعدة.' },
-  effective_date_not_allowed: { action: 'none', en: 'That date isn’t allowed for this change.', ar: 'هذا التاريخ غير مسموح به لهذا التغيير.' },
   nobody_can_approve: { action: 'none', en: 'Nobody can approve this yet.', ar: 'لا أحد يستطيع الموافقة على هذا بعد.' },
   support_same_person: { action: 'none', en: 'A second person has to do this.', ar: 'يجب أن يقوم بهذا شخص ثانٍ.' },
   support_not_clean: { action: 'none', en: 'The last reconciliation has a gap or hasn’t run, so payouts are stopped.', ar: 'في آخر مطابقة فرق أو لم تُجرَ بعد، لذا توقفت التحويلات.' },

@@ -43,7 +43,6 @@ function ruleFields(before: WorkflowRuleConfig, after: WorkflowRuleConfig): Work
     { key: 'oneStepPerPerson', label: { en: 'One step per person', ar: 'خطوة واحدة لكل شخص' }, kind: 'bool', before: before.exclusions.oneStepPerPerson, after: after.exclusions.oneStepPerPerson },
     { key: 'stepUp', label: { en: 'Passkey check', ar: 'التحقق بمفتاح المرور' }, kind: 'enum', before: before.stepUp, after: after.stepUp, enumLabels: stepUpLabel },
     { key: 'expiryHours', label: { en: 'Expires after (hours)', ar: 'تنتهي صلاحيته بعد (ساعات)' }, kind: 'count', before: before.expiryHours, after: after.expiryHours },
-    { key: 'effectiveDate', label: { en: 'Effective date allowed (days ahead)', ar: 'السماح بتاريخ سريان (أيام مقدمًا)' }, kind: 'count', before: before.effectiveDate.allowed ? before.effectiveDate.maxDaysAhead : null, after: after.effectiveDate.allowed ? after.effectiveDate.maxDaysAhead : null },
     { key: 'notifyEmail', label: { en: 'Email notices', ar: 'إشعارات البريد' }, kind: 'bool', before: before.notify.email, after: after.notify.email },
   ];
 }
