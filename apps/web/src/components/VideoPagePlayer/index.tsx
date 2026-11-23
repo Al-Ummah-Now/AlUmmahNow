@@ -95,7 +95,12 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             };
           }}
           pauseVideo={() => {
-            playerRef.current?.pause?.();
+            try {
+              const p = playerRef.current;
+              if (p && !p.isDisposed?.()) p.pause?.();
+            } catch {
+              // Ignore video.js tech-not-ready pause errors.
+            }
           }}
           resumeVideoAt={(seconds, rate) => {
             const p = playerRef.current as (Player & { playbackRate?: (r?: number) => number }) | null;

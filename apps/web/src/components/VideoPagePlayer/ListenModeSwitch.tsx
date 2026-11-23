@@ -58,8 +58,20 @@ export function ListenModeSwitch({
   const enterListenMode = async () => {
     setLoading(true);
     try {
-      const { currentTime, playbackRate } = getVideoPlaybackState();
-      pauseVideo();
+      let currentTime = 0;
+      let playbackRate = 1;
+      try {
+        const state = getVideoPlaybackState();
+        currentTime = Number.isFinite(state.currentTime) ? state.currentTime : 0;
+        playbackRate = Number.isFinite(state.playbackRate) && state.playbackRate > 0 ? state.playbackRate : 1;
+      } catch {
+        // Video tech may not be initialized yet (or failed to load); still allow Listen mode.
+      }
+      try {
+        pauseVideo();
+      } catch {
+        // Ignore tech-not-ready pause errors from video.js.
+      }
       const resolved = await fetchVideoAudio(videoId);
       const audioUrl = resolved?.url ?? fallbackPlayUrl;
       if (!audioUrl) return;
