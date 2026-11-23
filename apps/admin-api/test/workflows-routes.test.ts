@@ -209,3 +209,40 @@ describe('error catalogue', () => {
     }
   });
 });
+
+describe('review fixes (#1827)', () => {
+  const csRule = (approvalsNeeded: number, approvers: unknown[] = [{ kind: 'finance' }]) => ({
+    approvalsNeeded,
+    approvers,
+    exclusions: { subject: true, techStaff: true, owner: true, oneStepPerPerson: true },
+    stepUp: 'approve',
+    expiryHours: 168,
+    effectiveDate: { allowed: false, maxDaysAhead: 0 },
+    notify: { email: true, extra: [] },
+  });
+
+  it('the creatorSupport switch rule is a money rule: super admins and the owner cannot change it, the floor holds', async () => {
+    const t = await setup();
+    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(1), reason: 'r' })).body.code, 'propose_not_allowed');
+    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(0, [{ kind: 'role', role: 'super_admin' }]), reason: 'r' })).status, 400, 'and a lowered rule is refused outright');
+    assert.equal((await t.as('owner', ['super_admin'])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(1), reason: 'r' })).body.code, 'propose_not_allowed');
+    const low = await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(0), reason: 'r' });
+    assert.equal(low.body.code, 'rule_below_floor');
+    const supers = await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(1, [{ kind: 'role', role: 'super_admin' }]), reason: 'r' });
+    assert.equal(supers.body.code, 'rule_below_floor');
+    const ok = await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: csRule(2), reason: 'Two people' });
+    assert.equal(ok.status, 202, JSON.stringify(ok.body));
+    assert.equal(ok.body.result.request.domain, 'money');
+  });
+
+  it('GET /actions lists the seeded scopes, and money ones only for people who see money', async () => {
+    const t = await setup();
+    const fin = (await t.as('fin1', [])('GET', '/actions')).body.result.actions as { type: string; rules: { scope: string; floor: { money: boolean } }[] }[];
+    const fs = fin.find((a) => a.type === 'features.set')!;
+    assert.deepEqual(fs.rules.map((r) => [r.scope, r.floor.money]), [['', false], ['creatorSupport', true]]);
+    assert.ok(fin.find((a) => a.type === 'workflows.rule.set')!.rules.some((r) => r.scope === 'money'));
+    const adm = (await t.as('adm', ['admin'])('GET', '/actions')).body.result.actions as { type: string; rules: { scope: string }[] }[];
+    assert.deepEqual(adm.find((a) => a.type === 'features.set')!.rules.map((r) => r.scope), ['']);
+    assert.ok(adm.some((a) => a.type === 'support.financeList.add'), 'finance-list changes are people actions super admins decide');
+  });
+});

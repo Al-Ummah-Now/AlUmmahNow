@@ -18,7 +18,10 @@ import { Hono, type Context } from 'hono';
 import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ACTION_TYPES,
+  WORKFLOW_SEEDED_SCOPES,
   WORKFLOW_STATUSES,
+  isMoneyRule,
+  workflowFloorFor,
   hasContentPermission,
   isWorkflowActionType,
   type WorkflowActor,
@@ -135,17 +138,20 @@ app.get('/actions', async (c) => {
   const out = [];
   for (const type of WORKFLOW_ACTION_TYPES) {
     const def = WORKFLOW_ACTIONS[type];
-    if (def.domain === 'money' && !money) continue;
     const { results } = await ctx.db
       .prepare('SELECT scope, MAX(version) AS version FROM workflow_rules WHERE action_type = ? GROUP BY scope LIMIT 100')
       .bind(type)
       .all<{ scope: string; version: number }>();
-    const scopes = ['', ...(results ?? []).map((r) => r.scope).filter((s) => s !== '')];
+    // The default scope, the seeded scopes (WF-D9's creatorSupport switch, money rule changes) and any edited one
+    const scopes = [...new Set(['', ...(WORKFLOW_SEEDED_SCOPES[type] ?? []), ...(results ?? []).map((r) => r.scope)])];
     const rules = [];
     for (const scope of scopes) {
+      // Money rules (by their floor, not only the action's domain) are for people who can see money
+      if (isMoneyRule(type, scope) && !money) continue;
       const r = await ruleInForce(ctx, type, scope);
-      rules.push({ scope, version: r.version, config: r.config });
+      rules.push({ scope, version: r.version, config: r.config, floor: workflowFloorFor(type, scope) });
     }
+    if (!rules.length) continue;
     out.push({ type, domain: def.domain, label: def.label, scoped: def.scoped, floor: def.floor, rules });
   }
   return ok(c, { actions: out });
@@ -156,8 +162,8 @@ app.get('/rules/:type/history', async (c) => {
   const actor = await needRead(c, ctx);
   const type = c.req.param('type');
   if (!isWorkflowActionType(type)) return apiError(c, 404, 'not_found');
-  if (WORKFLOW_ACTIONS[type].domain === 'money' && !seesMoney(c, actor)) throw new Refused(403, 'forbidden');
   const scope = c.req.query('scope') ?? '';
+  if (isMoneyRule(type, scope) && !seesMoney(c, actor)) throw new Refused(403, 'forbidden');
   const before = Number(c.req.query('before') ?? '0');
   const { results } = await ctx.db
     .prepare(`SELECT id, version, config, request_id, created_by, created_at FROM workflow_rules WHERE action_type = ? AND scope = ?${before > 0 ? ' AND version < ?' : ''} ORDER BY version DESC LIMIT 50`)
@@ -271,7 +277,8 @@ app.post('/requests/:id/retry', async (c) => {
   const ctx = ctxFor(c);
   const actor = await visible(c, ctx, c.req.param('id'));
   const row = await ctx.db.prepare('SELECT domain FROM workflow_requests WHERE id = ?').bind(c.req.param('id')).first<{ domain: string }>();
-  const allowed = row?.domain === 'money' ? actor.financePermissions.length > 0 && !actor.techStaff : actor.roles.includes('super_admin');
+  // Money (the stored domain follows the floor): the finance list, never tech staff or the owner
+  const allowed = row?.domain === 'money' ? actor.financePermissions.length > 0 && !actor.techStaff && !actor.owner : actor.roles.includes('super_admin');
   if (!allowed) throw new Refused(403, 'forbidden');
   return ok(c, await retryRequest(ctx, actor, c.req.param('id')));
 });
