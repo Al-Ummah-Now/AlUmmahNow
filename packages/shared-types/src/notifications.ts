@@ -79,6 +79,10 @@ export const NOTIFICATION_KEYS = [
   'tierRequestReceived',
   /** The user's tier changed for any reason other than an approved request (params: from/to + _en/_ar; reason); always on */
   'tierChanged',
+  /** Channel moves (wiki AUN-CHANNEL-CLAIM §3.6). To the new owner. params: channel; always on */
+  'channelMovedIn',
+  /** To the previous owner when the team moved it. params: channel; always on */
+  'channelMovedOutByTeam',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -107,6 +111,8 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   tierRequestDeclined: 'account',
   tierRequestReceived: 'account',
   tierChanged: 'account',
+  channelMovedIn: 'account',
+  channelMovedOutByTeam: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -136,6 +142,8 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   tierRequestDeclined: 'system',
   tierRequestReceived: 'system',
   tierChanged: 'system',
+  channelMovedIn: 'system',
+  channelMovedOutByTeam: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

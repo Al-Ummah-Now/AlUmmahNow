@@ -39,6 +39,7 @@ import {
 } from '@/lib/notifications/toast-queue';
 import { logger } from '@/lib/logger-client';
 import type { NotificationEvent } from '@/interfaces/websocket';
+import { CHANNEL_ACCESS_CHANGED_EVENT, changesChannelAccess } from '@/lib/notifications/channel-access';
 import './realtime-toasts.css';
 
 /** Bulk arrivals settle into one screen-reader announcement after this long. */
@@ -75,6 +76,8 @@ function KindIcon({ kind }: { kind: string }) {
     case 'channelRoleChanged':
     case 'channelMemberRemoved':
     case 'channelMemberLeft':
+    case 'channelMovedIn':
+    case 'channelMovedOutByTeam':
       return <Users {...props} />;
     case 'reviewApproved':
       return <Video {...props} />;
@@ -113,6 +116,9 @@ export function NotificationCenter() {
     const event = data as NotificationEvent;
     const { t: tNow, lang: langNow, pathname: path } = live.current;
     const kind = event.notificationKey ?? event.notificationType;
+
+    // A channel moved to or away from this account: the menu's channel list reloads (useMultiAccount)
+    if (changesChannelAccess(kind)) window.dispatchEvent(new CustomEvent(CHANNEL_ACCESS_CHANGED_EVENT));
 
     if (kind === 'uploadReady' || kind === 'uploadFailed') {
       const videoId = videoIdFromActionUrl(event.actionUrl);

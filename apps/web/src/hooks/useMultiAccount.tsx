@@ -42,6 +42,7 @@ import {
   type AuthAccount,
 } from '@/lib/auth/auth-accounts';
 import { PROBE_FLAG, loginRoutePath, probeOutcome, shouldProbe } from '@/lib/auth/silent-sign-in';
+import { CHANNEL_ACCESS_CHANGED_EVENT } from '@/lib/notifications/channel-access';
 
 // Types
 interface ChannelInfo {
@@ -392,6 +393,13 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     // router is stable from useRouter()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applySessionUser, refreshLiveChannels]);
+
+  // A channel moved to or away from this account, or a role changed (notification center)
+  useEffect(() => {
+    const onAccessChanged = () => { void refreshLiveChannels(true); };
+    window.addEventListener(CHANNEL_ACCESS_CHANGED_EVENT, onAccessChanged);
+    return () => window.removeEventListener(CHANNEL_ACCESS_CHANGED_EVENT, onAccessChanged);
+  }, [refreshLiveChannels]);
 
   // The live list again when the tab comes back (a role granted or revoked
   // meanwhile, a channel created on another device), throttled
