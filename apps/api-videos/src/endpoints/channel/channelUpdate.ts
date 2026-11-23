@@ -5,6 +5,7 @@ import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelUpdateInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { withIndexedVideoCount } from "../../lib/public-views";
+import { subscriberCounts } from "../../lib/subscription-store";
 import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
@@ -207,7 +208,11 @@ export class ChannelUpdate extends AuthenticatedRoute {
 		});
         
         // Transform to view model for response
-        const channelView = await withIndexedVideoCount(c.env as never, transformChannelToView(updatedChannel));
+        const subCounts = await subscriberCounts(c.env.NOTIFICATIONS_DB, [{ ...updatedChannel, id }]).catch((error) => {
+            logger.warn('[ChannelUpdate] Subscriber count unavailable', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+            return null;
+        });
+        const channelView = await withIndexedVideoCount(c.env as never, transformChannelToView(updatedChannel, subCounts?.get(id)));
 
         return {
             success: true,

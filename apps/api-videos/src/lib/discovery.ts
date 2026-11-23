@@ -17,6 +17,7 @@ import { detectTextLanguage } from '@al-ummah/shared-types';
 import { PUBLIC_DISLIKES_COUNT } from "./reactions";
 import { channelNameFields } from './channelName';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
+import { countSubscribers } from './subscriptions';
 
 export interface DiscoveryVideo {
   id: string;
@@ -65,6 +66,7 @@ export interface DiscoveryChannel {
   isDeleted?: boolean;
   isHidden?: boolean;
   subscribers?: unknown[];
+  subscriptions?: unknown[];
 }
 
 export type SuggestionType = 'query' | 'channel' | 'category' | 'video';
@@ -197,7 +199,9 @@ export function buildSuggestions(
         text: channel.name,
         type: 'channel',
         score,
-        popularity: Array.isArray(channel.subscribers) ? channel.subscribers.length : 0,
+        popularity: Array.isArray(channel.subscriptions) && channel.subscriptions.length > 0
+          ? countSubscribers(channel.subscriptions as never)
+          : (Array.isArray(channel.subscribers) ? channel.subscribers.length : 0),
         metadata: { channelId: channel.id, avatarUrl: channel.avatarUrl },
       });
     }

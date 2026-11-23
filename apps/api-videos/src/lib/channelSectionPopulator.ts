@@ -11,6 +11,7 @@
 import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { subscribedChannelIds } from './subscription-store';
+import { countSubscribers } from './subscriptions';
 import R2Repository, { NonVideoRepository } from './r2Repo';
 import {
   CHANNEL_SECTION_CONSTRAINTS,
@@ -112,6 +113,7 @@ export interface PopulatedSection {
 
 type StoredChannel = Channel & {
   subscribers?: unknown[];
+  subscriptions?: unknown[];
   videos?: unknown[];
   isSuspended?: boolean;
   handle?: string;
@@ -137,7 +139,9 @@ function toPublicChannelSummary(channel: StoredChannel): PublicChannelSummary {
     coverUrl: channel.coverUrl,
     handle: channel.handle,
     isVerified: channel.isVerified,
-    subscribersCount: Array.isArray(channel.subscribers) ? channel.subscribers.length : channel.subscribersCount || 0,
+    subscribersCount: Array.isArray(channel.subscriptions) && channel.subscriptions.length > 0
+      ? countSubscribers(channel.subscriptions as never)
+      : (channel.subscribersCount || 0),
     videosCount: Array.isArray(channel.videos) ? channel.videos.length : channel.videosCount || 0,
   };
 }

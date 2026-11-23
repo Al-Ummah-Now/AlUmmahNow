@@ -109,6 +109,7 @@ describe('subscriptions in D1: parallel subscribers', () => {
 		assert.equal(count(e), 50);
 		assert.equal(channels.read('target').name, 'Renamed');
 		const view = await (await buildApp(routes).request('/api/channels/target', {}, e)).json() as any;
+		assert.equal(view.subscribersCount, 50, 'the public view subscribersCount counts from D1');
 		assert.equal(view.subscriptionsCount, 50, 'the public view counts from D1');
 	});
 });

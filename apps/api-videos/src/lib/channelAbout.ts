@@ -90,7 +90,7 @@ export interface ChannelAboutSource {
 	contactEmail?: string;
 	location?: string;
 	dateCreated?: string;
-	subscribers?: Array<{ channelId?: string }>;
+	subscriptions?: Array<{ channelId?: string }>;
 }
 
 /** Only http(s) links are ever returned (older records are filtered defensively). */
@@ -100,7 +100,7 @@ export function safeChannelLinks(links: ChannelAboutSource['links']): Array<{ ti
 		.map((l) => ({ title: l.title as string, url: l.url as string }));
 }
 
-export function buildChannelAbout(channel: ChannelAboutSource, totals: ChannelTotals) {
+export function buildChannelAbout(channel: ChannelAboutSource, totals: ChannelTotals, subscribersCount?: number) {
 	return {
 		channelId: channel.id,
 		handle: channel.handle || null,
@@ -112,7 +112,7 @@ export function buildChannelAbout(channel: ChannelAboutSource, totals: ChannelTo
 		joinedDate: channel.dateCreated,
 		totalViews: totals.totalViews,
 		videosCount: totals.videosCount,
-		subscribersCount: countSubscribers(channel.subscribers as never),
+		subscribersCount: subscribersCount ?? countSubscribers(channel.subscriptions),
 		statsPartial: totals.partial,
 	};
 }

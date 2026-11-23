@@ -29,6 +29,7 @@ import {
 	resolveHandleHistory,
 } from "../../lib/channelHandles";
 import { buildChannelAbout, computeChannelTotals, isChannelVisibleTo } from "../../lib/channelAbout";
+import { subscriberCounts } from "../../lib/subscription-store";
 import { channelTotalsFromIndex, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 type ChannelType = z.infer<typeof BusinessChannel>;
@@ -155,14 +156,18 @@ export class ChannelAbout extends OptionalAuthRoute {
 		if (!channel) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		// Ownership index: one aggregate query; partial while it waits for a repair. The bucket only without an index (a local run)
-		let totals = await channelTotalsFromIndex(c.env as never, id);
+		// Use indexed totals when bound and keep a partial result while repair runs.
+		const [indexedTotals, subCounts] = await Promise.all([
+			channelTotalsFromIndex(c.env as never, id),
+			subscriberCounts(c.env.NOTIFICATIONS_DB, [{ ...channel, id }]),
+		]);
+		let totals = indexedTotals;
 		if (!totals && (c.env as { SEARCH_DB?: unknown }).SEARCH_DB) throw new IndexUnavailableError();
 		const source = totals ? "index" : "scan";
 		if (totals?.partial) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
 		totals ??= await computeChannelTotals(c.env.videos, id);
 		logger.debug('[ChannelAbout] Totals', { channelId: id, source, ...totals });
-		return { success: true, result: buildChannelAbout(channel, totals) };
+		return { success: true, result: buildChannelAbout(channel, totals, subCounts.get(id)) };
 	}
 }
 

@@ -28,7 +28,7 @@ export function isSubscribed(
 
 /** Number of distinct subscriber channels. */
 export function countSubscribers(subscriptions: StoredSubscription[] | null | undefined): number {
-	return new Set((subscriptions || []).map((s) => s.channelId)).size;
+	return new Set((subscriptions || []).map((s) => s?.channelId).filter((id): id is string => Boolean(id))).size;
 }
 
 export interface FeedVideo extends VisibilityFields {

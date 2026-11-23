@@ -160,7 +160,7 @@ describe('channel handle endpoints', () => {
 
 	it('stores About fields and returns them with totals', async () => {
 		const e = env({
-			channels: new MemoryBucket({ c1: channel('c1', { description: 'desc', descriptionLocalized: { ar: 'وصف' }, subscribers: [{ channelId: 'a' }, { channelId: 'b' }] }) }),
+			channels: new MemoryBucket({ c1: channel('c1', { description: 'desc', descriptionLocalized: { ar: 'وصف' }, subscriptions: [{ channelId: 'a' }, { channelId: 'b' }] }) }),
 			videos: new MemoryBucket({
 				v1: videoFixture({ id: 'v1', channelId: 'c1', views: 10 }),
 				v2: videoFixture({ id: 'v2', channelId: 'c1', views: 5 }),

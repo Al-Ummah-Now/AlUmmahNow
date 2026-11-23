@@ -10,6 +10,7 @@ import { isVideoReady } from './visibility';
 import { withoutMoveMark } from './channelMoveData';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
+import { countSubscribers } from './subscriptions';
 
 /**
  * The stored video without server-only processing fields, as every video view
@@ -114,7 +115,7 @@ export function transformVideoToView(
 }
 
 // Transform a business channel to a view model
-export function transformChannelToView(channel: z.infer<typeof BusinessChannel>): z.infer<typeof ChannelView> {
+export function transformChannelToView(channel: z.infer<typeof BusinessChannel>, subscribers?: number): z.infer<typeof ChannelView> {
     // Admin bookkeeping stays out of every view (who suspended it, the holds),
     // and so does the channel team: it is read through GET /:id/members, which
     // checks members.view
@@ -131,14 +132,15 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
         bunnyCollectionId?: unknown;
         bunnyCollections?: unknown;
     };
+    const subs = subscribers ?? countSubscribers(channel.subscriptions);
     return {
         ...(rest as typeof channel),
         ...(suspension ? { suspension: { at: suspension.at, ...(suspension.reason ? { reason: suspension.reason } : {}) } } : {}),
         ...(pendingImages && Object.keys(pendingImages).length ? { pendingImages: pendingImageStatus(pendingImages) } : {}),
         playlistsCount: channel.playlists?.length || 0,
         videosCount: channel.videos?.length || 0,
-        subscribersCount: channel.subscribers?.length || 0,
-        subscriptionsCount: channel.subscriptions?.length || 0,
+        subscribersCount: subs,
+        subscriptionsCount: subs,
         likesCount: channel.likes?.length || 0,
     };
 }
