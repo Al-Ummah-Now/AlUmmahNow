@@ -28,6 +28,7 @@ import {
   type PasskeyClaims,
 } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
+import { apiErrorBody } from '@al-ummah/shared-types';
 
 interface PasskeyEnv {
   Issuer?: string;
@@ -78,22 +79,15 @@ export function setupUrlFor(env: PasskeyEnv | undefined): string | undefined {
 /** The 403 body admin-web and the native admin apps turn into the "Passkey needed" page. */
 export function passkeyRequiredBody(env: PasskeyEnv | undefined, extra: { reason?: 'deadline' | 'step_up'; deadline?: number } = {}) {
   const setup_url = setupUrlFor(env);
-  return {
-    success: false,
+  return apiErrorBody(PASSKEY_REQUIRED_ERROR, {
     error: PASSKEY_REQUIRED_ERROR,
-    code: PASSKEY_REQUIRED_ERROR,
     ...(setup_url ? { setup_url } : {}),
     ...(extra.reason ? { reason: extra.reason } : {}),
     ...(extra.deadline !== undefined ? { deadline: extra.deadline } : {}),
-  };
+  });
 }
 
-export const stepUpRequiredBody = () => ({
-  success: false,
-  error: STEP_UP_REQUIRED_ERROR,
-  code: STEP_UP_REQUIRED_ERROR,
-  max_age: STEP_UP_MAX_AGE_S,
-});
+export const stepUpRequiredBody = () => apiErrorBody(STEP_UP_REQUIRED_ERROR, { error: STEP_UP_REQUIRED_ERROR, max_age: STEP_UP_MAX_AGE_S });
 
 /** The staff rule on every staff request. */
 export async function passkeyMiddleware(c: Context, next: Next) {

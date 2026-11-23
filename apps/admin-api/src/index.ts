@@ -68,6 +68,7 @@ import { purgeE2eReports } from './lib/report-stats';
 import { errorEnvelope } from './middleware/error-envelope';
 import featuresRouter from './routers/features.router';
 import { applyFeatureGates } from './middleware/require-feature';
+import { apiError } from './lib/api-error';
 
 // ==========================================
 // APP SETUP
@@ -81,7 +82,7 @@ app.onError((err, c) => {
   logger.error('Unhandled error', { error: err, method: c.req.method, path: c.req.path, ray: c.req.header('cf-ray') || undefined });
   markErrorLogged(c);
   const reference = reportAdminApiError(c as never, err, 500);
-  return c.json({ success: false, error: 'Internal server error', reference }, 500, reference ? { 'X-Error-Ref': reference } : {});
+  return apiError(c, 500, 'server_error', { error: 'Internal server error', reference }, reference ? { 'X-Error-Ref': reference } : {});
 });
 
 // Error answers carry the shared envelope (outermost: sees X-Error-Ref and onError's answers)

@@ -71,6 +71,7 @@
     "check:theme-colors": "node --experimental-strip-types --no-warnings packages/fanous-tokens/src/color-lint-cli.ts",
     "test:tokens": "node --experimental-strip-types --no-warnings --test packages/fanous-tokens/test/*.test.ts",
     "check:locale-format": "node --experimental-strip-types --no-warnings scripts/ci/check-locale-format.ts",
+    "check:error-bodies": "node --experimental-strip-types --no-warnings scripts/ci/check-error-bodies.ts",
     "check:config": "node --experimental-strip-types --no-warnings scripts/release/check-wrangler-config.ts",
     "check:site-theme": "node --experimental-strip-types --no-warnings scripts/release/check-site-theme.ts",
     "check:migrations": "node --experimental-strip-types --no-warnings scripts/release/migration-guard.ts",
