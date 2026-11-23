@@ -107,6 +107,17 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   // Creator support admin (wiki AUN-MEMBERS §9.6): finance list, payouts, settings
   support_not_finance: { action: 'none', en: 'Only people on the organization’s finance list can do this.', ar: 'لا يقوم بهذا إلا من هم في قائمة المالية في المؤسسة.' },
   support_tech_staff: { action: 'none', en: 'Tech staff can’t be on the finance list or hold money permissions.', ar: 'لا يمكن أن يكون فريق التقنية في قائمة المالية أو أن يملك صلاحيات الأموال.' },
+  // Approval workflows (wiki AUN-WORKFLOWS §8; same text as WORKFLOW_ERROR_MESSAGES)
+  change_pending: { action: 'none', en: 'A change to this is already waiting for approval.', ar: 'هناك تغيير على هذا ينتظر الموافقة بالفعل.' },
+  approval_not_allowed: { action: 'none', en: 'You can’t approve or reject this request.', ar: 'لا يمكنك الموافقة على هذا الطلب أو رفضه.' },
+  propose_not_allowed: { action: 'none', en: 'You can’t propose this change.', ar: 'لا يمكنك اقتراح هذا التغيير.' },
+  request_closed: { action: 'none', en: 'This request is already closed.', ar: 'هذا الطلب مُغلق بالفعل.' },
+  request_stale: { action: 'none', en: 'This changed since the request was made. Propose it again with the current values.', ar: 'تغيّر هذا منذ تقديم الطلب. اقترحه مرة أخرى بالقيم الحالية.' },
+  version_conflict: { action: 'retry', en: 'Someone else acted on this request a moment ago. It has been refreshed.', ar: 'تصرّف شخص آخر في هذا الطلب قبل لحظات. جرى تحديثه.' },
+  rule_below_floor: { action: 'none', en: 'This rule can’t be set lower than its minimum.', ar: 'لا يمكن ضبط هذه القاعدة أقل من حدّها الأدنى.' },
+  rule_invalid: { action: 'none', en: 'Check the rule’s values.', ar: 'راجِع قيم القاعدة.' },
+  effective_date_not_allowed: { action: 'none', en: 'That date isn’t allowed for this change.', ar: 'هذا التاريخ غير مسموح به لهذا التغيير.' },
+  nobody_can_approve: { action: 'none', en: 'Nobody can approve this yet.', ar: 'لا أحد يستطيع الموافقة على هذا بعد.' },
   support_same_person: { action: 'none', en: 'A second person has to do this.', ar: 'يجب أن يقوم بهذا شخص ثانٍ.' },
   support_not_clean: { action: 'none', en: 'The last reconciliation has a gap or hasn’t run, so payouts are stopped.', ar: 'في آخر مطابقة فرق أو لم تُجرَ بعد، لذا توقفت التحويلات.' },
   support_held: { action: 'none', en: 'All payouts are on hold.', ar: 'جميع التحويلات موقوفة.' },

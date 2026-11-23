@@ -56,6 +56,8 @@ import trashRouter from './routers/trash.router';
 import csamRouter from './routers/csam.router';
 import billingRouter from './routers/billing.router';
 import supportRouter from './routers/support.router';
+import workflowsRouter, { workflowCtx } from './routers/workflows.router';
+import { runDueWorkflows } from './lib/workflows/engine';
 import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from './lib/csam';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
@@ -331,6 +333,7 @@ app.route('/api/csam', csamRouter as never);
 app.route('/api/billing', billingRouter as never);
 // Creator support (wiki AUN-MEMBERS): finance list, decisions, payout batches, countries; money actions only for the finance list
 app.route('/api/support', supportRouter as never);
+app.route('/api/workflows', workflowsRouter as never);
 
 // ==========================================
 // HEALTH CHECK
@@ -372,6 +375,14 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
     return;
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
+  // Approval workflows (wiki AUN-WORKFLOWS §5): expire pending requests, apply scheduled ones (every 5 minutes)
+  if (env.SEARCH_DB) {
+    ctx.waitUntil(
+      runDueWorkflows(workflowCtx(env as never))
+        .then((r) => { if (r.expired || r.applied || r.failed) logger.info('[Workflows] Due requests', r); })
+        .catch((error) => logger.error('[Workflows] Due requests failed', { error: String(error) })),
+    );
+  }
   if (isHourlyTick(controller.scheduledTime)) {
     ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
     ctx.waitUntil(
