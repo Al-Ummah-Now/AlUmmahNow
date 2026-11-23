@@ -5,7 +5,8 @@
  *
  * This module is pure: the action-type registry, the rule format with its floors (rules the admin page
  * can't lower, §4.3), who may approve (§4.1), the request state machine (§5), the diff field format
- * (§6), and the error codes with server-written English and Arabic messages (§8). The engine lives in
+ * (§6), and the error codes with server-written English and Arabic messages (§8). An approved change takes
+ * effect at approval: there are no scheduled effective dates (owner, WF-D6). The engine lives in
  * admin-api (lib/workflows); the tables in the search D1.
  */
 import type { SupportPermission } from './support';
@@ -79,7 +80,6 @@ export interface WorkflowRuleConfig {
   stepUp: WorkflowStepUp;
   /** Hours a pending request stays open (1 hour – 30 days). */
   expiryHours: number;
-  effectiveDate: { allowed: boolean; maxDaysAhead: number };
   notify: { email: boolean; extra: WorkflowApproverSet[] };
 }
 
@@ -108,7 +108,6 @@ const rule = (over: Partial<WorkflowRuleConfig> & Pick<WorkflowRuleConfig, 'appr
   exclusions: { subject: true, techStaff: false, owner: false, oneStepPerPerson: true },
   stepUp: 'approve',
   expiryHours: 7 * DAY,
-  effectiveDate: { allowed: false, maxDaysAhead: 0 },
   notify: { email: true, extra: [] },
   ...over,
 });
@@ -136,7 +135,7 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
     label: { en: 'Change a creator-support fee', ar: 'تغيير رسم من رسوم دعم صنّاع المحتوى' },
     scoped: false,
     floor: MONEY_FLOOR(1),
-    defaultRule: moneyRule(1, 'support:providers', { effectiveDate: { allowed: true, maxDaysAhead: 90 } }),
+    defaultRule: moneyRule(1, 'support:providers'),
   }),
   'support.payoutBatch.approve': def({
     type: 'support.payoutBatch.approve',
@@ -180,7 +179,7 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
     label: { en: 'Change creator-support settings', ar: 'تغيير إعدادات دعم صنّاع المحتوى' },
     scoped: false,
     floor: MONEY_FLOOR(0),
-    defaultRule: moneyRule(1, 'support:providers', { effectiveDate: { allowed: true, maxDaysAhead: 90 } }),
+    defaultRule: moneyRule(1, 'support:providers'),
   }),
   'support.emergencyStop.lift': def({
     type: 'support.emergencyStop.lift',
@@ -291,7 +290,6 @@ export const WORKFLOW_LIMITS = Object.freeze({
   maxApprovals: 3,
   minExpiryHours: 1,
   maxExpiryHours: 30 * DAY,
-  maxEffectiveDaysAhead: 90,
   maxNamedPeople: 20,
   maxUserIdLength: 100,
   maxReasonLength: 1000,
@@ -308,7 +306,6 @@ export type WorkflowRuleProblem =
   | 'approvers_empty'
   | 'approvers_invalid'
   | 'expiry_out_of_range'
-  | 'effective_out_of_range'
   | 'below_floor_approvals'
   | 'below_floor_step_up'
   | 'below_floor_money_approvers'
@@ -345,9 +342,8 @@ export function validateWorkflowRule(type: WorkflowActionType, input: unknown, o
   if (!action || !isObj(input)) return { ok: false, problems: ['invalid_shape'] };
   const problems = new Set<WorkflowRuleProblem>();
   const ex = isObj(input.exclusions) ? input.exclusions : null;
-  const eff = isObj(input.effectiveDate) ? input.effectiveDate : null;
   const notify = isObj(input.notify) ? input.notify : null;
-  if (!ex || !eff || !notify || !Array.isArray(input.approvers) || typeof input.stepUp !== 'string') return { ok: false, problems: ['invalid_shape'] };
+  if (!ex || !notify || !Array.isArray(input.approvers) || typeof input.stepUp !== 'string') return { ok: false, problems: ['invalid_shape'] };
 
   const approvalsNeeded = input.approvalsNeeded;
   if (!isInt(approvalsNeeded) || approvalsNeeded < 0 || approvalsNeeded > WORKFLOW_LIMITS.maxApprovals) problems.add('approvals_out_of_range');
@@ -361,7 +357,6 @@ export function validateWorkflowRule(type: WorkflowActionType, input: unknown, o
   if (!(WORKFLOW_STEP_UP as readonly string[]).includes(input.stepUp)) problems.add('invalid_shape');
   const expiryHours = input.expiryHours;
   if (!isInt(expiryHours) || expiryHours < WORKFLOW_LIMITS.minExpiryHours || expiryHours > WORKFLOW_LIMITS.maxExpiryHours) problems.add('expiry_out_of_range');
-  if (typeof eff.allowed !== 'boolean' || !isInt(eff.maxDaysAhead) || eff.maxDaysAhead < 0 || eff.maxDaysAhead > WORKFLOW_LIMITS.maxEffectiveDaysAhead) problems.add('effective_out_of_range');
   for (const k of ['subject', 'techStaff', 'owner', 'oneStepPerPerson'] as const) if (typeof ex[k] !== 'boolean') problems.add('invalid_shape');
   if (typeof notify.email !== 'boolean') problems.add('invalid_shape');
   if (problems.size) return { ok: false, problems: [...problems] };
@@ -372,7 +367,6 @@ export function validateWorkflowRule(type: WorkflowActionType, input: unknown, o
     exclusions: { subject: ex.subject as boolean, techStaff: ex.techStaff as boolean, owner: ex.owner as boolean, oneStepPerPerson: ex.oneStepPerPerson as boolean },
     stepUp: input.stepUp as WorkflowStepUp,
     expiryHours: expiryHours as number,
-    effectiveDate: { allowed: eff.allowed as boolean, maxDaysAhead: eff.maxDaysAhead as number },
     notify: { email: notify.email as boolean, extra: extra as WorkflowApproverSet[] },
   };
   const floorProblems = checkWorkflowFloor(workflowFloorFor(type, opts.scope ?? ''), candidate, opts.minApprovals);
@@ -463,18 +457,17 @@ export function workflowProposeBlocks(floor: WorkflowFloor, actor: WorkflowActor
 // Requests: states and steps (§5)
 // ---------------------------------------------------------------------------------------------------
 
-export const WORKFLOW_STATUSES = ['pending', 'approved', 'scheduled', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale'] as const;
+export const WORKFLOW_STATUSES = ['pending', 'approved', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale'] as const;
 export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
 
 /** A request in one of these holds the target's lock (one open request per target). */
-export const WORKFLOW_OPEN_STATUSES: readonly WorkflowStatus[] = Object.freeze(['pending', 'approved', 'scheduled', 'applying', 'failed']);
+export const WORKFLOW_OPEN_STATUSES: readonly WorkflowStatus[] = Object.freeze(['pending', 'approved', 'applying', 'failed']);
 export const WORKFLOW_CLOSED_STATUSES: readonly WorkflowStatus[] = Object.freeze(['applied', 'rejected', 'withdrawn', 'expired', 'stale']);
 export const isWorkflowOpen = (s: WorkflowStatus) => WORKFLOW_OPEN_STATUSES.includes(s);
 
 const TRANSITIONS: Readonly<Record<WorkflowStatus, readonly WorkflowStatus[]>> = Object.freeze({
-  pending: ['approved', 'scheduled', 'applying', 'rejected', 'withdrawn', 'expired', 'stale'],
-  approved: ['scheduled', 'applying', 'stale'],
-  scheduled: ['applying', 'withdrawn', 'stale'],
+  pending: ['approved', 'applying', 'rejected', 'withdrawn', 'expired', 'stale'],
+  approved: ['applying', 'stale'],
   applying: ['applied', 'failed', 'stale'],
   failed: ['applying', 'withdrawn', 'stale'],
   applied: [],
@@ -492,18 +485,6 @@ export const WORKFLOW_DECIDING_STEPS: readonly WorkflowStepKind[] = Object.freez
 
 /** Hours → expiry instant. */
 export const workflowExpiresAt = (proposedAt: Date, rule: WorkflowRuleConfig) => new Date(proposedAt.getTime() + rule.expiryHours * 3_600_000);
-
-/** Checks a proposed effective date against the rule: null when fine, else the error code. */
-export function workflowEffectiveDateProblem(rule: WorkflowRuleConfig, effectiveAt: Date | null, now: Date): null | 'effective_date_not_allowed' {
-  if (!effectiveAt) return null;
-  if (!rule.effectiveDate.allowed) return 'effective_date_not_allowed';
-  if (Number.isNaN(effectiveAt.getTime())) return 'effective_date_not_allowed';
-  const max = now.getTime() + rule.effectiveDate.maxDaysAhead * 86_400_000;
-  return effectiveAt.getTime() > max ? 'effective_date_not_allowed' : null;
-}
-
-/** WF-D6: approved after the chosen date → it applies at approval time. */
-export const workflowApplyAt = (effectiveAt: Date | null, approvedAt: Date) => (effectiveAt && effectiveAt.getTime() > approvedAt.getTime() ? effectiveAt : approvedAt);
 
 /** The lock key while a request is open. */
 export const workflowOpenKey = (type: WorkflowActionType, targetKind: string, targetId: string) => `${type}:${targetKind}:${targetId}`;
@@ -548,7 +529,6 @@ export interface WorkflowRequestView {
   reason: string;
   proposedBy: string;
   proposedAt: string;
-  effectiveAt: string | null;
   expiresAt: string;
   status: WorkflowStatus;
   approvalsNeeded: number;
@@ -575,7 +555,6 @@ export const WORKFLOW_ERROR_CODES = [
   'version_conflict',
   'rule_below_floor',
   'rule_invalid',
-  'effective_date_not_allowed',
   'nobody_can_approve',
 ] as const;
 export type WorkflowErrorCode = (typeof WORKFLOW_ERROR_CODES)[number];
@@ -589,7 +568,6 @@ export const WORKFLOW_ERROR_MESSAGES: Readonly<Record<WorkflowErrorCode, Workflo
   version_conflict: { en: 'Someone else acted on this request a moment ago. It has been refreshed.', ar: 'تصرّف شخص آخر في هذا الطلب قبل لحظات. جرى تحديثه.' },
   rule_below_floor: { en: 'This rule can’t be set lower than its minimum.', ar: 'لا يمكن ضبط هذه القاعدة أقل من حدّها الأدنى.' },
   rule_invalid: { en: 'Check the rule’s values.', ar: 'راجِع قيم القاعدة.' },
-  effective_date_not_allowed: { en: 'That date isn’t allowed for this change.', ar: 'هذا التاريخ غير مسموح به لهذا التغيير.' },
   nobody_can_approve: { en: 'Nobody can approve this yet.', ar: 'لا أحد يستطيع الموافقة على هذا بعد.' },
 });
 
@@ -606,7 +584,6 @@ export const WORKFLOW_BLOCK_MESSAGES: Readonly<Record<WorkflowApprovalBlock | 'e
 export const WORKFLOW_STATUS_LABELS: Readonly<Record<WorkflowStatus, WorkflowLocalized>> = Object.freeze({
   pending: { en: 'Waiting for approval', ar: 'بانتظار الموافقة' },
   approved: { en: 'Approved', ar: 'تمت الموافقة' },
-  scheduled: { en: 'Scheduled', ar: 'مُجدوَل' },
   applying: { en: 'Taking effect', ar: 'قيد التنفيذ' },
   applied: { en: 'In effect', ar: 'نافذ' },
   failed: { en: 'Failed', ar: 'تعذّر التنفيذ' },
