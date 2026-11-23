@@ -47,6 +47,11 @@ function Icon({ item }: { item: NotificationItem }) {
     case 'channelMovedOutByTeam':
     case 'channelMovedOutByTeamWithReason':
     case 'channelHandleChangedByTeam':
+    case 'channelMoveOffered':
+    case 'channelMoveAccepted':
+    case 'channelMoveDeclined':
+    case 'channelMoveCancelled':
+    case 'channelMoveStopped':
       return <Users className={cls} aria-hidden="true" />;
     case 'reviewApproved':
       return <Video className={cls} aria-hidden="true" />;

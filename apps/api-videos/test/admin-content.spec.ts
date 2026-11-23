@@ -41,6 +41,7 @@ import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 import { AuthDb } from './auth-db';
+import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, stopMoveOffer } from '../src/lib/channelMoves';
 import { createSqliteD1 } from './sqlite-d1';
 import { scheduleKey } from '../src/lib/videoSideRecords';
 
@@ -1265,6 +1266,70 @@ describe('channel actions', () => {
 		assert.equal(job.status, 'succeeded');
 		const out = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.recipientUserId === OWNER && String(p?.notificationKey).startsWith('channelMovedOut'));
 		assert.deepEqual([out?.notificationKey, out?.params?.reason], ['channelMovedOutByTeamWithReason', 'Requested by the scholar']);
+	});
+
+	it('an owner moves a channel only to one of its admins, who accepts; the move runs at once (CC-6)', async () => {
+		const { raw, env, jobs, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { displayName: 'Amina' }), usr_viewer: profile('usr_viewer') },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }, { userId: 'usr_viewer', role: 'editor', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const fresh = Math.floor(Date.now() / 1000);
+		const refused = async (p: Promise<unknown>, code: string) => {
+			await assert.rejects(p, (e: unknown) => e instanceof MoveError && e.code === code, code);
+		};
+		// Only the owner, only to an admin, with a recent sign-in and the handle typed
+		assert.deepEqual((await moveReceivers(env as never, 'ch1', OWNER, 'ami')).map((r) => r.userId), [OTHER]);
+		assert.deepEqual(await moveReceivers(env as never, 'ch1', OWNER, 'usr_viewer'), [], 'an editor is not offered');
+		await refused(moveReceivers(env as never, 'ch1', OTHER, ''), 'not_owner');
+		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: 'usr_viewer', typed: '@ch1', authTime: fresh }), 'receiver_not_channel_admin');
+		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh - 3600 }), 'reauth_required');
+		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@wrong', authTime: fresh }), 'confirm_mismatch');
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@CH1', authTime: fresh });
+		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: 'ch1', authTime: fresh }), 'offer_open');
+		const offered = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.notificationKey === 'channelMoveOffered');
+		assert.deepEqual([offered?.recipientUserId, offered?.params?.channel], [OTHER, 'Channel ch1']);
+		assert.equal((await myMoveOffers(env as never, OTHER)).received.length, 1);
+		// Someone else can't accept it; the admin does, and the move runs at once
+		await refused(acceptMoveOffer(env as never, offer.id, 'usr_viewer'), 'offer_not_found');
+		const { jobId } = await acceptMoveOffer(env as never, offer.id, OTHER);
+		await jobs.drain(env);
+		const moved = JSON.parse(raw.channels.store.get('ch1')!);
+		assert.equal(moved.userId, OTHER);
+		assert.ok(!(moved.members ?? []).some((m: any) => m.userId === OWNER), 'the previous owner keeps no access (CC-D4)');
+		assert.ok(!(moved.members ?? []).some((m: any) => m.userId === OTHER), 'the new owner holds no member role');
+		const row = db.db.prepare('SELECT status, job_id FROM channel_move_offers WHERE id = ?').get(offer.id) as { status: string; job_id: string };
+		assert.deepEqual([row.status, row.job_id], ['moved', jobId]);
+		const accepted = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.notificationKey === 'channelMoveAccepted');
+		assert.deepEqual([accepted?.recipientUserId, accepted?.params?.member], [OWNER, 'Amina']);
+		// 30 days before the next move by an owner
+		moved.members = [{ userId: OWNER, role: 'admin', addedBy: OTHER, addedAt: '2026' }];
+		raw.channels.store.set('ch1', JSON.stringify(moved));
+		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OTHER, toUserId: OWNER, typed: '@ch1', authTime: fresh }), 'moved_recently');
+	});
+
+	it('offers can be declined, withdrawn or stopped by the team, and a paid channel is refused until admin approval exists (CC-6)', async () => {
+		const { raw, env, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const fresh = Math.floor(Date.now() / 1000);
+		const make = () => createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh });
+		const keys = () => raw.queue.messages.map((m: any) => m.payload?.notificationKey).filter(Boolean);
+		await declineMoveOffer(env as never, (await make()).id, OTHER);
+		assert.ok(keys().includes('channelMoveDeclined'));
+		await cancelMoveOffer(env as never, (await make()).id, OWNER);
+		assert.ok(keys().includes('channelMoveCancelled'));
+		const stopped = await stopMoveOffer(env as never, (await make()).id);
+		assert.equal(stopped.status, 'stopped');
+		assert.equal(keys().filter((k: string) => k === 'channelMoveStopped').length, 2, 'both sides are told');
+		// An expired offer can't be accepted
+		const old = await make();
+		db.db.prepare(`UPDATE channel_move_offers SET expires_at = '2020-01-01T00:00:00.000Z' WHERE id = ?`).run(old.id);
+		await assert.rejects(acceptMoveOffer(env as never, old.id, OTHER), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found');
+		// A channel that accepts payments: refused until moves can wait for an admin's approval
+		db.db.prepare(`INSERT INTO support_pledges (id, supporter_user_id, channel_id, collector, mode, amount, currency, status, started_at, created_at, updated_at) VALUES ('pl1', 'usr_fan', 'ch1', 'paygood', 'test', 500, 'USD', 'active', '2026', '2026', '2026')`).run();
+		await assert.rejects(make(), (e: unknown) => e instanceof MoveError && e.code === 'channel_has_support');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {

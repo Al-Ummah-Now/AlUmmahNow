@@ -89,6 +89,16 @@ export const NOTIFICATION_KEYS = [
   'channelMovedOutByTeamWithReason',
   /** The team changed the channel's @handle (params: channel, handle); always on */
   'channelHandleChangedByTeam',
+  /** Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5). To a channel admin: the owner offers them the channel. params: channel, owner; always on */
+  'channelMoveOffered',
+  /** Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5). To the owner: their admin accepted and the channel moved. params: channel, member; always on */
+  'channelMoveAccepted',
+  /** Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5). To the owner: their admin declined. params: channel, member; always on */
+  'channelMoveDeclined',
+  /** Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5). To the admin: the owner withdrew the offer, or it expired. params: channel; always on */
+  'channelMoveCancelled',
+  /** Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5). To both: the team stopped the offer. params: channel; always on */
+  'channelMoveStopped',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -121,6 +131,11 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   channelMovedOutByTeam: 'account',
   channelMovedOutByTeamWithReason: 'account',
   channelHandleChangedByTeam: 'account',
+  channelMoveOffered: 'account',
+  channelMoveAccepted: 'account',
+  channelMoveDeclined: 'account',
+  channelMoveCancelled: 'account',
+  channelMoveStopped: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -154,6 +169,11 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   channelMovedOutByTeam: 'system',
   channelMovedOutByTeamWithReason: 'system',
   channelHandleChangedByTeam: 'system',
+  channelMoveOffered: 'system',
+  channelMoveAccepted: 'system',
+  channelMoveDeclined: 'system',
+  channelMoveCancelled: 'system',
+  channelMoveStopped: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

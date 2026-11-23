@@ -22,6 +22,13 @@ describe('channel move notifications', () => {
     expect(isCenterKey('channelHandleChangedByTeam')).toBe(true);
   });
 
+  it('an owner’s offer reads with their name, in English and Arabic (CC-6)', () => {
+    expect(isCenterKey('channelMoveOffered')).toBe(true);
+    expect(resolveNotificationText(event('channelMoveOffered', { channel: 'Corner', owner: 'Amina' }), EN_TRANSLATIONS).message).toBe('Amina wants to hand Corner over to you. Open it to accept or decline.');
+    expect(resolveNotificationText(event('channelMoveOffered', { channel: 'Corner', owner: 'Amina' }), AR_TRANSLATIONS, 'ar').message).toBe('يريد Amina أن يسلّمك القناة Corner. افتحها لتقبل أو ترفض.');
+    expect(changesChannelAccess('channelMoveAccepted')).toBe(true);
+  });
+
   it('reads in English', () => {
     expect(resolveNotificationText(event('channelMovedIn', { channel: 'Corner' }), EN_TRANSLATIONS).message).toBe('You are now the owner of Corner.');
     expect(resolveNotificationText(event('channelMovedOutByTeam', { channel: 'Corner' }), EN_TRANSLATIONS).message).toBe('The Al Ummah Now team moved your channel Corner to another account.');

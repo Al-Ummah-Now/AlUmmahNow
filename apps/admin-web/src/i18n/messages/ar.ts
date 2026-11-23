@@ -6068,6 +6068,7 @@ const ar: Messages = {
       'handle-take': 'استُعيد معرّف رسمي',
       'handle-release': 'حُرّر المعرّف',
       'handle-taken-away': 'أُخذ معرّف رسمي لقناة أخرى',
+      'move-offer-stop': 'أُوقف عرض القناة',
       transferred: 'نُقلت الملكية',
       suspend: 'عُلِّق',
       suspended: 'عُلِّق',

@@ -31,6 +31,11 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   channelMovedOutByTeam: { title: 'channelMovedOutByTeamTitle', message: 'channelMovedOutByTeamMessage' },
   channelMovedOutByTeamWithReason: { title: 'channelMovedOutByTeamTitle', message: 'channelMovedOutByTeamWithReasonMessage' },
   channelHandleChangedByTeam: { title: 'channelHandleChangedByTeamTitle', message: 'channelHandleChangedByTeamMessage' },
+  channelMoveOffered: { title: 'channelMoveOfferedTitle', message: 'channelMoveOfferedMessage' },
+  channelMoveAccepted: { title: 'channelMoveAcceptedTitle', message: 'channelMoveAcceptedMessage' },
+  channelMoveDeclined: { title: 'channelMoveDeclinedTitle', message: 'channelMoveDeclinedMessage' },
+  channelMoveCancelled: { title: 'channelMoveCancelledTitle', message: 'channelMoveCancelledMessage' },
+  channelMoveStopped: { title: 'channelMoveStoppedTitle', message: 'channelMoveStoppedMessage' },
   youtubeImportFinished: { title: 'youtubeImportFinishedTitle', message: 'youtubeImportFinishedMessage' },
 };
 

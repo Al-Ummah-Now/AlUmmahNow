@@ -92,6 +92,8 @@ export const USER_FEATURE_KEYS = [
   'quietHours',
   /** Help has the parents' guide (switch parentsGuide, wiki E20) */
   'parentsGuide',
+  /** The caller may hand their own channel to one of its channel admins (switch channelMove; any tier, wiki AUN-CHANNEL-CLAIM CC-D2) */
+  'channelMove',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];

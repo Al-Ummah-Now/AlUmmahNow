@@ -6,7 +6,7 @@
  */
 export const CHANNEL_ACCESS_CHANGED_EVENT = 'aun:channel-access-changed';
 
-const KEYS = new Set<string>(['channelMovedIn', 'channelMovedOutByTeam', 'channelMovedOutByTeamWithReason', 'channelMemberRemoved', 'channelRoleChanged']);
+const KEYS = new Set<string>(['channelMovedIn', 'channelMovedOutByTeam', 'channelMovedOutByTeamWithReason', 'channelMoveAccepted', 'channelMemberRemoved', 'channelRoleChanged']);
 
 export function changesChannelAccess(key: unknown): boolean {
   return typeof key === 'string' && KEYS.has(key);

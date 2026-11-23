@@ -378,6 +378,8 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
 	if (!userId || !db) return features;
+	// Moving one's own channel is open to every tier once its switch is on (wiki AUN-CHANNEL-CLAIM CC-D2)
+	features.channelMove = true;
 
 	let scope: ChannelScope | null = null;
 	if (channelId) {
