@@ -231,4 +231,56 @@ describe('review fixes (cross-provider review of #1774, #1764)', () => {
 		const q = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=30`);
 		assert.equal(q.body.code, 'support_amount_too_small');
 	});
+
+	it('a vendor event in the same millisecond as the stop never brings the pledge back', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', amount: 1000, consent: true });
+		await fan('POST', new URL(r.body.result.url).pathname, undefined, { action: 'pay' });
+		await t.drain();
+		const pledge = (await fan('GET', '/api/me/support')).body.result.pledges[0];
+		const { stopMyPledge } = await import('../src/lib/support/checkout');
+		const now = new Date();
+		await stopMyPledge(t.env, FAN, pledge.id, (mode) => vendorContext(t.env, mode, () => now), now);
+		const ref = (await t.db.prepare('SELECT collector_pledge_ref FROM support_pledges').first<{ collector_pledge_ref: string }>())!.collector_pledge_ref;
+		const { applyCollectorEvents } = await import('../src/lib/support/events');
+		const { readSupportConfig } = await import('../src/lib/support/config');
+		const policy = (await readSupportConfig(t.db as never)).policy;
+		for (const at of [now, new Date(now.getTime() + 60_000)]) {
+			await applyCollectorEvents({ db: t.db as never, collector: 'test', mode: 'test', policy, now }, [{ type: 'pledge.updated', pledgeRef: ref, status: 'active', currentPeriodEnd: null, occurredAt: at.toISOString() }]);
+			assert.equal((await t.db.prepare('SELECT status FROM support_pledges').first<{ status: string }>())!.status, 'canceled', at.toISOString());
+		}
+	});
+
+	it('stopping uses the pledge’s own mode, not today’s setting (#1774-3)', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', amount: 1000, consent: true });
+		await fan('POST', new URL(r.body.result.url).pathname, undefined, { action: 'pay' });
+		await t.drain();
+		const pledge = (await fan('GET', '/api/me/support')).body.result.pledges[0];
+		await t.db.prepare("UPDATE support_config SET mode = 'live' WHERE id = 'default'").run();
+		const modes: string[] = [];
+		const { stopMyPledge } = await import('../src/lib/support/checkout');
+		const now = new Date();
+		assert.deepEqual(await stopMyPledge(t.env, FAN, pledge.id, (mode) => (modes.push(mode), vendorContext(t.env, mode, () => now)), now), { status: 'canceled' });
+		assert.deepEqual(modes, ['test']);
+	});
+
+	it('with the human check enforced, someone who may not support gets feature_off before any captcha refusal (#1774-4)', async () => {
+		const t = await setup();
+		Object.assign(t.env, { TURNSTILE_MODE: 'enforce', TURNSTILE_SITE_KEY: 'site', TURNSTILE_SECRET: { get: async () => 'secret' } });
+		assert.equal((await t.as(OWNER)('POST', `/api/channels/${CH}/support/checkout`, GIFT)).body.code, 'feature_off', 'own channel, no token');
+		const fan = await t.as(FAN)('POST', `/api/channels/${CH}/support/checkout`, GIFT);
+		assert.equal(fan.status, 403, 'an eligible supporter without a token meets the check');
+		assert.equal(fan.body.code, 'human_check_failed');
+	});
+
+	it('the chosen rails’ payee wins over a newer payee row on another rail (#1764-2)', async () => {
+		const t = await setup();
+		await t.db.prepare("INSERT INTO support_payees (id, channel_id, owner_user_id, rail, mode, rail_payee_ref, country, status, tax_form, sanctions_status, created_at, updated_at) VALUES ('pe_other', ?, ?, 'wise', 'test', 'wise_x', 'GB', 'pending', 'none', 'clear', '2099-01-01', '2099-01-01')").bind(CH, OWNER).run();
+		assert.equal((await t.as(FAN)('GET', `/api/channels/${CH}/support`)).status, 200, 'the active payee on the primary rail counts');
+		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.primaryRail', 'wise', '$.fallbackRail', 'test')").run();
+		assert.equal((await t.as(FAN)('GET', `/api/channels/${CH}/support`)).body.code, 'feature_off', 'now the pending Wise payee is the one that counts');
+	});
 });

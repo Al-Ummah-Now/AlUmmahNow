@@ -183,9 +183,11 @@ export async function applyCollectorEvents(c: ApplyContext, events: readonly Col
 				break;
 			}
 			case 'pledge.updated': {
+				// A pledge we stopped (supporter, erasure, admin: cancel_reason set) never comes back from a vendor
+				// event, whatever its time says; a tie with the stop's own time can't resurrect it either
 				await c.db
-					.prepare('UPDATE support_pledges SET status = ?, current_period_end = COALESCE(?, current_period_end), last_event_at = ?, canceled_at = CASE WHEN ? = \'canceled\' THEN COALESCE(canceled_at, ?) ELSE canceled_at END, updated_at = ? WHERE collector = ? AND mode = ? AND collector_pledge_ref = ? AND (last_event_at IS NULL OR last_event_at <= ?)')
-					.bind(e.status, e.currentPeriodEnd, e.occurredAt, e.status, e.occurredAt, at, c.collector, c.mode, e.pledgeRef, e.occurredAt)
+					.prepare('UPDATE support_pledges SET status = ?, current_period_end = COALESCE(?, current_period_end), last_event_at = ?, canceled_at = CASE WHEN ? = \'canceled\' THEN COALESCE(canceled_at, ?) ELSE canceled_at END, updated_at = ? WHERE collector = ? AND mode = ? AND collector_pledge_ref = ? AND (last_event_at IS NULL OR last_event_at <= ?) AND NOT (cancel_reason IS NOT NULL AND ? IN (\'active\', \'past_due\'))')
+					.bind(e.status, e.currentPeriodEnd, e.occurredAt, e.status, e.occurredAt, at, c.collector, c.mode, e.pledgeRef, e.occurredAt, e.status)
 					.run();
 				out.userIds.push(...(await pledgeSupporter(c, e.pledgeRef)));
 				break;
