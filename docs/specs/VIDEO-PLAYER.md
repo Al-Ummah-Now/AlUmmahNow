@@ -248,22 +248,25 @@ gear. Keys inside the panel never reach the player's shortcuts.
 ### In-player links
 
 A small, data-driven slot for links over the video (`components/VideoPlayer/PlayerLinkOverlay.tsx`):
-each link is a label, a destination, an optional screen-reader name and a placement. The one placement
-today is `caption-end`: a compact link (12px text, 11px under a 420px-wide player, on the caption
-background) at the inline end of the caption band, one row under the captions. While it shows, the
-player has `vjs-fanous-caption-credit` and the captions move up a row, so the two never overlap; it
-follows the band as the controls show and hide (88px over the bar, 16px when they hide), so it never
-covers the control bar, the centre of the video or the big play button. Its hit area is the link text
-only (`pointer-events` are off around it), and a press on it never reaches the player (no play or
-pause, no seek gesture). Every link is an `<a href>`, in the tab order, with a visible focus ring; a
-link to another site opens in a new tab with `rel="noopener"` and says so in its accessible name. It is
-inside the player element, so it is there in fullscreen, the mini player and embeds, and it mirrors in
-RTL. Nothing shows on the end screen.
+each link is a label, a destination, an optional screen-reader name, language and direction, and a
+placement. The one placement today is `caption-end`: a compact link directly under the cue, at the
+cue's end side (the cue's direction, not the page's: right for English, left for Arabic), with the
+cue's colours (the viewer's Caption style included) and 70% of its text size, at least 11px (the
+player measures the cue box; wiki AUN-PLAYER-LINKS §6.2). While it shows, the player has
+`vjs-fanous-caption-credit` and the captions move up one credit row, so the two never overlap; it
+follows the caption band as the controls show and hide (88px over the bar, 16px when they hide), so
+it never covers the control bar, the centre of the video or the big play button. Its hit area is the
+link text only (`pointer-events` are off around it), and a press on it never reaches the player (no
+play or pause, no seek gesture). Every link is an `<a href>` in the tab order with a visible focus
+ring; a link to another site opens in a new tab with `rel="noopener"` and says so in its accessible
+name. A link whose moment has passed stays while it has focus or the pointer, until blur or pointer
+leave, so focus is never lost. It is inside the player element, so it is there in fullscreen, the mini
+player and embeds. Nothing shows on the end screen.
 
 First use: Quran Foundation's credit (QF 2026-11-23; docs/specs/TRANSCRIPTION-TRANSLATION.md §9.7).
 Served cues with QF text end with "Source: Quran Foundation" / «المصدر: مؤسسة القرآن»; the web player
-takes that line off the cue (`lib/video/quran-credit.ts`) and shows it as a `caption-end` link to
-https://quran.foundation/ while such a cue is on screen, and the captions menu lists the same link
+takes that line off the cue (`lib/video/quran-credit.ts`) and shows it, in the cue's language, as a
+`caption-end` link to https://quran.foundation/ while such a cue is on screen, and the captions menu lists the same link
 after Caption style and Download while the shown track has QF text. Creator links (cards, end-screen
 links) are meant to reuse this slot with more placements.
 

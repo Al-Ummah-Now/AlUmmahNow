@@ -220,8 +220,10 @@ export default function CustomVideoPlayer({
   useAudioTrackChoice(playerReady ? (playerRef.current as unknown as Parameters<typeof useAudioTrackChoice>[0]) : null, audioTracks, lang);
   // QF's short credit, linked, next to Quran captions while they show (QF 2026-11-23)
   const quranCredit = useQuranCaptionCredit(playerReady ? (playerRef.current as unknown as CreditPlayerLike) : null, playerReady);
-  const playerLinks: PlayerOverlayLink[] = quranCredit
-    ? [{ id: 'quran-foundation', label: quranCreditFor(lang), ariaLabel: lang === 'ar' ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, href: QURAN_FOUNDATION_URL, placement: 'caption-end', testId: 'player-quran-credit' }]
+  // In the cue's language and direction, not the page's (wiki AUN-PLAYER-LINKS §6.2)
+  const creditAr = quranCredit.language.split('-')[0] === 'ar';
+  const playerLinks: PlayerOverlayLink[] = quranCredit.showing
+    ? [{ id: 'quran-foundation', label: quranCreditFor(quranCredit.language), ariaLabel: creditAr ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, lang: creditAr ? 'ar' : 'en', dir: quranCredit.dir, href: QURAN_FOUNDATION_URL, placement: 'caption-end', testId: 'player-quran-credit' }]
     : [];
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
