@@ -368,6 +368,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		livePremieres: !channelId,
 		liveEvents: !channelId,
 		liveReminders: !kidsClient,
+		recitationTools: quranText,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -432,6 +433,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.captionsTranslate = translate && minutes;
 	features.inlineTranslate = inlineTranslateConfigured(env, settings);
 	features.audioTracks = !!env.MEDIA_ORIGINALS && !!env.TRANSCODE_QUEUE && roleMay(scope, 'video.edit') && (unlimited || (tier?.audioTracksPerVideo ?? 0) > 0);
+	features.recitationMetadata = (unlimited || tier?.recitationMetadata === true) && roleMay(scope, 'video.edit');
 	features.siteDomains = siteDomains;
 	features.socialAutopost = social && roleMay(scope, 'channel.edit');
 	features.youtubeImport = youtube;
@@ -482,7 +484,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 		viewerTitles: { ...raw.viewerTitles, enabled: true },
 	};
 	const db = env.SEARCH_DB;
-	const [yt, ytSecret, social, networks, categorize, requests, live, quran, saas] = await Promise.all([
+	const [yt, ytSecret, social, networks, categorize, requests, live, quran, quranText, saas] = await Promise.all([
 		settled(readYtSettings(env, { raw: true }), null),
 		settled(googleClientSecret(env).then((v) => !!v), false),
 		settled(readPlatformSettings(env as never, { raw: true }), null),
@@ -491,6 +493,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 		db ? settled(readRequestsAllowed(db, { raw: true }).then((r) => r.allowed), true) : Promise.resolve(true),
 		settled(liveConfigured(env), false),
 		settled(quranEditionsConfigured(env), false),
+		settled(quranTextAvailable(env), false),
 		settled(saasConfigured(env), false),
 	]);
 	return {
@@ -513,6 +516,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			inlineTranslate: inlineTranslateConfigured(env, on),
 			viewerTranslatedTitles: viewerTitlesConfigured(env, on),
 			quranEditions: quran,
+			recitationTools: quranText,
 			socialAutopost: !!social && !!networks && SOCIAL_NETWORKS.some((n) => networks[n].configured && social.networks[n].enabled),
 			aiCategorySuggest: env.AI_CATEGORIZE_ENABLED !== 'false' && !!env.queue,
 			siteDomains: saas,

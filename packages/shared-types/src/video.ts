@@ -9,6 +9,18 @@ import { VideoCategory } from './upload-defaults';
 import type { VideoFormat } from './video-format';
 import type { AudioPackageState, AudioTrack, AudioTrackView, DetectedAudioStream } from './audio-tracks';
 
+export interface VideoReciter {
+  name: string;
+  nameLocalized?: { en?: string; ar?: string };
+  riwayah?: string;
+}
+
+export interface VideoRecitationMetadata {
+  reciter: VideoReciter | null;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 // Re-export VideoCategory for convenience
 export { VideoCategory };
 
@@ -102,6 +114,9 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   subtitles?: SubtitleTrack[];
   hasSubtitles?: boolean; // Quick check flag
   subtitleLanguages?: string[]; // Quick lookup: ['en', 'ar', 'ur']
+
+  // Recitation metadata is human supplied; verse text stays in the Quran Foundation path.
+  recitation?: VideoRecitationMetadata;
 
   // Multiple audio tracks (wiki AUN-MULTI-AUDIO). Stored: every track and the package state.
   // Public views (VideoView) replace `audioTracks` with only the tracks viewers can hear (AudioTrackView).

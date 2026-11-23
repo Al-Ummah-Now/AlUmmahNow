@@ -49,6 +49,7 @@ import { VideoTranslatedMetadataGet } from '../endpoints/translate/translate';
 import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet, CaptionTranslateCreate } from '../endpoints/captions/captionJobs';
 import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../endpoints/video/renditions';
 import { CaptionDraftDelete, CaptionDraftDownload, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, OnDeviceTranscriptSubmit, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
+import { VideoRecitationGet, VideoRecitationMetadataPut } from '../endpoints/recitation/recitation';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -208,6 +209,10 @@ videoRouter.get('/:videoId/captions/minutes', CaptionMinutesGet);
 videoRouter.post('/:videoId/captions/translations', CaptionTranslateCreate);
 // Viewer-side translated title and description (AUN-CAPTIONS §5.9, O6: on, channel opt-out, admin pause)
 videoRouter.get('/:videoId/translated-metadata', VideoTranslatedMetadataGet);
+
+// Recitation references and human-supplied reciter metadata (E21.4a)
+videoRouter.get('/:videoId/recitation', VideoRecitationGet);
+videoRouter.put('/:videoId/recitation-metadata', VideoRecitationMetadataPut);
 
 // Audio tracks (wiki AUN-MULTI-AUDIO; owner or video.edit). The chunk upload is a raw route (endpoints/audio/upload.ts)
 videoRouter.get('/:videoId/audio-tracks', AudioTracksList);
