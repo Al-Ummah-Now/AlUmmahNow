@@ -153,6 +153,8 @@ export interface CreatorTier {
   offlineMaxVideos?: number | null;
   /** Days before an offline license expires without an online refresh (1..90) */
   offlineLicenseDays?: number;
+  /** Private video notes (wiki E21-D9) a holder may keep; null = no limit */
+  notesMax?: number | null;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -212,6 +214,7 @@ export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> =
   offlineDownloads: true,
   offlineMaxQuality: '480p',
   offlineMaxVideos: 25,
+  notesMax: 1000,
   offlineLicenseDays: 30,
 };
 
@@ -246,6 +249,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   offlineDownloads: true,
   offlineMaxQuality: '1080p',
   offlineMaxVideos: 100,
+  notesMax: 1000,
   offlineLicenseDays: 30,
 };
 
@@ -276,6 +280,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   offlineDownloads: true,
   offlineMaxQuality: '1080p',
   offlineMaxVideos: null,
+  notesMax: null,
   offlineLicenseDays: 30,
 };
 
@@ -291,6 +296,7 @@ export const CREATOR_TIER_BOUNDS = {
   liveMaxConcurrent: { min: 1, max: 100 },
   liveMaxStreamMinutes: { min: 10, max: 1440 },
   offlineMaxVideos: { min: 1, max: 1000 },
+  notesMax: { min: 1, max: 100_000 },
   offlineLicenseDays: { min: 1, max: 90 },
   sortOrder: { min: 0, max: 10_000 },
 } as const;

@@ -74,6 +74,7 @@ interface TierRow {
 	import_counts_limits?: number | null;
 	audio_tracks_per_video?: number | null;
 	recitation_metadata?: number | null;
+	notes_max?: number | null;
 	live?: number | null;
 	live_hours_month?: number | null;
 	live_max_concurrent?: number | null;
@@ -173,6 +174,8 @@ function toTier(row: TierRow): CreatorTier {
 		...liveCapabilityFields(row),
 		// Rows from before migration 0079 have no offline columns: the shipped tier's defaults
 		...offlineFields(row),
+		// Rows from before migration 0082 have no notes column: the shipped tier's limit, else 1000
+		notesMax: row.notes_max === undefined ? (shipped ? shipped.notesMax ?? null : 1000) : row.notes_max === null ? null : Number(row.notes_max),
 		updatedAt: row.updated_at ?? null,
 		updatedBy: row.updated_by ?? null,
 	};
@@ -459,6 +462,7 @@ export interface TierInput {
 	importCountsAgainstLimits?: unknown;
 	audioTracksPerVideo?: unknown;
 	recitationMetadata?: unknown;
+	notesMax?: unknown;
 	live?: unknown;
 	liveHoursMonth?: unknown;
 	liveMaxConcurrent?: unknown;
@@ -526,7 +530,7 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 		return {
 			id, name, ...text, unlimited, uploads: true, channels: true, requestable, hidden, sortOrder, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0,
 			importCountsAgainstLimits, audioTracksPerVideo: 0, recitationMetadata: true, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0,
-			offlineDownloads: true, offlineMaxQuality: '1080p', offlineMaxVideos: null, offlineLicenseDays,
+			offlineDownloads: true, offlineMaxQuality: '1080p', offlineMaxVideos: null, offlineLicenseDays, notesMax: null,
 		};
 	}
 	// A new tier allows uploads and channels unless the admin says otherwise (what a tier meant before the flags)
@@ -565,11 +569,13 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	}
 	const rawOfflineMax = input.offlineMaxVideos === undefined ? (current?.offlineMaxVideos === undefined ? 25 : current.offlineMaxVideos) : input.offlineMaxVideos;
 	const offlineMaxVideos = rawOfflineMax === null || rawOfflineMax === '' ? null : intIn(rawOfflineMax, 'offlineMaxVideos');
+	const rawNotesMax = input.notesMax === undefined ? (current?.notesMax === undefined ? 1000 : current.notesMax) : input.notesMax;
+	const notesMax = rawNotesMax === null || rawNotesMax === '' ? null : intIn(rawNotesMax, 'notesMax');
 	return {
 		id, name, ...text, unlimited, uploads, channels, requestable, hidden, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo, recitationMetadata,
 		live, liveHoursMonth: liveLimit('liveHoursMonth'), liveMaxConcurrent: liveLimit('liveMaxConcurrent'), liveMaxStreamMinutes: liveLimit('liveMaxStreamMinutes'),
 		...liveCapabilities,
-		offlineDownloads, offlineMaxQuality: rawQuality, offlineMaxVideos, offlineLicenseDays,
+		offlineDownloads, offlineMaxQuality: rawQuality, offlineMaxVideos, offlineLicenseDays, notesMax,
 	};
 }
 
@@ -654,8 +660,8 @@ export async function saveTier(
 			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, hidden, sort_order,
 			   per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video, recitation_metadata,
 			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes, live_chat, live_premieres, live_events,
-			   offline_downloads, offline_max_quality, offline_max_videos, offline_license_days, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			   offline_downloads, offline_max_quality, offline_max_videos, offline_license_days, notes_max, updated_at, updated_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_ar = excluded.name_ar, description = excluded.description,
 			   description_ar = excluded.description_ar, unlimited = excluded.unlimited, uploads = excluded.uploads, channels = excluded.channels,
 			   requestable = excluded.requestable, hidden = excluded.hidden, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
@@ -665,7 +671,7 @@ export async function saveTier(
 			   live_max_concurrent = excluded.live_max_concurrent, live_max_stream_minutes = excluded.live_max_stream_minutes,
 			   live_chat = excluded.live_chat, live_premieres = excluded.live_premieres, live_events = excluded.live_events,
 			   offline_downloads = excluded.offline_downloads, offline_max_quality = excluded.offline_max_quality,
-			   offline_max_videos = excluded.offline_max_videos, offline_license_days = excluded.offline_license_days,
+			   offline_max_videos = excluded.offline_max_videos, offline_license_days = excluded.offline_license_days, notes_max = excluded.notes_max,
 			   updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
 		.bind(
@@ -674,6 +680,7 @@ export async function saveTier(
 			tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, tier.recitationMetadata ? 1 : 0, tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes,
 			...TIER_LIVE_CAPABILITIES.map((field) => (tier[field] === undefined ? null : tier[field] ? 1 : 0)),
 			tier.offlineDownloads ? 1 : 0, tier.offlineMaxQuality ?? '480p', tier.offlineMaxVideos === undefined ? 25 : tier.offlineMaxVideos, tier.offlineLicenseDays ?? 30,
+			tier.notesMax === undefined ? 1000 : tier.notesMax,
 			now, actorId,
 		)
 		.run();

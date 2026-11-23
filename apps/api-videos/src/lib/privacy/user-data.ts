@@ -275,6 +275,8 @@ export interface UserDataExport {
 	liveChatMessages: Json[];
 	/** Live streams and premieres the account asked to be reminded of (NOTIFICATIONS_DB live_reminders). */
 	liveReminders: Json[];
+	/** Private time-stamped notes on videos (SEARCH_DB video_notes, wiki E21-D9); deleted notes are left out. */
+	videoNotes: Json[];
 }
 
 /** Array sections of the export; partial exports are merged by concatenating these. */
@@ -303,6 +305,7 @@ export const EXPORT_LIST_FIELDS = [
 	'channelInvites',
 	'liveChatMessages',
 	'liveReminders',
+	'videoNotes',
 ] as const;
 
 const EXPORT_NOTES = [
@@ -516,6 +519,20 @@ export async function collectUserData(
 						expiresAt: row.expires_at,
 						respondedAt: row.responded_at ?? null,
 					});
+				}
+			}),
+		// Private video notes, in video and time order (idx_video_notes_user_video)
+		(ctx) =>
+			atomically(async () => {
+				const sdb = env.SEARCH_DB as D1Database | undefined;
+				if (!sdb) return;
+				ctx.budget.spend();
+				const { results } = await sdb
+					.prepare('SELECT id, video_id, start_ms, end_ms, body, created_at, updated_at FROM video_notes WHERE user_id = ? AND deleted_at IS NULL ORDER BY video_id, start_ms, id')
+					.bind(userId)
+					.all<Json>();
+				for (const row of results ?? []) {
+					out.videoNotes.push({ id: row.id, videoId: row.video_id, startMs: row.start_ms, endMs: row.end_ms ?? null, text: row.body, createdAt: row.created_at, updatedAt: row.updated_at });
 				}
 			}),
 		// Notification preferences and the menu-seen time (D1, one row each)
@@ -1207,6 +1224,10 @@ export async function eraseUserData(
 				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
 				// Their live sessions' tier owner (search migration 0060)
 				await eraseLiveSessionOwner(db as unknown as D1Database, userId);
+				// Private video notes, tombstones included (search migration 0082, wiki E21-D9)
+				ctx.budget.spend();
+				const notes = await (db as unknown as D1Database).prepare('DELETE FROM video_notes WHERE user_id = ?').bind(userId).run();
+				bump(summary.deleted, 'videoNotes', Number(notes.meta?.changes ?? 0));
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

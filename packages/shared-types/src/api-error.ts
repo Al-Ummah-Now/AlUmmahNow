@@ -171,6 +171,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
+  notes_limit: { action: 'none', en: 'You’ve reached the number of notes your plan allows. Delete some notes to add new ones.', ar: 'بلغتَ عدد الملاحظات الذي تسمح به خطتك. احذف بعض الملاحظات لتضيف ملاحظات جديدة.' },
   service_unavailable: { action: 'retry', en: 'This is unavailable for a moment. Please try again shortly.', ar: 'هذا غير متاح لحظيًا. يُرجى المحاولة بعد قليل.' },
   storage_unavailable: { action: 'retry', en: 'This is unavailable for a moment. Please try again shortly.', ar: 'هذا غير متاح لحظيًا. يُرجى المحاولة بعد قليل.' },
   index_unavailable: { action: 'retry', en: 'This is unavailable for a moment. Please try again shortly.', ar: 'هذا غير متاح لحظيًا. يُرجى المحاولة بعد قليل.' },

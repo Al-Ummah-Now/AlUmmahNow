@@ -530,6 +530,7 @@ const TierBody = z
 		importCountsAgainstLimits: z.boolean().optional(),
 		audioTracksPerVideo: z.coerce.number().optional(),
 		recitationMetadata: z.boolean().optional(),
+		notesMax: z.coerce.number().nullable().optional(),
 		live: z.boolean().optional(),
 		liveHoursMonth: z.coerce.number().optional(),
 		liveMaxConcurrent: z.coerce.number().optional(),
