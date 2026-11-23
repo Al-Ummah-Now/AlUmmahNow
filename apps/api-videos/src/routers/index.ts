@@ -15,6 +15,7 @@ import i18nRouter from './i18n.router';
 import discoveryRouter from './discovery.router';
 import privacyRouter from './privacy.router';
 import libraryRouter from './library.router';
+import prayerRouter from './prayer.router';
 import usersRouter from './users.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
@@ -112,6 +113,7 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/internal/app-config', appConfigAdminRouter);
   // Quran text from our Quran Foundation copy (AUN-CAPTIONS)
   openapi.route('/api/quran', quranRouter);
+  openapi.route('/api', prayerRouter);
 
   // Machine translation of titles and descriptions (AUN-CAPTIONS §5.8)
   openapi.route('/api/translate', translateRouter);

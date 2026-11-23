@@ -54,7 +54,8 @@ export type LimiterName =
 	| 'ATTEST_LIMITER'
 	| 'LIVE_VIEWER_LIMITER'
 	| 'LIVE_CHAT_LIMITER'
-	| 'LIVE_CHAT_IP_LIMITER';
+	| 'LIVE_CHAT_IP_LIMITER'
+	| 'PRAYER_LIMITER';
 
 export type BotEnv = TurnstileEnv & AttestationEnv & { [K in LimiterName]?: RateLimit } & {
 	HUMAN_VERIFIED?: KVNamespace;

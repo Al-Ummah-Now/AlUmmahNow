@@ -368,6 +368,10 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		liveEvents: !channelId,
 		liveReminders: true,
 		recitationTools: quranText,
+		// E21: anonymous, so signed-out viewers get them once the admin switch is on (wiki Epic 21 §3)
+		prayerTimes: true,
+		qibla: true,
+		hijriCalendar: true,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -527,6 +531,9 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			newsletter: null,
 			listenMode: true,
 			intentionalViewing: true,
+			prayerTimes: true,
+			qibla: true,
+			hijriCalendar: true,
 			offlineDownloads: !!env.SEARCH_DB,
 			studyNotes: !!env.SEARCH_DB,
 			quietHours: !!env.NOTIFICATIONS_DB,
