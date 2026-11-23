@@ -75,8 +75,9 @@ No numbers in this copy.
   `aun-btn-filled` button with no `bg-blue`; focus moves to the heading on retry; copy in en and ar.
 - Unit, `WatchPageContent`: empty hides the shelf and both shelf columns; failure → Try again → videos.
 - E2E: no existing spec asserted the old empty-as-error behavior (`related-videos-empty` was only used
-  in unit tests). The release specs (`related.spec.ts`, `theatre`, `watch-layout`) seed related videos
-  and keep passing on `related-videos-list`.
+  in unit tests). `30-watch-page.spec.ts` WATCH-002 matched the RTL component's hard-coded heading
+  (/ذات الصلة/); it now asserts the i18n heading «مرئيات ذات صلة» as an `h2`. The release specs
+  (`related.spec.ts`, `theatre`, `watch-layout`) seed related videos and use `related-videos-list`.
 
 ## Risks
 - **Layout shift when empty:** on wide screens the side column shows a skeleton, then disappears when

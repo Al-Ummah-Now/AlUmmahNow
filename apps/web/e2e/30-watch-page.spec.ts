@@ -66,7 +66,8 @@ test.describe('watch page - anonymous', () => {
       await expect(page.getByRole('heading', { level: 1, name: arTitle })).toBeVisible();
       await expect(page.getByTestId('video-metrics-views')).toHaveText(/مشاهد/);
       await expect(page.getByTestId('video-metrics')).toHaveAccessibleName('إحصائيات المرئي');
-      await expect(page.getByRole('heading', { name: /ذات الصلة/ }).first()).toBeAttached();
+      // The shelf heading comes from i18n (video.relatedVideos), like the English one (#1552)
+      await expect(page.getByRole('heading', { level: 2, name: 'مرئيات ذات صلة' }).first()).toBeAttached();
     });
   }
 

@@ -11,7 +11,7 @@ const RelatedVideosFailed: React.FC<{ onRetry: () => void }> = ({ onRetry }) => 
   return (
     <div data-testid="related-videos-failed" className="mx-4 md:mx-0 py-8 text-center">
       {/* Polite: the shelf sits beside the video, it must not interrupt it */}
-      <p role="status" className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t.video.relatedFailed}</p>
+      <p role="status" className="mb-4 text-sm text-[var(--fanous-color-text-secondary)]">{t.video.relatedFailed}</p>
       <button type="button" onClick={onRetry} className="aun-btn aun-btn-filled" data-testid="related-videos-retry">
         {t.video.relatedRetry}
       </button>
