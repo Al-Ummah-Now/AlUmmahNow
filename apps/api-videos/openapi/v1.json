@@ -60460,7 +60460,9 @@
               "charityDonations",
               "supportPerks",
               "tierRequests",
-              "newsletter"
+              "newsletter",
+              "listenMode",
+              "offlineDownloads"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
