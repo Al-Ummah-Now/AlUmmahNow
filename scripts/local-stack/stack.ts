@@ -166,6 +166,8 @@ export const WORKERS: StackWorker[] = [
       // Payments (wiki AUN-SUBS): the test provider's checkout page and webhooks live on this worker;
       // E2E pays with it, no money moves (lib/billing/fake.ts); its URLs use VIDEOS_API_URL below
       PAYMENTS_FAKE_PROVIDER: '1',
+      // Creator support (wiki AUN-MEMBERS): the test collector and test rail, no money moves (lib/support/test-*.ts)
+      SUPPORT_TEST_PROVIDERS: '1',
       // Mobile apps settings (attestation switches, NAT-REL) come from the stack's admin-api
       ADMIN_API_URL: url('admin-api'),
       // Social OAuth callbacks and the Telegram webhook point here
@@ -193,6 +195,8 @@ export const WORKERS: StackWorker[] = [
     vars: {
       ...COMMON_VARS,
       Issuer: url('auth'),
+      // Creator support's test adapters exist here, so the Features page precondition can pass (wiki AUN-MEMBERS)
+      SUPPORT_TEST_PROVIDERS: '1',
       // The videos web app invites continue to (lib/invites.ts videosWebOrigin): on the stack it cannot
       // be derived from ADMIN_WEB_URL (no "admin." host), so an invite fell back to the profile app
       VIDEOS_WEB_URL: url('web'),

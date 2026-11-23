@@ -6,15 +6,27 @@
  * Each check is owned by its feature's epic and must be fast (one or two reads) and fail closed:
  * a check that throws refuses with the generic reason.
  */
-import type { FeatureKey, FeatureText } from '@al-ummah/shared-types';
+import { supportCanTurnOnHook, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 
 /** `reasonKey` is the check's stable reason code, passed to clients so they can branch on it. */
 export type PreconditionResult = { ok: true } | { ok: false; reason: FeatureText; reasonKey?: string };
 export type FeaturePrecondition = (env: AdminBindings) => Promise<PreconditionResult>;
 
-/** Checks by switch. MEMBERS adds creatorSupport (organisation formed + a finance approver, spec §9.7). */
-export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = {};
+/**
+ * Creator support (wiki AUN-MEMBERS §9.7): on only once the organisation is recorded as formed, the
+ * finance list has the approvers MEM-D24 needs, every owner decision is recorded, and a collector
+ * and the chosen payout rail exist in this environment (shared-types support-readiness.ts).
+ */
+const creatorSupport: FeaturePrecondition = async (env) => {
+  const r = await supportCanTurnOnHook({ SEARCH_DB: env.SEARCH_DB as never, ENVIRONMENT: env.ENVIRONMENT, SUPPORT_TEST_PROVIDERS: env.SUPPORT_TEST_PROVIDERS });
+  if (r.ok === true) return { ok: true };
+  const refused = r as Extract<typeof r, { ok: false }>;
+  return { ok: false, reason: refused.reason, reasonKey: refused.reasonKey };
+};
+
+/** Checks by switch. */
+export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport };
 
 export const PRECONDITION_UNREADABLE: FeatureText = {
   en: 'We couldn’t check whether this can be turned on. Try again in a moment.',

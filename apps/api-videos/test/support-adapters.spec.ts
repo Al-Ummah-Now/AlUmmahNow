@@ -45,8 +45,19 @@ describe('which adapters exist where', () => {
 });
 
 describe('the switch seam', () => {
-	it('is off everywhere until the registry lands', async () => {
-		assert.deepEqual(await supportSwitch({}), { on: false, reason: 'registry_pending' });
+	it('reads the creatorSupport switch: off by default, and off when unreadable', async () => {
+		const { SqliteD1 } = await import('./search-sqlite-d1');
+		const { forgetFeatureSwitches } = await import('@al-ummah/shared-types');
+		forgetFeatureSwitches();
+		assert.deepEqual(await supportSwitch({}), { on: false, reason: 'unreadable' });
+		const db = new SqliteD1();
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: false, reason: 'switched_off' });
+		forgetFeatureSwitches();
+		await db.prepare("INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('creatorSupport', 1, 1, 'usr_super', 'now')").run();
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: true, reason: null });
+		forgetFeatureSwitches();
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db, FEATURES_FORCE_OFF: 'creatorSupport' }), { on: false, reason: 'switched_off' });
+		forgetFeatureSwitches();
 	});
 	it('can not be readied while the organisation, approvers or decisions are missing', () => {
 		const r = supportReadiness({ organisationFormed: false, financeApprovers: 0, policy: UNDECIDED_SUPPORT_POLICY, collectorAvailable: false, railAvailable: false });

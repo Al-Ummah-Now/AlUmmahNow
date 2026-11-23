@@ -252,3 +252,19 @@ describe('the tierRequests migration', () => {
     assert.deepEqual(row, { enabled: 0, updated_by: 'usr_x' });
   });
 });
+
+describe('creatorSupport precondition (wiki AUN-MEMBERS §9.7)', () => {
+  it('the real check refuses on a fresh database, in production too, and names the first blocker', async () => {
+    const { checkCanTurnOn } = await import('../src/lib/feature-preconditions');
+    const search = searchD1();
+    for (const env of [
+      { SEARCH_DB: search, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' },
+      { SEARCH_DB: search, ENVIRONMENT: 'production' },
+      { ENVIRONMENT: 'qa' },
+    ]) {
+      const r = await checkCanTurnOn(env as never, 'creatorSupport');
+      assert.equal(r.ok, false);
+      assert.ok(!r.ok && r.reasonKey === 'organisation_not_formed' && r.reason.en.length > 0 && r.reason.ar.length > 0);
+    }
+  });
+});

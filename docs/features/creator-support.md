@@ -32,7 +32,7 @@ Never Stripe (decision T2), including payout services built on Stripe.
 | Payout rail interface (Wise / PayPal later, MEM-11) | `apps/api-videos/src/lib/support/rail.ts` |
 | Test collector and test rail (no money) | `test-collector.ts`, `test-rail.ts`, state in `test-state.ts` / `d1-test-state.ts` |
 | Which adapters exist here | `adapters.ts` (`collectorFor`, `railFor`, `railForPayee`) |
-| The `creatorSupport` switch seam and readiness | `switch.ts` |
+| The `creatorSupport` switch (AUN-FEATURES `feature_switches`, fails closed) and readiness; the Features page precondition is admin-api `lib/feature-preconditions.ts` | `switch.ts`, shared-types `support-readiness.ts` |
 | Ledger and posting builders | `ledger.ts` |
 | Settings and owner decisions (`support_config`) | `config.ts` |
 | Erasure | `apps/processor/src/erasure/user-traces.ts` (support rows kept as records under the erased marker; messages, payloads, open checkouts and finance membership removed) |
