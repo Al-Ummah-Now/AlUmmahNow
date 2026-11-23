@@ -538,9 +538,9 @@ async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<b
 }
 
 /**
- * The channel's live streams move to the new owner, and every session provisioned but not on air
- * is ended (rotateChannelLiveKeys, as when a member with live access leaves): its ingest URL and
- * key are known to the previous owner, so the next Go live provisions fresh ones.
+ * The channel's live streams move to the new owner and every session of the channel that isn't
+ * over is ended, confirmed by the provider: its ingest URL and key are known to the previous
+ * owner, so the next Go live provisions fresh ones.
  */
 async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; rotated: number; failed: number }> {
 	// Every stream record: stream.userId alone grants access (canManageLiveStream), so the scan has no
