@@ -2,9 +2,10 @@
  * Server-rendered sections of the Delivery comparison page: Speed, Playback
  * (table and daily charts) and Cost (measured use and the projection).
  */
+import Link from '@/components/AppLink';
 import type { MediaSummary } from '@/lib/api/types';
 import type { Translator } from '@/i18n/translate';
-import { cardClass } from '@/components/ui';
+import { cardClass, linkClass } from '@/components/ui';
 import { DailyChart, SeriesSwatch } from './DailyChart';
 import { formatDate } from '@al-ummah/shared-types';
 import { deliveryFormats } from './format';
@@ -160,7 +161,7 @@ function CapBadge({ fits, t }: { fits: boolean; t: Translator }) {
   );
 }
 
-export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { budgetUsd: number }) {
+export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { budgetUsd: number | null }) {
   const f = deliveryFormats(locale);
   const used = transcodeCost(summary.jobs);
   const unit = unitCosts(summary.jobs, summary.costs, playbackTotals(summary.qoe));
@@ -172,11 +173,11 @@ export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { 
     { key: 'r2Transcode', label: t('mediaDelivery.rowR2Transcode'), cell: (p) => f.usd(p.r2.transcode) },
     { key: 'r2Storage', label: t('mediaDelivery.rowR2Storage'), cell: (p) => f.usd(p.r2.storage) },
     { key: 'r2Ops', label: t('mediaDelivery.rowR2Ops'), cell: (p) => f.usd(p.r2.ops) },
-    { key: 'r2Total', label: t('mediaDelivery.rowR2Total'), strong: true, cell: (p) => <>{f.usd(p.r2.total)}<CapBadge fits={p.fits.r2} t={t} /></> },
+    { key: 'r2Total', label: t('mediaDelivery.rowR2Total'), strong: true, cell: (p) => <>{f.usd(p.r2.total)}{p.fits && <CapBadge fits={p.fits.r2} t={t} />}</> },
     { key: 'bunnyStorage', label: t('mediaDelivery.rowBunnyStorage'), cell: (p) => f.usd(p.bunny.storage) },
     { key: 'bunnyDelivery', label: t('mediaDelivery.rowBunnyDelivery'), cell: (p) => range(p.bunny.deliveryLow, p.bunny.deliveryHigh) },
-    { key: 'bunnyTotal', label: t('mediaDelivery.rowBunnyTotal'), strong: true, cell: (p) => <>{range(p.bunny.totalLow, p.bunny.totalHigh)}<CapBadge fits={p.fits.bunny} t={t} /></> },
-    { key: 'both', label: t('mediaDelivery.rowBoth'), strong: true, cell: (p) => <>{range(p.both.low, p.both.high)}<CapBadge fits={p.fits.both} t={t} /></> },
+    { key: 'bunnyTotal', label: t('mediaDelivery.rowBunnyTotal'), strong: true, cell: (p) => <>{range(p.bunny.totalLow, p.bunny.totalHigh)}{p.fits && <CapBadge fits={p.fits.bunny} t={t} />}</> },
+    { key: 'both', label: t('mediaDelivery.rowBoth'), strong: true, cell: (p) => <>{range(p.both.low, p.both.high)}{p.fits && <CapBadge fits={p.fits.both} t={t} />}</> },
   ];
   const units: { key: keyof typeof unit.measured; label: string; value: string }[] = [
     { key: 'transcode', label: t('mediaDelivery.unitTranscode'), value: f.decimal(unit.containerSecondsPerVideoMinute) },
@@ -196,8 +197,17 @@ export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { 
         <Stat label={t('mediaDelivery.storedGb')} value={f.gb(used.storedGb)} testId="delivery-stored" />
       </dl>
 
-      <h3 className="font-semibold text-fg mb-1">{t('mediaDelivery.projectionTitle', { cap: f.usd(budgetUsd) })}</h3>
-      <p className="text-fg-muted text-sm mb-3">{t('mediaDelivery.projectionIntro', { asOf: formatDate(locale, PLAN_PRICES_AS_OF, { month: 'long', year: 'numeric', timeZone: 'UTC' }) })}</p>
+      <h3 className="font-semibold text-fg mb-1">{budgetUsd !== null ? t('mediaDelivery.projectionTitle', { cap: f.usd(budgetUsd) }) : t('mediaDelivery.projectionTitleUnset')}</h3>
+      <p className="text-fg-muted text-sm mb-3">
+        {t('mediaDelivery.projectionIntro', { asOf: formatDate(locale, PLAN_PRICES_AS_OF, { month: 'long', year: 'numeric', timeZone: 'UTC' }) })}
+        {budgetUsd === null && (
+          <>
+            {' '}
+            {t('mediaDelivery.projectionBudgetUnset')}{' '}
+            <Link href="/costs#thresholds" className={linkClass}>{t('mediaDelivery.projectionSetBudget')}</Link>
+          </>
+        )}
+      </p>
       <div className="relative overflow-x-auto mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="delivery-cost-title">
         <table className="w-full text-sm" data-testid="delivery-projection">
           <caption className="sr-only">{t('mediaDelivery.projectionCaption')}</caption>

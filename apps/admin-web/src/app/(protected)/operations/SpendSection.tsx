@@ -37,6 +37,25 @@ function Stat({ label, value, sub, tone = 'ok', testId }: { label: string; value
 function BudgetMeterBar({ c, t, f }: { c: OpsCosts; t: Translator; f: OpsFormats }) {
   const m = budgetMeter(c.budget);
   const cap = c.budget.capUsd;
+  if (cap === null) {
+    return (
+      <div className="mt-5" data-testid="ops-budget">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm text-fg-muted">
+            <span className="text-3xl font-bold tabular-nums text-fg" data-testid="ops-budget-spent">{f.usd(c.budget.mtd)}</span>{' '}
+            {t('operations.spend.unsetInMonth')}
+          </p>
+          <p className="text-sm tabular-nums text-fg-muted" data-testid="ops-budget-projected-text">
+            {t('operations.spend.projectedShortUnset', { value: f.usd(c.budget.projected) })}
+          </p>
+        </div>
+        <p className="rounded-lg border border-border border-s-4 border-s-warning-fg bg-surface-2 px-4 py-3 text-sm text-fg" role="status" data-testid="ops-budget-unset">
+          {t('operations.spend.unsetBanner')}{' '}
+          <Link href="/costs#thresholds" className={linkClass}>{t('operations.spend.setBudgetLink')}</Link>
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mt-5" data-testid="ops-budget">
       <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
@@ -45,7 +64,7 @@ function BudgetMeterBar({ c, t, f }: { c: OpsCosts; t: Translator; f: OpsFormats
           {t('operations.spend.ofBudget', { cap: f.usd(cap) })}
         </p>
         <p className={`text-sm tabular-nums ${TONE_TEXT[m.projectedTone]}`} data-testid="ops-budget-projected-text">
-          {t('operations.spend.projectedShort', { value: f.usd(c.budget.projected), percent: f.percent(c.budget.projectedShare) })}
+          {t('operations.spend.projectedShort', { value: f.usd(c.budget.projected), percent: f.percent(c.budget.projectedShare ?? 0) })}
         </p>
       </div>
       <div
@@ -181,7 +200,9 @@ function DriversTable({ c, t, f }: { c: OpsCosts; t: Translator; f: OpsFormats }
 export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; f: OpsFormats; locale: string }) {
   const m = budgetMeter(c.budget);
   const idle = idleStatus(c.idle);
-  const left = Math.max(0, c.budget.capUsd - c.budget.mtd);
+  const cap = c.budget.capUsd;
+  const left = cap !== null ? Math.max(0, cap - c.budget.mtd) : null;
+  const daily = cap !== null ? dailyBudget(cap, c.budget.month) : null;
   const envs: OpsEnv[] = ['production', 'stage', 'qa'];
   const idleByEnv = envs
     .filter((e) => (c.idle.byEnv[e] ?? 0) > 0)
@@ -211,8 +232,8 @@ export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; 
       <BudgetMeterBar c={c} t={t} f={f} />
 
       <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t('operations.spend.spent')} value={f.usd(c.budget.mtd)} sub={t('operations.spend.share', { percent: f.percent(c.budget.share) })} tone={m.tone} testId="ops-spend-mtd" />
-        <Stat label={t('operations.spend.projected')} value={f.usd(c.budget.projected)} sub={t('operations.spend.share', { percent: f.percent(c.budget.projectedShare) })} tone={m.projectedTone} testId="ops-spend-projected" />
+        <Stat label={t('operations.spend.spent')} value={f.usd(c.budget.mtd)} sub={cap !== null && c.budget.share !== null ? t('operations.spend.share', { percent: f.percent(c.budget.share) }) : t('operations.spend.notSet')} tone={m.tone} testId="ops-spend-mtd" />
+        <Stat label={t('operations.spend.projected')} value={f.usd(c.budget.projected)} sub={cap !== null && c.budget.projectedShare !== null ? t('operations.spend.share', { percent: f.percent(c.budget.projectedShare) }) : t('operations.spend.notSet')} tone={m.projectedTone} testId="ops-spend-projected" />
         <Stat
           label={t('operations.spend.idleTitle')}
           value={f.usd(c.idle.monthlyUsd)}
@@ -227,7 +248,17 @@ export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; 
           tone={idle.under ? 'ok' : 'danger'}
           testId="ops-idle"
         />
-        <Stat label={t('operations.spend.left')} value={f.usd(left)} sub={t('operations.spend.leftSub', { month: f.month(c.budget.month) })} testId="ops-spend-left" />
+        {left !== null ? (
+          <Stat label={t('operations.spend.left')} value={f.usd(left)} sub={t('operations.spend.leftSub', { month: f.month(c.budget.month) })} testId="ops-spend-left" />
+        ) : (
+          <Stat
+            label={t('operations.spend.monthlyBudget')}
+            value={t('operations.spend.notSet')}
+            sub={<Link href="/costs#thresholds" className={linkClass}>{t('operations.spend.setBudgetLink')}</Link>}
+            tone="warn"
+            testId="ops-spend-left"
+          />
+        )}
       </dl>
 
       <PartsBar c={c} t={t} f={f} />
@@ -240,7 +271,7 @@ export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; 
           locale={locale}
           format={f.usd}
           dayLabel={f.day}
-          reference={{ value: dailyBudget(c.budget.capUsd, c.budget.month), label: t('operations.spend.dailyBudget', { value: f.usd(dailyBudget(c.budget.capUsd, c.budget.month)) }) }}
+          reference={daily !== null ? { value: daily, label: t('operations.spend.dailyBudget', { value: f.usd(daily) }) } : undefined}
           labels={{ chart: t('operations.spend.trendTitle'), table: t('operations.charts.table'), day: t('operations.spend.day'), total: t('operations.spend.total'), empty: t('operations.charts.empty') }}
           testId="ops-spend-trend"
         />

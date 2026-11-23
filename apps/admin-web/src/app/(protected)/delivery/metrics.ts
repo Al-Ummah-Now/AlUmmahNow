@@ -211,12 +211,13 @@ export interface Projection {
   bunny: { storage: number; deliveryLow: number; deliveryHigh: number; totalLow: number; totalHigh: number };
   /** Both sources during the dual-write trial */
   both: { low: number; high: number };
-  fits: { r2: boolean; bunny: boolean; both: boolean };
+  /** null while no monthly budget is set in Costs → Alert settings. */
+  fits: { r2: boolean; bunny: boolean; both: boolean } | null;
 }
 
 /** Monthly cost of one scale, US dollars. Storage is the month after `ASSUMED.storageMonths` of uploads. */
-/** `cap` is the admin-set monthly budget (admin-api /api/costs/budget, #1427). */
-export function projectMonthlyCost(scale: Scale, unit: UnitCosts, cap: number): Projection {
+/** `cap` is the admin-set monthly budget (admin-api /api/costs/budget, #1427), or null while unset. */
+export function projectMonthlyCost(scale: Scale, unit: UnitCosts, cap: number | null): Projection {
   const videoMinutes = scale.uploadHours * 60;
   const storedGb = videoMinutes * unit.storedGbPerVideoMinute * ASSUMED.storageMonths;
   const transcode = videoMinutes * unit.containerSecondsPerVideoMinute * PRICES.containerSecond;
@@ -231,12 +232,13 @@ export function projectMonthlyCost(scale: Scale, unit: UnitCosts, cap: number): 
   const deliveryHigh = deliveredGb * PRICES.bunnyDeliveryGbHigh;
   const bunny = { storage: bunnyStorage, deliveryLow, deliveryHigh, totalLow: bunnyStorage + deliveryLow, totalHigh: bunnyStorage + deliveryHigh };
   const both = { low: r2Total + bunny.totalLow, high: r2Total + bunny.totalHigh };
+  const hasCap = cap !== null && Number.isFinite(cap) && cap > 0;
   return {
     scale,
     r2: { transcode, storage: r2Storage, ops, total: r2Total },
     bunny,
     both,
-    fits: { r2: r2Total <= cap, bunny: bunny.totalHigh <= cap, both: both.high <= cap },
+    fits: hasCap ? { r2: r2Total <= cap, bunny: bunny.totalHigh <= cap, both: both.high <= cap } : null,
   };
 }
 

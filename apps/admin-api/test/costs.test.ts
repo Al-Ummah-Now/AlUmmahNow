@@ -95,10 +95,12 @@ describe('costs permissions', () => {
     assert.equal((await admin.req('/api/costs/credentials')).status, 403);
   });
 
-  it('works with no data and no token: the dashboard answers with the collector state "unknown"', async () => {
+  it('works with no data, no token and no budget set: budget is null and collector state is "unknown"', async () => {
     const res = await setup(['Super Admin']).req('/api/costs');
-    const body = (await res.json()) as { result: { budget: { mtd: number; capUsd: number }; collector: { tokenSource: string } } };
-    assert.equal(body.result.budget.capUsd, 500);
+    const body = (await res.json()) as { result: { budget: { mtd: number; capUsd: number | null; share: number | null; projectedShare: number | null }; collector: { tokenSource: string } } };
+    assert.equal(body.result.budget.capUsd, null);
+    assert.equal(body.result.budget.share, null);
+    assert.equal(body.result.budget.projectedShare, null);
     assert.equal(body.result.collector.tokenSource, 'unknown');
   });
 });
@@ -216,8 +218,21 @@ describe('settings and alerts', () => {
     assert.equal(ok.result.budgetUsd, 300);
     assert.deepEqual(ok.result.budgetLevels, [0.25, 0.9]);
     const log = await env.REPORTS_DB.prepare("SELECT old_value, new_value FROM site_settings_log WHERE key = 'costs:settings'").first<{ old_value: string; new_value: string }>();
-    assert.equal(JSON.parse(log!.old_value).budgetUsd, 500);
+    assert.equal(JSON.parse(log!.old_value).budgetUsd, null);
     assert.equal(JSON.parse(log!.new_value).spikeFactor, 3);
+    const cleared = (await (await req('/api/costs/settings', send('PUT', { budgetUsd: null }))).json()) as { result: { budgetUsd: number | null } };
+    assert.equal(cleared.result.budgetUsd, null);
+  });
+
+  it('budget alerts stay quiet while the monthly budget is unset', async () => {
+    const db = costsD1();
+    const now = new Date('2026-11-14T15:00:00Z');
+    await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, cost_usd, updated_at) VALUES ('2026-11-10', 'worker:videos', 'worker', 'production', 'videos', 900, 'x')").run();
+    const reported: unknown[] = [];
+    const sink: AlertSink = { report: async (events) => void reported.push(...events), resolve: async () => undefined };
+    const out = await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' } as never, sink, now);
+    assert.equal(out.opened, 0);
+    assert.deepEqual(reported, []);
   });
 
   it('the alert tick follows the settings and emails each new alert to its subscribers once', async () => {
@@ -265,12 +280,14 @@ describe('settings and alerts', () => {
 
   it('renders every email kind in English too', () => {
     const base = { to: 'a@example.com', locale: 'en' as const, environment: 'production' };
-    assert.equal(renderCostEmail({ ...base, payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 400, cap: 500, projected: 520 } }).subject, 'Costs: 80% of the monthly budget used');
-    assert.equal(renderCostEmail({ ...base, payload: { type: 'projected', month: '2026-11', mtd: 200, cap: 500, projected: 640 } }).subject, 'Costs: projected to go over the monthly budget');
-    const digest = renderCostEmail({ ...base, payload: { type: 'digest', week: '2026-11-16', mtd: 120, cap: 500, projected: 310, lastWeek: 50, weekBefore: 40, products: [{ product: 'bunny', mtd: 60 }], envs: { production: 80, qa: 10, stage: 0, account: 30 }, movers: [{ label: 'videos-qa', env: 'qa', change: 4.5 }], openAlerts: 1 } });
+    assert.equal(renderCostEmail({ ...base, payload: { type: 'budget', month: '2026-11', level: 0.8, mtd: 320, cap: 400, projected: 420 } }).subject, 'Costs: 80% of the monthly budget used');
+    assert.equal(renderCostEmail({ ...base, payload: { type: 'projected', month: '2026-11', mtd: 200, cap: 400, projected: 640 } }).subject, 'Costs: projected to go over the monthly budget');
+    const digest = renderCostEmail({ ...base, payload: { type: 'digest', week: '2026-11-16', mtd: 120, cap: 400, projected: 310, lastWeek: 50, weekBefore: 40, products: [{ product: 'bunny', mtd: 60 }], envs: { production: 80, qa: 10, stage: 0, account: 30 }, movers: [{ label: 'videos-qa', env: 'qa', change: 4.5 }], openAlerts: 1 } });
     assert.match(digest.text, /Bunny/);
     assert.match(digest.text, /\+\$4\.50/);
     assert.doesNotMatch(digest.text, /Stage/, 'zero environments are left out');
+    const unsetDigest = renderCostEmail({ ...base, payload: { type: 'digest', week: '2026-11-16', mtd: 120, cap: null, projected: 310, lastWeek: 50, weekBefore: 40, products: [], envs: {}, movers: [], openAlerts: 0 } });
+    assert.match(unsetDigest.text, /Not set/);
   });
 });
 
@@ -302,7 +319,7 @@ describe('subscriptions and digest', () => {
     assert.equal(sent.length, 1);
     const payload = JSON.parse((await db.prepare('SELECT payload FROM cost_alert_deliveries').first<{ payload: string }>())!.payload);
     assert.equal(payload.type, 'digest');
-    assert.equal(payload.cap, 500);
+    assert.equal(payload.cap, null);
   });
 });
 

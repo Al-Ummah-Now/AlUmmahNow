@@ -11,13 +11,13 @@ export type CostBudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
 export type CostBudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan';
 
 export interface CostBudget {
-  capUsd: number;
+  capUsd: number | null;
   /** YYYY-MM */
   month: string;
   mtd: number;
   projected: number;
-  share: number;
-  projectedShare: number;
+  share: number | null;
+  projectedShare: number | null;
   level: CostBudgetLevel;
   projectedLevel: CostBudgetLevel;
   parts: Record<CostBudgetPart, { mtd: number; projected: number }>;

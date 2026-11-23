@@ -135,16 +135,22 @@ describe('costs model: alerts, connections, deltas', () => {
 });
 
 describe('costs model: alert settings form', () => {
-  it('round-trips the defaults', () => {
+  it('round-trips the defaults (unset budget) and an explicit budget', () => {
     const form = settingsToForm(COST_ALERT_DEFAULTS);
+    assert.equal(form.budgetUsd, '');
     assert.equal(form.budgetLevels, '50, 80, 100');
     const { value, errors } = validateSettingsForm(form);
     assert.deepEqual(errors, {});
     assert.deepEqual(value, COST_ALERT_DEFAULTS);
+
+    const withBudget: CostAlertSettings = { ...COST_ALERT_DEFAULTS, budgetUsd: 600 };
+    const setForm = settingsToForm(withBudget);
+    assert.equal(setForm.budgetUsd, '600');
+    assert.deepEqual(validateSettingsForm(setForm).value, withBudget);
   });
 
   it('reads Arabic digits and separators', () => {
-    assert.equal(readNumber('٥٠٠'), 500);
+    assert.equal(readNumber('٤٠٠'), 400);
     assert.equal(readNumber('٢٫٥'), 2.5);
     assert.equal(readNumber('12abc'), null);
     assert.deepEqual(readLevels('٥٠، ٨٠، ١٠٠'), [50, 80, 100]);
@@ -154,6 +160,7 @@ describe('costs model: alert settings form', () => {
 
   it('accepts and refuses exactly what admin-api accepts and refuses', () => {
     const cases: Partial<Record<'budgetUsd' | 'budgetLevels' | 'spikeFactor' | 'spikeMinUsd' | 'spikeTotalMinUsd', string>>[] = [
+      { budgetUsd: '' },
       { budgetUsd: '49' },
       { budgetUsd: '50' },
       { budgetUsd: '5000' },
@@ -181,7 +188,7 @@ describe('costs model: alert settings form', () => {
       const sent: Record<string, unknown> = { ...(local.value ?? {}) };
       // What admin-api would get when the form is sent anyway
       const raw: Record<string, unknown> = {
-        budgetUsd: readNumber(form.budgetUsd),
+        budgetUsd: form.budgetUsd.trim() === '' ? null : readNumber(form.budgetUsd),
         spikeFactor: readNumber(form.spikeFactor),
         spikeMinUsd: readNumber(form.spikeMinUsd),
         spikeTotalMinUsd: readNumber(form.spikeTotalMinUsd),
@@ -232,7 +239,7 @@ function freshDashboard(overrides: Partial<CostsDashboard> = {}): CostsDashboard
   const zeros = { mtd: 0, projected: 0 };
   return {
     budget: {
-      capUsd: 500, month: '2026-11', mtd: 2.17, projected: 5, share: 0.004, projectedShare: 0.01, level: 'ok', projectedLevel: 'ok',
+      capUsd: null, month: '2026-11', mtd: 2.17, projected: 5, share: null, projectedShare: null, level: 'ok', projectedLevel: 'ok',
       parts: { cloudflare: zeros, bunny: zeros, containers: zeros, ai: zeros, resend: zeros, plan: { mtd: 2.17, projected: 5 } }, levels: [0.5, 0.8, 1],
     },
     forecast: { linear: 5, trailing: 5 },
@@ -256,7 +263,7 @@ function freshDashboard(overrides: Partial<CostsDashboard> = {}): CostsDashboard
 describe('costs sections render', () => {
   const render = (el: React.ReactElement) => renderToStaticMarkup(el as never);
   for (const locale of ['en', 'ar'] as const) {
-    it(`renders a fresh environment (${locale}) with the token banner and no error`, () => {
+    it(`renders a fresh environment (${locale}) with the token and unset-budget banners and no error`, () => {
       const t = createTranslator(locale);
       const f = opsFormats(locale);
       const d = freshDashboard();
@@ -264,6 +271,7 @@ describe('costs sections render', () => {
       const html = [
         render(h(sections.CostsHeader, { d, t, f, now: NOW })),
         render(h(sections.TokenNotice, { d, t })),
+        render(h(sections.BudgetNotice, { d, t })),
         render(h(sections.BudgetSection, { d, t, f })),
         render(h(sections.ProductsPanel, { d, t, f, locale })),
         render(h(sections.EnvsPanel, { d, t, f })),
@@ -272,12 +280,29 @@ describe('costs sections render', () => {
       ].join('');
       assert.match(html, /data-testid="costs-token-banner"[^>]*data-kind="missing"/);
       assert.match(html, /data-testid="costs-token-action"/);
+      assert.match(html, /data-testid="costs-budget-banner"[^>]*data-kind="unset"/);
+      assert.match(html, /data-testid="costs-budget-action"/);
+      assert.match(html, /data-testid="costs-budget-unset"/);
+      assert.ok(!html.includes('data-testid="costs-budget-meter"'));
+      assert.ok(html.includes(locale === 'ar' ? 'غير محددة' : 'Not set'));
       assert.match(html, /data-stale="true"/);
       assert.match(html, /data-testid="costs-alerts-empty"/);
       assert.match(html, /data-testid="costs-movers-up-empty"/);
       assert.ok(html.includes(locale === 'ar' ? 'أضف رمز Cloudflare' : 'Set a Cloudflare token'));
     });
   }
+
+  it('hides the unset-budget banner and shows the meter once a monthly budget is set', () => {
+    const t = createTranslator('en');
+    const f = opsFormats('en');
+    const d = freshDashboard({
+      settings: { ...COST_ALERT_DEFAULTS, budgetUsd: 600, budgetLevels: [...COST_ALERT_DEFAULTS.budgetLevels] },
+      budget: { ...freshDashboard().budget, capUsd: 600, share: 0.004, projectedShare: 0.008 },
+    });
+    assert.equal(render(React.createElement(sections.BudgetNotice as React.FC, { d, t } as never)), '');
+    const html = render(React.createElement(sections.BudgetSection as React.FC, { d, t, f } as never));
+    assert.match(html, /aria-valuemax="600"[^>]*data-testid="costs-budget-meter"/);
+  });
 
   it('tells an admin who cannot manage that a super admin sets the token, without a button', () => {
     const t = createTranslator('en');

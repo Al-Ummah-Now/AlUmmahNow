@@ -106,6 +106,35 @@ export function TokenNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
   );
 }
 
+/** Warning banner when no monthly budget has been set yet: budget alerts stay quiet until a super admin sets one. */
+export function BudgetNotice({ d, t }: { d: CostsDashboard; t: Translator }) {
+  if ((d.settings.budgetUsd ?? d.budget.capUsd) !== null) return null;
+  return (
+    <section className="cost-banner p-5" role="status" aria-labelledby="costs-budget-banner-title" data-testid="costs-budget-banner" data-kind="unset">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="max-w-2xl">
+          <h2 id="costs-budget-banner-title" className="flex items-center gap-2 text-lg font-semibold text-fg">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5 shrink-0 text-warning-fg" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18.5A2 2 0 0 0 3.5 21.5h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+            </svg>
+            {t('costs.budget.unsetBannerTitle')}
+          </h2>
+          <p className="mt-1 text-sm text-fg">{d.canManage ? t('costs.budget.unsetBannerManage') : t('costs.budget.unsetBannerAdmin')}</p>
+        </div>
+        {d.canManage && (
+          <a
+            href="#thresholds"
+            className="cost-primary inline-flex min-h-11 items-center rounded px-5 py-2.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            data-testid="costs-budget-action"
+          >
+            {t('costs.budget.unsetBannerAction')}
+          </a>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function CollectorFailures({ d, t, f }: Common & { d: CostsDashboard }) {
   if (!d.collector.lastJobFailures.length) return null;
   return (
@@ -146,9 +175,9 @@ export function alertText(d: CostsDashboard, key: string, t: Translator, f: OpsF
 
 export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
   const b = d.budget;
-  const cap = d.settings.budgetUsd || b.capUsd;
+  const cap = d.settings.budgetUsd ?? b.capUsd;
   const m = budgetMeter({ ...b, levels: d.settings.budgetLevels });
-  const left = Math.max(0, cap - b.mtd);
+  const left = cap !== null ? Math.max(0, cap - b.mtd) : null;
   return (
     <section className="cost-panel p-5 sm:p-6" aria-labelledby="costs-budget-title" data-testid="costs-budget">
       <h2 id="costs-budget-title" className={sectionTitle}>{t('costs.budget.title')}</h2>
@@ -158,53 +187,66 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-sm text-fg-muted">
             <span className={`text-4xl font-bold tabular-nums ${TONE_TEXT[m.tone]}`} data-testid="costs-budget-spent">{f.usd(b.mtd)}</span>{' '}
-            <span data-testid="costs-budget-cap">{t('costs.budget.ofBudget', { cap: f.usd(cap), month: f.month(b.month) })}</span>
+            <span data-testid="costs-budget-cap">
+              {cap !== null ? t('costs.budget.ofBudget', { cap: f.usd(cap), month: f.month(b.month) }) : t('costs.budget.unsetInMonth', { month: f.month(b.month) })}
+            </span>
           </p>
           <p className={`text-sm tabular-nums ${TONE_TEXT[m.projectedTone]}`}>
-            {t('costs.budget.forecastShort', { value: f.usd(d.forecast.trailing), percent: f.percent(b.projectedShare) })}
+            {cap !== null && b.projectedShare !== null
+              ? t('costs.budget.forecastShort', { value: f.usd(d.forecast.trailing), percent: f.percent(b.projectedShare) })
+              : t('costs.budget.forecastShortUnset', { value: f.usd(d.forecast.trailing) })}
           </p>
         </div>
-        <div
-          role="meter"
-          aria-label={t('costs.budget.meter')}
-          aria-valuemin={0}
-          aria-valuemax={cap}
-          aria-valuenow={Math.min(b.mtd, cap)}
-          aria-valuetext={t('costs.budget.meterText', { spent: f.usd(b.mtd), cap: f.usd(cap), projected: f.usd(d.forecast.trailing) })}
-          className="cost-bar-track relative h-5 w-full overflow-hidden border border-border"
-          data-testid="costs-budget-meter"
-          data-level={b.level}
-        >
-          <div
-            className="absolute inset-y-0 start-0"
-            style={{ width: `${m.projectedPct}%`, background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 40%, transparent) 0 6px, transparent 6px 11px)` }}
-          />
-          <div
-            className="absolute inset-y-0 start-0 rounded-full"
-            style={{ width: `${m.spentPct}%`, background: `linear-gradient(90deg, color-mix(in srgb, ${TONE_FILL[m.tone]} 65%, var(--surface)), ${TONE_FILL[m.tone]})`, boxShadow: '0 0 12px -2px var(--m-glow, transparent)' }}
-          />
-          {m.ticks.map((tick) => (
-            <span key={tick} aria-hidden="true" className="absolute inset-y-0 w-0.5 bg-fg-muted" style={{ insetInlineStart: `${tick}%` }} />
-          ))}
-        </div>
-        <div className="relative mt-1 h-4 text-xs text-fg-muted tabular-nums" aria-hidden="true">
-          {m.ticks.map((tick) => (
-            <span key={tick} className="absolute -translate-x-1/2 rtl:translate-x-1/2" style={{ insetInlineStart: `${tick}%` }}>{f.percent(tick / 100)}</span>
-          ))}
-          <span className="absolute end-0">{f.usd(cap)}</span>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
-          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full" style={{ background: TONE_FILL[m.tone] }} />{t('costs.budget.legendSpent')}</span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full border border-border" style={{ background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 55%, transparent) 0 3px, transparent 3px 6px)` }} />
-            {t('costs.budget.legendForecast')}
-          </span>
-          <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f, t('common.sep')) })}</span>
-        </div>
+        {cap !== null ? (
+          <>
+            <div
+              role="meter"
+              aria-label={t('costs.budget.meter')}
+              aria-valuemin={0}
+              aria-valuemax={cap}
+              aria-valuenow={Math.min(b.mtd, cap)}
+              aria-valuetext={t('costs.budget.meterText', { spent: f.usd(b.mtd), cap: f.usd(cap), projected: f.usd(d.forecast.trailing) })}
+              className="cost-bar-track relative h-5 w-full overflow-hidden border border-border"
+              data-testid="costs-budget-meter"
+              data-level={b.level}
+            >
+              <div
+                className="absolute inset-y-0 start-0"
+                style={{ width: `${m.projectedPct}%`, background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 40%, transparent) 0 6px, transparent 6px 11px)` }}
+              />
+              <div
+                className="absolute inset-y-0 start-0 rounded-full"
+                style={{ width: `${m.spentPct}%`, background: `linear-gradient(90deg, color-mix(in srgb, ${TONE_FILL[m.tone]} 65%, var(--surface)), ${TONE_FILL[m.tone]})`, boxShadow: '0 0 12px -2px var(--m-glow, transparent)' }}
+              />
+              {m.ticks.map((tick) => (
+                <span key={tick} aria-hidden="true" className="absolute inset-y-0 w-0.5 bg-fg-muted" style={{ insetInlineStart: `${tick}%` }} />
+              ))}
+            </div>
+            <div className="relative mt-1 h-4 text-xs text-fg-muted tabular-nums" aria-hidden="true">
+              {m.ticks.map((tick) => (
+                <span key={tick} className="absolute -translate-x-1/2 rtl:translate-x-1/2" style={{ insetInlineStart: `${tick}%` }}>{f.percent(tick / 100)}</span>
+              ))}
+              <span className="absolute end-0">{f.usd(cap)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted">
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full" style={{ background: TONE_FILL[m.tone] }} />{t('costs.budget.legendSpent')}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-full border border-border" style={{ background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${TONE_FILL[m.projectedTone]} 55%, transparent) 0 3px, transparent 3px 6px)` }} />
+                {t('costs.budget.legendForecast')}
+              </span>
+              <span data-testid="costs-budget-levels">{t('costs.budget.levels', { levels: percentList(d.settings.budgetLevels, f, t('common.sep')) })}</span>
+            </div>
+          </>
+        ) : (
+          <p className="cost-note px-4 py-3 text-sm text-fg" data-testid="costs-budget-unset">
+            {d.canManage ? t('costs.budget.unsetNoteManage') : t('costs.budget.unsetNoteAdmin')}{' '}
+            {d.canManage && <a href="#thresholds" className={linkClass}>{t('costs.budget.setPrompt')}</a>}
+          </p>
+        )}
       </div>
 
       <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={t('costs.budget.share', { percent: f.percent(b.share) })} tone={m.tone} testId="costs-spent" />
+        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.percent(b.share) }) : t('costs.budget.notSet')} tone={m.tone} testId="costs-spent" />
         <Stat
           label={t('costs.budget.forecast')}
           value={f.usd(d.forecast.trailing)}
@@ -217,7 +259,17 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
           tone={m.projectedTone}
           testId="costs-forecast"
         />
-        <Stat label={t('costs.budget.left')} value={f.usd(left)} sub={t('costs.budget.leftSub', { month: f.month(b.month) })} testId="costs-left" />
+        {left !== null ? (
+          <Stat label={t('costs.budget.left')} value={f.usd(left)} sub={t('costs.budget.leftSub', { month: f.month(b.month) })} testId="costs-left" />
+        ) : (
+          <Stat
+            label={t('costs.budget.monthlyBudget')}
+            value={t('costs.budget.notSet')}
+            sub={d.canManage ? <a href="#thresholds" className={linkClass}>{t('costs.budget.setPrompt')}</a> : t('costs.budget.superAdminPrompt')}
+            tone="warn"
+            testId="costs-left"
+          />
+        )}
       </dl>
 
       <div className="mt-6" data-testid="costs-alerts-open">
@@ -379,8 +431,8 @@ export function EnvsPanel({ d, t, f }: Common & { d: CostsDashboard }) {
 }
 
 export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; locale: string }) {
-  const cap = d.settings.budgetUsd || d.budget.capUsd;
-  const daily = dailyBudget(cap, d.budget.month);
+  const cap = d.settings.budgetUsd ?? d.budget.capUsd;
+  const daily = cap !== null ? dailyBudget(cap, d.budget.month) : null;
   return (
     <section className="cost-panel p-5 sm:p-6" aria-label={t('costs.breakdown.trendTitle')} data-testid="costs-trend-panel">
       <StackedBarChart
@@ -390,7 +442,7 @@ export function TrendPanel({ d, t, f, locale }: Common & { d: CostsDashboard; lo
         locale={locale}
         format={f.usd}
         dayLabel={f.day}
-        reference={{ value: daily, label: t('costs.breakdown.dailyBudget', { value: f.usd(daily) }) }}
+        reference={daily !== null ? { value: daily, label: t('costs.breakdown.dailyBudget', { value: f.usd(daily) }) } : undefined}
         labels={{ chart: t('costs.breakdown.trendTitle'), table: t('costs.breakdown.table'), day: t('costs.breakdown.day'), total: t('costs.breakdown.total'), empty: t('costs.breakdown.empty30') }}
         testId="costs-trend"
       />

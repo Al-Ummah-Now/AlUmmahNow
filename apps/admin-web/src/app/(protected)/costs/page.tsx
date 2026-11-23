@@ -8,7 +8,7 @@ import type { Translator } from '@/i18n/translate';
 import { ErrorAlert } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { opsFormats } from '../operations/model';
-import { BudgetSection, CollectorFailures, CostsHeader, EnvsPanel, MoversSection, ProductsPanel, TokenNotice, TrendPanel } from './sections';
+import { BudgetNotice, BudgetSection, CollectorFailures, CostsHeader, EnvsPanel, MoversSection, ProductsPanel, TokenNotice, TrendPanel } from './sections';
 import { CostThresholds, MyCostAlerts } from './CostAlertForms';
 import { CostConnections } from './CostConnections';
 
@@ -48,6 +48,7 @@ export default async function CostsPage() {
       {d && (
         <>
           <TokenNotice d={d} t={t} />
+          <BudgetNotice d={d} t={t} />
           <CollectorFailures d={d} t={t} f={f} />
           <BudgetSection d={d} t={t} f={f} />
           {/* Side by side only on very wide screens: at 1280-1440 px the product table's last column was cut off */}

@@ -19,7 +19,7 @@ import { LOCAL_STACK, storageStatePath } from './support/env';
 import { expectDirection, expectNoAxeViolations, horizontalOverflow, setPreferences } from './support/ui';
 import { stackSql } from './support/local-stack';
 
-interface Settings { budgetUsd: number; budgetLevels: number[]; [k: string]: unknown }
+interface Settings { budgetUsd: number | null; budgetLevels: number[]; [k: string]: unknown }
 interface Dashboard {
   canManage: boolean;
   settings: Settings;
@@ -85,7 +85,7 @@ test.describe('costs (super admin)', () => {
     const asAdmin = await dashboard(readTokens().admin);
     expect(asAdmin.status).toBe(200);
     expect(asAdmin.result!.canManage).toBe(false);
-    expect((await adminApi('/api/costs/settings', { method: 'PUT', token: readTokens().admin, body: JSON.stringify({ budgetUsd: 501 }) })).status).toBe(403);
+    expect((await adminApi('/api/costs/settings', { method: 'PUT', token: readTokens().admin, body: JSON.stringify({ budgetUsd: 400 }) })).status).toBe(403);
     expect((await adminApi('/api/costs/credentials', { token: readTokens().admin })).status).toBe(403);
   });
 
@@ -93,7 +93,12 @@ test.describe('costs (super admin)', () => {
     const d = await skipUnlessReady();
     await page.goto('/costs');
     await expect(page.getByRole('heading', { level: 1, name: 'Costs' })).toBeVisible();
-    await expect(page.getByTestId('costs-budget-meter')).toHaveAttribute('aria-valuemax', String(d.settings.budgetUsd));
+    if (d.settings.budgetUsd !== null) {
+      await expect(page.getByTestId('costs-budget-meter')).toHaveAttribute('aria-valuemax', String(d.settings.budgetUsd));
+    } else {
+      await expect(page.getByTestId('costs-budget-banner')).toHaveAttribute('data-kind', 'unset');
+      await expect(page.getByTestId('costs-budget-unset')).toBeVisible();
+    }
     const cloudflare = d.connections.find((c) => c.provider === 'cloudflare');
     const missing = ['none', 'unknown'].includes(d.collector.tokenSource) && !cloudflare?.set;
     if (missing) {
@@ -172,10 +177,11 @@ test.describe('costs (super admin)', () => {
   test('COSTS-05 change the budget and put it back, kept after a reload; out-of-range values are refused', async ({ page }) => {
     const d = await skipUnlessReady();
     const before = d.settings.budgetUsd;
+    const beforeInput = before === null ? '' : String(before);
     const changed = before === 637 ? 638 : 637;
     await page.goto('/costs');
     const budget = page.getByTestId('costs-threshold-budgetUsd');
-    await expect(budget).toHaveValue(String(before));
+    await expect(budget).toHaveValue(beforeInput);
 
     await budget.fill('0');
     await page.getByTestId('costs-thresholds-save').click();
@@ -190,11 +196,11 @@ test.describe('costs (super admin)', () => {
     await expect(page.getByTestId('costs-budget-cap')).toContainText(usd(changed));
     expect((await dashboard()).result!.settings.budgetUsd).toBe(changed);
 
-    await page.getByTestId('costs-threshold-budgetUsd').fill(String(before));
+    await page.getByTestId('costs-threshold-budgetUsd').fill(beforeInput);
     await page.getByTestId('costs-thresholds-save').click();
     await expect(page.getByTestId('costs-thresholds-feedback-ok')).toBeVisible();
     await page.reload();
-    await expect(page.getByTestId('costs-threshold-budgetUsd')).toHaveValue(String(before));
+    await expect(page.getByTestId('costs-threshold-budgetUsd')).toHaveValue(beforeInput);
     expect((await dashboard()).result!.settings.budgetUsd).toBe(before);
   });
 

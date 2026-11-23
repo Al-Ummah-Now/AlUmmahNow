@@ -170,14 +170,16 @@ const pct = (share: number) => Math.round(Math.max(0, Math.min(1, share)) * 1000
 
 /** The budget meter: spent and projected against the budget, ticks at the warning levels. */
 export function budgetMeter(budget: OpsCosts['budget']): BudgetMeter {
+  const share = budget.share ?? 0;
+  const projectedShare = budget.projectedShare ?? 0;
   return {
-    spentPct: pct(budget.share),
-    projectedPct: pct(budget.projectedShare),
+    spentPct: pct(share),
+    projectedPct: pct(projectedShare),
     ticks: budget.levels.filter((l) => l < 1).map((l) => Math.round(l * 100)),
     tone: toneOf(budget.level),
     projectedTone: toneOf(budget.projectedLevel),
-    over: budget.share >= 1,
-    projectedOver: budget.projectedShare >= 1,
+    over: share >= 1,
+    projectedOver: projectedShare >= 1,
   };
 }
 
