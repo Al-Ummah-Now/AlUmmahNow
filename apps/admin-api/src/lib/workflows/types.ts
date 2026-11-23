@@ -63,7 +63,7 @@ export interface WorkflowExecutor<P = unknown, R = unknown> {
   scope?(payload: P): string;
   target(payload: P): { kind: string; id: string };
   /** The feature's own permission to propose (the engine adds the money floor on top). */
-  canPropose(ctx: WorkflowCtx, actor: WorkflowActor): Promise<boolean>;
+  canPropose(ctx: WorkflowCtx, actor: WorkflowActor, payload: P): Promise<boolean>;
   /** Validates and normalizes the input; throws the feature's own errors. */
   validate(ctx: WorkflowCtx, input: unknown): Promise<P>;
   describe(ctx: WorkflowCtx, payload: P): Promise<WorkflowDescription>;
