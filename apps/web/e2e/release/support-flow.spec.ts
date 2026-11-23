@@ -58,7 +58,10 @@ test.describe('Release: supporting creators (test collector and rail)', () => {
                  ON CONFLICT (id) DO UPDATE SET policy = excluded.policy, version = support_config.version + 1, updated_by = excluded.updated_by`);
       await supportOn(true);
 
+      // Both accounts first: signing up needs a signed-out page, and the hosted pages below don't need a session
       const owner = await ownData.createUser(page, 'rel-support-owner');
+      await page.context().clearCookies();
+      const fan = await ownData.createUser(page, 'rel-support-fan');
       await ownData.grantCreator(owner);
       const channelId = await ownData.createChannel(owner);
       channelIds.push(channelId);
@@ -77,7 +80,6 @@ test.describe('Release: supporting creators (test collector and rail)', () => {
         .toMatchObject({ status: 'active', taxForm: 'w8ben' });
 
       // A viewer sees support for this channel; the breakdown says the platform takes nothing
-      const fan = await ownData.createUser(page, 'rel-support-fan');
       await expect
         .poll(async () => ((await (await apiFetch(fan, `/api/me/features?channelId=${channelId}`)).json()) as { features?: { support?: boolean; supportReceive?: boolean } }).features, SWITCH_LANDS)
         .toMatchObject({ support: true, supportReceive: true });
