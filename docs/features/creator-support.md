@@ -166,19 +166,21 @@ guessing.
 
 | Decision | Policy fields | Code that reads it |
 |---|---|---|
-| MEM-D17 payout rail | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee`; `payees.ts` `startPayeeOnboarding`; `payouts.ts` `payoutDecisionsOpen` |
-| MEM-D18 hold | `holdDays` | `events.ts` (`available_at` stays empty while open) and `releaseDueGifts` |
-| MEM-D19 threshold and schedule | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | `payouts.ts` `planBatch`; `jobs.ts` `queueSupportCron` (payout day); `support_settings.payout_threshold` |
-| MEM-D20 payout and FX fees | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
-| MEM-D21 chargebacks after payout | `negativeBalancePolicy`, `reserveBasisPoints`, `reserveDays` | `ledger.ts` `debitCreator` (refunds, disputes) |
+| MEM-D17 payout rail (decided 2026-11-23: an admin setting per environment, no default; Wise, PayPal Payouts, Trolley) | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee`; `payees.ts` `startPayeeOnboarding`; `payouts.ts` `payoutDecisionsOpen` |
+| MEM-D18 hold (decided: admin setting, default 120 days, the card networks' dispute window) | `holdDays` | `events.ts` (`available_at` from payment + hold) and `releaseDueGifts` |
+| MEM-D19 threshold and schedule (decided: default $25 or the rail's minimum if higher, on the 15th, creators may raise theirs) | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | `payouts.ts` `planBatch` (with `PayoutRail.minimumPayout`); `jobs.ts` `queueSupportCron` (payout day); `support_settings.payout_threshold` |
+| MEM-D20 payout and FX fees (decided: the creator bears them, shown in Studio before payout day) | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
+| MEM-D21 chargebacks after payout (decided: 120-day hold; a later loss is netted against future gifts; the Waqf writes off only what can never be recovered) | `negativeBalancePolicy`, `reserveBasisPoints`, `reserveDays` | `ledger.ts` `debitCreator` (refunds, disputes) |
 | MEM-D22 dormant balances | `dormantPolicy`, `dormantReminderMonths` | `jobs.ts` `runSupportDormantJob` (lists only while open) |
-| MEM-D23 gifts before payee active | `collectBeforePayeeActive` | `eligibility.ts` `receiverEligibility` |
-| MEM-D24 approvals | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
+| MEM-D23 gifts before payee active (decided: no; Support shows only after payout setup) | `collectBeforePayeeActive` | `eligibility.ts` `receiverEligibility` |
+| MEM-D24 approvals (decided: two finance-list people, preparer + a different approver, never the owner or tech staff; moves to the generic approval workflow) | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
 | MEM-D3 card fee payer (decided 2026-11-23, O43: always shown, cover optional and unticked) | `collectorFeePayer` | `effectiveCoverFees` (shared-types); the sheet's `coverFeesDefault: false` |
 | MEM-D4 minimum and presets (decided O43: per currency, no default) | `amounts` | `checkout.ts` `quote`; the sheet; readiness |
 | MEM-D9 ages | `minSupporterAge`, `minCreatorAge` | `eligibility.ts` (must be recorded); the age confirmation on the support sheet (MEM-7) |
 | MEM-D5 who may receive | `receiversRule` (+ `CreatorTier.supportReceive`) | `eligibility.ts` `receiverEligibility` |
-| MEM-D15 apps | `appsEnabled` | `eligibility.ts` `supporterEligibility` (`X-AUN-Client`) |
+| MEM-D15 apps (decided 2026-11-23: an admin setting, hidden by default, never IAP) | `support_config.app_support` (`AppSupportSettings`, shared-types `support-apps.ts`) | `eligibility.ts` `appDecisionFor` (`X-AUN-Client` + `X-AUN-Storefront`); `supportCheckout.ts` (sheet `app`, monthly gate, `openIn: 'external_browser'`); `PUT /api/support/settings/apps` |
+| MEM-D13 perks (decided: none, ever) | none: no `supportPerks` switch or key | the gift stays strictly a gift (no digital content), which keeps the apps' P2P exemption simple |
+| MEM-D2 no payout service reaches (decided: collect nothing; channel About links as on YouTube) | none: no `supportExternalLinks` switch | `support_country_rules.creators` blocks collection there |
 
 ## Tests
 
@@ -191,7 +193,8 @@ guessing.
 - `apps/api-videos/test/support-jobs.spec.ts`: signed webhooks through the queue to the ledger, redelivery, refunds and disputes, release, rail payout events, reconciliation, crons.
 - `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
 - `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
-- `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps, payee state and pauses.
+- `packages/shared-types/test/support-apps.test.ts`: MEM-D15 modes, storefront rules, interlocks, cadence, parsing (no IAP mode).
+- `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps (platform, storefront, interlocks), payee state and pauses.
 - `apps/api-videos/test/support-checkout.spec.ts`: the sheet, the breakdown, the test checkout through the webhook to the ledger, monthly consent, stopping, the owner's settings, the refusals.
 - `apps/web/e2e/release/support-flow.spec.ts` runs on the local stack (MEM-21), in the shared-state project because it turns the switch on. It covers:
   - the creator's payee onboarding at the test rail;
