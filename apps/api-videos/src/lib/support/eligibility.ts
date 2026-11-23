@@ -83,14 +83,15 @@ export async function receiverEligibility(env: EligibilityEnv, channel: Receiver
 	if (!settings || settings.enabled !== 1) return { ok: false, reason: 'channel_off' };
 	if (settings.admin_paused === 1) return { ok: false, reason: 'channel_paused' };
 	const payee = await db
-		.prepare('SELECT status, tax_form, sanctions_status, payouts_held, country FROM support_payees WHERE channel_id = ? AND mode = ? ORDER BY updated_at DESC LIMIT 1')
-		.bind(channel.channelId, c.mode)
+		.prepare('SELECT status, tax_form, sanctions_status, payouts_held, country FROM support_payees WHERE channel_id = ? AND mode = ? ORDER BY CASE rail WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, updated_at DESC LIMIT 1')
+		.bind(channel.channelId, c.mode, c.policy.primaryRail ?? '', c.policy.fallbackRail ?? '')
 		.first<{ status: string; tax_form: string; sanctions_status: string; payouts_held: number; country: string | null }>();
 	const payeeReady = !!payee && payee.status === 'active' && payee.tax_form !== 'none' && payee.sanctions_status === 'clear' && payee.payouts_held === 0;
 	// MEM-D23: without an active payee, gifts are collected only when the decision allows it
 	if (!payeeReady && c.policy.collectBeforePayeeActive !== true) return { ok: false, reason: 'payee_not_ready' };
-	// A screening hold always stops new gifts, whatever MEM-D23 says
-	if (payee && payee.sanctions_status === 'hold') return { ok: false, reason: 'payee_not_ready' };
+	// Whatever MEM-D23 says, a payee the rail or an admin stopped never collects: a screening hold, held
+	// payouts, or a payee restricted, disabled or closed at the rail
+	if (payee && (payee.sanctions_status === 'hold' || payee.payouts_held === 1 || payee.status === 'restricted' || payee.status === 'disabled' || payee.status === 'closed')) return { ok: false, reason: 'payee_not_ready' };
 	const rule = await countryRule(db, payee?.country ?? null);
 	if (rule && rule.creators !== 'allowed') return { ok: false, reason: 'country_blocked' };
 	if (c.policy.receiversRule === 'tierCapability' && !(await ownerTierAllows(channel.ownerId))) return { ok: false, reason: 'tier_not_allowed' };

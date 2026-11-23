@@ -55,13 +55,17 @@ interface PayeeRow {
 	payouts_held: number;
 }
 
-async function payeeRow(db: SearchDb, channelId: string, mode: string): Promise<PayeeRow | null> {
-	return db.prepare('SELECT id, rail, mode, rail_payee_ref, country, payout_currency, method, status, tax_form, sanctions_status, requirements, payouts_held FROM support_payees WHERE channel_id = ? AND mode = ? ORDER BY updated_at DESC LIMIT 1').bind(channelId, mode).first<PayeeRow>();
+/** The channel's payee, on the chosen rail first (MEM-D17 may change after a payee exists on another). */
+async function payeeRow(db: SearchDb, channelId: string, mode: string, rails: { primary: string | null; fallback: string | null }): Promise<PayeeRow | null> {
+	return db
+		.prepare('SELECT id, rail, mode, rail_payee_ref, country, payout_currency, method, status, tax_form, sanctions_status, requirements, payouts_held FROM support_payees WHERE channel_id = ? AND mode = ? ORDER BY CASE rail WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, updated_at DESC LIMIT 1')
+		.bind(channelId, mode, rails.primary ?? '', rails.fallback ?? '')
+		.first<PayeeRow>();
 }
 
 export async function payeeView(db: SearchDb, channelId: string): Promise<PayeeView> {
 	const config = await readSupportConfig(db);
-	const row = await payeeRow(db, channelId, config.mode);
+	const row = await payeeRow(db, channelId, config.mode, { primary: config.policy.primaryRail, fallback: config.policy.fallbackRail === 'none' ? null : config.policy.fallbackRail });
 	if (!row) return NOT_STARTED;
 	let requirements: string[] = [];
 	try {
@@ -99,7 +103,7 @@ export async function startPayeeOnboarding(
 	await db
 		.prepare(
 			`INSERT INTO support_payees (id, channel_id, owner_user_id, rail, mode, country, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'not_started', ?, ?)
-			 ON CONFLICT (channel_id, rail, mode) DO UPDATE SET owner_user_id = excluded.owner_user_id, country = COALESCE(support_payees.country, excluded.country), updated_at = excluded.updated_at`,
+			 ON CONFLICT (channel_id, rail, mode) DO UPDATE SET owner_user_id = excluded.owner_user_id, country = excluded.country, updated_at = excluded.updated_at`,
 		)
 		.bind(payeeId, input.channelId, input.ownerUserId, rail.id, config.mode, input.country, at, at)
 		.run();

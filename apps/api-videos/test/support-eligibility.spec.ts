@@ -113,3 +113,24 @@ describe('MEM-D5 and the plain checks', () => {
 		assert.deepEqual(await receiverEligibility(t.env as never, { channelId: CH, ownerId: OWNER }, async () => true), { ok: false, reason: 'country_blocked' });
 	});
 });
+
+describe('review fixes (cross-provider review of #1772)', () => {
+	it('MEM-D5 tierCapability reads the real tier flag: off by default, on once the owner’s tier has it', async () => {
+		const { saveTier, assignTier } = await import('../src/lib/creatorTiers');
+		const t = await setup({ decided: { receiversRule: 'tierCapability' } });
+		await saveTier(t.db as never, 'creator-plus', { name: 'Creator Plus', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 2 }, 'admin-1', { create: true });
+		await assignTier(t.db as never, OWNER, 'creator-plus', 'admin-1');
+		assert.equal((await t.keys(VIEWER)).supportReceive, false);
+		await saveTier(t.db as never, 'creator-plus', { supportReceive: true }, 'admin-1');
+		forgetFeatureCaches();
+		assert.equal((await t.keys(VIEWER)).supportReceive, true);
+	});
+
+	it('MEM-D23 on: a payee with payouts held, or restricted, disabled or closed at the rail, never collects', async () => {
+		for (const change of ['payouts_held = 1', "status = 'restricted'", "status = 'disabled'", "status = 'closed'"]) {
+			const t = await setup({ payee: 'pending', decided: { collectBeforePayeeActive: true } });
+			await t.db.prepare(`UPDATE support_payees SET ${change}`).run();
+			assert.equal((await t.keys(VIEWER)).supportReceive, false, change);
+		}
+	});
+});

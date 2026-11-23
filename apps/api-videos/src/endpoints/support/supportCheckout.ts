@@ -14,7 +14,7 @@
  *   POST /api/me/support/pledges/:id/stop                  stops a monthly pledge at once
  */
 import type { Context } from 'hono';
-import { CLIENT_HEADER } from '@al-ummah/shared-types';
+import { CLIENT_HEADER, channelRoleOf } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { checkHuman, TURNSTILE_HEADER } from '../../lib/bot-guard';
 import { loadChannelRecord, roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
@@ -105,14 +105,16 @@ export async function handleSupportCheckout(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return apiError(c, 401, 'authentication_required');
 	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
-	const human = await checkHuman(env as never, c.req.raw, typeof body.turnstileToken === 'string' ? body.turnstileToken : (c.req.header(TURNSTILE_HEADER) ?? null), 'support-checkout');
-	if (!human.allowed) return apiError(c, 403, 'human_check_failed');
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
 	const supporter = await supporterEligibility(env, { userId, country: country(c), client: c.req.header(CLIENT_HEADER) ?? null });
-	// Not eligible here, or their own channel (self-support is refused, §2.3)
-	const role = await roleOnChannel(env as unknown as ChannelAccessEnv, channel.channelId, userId).catch(() => null);
+	// Not eligible here, or their own channel (self-support is refused, §2.3). The role comes from the
+	// channel record already read, so a storage error can't let a team member through.
+	const role = channelRoleOf(channel.record, userId);
 	if (!supporter.ok || role || channel.ownerId === userId) return featureOff(c, 'creatorSupport');
+	// The human check comes after: someone who may not support here gets feature_off, not a captcha refusal
+	const human = await checkHuman(env as never, c.req.raw, typeof body.turnstileToken === 'string' ? body.turnstileToken : (c.req.header(TURNSTILE_HEADER) ?? null), 'support-checkout');
+	if (!human.allowed) return apiError(c, 403, 'human_check_failed');
 	const kind = body.kind === 'monthly' ? 'monthly' : body.kind === 'one_time' ? 'one_time' : null;
 	if (!kind) return apiError(c, 400, 'invalid_request');
 	const settings = await env.SEARCH_DB.prepare('SELECT one_time_enabled, monthly_enabled FROM support_settings WHERE channel_id = ?').bind(channel.channelId).first<{ one_time_enabled: number; monthly_enabled: number }>();
@@ -195,8 +197,7 @@ export async function handleStopMyPledge(c: Context) {
 	if (g instanceof Response) return g;
 	try {
 		const now = new Date();
-		const config = await readSupportConfig(env.SEARCH_DB!);
-		return c.json({ success: true, result: await stopMyPledge(env, g, c.req.param('id') ?? '', vendorContext(env, config.mode, () => now), now) });
+		return c.json({ success: true, result: await stopMyPledge(env, g, c.req.param('id') ?? '', (mode) => vendorContext(env, mode, () => now), now) });
 	} catch (error) {
 		return failure(c, error);
 	}
