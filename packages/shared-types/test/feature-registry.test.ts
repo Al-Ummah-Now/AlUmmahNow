@@ -68,15 +68,15 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (only viewer caption download starts off)', () => {
+test('defaults keep today’s behaviour (caption download and creator support start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
-  assert.deepEqual(off, ['viewerCaptionDownload']);
+  assert.deepEqual(off, ['viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks']);
 });
 
-test('super-admin-only switches are the four the spec names', () => {
+test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'viewerCaptionDownload'],
+    ['upload', 'createChannel', 'live', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks'],
   );
 });
 
@@ -99,6 +99,9 @@ test('a required feature that is off turns its dependants off without changing t
   assert.deepEqual(r.blockedBy('youtubeImport', r.DEFAULT_FEATURE_SWITCHES), []);
   assert.deepEqual(r.dependantsOf('upload'), ['youtubeImport', 'audioTracks']);
   assert.deepEqual(r.dependantsOf('live'), []);
+  assert.deepEqual(r.dependantsOf('creatorSupport'), ['supportExternalLinks', 'charityDonations', 'supportPerks']);
+  const support = r.effectiveSwitches(r.withDefaults({ supportPerks: true, charityDonations: true }));
+  assert.equal(support.supportPerks, false, 'perks stay off while creator support is off');
 });
 
 test('applySwitchesToUserFeatures turns covered keys off and leaves the rest', () => {
