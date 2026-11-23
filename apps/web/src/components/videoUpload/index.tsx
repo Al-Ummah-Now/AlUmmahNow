@@ -1,5 +1,5 @@
 'use client';
-import { formatBytes, formatPercent } from '@al-ummah/shared-types';
+import { formatBytes, formatPercent, isArabicLocale } from '@al-ummah/shared-types';
 import { hasAnyLanguage, primaryText } from '@/lib/localized-input';
 import { logger } from '@/lib/logger-client';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
@@ -36,6 +36,9 @@ import { useFeatures } from "@/hooks/useFeatures";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { getApiUrl } from "@/lib/runtime-config";
 import { formatPlayerTime } from '@/lib/video/player-time';
+
+/** The formats the drop zone names, in the order shown */
+const UPLOAD_FORMATS = ['MP4', 'MOV', 'AVI', 'WebM'] as const;
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -1202,7 +1205,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           {/* Size and duration are unlimited (TUS), so only the formats are listed;
               the old line read "Max No limit • Max No limit" in both languages */}
           <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="upload-supported-formats">
-            {t.upload.supports} MP4, MOV, AVI, WebM
+            {/* Arabic copy takes the Arabic comma «،», never the Latin one */}
+            {t.upload.supports} {UPLOAD_FORMATS.join(isArabicLocale(lang) ? '، ' : ', ')}
           </p>
         </div>
       </div>

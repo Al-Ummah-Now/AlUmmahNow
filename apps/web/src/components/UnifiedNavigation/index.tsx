@@ -9,7 +9,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFitToViewport } from '@/hooks/useFitToViewport';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
@@ -84,8 +84,11 @@ export function UnifiedNavigation() {
     logoutAll,
   } = useMultiAccount();
 
-  const [channel, setChannel] = useState(user?.channel);
-  const [channels, setChannels] = useState(user?.channels || []);
+  // Read from the session as it renders, never mirrored into state: a copy set by an effect changed one
+  // paint after everything else reading the session, so on a switch the comment box showed the new
+  // identity while the pill still named the old one (AUDIT-2 re-audit 8, #1656)
+  const channel = user?.channel;
+  const channels = useMemo(() => user?.channels || [], [user?.channels]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [accountProfiles, setAccountProfiles] = useState<Map<string, Profile>>(new Map());
 
@@ -137,12 +140,6 @@ export function UnifiedNavigation() {
     // Keyed on the account ids and emails (accountsKey), not the array identity
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsKey]);
-
-  // Update local state when user changes
-  useEffect(() => {
-    setChannel(user?.channel);
-    setChannels(user?.channels || []);
-  }, [user?.id, user?.email, user?.channel, user?.channels]);
 
   // Get localized display name
   // The user's name (display name, else first + last); the email only as the last resort. The active channel is shown separately
