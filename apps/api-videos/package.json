@@ -24,7 +24,7 @@
   "dependencies": {
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
-    "@bunny.net/storage-sdk": "0.3.0",
+    "@bunny.net/storage-sdk": "0.3.2",
     "@al-ummah-now/openauth": "1.0.15",
     "chanfana": "^3.7.0",
     "hono": "^4.13.19",
@@ -36,9 +36,9 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251106.1",
     "@types/node": "24.10.0",
-    "@types/sanitize-html": "^2.13.0",
+    "@types/sanitize-html": "^2.16.2",
     "@types/service-worker-mock": "^2.0.1",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "wrangler": "^4.108.0"
   }
