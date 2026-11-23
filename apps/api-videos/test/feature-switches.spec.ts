@@ -144,6 +144,10 @@ describe('/api/me/features', () => {
 			false,
 			'eventCalendar stays hidden on Ummah Kids clients',
 		);
+		assert.equal(after.kidsMode, false, 'Ummah Kids is off by default');
+		await set('ummahKids', true);
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: [] })).kidsMode, true);
+		assert.equal((await computeFeatures(env, { userId: null })).kidsMode, false);
 	});
 
 	it('has a body ETag: a match gets 304; signed out is public for 30 s', async () => {

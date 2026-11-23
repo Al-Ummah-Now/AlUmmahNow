@@ -268,3 +268,15 @@ describe('creatorSupport precondition (wiki AUN-MEMBERS §9.7)', () => {
     }
   });
 });
+
+describe('ummahKids precondition (wiki E20 §6)', () => {
+  it('the real check refuses on a fresh database and names decisions_open', async () => {
+    const { checkCanTurnOn } = await import('../src/lib/feature-preconditions');
+    const search = searchD1();
+    for (const env of [{ SEARCH_DB: search }, {}]) {
+      const r = await checkCanTurnOn(env as never, 'ummahKids');
+      assert.equal(r.ok, false);
+      assert.ok(!r.ok && r.reasonKey === 'decisions_open' && r.reason.en.length > 0 && r.reason.ar.length > 0);
+    }
+  });
+});

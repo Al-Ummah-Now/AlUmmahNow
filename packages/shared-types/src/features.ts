@@ -70,6 +70,8 @@ export const USER_FEATURE_KEYS = [
   'listenMode',
   /** Encrypted offline downloads on native apps and creator download settings (wiki E14) */
   'offlineDownloads',
+  /** Ummah Kids mode and parental controls (switch ummahKids, wiki E20) */
+  'kidsMode',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];

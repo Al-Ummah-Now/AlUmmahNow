@@ -6,7 +6,7 @@
  * Each check is owned by its feature's epic and must be fast (one or two reads) and fail closed:
  * a check that throws refuses with the generic reason.
  */
-import { supportCanTurnOnHook, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
+import { kidsCanTurnOnHook, supportCanTurnOnHook, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 
 /** `reasonKey` is the check's stable reason code, passed to clients so they can branch on it. */
@@ -25,8 +25,19 @@ const creatorSupport: FeaturePrecondition = async (env) => {
   return { ok: false, reason: refused.reason, reasonKey: refused.reasonKey };
 };
 
+/**
+ * Ummah Kids (wiki E20 §6, §11): on only once all owner decisions are resolved, legal counsel
+ * sign-off is recorded, and at least one approved catalog item or published learning path exists.
+ */
+const ummahKids: FeaturePrecondition = async (env) => {
+  const r = await kidsCanTurnOnHook({ SEARCH_DB: env.SEARCH_DB as never });
+  if (r.ok === true) return { ok: true };
+  const refused = r as Extract<typeof r, { ok: false }>;
+  return { ok: false, reason: refused.reason, reasonKey: refused.reasonKey };
+};
+
 /** Checks by switch. */
-export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport };
+export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport, ummahKids };
 
 export const PRECONDITION_UNREADABLE: FeatureText = {
   en: 'We couldn’t check whether this can be turned on. Try again in a moment.',

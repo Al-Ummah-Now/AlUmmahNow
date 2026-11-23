@@ -304,6 +304,8 @@ export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channe
 	// Creator support (wiki AUN-MEMBERS §9.5): computed only while its switch is on, for viewers too
 	// (the Support button sits on the channel page), so nothing is read while support is off
 	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, request));
+	// Ummah Kids (wiki E20): available to signed-in parent accounts once the switch is on
+	if (switches.effective.ummahKids) features.kidsMode = !!who.userId;
 	// The Features page switches (FEAT-4): a switch that is off, or blocked by one, hides its keys
 	return applySwitchesToUserFeatures(features, switches.effective);
 }

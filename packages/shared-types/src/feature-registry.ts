@@ -95,6 +95,7 @@ export const FEATURE_KEYS = [
   'newsletter',
   'listenMode',
   'offlineDownloads',
+  'ummahKids',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -500,6 +501,21 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'off',
     requires: [],
     userFeatureKeys: ['offlineDownloads'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'ummahKids',
+    group: 'site',
+    name: { en: 'Ummah Kids', ar: 'أطفال الأمة' },
+    help: {
+      en: 'Ummah Kids and parental controls are hidden everywhere, and nobody can enter Kids Mode. Turning it on requires all child-safety decisions, legal sign-off, and at least one approved catalog item.',
+      ar: 'تختفي ميزة أطفال الأمة والرقابة الأبوية في كل مكان، ولا يستطيع أحد الدخول إلى وضع الأطفال. يتطلب التشغيل إغلاق قرارات سلامة الأطفال، والموافقة القانونية، ووجود محتوى معتمد واحد على الأقل.',
+    },
+    default: false,
+    toggle: 'superAdmin',
+    confirm: 'both',
+    requires: [],
+    userFeatureKeys: ['kidsMode'],
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);

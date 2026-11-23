@@ -242,6 +242,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   listenMode: 'E14-S3 adds the audio playback route and maps it here',
   offlineDownloads: 'E14-S3 adds the download license routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
+  ummahKids: 'E20-2 adds its routes and maps them here',
 });
 
 /** The routes a worker gates in its middleware. */
