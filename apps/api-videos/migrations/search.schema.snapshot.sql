@@ -65,6 +65,7 @@
 --   apps/api-videos/migrations/search/0094_recitation_metadata.sql
 --   apps/api-videos/migrations/search/0095_video_notes.sql
 --   apps/api-videos/migrations/search/0104_drop_download_licenses.sql
+--   apps/api-videos/migrations/search/0114_support_indexes.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -390,6 +391,7 @@ CREATE INDEX idx_support_events_user ON support_events (user_id) WHERE user_id I
 CREATE INDEX idx_support_finance_active ON support_finance_members (user_id) WHERE removed_at IS NULL AND approved_by IS NOT NULL;
 CREATE INDEX idx_support_ledger_account ON support_ledger (account, currency);
 CREATE INDEX idx_support_ledger_channel ON support_ledger (channel_id, seq) WHERE channel_id IS NOT NULL;
+CREATE INDEX idx_support_ledger_created ON support_ledger (created_at);
 CREATE INDEX idx_support_ledger_entry ON support_ledger (entry_id);
 CREATE INDEX idx_support_ledger_key ON support_ledger (entry_key);
 CREATE INDEX idx_support_ledger_ref ON support_ledger (ref_table, ref_id);
@@ -398,9 +400,11 @@ CREATE INDEX idx_support_payees_owner ON support_payees (owner_user_id);
 CREATE UNIQUE INDEX idx_support_payees_ref ON support_payees (rail, mode, rail_payee_ref) WHERE rail_payee_ref IS NOT NULL;
 CREATE INDEX idx_support_payees_status ON support_payees (status, updated_at);
 CREATE INDEX idx_support_payments_channel ON support_payments (channel_id, created_at);
+CREATE INDEX idx_support_payments_created ON support_payments (created_at);
 CREATE UNIQUE INDEX idx_support_payments_ref ON support_payments (collector, mode, collector_payment_ref);
 CREATE INDEX idx_support_payments_release ON support_payments (available_at) WHERE released_at IS NULL AND available_at IS NOT NULL;
 CREATE INDEX idx_support_payments_supporter ON support_payments (supporter_user_id, created_at);
+CREATE INDEX idx_support_payments_unscheduled ON support_payments (created_at) WHERE available_at IS NULL AND released_at IS NULL;
 CREATE UNIQUE INDEX idx_support_batches_period ON support_payout_batches (period) WHERE status NOT IN ('stopped');
 CREATE INDEX idx_support_batches_status ON support_payout_batches (status, created_at);
 CREATE UNIQUE INDEX idx_support_payouts_batch_payee ON support_payouts (batch_id, payee_id, currency);
@@ -412,6 +416,7 @@ CREATE INDEX idx_support_pledges_supporter ON support_pledges (supporter_user_id
 CREATE UNIQUE INDEX idx_support_recon_day ON support_reconciliations (date, currency);
 CREATE INDEX idx_support_refunds_payment ON support_refunds (payment_id);
 CREATE UNIQUE INDEX idx_support_refunds_ref ON support_refunds (collector_refund_ref) WHERE collector_refund_ref IS NOT NULL;
+CREATE INDEX idx_support_refunds_requester ON support_refunds (requested_by_user) WHERE requested_by_user IS NOT NULL;
 CREATE INDEX idx_support_reports_reporter ON support_reports (reporter_user_id);
 CREATE INDEX idx_support_reports_status ON support_reports (status, created_at);
 CREATE UNIQUE INDEX idx_tier_requests_one_pending ON tier_requests (user_id) WHERE status = 'pending';

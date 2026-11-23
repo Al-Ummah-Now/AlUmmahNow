@@ -47,10 +47,13 @@ export async function reconcileDay(input: ReconcileInput): Promise<{ lines: Reco
 	}
 	const railBalances = new Map<SupportCurrency, number>();
 	if (input.rail) for (const m of await input.rail.adapter.getFundingBalance(input.rail.ctx)) railBalances.set(m.currency, m.amount);
-	const unbalanced = await unbalancedEntries(db);
+	// Everything up to the end of `day` (UTC): the statement is the balance at the end of that day
+	const dayStart = `${day}T00:00:00.000Z`;
+	const dayEnd = new Date(Date.parse(dayStart) + 86_400_000).toISOString();
+	const unbalanced = await unbalancedEntries(db, { since: dayStart, before: dayEnd });
 	const lines: ReconcileLine[] = [];
 	for (const currency of Object.keys(SUPPORT_CURRENCY_EXPONENTS) as SupportCurrency[]) {
-		const [ledgerBank, ledgerRail, ledgerClearing] = await Promise.all([accountTotal(db, 'bank:creator_funds', currency), accountTotal(db, 'rail:funding', currency), accountTotal(db, 'clearing:collector', currency)]);
+		const [ledgerBank, ledgerRail, ledgerClearing] = await Promise.all([accountTotal(db, 'bank:creator_funds', currency, dayEnd), accountTotal(db, 'rail:funding', currency, dayEnd), accountTotal(db, 'clearing:collector', currency, dayEnd)]);
 		const stmt = await db.prepare("SELECT balance FROM support_bank_statements WHERE account = 'creator_funds' AND date = ? AND currency = ?").bind(day, currency).first<{ balance: number }>();
 		const bankBalance = stmt ? Number(stmt.balance) : null;
 		const railBalance = railBalances.has(currency) ? (railBalances.get(currency) as number) : null;
@@ -58,7 +61,8 @@ export async function reconcileDay(input: ReconcileInput): Promise<{ lines: Reco
 		if (!active) continue;
 		const bankGap = bankBalance === null ? 0 : bankBalance - ledgerBank;
 		const railGap = railBalance === null ? 0 : railBalance - ledgerRail;
-		const gap = bankGap + railGap;
+		// Absolute: a gap at the bank and an opposite one at the rail never cancel out
+		const gap = Math.abs(bankGap) + Math.abs(railGap);
 		const missing = (ledgerBank !== 0 && bankBalance === null) || (ledgerRail !== 0 && railBalance === null);
 		const status: ReconcileLine['status'] = unbalanced > 0 || bankGap !== 0 || railGap !== 0 ? 'gap' : missing ? 'incomplete' : 'ok';
 		const line: ReconcileLine = { currency, ledgerBank, ledgerRail, ledgerClearing, collectorSettled: settled.get(currency) ?? (input.collector ? 0 : null), bankBalance, railBalance, gap, status };
