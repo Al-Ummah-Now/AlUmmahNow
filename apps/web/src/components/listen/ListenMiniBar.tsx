@@ -84,13 +84,16 @@ export function ListenMiniBar() {
       dir={isRTL ? 'rtl' : 'ltr'}
       aria-label={labels.listenMode}
       data-testid="listen-mini-bar"
-      style={{
-        zIndex: 55,
-        backgroundColor: 'var(--fanous-c-drawer-bg, var(--fanous-color-surface, #ffffff))',
-        borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
-      }}
-      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-50 border-t shadow-lg"
+      style={{ zIndex: 55 }}
+      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-50 shadow-lg"
     >
+      <div
+        style={{
+          backgroundColor: 'var(--fanous-c-drawer-bg, var(--fanous-color-surface, #ffffff))',
+          borderColor: 'var(--fanous-color-outline, rgba(128, 128, 128, 0.25))',
+        }}
+        className="w-full border-t"
+      >
       {/* Sleep timer popover */}
       {showSleep && (
         <div
@@ -323,6 +326,7 @@ export function ListenMiniBar() {
             <X className="w-4 h-4" />
           </button>
         </div>
+      </div>
       </div>
     </aside>
   );
