@@ -81,6 +81,10 @@ describe('side rail scroll hint', () => {
     expect(css).not.toMatch(/\.nv-scroll[^{]*\{[^}]*mask-image/);
     expect(css).toMatch(/\.nv-scroll\{scrollbar-width:thin;scrollbar-color:transparent transparent;scrollbar-gutter:stable\}/);
     expect(css).toMatch(/\.nv-scroll:hover,\.nv-scroll:focus-within\{scrollbar-color:var\(--fanous-c-drawer-icon\) transparent\}/);
+    // The collapsed rail keeps no gutter and its items fill the list: a classic scrollbar's gutter made
+    // the 80px items overflow, and the Arabic list opened scrolled sideways (#1656 re-audit 8)
+    expect(css).toMatch(/html:not\(\[data-rail=open\]\) \.nv-panel \.nv-scroll\{padding-inline:4px;scrollbar-width:none;scrollbar-gutter:auto\}/);
+    expect(css).toMatch(/html:not\(\[data-rail=open\]\) \.nv-panel \.nv\{padding-inline:4px;inline-size:100%\}/);
     expect(css).not.toMatch(/\.nv-scroll\{scrollbar-width:none\}/);
   });
 });
