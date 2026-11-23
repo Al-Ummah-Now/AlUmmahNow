@@ -5,7 +5,7 @@
  *            → every active, unheld payee whose available balance reaches the threshold, with the
  *              rail's fee quote → batch 'awaiting_approval'. Refused after an unclean reconciliation,
  *              while payouts are held, or while a decision it needs is open (MEM-D17, D19, D20, D24).
- *   approve  people on the organisation's finance list (never the owner, never tech staff: admin-api
+ *   approve  people on the organization's finance list (never the owner, never tech staff: admin-api
  *            refuses them before calling here) until MEM-D24's count is met → 'approved' → fund job
  *   fund     the rail's funding balance must cover the batch; otherwise "Fund the rail" on the
  *            Errors page and the job waits and checks again. Never moves bank money itself.
@@ -141,7 +141,7 @@ export async function planBatch(
 	return { batchId, payouts, skipped };
 }
 
-/** Whether `userId` is on the organisation's finance list (active and approved by the board). */
+/** Whether `userId` is on the organization's finance list (active and approved by the board). */
 export async function isFinanceMember(db: SearchDb, userId: string): Promise<boolean> {
 	const r = await db.prepare('SELECT 1 AS x FROM support_finance_members WHERE user_id = ? AND removed_at IS NULL AND approved_by IS NOT NULL').bind(userId).first<{ x: number }>();
 	return !!r;
@@ -155,7 +155,7 @@ export async function approveBatch(db: SearchDb, batchId: string, approverId: st
 	const config = await readSupportConfig(db);
 	const needed = config.policy.batchApprovers;
 	if (needed === null) throw new PayoutError('decision_open', 'MEM-D24 is open', { open: ['MEM-D24'] });
-	if (!(await isFinanceMember(db, approverId))) throw new PayoutError('not_finance', 'Only people on the organisation’s finance list approve payouts');
+	if (!(await isFinanceMember(db, approverId))) throw new PayoutError('not_finance', 'Only people on the organization’s finance list approve payouts');
 	const batch = await db.prepare('SELECT id, status, prepared_by, approvals FROM support_payout_batches WHERE id = ?').bind(batchId).first<{ id: string; status: string; prepared_by: string; approvals: string }>();
 	if (!batch) throw new PayoutError('not_found', 'No such batch');
 	if (batch.status !== 'awaiting_approval') throw new PayoutError('wrong_status', `The batch is ${batch.status}`);

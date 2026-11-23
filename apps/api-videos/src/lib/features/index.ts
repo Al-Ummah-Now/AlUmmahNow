@@ -56,6 +56,7 @@ import { enabledProviders } from '../billing/config';
 import { readQuranCurrent } from '../quran/copy';
 import { forgetFeatureSwitches, overlaySwitch, readFeatureSwitches } from './switches';
 import { readRequestsAllowed } from '../upgradeMode';
+import { supportFeatureKeys } from '../support/eligibility';
 
 export { featureOff } from './off';
 
@@ -296,10 +297,43 @@ const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[
  * With `channelId`, channel work is judged on that channel's owner's tier and
  * the caller's role there; a caller without a role sees none of it.
  */
-export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
+export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null, request: FeaturesRequest = {}): Promise<UserFeatures> {
 	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
+	// Creator support (wiki AUN-MEMBERS §9.5): computed only while its switch is on, for viewers too
+	// (the Support button sits on the channel page), so nothing is read while support is off
+	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, request));
 	// The Features page switches (FEAT-4): a switch that is off, or blocked by one, hides its keys
 	return applySwitchesToUserFeatures(features, switches.effective);
+}
+
+/** What the request says about where it comes from (support's country and app checks). */
+export interface FeaturesRequest {
+	/** cf.country of the request */
+	country?: string | null;
+	/** X-AUN-Client (native apps) */
+	client?: string | null;
+}
+
+async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: string | null, request: FeaturesRequest): Promise<{ support: boolean; supportReceive: boolean }> {
+	try {
+		const db = env.SEARCH_DB;
+		if (!db) return { support: false, supportReceive: false };
+		const record = channelId ? await loadChannelRecord(env as never, channelId) : null;
+		const channel = channelId && record
+			? {
+					channelId,
+					ownerId: record.userId ?? null,
+					deleted: !!(record as { isDeleted?: boolean }).isDeleted,
+					suspended: !!(record as { isSuspended?: boolean }).isSuspended,
+					callerRole: who.userId ? channelRoleOf(record, who.userId) : null,
+				}
+			: null;
+		const ownerTierAllows = async (ownerId: string) => (await resolveCreator(db, { userId: ownerId, roles: null })).tier?.supportReceive === true;
+		return await supportFeatureKeys(env as never, { userId: who.userId ?? null, country: request.country ?? null, client: request.client ?? null }, channel, ownerTierAllows);
+	} catch (error) {
+		logger.warn('[features] Support keys not computed; hidden', { error: error instanceof Error ? error.message : String(error) });
+		return { support: false, supportReceive: false };
+	}
 }
 
 /**

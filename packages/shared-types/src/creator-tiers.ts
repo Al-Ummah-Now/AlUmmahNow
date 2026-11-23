@@ -86,6 +86,11 @@ export interface CreatorTier {
   uploads: boolean;
   /** May create channels, up to `maxChannels` */
   channels: boolean;
+  /**
+   * Creator support (wiki AUN-MEMBERS, MEM-D5 "tier capability"): owners on this tier may receive
+   * support. Absent = no. Read only while the support policy's `receiversRule` is 'tierCapability'.
+   */
+  supportReceive?: boolean;
   /** Listed on /upgrade, where users may request it */
   requestable: boolean;
   /**

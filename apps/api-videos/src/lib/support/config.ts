@@ -14,8 +14,8 @@ export interface SupportConfig {
 	collector: SupportCollectorId;
 	mode: SupportMode;
 	collectorFees: Partial<Record<SupportCurrency, CollectorFeeSchedule>>;
-	organisationFormed: boolean;
-	organisationName: string | null;
+	organizationFormed: boolean;
+	organizationName: string | null;
 	emergencyStop: boolean;
 	holdAllPayouts: boolean;
 	version: number;
@@ -69,8 +69,8 @@ export async function readSupportConfig(db: SearchDb): Promise<SupportConfig> {
 		collector: row?.collector ?? 'test',
 		mode: row?.mode ?? 'test',
 		collectorFees: parseCollectorFees(json(row?.collector_fees)),
-		organisationFormed: row?.organisation_formed === 1,
-		organisationName: row?.organisation_name ?? null,
+		organizationFormed: row?.organisation_formed === 1,
+		organizationName: row?.organisation_name ?? null,
 		emergencyStop: row?.emergency_stop === 1,
 		holdAllPayouts: row?.hold_all_payouts === 1,
 		version: row?.version ?? 0,

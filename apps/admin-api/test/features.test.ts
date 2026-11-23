@@ -188,9 +188,9 @@ describe('PUT /api/features/:key', () => {
   });
 
   it('a precondition refuses turning on with its reason in the caller’s language; turning off is never refused', async () => {
-    const reason = { en: 'Form the organisation first.', ar: 'أسّس المنظمة أولًا.' };
+    const reason = { en: 'Form the organization first.', ar: 'أسّس المنظمة أولًا.' };
     let calls = 0;
-    const checks = { creatorSupport: async () => { calls++; return { ok: false as const, reason, reasonKey: 'organisation_not_formed' }; } };
+    const checks = { creatorSupport: async () => { calls++; return { ok: false as const, reason, reasonKey: 'organization_not_formed' }; } };
     const t = setup(['super_admin'], { checks });
     const res = await t.put('creatorSupport', { enabled: true, expectedVersion: 0 }, { 'X-App-Locale': 'ar' });
     assert.equal(res.status, 409);
@@ -199,7 +199,7 @@ describe('PUT /api/features/:key', () => {
     assert.equal(body.message, reason.ar);
     assert.equal(body.lang, 'ar');
     assert.equal(body.feature, 'creatorSupport');
-    assert.equal(body.reasonKey, 'organisation_not_formed');
+    assert.equal(body.reasonKey, 'organization_not_formed');
     assert.equal((await t.item('creatorSupport')).enabled, false);
     // Already off: writing off again skips the check
     assert.equal((await t.put('creatorSupport', { enabled: false, expectedVersion: 0 })).status, 200);
@@ -264,7 +264,7 @@ describe('creatorSupport precondition (wiki AUN-MEMBERS §9.7)', () => {
     ]) {
       const r = await checkCanTurnOn(env as never, 'creatorSupport');
       assert.equal(r.ok, false);
-      assert.ok(!r.ok && r.reasonKey === 'organisation_not_formed' && r.reason.en.length > 0 && r.reason.ar.length > 0);
+      assert.ok(!r.ok && r.reasonKey === 'organization_not_formed' && r.reason.en.length > 0 && r.reason.ar.length > 0);
     }
   });
 });

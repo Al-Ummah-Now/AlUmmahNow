@@ -14,7 +14,7 @@ export type PreconditionResult = { ok: true } | { ok: false; reason: FeatureText
 export type FeaturePrecondition = (env: AdminBindings) => Promise<PreconditionResult>;
 
 /**
- * Creator support (wiki AUN-MEMBERS §9.7): on only once the organisation is recorded as formed, the
+ * Creator support (wiki AUN-MEMBERS §9.7): on only once the organization is recorded as formed, the
  * finance list has the approvers MEM-D24 needs, every owner decision is recorded, and a collector
  * and the chosen payout rail exist in this environment (shared-types support-readiness.ts).
  */

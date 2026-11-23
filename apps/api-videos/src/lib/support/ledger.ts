@@ -9,7 +9,7 @@
  *   so a crash can't leave half an entry.
  * - Balances are never stored: `creatorBalance` sums the lines.
  *
- * Sign convention (§9.3): what the organisation holds for a creator is NEGATIVE on the creator's
+ * Sign convention (§9.3): what the organization holds for a creator is NEGATIVE on the creator's
  * accounts; `creatorBalance` returns it as a positive "owed" amount.
  *
  * The posting builders (`giftLines`, `refundLines`, …) are pure. Where an owner decision changes
@@ -108,7 +108,7 @@ function channelOf(account: string): string | null {
 export type CreatorBalance = Record<CreatorBucket, number>;
 
 /**
- * What the organisation holds for a channel, per currency and bucket, as positive amounts owed
+ * What the organization holds for a channel, per currency and bucket, as positive amounts owed
  * (a negative number means the creator owes, MEM-D21).
  */
 export async function creatorBalance(db: SearchDb, channelId: string): Promise<Partial<Record<SupportCurrency, CreatorBalance>>> {
@@ -154,12 +154,12 @@ export function releaseLines(channelId: string, net: Money): LedgerLine[] {
 	return [line(creatorAccount(channelId, 'pending'), net.amount, net.currency), line(creatorAccount(channelId, 'available'), -net.amount, net.currency)];
 }
 
-/** The collector paid out to the organisation's creator-funds bank account. */
+/** The collector paid out to the organization's creator-funds bank account. */
 export function settlementLines(net: Money): LedgerLine[] {
 	return [line('bank:creator_funds', net.amount, net.currency), line('clearing:collector', -net.amount, net.currency)];
 }
 
-/** The organisation moved money from the creator-funds bank account to the rail. */
+/** The organization moved money from the creator-funds bank account to the rail. */
 export function railFundingLines(amount: Money): LedgerLine[] {
 	return [line('rail:funding', amount.amount, amount.currency), line('bank:creator_funds', -amount.amount, amount.currency)];
 }
@@ -167,7 +167,7 @@ export function railFundingLines(amount: Money): LedgerLine[] {
 /**
  * Takes `amount` off what a creator is owed, from pending first, then available, then reserve.
  * What is left once those are empty follows MEM-D21: the creator's available balance goes negative
- * (nets against future gifts), or the organisation writes it off. Open decision → refuses.
+ * (nets against future gifts), or the organization writes it off. Open decision → refuses.
  */
 export function debitCreator(channelId: string, amount: Money, owed: CreatorBalance, policy: NegativeBalancePolicy | null): LedgerLine[] {
 	const c = amount.currency;
@@ -180,13 +180,13 @@ export function debitCreator(channelId: string, amount: Money, owed: CreatorBala
 	}
 	if (left > 0) {
 		if (policy === null) throw new LedgerError('decision_open', 'MEM-D21 is open: no rule for a balance that would go negative');
-		if (policy === 'organisationAbsorbs') out.push(line('loss:org_reserve', left, c, 'write_off'));
+		if (policy === 'organizationAbsorbs') out.push(line('loss:org_reserve', left, c, 'write_off'));
 		else out.push(line(creatorAccount(channelId, 'available'), left, c));
 	}
 	return out;
 }
 
-/** A refund to the supporter (from the organisation's merchant account), debited from the creator. */
+/** A refund to the supporter (from the organization's merchant account), debited from the creator. */
 export function refundLines(channelId: string, refund: Money, owed: CreatorBalance, policy: NegativeBalancePolicy | null): LedgerLine[] {
 	return [...debitCreator(channelId, refund, owed, policy), line('clearing:collector', -refund.amount, refund.currency)];
 }
@@ -211,12 +211,12 @@ export function payoutSentLines(channelId: string, amount: Money): LedgerLine[] 
 /**
  * The rail paid it. Who bears the rail fee is MEM-D20: from the payout (the creator receives
  * amount − fee; the supporter-covers option books the same way, the estimate was charged up front)
- * or by the organisation from its own funds (the creator receives the whole amount).
+ * or by the organization from its own funds (the creator receives the whole amount).
  */
 export function payoutPaidLines(channelId: string, amount: Money, railFee: Money, bearer: PayoutFeeBearer | null): LedgerLine[] {
 	const c = amount.currency;
 	if (bearer === null) throw new LedgerError('decision_open', 'MEM-D20 is open: no rule for who bears the payout fee');
-	if (bearer === 'organisation') {
+	if (bearer === 'organization') {
 		return [line(creatorAccount(channelId, 'in_payout'), amount.amount, c), line('rail:funding', -amount.amount, c), line('fees:rail', -railFee.amount, c, 'payout_fee'), line('org:fee_contributions', railFee.amount, c, 'payout_fee')];
 	}
 	return [line(creatorAccount(channelId, 'in_payout'), amount.amount, c), line('rail:funding', -(amount.amount - railFee.amount), c), line('fees:rail', -railFee.amount, c, 'payout_fee')];

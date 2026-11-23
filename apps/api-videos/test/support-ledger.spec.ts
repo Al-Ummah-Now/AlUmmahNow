@@ -98,11 +98,11 @@ describe('owner decisions are parameters', () => {
 		assert.equal(await unbalancedEntries(d), 0);
 	});
 
-	it('MEM-D21 "organisation absorbs": the shortfall is a write-off, the creator never goes negative', async () => {
+	it('MEM-D21 "organization absorbs": the shortfall is a write-off, the creator never goes negative', async () => {
 		const d = db();
 		await postEntry(d, { ...sys, entryKey: 'gift:p1', kind: 'gift', lines: giftLines(CH, usd(500), usd(45)), channelId: CH });
 		const bal = (await creatorBalance(d, CH)).USD!;
-		await postEntry(d, { ...sys, entryKey: 'dispute:d1', kind: 'dispute', lines: disputeLines(CH, usd(500), usd(1500), bal, 'organisationAbsorbs'), channelId: CH });
+		await postEntry(d, { ...sys, entryKey: 'dispute:d1', kind: 'dispute', lines: disputeLines(CH, usd(500), usd(1500), bal, 'organizationAbsorbs'), channelId: CH });
 		assert.deepEqual((await creatorBalance(d, CH)).USD, { pending: 0, available: 0, in_payout: 0, reserve: 0 });
 		assert.equal(await accountTotal(d, 'loss:org_reserve', 'USD'), 2000 - 455);
 		await postEntry(d, { ...sys, entryKey: 'dispute:d1:won', kind: 'dispute_reversal', lines: disputeWonLines(CH, usd(500), usd(0)), channelId: CH });
@@ -111,7 +111,7 @@ describe('owner decisions are parameters', () => {
 
 	it('MEM-D20: payout fee bearer changes who pays the rail fee; open refuses', async () => {
 		assert.throws(() => payoutPaidLines(CH, usd(4000), usd(100), null), (e: LedgerError) => e.code === 'decision_open');
-		const org = payoutPaidLines(CH, usd(4000), usd(100), 'organisation');
+		const org = payoutPaidLines(CH, usd(4000), usd(100), 'organization');
 		validateEntry(org);
 		assert.equal(org.find((l) => l.account === 'rail:funding')!.amount, -4000);
 		const creator = payoutPaidLines(CH, usd(4000), usd(100), 'creatorFromPayout');
@@ -147,7 +147,7 @@ describe('support settings (owner decisions)', () => {
 		const d = db();
 		const c0 = await readSupportConfig(d);
 		assert.equal(c0.version, 0);
-		assert.equal(c0.organisationFormed, false);
+		assert.equal(c0.organizationFormed, false);
 		assert.ok(Object.values(c0.policy).every((v) => v === null));
 		const w = await writeSupportPolicy(d, { holdDays: 30 }, 'usr_finance', 0);
 		assert.equal(w.before.holdDays, null);
@@ -187,7 +187,7 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 		const d = db();
 		const r = await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' });
 		assert.equal(r.ready, false);
-		assert.deepEqual(r.blockers, ['organisation_not_formed', 'no_finance_approver', 'decisions_open', 'no_rail']);
+		assert.deepEqual(r.blockers, ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_rail']);
 		assert.equal((await supportCanTurnOn({})).ready, false);
 	});
 
@@ -195,7 +195,7 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 		const { supportCanTurnOn } = await import('../src/lib/support/readiness');
 		const { writeSupportPolicy } = await import('../src/lib/support/config');
 		const d = db();
-		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000], minSupporterAge: 18, minCreatorAge: 18 }, 'usr_fin', 0);
+		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }, 'usr_fin', 0);
 		await d.prepare("UPDATE support_config SET organisation_formed = 1 WHERE id = 'default'").run();
 		await d.prepare("INSERT INTO support_finance_members (user_id, added_by, approved_by, added_at) VALUES ('usr_fin', 'usr_board', 'usr_board2', 'now')").run();
 		assert.equal((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).ready, true);
@@ -208,7 +208,7 @@ describe('the FEAT-4 hook shape', () => {
 		const { supportCanTurnOnHook, SUPPORT_TURN_ON_REASONS } = await import('../src/lib/support/readiness');
 		const r = await supportCanTurnOnHook({ SEARCH_DB: db(), ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' });
 		assert.equal(r.ok, false);
-		assert.ok(!r.ok && r.reasonKey === 'organisation_not_formed' && r.reason.ar.length > 0);
+		assert.ok(!r.ok && r.reasonKey === 'organization_not_formed' && r.reason.ar.length > 0);
 		for (const t of Object.values(SUPPORT_TURN_ON_REASONS)) {
 			assert.ok(t.en && t.ar);
 			assert.doesNotMatch(t.ar, /[0-9]|فيديو/);

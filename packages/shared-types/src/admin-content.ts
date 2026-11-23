@@ -49,7 +49,7 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   /**
    * Creator support (wiki AUN-MEMBERS §9.6): see the Support pages, and retry or cancel support jobs.
    * Super admins only. Money actions (refunds, payouts, ledger, providers, disputes) are NOT admin
-   * roles: they need a place on the organisation's finance list (support:* in support.ts).
+   * roles: they need a place on the organization's finance list (support:* in support.ts).
    */
   'support:read',
   'support:manage',
@@ -742,7 +742,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'support.dispute-deadline': ['support:manage'],
   'support.dormant': ['support:manage'],
   // A payout retry never pays twice (the payout id is the rail's idempotency key) and only resumes a batch the
-  // organisation's finance list already approved; approving is the finance list's own action (admin-api)
+  // organization's finance list already approved; approving is the finance list's own action (admin-api)
   'support.payout-plan': ['support:manage'],
   'support.payout-fund': ['support:manage'],
   'support.payout-send': ['support:manage'],

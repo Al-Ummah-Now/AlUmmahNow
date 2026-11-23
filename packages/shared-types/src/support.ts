@@ -2,9 +2,9 @@
  * Supporting creators (wiki AUN-MEMBERS, Linear AUN-612; decisions O41, O42).
  *
  * Viewers give a creator a one-time or monthly gift. PayGood only COLLECTS into the
- * organisation's merchant account; creators are paid through a separate payout rail. The
+ * organization's merchant account; creators are paid through a separate payout rail. The
  * platform takes 0%: no cut, no margin, no float. Everything here is off by default behind the
- * `creatorSupport` switch (AUN-FEATURES) and stays off until the organisation exists.
+ * `creatorSupport` switch (AUN-FEATURES) and stays off until the organization exists.
  *
  * Money rules (never broken):
  * - amounts are integers in the currency's minor units, with the ISO 4217 code alongside;
@@ -152,11 +152,11 @@ export const COLLECTOR_FEE_PAYERS = ['creatorSupporterMayCover', 'supporterAlway
 export type CollectorFeePayer = (typeof COLLECTOR_FEE_PAYERS)[number];
 
 /** MEM-D20: who bears the payout rail's fee and currency exchange. */
-export const PAYOUT_FEE_BEARERS = ['creatorFromPayout', 'organisation', 'supporterCoverEstimate'] as const;
+export const PAYOUT_FEE_BEARERS = ['creatorFromPayout', 'organization', 'supporterCoverEstimate'] as const;
 export type PayoutFeeBearer = (typeof PAYOUT_FEE_BEARERS)[number];
 
 /** MEM-D21: what happens when a refund or lost dispute arrives after the money was paid out. */
-export const NEGATIVE_BALANCE_POLICIES = ['netAgainstFutureGifts', 'reserveFromPayouts', 'organisationAbsorbs'] as const;
+export const NEGATIVE_BALANCE_POLICIES = ['netAgainstFutureGifts', 'reserveFromPayouts', 'organizationAbsorbs'] as const;
 export type NegativeBalancePolicy = (typeof NEGATIVE_BALANCE_POLICIES)[number];
 
 /** MEM-D22: balances whose creator never completes payout setup, or disappears. */
@@ -166,7 +166,7 @@ export type DormantPolicy = (typeof DORMANT_POLICIES)[number];
 /**
  * Every open owner decision, as a setting. `null` = not decided yet. Admins with
  * `support:providers` record the decision on the Support settings page once the owner and the
- * organisation have made it; the value is audited.
+ * organization have made it; the value is audited.
  */
 export interface SupportPolicy {
   /** MEM-D17: the payout rail (primary), and the fallback for countries it can't reach */
@@ -205,7 +205,17 @@ export interface SupportPolicy {
   /** MEM-D9: youngest age that may support / receive */
   minSupporterAge: number | null;
   minCreatorAge: number | null;
+  /**
+   * MEM-D5: who may receive. 'tierCapability': owners whose creator tier has "Can receive support"
+   * (CreatorTier.supportReceive); 'everyAdultOwner': every channel owner (the rail's onboarding checks age).
+   */
+  receiversRule: ReceiversRule | null;
+  /** MEM-D15: the native apps show Support (false = web only, until Apple's and Google's written answers) */
+  appsEnabled: boolean | null;
 }
+
+export const RECEIVERS_RULES = ['tierCapability', 'everyAdultOwner'] as const;
+export type ReceiversRule = (typeof RECEIVERS_RULES)[number];
 
 export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   primaryRail: null,
@@ -228,15 +238,19 @@ export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   presetsUsdMinor: null,
   minSupporterAge: null,
   minCreatorAge: null,
+  receiversRule: null,
+  appsEnabled: null,
 }) as SupportPolicy;
 
-export type SupportDecisionId = 'MEM-D3' | 'MEM-D4' | 'MEM-D9' | 'MEM-D17' | 'MEM-D18' | 'MEM-D19' | 'MEM-D20' | 'MEM-D21' | 'MEM-D22' | 'MEM-D23' | 'MEM-D24';
+export type SupportDecisionId = 'MEM-D3' | 'MEM-D4' | 'MEM-D5' | 'MEM-D9' | 'MEM-D15' | 'MEM-D17' | 'MEM-D18' | 'MEM-D19' | 'MEM-D20' | 'MEM-D21' | 'MEM-D22' | 'MEM-D23' | 'MEM-D24';
 
 /** Which policy fields answer which owner decision (wiki AUN-MEMBERS §15). */
 export const SUPPORT_DECISION_FIELDS: Readonly<Record<SupportDecisionId, readonly (keyof SupportPolicy)[]>> = Object.freeze({
   'MEM-D3': ['collectorFeePayer'],
   'MEM-D4': ['minimumUsdMinor', 'presetsUsdMinor'],
+  'MEM-D5': ['receiversRule'],
   'MEM-D9': ['minSupporterAge', 'minCreatorAge'],
+  'MEM-D15': ['appsEnabled'],
   'MEM-D17': ['primaryRail', 'fallbackRail'],
   'MEM-D18': ['holdDays'],
   'MEM-D19': ['payoutThresholdUsdMinor', 'payoutDayOfMonth', 'creatorMayRaiseThreshold'],
@@ -289,6 +303,8 @@ const POLICY_CHECKS: Readonly<Record<keyof SupportPolicy, (v: unknown) => boolea
   presetsUsdMinor: intList(1, 10_000_000, 6),
   minSupporterAge: (v) => intIn(v, 13, 99),
   minCreatorAge: (v) => intIn(v, 13, 99),
+  receiversRule: oneOf(RECEIVERS_RULES),
+  appsEnabled: bool,
 };
 
 /**
@@ -432,13 +448,13 @@ export const LEDGER_KINDS = ['gift', 'collector_fee', 'settlement', 'release', '
 export type LedgerKind = (typeof LEDGER_KINDS)[number];
 
 // ---------------------------------------------------------------------------
-// Permissions (admin-api; §9.6). Money permissions are for the organisation's finance list only.
+// Permissions (admin-api; §9.6). Money permissions are for the organization's finance list only.
 // ---------------------------------------------------------------------------
 
 export const SUPPORT_PERMISSIONS = ['support:read', 'support:manage', 'support:refund', 'support:disputes', 'support:payouts', 'support:ledger', 'support:countries', 'support:providers'] as const;
 export type SupportPermission = (typeof SUPPORT_PERMISSIONS)[number];
 
-/** Never granted to an account that isn't on the organisation's finance list, nor to tech staff. */
+/** Never granted to an account that isn't on the organization's finance list, nor to tech staff. */
 export const FINANCE_ONLY_SUPPORT_PERMISSIONS: readonly SupportPermission[] = Object.freeze(['support:refund', 'support:disputes', 'support:payouts', 'support:ledger', 'support:providers']);
 
 // ---------------------------------------------------------------------------
@@ -446,7 +462,7 @@ export const FINANCE_ONLY_SUPPORT_PERMISSIONS: readonly SupportPermission[] = Ob
 // Features page precondition (AUN-FEATURES FEAT-4).
 // ---------------------------------------------------------------------------
 
-export type SupportTurnOnBlocker = 'organisation_not_formed' | 'no_finance_approver' | 'decisions_open' | 'no_collector' | 'no_rail';
+export type SupportTurnOnBlocker = 'organization_not_formed' | 'no_finance_approver' | 'decisions_open' | 'no_collector' | 'no_rail';
 
 export interface SupportReadiness {
   /** The switch may be turned on */
@@ -457,13 +473,13 @@ export interface SupportReadiness {
 }
 
 /**
- * Ready when the organisation is recorded as formed, the finance list has enough people for
+ * Ready when the organization is recorded as formed, the finance list has enough people for
  * MEM-D24 (two-person approval needs two), every owner decision is recorded, and a collector and a
  * rail are available in this environment.
  */
-export function supportReadiness(input: { organisationFormed: boolean; financeApprovers: number; policy: SupportPolicy; collectorAvailable: boolean; railAvailable: boolean }): SupportReadiness {
+export function supportReadiness(input: { organizationFormed: boolean; financeApprovers: number; policy: SupportPolicy; collectorAvailable: boolean; railAvailable: boolean }): SupportReadiness {
   const blockers: SupportTurnOnBlocker[] = [];
-  if (!input.organisationFormed) blockers.push('organisation_not_formed');
+  if (!input.organizationFormed) blockers.push('organization_not_formed');
   if (input.financeApprovers < Math.max(1, input.policy.batchApprovers ?? 1, input.policy.adjustmentApprovers ?? 1)) blockers.push('no_finance_approver');
   const openDecisions = undecidedSupportDecisions(input.policy);
   if (openDecisions.length) blockers.push('decisions_open');
@@ -474,8 +490,8 @@ export function supportReadiness(input: { organisationFormed: boolean; financeAp
 
 /** Why `creatorSupport` can't be switched on yet, for the Features page (en / ar, typographic quotes, ٠–٩). */
 export const SUPPORT_TURN_ON_REASONS: Readonly<Record<SupportTurnOnBlocker, { en: string; ar: string }>> = Object.freeze({
-  organisation_not_formed: { en: 'Supporting creators can’t be switched on until the organisation that holds creators’ money is recorded as formed.', ar: 'لا يمكن تشغيل دعم صنّاع المحتوى قبل تسجيل تأسيس المؤسسة التي تحفظ أموال صنّاع المحتوى.' },
-  no_finance_approver: { en: 'Add enough people to the organisation’s finance list to approve payouts first.', ar: 'أضف أولًا عددًا كافيًا من الأشخاص إلى قائمة المالية في المؤسسة لاعتماد الدفعات.' },
+  organization_not_formed: { en: 'Supporting creators can’t be switched on until the organization that holds creators’ money is recorded as formed.', ar: 'لا يمكن تشغيل دعم صنّاع المحتوى قبل تسجيل تأسيس المؤسسة التي تحفظ أموال صنّاع المحتوى.' },
+  no_finance_approver: { en: 'Add enough people to the organization’s finance list to approve payouts first.', ar: 'أضف أولًا عددًا كافيًا من الأشخاص إلى قائمة المالية في المؤسسة لاعتماد الدفعات.' },
   decisions_open: { en: 'Some decisions about holds, payouts and fees haven’t been recorded yet on the Support settings page.', ar: 'لم تُسجَّل بعد بعض القرارات الخاصة بفترة الحجز والدفعات والرسوم في صفحة إعدادات الدعم.' },
   no_collector: { en: 'No payment provider is set up to collect support here.', ar: 'لا يوجد مزوّد دفع مُعدّ لتحصيل الدعم هنا.' },
   no_rail: { en: 'No payout service is set up to pay creators here.', ar: 'لا توجد خدمة دفع مُعدّة لتحويل الأموال إلى صنّاع المحتوى هنا.' },

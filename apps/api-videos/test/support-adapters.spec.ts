@@ -59,16 +59,16 @@ describe('the switch seam', () => {
 		assert.deepEqual(await supportSwitch({ SEARCH_DB: db, FEATURES_FORCE_OFF: 'creatorSupport' }), { on: false, reason: 'switched_off' });
 		forgetFeatureSwitches();
 	});
-	it('can not be readied while the organisation, approvers or decisions are missing', () => {
-		const r = supportReadiness({ organisationFormed: false, financeApprovers: 0, policy: UNDECIDED_SUPPORT_POLICY, collectorAvailable: false, railAvailable: false });
+	it('can not be readied while the organization, approvers or decisions are missing', () => {
+		const r = supportReadiness({ organizationFormed: false, financeApprovers: 0, policy: UNDECIDED_SUPPORT_POLICY, collectorAvailable: false, railAvailable: false });
 		assert.equal(r.ready, false);
-		assert.deepEqual(r.blockers, ['organisation_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail']);
+		assert.deepEqual(r.blockers, ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail']);
 		assert.ok(r.openDecisions.includes('MEM-D24'));
 	});
 	it('two-person approval (MEM-D24) needs two finance people', () => {
-		const policy = parseSupportPolicy({ primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 1, payoutDayOfMonth: 1, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorAlways', minimumUsdMinor: 100, presetsUsdMinor: [100], minSupporterAge: 18, minCreatorAge: 18 }).policy;
-		assert.deepEqual(supportReadiness({ organisationFormed: true, financeApprovers: 1, policy, collectorAvailable: true, railAvailable: true }).blockers, ['no_finance_approver']);
-		assert.equal(supportReadiness({ organisationFormed: true, financeApprovers: 2, policy, collectorAvailable: true, railAvailable: true }).ready, true);
+		const policy = parseSupportPolicy({ primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 1, payoutDayOfMonth: 1, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorAlways', minimumUsdMinor: 100, presetsUsdMinor: [100], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }).policy;
+		assert.deepEqual(supportReadiness({ organizationFormed: true, financeApprovers: 1, policy, collectorAvailable: true, railAvailable: true }).blockers, ['no_finance_approver']);
+		assert.equal(supportReadiness({ organizationFormed: true, financeApprovers: 2, policy, collectorAvailable: true, railAvailable: true }).ready, true);
 	});
 });
 

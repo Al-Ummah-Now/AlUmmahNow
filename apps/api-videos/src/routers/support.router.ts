@@ -8,7 +8,7 @@
  *   POST /batches/:id/approve { actorId }           one approval (MEM-D24); the last one queues the funding check
  *   POST /batches/:id/stop { actorId, reason }      stops a batch; payouts not sent yet are canceled
  *
- * admin-api allows the batch routes only to people on the organisation's finance list, with a
+ * admin-api allows the batch routes only to people on the organization's finance list, with a
  * step-up, and audits them; approve checks the finance list again here.
  */
 import { Hono, type Context } from 'hono';
