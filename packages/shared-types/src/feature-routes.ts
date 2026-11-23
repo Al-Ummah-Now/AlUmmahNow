@@ -99,6 +99,9 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'PUT', '/api/library/notes/:id', 'studyNotes'),
   r('api-videos', 'DELETE', '/api/library/notes/:id', 'studyNotes'),
   r('api-videos', 'PUT', '/api/videos/:videoId/recitation-metadata', 'recitationTools'),
+  // Islamic preferences: reachable while any of prayer times, Qibla, Hijri or Ramadan mode is on (E21.1b)
+  r('api-videos', 'GET', '/api/profile/islamic', 'prayerTimes', 'handler'),
+  r('api-videos', 'PUT', '/api/profile/islamic', 'prayerTimes', 'handler'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect', 'socialAutopost'),
   r('api-videos', 'POST', '/api/social/channel/:channelId/connect/confirm', 'socialAutopost'),
   r('api-videos', 'GET', '/api/videos/category-suggestions', 'aiCategorySuggest'),
@@ -273,7 +276,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   listenMode: 'E14-S3 adds the audio playback route and maps it here',
   offlineDownloads: 'E14-S3 adds the offline download routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
-  prayerTimes: 'E21.1 adds the preference routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   hijriCalendar: 'E21.2 adds the season and preference routes and maps them here',
   ramadanMode: 'E21.2 adds the season routes and maps them here',

@@ -11,6 +11,7 @@ import { ProfilesList } from '../endpoints/profile/profileList';
 import { ProfileUpdate } from '../endpoints/profile/profileUpdate';
 import { PlaybackSettingsGet, PlaybackSettingsUpdate } from '../endpoints/profile/playbackSettings';
 import { IntentionalPreferencesGet, IntentionalPreferencesUpdate } from '../endpoints/profile/intentionalPreferences';
+import { IslamicPreferencesGet, IslamicPreferencesUpdate } from '../endpoints/profile/islamicPreferences';
 import { OnboardingGet, OnboardingUpdate } from '../endpoints/profile/onboarding';
 import { WatchHistoryAdd } from '../endpoints/profile/watchHistoryAdd';
 import { WatchHistoryList } from '../endpoints/profile/watchHistoryList';
@@ -62,6 +63,8 @@ profileRouter.delete('/profile', ProfileDelete);
 profileRouter.get('/profile/playback', PlaybackSettingsGet);
 profileRouter.get('/profile/intentional', IntentionalPreferencesGet);
 profileRouter.put('/profile/intentional', IntentionalPreferencesUpdate);
+profileRouter.get('/profile/islamic', IslamicPreferencesGet);
+profileRouter.put('/profile/islamic', IslamicPreferencesUpdate);
 profileRouter.put('/profile/playback', PlaybackSettingsUpdate);
 
 // Auth required: first-run guides seen (the identity tour shows once per account)
