@@ -69,6 +69,10 @@ export interface AppBindings {
   TUS_SESSIONS: KVNamespace;
   /** Remote config: app version policies and feature flags (Epic 9.3 / 9.5). Optional: defaults without it. */
   APP_CONFIG?: KVNamespace;
+  /** Update root public keys per repo, JSON (wiki AUN-APP-UPDATES §3.5, §9 K-R); not secret. Unset: every repo stays "no keys yet". */
+  UPDATE_ROOT_KEYS?: string;
+  /** The private admin release bucket, read-only (wiki AUN-APP-UPDATES §3.6). Unbound: admin releases aren't indexed. */
+  ADMIN_RELEASES?: R2Bucket;
 
   // Queues
   queue: Queue;

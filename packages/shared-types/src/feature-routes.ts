@@ -249,6 +249,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   recitationTools: 'E21.4a adds the recitation reference routes and maps them here',
   intentionalViewing: 'E21.6 adds the intentional-viewing routes and maps them here',
   studyNotes: 'E21.8a adds the private-notes routes and maps them here',
+  appUpdates: 'GET /api/v1/app-config stays public while off and answers update.enabled false with no notice (wiki AUN-APP-UPDATES §4.1); it also serves flags and config',
 });
 
 /** The routes a worker gates in its middleware. */
