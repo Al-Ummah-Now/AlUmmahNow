@@ -26,7 +26,7 @@ function livePlaylist(): string {
 
 const CHAPTER_TITLES: [string, string, string] = ['Opening', 'The middle', 'Closing'];
 
-export async function routeFixtures(page: Page, chapterTitles: [string, string, string] = CHAPTER_TITLES): Promise<void> {
+export async function routeFixtures(page: Page, chapterTitles: [string, string, string] = CHAPTER_TITLES, captions: CaptionBodies = {}): Promise<void> {
   await page.route('**/__player-fixtures/**', async (route) => {
     const rel = decodeURIComponent(new URL(route.request().url()).pathname.replace(/^.*\/__player-fixtures\//, ''));
     if (rel === 'live/master.m3u8') {
@@ -76,10 +76,13 @@ export async function routeFixtures(page: Page, chapterTitles: [string, string, 
   );
 
   await page.route(/\/api\/videos\/harness-[a-z]+\/subtitles\/(en|ar)$/, (route) => {
-    const lang = new URL(route.request().url()).pathname.split('/').pop();
-    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': TYPES['.vtt'] }, body: fs.readFileSync(path.join(FIXTURES, `${lang}.vtt`)) });
+    const lang = new URL(route.request().url()).pathname.split('/').pop() as 'en' | 'ar';
+    return route.fulfill({ status: 200, headers: { ...CORS, 'content-type': TYPES['.vtt'] }, body: captions[lang] ?? fs.readFileSync(path.join(FIXTURES, `${lang}.vtt`)) });
   });
 }
+
+/** WebVTT bodies served for a track instead of the fixture file (as GET /subtitles/:lang serves them) */
+export type CaptionBodies = Partial<Record<'en' | 'ar', string>>;
 
 const videoIdOf = (url: string) => /\/videos\/([^/]+)\/subtitles/.exec(new URL(url).pathname)?.[1] ?? 'harness-bright';
 
@@ -110,6 +113,8 @@ export interface HarnessOptions {
   account?: boolean;
   /** The features answer (GET /api/me/features); every feature is off unless named here */
   features?: Record<string, boolean>;
+  /** Caption track bodies instead of the fixture files */
+  captions?: CaptionBodies;
 }
 
 const THEMES_CSS = path.resolve(__dirname, '../../../../packages/fanous-tokens/generated-player');
@@ -161,7 +166,7 @@ async function keepDevBuildStill(page: Page): Promise<void> {
 }
 
 export async function openHarness(page: Page, opts: HarnessOptions = {}): Promise<Locator> {
-  await routeFixtures(page, opts.chapterTitles);
+  await routeFixtures(page, opts.chapterTitles, opts.captions);
   await routeFeatures(page, opts.features ?? {});
   await keepDevBuildStill(page);
   // A recorded consent choice keeps the consent banner out of the frame (lib/consent/consent-cookie.ts)

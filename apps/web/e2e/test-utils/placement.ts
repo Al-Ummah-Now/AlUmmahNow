@@ -164,6 +164,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/player/mobile-layout.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/playlist.spec.ts': { placement: 'local', reason: 'already local player harness; the queue API is served by the spec' },
   'apps/web/e2e/player/overlays.spec.ts': { placement: 'local', reason: 'already local player harness' },
+  'apps/web/e2e/player/quran-credit.spec.ts': { placement: 'local', reason: 'local player harness; the caption tracks are served by the spec' },
   'apps/web/e2e/player/rtl-labels.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/settings-small.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/themes.spec.ts': { placement: 'local', reason: 'already local player harness' },

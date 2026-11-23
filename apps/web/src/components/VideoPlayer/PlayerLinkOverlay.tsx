@@ -14,7 +14,7 @@
  */
 'use client';
 
-import type { MouseEvent, PointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 
 export type PlayerLinkPlacement = 'caption-end';
 
@@ -28,6 +28,8 @@ export interface PlayerOverlayLink {
   ariaLabel?: string;
   /** Language of the label when it differs from the page's */
   lang?: string;
+  /** Direction of the label and its placement when it differs from the page's (a caption credit follows its cue) */
+  dir?: 'ltr' | 'rtl';
   placement: PlayerLinkPlacement;
   testId?: string;
 }
@@ -45,16 +47,44 @@ export function isExternalHref(href: string, origin: string = typeof window !== 
 /** Presses on a link are the link's own: the player never reads them as a tap on the video. */
 const keepToLink = (e: MouseEvent | PointerEvent) => e.stopPropagation();
 
+/**
+ * The links to show: `links`, except that links which just went away stay while one of them has focus
+ * or the pointer, until blur or pointer leave, so keyboard focus is never lost and a click is never
+ * pulled from under the pointer (wiki AUN-PLAYER-LINKS, phase 0 accessibility).
+ */
+function useHeldLinks(links: PlayerOverlayLink[]) {
+  const [held, setHeld] = useState<PlayerOverlayLink[]>([]);
+  const engaged = useRef({ focus: false, hover: false });
+  const latest = useRef(links);
+  latest.current = links;
+  const shown = links.length > 0 ? links : held;
+  useEffect(() => {
+    if (links.length > 0) setHeld(links);
+    else if (!engaged.current.focus && !engaged.current.hover) setHeld([]);
+  }, [links]);
+  const release = () => {
+    if (!engaged.current.focus && !engaged.current.hover && latest.current.length === 0) setHeld([]);
+  };
+  const handlers = {
+    onFocus: () => { engaged.current.focus = true; },
+    onBlur: () => { engaged.current.focus = false; release(); },
+    onPointerEnter: () => { engaged.current.hover = true; },
+    onPointerLeave: () => { engaged.current.hover = false; release(); },
+  };
+  return { shown, handlers };
+}
+
 export function PlayerLinkOverlay({ links, dir }: { links: PlayerOverlayLink[]; dir: 'ltr' | 'rtl' }) {
-  if (links.length === 0) return null;
-  const placements = [...new Set(links.map((l) => l.placement))];
+  const { shown, handlers } = useHeldLinks(links);
+  if (shown.length === 0) return null;
+  const placements = [...new Set(shown.map((l) => l.placement))];
   return (
     <>
-      {placements.map((placement) => (
-        <div key={placement} className="vjs-fanous-links" data-placement={placement} dir={dir} data-testid={`player-links-${placement}`}>
-          {links
-            .filter((l) => l.placement === placement)
-            .map((l) => {
+      {placements.map((placement) => {
+        const here = shown.filter((l) => l.placement === placement);
+        return (
+          <div key={placement} className="vjs-fanous-links" data-placement={placement} dir={here[0]?.dir ?? dir} data-testid={`player-links-${placement}`}>
+            {here.map((l) => {
               const external = isExternalHref(l.href);
               return (
                 <a
@@ -69,13 +99,15 @@ export function PlayerLinkOverlay({ links, dir }: { links: PlayerOverlayLink[]; 
                   onClick={keepToLink}
                   onPointerDown={keepToLink}
                   onDoubleClick={keepToLink}
+                  {...handlers}
                 >
                   {l.label}
                 </a>
               );
             })}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </>
   );
 }
