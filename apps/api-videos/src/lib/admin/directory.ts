@@ -605,12 +605,16 @@ export async function channelVideoStats(db: SearchDb, channelId: string): Promis
 	return { videos: Number(row?.videos) || 0, views: Number(row?.views) || 0 };
 }
 
-/** Ids of every not-deleted item of `kind` in a channel or owned by a user (cascades). */
-export async function contentIds(db: SearchDb, kind: OwnershipKind, by: { channelId?: string; ownerId?: string }): Promise<string[]> {
+/**
+ * Ids of every not-deleted item of `kind` in a channel or owned by a user (cascades).
+ * `includeDeleted` adds soft-deleted items too: a channel move must take them, or a restored
+ * video would come back on the previous owner.
+ */
+export async function contentIds(db: SearchDb, kind: OwnershipKind, by: { channelId?: string; ownerId?: string }, opts: { includeDeleted?: boolean } = {}): Promise<string[]> {
 	const column = by.channelId ? 'channel_id' : 'owner_id';
 	const { results } = await db
 		// Sorted here, not by D1: ORDER BY id made it scan every row of the kind (ownership.ts orderAndLimit)
-		.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND ${column} = ? AND is_deleted = 0`)
+		.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND ${column} = ?${opts.includeDeleted ? '' : ' AND is_deleted = 0'}`)
 		.bind(kind, by.channelId ?? by.ownerId)
 		.all<{ id: string }>();
 	return byKey((results ?? []).map((r) => r.id));
