@@ -66,7 +66,7 @@ test.describe('social posting', () => {
     await expect(page.getByTestId('social-history')).toContainText('Telegram setup saved by');
 
     // A cap over the limit is refused in the form
-    await page.getByTestId('social-x-cap').fill('900');
+    await page.getByTestId('social-x-cap').fill('10001');
     await expect(page.getByTestId('social-settings-save')).toBeDisabled();
   });
 
