@@ -36,6 +36,7 @@ import { auditOriginJson } from '../lib/request-origin';
 import { callVideos, type VideosClientEnv } from '../lib/content/videosClient';
 import { newsletterConfigured } from '../lib/public-features';
 import { checkCanTurnOn, FEATURE_PRECONDITIONS, type FeaturePrecondition } from '../lib/feature-preconditions';
+import { apiError } from '../lib/api-error';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv & { FEATURES_FORCE_OFF?: string }; Variables: { auth?: AuthContext } };
@@ -66,7 +67,7 @@ const roles = (c: C) => c.get('auth')?.roles;
 const actorOf = (c: C) => c.get('auth')?.userId ?? 'unknown';
 const forbidden = (c: C, permission: Permission | 'super_admin') => {
   logger.warn('[Features] Permission denied', { userId: actorOf(c), permission, path: c.req.path });
-  return c.json({ success: false, code: 'forbidden', error: `Missing permission ${permission}` }, 403);
+  return apiError(c, 403, 'forbidden', { error: `Missing permission ${permission}` });
 };
 
 /** May this caller change this switch? */
@@ -130,12 +131,12 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
   app.put('/:key', async (c) => {
     if (!hasPermission(roles(c), 'features:manage')) return forbidden(c, 'features:manage');
     const key = c.req.param('key');
-    if (!isFeatureKey(key)) return c.json({ success: false, code: 'not_found', error: 'Unknown feature' }, 404);
+    if (!isFeatureKey(key)) return apiError(c, 404, 'not_found', { error: 'Unknown feature' });
     const def = FEATURE_REGISTRY.find((d) => d.key === key)!;
     if (!canToggle(roles(c), def)) return forbidden(c, 'super_admin');
     const input = (await c.req.json().catch(() => ({}))) as { enabled?: unknown; expectedVersion?: unknown; undo?: unknown };
     if (typeof input.enabled !== 'boolean' || !Number.isInteger(input.expectedVersion) || (input.expectedVersion as number) < 0) {
-      return c.json({ success: false, code: 'invalid_request', error: 'enabled (boolean) and expectedVersion (integer) are required' }, 400);
+      return apiError(c, 400, 'invalid_request', { error: 'enabled (boolean) and expectedVersion (integer) are required' });
     }
 
     // The value in force before the first write: the old setting, else the default
@@ -151,7 +152,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
       if (check.ok === false) {
         const lang = errorLangOf(c.req.raw);
         logger.info('[Features] Turn on refused by its precondition', { key, actorId: actorOf(c) });
-        return c.json({ success: false, code: 'feature_precondition', message: check.reason[lang], lang, reason: check.reason, ...(check.reasonKey ? { reasonKey: check.reasonKey } : {}), feature: key }, 409);
+        return apiError(c, 409, 'feature_precondition', { message: check.reason[lang], lang, reason: check.reason, ...(check.reasonKey ? { reasonKey: check.reasonKey } : {}), feature: key });
       }
     }
 
@@ -186,7 +187,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
       await db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(auditId).run().catch((e: unknown) =>
         logger.error('[Features] Could not drop the audit row of a failed change', { auditId, error: String(e) }));
       if (error instanceof SwitchWriteError) {
-        return c.json({ success: false, code: error.code, error: error.code, ...(error.current ? { current: error.current } : {}) }, error.status);
+        return apiError(c, error.status, error.code, { error: error.code, ...(error.current ? { current: error.current } : {}) });
       }
       throw error;
     }
@@ -195,7 +196,7 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
   app.get('/:key/history', async (c) => {
     if (!hasPermission(roles(c), 'features:read')) return forbidden(c, 'features:read');
     const key = c.req.param('key');
-    if (!isFeatureKey(key)) return c.json({ success: false, code: 'not_found', error: 'Unknown feature' }, 404);
+    if (!isFeatureKey(key)) return apiError(c, 404, 'not_found', { error: 'Unknown feature' });
     const page = await readSwitchHistory(c.env, key, c.req.query('cursor'));
     const names = await resolveNames(c.env.SEARCH_DB as never, { profiles: page.items.map((i) => i.actorId) });
     return c.json({
