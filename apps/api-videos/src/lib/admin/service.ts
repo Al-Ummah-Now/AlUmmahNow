@@ -53,8 +53,7 @@ import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
-import { endSession } from '../live/service';
-import { readSession } from '../live/store';
+import { rotateChannelLiveKeys } from '../channelTeam';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -466,9 +465,9 @@ async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<b
 }
 
 /**
- * The channel's live streams move to the new owner, and any session provisioned but not on air is
- * ended: its ingest URL and key are known to the previous owner, so the next Go live provisions
- * fresh ones. Returns the counts and failures (a failure retries the job).
+ * The channel's live streams move to the new owner, and every session provisioned but not on air
+ * is ended (rotateChannelLiveKeys, as when a member with live access leaves): its ingest URL and
+ * key are known to the previous owner, so the next Go live provisions fresh ones.
  */
 async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; rotated: number; failed: number }> {
 	const { keys, truncated } = await liveStreamKeysOf(env, { channelId });
@@ -479,21 +478,11 @@ async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: st
 	});
 	let rotated = 0;
 	let failed = moved.failed + (truncated ? 1 : 0);
-	const db = env.SEARCH_DB as D1Database | undefined;
-	if (db) {
-		const streams = await readMany(env.videos, keys);
-		for (const stream of streams.values()) {
-			if (typeof stream.sessionId !== 'string' || !stream.sessionId) continue;
-			try {
-				const session = await readSession(db, stream.sessionId);
-				if (session?.status !== 'provisioned') continue;
-				await endSession(env as never, session, 'channel_transferred');
-				rotated++;
-			} catch (error) {
-				failed++;
-				logger.warn('[Admin] Live session rotation failed on a channel move', { channelId, streamKey: stream.id, error: error instanceof Error ? error.message : String(error) });
-			}
-		}
+	try {
+		rotated = await rotateChannelLiveKeys(env as never, channelId);
+	} catch (error) {
+		failed++;
+		logger.warn('[Admin] Live key rotation failed on a channel move', { channelId, error: error instanceof Error ? error.message : String(error) });
 	}
 	return { changed: moved.changed, rotated, failed };
 }
