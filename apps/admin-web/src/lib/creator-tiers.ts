@@ -120,7 +120,7 @@ export interface TierFormValues {
   importCountsAgainstLimits: boolean;
 }
 
-export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
+export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo' | 'offlineMaxVideos' | 'offlineLicenseDays';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 /** Field errors for a tier form (empty: valid). Mirrors validateTier in api-videos. No id: api-videos makes it from the name. */
