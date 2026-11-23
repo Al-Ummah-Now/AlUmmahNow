@@ -6795,6 +6795,19 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "views",
+                "watchTime",
+                "avgViewDuration"
+              ]
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "number"
             },
             "required": false,
