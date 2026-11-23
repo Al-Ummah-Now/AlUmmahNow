@@ -144,8 +144,8 @@ app.use('*', cors({
 	// origin callback receives (origin, context) - context has env access
 	origin: (origin, c) => allowOrigin(origin, c as never),
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat', 'X-App-Locale'],
-	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date', 'Content-Language', 'X-Error-Ref'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat', 'X-App-Locale', 'If-None-Match'],
+	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date', 'Content-Language', 'X-Error-Ref', 'ETag'],
 	maxAge: 600,
 	credentials: false,
 }));

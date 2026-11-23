@@ -24,6 +24,7 @@ import {
 	type SocialWebhookEvent,
 	type SocialWebhookView,
 } from '@al-ummah/shared-types';
+import { overlaySwitch } from '../features/switches';
 
 export interface SocialDbEnv {
 	SEARCH_DB?: unknown;
@@ -485,7 +486,14 @@ export async function writeMastodonLimit(env: SocialDbEnv, instance: string, max
 	await writeSetting(env, MASTODON_LIMIT_PREFIX + instance, JSON.stringify({ maxChars, at: now }), 'system', now);
 }
 
-export async function readPlatformSettings(env: SocialDbEnv): Promise<SocialPlatformSettings> {
+export async function readPlatformSettings(env: SocialDbEnv, opts: { raw?: boolean } = {}): Promise<SocialPlatformSettings> {
+	const settings = await readStoredPlatformSettings(env);
+	if (opts.raw) return settings;
+	// The Features page switch decides `enabled` once set (lib/features/switches.ts)
+	return { ...settings, enabled: await overlaySwitch(env as never, 'socialAutopost', settings.enabled) };
+}
+
+async function readStoredPlatformSettings(env: SocialDbEnv): Promise<SocialPlatformSettings> {
 	const raw = await readSetting(env, 'platform');
 	let parsed: unknown = null;
 	try {

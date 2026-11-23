@@ -229,7 +229,7 @@ describe('feature answer', () => {
 		assert.equal(calls, 1);
 	});
 
-	it('GET /api/me/features: version 1, never cached, all hidden when the lookup fails', async () => {
+	it('GET /api/me/features: version 1, revalidated every time, all hidden when the lookup fails', async () => {
 		const { env } = await setup();
 		const app = new Hono();
 		app.use('*', async (c, next) => {
@@ -240,7 +240,7 @@ describe('feature answer', () => {
 		app.get('/api/me/features', handleUserFeatures);
 		const res = await app.request('/api/me/features', {}, env);
 		assert.equal(res.status, 200);
-		assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+		assert.equal(res.headers.get('cache-control'), 'private, max-age=0, must-revalidate');
 		const body = (await res.json()) as { version: number; features: Record<string, boolean> };
 		assert.equal(body.version, 1);
 		assert.equal(body.features.live, true);

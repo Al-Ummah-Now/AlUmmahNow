@@ -40,6 +40,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { cancelMinutes, captionSubject, commitMinutes, readUsage, releaseMinutes, reserveMinutes } from './minutes';
+import { overlaySwitch } from '../features/switches';
 
 export const CAPTION_PROVIDER = 'workers-ai';
 export const CAPTION_MODEL = '@cf/openai/whisper-large-v3-turbo';
@@ -156,7 +157,26 @@ export function cleanCaptionSettings(raw: unknown, base: CaptionSettings): Capti
 	};
 }
 
-export async function readCaptionSettings(env: CaptionJobsEnv): Promise<CaptionSettings> {
+export async function readCaptionSettings(env: CaptionJobsEnv, opts: { raw?: boolean } = {}): Promise<CaptionSettings> {
+	const settings = await readStoredCaptionSettings(env);
+	if (opts.raw) return settings;
+	// The Features page switches decide the four `enabled` fields once set (lib/features/switches.ts)
+	const [translation, inline, viewerTitles, viewerDownload] = await Promise.all([
+		overlaySwitch(env, 'captionsTranslate', settings.translation.enabled),
+		overlaySwitch(env, 'inlineTranslate', settings.inline.enabled),
+		overlaySwitch(env, 'viewerTranslatedTitles', settings.viewerTitles.enabled),
+		overlaySwitch(env, 'viewerCaptionDownload', settings.viewerDownload.enabled),
+	]);
+	return {
+		...settings,
+		translation: { ...settings.translation, enabled: translation },
+		inline: { ...settings.inline, enabled: inline },
+		viewerTitles: { ...settings.viewerTitles, enabled: viewerTitles },
+		viewerDownload: { ...settings.viewerDownload, enabled: viewerDownload },
+	};
+}
+
+async function readStoredCaptionSettings(env: CaptionJobsEnv): Promise<CaptionSettings> {
 	const fallback = defaultCaptionSettings(env);
 	try {
 		const stored = await env.global_settings?.get(SETTINGS_KEY);
@@ -170,7 +190,7 @@ export async function readCaptionSettings(env: CaptionJobsEnv): Promise<CaptionS
 
 /** Saves the admin's settings (admin-api audits the change). */
 export async function writeCaptionSettings(env: CaptionJobsEnv & { global_settings?: Bucket & { put(key: string, value: string, opts?: unknown): Promise<unknown> } }, patch: unknown): Promise<CaptionSettings> {
-	const next = cleanCaptionSettings(patch, await readCaptionSettings(env));
+	const next = cleanCaptionSettings(patch, await readCaptionSettings(env, { raw: true }));
 	if (!env.global_settings) throw new CaptionJobHttpError(503, 'unavailable');
 	await (env.global_settings as unknown as { put(key: string, value: string, opts?: unknown): Promise<unknown> }).put(SETTINGS_KEY, JSON.stringify(next), { httpMetadata: { contentType: 'application/json' } });
 	return next;

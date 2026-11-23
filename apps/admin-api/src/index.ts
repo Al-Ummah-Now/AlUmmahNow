@@ -66,6 +66,7 @@ import { statusNotifyConsumer } from './lib/status-notify';
 import { runErrorRetention } from './lib/errors-retention';
 import { purgeE2eReports } from './lib/report-stats';
 import { errorEnvelope } from './middleware/error-envelope';
+import featuresRouter from './routers/features.router';
 
 // ==========================================
 // APP SETUP
@@ -280,6 +281,7 @@ app.route('/api/notification-settings', notificationSettingsRouter);
 app.route('/api/social', socialRouter);
 // Video categories (admin-managed list in the search D1): videos:categories to change, audited
 app.route('/api/video-categories', videoCategoriesRouter);
+app.route('/api/features', featuresRouter);
 // Translate for staff-set en/ar fields (L10N rule; routers/translate.router.ts)
 app.route('/api/translate', translateRouter);
 // Settings › Emails: admin-edited system emails, versions, preview and test send (emails:manage; routers/emailTemplates.router.ts)

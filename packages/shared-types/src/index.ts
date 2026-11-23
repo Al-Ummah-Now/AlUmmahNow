@@ -178,3 +178,4 @@ export * from './email-templates';
 export * from './i18n-youtube-import';
 export * from './feature-registry';
 export * from './api-error';
+export * from './feature-switch-store';

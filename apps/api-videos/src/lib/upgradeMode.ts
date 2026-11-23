@@ -7,11 +7,19 @@
 import { upgradeModeOf, type UpgradeMode } from '@al-ummah/shared-types';
 import { enabledProviders } from './billing/config';
 import type { BillingEnv } from './billing/config';
+import { overlaySwitch, syncLegacySwitch } from './features/switches';
 
 const REQUESTS_KEY = 'tier_requests_enabled';
 
 /** The admin's "Allow tier requests" (on by default; on when the table or row is missing). */
-export async function readRequestsAllowed(db: D1Database): Promise<{ allowed: boolean; updatedAt: string | null; updatedBy: string | null }> {
+export async function readRequestsAllowed(db: D1Database, opts: { raw?: boolean } = {}): Promise<{ allowed: boolean; updatedAt: string | null; updatedBy: string | null }> {
+	const stored = await readStoredRequestsAllowed(db);
+	if (opts.raw) return stored;
+	// The Features page switch tierRequests decides once set (lib/features/switches.ts)
+	return { ...stored, allowed: await overlaySwitch({ SEARCH_DB: db }, 'tierRequests', stored.allowed) };
+}
+
+async function readStoredRequestsAllowed(db: D1Database): Promise<{ allowed: boolean; updatedAt: string | null; updatedBy: string | null }> {
 	try {
 		const row = await db.prepare('SELECT value, updated_at, updated_by FROM creator_tier_settings WHERE key = ?').bind(REQUESTS_KEY).first<{ value: string; updated_at: string | null; updated_by: string | null }>();
 		return { allowed: row ? row.value === '1' : true, updatedAt: row?.updated_at ?? null, updatedBy: row?.updated_by ?? null };
@@ -23,7 +31,7 @@ export async function readRequestsAllowed(db: D1Database): Promise<{ allowed: bo
 
 /** Turns "Allow tier requests" on or off; returns the previous value (audit, Undo). */
 export async function setRequestsAllowed(db: D1Database, allowed: boolean, actorId: string, now = new Date().toISOString()): Promise<{ previous: boolean; allowed: boolean }> {
-	const { allowed: previous } = await readRequestsAllowed(db);
+	const { allowed: previous } = await readRequestsAllowed(db, { raw: true });
 	await db
 		.prepare(
 			`INSERT INTO creator_tier_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?)
@@ -31,6 +39,9 @@ export async function setRequestsAllowed(db: D1Database, allowed: boolean, actor
 		)
 		.bind(REQUESTS_KEY, allowed ? '1' : '0', actorId, now)
 		.run();
+	// The switch row (migration 0077) decides reads; the old page's toggle moves it too until the
+	// Features page replaces that toggle (wiki AUN-FEATURES §3)
+	await syncLegacySwitch({ SEARCH_DB: db }, 'tierRequests', allowed, actorId, now);
 	return { previous, allowed };
 }
 

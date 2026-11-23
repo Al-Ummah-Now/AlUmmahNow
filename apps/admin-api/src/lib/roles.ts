@@ -78,6 +78,10 @@ export const PERMISSIONS = {
   'emails:manage': ADMIN_ROLE_IDS,
   /** Admin Tools (wiki TOOLS-ADMIN): bulk import into any channel without tier quotas or upload limits; every request audited. */
   'imports:manage': ADMIN_ROLE_IDS,
+  /** Features page (wiki AUN-FEATURES §4): see every feature switch, its state and history. */
+  'features:read': MODERATOR_ROLE_IDS,
+  /** Features page: turn a feature on or off (the super-admin-only switches also need super admin). */
+  'features:manage': ADMIN_ROLE_IDS,
   /** Admin Tools: add, change and remove a channel's social import sources and their sync schedule. */
   'import_sources:manage': ['super_admin'],
 } as const satisfies Record<string, readonly string[]>;

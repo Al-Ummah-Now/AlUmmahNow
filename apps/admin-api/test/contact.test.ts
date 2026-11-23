@@ -122,8 +122,8 @@ describe('contact permissions (RBAC)', () => {
       assert.equal(hasPermission(roles, 'contact:read'), false, String(roles));
       assert.equal(hasPermission(roles, 'contact:manage'), false, String(roles));
     }
-    assert.deepEqual(permissionsFor(['Admin']).filter((p) => !p.startsWith('auth_requests:')), ['audit:read', 'contact:manage', 'contact:read', 'content:translate', 'emails:manage', 'errors:manage', 'errors:read', 'imports:manage', 'media:manage', 'media:read', 'newsletter:manage', 'ops:read', 'review_alerts:manage', 'settings:manage', 'staff_devices:manage', 'status:manage', 'videos:categories', 'videos:format', 'videos:processing', 'videos:uploads']);
-    assert.deepEqual(permissionsFor(['Moderator']), ['auth_requests:read', 'media:read']);
+    assert.deepEqual(permissionsFor(['Admin']).filter((p) => !p.startsWith('auth_requests:')), ['audit:read', 'contact:manage', 'contact:read', 'content:translate', 'emails:manage', 'errors:manage', 'errors:read', 'features:manage', 'features:read', 'imports:manage', 'media:manage', 'media:read', 'newsletter:manage', 'ops:read', 'review_alerts:manage', 'settings:manage', 'staff_devices:manage', 'status:manage', 'videos:categories', 'videos:format', 'videos:processing', 'videos:uploads']);
+    assert.deepEqual(permissionsFor(['Moderator']), ['auth_requests:read', 'features:read', 'media:read']);
   });
 });
 
