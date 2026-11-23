@@ -303,7 +303,7 @@ export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channe
 	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
 	// Creator support (wiki AUN-MEMBERS §9.5): computed only while its switch is on, for viewers too
 	// (the Support button sits on the channel page), so nothing is read while support is off
-	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, request));
+	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, { ...request, perksOn: switches.effective.supportPerks === true }));
 	// The Features page switches (FEAT-4): a switch that is off, or blocked by one, hides its keys
 	return applySwitchesToUserFeatures(features, switches.effective);
 }
@@ -314,6 +314,10 @@ export interface FeaturesRequest {
 	country?: string | null;
 	/** X-AUN-Client (native apps) */
 	client?: string | null;
+	/** X-AUN-Storefront (native apps: the store's storefront country, MEM-D15) */
+	storefront?: string | null;
+	/** The supportPerks switch (set here from the switches, not by callers) */
+	perksOn?: boolean;
 }
 
 async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: string | null, request: FeaturesRequest): Promise<{ support: boolean; supportReceive: boolean }> {
@@ -331,7 +335,7 @@ async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: str
 				}
 			: null;
 		const ownerTierAllows = async (ownerId: string) => (await channelOwnerTier(db, ownerId))?.supportReceive === true;
-		return await supportFeatureKeys(env as never, { userId: who.userId ?? null, country: request.country ?? null, client: request.client ?? null }, channel, ownerTierAllows);
+		return await supportFeatureKeys(env as never, { userId: who.userId ?? null, country: request.country ?? null, client: request.client ?? null, storefront: request.storefront ?? null, perksOn: request.perksOn === true }, channel, ownerTierAllows);
 	} catch (error) {
 		logger.warn('[features] Support keys not computed; hidden', { error: error instanceof Error ? error.message : String(error) });
 		return { support: false, supportReceive: false };

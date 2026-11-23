@@ -89,21 +89,33 @@ test('MEM-D3 is a setting: open = no checkout', () => {
   assert.equal(s.effectiveCoverFees('creatorSupporterMayCover', true), true);
 });
 
-test('every owner decision starts undecided', () => {
+test('open owner decisions start unset; the decided ones start at the owner’s admin-editable defaults', () => {
   const open = s.undecidedSupportDecisions(s.UNDECIDED_SUPPORT_POLICY);
-  for (const id of ['MEM-D17', 'MEM-D18', 'MEM-D19', 'MEM-D20', 'MEM-D21', 'MEM-D22', 'MEM-D23', 'MEM-D24']) assert.ok(open.includes(id as s.SupportDecisionId), id);
-  for (const v of Object.values(s.UNDECIDED_SUPPORT_POLICY)) assert.equal(v, null);
+  for (const id of ['MEM-D17', 'MEM-D22', 'MEM-D23', 'MEM-D24']) assert.ok(open.includes(id as s.SupportDecisionId), id);
+  for (const id of ['MEM-D18', 'MEM-D19', 'MEM-D20', 'MEM-D21']) assert.ok(!open.includes(id as s.SupportDecisionId), id);
+  // Owner 2026-11-23: a 120-day hold; $25 on the 15th, creators may raise theirs; the creator bears payout fees; losses netted against future gifts
+  const p = s.UNDECIDED_SUPPORT_POLICY;
+  assert.equal(p.holdDays, 120);
+  assert.equal(p.payoutThresholdUsdMinor, 2500);
+  assert.equal(p.payoutDayOfMonth, 15);
+  assert.equal(p.creatorMayRaiseThreshold, true);
+  assert.equal(p.payoutFeeBearer, 'creatorFromPayout');
+  assert.equal(p.negativeBalancePolicy, 'netAgainstFutureGifts');
+  // MEM-D17 has no default: both rails stay unset until an admin picks them
+  assert.equal(p.primaryRail, null);
+  assert.equal(p.fallbackRail, null);
 });
 
-test('policy parsing keeps nulls, refuses bad values and never fills a default', () => {
+test('policy parsing refuses bad values, keeps open decisions null and fills only the decided defaults', () => {
   const { policy, problems } = s.parseSupportPolicy({ holdDays: 30, payoutDayOfMonth: 31, primaryRail: 'stripe', bogus: 1 });
   assert.equal(policy.holdDays, 30);
-  assert.equal(policy.payoutDayOfMonth, null);
+  assert.equal(policy.payoutDayOfMonth, 15, 'an invalid value is a problem and leaves the default');
   assert.equal(policy.primaryRail, null);
   assert.deepEqual(problems.map((p) => p.field).sort(), ['payoutDayOfMonth', 'primaryRail']);
   assert.ok(!('bogus' in policy));
   assert.ok(s.parseSupportPolicy({ amounts: { USD: { minimum: 300, presets: [100] } } }).problems.some((p) => p.field === 'amounts'));
   assert.ok(s.parseSupportPolicy({ primaryRail: 'wise', fallbackRail: 'wise' }).problems.some((p) => p.field === 'fallbackRail'));
+  assert.equal(s.parseSupportPolicy({ primaryRail: 'trolley', fallbackRail: 'paypal-payouts' }).problems.length, 0, 'Trolley is a rail (MEM-D17)');
 });
 
 test('MEM-D21 reserve option needs its numbers', () => {

@@ -119,7 +119,9 @@ export async function planBatch(
 				continue;
 			}
 			const own = p.creatorMayRaiseThreshold && settings?.payout_threshold ? settings.payout_threshold : 0;
-			const threshold = Math.max(p.payoutThresholdUsdMinor as number, own);
+			// MEM-D19: "$25 or the rail's minimum", whichever is higher
+			const railMin = rail.minimumPayout ? await rail.minimumPayout(input.ctxFor(payee.mode), currency).catch(() => null) : null;
+			const threshold = Math.max(p.payoutThresholdUsdMinor as number, own, railMin?.currency === currency ? railMin.amount : 0);
 			if (bal.available < threshold) {
 				skipped.push({ channelId: payee.channel_id, reason: 'under_threshold' });
 				continue;

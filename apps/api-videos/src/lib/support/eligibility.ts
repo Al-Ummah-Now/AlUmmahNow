@@ -7,7 +7,8 @@
  * - supporter: may this signed-in person support creators from here? The owner decisions the
  *   support sheet needs (MEM-D3 card fee, D4 minimum, D9 ages) are recorded; no emergency stop; a
  *   collector exists here; the person's country isn't blocked for supporters (Countries page);
- *   and a native app (X-AUN-Client) only once MEM-D15 allows the apps.
+ *   and a native app (X-AUN-Client) only where the MEM-D15 app settings give its platform and
+ *   storefront a mode other than hidden (shared-types support-apps.ts, with its interlocks).
  * - receiver: may this channel receive? MEM-D5 (who may receive), MEM-D17 (rail) and MEM-D23
  *   (gifts before the payee is active) are recorded; the channel exists and isn't suspended; the
  *   owner switched support on and no admin paused it; the payee is active, clear of screening and
@@ -17,7 +18,7 @@
  * The `creatorSupport` switch is checked by the caller (computeFeatures ANDs it in; the APIs call
  * `supportSwitch` first), so nothing here runs while support is off. Every read is keyed.
  */
-import type { SearchDb, SupportPolicy } from '@al-ummah/shared-types';
+import { type AppSupportDecision, appPlatformOfOs, appSupportMode, parseClientHeader, type SearchDb, type SupportPolicy } from '@al-ummah/shared-types';
 import { collectorFor, type SupportAdapterEnv } from './adapters';
 import { readSupportConfig, type SupportConfig } from './config';
 
@@ -32,6 +33,10 @@ export interface SupportRequest {
 	country: string | null;
 	/** Native apps send X-AUN-Client; the web sends none */
 	client: string | null;
+	/** X-AUN-Storefront: the app store's storefront country (MEM-D15; stores apply rules by storefront) */
+	storefront?: string | null;
+	/** Whether the supportPerks switch is on (MEM-D15 interlock); unknown counts as on, so P2P stays hidden */
+	perksOn?: boolean;
 }
 
 export interface ReceiverChannel {
@@ -50,8 +55,19 @@ export interface EligibilityEnv extends SupportAdapterEnv {
 /** The owner's tier flag (MEM-D5 'tierCapability'); injected so this module stays free of tier storage. */
 export type OwnerTierAllows = (ownerId: string) => Promise<boolean>;
 
-const SUPPORTER_DECISIONS: (keyof SupportPolicy)[] = ['collectorFeePayer', 'amounts', 'minSupporterAge', 'appsEnabled'];
+const SUPPORTER_DECISIONS: (keyof SupportPolicy)[] = ['collectorFeePayer', 'amounts', 'minSupporterAge'];
 const RECEIVER_DECISIONS: (keyof SupportPolicy)[] = ['receiversRule', 'primaryRail', 'fallbackRail', 'collectBeforePayeeActive', 'minCreatorAge'];
+
+/**
+ * MEM-D15: what a native app may show; null for the web. An app the server can't place on a
+ * platform gets hidden, like an app with no rule.
+ */
+export function appDecisionFor(c: SupportConfig, req: SupportRequest): AppSupportDecision | null {
+	if (!req.client) return null;
+	const platform = appPlatformOfOs(parseClientHeader(req.client)?.os);
+	if (!platform) return { mode: 'hidden', cadence: 'one_time_only', hiddenBecause: 'platform_off' };
+	return appSupportMode({ settings: c.apps, platform, storefront: req.storefront ?? null, perksOn: req.perksOn !== false, policy: c.policy });
+}
 
 const open = (p: SupportPolicy, fields: (keyof SupportPolicy)[]) => fields.some((f) => p[f] === null);
 
@@ -67,7 +83,8 @@ export async function supporterEligibility(env: EligibilityEnv, req: SupportRequ
 	if (open(c.policy, SUPPORTER_DECISIONS)) return { ok: false, reason: 'decisions_open' };
 	if (c.emergencyStop) return { ok: false, reason: 'emergency_stop' };
 	if (!collectorFor(env, c.collector)) return { ok: false, reason: 'no_collector' };
-	if (req.client && c.policy.appsEnabled !== true) return { ok: false, reason: 'app_not_allowed' };
+	const app = appDecisionFor(c, req);
+	if (app && app.mode === 'hidden') return { ok: false, reason: 'app_not_allowed' };
 	const rule = await countryRule(db, req.country);
 	if (rule?.supporters === 'blocked') return { ok: false, reason: 'country_blocked' };
 	return { ok: true };

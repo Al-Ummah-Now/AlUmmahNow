@@ -151,16 +151,19 @@ describe('support settings (owner decisions)', () => {
 		const c0 = await readSupportConfig(d);
 		assert.equal(c0.version, 0);
 		assert.equal(c0.organizationFormed, false);
-		assert.ok(Object.values(c0.policy).every((v) => v === null));
+		assert.equal(c0.policy.primaryRail, null, 'open decisions read as null');
+		assert.equal(c0.policy.holdDays, 120, 'decided ones read as the owner default (MEM-D18)');
 		const w = await writeSupportPolicy(d, { holdDays: 30 }, 'usr_finance', 0);
-		assert.equal(w.before.holdDays, null);
+		assert.equal(w.before.holdDays, 120);
 		assert.equal(w.after.holdDays, 30);
 		assert.equal((await readSupportConfig(d)).policy.holdDays, 30);
 		await assert.rejects(writeSupportPolicy(d, { holdDays: 14 }, 'usr_other', 0), (e: InstanceType<typeof SupportConfigError>) => e.code === 'stale');
 		await assert.rejects(writeSupportPolicy(d, { payoutDayOfMonth: 31 }, 'usr_finance', 1), (e: InstanceType<typeof SupportConfigError>) => e.code === 'invalid' && e.problems[0].field === 'payoutDayOfMonth');
-		// Re-opening a decision is allowed
-		await writeSupportPolicy(d, { holdDays: null }, 'usr_finance', 1);
-		assert.equal((await readSupportConfig(d)).policy.holdDays, null);
+		// Clearing a decided setting puts the owner's default back; clearing an open one re-opens it
+		await writeSupportPolicy(d, { holdDays: null, primaryRail: 'test' }, 'usr_finance', 1);
+		assert.equal((await readSupportConfig(d)).policy.holdDays, 120);
+		await writeSupportPolicy(d, { primaryRail: null }, 'usr_finance', 2);
+		assert.equal((await readSupportConfig(d)).policy.primaryRail, null);
 	});
 
 });
@@ -194,7 +197,7 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 		const { supportCanTurnOn } = await import('../src/lib/support/readiness');
 		const { writeSupportPolicy } = await import('../src/lib/support/config');
 		const d = db();
-		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }, 'usr_fin', 0);
+		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner' }, 'usr_fin', 0);
 		await d.prepare("UPDATE support_config SET organisation_formed = 1 WHERE id = 'default'").run();
 		await d.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('usr_fin', '[\"support:payouts\"]', 'usr_board', 'usr_board2', 'now')").run();
 		assert.equal((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).ready, true);

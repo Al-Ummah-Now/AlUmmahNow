@@ -137,7 +137,7 @@ export function toMajorString(m: Money): string {
 // ---------------------------------------------------------------------------
 
 /** Payout rails an adapter exists for. 'test' moves no money and exists only on QA and the local stack. */
-export const PAYOUT_RAIL_IDS = ['wise', 'paypal-payouts', 'test'] as const;
+export const PAYOUT_RAIL_IDS = ['wise', 'paypal-payouts', 'trolley', 'test'] as const;
 export type PayoutRailId = (typeof PAYOUT_RAIL_IDS)[number];
 
 /** Collectors (who takes the supporter's payment). PayGood only (O42); 'test' for QA and local. */
@@ -172,7 +172,7 @@ export interface SupportPolicy {
   /** MEM-D17: the payout rail (primary), and the fallback for countries it can't reach */
   primaryRail: PayoutRailId | null;
   fallbackRail: PayoutRailId | 'none' | null;
-  /** MEM-D18: days a gift is held before it becomes available for payout */
+  /** MEM-D18 (decided 2026-11-23: an admin setting, 30 days unless changed): days a gift is held before it becomes available */
   holdDays: number | null;
   /** MEM-D19: smallest available balance paid out, in USD minor units (converted per payee currency by the rail quote) */
   payoutThresholdUsdMinor: number | null;
@@ -213,8 +213,6 @@ export interface SupportPolicy {
    * (CreatorTier.supportReceive); 'everyAdultOwner': every channel owner (the rail's onboarding checks age).
    */
   receiversRule: ReceiversRule | null;
-  /** MEM-D15: the native apps show Support (false = web only, until Apple's and Google's written answers) */
-  appsEnabled: boolean | null;
 }
 
 export const RECEIVERS_RULES = ['tierCapability', 'everyAdultOwner'] as const;
@@ -223,12 +221,16 @@ export type ReceiversRule = (typeof RECEIVERS_RULES)[number];
 export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   primaryRail: null,
   fallbackRail: null,
-  holdDays: null,
-  payoutThresholdUsdMinor: null,
-  payoutDayOfMonth: null,
-  creatorMayRaiseThreshold: null,
-  payoutFeeBearer: null,
-  negativeBalancePolicy: null,
+  // Owner 2026-11-23, admin-editable defaults: MEM-D18/D21 a 120-day hold (the card networks' standard
+  // dispute window); MEM-D19 $25 (or the rail's minimum, if higher) on the 15th, creators may raise
+  // their own; MEM-D20 the creator bears payout and exchange fees; MEM-D21 a later loss is netted
+  // against future gifts (the organization writes off only what can never be recovered)
+  holdDays: 120,
+  payoutThresholdUsdMinor: 2500,
+  payoutDayOfMonth: 15,
+  creatorMayRaiseThreshold: true,
+  payoutFeeBearer: 'creatorFromPayout',
+  negativeBalancePolicy: 'netAgainstFutureGifts',
   reserveBasisPoints: null,
   reserveDays: null,
   dormantPolicy: null,
@@ -241,10 +243,9 @@ export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   minSupporterAge: null,
   minCreatorAge: null,
   receiversRule: null,
-  appsEnabled: null,
 }) as SupportPolicy;
 
-export type SupportDecisionId = 'MEM-D3' | 'MEM-D4' | 'MEM-D5' | 'MEM-D9' | 'MEM-D15' | 'MEM-D17' | 'MEM-D18' | 'MEM-D19' | 'MEM-D20' | 'MEM-D21' | 'MEM-D22' | 'MEM-D23' | 'MEM-D24';
+export type SupportDecisionId = 'MEM-D3' | 'MEM-D4' | 'MEM-D5' | 'MEM-D9' | 'MEM-D17' | 'MEM-D18' | 'MEM-D19' | 'MEM-D20' | 'MEM-D21' | 'MEM-D22' | 'MEM-D23' | 'MEM-D24';
 
 /** Which policy fields answer which owner decision (wiki AUN-MEMBERS §15). */
 export const SUPPORT_DECISION_FIELDS: Readonly<Record<SupportDecisionId, readonly (keyof SupportPolicy)[]>> = Object.freeze({
@@ -252,7 +253,6 @@ export const SUPPORT_DECISION_FIELDS: Readonly<Record<SupportDecisionId, readonl
   'MEM-D4': ['amounts'],
   'MEM-D5': ['receiversRule'],
   'MEM-D9': ['minSupporterAge', 'minCreatorAge'],
-  'MEM-D15': ['appsEnabled'],
   'MEM-D17': ['primaryRail', 'fallbackRail'],
   'MEM-D18': ['holdDays'],
   'MEM-D19': ['payoutThresholdUsdMinor', 'payoutDayOfMonth', 'creatorMayRaiseThreshold'],
@@ -320,7 +320,6 @@ const POLICY_CHECKS: Readonly<Record<keyof SupportPolicy, (v: unknown) => boolea
   minSupporterAge: (v) => intIn(v, 18, 99),
   minCreatorAge: (v) => intIn(v, 18, 99),
   receiversRule: oneOf(RECEIVERS_RULES),
-  appsEnabled: bool,
 };
 
 /**

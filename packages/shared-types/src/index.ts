@@ -139,6 +139,7 @@ export * from './billing';
 export * from './support';
 export * from './support-format';
 export * from './support-readiness';
+export * from './support-apps';
 export * from './thumbnail-crop';
 export * from './roles';
 // Staff passkey rule and step-up (wiki AUTH-PASSKEYS): admin-api and admin-web read Auth tokens the same way

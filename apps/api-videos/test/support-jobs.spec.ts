@@ -91,7 +91,11 @@ describe('webhook intake', () => {
 		assert.equal(r.status, 200);
 		assert.deepEqual((await creatorBalance(t.sql as never, CH)).USD, { pending: 455, available: 0, in_payout: 0, reserve: 0 });
 		const row = await t.sql.prepare('SELECT status, message, supporter_country, available_at FROM support_payments').first<Record<string, unknown>>();
-		assert.deepEqual({ ...row }, { status: 'succeeded', message: 'Thank you', supporter_country: 'GB', available_at: null }); // MEM-D18 open: no date yet
+		const { available_at, ...rest } = { ...row } as Record<string, unknown>;
+		assert.deepEqual(rest, { status: 'succeeded', message: 'Thank you', supporter_country: 'GB' });
+		// MEM-D18: the owner's default hold is 120 days from payment
+		const days = (Date.parse(String(available_at)) - Date.now()) / 86_400_000;
+		assert.ok(days > 119.9 && days <= 120, `held 120 days, got ${days}`);
 		const again = await deliverCollector(t.env, paid.eventId, paid.events);
 		assert.equal(again.status === 200 && again.duplicate, true);
 		await t.drain();
@@ -138,15 +142,15 @@ describe('webhook intake', () => {
 });
 
 describe('refunds and disputes follow MEM-D21', () => {
-	it('while MEM-D21 is open, a refund larger than what is owed is not booked: the event fails and the admin is told', async () => {
+	it('MEM-D21 default: a refund larger than what is owed books and leaves a negative balance, netted against future gifts', async () => {
 		const t = setup();
 		const { paid } = await pay(t, 'sco_r');
 		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
 		await deliverCollector(t.env, 'tevt_refund', [{ type: 'payment.refunded', paymentRef: ref, refundRef: 'tref_1', amount: usd(500), occurredAt: new Date().toISOString() }]);
 		await t.drain();
-		assert.equal((await t.sql.prepare("SELECT status FROM support_events WHERE event_id = 'tevt_refund'").first<{ status: string }>())!.status, 'failed');
-		assert.ok(reported.some((r) => r.includes('MEM-D21')));
-		assert.equal(t.sql.count('support_ledger_entries'), 1);
+		assert.equal(t.sql.count('support_ledger_entries'), 2);
+		const bal = (await creatorBalance(t.sql as never, CH)).USD!;
+		assert.equal(bal.pending + bal.available, 455 - 500);
 	});
 
 	it('with MEM-D21 recorded, the refund and a dispute book; a won dispute comes back', async () => {
@@ -170,15 +174,14 @@ describe('refunds and disputes follow MEM-D21', () => {
 });
 
 describe('release (MEM-D18)', () => {
-	it('nothing is released while the hold is undecided; once recorded, gifts get their date and release on time', async () => {
+	it('gifts get their date from the hold setting (MEM-D18, default 120 days) and release on time', async () => {
 		const t = setup();
-		await pay(t, 'sco_h', 'one_time', 1000);
-		const later = new Date(Date.now() + 40 * 86_400_000);
-		const cfg0 = (await import('../src/lib/support/config')).readSupportConfig;
-		assert.deepEqual(await releaseDueGifts(t.sql as never, (await cfg0(t.sql as never)).policy, later), { released: 0, scheduled: 0 });
 		await writeSupportPolicy(t.sql as never, { holdDays: 30 }, 'usr_fin', 0);
-		const policy = (await cfg0(t.sql as never)).policy;
-		assert.deepEqual(await releaseDueGifts(t.sql as never, policy, new Date()), { released: 0, scheduled: 1 });
+		const policy = (await (await import('../src/lib/support/config')).readSupportConfig(t.sql as never)).policy;
+		await pay(t, 'sco_h', 'one_time', 1000);
+		const later = new Date(Date.now() + 31 * 86_400_000);
+		assert.deepEqual(await releaseDueGifts(t.sql as never, policy, new Date()), { released: 0, scheduled: 0 });
+		assert.deepEqual(await releaseDueGifts(t.sql as never, policy, new Date(Date.now() + 29 * 86_400_000)), { released: 0, scheduled: 0 });
 		assert.deepEqual(await releaseDueGifts(t.sql as never, policy, later), { released: 1, scheduled: 0 });
 		assert.deepEqual((await creatorBalance(t.sql as never, CH)).USD, { pending: 0, available: 941, in_payout: 0, reserve: 0 });
 		assert.deepEqual(await releaseDueGifts(t.sql as never, policy, later), { released: 0, scheduled: 0 });
@@ -195,18 +198,10 @@ describe('rail payout events (MEM-D20)', () => {
 		return receiveSupportWebhook(env, 'rail', 'test', body, await signTestRailDelivery(body, new Date()));
 	}
 
-	it('paid needs MEM-D20; failed puts the money back', async () => {
+	it('paid books under MEM-D20 (default: the creator bears the fee); failed puts the money back', async () => {
 		const t = setup();
 		await payoutRow(t, 'po_1', 4000);
 		await deliverRail(t.env, 'trev_1', [{ type: 'payout.updated', payoutId: 'po_1', railPayoutRef: 'r', status: 'paid', failureCode: null, occurredAt: new Date().toISOString() }]);
-		await t.drain();
-		assert.equal((await t.sql.prepare("SELECT status FROM support_payouts WHERE id = 'po_1'").first<{ status: string }>())!.status, 'sent');
-		await writeSupportPolicy(t.sql as never, { payoutFeeBearer: 'creatorFromPayout' }, 'usr_fin', 0);
-		const { retryJob } = await import('../src/lib/admin/jobs');
-		const job = await t.sql.prepare("SELECT id FROM admin_jobs WHERE kind = 'support.webhook'").first<{ id: string }>();
-		await t.sql.prepare("UPDATE support_events SET status = 'queued'").run();
-		await t.sql.prepare('UPDATE admin_jobs SET status = ? WHERE id = ?').bind('failed', job!.id).run();
-		await retryJob(t.env, job!.id);
 		await t.drain();
 		assert.equal((await t.sql.prepare("SELECT status FROM support_payouts WHERE id = 'po_1'").first<{ status: string }>())!.status, 'paid');
 		assert.equal((await creatorBalance(t.sql as never, CH)).USD!.in_payout, 0);
