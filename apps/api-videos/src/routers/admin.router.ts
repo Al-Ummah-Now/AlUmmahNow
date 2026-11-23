@@ -540,6 +540,8 @@ const TierBody = z
 		audioTracksPerVideo: z.coerce.number().optional(),
 		recitationMetadata: z.boolean().optional(),
 		notesMax: z.coerce.number().nullable().optional(),
+		// Creator support (MEM-D5 tier capability): owners on this tier may receive support
+		supportReceive: z.boolean().optional(),
 		live: z.boolean().optional(),
 		liveHoursMonth: z.coerce.number().optional(),
 		liveMaxConcurrent: z.coerce.number().optional(),

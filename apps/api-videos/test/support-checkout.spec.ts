@@ -186,3 +186,35 @@ describe('the owner’s settings', () => {
 		assert.equal(ok.body.result.thankYouNote, 'Thank you');
 	});
 });
+
+describe('review fixes (cross-provider review of #1774, #1764)', () => {
+	it('a stopped pledge stays stopped when an older collector event arrives afterwards', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		const before = new Date().toISOString();
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', amount: 1000, consent: true });
+		await fan('POST', new URL(r.body.result.url).pathname, undefined, { action: 'pay' });
+		await t.drain();
+		const pledge = (await fan('GET', '/api/me/support')).body.result.pledges[0];
+		await fan('POST', `/api/me/support/pledges/${pledge.id}/stop`);
+		const ref = (await t.db.prepare('SELECT collector_pledge_ref FROM support_pledges').first<{ collector_pledge_ref: string }>())!.collector_pledge_ref;
+		const { applyCollectorEvents } = await import('../src/lib/support/events');
+		const { readSupportConfig } = await import('../src/lib/support/config');
+		await applyCollectorEvents({ db: t.db as never, collector: 'test', mode: 'test', policy: (await readSupportConfig(t.db as never)).policy, now: new Date() }, [{ type: 'pledge.updated', pledgeRef: ref, status: 'active', currentPeriodEnd: null, occurredAt: before }]);
+		assert.equal((await t.db.prepare('SELECT status FROM support_pledges').first<{ status: string }>())!.status, 'canceled');
+	});
+
+	it('a channel editor can’t support their own channel (the role comes from the record already read)', async () => {
+		const t = await setup();
+		await (t.env as unknown as { channels: MemoryBucket }).channels.put(CH, JSON.stringify({ id: CH, userId: OWNER, members: [{ userId: 'usr_editor', role: 'editor' }] }));
+		const r = await t.as('usr_editor')('POST', `/api/channels/${CH}/support/checkout`, GIFT);
+		assert.equal(r.body.code, 'feature_off');
+	});
+
+	it('a gift the card fee would swallow is refused', async () => {
+		const t = await setup();
+		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.minimumUsdMinor', 1)").run();
+		const q = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=30`);
+		assert.equal(q.body.code, 'support_amount_too_small');
+	});
+});

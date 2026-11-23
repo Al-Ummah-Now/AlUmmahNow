@@ -365,26 +365,28 @@ export function quoteGift(input: { gift: Money; fee: CollectorFeeSchedule; suppo
   if (gift.amount <= 0) throw new MoneyError('A gift must be more than zero');
   sameCurrency(gift, fee.fixed);
   const tax = basisPoints(gift, input.taxBasisPoints ?? 0, 'halfUp');
+  // The card fee is charged on everything the card pays, tax included
+  const feeOf = (m: Money) => addMoney(basisPoints(m, fee.basisPoints, 'up'), fee.fixed);
   let charged: Money;
   if (input.supporterCovers) {
-    // Gross up so that charged − fee(charged) ≥ gift: charged = ceil((gift + fixed) / (1 − bp))
-    const numer = safe((gift.amount + fee.fixed.amount) * 10_000);
+    // Gross up so that charged − fee(charged) ≥ gift + tax: charged = ceil((gift + tax + fixed) / (1 − bp))
+    const numer = safe((gift.amount + tax.amount + fee.fixed.amount) * 10_000);
     charged = { amount: divRound(numer, 10_000 - fee.basisPoints, 'up'), currency: gift.currency };
   } else {
-    charged = gift;
+    charged = addMoney(gift, tax);
   }
-  charged = addMoney(charged, tax);
-  const base = subMoney(charged, tax);
-  const collectorFee = addMoney(basisPoints(base, fee.basisPoints, 'up'), fee.fixed);
-  const creatorReceives = subMoney(base, collectorFee);
+  const collectorFee = feeOf(charged);
+  const creatorReceives = subMoney(subMoney(charged, tax), collectorFee);
+  // A gift the card fee would swallow is refused, never booked as a negative balance for the creator
+  if (creatorReceives.amount <= 0) throw new MoneyError('A gift must be more than the card fee');
   return {
     charged,
     gift,
-    coverFees: subMoney(base, gift),
+    coverFees: subMoney(subMoney(charged, tax), gift),
     collectorFee,
     tax,
     platformFee: zeroMoney(gift.currency),
-    creatorReceives: creatorReceives.amount < 0 ? zeroMoney(gift.currency) : creatorReceives,
+    creatorReceives,
   };
 }
 

@@ -126,3 +126,14 @@ test('no Stripe anywhere', () => {
   assert.ok(!s.PAYOUT_RAIL_IDS.some((id) => /stripe/i.test(id)));
   assert.ok(!s.SUPPORT_COLLECTOR_IDS.some((id) => /stripe/i.test(id)));
 });
+
+test('review of #1757: the card fee is on everything charged, and a gift the fee would swallow is refused', () => {
+  const fee = { basisPoints: 1000, fixed: usd(0) };
+  const b = s.quoteGift({ gift: usd(1000), fee, supporterCovers: false, taxBasisPoints: 1000 });
+  assert.deepEqual(b.charged, usd(1100));
+  assert.deepEqual(b.collectorFee, usd(110));
+  assert.deepEqual(b.creatorReceives, usd(890));
+  const covered = s.quoteGift({ gift: usd(1000), fee, supporterCovers: true, taxBasisPoints: 1000 });
+  assert.ok(covered.creatorReceives.amount >= 1000);
+  assert.throws(() => s.quoteGift({ gift: usd(30), fee: { basisPoints: 290, fixed: usd(30) }, supporterCovers: false }), /more than the card fee/);
+});

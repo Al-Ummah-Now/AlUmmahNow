@@ -12,7 +12,7 @@
  * Amounts are integer minor units. The checkout currency is USD while the decisions (MEM-D4
  * minimum and presets) are set in USD; other currencies are refused until a rule exists for them.
  */
-import { effectiveCoverFees, formatSupportMoney, money, quoteGift, type CollectorFeeSchedule, type GiftBreakdown, type Money, type SearchDb, type SupportCurrency } from '@al-ummah/shared-types';
+import { effectiveCoverFees, formatSupportMoney, money, MoneyError, quoteGift, type CollectorFeeSchedule, type GiftBreakdown, type Money, type SearchDb, type SupportCurrency } from '@al-ummah/shared-types';
 import { collectorFor, type SupportAdapterEnv } from './adapters';
 import type { CancelReason, CollectorContext } from './collector';
 import { readSupportConfig, type SupportConfig } from './config';
@@ -63,7 +63,14 @@ export function quote(env: SupportAdapterEnv, config: SupportConfig, input: Quot
 	const fee = feeScheduleFor(env, config, 'USD');
 	if (!fee) throw new CheckoutError(409, 'support_currency_unavailable', 'No fee schedule for this currency');
 	const covers = effectiveCoverFees(p.collectorFeePayer, input.supporterTicked) as boolean;
-	const b = quoteGift({ gift: money(input.amount, 'USD'), fee, supporterCovers: covers });
+	let b: GiftBreakdown;
+	try {
+		b = quoteGift({ gift: money(input.amount, 'USD'), fee, supporterCovers: covers });
+	} catch (error) {
+		// The card fee would take the whole gift
+		if (error instanceof MoneyError) throw new CheckoutError(400, 'support_amount_too_small', error.message);
+		throw error;
+	}
 	const t = (m: Money) => formatSupportMoney(locale, m);
 	return {
 		...b,
@@ -142,15 +149,20 @@ export async function mySupport(db: SearchDb, userId: string): Promise<{ pledges
 }
 
 /** Stops a monthly pledge: at the collector first (no further charges), then here. Idempotent. */
-export async function stopMyPledge(env: SupportAdapterEnv & { SEARCH_DB?: SearchDb }, userId: string, pledgeId: string, ctx: CollectorContext, now: Date, reason: CancelReason = 'supporter'): Promise<{ status: string }> {
+export async function stopMyPledge(env: SupportAdapterEnv & { SEARCH_DB?: SearchDb }, userId: string, pledgeId: string, ctxFor: (mode: 'test' | 'live') => CollectorContext, now: Date, reason: CancelReason = 'supporter'): Promise<{ status: string }> {
 	const db = env.SEARCH_DB!;
-	const p = await db.prepare('SELECT id, collector, collector_pledge_ref, status FROM support_pledges WHERE id = ? AND supporter_user_id = ?').bind(pledgeId, userId).first<{ id: string; collector: string; collector_pledge_ref: string | null; status: string }>();
+	const p = await db.prepare('SELECT id, collector, mode, collector_pledge_ref, status FROM support_pledges WHERE id = ? AND supporter_user_id = ?').bind(pledgeId, userId).first<{ id: string; collector: string; mode: 'test' | 'live'; collector_pledge_ref: string | null; status: string }>();
 	if (!p) throw new CheckoutError(404, 'not_found', 'No such pledge');
 	if (p.status === 'canceled' || p.status === 'ended') return { status: p.status };
 	const collector = collectorFor(env, p.collector as never);
 	if (!collector || !p.collector_pledge_ref) throw new CheckoutError(409, 'support_pledge_ended', 'This monthly support can’t be reached at the payment provider');
-	await collector.cancelPledge(ctx, p.collector_pledge_ref, reason);
-	await db.prepare("UPDATE support_pledges SET status = 'canceled', canceled_at = ?, cancel_reason = ?, updated_at = ? WHERE id = ? AND status IN ('active', 'past_due')").bind(now.toISOString(), reason, now.toISOString(), p.id).run();
+	// The pledge's own mode, not today's setting
+	await collector.cancelPledge(ctxFor(p.mode), p.collector_pledge_ref, reason);
+	// last_event_at moves too: a collector event from before the stop never brings the pledge back
+	await db
+		.prepare("UPDATE support_pledges SET status = 'canceled', canceled_at = ?, cancel_reason = ?, last_event_at = CASE WHEN last_event_at IS NULL OR last_event_at < ? THEN ? ELSE last_event_at END, updated_at = ? WHERE id = ? AND status IN ('active', 'past_due')")
+		.bind(now.toISOString(), reason, now.toISOString(), now.toISOString(), now.toISOString(), p.id)
+		.run();
 	return { status: 'canceled' };
 }
 

@@ -73,6 +73,7 @@ interface TierRow {
 	audio_tracks_per_video?: number | null;
 	recitation_metadata?: number | null;
 	notes_max?: number | null;
+	support_receive?: number | null;
 	live?: number | null;
 	live_hours_month?: number | null;
 	live_max_concurrent?: number | null;
@@ -141,6 +142,8 @@ function toTier(row: TierRow): CreatorTier {
 		importCountsAgainstLimits: row.import_counts_limits === undefined || row.import_counts_limits === null ? true : Number(row.import_counts_limits) === 1,
 		audioTracksPerVideo: Number(row.audio_tracks_per_video ?? 0) || 0,
 		recitationMetadata: flag(row.recitation_metadata, shipped?.recitationMetadata ?? true),
+		// Migration 0115 (creator support, MEM-D5): owners on this tier may receive support
+		supportReceive: flag(row.support_receive, false),
 		// Rows from before migration 0060 have no live columns: the shipped tier's defaults
 		...liveFields(row),
 		...liveCapabilityFields(row),
@@ -433,6 +436,7 @@ export interface TierInput {
 	audioTracksPerVideo?: unknown;
 	recitationMetadata?: unknown;
 	notesMax?: unknown;
+	supportReceive?: unknown;
 	live?: unknown;
 	liveHoursMonth?: unknown;
 	liveMaxConcurrent?: unknown;
@@ -491,11 +495,13 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	if (input.hidden !== undefined && typeof input.hidden !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'hidden must be true or false');
 	const hidden = bool(input.hidden, current?.hidden, false);
 	const sortOrder = intIn(input.sortOrder ?? current?.sortOrder ?? 50, 'sortOrder');
+	if (input.supportReceive !== undefined && typeof input.supportReceive !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'supportReceive must be true or false');
+	const supportReceive = bool(input.supportReceive, current?.supportReceive, false);
 	if (unlimited) {
 		return {
 			id, name, ...text, unlimited, uploads: true, channels: true, requestable, hidden, sortOrder, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0,
 			importCountsAgainstLimits, audioTracksPerVideo: 0, recitationMetadata: true, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0,
-			notesMax: null,
+			notesMax: null, supportReceive,
 		};
 	}
 	// A new tier allows uploads and channels unless the admin says otherwise (what a tier meant before the flags)
@@ -530,7 +536,7 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 		id, name, ...text, unlimited, uploads, channels, requestable, hidden, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo, recitationMetadata,
 		live, liveHoursMonth: liveLimit('liveHoursMonth'), liveMaxConcurrent: liveLimit('liveMaxConcurrent'), liveMaxStreamMinutes: liveLimit('liveMaxStreamMinutes'),
 		...liveCapabilities,
-		notesMax,
+		notesMax, supportReceive,
 	};
 }
 
@@ -615,8 +621,8 @@ export async function saveTier(
 			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, hidden, sort_order,
 			   per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video, recitation_metadata,
 			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes, live_chat, live_premieres, live_events,
-			   notes_max, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			   notes_max, support_receive, updated_at, updated_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_ar = excluded.name_ar, description = excluded.description,
 			   description_ar = excluded.description_ar, unlimited = excluded.unlimited, uploads = excluded.uploads, channels = excluded.channels,
 			   requestable = excluded.requestable, hidden = excluded.hidden, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
@@ -625,7 +631,7 @@ export async function saveTier(
 			   recitation_metadata = excluded.recitation_metadata, live = excluded.live, live_hours_month = excluded.live_hours_month,
 			   live_max_concurrent = excluded.live_max_concurrent, live_max_stream_minutes = excluded.live_max_stream_minutes,
 			   live_chat = excluded.live_chat, live_premieres = excluded.live_premieres, live_events = excluded.live_events,
-			   notes_max = excluded.notes_max,
+			   notes_max = excluded.notes_max, support_receive = excluded.support_receive,
 			   updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
 		.bind(
@@ -634,6 +640,7 @@ export async function saveTier(
 			tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, tier.recitationMetadata ? 1 : 0, tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes,
 			...TIER_LIVE_CAPABILITIES.map((field) => (tier[field] === undefined ? null : tier[field] ? 1 : 0)),
 			tier.notesMax === undefined ? 1000 : tier.notesMax,
+			tier.supportReceive ? 1 : 0,
 			now, actorId,
 		)
 		.run();

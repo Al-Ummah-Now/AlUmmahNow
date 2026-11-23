@@ -135,3 +135,12 @@ describe('the Studio API while support is off', () => {
 		assert.equal(t.sql.count('support_payees'), 0);
 	});
 });
+
+describe('review fixes (cross-provider review of #1764)', () => {
+	it('starting again with another country updates the payee’s country', async () => {
+		const t = await setup();
+		await t.start('ch_move', 'GB');
+		await t.start('ch_move', 'FR');
+		assert.equal((await t.sql.prepare("SELECT country FROM support_payees WHERE channel_id = 'ch_move'").first<{ country: string }>())!.country, 'FR');
+	});
+});
