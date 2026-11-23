@@ -1930,7 +1930,9 @@
               "enum": [
                 "viewer",
                 "studio",
-                "kids"
+                "kids",
+                "tools",
+                "admin"
               ]
             },
             "required": true,
@@ -1940,7 +1942,7 @@
           {
             "schema": {
               "type": "string",
-              "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:[-+][0-9A-Za-z.-]+)?$",
+              "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:\\.(\\d{1,6}))?(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z.-]+)?$",
               "description": "Version of the running build (semver, e.g. 1.4.2)"
             },
             "required": true,

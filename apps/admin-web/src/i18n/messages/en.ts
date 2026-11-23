@@ -5150,6 +5150,8 @@ const en = {
       viewer: 'Viewer',
       studio: 'Studio',
       kids: 'Kids',
+      tools: 'Tools',
+      admin: 'Admin',
     },
     entry: 'Entry {n}',
     app: 'App',
@@ -5202,7 +5204,7 @@ const en = {
     problems: {
       keyRequired: 'Enter a key.',
       keyFormat: 'This key has characters a key cannot have.',
-      versionFormat: 'Use a version like 1.4.0.',
+      versionFormat: 'Use a version like 1.4.0 or 2026.11.22.2.',
       versionOrder: 'Must be the same as or higher than the lower version.',
       rolloutRange: 'Enter a number from {#0} to {#100}.',
       valueJson: 'Not valid JSON. Put text in double quotes, like "1080p".',

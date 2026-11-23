@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from './api-version';
-import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, APP_CONFIG_SEMVER, APP_CONFIG_VERSIONS_KEY, compareAppVersions } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, APP_CONFIG_SEMVER, APP_CONFIG_VERSIONS_KEY, compareAppVersionCores, compareAppVersions } from '@al-ummah/shared-types';
 import type { AppConfigApp, AppConfigPlatform } from '@al-ummah/shared-types';
 import { readAppConfigDocument } from './app-config-store';
 
@@ -20,8 +20,10 @@ export type AppName = AppConfigApp;
 
 export const SEMVER = APP_CONFIG_SEMVER;
 
-/** -1 / 0 / 1. Pre-release and build suffixes are ignored (1.2.0-beta counts as 1.2.0). */
+/** -1 / 0 / 1 by semver precedence (1.2.0-beta < 1.2.0; build metadata ignored). Update policy uses this. */
 export const compareVersions = compareAppVersions;
+/** -1 / 0 / 1 over the numeric parts only (1.2.0-beta counts as 1.2.0). Flag and config rules use this. */
+export const compareVersionCores = compareAppVersionCores;
 
 export const VersionPolicySchema = z.object({
 	minimumVersion: z.string().regex(SEMVER),
