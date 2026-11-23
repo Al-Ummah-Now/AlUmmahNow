@@ -193,10 +193,52 @@ describe('minimum rule (§3.4, §3.7)', () => {
 		assert.match(problems.find((p) => p.key === 'viewer/ios')!.message, /App Store/);
 	});
 
-	it('TestFlight marks bound the minimum too', () => {
-		const doc = releases([entry({ app: 'studio', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.4.0' })]);
-		assert.equal(minimumProblems({ 'studio/ios': { minimumVersion: '1.4.0' } }, doc, { 'studio/ios/testflight': '1.3.0' }).length, 1);
-		assert.equal(minimumProblems({ 'studio/ios': { minimumVersion: '1.3.0' } }, doc, { 'studio/ios/testflight': '1.3.0' }).length, 0);
+	it('TestFlight marks bound the minimum too; an upload with no mark blocks it', () => {
+		// The staff Admin app ships through TestFlight only (no App Store record)
+		const doc = releases([entry({ app: 'admin', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.4.0', stores: ['testflight'] })]);
+		assert.match(minimumProblems({ 'admin/ios': { minimumVersion: '1.3.0' } }, doc, {})[0].message, /TestFlight/);
+		assert.equal(minimumProblems({ 'admin/ios': { minimumVersion: '1.4.0' } }, doc, { 'admin/ios/testflight': '1.3.0' }).length, 1);
+		assert.equal(minimumProblems({ 'admin/ios': { minimumVersion: '1.3.0' } }, doc, { 'admin/ios/testflight': '1.3.0' }).length, 0);
+		// Studio for iPhone is on the App Store too: both must reach the minimum
+		const studio = releases([entry({ app: 'studio', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.4.0', stores: ['testflight'] })]);
+		assert.match(minimumProblems({ 'studio/ios': { minimumVersion: '1.3.0' } }, studio, { 'studio/ios/testflight': '1.4.0' })[0].message, /App Store has no version/);
+	});
+
+	it('only signed stable releases count for a stable minimum; a typed latest version counts for nothing', () => {
+		const unsigned = releases([{ ...tools, signed: false }]);
+		assert.equal(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.23' } }, unsigned, {}).length, 1, 'unsigned');
+		const keyless = releases([tools], []);
+		assert.equal(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.23' } }, keyless, {}).length, 1, 'repo without keys');
+		const betaOnly = releases([{ ...tools, channel: 'beta' }]);
+		assert.equal(minimumProblems({ 'tools/windows': { minimumVersion: '2026.11.23' } }, betaOnly, {}).length, 1, 'beta release, stable policy');
+		assert.equal(minimumProblems({ 'tools/windows#beta': { minimumVersion: '2026.11.23' } }, betaOnly, {}).length, 0, 'beta release, beta policy');
+		assert.equal(minimumProblems({ 'tools/linux': { minimumVersion: '2026.11.01', latestVersion: '2026.12.01' } as never }, releases([tools]), {}).length, 1, 'typed latestVersion ignored');
+	});
+
+	it('an App Store app with no lookup answer blocks a minimum', () => {
+		const doc = releases([entry({ app: 'viewer', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.3.0.0', stores: ['appstore'] })]);
+		assert.match(minimumProblems({ 'viewer/ios': { minimumVersion: '1.3.0' } }, doc, {})[0].message, /App Store has no version/);
+	});
+});
+
+describe('versions compare by precedence, not text', () => {
+	it('a 4-part App Store version matches its 3-part release and notes override', () => {
+		const viewer = entry({ app: 'viewer', platform: 'ios', repo: 'AlUmmahNowApple', version: '1.3.0' });
+		const doc = releases([viewer]);
+		doc.appStore['net.alummahnow.viewer'] = { version: '1.3.0.0', trackId: 1, url: 'https://apps.apple.com/app/id1', checkedAt: '' };
+		const a = updateAnswer(input({ app: 'viewer', platform: 'ios', version: '1.2.0', source: 'appstore' }), ctx({ releases: doc }));
+		assert.deepEqual(a.notes, notes('1.3.0'));
+		const o = updateAnswer(input({ app: 'viewer', platform: 'ios', version: '1.2.0', source: 'appstore' }), ctx({ releases: doc, policy: { minimumVersion: '0.0.0', notesOverrides: { '1.3.0': { en: 'Fixed.', ar: 'أُصلح.' } } } }));
+		assert.deepEqual(o.notes, { en: 'Fixed.', ar: 'أُصلح.' });
+	});
+
+	it('a typed latestVersion never becomes an offer, and install never comes without a manifest', () => {
+		const a = updateAnswer(input({ app: 'viewer', platform: 'android', version: '2026.11.20', source: 'play' }), ctx({ releases: releases([]), policy: { minimumVersion: '0.0.0', latestVersion: '2026.12.01' } }));
+		assert.equal(a.latestVersion, null);
+		assert.equal(a.status, 'ok');
+		const noManifest = updateAnswer(input({}), ctx({ releases: releases([{ ...tools, manifestUrl: null }]) }));
+		assert.equal(noManifest.action, 'download');
+		assert.equal(noManifest.manifestUrl, null);
 	});
 });
 
@@ -235,6 +277,8 @@ describe('POST /api/app-config/update-failure', () => {
 	it('refuses unknown reasons and repos, and answers 429 when rate-limited', async () => {
 		assert.equal((await post({ ...report, reason: 'whatever' }, {})).status, 400);
 		assert.equal((await post({ ...report, repo: 'Other' }, {})).status, 400);
+		assert.equal((await post({ ...report, tag: 'release-1' }, {})).status, 400);
+		assert.equal((await post({ ...report, tag: 'admin-windows-v1.4.0' }, {})).status, 202, 'admin tags are tags');
 		assert.equal((await post(report, { SUGGEST_LIMITER: { limit: async () => ({ success: false }) } })).status, 429);
 	});
 });

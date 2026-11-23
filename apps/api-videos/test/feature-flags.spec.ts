@@ -181,8 +181,11 @@ describe('/internal/app-config/:key', () => {
 		assert.equal(put.status, 200);
 		const got: any = await (await app.request('/internal/app-config/flags', {}, { APP_CONFIG: kv })).json();
 		assert.deepEqual(got.value, [{ key: 'downloads', enabled: true }]);
-		const versions = await app.request('/internal/app-config/versions', { method: 'PUT', headers: json, body: JSON.stringify({ 'viewer/ios': { minimumVersion: '1.0.0', latestVersion: '1.2.0' } }) }, { APP_CONFIG: kv });
+		const versions = await app.request('/internal/app-config/versions', { method: 'PUT', headers: json, body: JSON.stringify({ 'viewer/ios': { minimumVersion: '0.0.0', storeUrl: 'https://apps.apple.com/app/id1' } }) }, { APP_CONFIG: kv });
 		assert.equal(versions.status, 200);
+		// A minimum no install source can give users yet is refused (AUN-APP-UPDATES §3.4)
+		const stranded = await app.request('/internal/app-config/versions', { method: 'PUT', headers: json, body: JSON.stringify({ 'viewer/ios': { minimumVersion: '1.0.0', latestVersion: '1.2.0' } }) }, { APP_CONFIG: kv });
+		assert.equal(stranded.status, 400);
 	});
 
 	it('only known keys', async () => {
