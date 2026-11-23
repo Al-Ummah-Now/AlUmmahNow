@@ -84,7 +84,7 @@ export function ListenMiniBar() {
       dir={isRTL ? 'rtl' : 'ltr'}
       aria-label={labels.listenMode}
       data-testid="listen-mini-bar"
-      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-[55] border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-lg"
+      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-[55] border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg"
     >
       {/* Sleep timer popover */}
       {showSleep && (
