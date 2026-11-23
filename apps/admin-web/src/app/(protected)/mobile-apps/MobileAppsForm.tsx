@@ -8,6 +8,8 @@ import {
   appleAppSiteAssociation,
   assetLinks,
   publicAttestationConfig,
+  shortLinksAppleAppSiteAssociation,
+  shortLinksAssetLinks,
   type MobileAppRole,
   type MobileAppsSettings,
 } from '@al-ummah/shared-types';
@@ -31,6 +33,7 @@ const ROLE_LABEL: Record<MobileAppRole, MessageKey> = {
 interface Draft {
   teamId: string;
   apple: { role: MobileAppRole; bundleId: string }[];
+  appClipBundleId: string;
   appAttest: boolean;
   appAttestEnvironment: 'production' | 'development';
   android: { role: MobileAppRole; packageName: string; fingerprints: string }[];
@@ -49,6 +52,7 @@ function toDraft(s: MobileAppsSettings): Draft {
   return {
     teamId: s.apple.teamId,
     apple: s.apple.apps.map((a) => ({ ...a })),
+    appClipBundleId: s.apple.appClipBundleId ?? '',
     appAttest: s.apple.appAttest.enabled,
     appAttestEnvironment: s.apple.appAttest.environment,
     android: s.android.apps.map((a) => ({ role: a.role, packageName: a.packageName, fingerprints: a.sha256Fingerprints.join('\n') })),
@@ -63,6 +67,7 @@ function toSettings(d: Draft): MobileAppsSettings {
     apple: {
       teamId: d.teamId.trim().toUpperCase(),
       apps: d.apple.filter((a) => a.bundleId.trim()).map((a) => ({ role: a.role, bundleId: a.bundleId.trim() })),
+      appClipBundleId: d.appClipBundleId.trim(),
       appAttest: { enabled: d.appAttest, environment: d.appAttestEnvironment },
     },
     android: {
@@ -85,8 +90,20 @@ function problemsOf(settings: MobileAppsSettings): Map<string, string> {
   return out;
 }
 
-export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: MobileAppsView; history: MobileAppsChange[]; canEdit: boolean; siteUrl: string | null }) {
-  const { t } = useLanguage();
+export function MobileAppsForm({
+  state,
+  history,
+  canEdit,
+  siteUrl,
+  shortLinkUrl = null,
+}: {
+  state: MobileAppsView;
+  history: MobileAppsChange[];
+  canEdit: boolean;
+  siteUrl: string | null;
+  shortLinkUrl?: string | null;
+}) {
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
   const [draft, setDraft] = useState<Draft>(() => toDraft(state.settings));
@@ -99,6 +116,8 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
   const problems = useMemo(() => problemsOf(settings), [settings]);
   const aasa = useMemo(() => (problems.size ? null : appleAppSiteAssociation(settings)), [settings, problems]);
   const links = useMemo(() => (problems.size ? null : assetLinks(settings)), [settings, problems]);
+  const shortAasa = useMemo(() => (problems.size ? null : shortLinksAppleAppSiteAssociation(settings)), [settings, problems]);
+  const shortLinks = useMemo(() => (problems.size ? null : shortLinksAssetLinks(settings)), [settings, problems]);
   const attestation = useMemo(() => publicAttestationConfig(settings), [settings]);
   const dirty = JSON.stringify(settings) !== JSON.stringify(toSettings(toDraft(state.settings)));
   const disabled = !canEdit || busy;
@@ -222,6 +241,31 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
             <button type="button" className={`${smallButton} mt-2`} onClick={() => set({ apple: [...draft.apple, { role: 'viewer', bundleId: '' }] })} data-testid="mobile-apps-add-bundle">
               {t('mobileApps.addBundle')}
             </button>
+          </div>
+
+          <div className="max-w-md">
+            <label htmlFor={`${ids}-app-clip`} className={label}>{t('mobileApps.appClipBundleId')}</label>
+            <input
+              id={`${ids}-app-clip`}
+              className={`${fieldClass} w-full font-mono`}
+              value={draft.appClipBundleId}
+              onChange={(e) => set({ appClipBundleId: e.target.value })}
+              autoComplete="off"
+              spellCheck={false}
+              dir="ltr"
+              placeholder="net.alummahnow.viewer.clip"
+              aria-describedby={`${ids}-app-clip-hint ${ids}-app-clip-error`}
+              aria-invalid={!!problem('apple.appClipBundleId')}
+              data-testid="mobile-apps-app-clip-bundle"
+            />
+            <span id={`${ids}-app-clip-hint`} className={hint}>{t('mobileApps.appClipHint')}</span>
+            {problem('apple.appClipBundleId') && (
+              <span id={`${ids}-app-clip-error`} className={errorText}>
+                {draft.apple.some((a) => a.bundleId.trim() && a.bundleId.trim() === draft.appClipBundleId.trim())
+                  ? t('mobileApps.duplicate')
+                  : t('mobileApps.bundleIdInvalid')}
+              </span>
+            )}
           </div>
 
           <div className="rounded border border-border p-4 space-y-3">
@@ -387,6 +431,40 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
         </div>
       </section>
 
+      {/* What the short-link domain serves (alummahnow.link) */}
+      <section className={cardClass} aria-labelledby={`${ids}-short-files`} data-testid="mobile-apps-short-links-files">
+        <h2 id={`${ids}-short-files`} className="text-lg font-semibold text-fg mb-2">{t('mobileApps.shortLinksFilesTitle')}</h2>
+        <p className="text-sm text-fg-muted mb-4">{t('mobileApps.shortLinksFilesHint')}</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {[
+            { name: 'apple-app-site-association', doc: shortAasa, testId: 'mobile-apps-preview-short-aasa', statusTestId: 'mobile-apps-short-aasa-status' },
+            { name: 'assetlinks.json', doc: shortLinks, testId: 'mobile-apps-preview-short-assetlinks', statusTestId: 'mobile-apps-short-assetlinks-status' },
+          ].map((file) => (
+            <div key={file.name} className="min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <p className="text-sm font-medium text-fg" dir="ltr">
+                  {shortLinkUrl ? (
+                    <a className={linkClass} href={`${shortLinkUrl}/.well-known/${file.name}`} target="_blank" rel="noreferrer">
+                      /.well-known/{file.name}
+                    </a>
+                  ) : (
+                    <>/.well-known/{file.name}</>
+                  )}
+                </p>
+                {served(!!file.doc, file.statusTestId)}
+              </div>
+              {file.doc ? (
+                <pre className="max-h-72 overflow-auto rounded border border-border bg-surface-2 p-3 text-xs text-fg" dir="ltr" tabIndex={0} data-testid={file.testId}>
+                  {JSON.stringify(file.doc, null, 2)}
+                </pre>
+              ) : (
+                <p className="rounded border border-dashed border-border p-3 text-sm text-fg-muted" data-testid={file.testId}>{t('mobileApps.fileEmpty')}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="space-y-3">
         <p className="text-sm text-fg-muted" data-testid="mobile-apps-last-changed">
           {state.updatedAt
@@ -425,7 +503,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
         ) : (
           <ul className="space-y-1 text-sm text-fg-muted" data-testid="mobile-apps-history">
             {history.map((h) => (
-              <li key={h.id}>{fillNodes(t('mobileApps.historyEntry', { summary: changeSummary(h, t) }), { date: <LocalTime value={h.createdAt} withTime />, actor: <UserName id={h.actorId} showEmail={false} /> })}</li>
+              <li key={h.id}>{fillNodes(t('mobileApps.historyEntry', { summary: changeSummary(h, t, locale) }), { date: <LocalTime value={h.createdAt} withTime />, actor: <UserName id={h.actorId} showEmail={false} /> })}</li>
             ))}
           </ul>
         )}
@@ -435,15 +513,16 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
 }
 
 /** What a change touched, in words: "Team ID, Android fingerprints". */
-function changeSummary(h: MobileAppsChange, t: (key: MessageKey) => string): string {
+function changeSummary(h: MobileAppsChange, t: (key: MessageKey) => string, locale: string): string {
   const before = h.oldValue;
   const after = h.newValue;
   const parts: string[] = [];
   if (!before || before.apple.teamId !== after.apple.teamId) parts.push(t('mobileApps.teamId'));
   if (!before || JSON.stringify(before.apple.apps) !== JSON.stringify(after.apple.apps)) parts.push(t('mobileApps.bundleIds'));
+  if (!before || (before.apple.appClipBundleId ?? '') !== (after.apple.appClipBundleId ?? '')) parts.push(t('mobileApps.appClipBundleId'));
   if (!before || JSON.stringify(before.android.apps) !== JSON.stringify(after.android.apps)) parts.push(t('mobileApps.androidTitle'));
   if (!before || JSON.stringify(before.apple.appAttest) !== JSON.stringify(after.apple.appAttest)) parts.push(t('mobileApps.appAttest'));
   if (!before || JSON.stringify(before.android.playIntegrity) !== JSON.stringify(after.android.playIntegrity)) parts.push(t('mobileApps.playIntegrity'));
   if (!before || JSON.stringify(before.attestation) !== JSON.stringify(after.attestation)) parts.push(t('mobileApps.enforceTitle'));
-  return parts.join(', ');
+  return parts.join(locale === 'ar' ? '، ' : ', ');
 }
