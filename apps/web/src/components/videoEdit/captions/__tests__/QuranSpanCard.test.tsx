@@ -32,6 +32,17 @@ describe('QuranSpanCard: the loading state ends', () => {
     expect(spinner(container)).toBeNull();
   });
 
+  it('with QF’s short credit under the text, linked to quran.foundation in a new tab (QF 2026-11-23)', async () => {
+    getQuranPassage.mockResolvedValue({ ok: true, data: { range: '2:1', ayat: [{ text: 'الم' }] } });
+    renderCard();
+    const link = await screen.findByTestId('quran-credit-link');
+    expect(link).toHaveTextContent('Source: Quran Foundation');
+    expect(link).toHaveAttribute('href', 'https://quran.foundation/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener');
+    expect(link).toHaveAccessibleName('Source: Quran Foundation (opens in a new tab)');
+  });
+
   it.each([
     ['feature_off', { ok: false, status: 404, error: 'feature_off' }],
     ['404', { ok: false, status: 404, error: 'not_found' }],

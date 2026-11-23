@@ -9,7 +9,7 @@
  *   served: the official text from our Quran Foundation copy for a span the creator accepted, a
  *   reference with a quran.com link for an unconfirmed one or when there is no fresh copy.
  */
-import { QURAN_ATTRIBUTION_LINE, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type AsrWord, type QuranMatch, type QuranMatchClass } from './quran';
+import { QURAN_ATTRIBUTION, QURAN_CREDIT, quranCreditFor, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type AsrWord, type QuranMatch, type QuranMatchClass } from './quran';
 
 /** A matcher class (a suggestion) or `accepted` (the creator confirmed it). */
 export type CaptionQuranStatus = QuranMatchClass | 'accepted';
@@ -478,11 +478,11 @@ export async function fillCaptionQuranMarkers(
     else wanted.add(range);
   }
   for (const range of wanted) texts.set(range, await resolve(range).catch(() => null));
-  // QF terms (2026-11-21): every cue that shows Quran text or a translation ends with QF's
-  // attribution, so it reaches every player (web, native apps, embeds) with the text itself
-  const ar = language.split('-')[0]!.toLowerCase() === 'ar';
+  // QF (2026-11-23): every cue that shows Quran text or a translation ends with QF's short credit,
+  // so it reaches every player (web, native apps, embeds) with the text itself; the web player
+  // lifts it out of the cue into a link (splitQuranCredit)
   const rtl = RTL_CAPTION_LANGUAGES.has(language.split('-')[0]!.toLowerCase());
-  const attribution = `${rtl ? '\u200f' : ''}${ar ? QURAN_ATTRIBUTION_LINE.ar : QURAN_ATTRIBUTION_LINE.en}`;
+  const attribution = `${rtl ? '\u200f' : ''}${quranCreditFor(language)}`;
   return vtt
     .split(/(\n{2,})/)
     .map((block) => {
@@ -498,6 +498,28 @@ export async function fillCaptionQuranMarkers(
     })
     .join('')
     .replace(MARK_CHARS, '');
+}
+
+/** Credit lines a served cue may end with: the short credit, and the long line cues had before 2026-11-23 (edge caches). */
+const CREDIT_LINES: readonly string[] = [
+  QURAN_CREDIT.en,
+  QURAN_CREDIT.ar,
+  QURAN_ATTRIBUTION.en.replace('Quran Foundation (', 'Quran\u00a0Foundation\u00a0('),
+  QURAN_ATTRIBUTION.ar.replace('مؤسسة القرآن (', 'مؤسسة\u00a0القرآن\u00a0('),
+  QURAN_ATTRIBUTION.en,
+  QURAN_ATTRIBUTION.ar,
+];
+
+/**
+ * A served cue's text without its Quran Foundation credit line, and whether it had one. A player
+ * that can link (the web player) shows the credit as a link next to the captions instead of as
+ * caption text; the cue text is otherwise untouched.
+ */
+export function splitQuranCredit(cueText: string): { text: string; credited: boolean } {
+  const lines = cueText.split('\n');
+  const last = (lines.at(-1) ?? '').replace(/^[\u200e\u200f]+/, '').trim();
+  if (lines.length < 2 || !CREDIT_LINES.includes(last)) return { text: cueText, credited: false };
+  return { text: lines.slice(0, -1).join('\n'), credited: true };
 }
 
 const VTT_TIME = /^(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/;

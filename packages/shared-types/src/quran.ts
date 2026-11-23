@@ -72,22 +72,31 @@ export function quranAyahLabel(r: QuranRange): string {
   return r.from.ayah === r.to.ayah ? `${r.from.surah}:${r.from.ayah}` : `${r.from.surah}:${r.from.ayah}–${r.to.ayah}`;
 }
 
+/** Quran Foundation's site: what every credit links to. */
+export const QURAN_FOUNDATION_URL = 'https://quran.foundation/';
+
 /**
- * Attribution wherever Quran text is shown (QF 2026-11-21, spec §9.5): QF's own wording, with the
- * translation edition named next to any translation. The Arabic line has an LRM after the URL so its
- * slash stays with it in right-to-left text.
+ * QF's full attribution line (QF to the owner, 2026-11-23; https://api-docs.quran.foundation/docs/tutorials/faq#what-attribution-or-copyright-information-should-i-show):
+ * "Quran data provided by Quran Foundation (https://quran.foundation/)", with the name of each
+ * translation edition used, on a page viewers can easily reach (web /credits) and inside every
+ * downloaded file that carries Quran text. The Arabic line has an LRM after the URL so its slash
+ * stays with it in right-to-left text.
  */
 export const QURAN_ATTRIBUTION = { en: 'Quran data provided by Quran Foundation (https://quran.foundation/)', ar: 'بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/\u200e)' } as const;
 
 /**
- * The same wording for a line that wraps on screen (a caption cue, Studio's Quran card): no-break
- * spaces keep "Quran Foundation (https://quran.foundation/)" together, so the URL never sits alone
- * on the last line.
+ * The short credit shown next to Quran text from QF (QF 2026-11-23: "Next to the captions, a short
+ * credit such as 'Source: Quran Foundation', linked to https://quran.foundation/, is enough"). It ends
+ * every caption cue that shows QF text, so it reaches every player; the web player shows it as a link
+ * (components/VideoPlayer/PlayerLinkOverlay) and in its captions menu.
  */
-export const QURAN_ATTRIBUTION_LINE = {
-  en: QURAN_ATTRIBUTION.en.replace('Quran Foundation (', 'Quran\u00a0Foundation\u00a0('),
-  ar: QURAN_ATTRIBUTION.ar.replace('مؤسسة القرآن (', 'مؤسسة\u00a0القرآن\u00a0('),
-} as const;
+export const QURAN_CREDIT = { en: 'Source: Quran Foundation', ar: 'المصدر: مؤسسة القرآن' } as const;
+
+/** The credit link's screen-reader name: it opens QF's site in a new tab. */
+export const QURAN_CREDIT_LINK_LABEL = { en: 'Source: Quran Foundation (opens in a new tab)', ar: 'المصدر: مؤسسة القرآن (يفتح في علامة تبويب جديدة)' } as const;
+
+/** The credit in a language: Arabic for Arabic, English otherwise (the caption cue rule). */
+export const quranCreditFor = (language: string): string => (language.split('-')[0]!.toLowerCase() === 'ar' ? QURAN_CREDIT.ar : QURAN_CREDIT.en);
 
 /** The same wording, written inside every file that carries Quran text (a downloaded subtitle file's NOTE). */
 export const QF_ATTRIBUTION = QURAN_ATTRIBUTION;

@@ -6,7 +6,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, BookOpenText, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -19,6 +19,8 @@ import { useMoreBelow } from './rail-scroll';
 import { statusPageUrl } from '@/lib/navigation/destinations';
 import { getEnvironment } from '@/lib/runtime-config';
 import { IdentityTour } from '@/components/help/IdentityTour';
+import { useFeatures } from '@/hooks/useFeatures';
+import { CREDITS_COPY } from '@/lib/credits/copy';
 
 const L = {
   en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', close: 'Close menu' },
@@ -37,6 +39,9 @@ export function AppShell() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
+  // Credits (Quran Foundation's attribution and editions) only while Quran text from QF is shown here
+  const { features } = useFeatures();
+  const showCredits = features.quranText || features.quranEditions;
   const c = lang === 'ar' ? L.ar : L.en;
   const base = `/${lang}`;
   const rtl = lang === 'ar';
@@ -74,6 +79,7 @@ export function AppShell() {
       { label: t.help.navLabel, href: `${base}/help`, icon: CircleHelp },
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
+      ...(showCredits ? [{ label: CREDITS_COPY[rtl ? 'ar' : 'en'].navLabel, href: `${base}/credits`, icon: BookOpenText, testId: 'nav-credits' }] : []),
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
       // The public status page (apps/status): its own host, so it opens even when this site is down
       { label: c.status, href: statusHref, icon: Activity, external: true, testId: 'nav-status' },

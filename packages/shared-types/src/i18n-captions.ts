@@ -188,7 +188,10 @@ export interface CaptionsTranslations {
     officialText: string;
     unconfirmedHint: string;
     textUnavailable: string;
+    /** QF's short credit, linked to https://quran.foundation/ (QF 2026-11-23) */
     attribution: string;
+    /** Screen-reader name of the credit link */
+    attributionLinkLabel: string;
     /** Names the Arabic text the card shows */
     textEdition: string;
     /** On a translated draft: {name} is the Quran Foundation translation its viewers see there */
@@ -433,7 +436,8 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     officialText: 'Official text',
     unconfirmedHint: 'Until you confirm it, viewers see the reference with a quran.com link, not the text.',
     textUnavailable: "The official text isn’t available right now. Viewers see the reference.",
-    attribution: 'Quran data provided by Quran\u00a0Foundation\u00a0(https://quran.foundation/)',
+    attribution: 'Source: Quran Foundation',
+    attributionLinkLabel: 'Source: Quran Foundation (opens in a new tab)',
     textEdition: 'Quran text: Uthmani (Hafs)',
     translationEdition: 'Translation shown to viewers: {name}',
   },
@@ -660,7 +664,8 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     officialText: 'النص الرسمي',
     unconfirmedHint: 'حتى تؤكده، يرى المشاهدون الموضع مع رابط quran.com دون النص.',
     textUnavailable: 'النص الرسمي غير متاح الآن، ويرى المشاهدون الموضع.',
-    attribution: 'بيانات القرآن مقدَّمة من مؤسسة\u00a0القرآن\u00a0(https://quran.foundation/\u200e)',
+    attribution: 'المصدر: مؤسسة القرآن',
+    attributionLinkLabel: 'المصدر: مؤسسة القرآن (يفتح في علامة تبويب جديدة)',
     textEdition: 'نص القرآن: الرسم العثماني (حفص)',
     translationEdition: 'الترجمة المعروضة للمشاهدين: {name}',
   },

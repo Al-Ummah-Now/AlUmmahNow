@@ -10,13 +10,15 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { Player } from 'video.js';
-import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Download, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
+import { AudioLines, BookOpenText, Captions, Check, ChevronLeft, ChevronRight, Download, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
 import { getPlayerUi, setAutoplayNext } from '@/lib/video/player-ui';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
 import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
 import { isLivePlayback } from '@/lib/video/live-state';
 import { usePlayerLayerHost } from './usePlayerLayerHost';
 import { useVideoPlayerI18n, type SupportedLanguage } from '@/lib/video/i18n';
+import { QURAN_CREDIT_LINK_LABEL, QURAN_FOUNDATION_URL, quranCreditFor } from '@al-ummah/shared-types';
+import { showingCaptionTrack, trackHasQuranCredit, type CreditTrackLike } from '@/lib/video/quran-credit';
 import {
   audioOptions,
   captionOptions,
@@ -310,6 +312,10 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
   // The shown track only: one video, one language per file
   const shownLanguage = currentCaptionLanguage(text);
   const downloadHref = shownLanguage && captionDownloadUrl ? captionDownloadUrl(shownLanguage) : null;
+  // QF's short credit, linked, while the shown track has Quran text from QF (QF 2026-11-23)
+  const credit = trackHasQuranCredit(showingCaptionTrack(text as unknown as ArrayLike<CreditTrackLike>))
+    ? { label: quranCreditFor(lang), ariaLabel: lang === 'ar' ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, href: QURAN_FOUNDATION_URL }
+    : undefined;
   const playerAudio = p.audioTracks?.();
   const audioMeta = playerAudio ? matchTracks(playerAudio, audioTracks) : [];
   // In the creator's order (the API's), whatever order the engine lists them in (Safari's own HLS
@@ -355,7 +361,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
     go('root', from);
   };
 
-  const sub = (title: string, options: MenuOption[], current: string, apply: (id: string) => void, extra?: { label: string; run: () => void }, download?: { label: string; href: string }) => (
+  const sub = (title: string, options: MenuOption[], current: string, apply: (id: string) => void, extra?: { label: string; run: () => void }, download?: { label: string; href: string }, source?: { label: string; ariaLabel: string; href: string }) => (
     <>
       {/* Pinned while the submenu scrolls: the rows pass under it (styles: .vjs-fanous-mi-back-bar) */}
       <div className="vjs-fanous-mi-back-bar" role="none">
@@ -395,6 +401,13 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
         <a role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-extra" data-row="download" data-testid="player-download-captions" tabIndex={-1} href={download.href} download onClick={() => close(false)}>
           <span className="vjs-fanous-mi-icon" aria-hidden="true"><Download /></span>
           <span className="vjs-fanous-mi-label">{download.label}</span>
+        </a>
+      )}
+      {source && (
+        // Another site, in a new tab: the video keeps playing
+        <a role="menuitem" className="vjs-fanous-mi vjs-fanous-mi-extra" data-row="source" data-testid="player-menu-quran-credit" tabIndex={-1} href={source.href} target="_blank" rel="noopener" aria-label={source.ariaLabel} onClick={() => close(false)}>
+          <span className="vjs-fanous-mi-icon" aria-hidden="true"><BookOpenText /></span>
+          <span className="vjs-fanous-mi-label">{source.label}</span>
         </a>
       )}
     </>
@@ -470,7 +483,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks, capti
         )}
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}
         {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal, lang), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
-        {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined, downloadHref ? { label: t.chrome.downloadCaptions, href: downloadHref } : undefined)}
+        {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined, downloadHref ? { label: t.chrome.downloadCaptions, href: downloadHref } : undefined, credit)}
         {panel === 'audio' && sub(t.chrome.audioTrack, audio, audioId, chooseAudio)}
       </div>
     </div>,
