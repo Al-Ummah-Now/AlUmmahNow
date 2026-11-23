@@ -103,7 +103,7 @@ test('invite, accept, act, change, remove: the role follows on the next request 
     await expect(member.page.locator('[data-testid="nav-channel-group-managed"]')).toHaveCount(0);
 
     // The owner invites them by email as Editor on the Team page: pending, no role yet
-    await owner.page.goto(`${target().web}/en/settings/channel/${ownerChannel}/team`, { waitUntil: 'load' });
+    await owner.page.goto(`${target().web}/en/studio/${ownerChannel}/settings/permissions`, { waitUntil: 'load' });
     await owner.page.getByRole('combobox', { name: 'Email or @handle' }).fill(member.user.email);
     await owner.page.getByTestId('team-add-role').selectOption('editor');
     await owner.page.getByTestId('team-add-submit').click();
@@ -167,7 +167,7 @@ test('invite, accept, act, change, remove: the role follows on the next request 
     }).toPass({ timeout: 30000 });
 
     // The Arabic Activity tab lists it all, right to left
-    await owner.page.goto(`${target().web}/ar/settings/channel/${ownerChannel}/team`, { waitUntil: 'load' });
+    await owner.page.goto(`${target().web}/ar/studio/${ownerChannel}/settings/permissions`, { waitUntil: 'load' });
     await expect(owner.page.locator('html')).toHaveAttribute('dir', 'rtl');
     await owner.page.getByRole('tab', { name: 'النشاط' }).click();
     const entries = owner.page.getByTestId('team-activity-entry');

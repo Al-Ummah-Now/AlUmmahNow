@@ -1,8 +1,9 @@
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
-import { useState } from 'react';
-import { CommunityPost, PostType, PostStatus, formatNumber, formatTimeAgo } from '@al-ummah/shared-types';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
+import { CommunityPost, PostType, PostStatus, formatCompact, formatCountNoun, formatTimeAgo } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +65,19 @@ const STATUS_LABELS = {
 
 export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardProps) {
   const isRTL = locale === 'ar';
+  // Whether the text is cut at two lines (measured, and again when the card's width changes)
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [post.content]);
   const { t } = useLanguage();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -118,7 +132,11 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 )}
               </div>
 
-              <p className="text-sm md:text-base line-clamp-2 mb-2">
+              {/* Its own direction for the words and two lines that end in an ellipsis (the fading clamp left a
+                  short second line looking cut off). An uncut text lines up with the page's edge, like Studio
+                  comments; a cut one takes its own start: pinned to the page's edge, an Arabic text's ellipsis in
+                  the English Studio fell outside the card. Two cut lines fill the width, so they still line up */}
+              <p ref={textRef} className={cn('text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] mb-2', clamped ? 'text-start' : 'text-left [html[dir=rtl]_&]:text-right')} dir="auto" data-testid="post-card-text" data-clamped={clamped || undefined}>
                 {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 
@@ -127,17 +145,20 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                   <Calendar className="w-3 h-3 md:w-4 md:h-4" />
                   {timeAgo}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Eye className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.views)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.views, 'view')}>
+                  <Eye className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.views ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.views, 'view')}</span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <ThumbsUp className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.likes)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.likes, 'like')}>
+                  <ThumbsUp className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.likes ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.likes, 'like')}</span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3 md:w-4 md:h-4" />
-                  {formatNumber(isRTL ? 'ar' : 'en-US', post.comments)}
+                <span className="flex items-center gap-1" title={formatCountNoun(isRTL ? 'ar' : 'en-US', post.comments, 'comment')}>
+                  <MessageSquare className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  <span aria-hidden="true">{formatCompact(isRTL ? 'ar' : 'en-US', post.comments ?? 0)}</span>
+                  <span className="sr-only">{formatCountNoun(isRTL ? 'ar' : 'en-US', post.comments, 'comment')}</span>
                 </span>
               </div>
             </div>

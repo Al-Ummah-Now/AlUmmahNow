@@ -29,6 +29,7 @@ import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocompl
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { pluralText } from '@/lib/notifications/toast-queue';
 import { avatarInitial } from '@/lib/avatar-initial';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 
 interface ChannelTeamProps {
   channelId: string;
@@ -162,7 +163,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
 
   const me: TeamMember | null = user ? { userId: user.id, role, isYou: true } : null;
   const roleBadge = (r: ChannelRole) => (
-    <span data-testid="team-member-role" className="c rounded-full px-2.5 py-0.5 text-xs font-medium text-[var(--fanous-color-text-secondary)]">
+    <span data-testid="team-member-role" className="inline-flex min-h-10 items-center rounded-full border border-[var(--fanous-color-outline)] px-4 text-sm font-medium text-[var(--fanous-color-text-secondary)]">
       {tr.roles[r]}
     </span>
   );
@@ -186,7 +187,9 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
               {can(role, 'members.manage') && (
                 <form onSubmit={onInvite} className={CARD} data-testid="team-add-form" aria-describedby={message ? ids.status : undefined}>
                   <h2 className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.inviteTitle}</h2>
-                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                  {/* Top-aligned, so both labels share one baseline (bottom alignment put "Role" 8px lower: the search
+                      field is taller than the select); the button drops by one label line to sit beside the fields */}
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-start">
                     <div>
                       <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.inviteLabel}</label>
                       <Autocomplete
@@ -207,13 +210,13 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                     </div>
                     <div>
                       <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.roleLabel}</label>
-                      <select id={ids.role} value={newRole} onChange={(e) => setNewRole(e.target.value as ChannelMemberRole)}
+                      <ThemedSelectField id={ids.role} value={newRole} onChange={(e) => setNewRole(e.target.value as ChannelMemberRole)}
                         disabled={busy === 'invite'} className={FIELD} data-testid="team-add-role">
                         {grantable.map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-                      </select>
+                      </ThemedSelectField>
                     </div>
                     <button type="submit" disabled={!handle.trim() || busy === 'invite'} aria-busy={busy === 'invite'}
-                      className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover`} data-testid="team-add-submit">
+                      className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover sm:mt-6`} data-testid="team-add-submit">
                       {busy === 'invite' ? tr.inviting : tr.invite}
                     </button>
                   </div>
@@ -253,25 +256,28 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                               <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                             ) : (
                               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                                {avatarInitial(nameOf(m))}
+                                {avatarInitial(m.displayName, nameOf(m))}
                               </span>
                             )}
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
-                              {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                            <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
+                              {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> (<bdi>{m.displayName}</bdi>)</span> : null}
                             </span>
-                            {manageable ? (
-                              <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
-                                onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
-                                disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
-                                {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-                              </select>
-                            ) : roleBadge(m.role)}
-                            {manageable && (
-                              <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                                className={`${BUTTON} b-danger`} data-testid="team-member-remove">
-                                {tr.remove}
-                              </button>
-                            )}
+                            {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
+                            <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
+                              {manageable ? (
+                                <ThemedSelectField aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                                  onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                                  disabled={busy === m.userId} data-testid="team-member-role-select">
+                                  {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                                </ThemedSelectField>
+                              ) : roleBadge(m.role)}
+                              {manageable && (
+                                <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                                  className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                                  {tr.remove}
+                                </button>
+                              )}
+                            </span>
                           </li>
                         );
                       })}
@@ -344,25 +350,28 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                           <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                         ) : (
                           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                            {avatarInitial(nameOf(m))}
+                            {avatarInitial(m.displayName, nameOf(m))}
                           </span>
                         )}
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
-                          {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                        <span className="min-w-0 flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)] [overflow-wrap:anywhere]">
+                          {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> (<bdi>{m.displayName}</bdi>)</span> : null}
                         </span>
-                        {manageable ? (
-                          <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
-                            onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
-                            disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
-                            {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-                          </select>
-                        ) : roleBadge(m.role)}
-                        {manageable && (
-                          <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                            className={`${BUTTON} b-danger`} data-testid="team-member-remove">
-                            {tr.remove}
-                          </button>
-                        )}
+                        {/* Row actions at the end edge (they wrap together onto their own line on a phone) */}
+                        <span className="ms-auto flex flex-wrap items-center justify-end gap-2" data-testid="team-member-actions">
+                          {manageable ? (
+                            <ThemedSelectField aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                              onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                              disabled={busy === m.userId} data-testid="team-member-role-select">
+                              {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                            </ThemedSelectField>
+                          ) : roleBadge(m.role)}
+                          {manageable && (
+                            <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                              className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                              {tr.remove}
+                            </button>
+                          )}
+                        </span>
                       </li>
                     );
                   })}

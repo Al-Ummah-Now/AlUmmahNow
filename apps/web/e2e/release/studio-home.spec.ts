@@ -23,6 +23,8 @@ test.describe('Release: Studio is the creator home', () => {
     for (const [old, landing] of [
       ['/en/dashboard/videos', `${studio}/content/videos`],
       ['/en/settings/channel/' + channelId + '/videos', `${studio}/content/videos`],
+      ['/en/settings/channel/' + channelId + '/edit', `${studio}/customisation/profile`],
+      ['/en/settings/channel/' + channelId + '/community', `${studio}/content/posts`],
       ['/en/analytics', `${studio}/analytics`],
       ['/en/scheduled-videos', `${studio}/content/videos?status=scheduled&view=calendar`],
       ['/en/dashboard', `${studio}/dashboard`],
@@ -42,8 +44,9 @@ test.describe('Release: Studio is the creator home', () => {
     const { channelId } = await studioOwner(page, 'rel-studio-links');
     await page.goto(`${target().web}/en/studio/${channelId}/dashboard`);
     await expect(page.getByTestId('studio-upload').first()).toHaveAttribute('href', `/en/upload?channel=${channelId}`);
-    // Sections Studio hasn't rebuilt open the channel settings pages, never a dead end
-    await expect(page.getByTestId('studio-nav-playlists').first()).toHaveAttribute('href', `/en/settings/channel/${channelId}/playlists`);
+    // Every section is in Studio itself (the old channel settings pages redirect here)
+    await expect(page.getByTestId('studio-nav-playlists').first()).toHaveAttribute('href', `/en/studio/${channelId}/playlists`);
+    await expect(page.locator('a[href*="/settings/channel/"]')).toHaveCount(0);
     await page.getByTestId('studio-upload').first().click();
     await expect(page).toHaveURL(new RegExp(`/en/upload\\?channel=${channelId}$`));
   });

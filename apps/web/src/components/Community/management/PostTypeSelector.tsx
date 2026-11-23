@@ -44,7 +44,7 @@ const POST_TYPES: PostTypeCard[] = [
     type: PostType.IMAGE,
     icon: Image,
     label: { en: 'Image', ar: 'صورة' },
-    description: { en: 'Upload up to 10 images', ar: 'ارفع حتى 10 صور' }
+    description: { en: 'Upload up to 10 images', ar: 'ارفع حتى ١٠ صور' }
   },
   {
     type: PostType.POLL,
@@ -101,8 +101,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
       className="
       grid
       grid-cols-2          /* Mobile: 2 columns */
-      sm:grid-cols-3       /* Tablet: 3 columns */
-      lg:grid-cols-5       /* Desktop: 5 a row (9 kinds) */
+      sm:grid-cols-3       /* 3 a row from tablet up: the selector sits in the form's two-thirds column, where 5 a row wrapped every word (9 kinds: 3 rows) */
       gap-3                /* Mobile: compact gaps */
       md:gap-4             /* Desktop: larger gaps */
     ">
@@ -148,9 +147,11 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
               md:gap-3           /* Desktop: more spacing */
               text-center
             ">
+              {/* A fixed circle centred over the label. No comments in this class string: the old
+                  "icon container" note put Tailwind's `container` (width: 100%) on it, a full-width pill */}
               <div className={`
-                p-3              /* Mobile: smaller icon container */
-                md:p-4           /* Desktop: larger icon container */
+                grid place-items-center shrink-0 self-center
+                w-11 h-11 md:w-14 md:h-14
                 rounded-full
                 ${isSelected
                   ? 'bg-primary text-primary-foreground'
@@ -173,10 +174,10 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
                   {label}
                 </h3>
                 <p className="
+                  [text-wrap:balance]
                   text-xs        /* Mobile: extra small */
                   md:text-sm     /* Desktop: small */
                   text-muted-foreground
-                  line-clamp-2
                 ">
                   {description}
                 </p>

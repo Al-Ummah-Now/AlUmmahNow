@@ -2153,6 +2153,8 @@ export interface AppTranslations {
       publish: string;
       publishing: string;
       sectionsUsed: string;
+      /** No sections yet: words, not «٠» (which reads as a dot in Arabic) */
+      sectionsNoneUsed: string;
       unpublishedChanges: string;
       empty: string;
       maxReached: string;

@@ -30,7 +30,7 @@ import {
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
 const CARD = 'rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] p-4 sm:p-6 space-y-4';
-const MUTED = 'text-sm text-[var(--fanous-color-text-secondary)]';
+const MUTED = 'text-balance text-sm text-[var(--fanous-color-text-secondary)]';
 const SELECT = 'min-h-11 w-full rounded-md border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-background)] px-3 text-sm text-[var(--fanous-color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-primary)]';
 
 function EditionRow({ channelId, row, onChange }: { channelId: string; row: ChannelQuranEdition; onChange: (rows: ChannelQuranEdition[]) => void }) {
@@ -199,13 +199,17 @@ export function ChannelTranslationSettings({ channelId }: { channelId: string })
 
       {titlesOn && settings && (
         <div className="space-y-1">
+          {/* The hint sits inside the label, right under its line: with the label alone at min-h-11 a
+              one-line label left a 24px gap above the hint (AUDIT-2) */}
           <label className="flex min-h-11 items-start gap-3 text-sm font-medium text-[var(--fanous-color-text-primary)]">
-            <input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--fanous-color-primary)]" checked={settings.viewerTitles} disabled={savingTitles} onChange={(e) => void toggleTitles(e.target.checked)} aria-describedby={`${ids}-titles-hint`} data-testid="channel-viewer-titles" />
-            <span>{cs.viewerTitles}</span>
+            <input type="checkbox" className="mt-0.5 h-5 w-5 flex-none accent-[var(--fanous-color-primary)]" checked={settings.viewerTitles} disabled={savingTitles} onChange={(e) => void toggleTitles(e.target.checked)} aria-labelledby={`${ids}-titles-label`} aria-describedby={`${ids}-titles-hint`} data-testid="channel-viewer-titles" />
+            <span className="min-w-0">
+              <span id={`${ids}-titles-label`} className="block">{cs.viewerTitles}</span>
+              <span id={`${ids}-titles-hint`} className={`${MUTED} mt-1 block font-normal`}>
+                {cs.viewerTitlesHint}
+              </span>
+            </span>
           </label>
-          <p id={`${ids}-titles-hint`} className={`${MUTED} ps-8`}>
-            {cs.viewerTitlesHint}
-          </p>
           {titleNote && (
             <p role={titleNote.error ? 'alert' : 'status'} className={`ps-8 text-xs ${titleNote.error ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}>
               {titleNote.text}

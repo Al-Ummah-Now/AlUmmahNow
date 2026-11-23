@@ -33,7 +33,7 @@ interface PlaylistManagerProps {
 
 /** Manage Playlists of a channel, or (channelId '') the user's personal playlists under You. */
 export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
-  const base = channelId ? `/${lang}/settings/channel/${channelId}/playlists` : `/${lang}/library/playlists`;
+  const base = channelId ? `/${lang}/studio/${encodeURIComponent(channelId)}/playlists` : `/${lang}/library/playlists`;
   return playlistId ? `${base}/${encodeURIComponent(playlistId)}` : base;
 }
 
@@ -155,27 +155,33 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                 <Link href={editHref} className="w-28 flex-none overflow-hidden rounded-[var(--r-sm)]" tabIndex={-1} aria-hidden="true">
                   <PlaylistCover playlist={playlist} alt="" sizes="112px" />
                 </Link>
+                {/* Phone: the cover and the text share the first row and the actions get their own row
+                    at the end, so the title wraps instead of being cut beside three buttons */}
                 <div className="min-w-0 flex-1">
-                  <h3 className={`truncate font-semibold ${TEXT}`}>
+                  {/* A title in the other script starts where the page's lines start, like comments (dir keeps its order) */}
+                  <h3 className={`break-words font-semibold ${TEXT} text-left [html[dir=rtl]_&]:text-right`} dir="auto">
                     <Link href={editHref} className="hover:underline">{title}</Link>
                   </h3>
-                  {/* A separator never ends a line: each item after the first carries its own leading
-                      bullet, so a wrapped item takes its bullet with it */}
-                  <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`} data-testid="playlist-details">
-                    <span>{formatVideoCount(count, lang)}</span>
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
-                      {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
-                      {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
-                    </span>
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="playlist-sort-summary">
-                      <MetaSep lang={lang} gap="0.5rem" className="me-1" />
-                      <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
-                      {sort.sortMode === 'auto'
-                        ? joinMeta(lang, [fieldLabel(sort.sortField, t), directionLabels(sort.sortField, t)[sort.sortDirection]], '·')
-                        : p.sortManual}
-                    </span>
-                  </p>
+                  {/* Count and visibility on one line, the order on its own line below: no separator ever starts or
+                      ends a line, at any width (AUDIT-2: "• Manual" wrapped to the start of a line) */}
+                  <div className={`mt-0.5 text-sm ${MUTED}`} data-testid="playlist-details">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{formatVideoCount(count, lang)}</span>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                        <MetaSep lang={lang} gap="0.5rem" gapEnd="0.25rem" className="me-1" />
+                        {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+                        {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
+                      </span>
+                    </p>
+                    <p className="mt-1 flex items-center gap-1" data-testid="playlist-sort-summary">
+                      <ArrowDownUp className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
+                      <span>
+                        {sort.sortMode === 'auto'
+                          ? joinMeta(lang, [fieldLabel(sort.sortField, t), directionLabels(sort.sortField, t)[sort.sortDirection]], '·')
+                          : p.sortManual}
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 {/* Phones: the actions get a row of their own, so the title and details keep the width
                     (they were cut to "Wee…" with one word per line) */}

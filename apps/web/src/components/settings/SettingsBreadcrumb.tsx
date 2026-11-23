@@ -4,9 +4,7 @@
  * "Settings › <page>" trail with a back arrow to the parent page. Rendered by
  * settings/layout.tsx on the settings sub-pages, by the profile and Contact us
  * pages when opened from Settings (?from=settings, or ?from=/<lang>/settings on
- * Contact us, whose ?from= is the page the message is about), and by
- * ChannelSettingsBreadcrumb on the
- * channel settings pages. Real links to the parent route, never history.back():
+ * Contact us, whose ?from= is the page the message is about). Real links to the parent route, never history.back():
  * a page opened directly has nothing to go back to.
  */
 

@@ -123,8 +123,8 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
                 {selectedName}
               </p>
               {selected.handle && (
-                <p className="truncate text-sm text-[var(--fanous-color-text-secondary)]" data-testid="upload-channel-handle">
-                  <bdi dir="ltr">@{selected.handle}</bdi>
+                <p className="text-sm text-[var(--fanous-color-text-secondary)]" data-testid="upload-channel-handle">
+                  <bdi dir="ltr" className="block truncate">@{selected.handle}</bdi>
                 </p>
               )}
               {selectedRole && selectedRole !== 'owner' && (

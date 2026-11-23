@@ -84,13 +84,13 @@ test.describe('Release: profile and channel images', () => {
     const channelId = (JSON.parse(createdText) as { result?: { channel?: { id?: string } } }).result?.channel?.id as string;
     expect(channelId, 'channel create returned no id').toBeTruthy();
 
-    await page.goto(`${target().web}/en/settings/channel/${channelId}/edit`);
+    await page.goto(`${target().web}/en/studio/${channelId}/customisation/profile`);
     await expect(page.getByTestId('channel-cover-upload')).toBeVisible({ timeout: 30000 });
-    const avatar = await uploadThroughForm(page, '#avatarPhotoInput', 'avatar', 'channel-avatar-image');
-    const cover = await uploadThroughForm(page, '#coverPhotoInput', 'cover', 'channel-cover-image');
+    const avatar = await uploadThroughForm(page, '#studio-avatar-input', 'avatar', 'channel-avatar-image');
+    const cover = await uploadThroughForm(page, '#studio-cover-input', 'cover', 'channel-cover-image');
 
     for (const locale of ['en', 'ar'] as const) {
-      await page.goto(`${target().web}/${locale}/settings/channel/${channelId}/edit`);
+      await page.goto(`${target().web}/${locale}/studio/${channelId}/customisation/profile`);
       expect(await expectLoadedImage(page.getByTestId('channel-cover-image'), `${locale} channel edit cover preview`, 200)).toBe(cover);
       expect(await expectLoadedImage(page.getByTestId('channel-avatar-image'), `${locale} channel edit avatar preview`, 40)).toBe(avatar);
       await expect(page.getByTestId('channel-cover-upload-remove')).toBeVisible();

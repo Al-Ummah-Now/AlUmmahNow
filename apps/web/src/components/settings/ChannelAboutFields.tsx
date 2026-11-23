@@ -40,8 +40,10 @@ interface ChannelAboutFieldsProps {
   handleLocked?: boolean;
 }
 
-const inputClass =
-  'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base';
+// The same theme tokens as the Studio Profile form's own fields (ProfileTab FIELD), so the handle,
+// links, e-mail and location never look different from the name and description beside them.
+export const inputClass =
+  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -114,15 +116,21 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
   const previewUrl = `${origin}/${lang}/@${normalizedHandle || t.channel.handlePlaceholder}`;
   const emailInvalid = !isValidContactEmail(value.contactEmail);
 
+  // handleHelp is "<lead>{url} <rule>" (no full stop after the URL, so none is read as part of it): split it into the URL line and the rule
+  const [handleHelpLead, handleHelpAfterUrl = ''] = t.channel.handleHelp.split('{url}');
+  const tailMatch = /^(\S*)\s+([\s\S]*)$/.exec(handleHelpAfterUrl);
+  const handleHelpUrlTail = tailMatch ? tailMatch[1] : handleHelpAfterUrl;
+  const handleHelpRule = tailMatch ? tailMatch[2] : '';
+
   return (
     <div className="space-y-6" data-testid="channel-about-fields">
       {/* Handle */}
       <div>
-        <label htmlFor={ids.handle} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        <label htmlFor={ids.handle} className="mb-1.5 block text-sm font-medium text-foreground">
           {t.channel.handle}
         </label>
         <div className="flex items-stretch" dir="ltr">
-          <span className="inline-flex items-center px-3 rounded-s-lg border border-e-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300" aria-hidden="true">@</span>
+          <span className="inline-flex items-center px-3 rounded-s-md border border-e-0 border-input bg-muted text-muted-foreground" aria-hidden="true">@</span>
           <input
             id={ids.handle}
             type="text"
@@ -141,21 +149,28 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
             data-testid="channel-handle-input"
           />
         </div>
-        <p id={ids.handleHelp} className="text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">
-          {t.channel.handleHelp.replace('{url}', previewUrl)}
+        <p id={ids.handleHelp} className="text-sm text-muted-foreground mt-1 break-words" data-testid="channel-handle-help">
+          {/* The URL sentence and the handle rule each get their own line, so no break lands inside
+              "3 to 30"; the Latin URL is isolated so it never reorders inside Arabic. */}
+          <span className="block">
+            {handleHelpLead}
+            <bdi dir="ltr">{previewUrl}</bdi>
+            {handleHelpUrlTail}
+          </span>
+          {handleHelpRule && <span className="block text-balance">{handleHelpRule}</span>}
         </p>
-        <p id={ids.handleStatus} className="text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
-          {status.state === 'checking' && <span className="text-gray-500 dark:text-gray-400">{t.channel.handleChecking}</span>}
+        <p id={ids.handleStatus} className="text-balance text-sm mt-1" aria-live="polite" data-testid="channel-handle-status" data-state={status.state}>
+          {status.state === 'checking' && <span className="text-muted-foreground">{t.channel.handleChecking}</span>}
           {status.state === 'available' && <span className="text-green-700 dark:text-green-400">{t.channel.handleAvailable.replace('{handle}', normalizedHandle)}</span>}
-          {status.state === 'current' && <span className="text-gray-500 dark:text-gray-400">{t.channel.handleCurrent}</span>}
+          {status.state === 'current' && <span className="text-muted-foreground">{t.channel.handleCurrent}</span>}
           {status.state === 'unavailable' && <span className="text-red-600 dark:text-red-400">{problemText[status.reason]}</span>}
         </p>
       </div>
 
       {/* Links */}
       <fieldset>
-        <legend className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t.channel.links}</legend>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.channel.linksHelp.replace('{max}', formatNumber(lang, MAX_CHANNEL_LINKS))}</p>
+        <legend className="mb-1.5 block text-sm font-medium text-foreground">{t.channel.links}</legend>
+        <p className="text-balance text-sm text-muted-foreground mb-2">{t.channel.linksHelp.replace('{max}', formatNumber(lang, MAX_CHANNEL_LINKS))}</p>
         <ul className="space-y-2" id={ids.links}>
           {value.links.map((link, index) => {
             const invalid = (link.title.trim() !== '' || link.url.trim() !== '') && !isValidLink(link);
@@ -189,24 +204,24 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
                   onClick={() => update({ links: value.links.filter((_, i) => i !== index) })}
                   disabled={disabled}
                   aria-label={t.channel.removeLink.replace('{n}', formatNumber(lang, index + 1))}
-                  className="inline-flex items-center justify-center min-h-10 min-w-10 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="inline-flex items-center justify-center min-h-10 min-w-10 rounded-md border border-input hover:bg-muted"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>
-                {invalid && <p className="text-sm text-red-600 dark:text-red-400 sm:hidden" role="alert">{t.channel.invalidLinkUrl}</p>}
+                {invalid && <p className="text-balance text-sm text-red-600 dark:text-red-400 sm:hidden" role="alert">{t.channel.invalidLinkUrl}</p>}
               </li>
             );
           })}
         </ul>
         {value.links.some((l) => (l.title.trim() !== '' || l.url.trim() !== '') && !isValidLink(l)) && (
-          <p className="hidden sm:block text-sm text-red-600 dark:text-red-400 mt-1" role="alert">{t.channel.invalidLinkUrl}</p>
+          <p className="hidden sm:block text-balance text-sm text-red-600 dark:text-red-400 mt-1" role="alert">{t.channel.invalidLinkUrl}</p>
         )}
         {value.links.length < MAX_CHANNEL_LINKS && (
           <button
             type="button"
             onClick={() => update({ links: [...value.links, { title: '', url: '' }] })}
             disabled={disabled}
-            className="mt-2 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            className="mt-2 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-input hover:bg-muted"
             data-testid="channel-add-link"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
@@ -217,7 +232,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
 
       {/* Contact email */}
       <div>
-        <label htmlFor={ids.email} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        <label htmlFor={ids.email} className="mb-1.5 block text-sm font-medium text-foreground">
           {t.channel.contactEmail}
         </label>
         <input
@@ -233,14 +248,14 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
           className={inputClass}
           data-testid="channel-contact-input"
         />
-        <p id={ids.emailHelp} className={`text-sm mt-1 ${emailInvalid ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+        <p id={ids.emailHelp} className={`text-balance text-sm mt-1 ${emailInvalid ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
           {emailInvalid ? t.channel.invalidEmail : t.channel.contactEmailHelp}
         </p>
       </div>
 
       {/* Location */}
       <div>
-        <label htmlFor={ids.location} className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+        <label htmlFor={ids.location} className="mb-1.5 block text-sm font-medium text-foreground">
           {t.channel.location}
         </label>
         <input
