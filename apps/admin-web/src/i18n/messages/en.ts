@@ -2364,7 +2364,6 @@ const en = {
     },
     conflict: '{name} changed this a moment ago.',
     conflictNobody: 'Someone else changed this a moment ago.',
-    preconditionTitle: 'Can’t be switched on yet',
     writeFailed: 'The change wasn’t saved. Try again.',
     toastOn: '“{name}” switched on',
     toastOff: '“{name}” switched off',

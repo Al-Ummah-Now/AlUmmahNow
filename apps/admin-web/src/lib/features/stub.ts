@@ -66,8 +66,8 @@ function seed(scenario: Scenario): StubState {
   };
 
   // A long history on one row, so the sheet shows a second page
-  const flips = Array.from({ length: 62 }, (_, i) => i % 2 === 1);
-  change('youtubeImport', [...flips, true], PEOPLE, Array.from({ length: 63 }, (_, i) => (63 - i) * 1440 + 95));
+  const flips = Array.from({ length: 63 }, (_, i) => i % 2 === 0);
+  change('youtubeImport', flips, PEOPLE, Array.from({ length: 63 }, (_, i) => (63 - i) * 1440 + 95));
   change('newsletter', [false, true], [YUSUF, FATIMA], [4320, 2905]);
   change('captionsTranslate', [false, true], [AMINA, AMINA], [180, 178]);
   change('tierRequests', [true], [FATIMA], [26]);
