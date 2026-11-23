@@ -205,6 +205,24 @@ describe('content endpoints: permissions', () => {
     assert.equal(row.details.code, 'new_owner_channel_limit');
   });
 
+  it('handle tools are super admin only, need a reason and are audited (AUN-CHANNEL-CLAIM CC-4)', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos();
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    for (const path of ['/api/content/channels/ch_1/handle/take', '/api/content/channels/ch_1/handle/release']) {
+      assert.equal((await call(path, { method: 'POST', roles: 'admin', json: { handle: 'lamahat', reason: 'Official name back' } })).status, 403);
+      const noReason = await call(path, { method: 'POST', roles: 'super_admin', json: { handle: 'lamahat' } });
+      assert.equal(((await noReason.json()) as { code: string }).code, 'transfer_reason_required');
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(log.length, 0);
+    const took = await call('/api/content/channels/ch_1/handle/take', { method: 'POST', roles: 'super_admin', json: { handle: '@lamahat', reason: 'Official name back' } });
+    assert.equal(took.status, 200);
+    assert.deepEqual(calls.at(-1)!.body, { handle: 'lamahat' });
+    assert.equal((await call('/api/content/channels/ch_1/handle/release', { method: 'POST', roles: 'super_admin', json: { reason: 'Name is misleading' } })).status, 200);
+    assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['handle-take', 'handle-release']);
+  });
+
   it('a transfer without a user id is refused before anything is audited', async () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos();

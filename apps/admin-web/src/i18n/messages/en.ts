@@ -5851,6 +5851,8 @@ const en = {
       move: 'Moved',
       transfer: 'Ownership transferred',
       'transfer-refused': 'Ownership transfer refused',
+      'handle-take': 'Official handle taken back',
+      'handle-release': 'Handle released',
       transferred: 'Ownership transferred',
       suspend: 'Suspended',
       suspended: 'Suspended',

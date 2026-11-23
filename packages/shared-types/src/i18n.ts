@@ -1807,6 +1807,8 @@ export interface AppTranslations {
       channelMovedOutByTeamTitle: string;
       channelMovedOutByTeamMessage: string;
       channelMovedOutByTeamWithReasonMessage: string;
+      channelHandleChangedByTeamTitle: string;
+      channelHandleChangedByTeamMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

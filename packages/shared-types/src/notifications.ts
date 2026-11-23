@@ -86,6 +86,8 @@ export const NOTIFICATION_KEYS = [
   'channelMovedOutByTeam',
   /** The same, with the admin's reason (params: channel, reason); always on */
   'channelMovedOutByTeamWithReason',
+  /** The team changed the channel's @handle (params: channel, handle); always on */
+  'channelHandleChangedByTeam',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -117,6 +119,7 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   channelMovedIn: 'account',
   channelMovedOutByTeam: 'account',
   channelMovedOutByTeamWithReason: 'account',
+  channelHandleChangedByTeam: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -149,6 +152,7 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   channelMovedIn: 'system',
   channelMovedOutByTeam: 'system',
   channelMovedOutByTeamWithReason: 'system',
+  channelHandleChangedByTeam: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

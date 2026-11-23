@@ -251,6 +251,11 @@ app.post('/channels/:id/transfer', async (c) => {
 	if (!USER_ID.test(input.newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
 	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), input.newOwnerId, actor(c), { keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true, keepContactEmail: input.keepContactEmail === true, reason: input.reason || undefined }));
 });
+app.post('/channels/:id/handle/take', async (c) => {
+	const { handle } = parse(z.object({ handle: z.string().trim().min(1).max(60) }), await body(c));
+	return ok(c, await admin.takeOfficialHandle(c.env, c.req.param('id'), handle, actor(c)));
+});
+app.post('/channels/:id/handle/release', async (c) => ok(c, await admin.releaseChannelHandle(c.env, c.req.param('id'), actor(c))));
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Videos

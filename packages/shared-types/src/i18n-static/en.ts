@@ -1684,6 +1684,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
       channelMovedOutByTeamTitle: 'Your channel was moved',
       channelMovedOutByTeamMessage: 'The Al Ummah Now team moved your channel {channel} to another account.',
       channelMovedOutByTeamWithReasonMessage: 'The Al Ummah Now team moved your channel {channel} to another account. Reason: {reason}',
+      channelHandleChangedByTeamTitle: 'Your channel handle changed',
+      channelHandleChangedByTeamMessage: 'The Al Ummah Now team changed the handle of {channel} to @{handle}.',
       uploadReadyMessage: 'Your video “{videoTitle}” has finished processing',
       uploadFailedTitle: 'Upload Failed',
       uploadFailedMessage: 'Your video “{videoTitle}” could not be processed',

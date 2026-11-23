@@ -289,6 +289,38 @@ app.post('/channels/:id/transfer', async (c) => {
   return ok(c, started);
 });
 
+/**
+ * Admin handle tools (wiki AUN-CHANNEL-CLAIM §4), super admins only, with a reason in the audit log:
+ * take an official handle back from the channel that holds it, or release a channel's handle
+ * (it gets a default one at once).
+ */
+const handleReason = async (c: C): Promise<string | null> => {
+  const reason = (await body(c)).reason;
+  const text = typeof reason === 'string' ? reason.trim() : '';
+  return text.length >= TRANSFER_REASON_MIN && text.length <= TRANSFER_REASON_MAX ? text : null;
+};
+
+app.post('/channels/:id/handle/take', async (c) => {
+  need(c, 'channels:transfer');
+  const id = c.req.param('id');
+  const input = await body(c);
+  const handle = typeof input.handle === 'string' ? input.handle.trim().replace(/^@/, '') : '';
+  if (!handle) return c.json({ success: false, code: 'invalid_request', error: 'handle is required' }, 400);
+  const reason = await handleReason(c);
+  if (!reason) return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-take', details: { handle, reason } }, () =>
+    videos(c, `/channels/${encodeURIComponent(id)}/handle/take`, { method: 'POST', json: { handle } })));
+});
+
+app.post('/channels/:id/handle/release', async (c) => {
+  need(c, 'channels:transfer');
+  const id = c.req.param('id');
+  const reason = await handleReason(c);
+  if (!reason) return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-release', details: { reason } }, () =>
+    videos(c, `/channels/${encodeURIComponent(id)}/handle/release`, { method: 'POST' })));
+});
+
 app.delete('/channels/:id', async (c) => {
   need(c, 'content:delete');
   const id = c.req.param('id');

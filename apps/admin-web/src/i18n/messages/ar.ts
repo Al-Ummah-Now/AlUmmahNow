@@ -5850,6 +5850,8 @@ const ar: Messages = {
       move: 'نُقل',
       transfer: 'نُقلت الملكية',
       'transfer-refused': 'رُفض نقل الملكية',
+      'handle-take': 'استُعيد معرّف رسمي',
+      'handle-release': 'حُرّر المعرّف',
       transferred: 'نُقلت الملكية',
       suspend: 'عُلِّق',
       suspended: 'عُلِّق',

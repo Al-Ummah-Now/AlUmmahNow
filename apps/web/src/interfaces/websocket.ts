@@ -97,6 +97,7 @@ export type RealtimeNotificationKey =
   | 'channelMovedIn'
   | 'channelMovedOutByTeam'
   | 'channelMovedOutByTeamWithReason'
+  | 'channelHandleChangedByTeam'
   /** Move from YouTube finished (params: ready, failed, channelTitle; wiki AUN-YT-IMPORT) */
   | 'youtubeImportFinished';
 
