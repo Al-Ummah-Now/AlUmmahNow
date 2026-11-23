@@ -10,7 +10,7 @@ const RelatedVideosError: React.FC<{ onRetry?: () => void }> = ({ onRetry }) => 
   const { t } = useLanguage();
   return (
     <div data-testid="related-videos-error" role="alert" className="mx-4 md:mx-0 py-8 text-center">
-      <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t.video.relatedError}</p>
+      <p className="mb-4 text-sm text-[var(--fanous-color-text-muted)]">{t.video.relatedError}</p>
       {onRetry && (
         <button
           type="button"
