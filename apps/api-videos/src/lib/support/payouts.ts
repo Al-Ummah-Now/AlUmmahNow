@@ -133,16 +133,22 @@ export async function planBatch(
 	const at = input.now.toISOString();
 	const totals: Record<string, number> = {};
 	for (const po of payouts) totals[po.currency] = (totals[po.currency] ?? 0) + po.amount;
+	// The one-in-flight rule is checked again inside the write: two plans for different periods racing
+	// past the read above can't both insert (D1 runs a batch as one transaction)
+	const IN_FLIGHT = "('awaiting_approval', 'approved', 'funding', 'sending')";
 	const statements = [
-		db.prepare("INSERT INTO support_payout_batches (id, period, status, totals, count, prepared_by, created_at, updated_at) VALUES (?, ?, 'awaiting_approval', ?, ?, ?, ?, ?)").bind(batchId, input.period, JSON.stringify(totals), payouts.length, input.preparedBy, at, at),
+		db
+			.prepare(`INSERT INTO support_payout_batches (id, period, status, totals, count, prepared_by, created_at, updated_at) SELECT ?, ?, 'awaiting_approval', ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM support_payout_batches WHERE status IN ${IN_FLIGHT})`)
+			.bind(batchId, input.period, JSON.stringify(totals), payouts.length, input.preparedBy, at, at),
 		...payouts.map((po) => {
 			const payee = (payees.results ?? []).find((x) => x.id === po.payeeId)!;
 			return db
-				.prepare("INSERT INTO support_payouts (id, batch_id, payee_id, channel_id, rail, mode, amount, currency, rail_fee, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)")
-				.bind(po.payoutId, batchId, po.payeeId, po.channelId, payee.rail, payee.mode, po.amount, po.currency, po.railFee, at, at);
+				.prepare("INSERT INTO support_payouts (id, batch_id, payee_id, channel_id, rail, mode, amount, currency, rail_fee, status, created_at, updated_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ? WHERE EXISTS (SELECT 1 FROM support_payout_batches WHERE id = ?)")
+				.bind(po.payoutId, batchId, po.payeeId, po.channelId, payee.rail, payee.mode, po.amount, po.currency, po.railFee, at, at, batchId);
 		}),
 	];
 	await db.batch(statements);
+	if (!(await db.prepare('SELECT id FROM support_payout_batches WHERE id = ?').bind(batchId).first())) throw new PayoutError('exists', 'Another payout batch is still open');
 	return { batchId, payouts, skipped };
 }
 
@@ -289,10 +295,11 @@ export async function sendOnePayout(env: SupportAdapterEnv & { SEARCH_DB?: Searc
 	}
 
 	// Claim the payout before anything moves: it reads 'unknown' from here on, so a crash at any later
-	// point makes the retry ask the rail first, and a second worker on the same payout stops here
+	// point makes the retry ask the rail first, and a second worker on the same payout stops here (the
+	// attempts count is part of the check, so two retries of an 'unknown' payout can't both claim it)
 	const claimed = (await db
-		.prepare("UPDATE support_payouts SET status = 'unknown', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = ?")
-		.bind(at, po.id, po.status)
+		.prepare("UPDATE support_payouts SET status = 'unknown', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = ? AND attempts = ?")
+		.bind(at, po.id, po.status, po.attempts)
 		.run()) as { meta?: { changes?: number } };
 	if (!claimed.meta?.changes) return 'skipped';
 	// The money leaves the creator's available balance before the call (key per payout: once)

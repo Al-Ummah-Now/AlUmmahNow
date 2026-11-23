@@ -32,6 +32,9 @@ import { accountTotal } from '../lib/support/ledger';
 
 const app = new Hono<{ Bindings: SupportJobEnv }>();
 
+/** Jobs that finish "succeeded" after flagging the Errors page (refused or failed), so Retry runs them again. */
+const FLAGGING_JOBS = new Set(['support.payout-plan', 'support.payout-send', 'support.payout-fund', 'support.payee-sync']);
+
 const RetryBody = z.object({ jobId: z.guid(), kind: z.string().max(40) }).strict();
 
 app.post('/jobs/retry', async (c) => {
@@ -46,8 +49,8 @@ app.post('/jobs/retry', async (c) => {
 		const eventId = job.kind === 'support.webhook' ? String(job.params.eventId ?? job.targetId) : null;
 		const event = eventId ? await store.prepare('SELECT id, status FROM support_events WHERE id = ?').bind(eventId).first<{ id: string; status: string }>() : null;
 		// Reconcile "Check again" runs a fresh pass even when the last one succeeded; a payout job that
-		// finished by flagging the Errors page (refused plan, refused send, refused funding) runs again too
-		const flagged = (job.kind === 'support.payout-plan' || job.kind === 'support.payout-send' || job.kind === 'support.payout-fund') && job.status === 'succeeded' && !!(job.result && ('refused' in job.result || 'failed' in job.result));
+		// finished by flagging the Errors page (refused plan, send or funding; payee sync with no rail) runs again too
+		const flagged = FLAGGING_JOBS.has(job.kind) && job.status === 'succeeded' && !!(job.result && ('refused' in job.result || 'failed' in job.result));
 		if (event?.status !== 'failed' && job.kind !== 'support.reconcile' && !flagged) return c.json({ success: true, result: { ok: true, status: job.status, result: 'Nothing to retry' } });
 		if (event) await store.prepare(`UPDATE support_events SET status = 'queued', error = NULL WHERE id = ?`).bind(event.id).run();
 		await store.prepare(`UPDATE admin_jobs SET status = 'failed' WHERE id = ?`).bind(job.id).run();
