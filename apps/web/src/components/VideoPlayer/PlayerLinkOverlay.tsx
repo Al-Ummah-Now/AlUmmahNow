@@ -14,7 +14,7 @@
  */
 'use client';
 
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 
 export type PlayerLinkPlacement = 'caption-end';
 
@@ -34,9 +34,38 @@ export interface PlayerOverlayLink {
   testId?: string;
 }
 
+/**
+ * Protocol allowlist for in-player links: only absolute `https:` URLs and same-origin root-relative
+ * paths (`/…`, never protocol-relative `//…` or `/\…`). Anything else (`javascript:`, `data:`,
+ * `http:`, control characters, empty) is rejected.
+ */
+export function safePlayerHref(href: string): string | null {
+  if (typeof href !== 'string') return null;
+  const trimmed = href.trim();
+  if (!trimmed || /[\u0000-\u001f\u007f]/.test(trimmed)) return null;
+  if (trimmed.startsWith('/')) {
+    if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return null;
+    try {
+      const resolved = new URL(trimmed, 'https://same-origin.invalid');
+      if (resolved.origin !== 'https://same-origin.invalid') return null;
+      return trimmed;
+    } catch {
+      return null;
+    }
+  }
+  if (!/^https:\/\//i.test(trimmed)) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' || !parsed.hostname) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 /** Another site: opens in a new tab. A relative path or this site's origin opens in place. */
 export function isExternalHref(href: string, origin: string = typeof window !== 'undefined' ? window.location.origin : ''): boolean {
-  if (!/^https?:\/\//i.test(href)) return false;
+  if (!/^https:\/\//i.test(href)) return false;
   try {
     return new URL(href).origin !== origin;
   } catch {
@@ -75,7 +104,15 @@ function useHeldLinks(links: PlayerOverlayLink[]) {
 }
 
 export function PlayerLinkOverlay({ links, dir }: { links: PlayerOverlayLink[]; dir: 'ltr' | 'rtl' }) {
-  const { shown, handlers } = useHeldLinks(links);
+  const safeLinks = useMemo(
+    () =>
+      links.flatMap((l) => {
+        const href = safePlayerHref(l.href);
+        return href ? [href === l.href ? l : { ...l, href }] : [];
+      }),
+    [links],
+  );
+  const { shown, handlers } = useHeldLinks(safeLinks);
   if (shown.length === 0) return null;
   const placements = [...new Set(shown.map((l) => l.placement))];
   return (

@@ -12,7 +12,7 @@
  * be reached).
  */
 import { z } from 'zod';
-import { DEFAULT_QURAN_TRANSLATIONS, QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, type QuranTranslationEdition } from '@al-ummah/shared-types';
+import { DEFAULT_QURAN_TRANSLATIONS, QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, featureGate, type QuranTranslationEdition } from '@al-ummah/shared-types';
 import { PublicRoute, type AppContext } from '../../base';
 import { listTranslationEditions } from '../../lib/quran/translations';
 import { quranEditionsConfigured, quranTextAvailable } from '../../lib/features';
@@ -41,6 +41,58 @@ interface Row {
 	lang: string;
 	qf_translation_id: number;
 	name: string;
+}
+
+interface EdgeCache {
+	match(key: Request): Promise<Response | undefined>;
+	put(key: Request, value: Response): Promise<void>;
+	delete(key: Request): Promise<boolean>;
+}
+
+const edgeCache = (): EdgeCache | null => (globalThis as { caches?: { default?: EdgeCache } }).caches?.default ?? null;
+const CREDITS_ROWS_CACHE_URL = 'https://qf-cache.internal/quran-credits-rows';
+const CREDITS_ROWS_EDGE_TTL_S = 3600;
+const CREDITS_ROWS_ISOLATE_TTL_MS = 5 * 60_000;
+
+// Settled per-isolate cache keyed by D1 instance so concurrent/test DBs never share stale rows
+let isolateRowsCache: { db: D1Database; at: number; rows: Row[] } | null = null;
+
+/** Drops the cached edition picks after a channel or platform translation changes (and in tests). */
+export async function invalidateQuranCreditsCache(): Promise<void> {
+	isolateRowsCache = null;
+	const cache = edgeCache();
+	if (cache) await cache.delete(new Request(CREDITS_ROWS_CACHE_URL)).catch(() => undefined);
+}
+
+async function readEditionRows(d1: D1Database, now = Date.now()): Promise<Row[]> {
+	if (isolateRowsCache && isolateRowsCache.db === d1 && now - isolateRowsCache.at < CREDITS_ROWS_ISOLATE_TTL_MS) {
+		return isolateRowsCache.rows;
+	}
+	const cache = edgeCache();
+	const req = cache ? new Request(CREDITS_ROWS_CACHE_URL) : null;
+	if (cache && req) {
+		const hit = await cache.match(req).catch(() => undefined);
+		if (hit) {
+			const cached = (await hit.json().catch(() => null)) as Row[] | null;
+			if (Array.isArray(cached)) {
+				isolateRowsCache = { db: d1, at: now, rows: cached };
+				return cached;
+			}
+		}
+	}
+	// channel_quran_translations is covered by idx_channel_quran_translations_edition (lang, qf_translation_id, name)
+	const [platform, channels] = await Promise.all([
+		d1.prepare('SELECT lang, qf_translation_id, name FROM quran_translation_defaults').all<Row>(),
+		d1.prepare('SELECT DISTINCT lang, qf_translation_id, name FROM channel_quran_translations').all<Row>(),
+	]);
+	const rows = [...(platform.results ?? []), ...(channels.results ?? [])];
+	isolateRowsCache = { db: d1, at: now, rows };
+	if (cache && req) {
+		await cache
+			.put(req, new Response(JSON.stringify(rows), { headers: { 'content-type': 'application/json', 'cache-control': `public, s-maxage=${CREDITS_ROWS_EDGE_TTL_S}` } }))
+			.catch(() => undefined);
+	}
+	return rows;
 }
 
 /**
@@ -79,20 +131,18 @@ export class QuranCreditsGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const env = c.env as never;
-		const [text, editionsOn] = await Promise.all([quranTextAvailable(env), quranEditionsConfigured(env)]);
+		const [text, editionsConfigured, editionsGate] = await Promise.all([
+			quranTextAvailable(env),
+			quranEditionsConfigured(env),
+			featureGate(env, 'quranEditions').catch(() => ({ on: true as const })),
+		]);
+		const editionsOn = editionsConfigured && editionsGate.on;
 		if (!text && !editionsOn) return featureOff(c);
 		let editions: QuranTranslationEdition[] = [];
 		if (editionsOn) {
 			let rows: Row[] = [];
 			try {
-				// Both tables are small (one row per language, and per channel that picked one), keyed by
-				// language or channel: DISTINCT reads them once each
-				const d1 = c.env.SEARCH_DB as D1Database;
-				const [platform, channels] = await Promise.all([
-					d1.prepare('SELECT lang, qf_translation_id, name FROM quran_translation_defaults').all<Row>(),
-					d1.prepare('SELECT DISTINCT lang, qf_translation_id, name FROM channel_quran_translations').all<Row>(),
-				]);
-				rows = [...(platform.results ?? []), ...(channels.results ?? [])];
+				rows = await readEditionRows(c.env.SEARCH_DB as D1Database);
 			} catch (error) {
 				logger.warn('[Quran] Credits: edition picks unreadable; listing the defaults', { error: error instanceof Error ? error.message : String(error) });
 			}

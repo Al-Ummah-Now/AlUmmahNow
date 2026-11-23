@@ -43,6 +43,7 @@ import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorInfo } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
+import { invalidateQuranCreditsCache } from '../endpoints/quran/quranCredits';
 import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs';
 import { listTranslationEditions } from '../lib/quran/translations';
 import { readQuranIndex } from '../lib/quran/copy';
@@ -736,10 +737,12 @@ app.put('/captions/quran-translations/:lang', async (c) => {
 		)
 		.bind(lang, edition.id, edition.name.slice(0, 200), actor(c), new Date().toISOString())
 		.run();
+	await invalidateQuranCreditsCache();
 	return ok(c, { editions: await platformEditions(searchDb(c)) });
 });
 app.delete('/captions/quran-translations/:lang', async (c) => {
 	await searchDb(c).prepare('DELETE FROM quran_translation_defaults WHERE lang = ?').bind(c.req.param('lang').toLowerCase()).run();
+	await invalidateQuranCreditsCache();
 	return ok(c, { editions: await platformEditions(searchDb(c)) });
 });
 

@@ -3,9 +3,41 @@
  * credit next to Quran captions (QF 2026-11-23).
  */
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { PlayerLinkOverlay, isExternalHref } from '../PlayerLinkOverlay';
+import { PlayerLinkOverlay, isExternalHref, safePlayerHref } from '../PlayerLinkOverlay';
 
 const qf = { id: 'quran-foundation', label: 'Source: Quran Foundation', ariaLabel: 'Source: Quran Foundation (opens in a new tab)', href: 'https://quran.foundation/', placement: 'caption-end' as const, testId: 'player-quran-credit' };
+
+describe('safePlayerHref', () => {
+  it('allows https URLs and same-origin root-relative paths', () => {
+    expect(safePlayerHref('https://quran.foundation/')).toBe('https://quran.foundation/');
+    expect(safePlayerHref('  https://example.com/path?a=1#b  ')).toBe('https://example.com/path?a=1#b');
+    expect(safePlayerHref('/en/credits')).toBe('/en/credits');
+    expect(safePlayerHref('/ar/watch/v1?t=12')).toBe('/ar/watch/v1?t=12');
+  });
+
+  it('rejects javascript:, data:, http:, protocol-relative, and malformed hrefs', () => {
+    for (const href of [
+      '',
+      '   ',
+      'javascript:alert(1)',
+      'JAVASCRIPT:alert(1)',
+      '  javascript:alert(1)',
+      'java\tscript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      'http://quran.foundation/',
+      'http://example.com/insecure',
+      '//evil.example/path',
+      '/\\evil.example/path',
+      'mailto:test@example.com',
+      'credits',
+      'https://',
+      'https://quran.foundation/\nfoo',
+    ]) {
+      expect(safePlayerHref(href)).toBeNull();
+    }
+  });
+});
 
 describe('PlayerLinkOverlay', () => {
   it('renders nothing without links', () => {
@@ -50,6 +82,40 @@ describe('PlayerLinkOverlay', () => {
     expect(isExternalHref('https://quran.foundation/', 'https://alummahnow.net')).toBe(true);
     expect(isExternalHref('https://alummahnow.net/en', 'https://alummahnow.net')).toBe(false);
     expect(isExternalHref('/en/credits', 'https://alummahnow.net')).toBe(false);
+  });
+
+  it('drops links with disallowed protocols (javascript:, data:, http:, //)', () => {
+    const { container } = render(
+      <PlayerLinkOverlay
+        links={[
+          { ...qf, id: 'bad-js', href: 'javascript:alert(1)', testId: 'bad-js' },
+          { ...qf, id: 'bad-data', href: 'data:text/html,<h1>x</h1>', testId: 'bad-data' },
+          { ...qf, id: 'bad-http', href: 'http://example.com', testId: 'bad-http' },
+          { ...qf, id: 'bad-proto', href: '//evil.example/x', testId: 'bad-proto' },
+          qf,
+        ]}
+        dir="ltr"
+      />,
+    );
+    expect(screen.queryByTestId('bad-js')).toBeNull();
+    expect(screen.queryByTestId('bad-data')).toBeNull();
+    expect(screen.queryByTestId('bad-http')).toBeNull();
+    expect(screen.queryByTestId('bad-proto')).toBeNull();
+    expect(screen.getByTestId('player-quran-credit')).toHaveAttribute('href', 'https://quran.foundation/');
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+  });
+
+  it('renders nothing when every link has a disallowed protocol', () => {
+    const { container } = render(
+      <PlayerLinkOverlay
+        links={[
+          { ...qf, id: 'bad-js', href: 'javascript:void(0)' },
+          { ...qf, id: 'bad-http', href: 'http://example.com' },
+        ]}
+        dir="ltr"
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('a link whose moment passed stays while it has focus or the pointer, then goes', () => {
