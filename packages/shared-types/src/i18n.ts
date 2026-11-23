@@ -1802,6 +1802,10 @@ export interface AppTranslations {
       tierRequestReceivedMessage: string;
       tierChangedTitle: string;
       tierChangedMessage: string;
+      channelMovedInTitle: string;
+      channelMovedInMessage: string;
+      channelMovedOutByTeamTitle: string;
+      channelMovedOutByTeamMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

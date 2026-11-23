@@ -56,6 +56,8 @@ import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePos
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
 import { endSession, ensureProviderStopped } from '../live/service';
 import type { LiveSessionRow } from '../live/store';
+import { notifyTeam } from '../channelTeam';
+import { channelParams } from '../channelName';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -796,6 +798,22 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 	return problems;
 }
 
+/**
+ * Both owners hear about a finished move (always-on `account` notices, wiki AUN-CHANNEL-CLAIM §3.6).
+ * The acting admin is never named, and nobody is told about their own action. One per job and side.
+ */
+async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, from: string | null, to: string): Promise<void> {
+	const params = channelParams('channel', channel as never);
+	const actionUrl = `/channels/${job.targetId}`;
+	try {
+		await notifyTeam(env as never, to, job.actorId, { notificationKey: 'channelMovedIn', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:in` });
+		await notifyTeam(env as never, from, job.actorId, { notificationKey: 'channelMovedOutByTeam', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:out` });
+	} catch (error) {
+		// The move is done; a lost notice is not worth undoing or repeating it
+		logger.warn('[Admin] Channel move notice failed', { channelId: job.targetId, jobId: job.id, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
@@ -870,6 +888,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (problems.length) throw new Error(`Channel move verify found records on the previous owner (${problems.join(', ')}); retrying`);
 		await releaseTransferLock(env, id, job.id);
 		await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
+		await notifyMove(env, job, saved, previousOwnerId, newOwnerId);
 	}
 	return finish(result, failed);
 }

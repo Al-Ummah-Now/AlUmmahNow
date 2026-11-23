@@ -25,6 +25,8 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   tierRequestDeclined: { title: 'tierRequestDeclinedTitle', message: 'tierRequestDeclinedMessage' },
   tierRequestReceived: { title: 'tierRequestReceivedTitle', message: 'tierRequestReceivedMessage' },
   tierChanged: { title: 'tierChangedTitle', message: 'tierChangedMessage' },
+  channelMovedIn: { title: 'channelMovedInTitle', message: 'channelMovedInMessage' },
+  channelMovedOutByTeam: { title: 'channelMovedOutByTeamTitle', message: 'channelMovedOutByTeamMessage' },
   youtubeImportFinished: { title: 'youtubeImportFinishedTitle', message: 'youtubeImportFinishedMessage' },
 };
 

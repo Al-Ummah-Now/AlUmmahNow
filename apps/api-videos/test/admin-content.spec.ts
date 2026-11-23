@@ -426,6 +426,14 @@ describe('channel actions', () => {
 		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
 		assert.deepEqual(JSON.parse(raw.profiles.store.get(OTHER)!).channels, ['ch1']);
 		assert.deepEqual(JSON.parse(raw.profiles.store.get(OWNER)!).channels, []);
+		// Both owners are told once, in their language, without the admin's name (AUN-CHANNEL-CLAIM CC-2)
+		const notices = raw.queue.messages.map((m: any) => m.payload ?? m.body?.payload ?? m).filter((p: any) => typeof p?.notificationKey === 'string' && p.notificationKey.startsWith('channelMoved'));
+		assert.deepEqual(notices.map((n: any) => `${n.notificationKey}:${n.recipientUserId}`).sort(), [`channelMovedIn:${OTHER}`, `channelMovedOutByTeam:${OWNER}`]);
+		for (const n of notices) {
+			assert.equal(n.params.channel, 'Channel ch1');
+			assert.equal(n.dedupeKey, `move:${job.id}:${n.notificationKey === 'channelMovedIn' ? 'in' : 'out'}`);
+			assert.ok(!JSON.stringify(n.params).includes('usr_admin'), 'the acting admin is never named');
+		}
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_nobody' })).status, 404);
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER })).body.code, 'already_owner');
 	});
