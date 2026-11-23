@@ -20,6 +20,7 @@ import {
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
   FEATURE_REGISTRY,
+  type FeatureKey,
   type AdminDeletionKind,
   type AdminDeletionPage,
   contentPermissionsFor,
@@ -891,7 +892,7 @@ app.get('/captions/settings', async (c) => {
  * bypass the Features page's rule (viewer caption download, QF terms). Unchanged values pass, as
  * the page sends the whole form.
  */
-const SUPER_ADMIN_CAPTION_FIELDS: ReadonlyArray<{ key: string; path: string[] }> = FEATURE_REGISTRY
+const SUPER_ADMIN_CAPTION_FIELDS: ReadonlyArray<{ key: FeatureKey; path: string[] }> = FEATURE_REGISTRY
   .filter((d) => d.toggle === 'superAdmin' && d.legacy?.startsWith('captions.'))
   .map((d) => ({ key: d.key, path: d.legacy!.slice('captions.'.length).split('.') }));
 
