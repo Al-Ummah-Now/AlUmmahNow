@@ -125,16 +125,22 @@ export function LocalizedDatePicker({
     if (map[e.key]) {
       e.preventDefault();
       move(map[e.key]());
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      setOpen(false);
-      button.current?.focus();
     }
+  };
+  // Escape closes the calendar wherever focus is inside the picker, the date button included: a mouse
+  // opens it with focus left on the button, and Escape must close it there too
+  const onPickerKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Escape' || !open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(false);
+    moved.current = false;
+    button.current?.focus();
   };
 
   const text = value ? formatPickedDate(value, locale) : placeholder;
   return (
-    <div className="space-y-1" data-testid={testId}>
+    <div className="space-y-1" data-testid={testId} onKeyDown={onPickerKey}>
       <span id={`${id}-label`} className="block text-xs text-muted-foreground">{label}</span>
       <button
         ref={button}

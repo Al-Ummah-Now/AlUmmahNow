@@ -239,6 +239,16 @@ describe('localized date, time and zone', () => {
     expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-21T09:15', zone: 'America/New_York' });
   });
 
+  it('Escape closes the calendar while focus is still on the date button', () => {
+    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15', zone: 'America/New_York' }} onChange={jest.fn()} timeOnly />);
+    const button = screen.getByTestId('post-schedule-date-button');
+    fireEvent.click(button);
+    expect(screen.getByTestId('post-schedule-date-calendar')).toBeInTheDocument();
+    fireEvent.keyDown(button, { key: 'Escape' });
+    expect(screen.queryByTestId('post-schedule-date-calendar')).toBeNull();
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('the calendar moves by keyboard and never picks a day out of range', () => {
     const onChange = jest.fn();
     render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15', zone: 'America/New_York' }} onChange={onChange} timeOnly />);

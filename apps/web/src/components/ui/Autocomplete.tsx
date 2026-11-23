@@ -468,14 +468,27 @@ export function Autocomplete(props: AutocompleteProps) {
 
   const activeId = expanded && active >= 0 ? `${baseId}-opt-${active}` : undefined;
 
+  // A list that scrolls fades out at its bottom edge while more rows lie below, so the row the edge
+  // cuts reads as "more", not as a sliced row (AUDIT-2: the zone list's last row looked cut)
+  const listRef = useRef<HTMLUListElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  const measureMore = useCallback(() => {
+    const el = listRef.current;
+    setMoreBelow(!!el && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  }, []);
+  useLayoutEffect(() => { measureMore(); });
+
   const list = (
     <ul
+      ref={listRef}
       id={listId}
       role="listbox"
       aria-label={listLabel ?? label}
       aria-busy={(initialLoading || (!query && initial.status === 'more')) || undefined}
-      className="max-h-80 overflow-y-auto py-1"
+      className={`max-h-80 overflow-y-auto py-1${moreBelow ? ' [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]' : ''}`}
+      data-more-below={moreBelow || undefined}
       onScroll={(event) => {
+        measureMore();
         if (query || !hasInitial) return;
         const el = event.currentTarget;
         // Near the end: the next page
