@@ -223,6 +223,8 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   supportExternalLinks: 'MEMBERS adds its routes and maps them here',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportPerks: 'MEMBERS adds its routes and maps them here',
+  listenMode: 'E14-S3 adds the audio playback route and maps it here',
+  offlineDownloads: 'E14-S3 adds the download license routes and maps them here',
 });
 
 /** The routes a worker gates in its middleware. */

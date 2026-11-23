@@ -92,6 +92,8 @@ export const FEATURE_KEYS = [
   'supportPerks',
   'tierRequests',
   'newsletter',
+  'listenMode',
+  'offlineDownloads',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -451,6 +453,36 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     publicFeatureKeys: ['newsletter'],
     setupHref: '/newsletter',
     jobs: ['newsletter_issue'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'listenMode',
+    group: 'site',
+    name: { en: 'Listen mode', ar: 'وضع الاستماع' },
+    help: {
+      en: 'The audio-first Listen button, mini audio bar, sleep timer and background audio controls disappear across web and native apps.',
+      ar: 'يختفي زر الاستماع الصوتي وشريط الصوت المصغّر ومؤقّت النوم وعناصر التحكم بالصوت في الخلفية من الويب والتطبيقات.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'off',
+    requires: [],
+    userFeatureKeys: ['listenMode'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'offlineDownloads',
+    group: 'site',
+    name: { en: 'Offline downloads', ar: 'التنزيل دون اتصال' },
+    help: {
+      en: 'Viewers can’t start new offline downloads or refresh download licenses, and the download toggle disappears from Studio. Removing existing downloads still works.',
+      ar: 'لا يستطيع المشاهدون بدء تنزيلات جديدة دون اتصال أو تجديد تراخيص التنزيل، ويختفي خيار السماح بالتنزيل من الاستوديو. يبقى حذف التنزيلات الموجودة متاحًا.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'off',
+    requires: [],
+    userFeatureKeys: ['offlineDownloads'],
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);
