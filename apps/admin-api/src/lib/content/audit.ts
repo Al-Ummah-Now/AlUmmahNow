@@ -46,6 +46,8 @@ export type ContentKind =
   | 'billing-payment'
   /** Payments: a billing job retried from the Jobs page (id = the job's target). */
   | 'billing'
+  /** Creator support (wiki AUN-MEMBERS): a support job retried or cancelled from the Jobs page (id = the job's target). */
+  | 'support'
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
   | 'import';
 

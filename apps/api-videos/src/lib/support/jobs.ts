@@ -1,0 +1,303 @@
+/**
+ * Creator-support webhooks and jobs (wiki AUN-MEMBERS §9.4; MEM-4). Always async (O26):
+ *
+ *   POST /webhooks/support/:side/:vendor   (side = collector | rail)
+ *     → the vendor exists here (test adapters: QA and local only) → signature on the raw body
+ *     → stored once in support_events ((vendor, mode, event_id) unique) → job 'support.webhook' → 200
+ *     A failure before the event is stored answers 503 so the vendor redelivers.
+ *   support.webhook          maps the event, applies it (events.ts), cancels pledges ended on our side
+ *   support.release          hourly: held gifts whose hold ended move to available (MEM-D18)
+ *   support.reconcile        daily: the three-way check (reconcile.ts)
+ *   support.payee-sync       a payee's state from the rail (after onboarding, on payee events, daily)
+ *   support.dispute-deadline daily: disputes whose evidence is due within 3 days → Errors page
+ *   support.dormant          monthly: balances with no active payee (MEM-D22 decides what follows)
+ *
+ * Webhooks keep working while the `creatorSupport` switch is off: money already moving (renewals of
+ * existing pledges, refunds, disputes, payouts) belongs to creators and must still be booked.
+ * The crons do nothing until there is support data (one keyed read).
+ *
+ * A job that gives up flags the videos admin Errors page with Retry (support:manage).
+ */
+import { reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv, type ExecutionContextLike, type SearchDb, type SupportCollectorId } from '@al-ummah/shared-types';
+import { createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
+import { logger } from '../logger';
+import { collectorFor, railFor, type SupportAdapterEnv } from './adapters';
+import type { CollectorContext } from './collector';
+import { readSupportConfig } from './config';
+import { testStateFor } from './d1-test-state';
+import { applyCollectorEvents, applyRailEvents, releaseDueGifts, UnmatchedSupportEventError } from './events';
+import { LedgerError } from './ledger';
+import { RailError, type RailContext } from './rail';
+import { reconcileDay } from './reconcile';
+import { CollectorError } from './collector';
+
+export interface SupportJobEnv extends Omit<JobEnv, 'INTERNAL_API_KEY'>, SupportAdapterEnv, ErrorReporterEnv {
+	SEARCH_DB?: SearchDb;
+	VIDEOS_API_URL?: string;
+}
+
+type Side = 'collector' | 'rail';
+const vendorKey = (side: Side, id: string) => `${side}:${id}`;
+
+function db(env: SupportJobEnv): SearchDb {
+	if (!env.SEARCH_DB) throw new Error('SEARCH_DB is not bound');
+	return env.SEARCH_DB;
+}
+
+/** Context for a vendor call in this environment. Real vendors' credentials come from Secrets Store (MEM-10/11). */
+export function vendorContext(env: SupportJobEnv, mode: 'test' | 'live', now: () => Date = () => new Date()): CollectorContext & RailContext {
+	return { mode, credentials: {}, fetch, now, origin: env.VIDEOS_API_URL ?? '', testState: testStateFor(env) };
+}
+
+// ---------------------------------------------------------------------------
+// Webhooks
+// ---------------------------------------------------------------------------
+
+export type SupportWebhookOutcome = { status: 200; duplicate: boolean; eventId: string } | { status: 401 | 404 | 503; error: string };
+
+export async function receiveSupportWebhook(env: SupportJobEnv, side: string, vendor: string, rawBody: string, headers: Headers, now = new Date()): Promise<SupportWebhookOutcome> {
+	if (side !== 'collector' && side !== 'rail') return { status: 404, error: 'Unknown vendor' };
+	const adapter = side === 'collector' ? collectorFor(env, vendor as SupportCollectorId) : railFor(env, vendor as never);
+	if (!adapter || !env.SEARCH_DB) return { status: 404, error: 'Unknown vendor' };
+	let config;
+	try {
+		config = await readSupportConfig(env.SEARCH_DB);
+	} catch (error) {
+		logger.error('[Support] Webhook could not read settings', { side, vendor, error: error instanceof Error ? error.message : String(error) });
+		return { status: 503, error: 'Try again' };
+	}
+	const ctx = vendorContext(env, config.mode, () => now);
+	const delivery = await adapter.verifyWebhook(ctx, rawBody, headers);
+	if (!delivery) {
+		logger.warn('[Support] Webhook signature refused', { side, vendor });
+		return { status: 401, error: 'Invalid signature' };
+	}
+	try {
+		const id = `sev_${crypto.randomUUID().replace(/-/g, '')}`;
+		const key = vendorKey(side, vendor);
+		const res = (await env.SEARCH_DB.prepare(
+			`INSERT INTO support_events (id, vendor, mode, event_id, type, payload, status, received_at) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?) ON CONFLICT (vendor, mode, event_id) DO NOTHING`,
+		)
+			.bind(id, key, config.mode, delivery.eventId.slice(0, 200), delivery.type.slice(0, 100), JSON.stringify(delivery.payload), now.toISOString())
+			.run()) as { meta?: { changes?: number } };
+		if (!res.meta?.changes) {
+			const existing = await env.SEARCH_DB.prepare('SELECT id FROM support_events WHERE vendor = ? AND mode = ? AND event_id = ?').bind(key, config.mode, delivery.eventId.slice(0, 200)).first<{ id: string }>();
+			return { status: 200, duplicate: true, eventId: existing?.id ?? id };
+		}
+		const job = await createJob(env, { kind: 'support.webhook', targetKind: 'support', targetId: id, params: { eventId: id }, actorId: `webhook:${key}` });
+		await env.SEARCH_DB.prepare('UPDATE support_events SET job_id = ? WHERE id = ?').bind(job.id, id).run();
+		return { status: 200, duplicate: false, eventId: id };
+	} catch (error) {
+		logger.error('[Support] Webhook could not be stored', { side, vendor, error: error instanceof Error ? error.message : String(error) });
+		return { status: 503, error: 'Try again' };
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Jobs
+// ---------------------------------------------------------------------------
+
+/** Errors that retrying can't fix: the event is marked failed and the admin is told now. */
+function permanent(error: unknown): boolean {
+	return error instanceof UnmatchedSupportEventError || (error instanceof LedgerError) || (error instanceof CollectorError && error.permanent) || (error instanceof RailError && error.permanent);
+}
+
+const text = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
+
+export async function runSupportWebhookJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const eventId = String(job.params.eventId ?? job.targetId);
+	const row = await store.prepare('SELECT id, vendor, mode, event_id, type, payload, status, received_at FROM support_events WHERE id = ?').bind(eventId).first<{ id: string; vendor: string; mode: string; event_id: string; type: string; payload: string; status: string; received_at: string }>();
+	if (!row) return { done: true, result: { skipped: 'event gone' } };
+	if (row.status === 'processed' || row.status === 'ignored') return { done: true, result: { skipped: row.status } };
+	const [side, vendor] = row.vendor.split(':') as [Side, string];
+	const config = await readSupportConfig(store);
+	const ctx = vendorContext(env, row.mode === 'live' ? 'live' : 'test', () => now);
+	const delivery = { eventId: row.event_id, type: row.type, occurredAt: row.received_at, payload: JSON.parse(row.payload || '{}') };
+	const finish = (status: string, error: string | null, userId: string | null = null) =>
+		store.prepare('UPDATE support_events SET status = ?, error = ?, user_id = COALESCE(?, user_id), processed_at = ? WHERE id = ?').bind(status, error, userId, now.toISOString(), row.id).run();
+	try {
+		if (side === 'collector') {
+			const adapter = collectorFor(env, vendor as SupportCollectorId);
+			if (!adapter) throw new UnmatchedSupportEventError(`Collector ${vendor} is not available here`);
+			const events = await adapter.normalize(ctx, delivery);
+			const result = await applyCollectorEvents({ db: store, collector: vendor, mode: row.mode, policy: config.policy, now }, events);
+			for (const ref of result.pledgesToCancel) await adapter.cancelPledge(ctx, ref, 'erasure');
+			await finish(result.applied ? 'processed' : 'ignored', null, result.userIds[0] ?? null);
+			resolveNeedsAction(env, undefined, needsActionKey(job.id));
+			return { done: true, result: { applied: result.applied, ignored: result.ignored } };
+		}
+		const rail = railFor(env, vendor as never);
+		if (!rail) throw new UnmatchedSupportEventError(`Rail ${vendor} is not available here`);
+		const events = await rail.normalize(ctx, delivery);
+		const result = await applyRailEvents({ db: store, collector: '', mode: row.mode, policy: config.policy, now, rail: vendor }, events);
+		for (const ref of result.payeeRefs) {
+			const payee = await store.prepare('SELECT id FROM support_payees WHERE rail = ? AND mode = ? AND rail_payee_ref = ?').bind(vendor, row.mode, ref).first<{ id: string }>();
+			if (payee) await createJob(env, { kind: 'support.payee-sync', targetKind: 'support', targetId: payee.id, params: { payeeId: payee.id }, actorId: `webhook:${row.vendor}` });
+		}
+		await finish(result.applied ? 'processed' : 'ignored', null);
+		resolveNeedsAction(env, undefined, needsActionKey(job.id));
+		return { done: true, result: { applied: result.applied, ignored: result.ignored } };
+	} catch (error) {
+		if (permanent(error)) {
+			await finish('failed', text(error));
+			flagSupportJob(env, undefined, job, text(error));
+			logger.error('[Support] Event cannot be applied', { eventId, vendor: row.vendor, error: text(error) });
+			return { done: true, result: { failed: text(error) } };
+		}
+		throw error;
+	}
+}
+
+export async function runSupportReleaseJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const config = await readSupportConfig(store);
+	const r = await releaseDueGifts(store, config.policy, now);
+	// More due than one pass takes: another step right away
+	if (r.released >= 200 || r.scheduled >= 200) return { done: false, params: { step: Date.now() }, result: r };
+	return { done: true, result: r };
+}
+
+export async function runSupportReconcileJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const config = await readSupportConfig(store);
+	const day = typeof job.params.day === 'string' ? job.params.day : now.toISOString().slice(0, 10);
+	const ctx = vendorContext(env, config.mode, () => now);
+	const collector = collectorFor(env, config.collector);
+	const railAdapter = config.policy.primaryRail ? railFor(env, config.policy.primaryRail) : null;
+	const out = await reconcileDay({ db: store, day, now, collector: collector ? { adapter: collector, ctx, id: config.collector, mode: config.mode } : null, rail: railAdapter ? { adapter: railAdapter, ctx } : null });
+	for (const l of out.lines) {
+		const key = `support-reconcile:${l.currency}`;
+		if (l.status === 'gap') {
+			reportNeedsAction('api-videos', env, undefined, {
+				key,
+				source: 'admin-job',
+				title: 'Support money doesn’t match',
+				message: `${day} ${l.currency}: ledger bank ${l.ledgerBank}, statement ${l.bankBalance ?? '–'}; ledger rail ${l.ledgerRail}, rail ${l.railBalance ?? '–'}; gap ${l.gap}; unbalanced entries ${out.unbalanced}. New payout batches are stopped until it is resolved.`,
+				itemType: 'support-reconcile',
+				itemId: `${day}:${l.currency}`,
+				itemUrl: '/support/ledger',
+				retry: { kind: 'service', service: 'api-videos', path: '/internal/support/jobs/retry', body: { jobId: job.id, kind: job.kind } },
+				retryLabel: 'Check again',
+			});
+		} else if (l.status === 'ok') resolveNeedsAction(env, undefined, key);
+	}
+	return { done: true, result: { day, lines: out.lines.length, gaps: out.lines.filter((l) => l.status === 'gap').length, settlementsPosted: out.settlementsPosted } };
+}
+
+export async function runSupportPayeeSyncJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const payeeId = String(job.params.payeeId ?? job.targetId);
+	const row = await store.prepare('SELECT id, rail, mode, rail_payee_ref FROM support_payees WHERE id = ?').bind(payeeId).first<{ id: string; rail: string; mode: 'test' | 'live'; rail_payee_ref: string | null }>();
+	if (!row?.rail_payee_ref) return { done: true, result: { skipped: 'no payee at the rail yet' } };
+	const rail = railFor(env, row.rail as never);
+	if (!rail) {
+		flagSupportJob(env, undefined, job, `Payout service ${row.rail} is not available here`);
+		return { done: true, result: { failed: 'rail unavailable' } };
+	}
+	const state = await rail.getPayee(vendorContext(env, row.mode, () => now), row.rail_payee_ref);
+	await store
+		.prepare('UPDATE support_payees SET status = ?, country = ?, payout_currency = ?, method = ?, tax_form = ?, sanctions_status = ?, requirements = ?, updated_at = ?, updated_from_event_at = ? WHERE id = ?')
+		.bind(state.status, state.country, state.payoutCurrency, state.method, state.taxForm, state.sanctions, JSON.stringify(state.requirements.slice(0, 20)), now.toISOString(), now.toISOString(), row.id)
+		.run();
+	if (state.sanctions === 'hold') {
+		// A screening hit holds the balance and never auto-releases (§4.3)
+		await store.prepare('UPDATE support_payees SET payouts_held = 1 WHERE id = ?').bind(row.id).run();
+		reportNeedsAction('api-videos', env, undefined, { key: `support-sanctions:${row.id}`, source: 'admin-job', title: 'Payee held by sanctions screening', message: `Payee ${row.id}: the payout service reports a screening hold. Payouts are held until the organisation’s compliance person reviews it.`, itemType: 'support-payee', itemId: row.id, itemUrl: '/support/creators' });
+	}
+	return { done: true, result: { status: state.status, taxForm: state.taxForm } };
+}
+
+export async function runSupportDisputeDeadlineJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const soon = new Date(now.getTime() + 3 * 86_400_000).toISOString();
+	const due = await db(env).prepare("SELECT id, collector_dispute_ref, evidence_due_at FROM support_disputes WHERE status = 'open' AND evidence_due_at IS NOT NULL AND evidence_due_at <= ? ORDER BY evidence_due_at LIMIT 100").bind(soon).all<{ id: string; collector_dispute_ref: string; evidence_due_at: string }>();
+	for (const d of due.results ?? []) {
+		reportNeedsAction('api-videos', env, undefined, { key: `support-dispute:${d.id}`, source: 'admin-job', title: 'Dispute evidence due', message: `Dispute ${d.collector_dispute_ref}: evidence is due by ${d.evidence_due_at}. Answer it in the payment provider’s dashboard, then mark it sent on the Disputes page.`, itemType: 'support-dispute', itemId: d.id, itemUrl: '/support/disputes' });
+	}
+	return { done: true, result: { due: due.results?.length ?? 0 } };
+}
+
+/**
+ * Channels holding money with no active payee for the reminder months (MEM-D22). What happens to the
+ * money follows the decision; while it is open this only lists them.
+ */
+export async function runSupportDormantJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const config = await readSupportConfig(store);
+	const months = config.policy.dormantReminderMonths ?? [];
+	const oldest = Math.min(...(months.length ? months : [6]));
+	const before = new Date(now.getTime() - oldest * 30 * 86_400_000).toISOString();
+	// Channels whose first gift is older than the window and who have no active payee (keyed reads per channel, bounded)
+	const rows = await store
+		.prepare(
+			`SELECT p.channel_id, MIN(p.created_at) AS first_at FROM support_payments p
+			 WHERE p.created_at <= ? AND NOT EXISTS (SELECT 1 FROM support_payees y WHERE y.channel_id = p.channel_id AND y.status = 'active')
+			 GROUP BY p.channel_id LIMIT 500`,
+		)
+		.bind(before)
+		.all<{ channel_id: string; first_at: string }>();
+	return { done: true, result: { channels: rows.results?.length ?? 0, decision: config.policy.dormantPolicy ?? 'open' } };
+}
+
+// ---------------------------------------------------------------------------
+// Failures and crons
+// ---------------------------------------------------------------------------
+
+const TITLES: Record<string, string> = {
+	'support.webhook': 'Support payment event not applied',
+	'support.release': 'Held gifts not released',
+	'support.reconcile': 'Support reconciliation didn’t run',
+	'support.payee-sync': 'Creator payout account not refreshed',
+	'support.dispute-deadline': 'Dispute deadlines not checked',
+	'support.dormant': 'Unclaimed balances not listed',
+};
+
+export const needsActionKey = (jobId: string) => `support-job:${jobId}`;
+
+export function flagSupportJob(env: SupportJobEnv, ctx: ExecutionContextLike | undefined, job: Pick<AdminJob, 'id' | 'kind' | 'targetId'>, error: string): void {
+	reportNeedsAction('api-videos', env, ctx, {
+		key: needsActionKey(job.id),
+		source: 'admin-job',
+		title: TITLES[job.kind] ?? 'Support job failed',
+		message: error.slice(0, 500),
+		itemType: 'support-job',
+		itemId: job.id,
+		itemUrl: '/jobs',
+		retry: { kind: 'service', service: 'api-videos', path: '/internal/support/jobs/retry', body: { jobId: job.id, kind: job.kind } },
+		retryLabel: 'Retry',
+		extra: { kind: job.kind, target: job.targetId },
+	});
+}
+
+/** The last queue attempt failed. */
+export async function onSupportJobFailed(env: SupportJobEnv, job: AdminJob, error: string): Promise<void> {
+	flagSupportJob(env, undefined, job, error);
+}
+
+/** Support has data here (one keyed read). The crons do nothing before the first gift or payee. */
+async function hasSupportData(store: SearchDb): Promise<boolean> {
+	const r = await store.prepare('SELECT 1 AS x FROM support_ledger_entries LIMIT 1').first<{ x: number }>();
+	if (r) return true;
+	const p = await store.prepare('SELECT 1 AS x FROM support_payees LIMIT 1').first<{ x: number }>();
+	return !!p;
+}
+
+/** Hourly cron: release; daily (first run after midnight UTC): reconcile, dispute deadlines, payee refresh; monthly: dormant. */
+export async function queueSupportCron(env: SupportJobEnv, now = new Date()): Promise<string[]> {
+	if (!env.SEARCH_DB || !(await hasSupportData(env.SEARCH_DB))) return [];
+	const queued: string[] = [];
+	const job = async (kind: AdminJob['kind'], targetId: string, params: Record<string, unknown> = {}) => {
+		await createJob(env, { kind, targetKind: 'support', targetId, params, actorId: 'cron' });
+		queued.push(kind);
+	};
+	await job('support.release', `release:${now.toISOString().slice(0, 13)}`);
+	if (now.getUTCHours() === 1) {
+		const day = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+		await job('support.reconcile', `reconcile:${day}`, { day });
+		await job('support.dispute-deadline', `disputes:${day}`);
+		const payees = await env.SEARCH_DB.prepare("SELECT id FROM support_payees WHERE status NOT IN ('closed', 'not_started') ORDER BY updated_at LIMIT 50").all<{ id: string }>();
+		for (const p of payees.results ?? []) await job('support.payee-sync', p.id, { payeeId: p.id });
+		if (now.getUTCDate() === 1) await job('support.dormant', `dormant:${day.slice(0, 7)}`);
+	}
+	return queued;
+}

@@ -10,6 +10,7 @@
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { runTranscodeAction } from '../media/troubleshoot';
 import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
+import { runSupportDisputeDeadlineJob, runSupportDormantJob, runSupportPayeeSyncJob, runSupportReconcileJob, runSupportReleaseJob, runSupportWebhookJob } from '../support/jobs';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1721,6 +1722,13 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'billing.cancel': (env, job) => runCancelJob(env as never, job),
 	'billing.refund': (env, job) => runRefundJob(env as never, job),
 	'billing.reconcile': (env, job) => runReconcileJob(env as never, job),
+	// Creator support (lib/support/jobs.ts, wiki AUN-MEMBERS §9.4)
+	'support.webhook': (env, job) => runSupportWebhookJob(env as never, job),
+	'support.release': (env, job) => runSupportReleaseJob(env as never, job),
+	'support.reconcile': (env, job) => runSupportReconcileJob(env as never, job),
+	'support.payee-sync': (env, job) => runSupportPayeeSyncJob(env as never, job),
+	'support.dispute-deadline': (env, job) => runSupportDisputeDeadlineJob(env as never, job),
+	'support.dormant': (env, job) => runSupportDormantJob(env as never, job),
 	// Discovery ranking (lib/ranking/job.ts): hourly from the cron, or "Run now" in the videos admin
 	'discovery.rank': (env, job) => runDiscoveryRankJob(env as DiscoveryEnv, job),
 	// Objects whose index write failed, rewritten one by one from R2 (lib/search/repairs.ts)
