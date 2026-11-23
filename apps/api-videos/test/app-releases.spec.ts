@@ -93,7 +93,9 @@ describe('release index', () => {
 	before(async () => {
 		[root, release, next] = await Promise.all([keyPair(), keyPair(), keyPair()]);
 	});
-	const env = (kv: MemoryKV, extra: Record<string, unknown> = {}) => ({ APP_CONFIG: kv as unknown as KVNamespace, UPDATE_ROOT_KEYS: JSON.stringify({ [TOOLS]: [root.pub], AlUmmahNowDesktop: [root.pub] }), ...extra });
+	const env = (kv: MemoryKV, extra: Record<string, unknown> = {}) => ({ APP_CONFIG: kv as unknown as KVNamespace, UPDATE_ROOT_KEYS: JSON.stringify({ [TOOLS]: [root.pub] }), ...extra });
+	/** No root key anywhere: the "no keys yet" state */
+	const keyless = (kv: MemoryKV) => ({ APP_CONFIG: kv as unknown as KVNamespace });
 	const keyList = (serial: number, keys: Key[], revoked: string[] = [], yanked: string[] = [], repo = TOOLS) =>
 		enc.encode(JSON.stringify({ schema: 1, repo, serial, keys: keys.map((x) => ({ keyId: x.keyId, publicKey: x.pub })), revoked, yanked }));
 	async function keyRoutes(serial: number, keys: Key[], revoked: string[] = [], yanked: string[] = []): Promise<Routes> {
@@ -106,8 +108,9 @@ describe('release index', () => {
 	}
 
 	it('reads tags from the Atom feed, newest first, only for its repo', () => {
-		const xml = atom(TOOLS, ['v2026.11.23', 'v2026.11.22']) + atom('AlUmmahNowDesktop', ['v1.0.0']);
-		assert.deepEqual(tagsFromAtom(xml, TOOLS), ['v2026.11.23', 'v2026.11.22']);
+		const xml = atom(TOOLS, ['v2026.11.23', 'v2026.11.22', 'update-keys']) + atom('AlUmmahNowDesktop', ['v1.0.0']);
+		assert.deepEqual(tagsFromAtom(xml, TOOLS), ['v2026.11.23', 'v2026.11.22'], 'the fixed update-keys release is not a tag of an app');
+		assert.deepEqual(tagsFromAtom(atom('AlUmmahNowDesktop', ['admin-windows-v1.4.0', 'v1.4.0']), 'AlUmmahNowDesktop'), ['admin-windows-v1.4.0', 'v1.4.0']);
 	});
 
 	it('trusts only well-formed root keys of known repos', () => {
@@ -186,7 +189,7 @@ describe('release index', () => {
 			[feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.23']) },
 			[dl('v2026.11.23', 'app-release.json')]: { status: 200, body: enc.encode(JSON.stringify(manifest(TOOLS, 'v2026.11.23', '2026.11.23'))) },
 		};
-		const r = await indexReleases(env(kv), { fetchImpl: fakeFetch(routes), onProblem: (p) => problems.push(p) });
+		const r = await indexReleases(keyless(kv), { fetchImpl: fakeFetch(routes), onProblem: (p) => problems.push(p) });
 		assert.deepEqual(r.added, [{ source: `github:${TOOLS}`, repo: TOOLS, tag: 'v2026.11.23', signed: false }]);
 		assert.deepEqual(problems, []);
 		assert.equal((await readReleases(kv as unknown as KVNamespace)).entries[entryKey('tools', 'windows', 'stable')].signed, false);
@@ -199,7 +202,7 @@ describe('release index', () => {
 			[feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.25']) },
 			[dl('v2026.11.25', 'app-release.json')]: { status: 200, body: enc.encode(JSON.stringify(manifest(TOOLS, 'v2026.11.20', '2026.11.20'))) },
 		};
-		await indexReleases(env(kv), { fetchImpl: fakeFetch(routes), onProblem: (p) => problems.push(p) });
+		await indexReleases(keyless(kv), { fetchImpl: fakeFetch(routes), onProblem: (p) => problems.push(p) });
 		assert.deepEqual(problems.map((p) => p.reason), ['wrong_tag']);
 		assert.equal(kv.values.has(RELEASES_KEY), true);
 		assert.deepEqual((await readReleases(kv as unknown as KVNamespace)).entries, {});
@@ -215,8 +218,24 @@ describe('release index', () => {
 			[dl('update-keys', 'update-keys.json.sig')]: { status: 200, body: await signText(list, release) },
 		};
 		await indexReleases(env(kv), { fetchImpl: fakeFetch(routes), onProblem: (p) => problems.push(p) });
-		assert.deepEqual(problems.map((p) => `${p.tag}:${p.reason}`), ['update-keys:key_list_unknown_key']);
+		assert.deepEqual(problems.filter((p) => (p as { source: string }).source === `github:${TOOLS}`).map((p) => `${p.tag}:${p.reason}`), ['update-keys:key_list_unknown_key', 'update-keys:key_list_not_accepted']);
 		assert.equal((await readReleases(kv as unknown as KVNamespace)).keys[TOOLS], undefined);
+	});
+
+	it('fail closed: with a root key configured, a missing key list indexes nothing and marks no tag seen', async () => {
+		const kv = new MemoryKV();
+		const calls: string[] = [];
+		const routes: Routes = {
+			[feed()]: { status: 200, body: atom(TOOLS, ['v2026.11.23']) },
+			[dl('v2026.11.23', 'app-release.json')]: { status: 200, body: enc.encode(JSON.stringify(manifest(TOOLS, 'v2026.11.23', '2026.11.23'))) },
+		};
+		const r = await indexReleases(env(kv), { fetchImpl: fakeFetch(routes, calls) });
+		assert.deepEqual(r.added, []);
+		assert.ok(!calls.some((u) => u.includes('app-release.json')), 'no manifest is even fetched');
+		const doc = await readReleases(kv as unknown as KVNamespace);
+		assert.deepEqual(doc.entries, {});
+		assert.equal(doc.seen[`github:${TOOLS}`], undefined, 'retried once the key list is there');
+		assert.ok(r.problems.some((p) => p.repo === TOOLS && p.reason === 'key_list_not_accepted'));
 	});
 
 	it('rotation and revocation: a new list adds a key, revokes the old one and yanks a version', async () => {
@@ -252,7 +271,7 @@ describe('release index', () => {
 	it('staff-only admin releases come from the private bucket, with no public links', async () => {
 		const kv = new MemoryKV();
 		const DESK = 'AlUmmahNowDesktop';
-		const tag = 'v1.4.0';
+		const tag = 'admin-windows-v1.4.0';
 		const m = manifest(DESK, tag, '1.4.0', {
 			artifacts: [{ app: 'admin', platform: 'windows', arch: 'x64', kind: 'msix', url: `r2://app-releases/${DESK}/${tag}/AlUmmahNow-Admin.msix`, sha256: 'c'.repeat(64), size: 10 }],
 		});
@@ -265,7 +284,7 @@ describe('release index', () => {
 			[`app-releases/${DESK}/${tag}/app-release.json`]: bytes,
 			[`app-releases/${DESK}/${tag}/app-release.json.sig`]: await signText(bytes, release),
 		});
-		const r = await indexReleases(env(kv, { ADMIN_RELEASES: bucket }), { fetchImpl: fakeFetch({}) });
+		const r = await indexReleases(env(kv, { ADMIN_RELEASES: bucket, UPDATE_ROOT_KEYS: JSON.stringify({ AlUmmahNowDesktop: [root.pub] }) }), { fetchImpl: fakeFetch({}) });
 		assert.deepEqual(r.added, [{ source: `admin:${DESK}`, repo: DESK, tag, signed: true }]);
 		const e = (await readReleases(kv as unknown as KVNamespace)).entries[entryKey('admin', 'windows', 'stable')];
 		assert.equal(e.private, true);
@@ -278,7 +297,7 @@ describe('release index', () => {
 		const tag = 'v2026.11.23';
 		const m = manifest(TOOLS, tag, '2026.11.23', { artifacts: [{ app: 'tools', platform: 'windows', kind: 'msi', url: `r2://app-releases/${TOOLS}/${tag}/x.msi`, sha256: 'a'.repeat(64), size: 1 }] });
 		const problems: { reason: string }[] = [];
-		await indexReleases(env(kv), {
+		await indexReleases(keyless(kv), {
 			fetchImpl: fakeFetch({ [feed()]: { status: 200, body: atom(TOOLS, [tag]) }, [dl(tag, 'app-release.json')]: { status: 200, body: enc.encode(JSON.stringify(m)) } }),
 			onProblem: (p) => problems.push(p),
 		});
@@ -292,7 +311,7 @@ describe('release index', () => {
 			[dl('v2026.11.26', 'app-release.json')]: { status: 502 },
 			[feed('AlUmmahNowDesktop')]: { status: 500 },
 		};
-		const r = await indexReleases(env(kv), { fetchImpl: fakeFetch(routes) });
+		const r = await indexReleases(keyless(kv), { fetchImpl: fakeFetch(routes) });
 		assert.deepEqual(r.feedErrors.find((e) => e.source === 'github:AlUmmahNowDesktop'), { source: 'github:AlUmmahNowDesktop', status: 500 });
 		assert.equal((await readReleases(kv as unknown as KVNamespace)).seen[`github:${TOOLS}`]?.includes('v2026.11.26') ?? false, false);
 	});
