@@ -270,12 +270,22 @@ app.post('/channels/:id/transfer', async (c) => {
     keepContactEmail: input.keepContactEmail === true,
   };
   const current = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
-  const started = await audited(c, { kind: 'channel', id, action: 'transfer', details: { newOwnerId, reason, ...options }, previous: { ownerId: current.ownerId } }, () =>
-    videos(c, `/channels/${encodeURIComponent(id)}/transfer`, {
-      method: 'POST',
-      // The reason reaches the previous owner with the notice (CC-D11)
-      json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail },
-    }));
+  let started: unknown;
+  try {
+    started = await audited(c, { kind: 'channel', id, action: 'transfer', details: { newOwnerId, reason, ...options }, previous: { ownerId: current.ownerId } }, () =>
+      videos(c, `/channels/${encodeURIComponent(id)}/transfer`, {
+        method: 'POST',
+        // The reason reaches the previous owner with the notice (CC-D11)
+        json: { newOwnerId, reason, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin, keepContactEmail: options.keepContactEmail },
+      }));
+  } catch (error) {
+    // A refusal changed nothing, so its audit row was dropped; keep a row of the refused request (wiki AUN-CHANNEL-CLAIM §3.7)
+    if (error instanceof VideosError && error.status < 500) {
+      await writeAudit(c.env.REPORTS_DB, { kind: 'channel', id, action: 'transfer-refused', actorId: actorOf(c), details: { newOwnerId, reason, ...options, code: error.code } })
+        .catch((e) => logger.error('[Content] Could not record a refused transfer', { channelId: id, error: String(e) }));
+    }
+    throw error;
+  }
   return ok(c, started);
 });
 

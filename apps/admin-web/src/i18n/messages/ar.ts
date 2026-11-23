@@ -5849,6 +5849,7 @@ const ar: Messages = {
       purge_requested: 'طُلب الحذف النهائي',
       move: 'نُقل',
       transfer: 'نُقلت الملكية',
+      'transfer-refused': 'رُفض نقل الملكية',
       transferred: 'نُقلت الملكية',
       suspend: 'عُلِّق',
       suspended: 'عُلِّق',

@@ -190,6 +190,21 @@ describe('content endpoints: permissions', () => {
     assert.equal(log.length, 0);
   });
 
+  it('a refused transfer keeps a transfer-refused audit row with the code (AUN-CHANNEL-CLAIM §3.7)', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({
+      'GET /channels/ch_1': () => ({ body: { success: true, result: channelDetail } }),
+      'POST /channels/ch_1/transfer': () => ({ status: 409, body: { success: false, code: 'new_owner_channel_limit', error: 'No room' } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId: 'usr_2', reason: 'Owner asked by email' } });
+    assert.equal(res.status, 409);
+    assert.equal(log.length, 1);
+    const row = JSON.parse(log[0].new_value);
+    assert.equal(row.action, 'transfer-refused');
+    assert.equal(row.details.code, 'new_owner_channel_limit');
+  });
+
   it('a transfer without a user id is refused before anything is audited', async () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos();
