@@ -12,7 +12,7 @@ import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket } from './helpers';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
-import { writeSupportPolicy } from '../src/lib/support/config';
+import { writeSupportApps, writeSupportPolicy } from '../src/lib/support/config';
 import { computeFeatures } from '../src/lib/features';
 import { creatorBalance } from '../src/lib/support/ledger';
 import { onSupportJobFailed, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
@@ -74,8 +74,8 @@ async function setup(opts: { switchOn?: boolean } = {}) {
 		app.post('/api/me/support/pledges/:id/stop', handleStopMyPledge);
 		app.get('/webhooks/support/test/checkout/:id', handleTestCheckoutPage);
 		app.post('/webhooks/support/test/checkout/:id', handleTestCheckoutSubmit);
-		return async (method: string, path: string, json?: unknown, form?: Record<string, string>) => {
-			const res = await app.request(path, { method, body: form ? new URLSearchParams(form) : json === undefined ? undefined : JSON.stringify(json), headers: form ? {} : { 'Content-Type': 'application/json' } }, env as never);
+		return async (method: string, path: string, json?: unknown, form?: Record<string, string>, extra: Record<string, string> = {}) => {
+			const res = await app.request(path, { method, body: form ? new URLSearchParams(form) : json === undefined ? undefined : JSON.stringify(json), headers: { ...(form ? {} : { 'Content-Type': 'application/json' }), ...extra } }, env as never);
 			const text = await res.text();
 			let body: any = null;
 			try {
@@ -348,5 +348,46 @@ describe('owner decisions O43 (MEM-D3, D4, fee settings)', () => {
 		assert.equal(ok.status, 200, 'over the old fixed ceiling is fine');
 		assert.equal((await t.db.prepare('SELECT currency FROM support_settings WHERE channel_id = ?').bind(CH).first<{ currency: string }>())!.currency, 'EUR');
 		assert.equal((await owner('PUT', `/api/channels/${CH}/support/settings`, { presets: [2_000_000_000] })).status, 400);
+	});
+});
+
+describe('native apps on the routes (MEM-D15; cross-provider review of #1818)', () => {
+	const IOS = { 'X-AUN-Client': 'aun-ios/1.0 (iOS 19)', 'X-AUN-Storefront': 'US' };
+	async function withApps(t: Awaited<ReturnType<typeof setup>>, cadence: 'one_time_only' | 'one_time_and_monthly') {
+		const v = (await t.db.prepare("SELECT version FROM support_config WHERE id = 'default'").first<{ version: number }>())!.version;
+		await writeSupportApps(t.db as never, { platforms: { ios: true }, rules: [{ platform: 'ios', region: 'US', mode: 'external_browser_us_link', cadence }] }, 'usr_fin', v);
+	}
+
+	it('hidden by default: sheet, quote and checkout all answer feature_off to an app; the web is unaffected', async () => {
+		const t = await setup();
+		const fan = t.as(FAN);
+		assert.equal((await fan('GET', `/api/channels/${CH}/support`, undefined, undefined, IOS)).body.code, 'feature_off');
+		assert.equal((await fan('GET', `/api/channels/${CH}/support/quote?amount=1000`, undefined, undefined, IOS)).body.code, 'feature_off');
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, GIFT, undefined, IOS)).body.code, 'feature_off');
+		assert.equal((await fan('GET', `/api/channels/${CH}/support`)).status, 200);
+	});
+
+	it('an allowed storefront: the sheet says one-time only and the system browser; monthly is refused; one-time opens externally', async () => {
+		const t = await setup();
+		await withApps(t, 'one_time_only');
+		const fan = t.as(FAN);
+		const sheet = await fan('GET', `/api/channels/${CH}/support`, undefined, undefined, IOS);
+		assert.equal(sheet.status, 200);
+		assert.equal(sheet.body.result.monthly, false);
+		assert.deepEqual(sheet.body.result.app, { mode: 'external_browser_us_link', monthlyAllowed: false, openIn: 'external_browser' });
+		assert.equal((await fan('GET', `/api/channels/${CH}/support/quote?amount=1000`, undefined, undefined, IOS)).status, 200);
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', consent: true }, undefined, IOS)).status, 400);
+		const r = await fan('POST', `/api/channels/${CH}/support/checkout`, GIFT, undefined, IOS);
+		assert.equal(r.status, 200);
+		assert.equal(r.body.result.openIn, 'external_browser');
+		assert.equal((await fan('GET', `/api/channels/${CH}/support`, undefined, undefined, { ...IOS, 'X-AUN-Storefront': 'GB' })).body.code, 'feature_off', 'no rule for GB');
+	});
+
+	it('monthly is allowed where the rule allows it', async () => {
+		const t = await setup();
+		await withApps(t, 'one_time_and_monthly');
+		const fan = t.as(FAN);
+		assert.equal((await fan('GET', `/api/channels/${CH}/support`, undefined, undefined, IOS)).body.result.monthly, true);
+		assert.equal((await fan('POST', `/api/channels/${CH}/support/checkout`, { ...GIFT, kind: 'monthly', amount: 1000, consent: true }, undefined, IOS)).status, 200);
 	});
 });

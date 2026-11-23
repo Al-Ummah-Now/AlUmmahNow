@@ -38,6 +38,8 @@ test('interlocks: fees not whole, EU attestation, US-only link', () => {
   const eu = settings({ rules: [{ platform: 'ios', region: 'EU_EEA', mode: 'external_browser_eu_entitled', cadence: 'one_time_only' }] });
   assert.equal(a.appSupportMode({ settings: eu, platform: 'ios', storefront: 'DE', policy: notWhole }).hiddenBecause, 'eu_not_ready');
   assert.equal(a.appSupportMode({ settings: { ...eu, euEntitlementReady: true }, platform: 'ios', storefront: 'DE', policy: notWhole }).mode, 'external_browser_eu_entitled');
+  const euElsewhere = settings({ euEntitlementReady: true, rules: [{ platform: 'ios', region: 'ROW', mode: 'external_browser_eu_entitled', cadence: 'one_time_only' }] });
+  assert.equal(a.appSupportMode({ settings: euElsewhere, platform: 'ios', storefront: 'EG', policy: notWhole }).hiddenBecause, 'eu_not_ready', 'the EU mode only on an EU/EEA storefront');
   const us = settings({ rules: [{ platform: 'ios', region: 'CA', mode: 'external_browser_us_link', cadence: 'one_time_only' }] });
   assert.equal(a.appSupportMode({ settings: us, platform: 'ios', storefront: 'CA', policy: whole }).hiddenBecause, 'us_link_outside_us');
 });

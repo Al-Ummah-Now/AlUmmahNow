@@ -116,6 +116,8 @@ export async function handleSupportQuote(c: Context) {
 	if (!(await receivingChannel(c, env))) return featureOff(c, 'creatorSupport');
 	try {
 		const config = await readSupportConfig(env.SEARCH_DB);
+		// MEM-D15: an app whose platform and storefront have no mode gets nothing here either
+		if (appDecisionFor(config, { userId: null, ...where(c) })?.mode === 'hidden') return featureOff(c, 'creatorSupport');
 		const now = new Date();
 		const q = await quote(env, config, { amount: Number(c.req.query('amount')), currency: (c.req.query('currency') ?? 'USD').toUpperCase(), supporterTicked: c.req.query('coverFees') === '1', method: c.req.query('method') ?? null }, lang(c), vendorContext(env, config.mode, () => now), now);
 		return c.json({ success: true, result: q });

@@ -25,7 +25,7 @@
  *   1. P2P needs 100% of the gift to reach the creator: the supporter always covers the card fee and
  *      the organization bears payout fees, unless the admin records the stores' written OK for
  *      deducting third-party processor fees;
- *   2. the EU entitled mode needs the entitlement / age-gate attestation;
+ *   2. the EU entitled mode needs the entitlement / age-gate attestation, and only on an EU/EEA storefront;
  *   3. the US link mode only on the US storefront;
  *   4. no storefront country from the app → hidden (stores apply rules by storefront, not by IP).
  */
@@ -144,7 +144,7 @@ export function appSupportMode(input: { settings: AppSupportSettings; platform: 
     const whole = input.policy.collectorFeePayer === 'supporterAlways' && input.policy.payoutFeeBearer === 'organization';
     if (!whole && !settings.storeConfirmedProcessorFeeDeduction) return hidden('fees_not_whole');
   }
-  if (rule.mode === 'external_browser_eu_entitled' && !settings.euEntitlementReady) return hidden('eu_not_ready');
+  if (rule.mode === 'external_browser_eu_entitled' && (!settings.euEntitlementReady || !EU_EEA_COUNTRIES.includes(storefront))) return hidden('eu_not_ready');
   if (rule.mode === 'external_browser_us_link' && storefront !== 'US') return hidden('us_link_outside_us');
   return { mode: rule.mode, cadence: rule.cadence, hiddenBecause: null };
 }
