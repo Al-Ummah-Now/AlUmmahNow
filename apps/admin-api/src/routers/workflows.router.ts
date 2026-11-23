@@ -51,6 +51,7 @@ import { createWorkflowDirectory, ownerIdsFrom } from '../lib/workflows/director
 import { registerRuleChangeExecutor } from '../lib/workflows/rule-change';
 import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
 import type { WorkflowCtx, WorkflowEvent } from '../lib/workflows/types';
+import { enqueueWorkflowNotify } from '../lib/workflows/notify';
 import type { D1Database } from '../lib/types';
 
 type Env = { Bindings: AdminBindings & { PLATFORM_OWNER_USER_IDS?: string }; Variables: { auth?: AuthContext } };
@@ -97,7 +98,12 @@ export function workflowCtx(env: Env['Bindings'], opts: { steppedUp?: boolean; o
     directory: createWorkflowDirectory({ searchDb: db, reportsDb: reports ?? null, ownerIds: ownerIdsFrom(env.PLATFORM_OWNER_USER_IDS) }),
     now: () => new Date(),
     steppedUp: opts.steppedUp,
-    onEvent: opts.onEvent ?? auditMirror(reports),
+    onEvent:
+      opts.onEvent ??
+      (async (e) => {
+        await auditMirror(reports)(e);
+        await enqueueWorkflowNotify(env, e);
+      }),
     env,
   };
 }

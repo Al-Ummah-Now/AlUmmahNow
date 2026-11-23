@@ -25,6 +25,7 @@ import { isRejectionMailJob, processRejectionMailJob, type RejectionMailJob } fr
 import { isNewsletterMailJob, processNewsletterMailJob, type NewsletterMailJob } from './newsletter-mail';
 import { isCostAlertMailJob, processCostAlertMailJob, type CostAlertMailJob } from './cost-alert-mail';
 import { isTierRequestMailJob, processTierRequestMailJob, type TierRequestMailJob } from './tier-request-mail';
+import { isWorkflowNotifyJob, processWorkflowNotifyJob, type WorkflowNotifyJob } from './workflows/notify';
 import { isTierChangeMailJob, processTierChangeMailJob, type TierChangeMailJob } from './tier-change-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
@@ -235,6 +236,8 @@ export async function contactMailConsumer(
           ? await processCostAlertMailJob(env, msg as unknown as QueueMessageLike<CostAlertMailJob>)
           : isTierRequestMailJob(msg.body)
             ? await processTierRequestMailJob(env as never, msg as QueueMessageLike<TierRequestMailJob>)
+            : isWorkflowNotifyJob(msg.body)
+              ? await processWorkflowNotifyJob(env as never, msg as unknown as QueueMessageLike<WorkflowNotifyJob>)
             : isTierChangeMailJob(msg.body)
               ? await processTierChangeMailJob(env as never, msg as QueueMessageLike<TierChangeMailJob>)
               : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
