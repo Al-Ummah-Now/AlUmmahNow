@@ -5,7 +5,7 @@
 import { before, describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { APP_CONFIG_SEMVER, appReleaseKeyId, appReleaseTrustFrom, compareAppVersions, verifyAppReleaseManifest, verifyAppUpdateKeyList, type AppReleaseTrust } from '@al-ummah/shared-types';
+import { APP_CONFIG_SEMVER, parseAppReleaseTag, appReleaseKeyId, appReleaseTrustFrom, compareAppVersions, verifyAppReleaseManifest, verifyAppUpdateKeyList, type AppReleaseTrust } from '@al-ummah/shared-types';
 
 const b64 = (bytes: ArrayBuffer | Uint8Array) => Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).toString('base64');
 const enc = new TextEncoder();
@@ -159,6 +159,20 @@ describe('verifyAppReleaseManifest (AUN-APP-UPDATES §3.1, §5.3)', () => {
 		}
 	});
 
+	it('admin- tags release only the Admin app, and the version must be the tag\'s', async () => {
+		const adminTag = 'admin-windows-v1.4.0';
+		const adminUrl = `https://github.com/Al-Ummah-Now/AlUmmahNowTools/releases/download/${adminTag}/x.msix`;
+		const ok = manifest({ tag: adminTag, version: '1.4.0', artifacts: [{ app: 'admin', platform: 'windows', kind: 'msix', url: adminUrl, sha256: 'a'.repeat(64), size: 1 }] });
+		const okBytes = bytesOf(ok);
+		assert.equal((await verifyAppReleaseManifest(okBytes, await sign(okBytes, k), trust, { repo: 'AlUmmahNowTools', tag: adminTag })).ok, true);
+		const mixed = bytesOf({ ...ok, artifacts: [{ ...ok.artifacts[0], app: 'tools' }] });
+		const r1 = await verifyAppReleaseManifest(mixed, await sign(mixed, k), trust, { repo: 'AlUmmahNowTools' });
+		assert.equal(r1.ok ? 'ok' : r1.reason, 'bad_manifest');
+		const wrongVersion = bytesOf(manifest({ version: '2026.11.24' }));
+		const r2 = await verifyAppReleaseManifest(wrongVersion, await sign(wrongVersion, k), trust, { repo: 'AlUmmahNowTools' });
+		assert.equal(r2.ok ? 'ok' : r2.reason, 'bad_manifest');
+	});
+
 	it('requires English and Arabic notes', async () => {
 		const bytes = bytesOf(manifest({ notes: { en: 'Only English.' } }));
 		const r = await verifyAppReleaseManifest(bytes, await sign(bytes, k), trust, { repo: 'AlUmmahNowTools' });
@@ -233,6 +247,12 @@ describe('key lists: rotation and revocation (AUN-APP-UPDATES §3.5)', () => {
 
 describe('shared vectors with aun-core (AlUmmahNowCore spec/app-updates, copied verbatim)', () => {
 	const fixture = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/app-updates/${name}`, import.meta.url), 'utf8'));
+
+	it('the release tag table (v, admin-v, admin-windows-v)', () => {
+		const t = fixture('tags.json');
+		for (const [tag, prefix, version, adminOnly] of t.valid as [string, string, string, boolean][]) assert.deepEqual(parseAppReleaseTag(tag), { prefix, version, adminOnly }, tag);
+		for (const bad of t.invalid as string[]) assert.equal(parseAppReleaseTag(bad), null, bad);
+	});
 
 	it('the version table', () => {
 		const v = fixture('versions.json');
