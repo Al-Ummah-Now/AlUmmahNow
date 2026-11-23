@@ -16,13 +16,13 @@
  */
 import {
   WORKFLOW_ACTIONS,
-  WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE,
   WORKFLOW_DECIDING_STEPS,
   WORKFLOW_LIMITS,
-  WORKFLOW_MONEY_RULE_CHANGE_DEFAULT,
-  WORKFLOW_RULE_CHANGE_MONEY_SCOPE,
   checkWorkflowFloor,
+  workflowDefaultRuleFor,
+  workflowFloorFor,
   isWorkflowOpen,
+  WORKFLOW_OPEN_STATUSES,
   workflowApplyAt,
   workflowApprovalBlocks,
   workflowEffectiveDateProblem,
@@ -42,6 +42,7 @@ import {
   type WorkflowStepKind,
 } from '@al-ummah/shared-types';
 import type { D1PreparedStatement } from '../types';
+import { logger } from '../logger';
 import type { WorkflowCtx, WorkflowEvent, WorkflowExecutor, WorkflowStoredRequest } from './types';
 
 export class WorkflowError extends Error {
@@ -90,9 +91,7 @@ export interface RuleInForce {
 
 /** The default for a scope that has no row: some scopes have their own seeds (WF-D9, money rule changes). */
 export function defaultRuleFor(type: WorkflowActionType, scope: string): WorkflowRuleConfig {
-  if (type === 'features.set' && scope === 'creatorSupport') return WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE;
-  if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return WORKFLOW_MONEY_RULE_CHANGE_DEFAULT;
-  return WORKFLOW_ACTIONS[type].defaultRule;
+  return workflowDefaultRuleFor(type, scope);
 }
 
 /** The rule in force: the newest version for the scope, else the newest for the default scope, else the seed. */
@@ -116,8 +115,7 @@ export async function ruleInForce(ctx: WorkflowCtx, type: WorkflowActionType, sc
  * floor, so the finance list, never tech staff or the owner, decides on them.
  */
 export function floorFor(type: WorkflowActionType, scope: string): WorkflowFloor {
-  if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return { minApprovals: 1, money: true, minStepUp: 'approve' };
-  return WORKFLOW_ACTIONS[type].floor;
+  return workflowFloorFor(type, scope);
 }
 
 /** The rule with its floor applied: a stored rule can never be weaker than the floor (§4.3). */
@@ -263,7 +261,7 @@ export interface ProposeInput {
   effectiveAt?: string | null;
 }
 
-export type ProposeOutcome = { status: 'applied'; requestId: string; result: unknown } | { status: 'scheduled' | 'pending_approval'; request: WorkflowRequestView };
+export type ProposeOutcome = { status: 'applied'; requestId: string; result: unknown } | { status: 'scheduled' | 'pending_approval' | 'failed'; request: WorkflowRequestView };
 
 export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, input: ProposeInput): Promise<ProposeOutcome> {
   const executor = executorFor(input.type);
@@ -343,6 +341,8 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
     const row = await loadRow(ctx, id);
     const applied = await runApply(ctx, row);
     if (applied.status === 'applied') return { status: 'applied', requestId: id, result: applied.result };
+    // A direct change that failed (or went stale) is not waiting for anyone: say what happened
+    return { status: 'failed', request: await getRequestView(ctx, id, actor) };
   }
   const view = await getRequestView(ctx, id, actor);
   return { status: status === 'scheduled' ? 'scheduled' : 'pending_approval', request: view };
@@ -484,17 +484,23 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
     if (!changes(r)) return { status: 'skipped' };
     current = await loadRow(ctx, row.id);
   }
-  if (await isStale(ctx, current)) {
-    await markStale(ctx, current);
-    return { status: 'stale' };
-  }
-  const executor = executorFor(current.action_type);
+  // From here the request is `applying` and holds its target's lock: every error ends in `failed`
+  // (Retry on the request page and the Errors page), never a request stuck in `applying`.
   const at = ctx.now().toISOString();
-  const finish = (result: unknown) =>
-    ctx.db
-      .prepare("UPDATE workflow_requests SET status = 'applied', open_key = NULL, applied_at = ?, result = ?, error = NULL, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND status = 'applying'")
-      .bind(at, JSON.stringify(result ?? null), at, current.id, current.version);
+  const people = async () => {
+    const steps = await loadSteps(ctx, current.id).catch(() => [] as StepRow[]);
+    return [current.proposed_by, ...steps.filter((s) => s.kind === 'approve').map((s) => s.actor)];
+  };
   try {
+    if (await isStale(ctx, current)) {
+      await markStale(ctx, current);
+      return { status: 'stale' };
+    }
+    const executor = executorFor(current.action_type);
+    const finish = (result: unknown) =>
+      ctx.db
+        .prepare("UPDATE workflow_requests SET status = 'applied', open_key = NULL, applied_at = ?, result = ?, error = NULL, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND status = 'applying'")
+        .bind(at, JSON.stringify(result ?? null), at, current.id, current.version);
     let result: unknown;
     if (executor.applyStatements) {
       const out = await executor.applyStatements(ctx, JSON.parse(current.payload), stored(current));
@@ -519,7 +525,7 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
       const results = await ctx.db.batch([finish(result), stepStatement(ctx, current.id, null, 'system', 'apply', null, at)]);
       if (!changes(results[0])) return { status: 'skipped' };
     }
-    await emit(ctx, { kind: 'applied', requestId: current.id, type: current.action_type, actor: 'system', recipients: [current.proposed_by] });
+    await emit(ctx, { kind: 'applied', requestId: current.id, type: current.action_type, actor: 'system', recipients: await people() });
     return { status: 'applied', result };
   } catch (e) {
     const message = String((e as Error)?.message ?? e).slice(0, 500);
@@ -527,7 +533,7 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
       ctx.db.prepare("UPDATE workflow_requests SET status = 'failed', error = ?, version = version + 1, updated_at = ? WHERE id = ? AND status = 'applying'").bind(message, at, current.id),
       stepStatement(ctx, current.id, null, 'system', 'fail', message, at),
     ]);
-    await emit(ctx, { kind: 'failed', requestId: current.id, type: current.action_type, actor: 'system', recipients: [current.proposed_by] });
+    await emit(ctx, { kind: 'failed', requestId: current.id, type: current.action_type, actor: 'system', recipients: await people() });
     return { status: 'failed' };
   }
 }
@@ -545,22 +551,32 @@ export async function retryRequest(ctx: WorkflowCtx, actor: WorkflowActor, id: s
 // Cron: expiry and scheduled apply
 // ---------------------------------------------------------------------------------------------------
 
-export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; applied: number; failed: number }> {
+export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; applied: number; failed: number; errors: number }> {
   const now = ctx.now().toISOString();
-  const out = { expired: 0, applied: 0, failed: 0 };
+  const out = { expired: 0, applied: 0, failed: 0, errors: 0 };
   const expiring = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE status = 'pending' AND expires_at <= ? ORDER BY expires_at LIMIT ?`).bind(now, limit).all<RequestRow>();
   for (const row of expiring.results ?? []) {
-    const recipients = (await ctx.db.prepare('SELECT user_id FROM workflow_inbox WHERE request_id = ?').bind(row.id).all<{ user_id: string }>()).results?.map((r) => r.user_id) ?? [];
-    if (await close(ctx, row, 'system', 'expire', 'expired', null)) {
-      out.expired++;
-      await emit(ctx, { kind: 'expired', requestId: row.id, type: row.action_type, actor: 'system', recipients: [row.proposed_by, ...recipients] });
+    try {
+      const recipients = (await ctx.db.prepare('SELECT user_id FROM workflow_inbox WHERE request_id = ?').bind(row.id).all<{ user_id: string }>()).results?.map((r) => r.user_id) ?? [];
+      if (await close(ctx, row, 'system', 'expire', 'expired', null)) {
+        out.expired++;
+        await emit(ctx, { kind: 'expired', requestId: row.id, type: row.action_type, actor: 'system', recipients: [row.proposed_by, ...recipients] });
+      }
+    } catch (error) {
+      out.errors++;
+      logger.error('[Workflows] Expiring a request failed', { requestId: row.id, error: String(error) });
     }
   }
   const due = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE status = 'scheduled' AND apply_at <= ? ORDER BY apply_at LIMIT ?`).bind(now, limit).all<RequestRow>();
   for (const row of due.results ?? []) {
-    const r = await runApply(ctx, row);
-    if (r.status === 'applied') out.applied++;
-    if (r.status === 'failed') out.failed++;
+    try {
+      const r = await runApply(ctx, row);
+      if (r.status === 'applied') out.applied++;
+      if (r.status === 'failed') out.failed++;
+    } catch (error) {
+      out.errors++;
+      logger.error('[Workflows] Applying a scheduled request failed', { requestId: row.id, error: String(error) });
+    }
   }
   return out;
 }
@@ -632,28 +648,32 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   const [cAt, cId] = opts.cursor ? opts.cursor.split('|') : [null, null];
   const cursorSql = cAt ? ' AND (r.proposed_at < ? OR (r.proposed_at = ? AND r.id < ?))' : '';
   const cursorArgs = cAt ? [cAt, cAt, cId ?? ''] : [];
+  // The action filter applies to every view; each view still starts from its own index.
+  const typeSql = opts.type ? ' AND r.action_type = ?' : '';
+  const typeArgs = opts.type ? [opts.type] : [];
   let sql: string;
   let args: unknown[];
   const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.effective_at, r.expires_at, r.approvals_needed, r.approvals_count';
   switch (opts.view) {
     case 'waiting':
-      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
-      args = [userId, ...cursorArgs, limit + 1];
+      sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'mine':
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
-      args = [userId, ...cursorArgs, limit + 1];
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.proposed_by = ?${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      args = [userId, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     case 'open': {
-      const statuses = opts.status && isWorkflowOpen(opts.status) ? [opts.status] : ['pending', 'scheduled', 'applying', 'failed'];
-      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
-      args = [...statuses, ...cursorArgs, limit + 1];
+      const statuses = opts.status && isWorkflowOpen(opts.status) ? [opts.status] : [...WORKFLOW_OPEN_STATUSES];
+      sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status IN (${statuses.map(() => '?').join(', ')})${typeSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+      args = [...statuses, ...typeArgs, ...cursorArgs, limit + 1];
       break;
     }
     default:
       if (opts.type) {
-        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
-        args = [opts.type, ...cursorArgs, limit + 1];
+        const statusSql = opts.status ? ' AND r.status = ?' : '';
+        sql = `SELECT ${cols} FROM workflow_requests r WHERE r.action_type = ?${statusSql}${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
+        args = [opts.type, ...(opts.status ? [opts.status] : []), ...cursorArgs, limit + 1];
       } else if (opts.status) {
         sql = `SELECT ${cols} FROM workflow_requests r WHERE r.status = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
         args = [opts.status, ...cursorArgs, limit + 1];
