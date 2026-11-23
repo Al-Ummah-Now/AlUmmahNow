@@ -126,14 +126,22 @@ export async function creatorBalance(db: SearchDb, channelId: string): Promise<P
 }
 
 /** Sum of one system account in a currency (reconciliation). */
-export async function accountTotal(db: SearchDb, account: LedgerAccount, currency: SupportCurrency): Promise<number> {
-	const r = await db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM support_ledger WHERE account = ? AND currency = ?').bind(account, currency).first<{ total: number }>();
+export async function accountTotal(db: SearchDb, account: LedgerAccount, currency: SupportCurrency, before?: string): Promise<number> {
+	const r = before
+		? await db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM support_ledger WHERE account = ? AND currency = ? AND created_at < ?').bind(account, currency, before).first<{ total: number }>()
+		: await db.prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM support_ledger WHERE account = ? AND currency = ?').bind(account, currency).first<{ total: number }>();
 	return Number(r?.total ?? 0);
 }
 
-/** Entries whose lines don't sum to zero (always none unless something bypassed `postEntry`). */
-export async function unbalancedEntries(db: SearchDb): Promise<number> {
-	const r = await db.prepare('SELECT COUNT(*) AS n FROM (SELECT entry_id FROM support_ledger GROUP BY entry_id, currency HAVING SUM(amount) <> 0)').first<{ n: number }>();
+/**
+ * Entries posted in [since, before) whose lines don't sum to zero (always none unless something
+ * bypassed `postEntry`). Lines never change once written, so each day's check covers that day's new
+ * entries only (idx_support_ledger_created, search 0114); without a window it checks everything.
+ */
+export async function unbalancedEntries(db: SearchDb, window?: { since: string; before: string }): Promise<number> {
+	const r = window
+		? await db.prepare('SELECT COUNT(*) AS n FROM (SELECT entry_id FROM support_ledger WHERE created_at >= ? AND created_at < ? GROUP BY entry_id, currency HAVING SUM(amount) <> 0)').bind(window.since, window.before).first<{ n: number }>()
+		: await db.prepare('SELECT COUNT(*) AS n FROM (SELECT entry_id FROM support_ledger GROUP BY entry_id, currency HAVING SUM(amount) <> 0)').first<{ n: number }>();
 	return Number(r?.n ?? 0);
 }
 
@@ -197,10 +205,16 @@ export function disputeLines(channelId: string, amount: Money, fee: Money, owed:
 	return [...debitCreator(channelId, total, owed, policy), line('clearing:collector', -amount.amount, amount.currency), line('fees:collector', -fee.amount, fee.currency, 'dispute_fee')];
 }
 
-/** A dispute won: the amount comes back to the creator's available balance (the fee only if the collector returns it). */
-export function disputeWonLines(channelId: string, amount: Money, feeReturned: Money): LedgerLine[] {
+/**
+ * A dispute won: the amount comes back (the fee only if the collector returns it). What the
+ * organization wrote off for this dispute (MEM-D21 "organization absorbs") is repaid first; the rest
+ * is the creator's again.
+ */
+export function disputeWonLines(channelId: string, amount: Money, feeReturned: Money, writtenOff: Money = { amount: 0, currency: amount.currency }): LedgerLine[] {
 	const c = amount.currency;
-	return [line('clearing:collector', amount.amount, c), line('fees:collector', feeReturned.amount, c), line(creatorAccount(channelId, 'available'), -(amount.amount + feeReturned.amount), c)];
+	const back = amount.amount + feeReturned.amount;
+	const repay = Math.min(Math.max(0, writtenOff.amount), back);
+	return [line('clearing:collector', amount.amount, c), line('fees:collector', feeReturned.amount, c), line('loss:org_reserve', -repay, c, 'write_off'), line(creatorAccount(channelId, 'available'), -(back - repay), c)];
 }
 
 /** A payout left: available → in payout. */

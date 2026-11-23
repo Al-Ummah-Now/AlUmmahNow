@@ -19,7 +19,7 @@
  * A job that gives up flags the videos admin Errors page with Retry (support:manage).
  */
 import { reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporterEnv, type ExecutionContextLike, type SearchDb, type SupportCollectorId } from '@al-ummah/shared-types';
-import { createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
+import { ADMIN_JOB_MAX_ATTEMPTS, createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
 import { collectorFor, railFor, type SupportAdapterEnv } from './adapters';
 import type { CollectorContext } from './collector';
@@ -27,7 +27,7 @@ import { readSupportConfig } from './config';
 import { testStateFor } from './d1-test-state';
 import { applyCollectorEvents, applyRailEvents, releaseDueGifts, UnmatchedSupportEventError } from './events';
 import { LedgerError } from './ledger';
-import { RailError, type RailContext } from './rail';
+import { RailError, type RailContext, type RailEvent } from './rail';
 import { reconcileDay } from './reconcile';
 import { finishBatchIfDone, fundingShortfall, PayoutError, planBatch, refreshPayoutStatuses, sendOnePayout } from './payouts';
 import { CollectorError } from './collector';
@@ -98,9 +98,27 @@ export async function receiveSupportWebhook(env: SupportJobEnv, side: string, ve
 // Jobs
 // ---------------------------------------------------------------------------
 
+/** The channel owners a rail delivery is about (payee and payout events), for erasure. */
+async function railEventOwners(store: SearchDb, rail: string, mode: string, events: readonly RailEvent[]): Promise<string[]> {
+	const out: string[] = [];
+	for (const e of events) {
+		const r =
+			e.type === 'payee.updated'
+				? await store.prepare('SELECT owner_user_id FROM support_payees WHERE rail = ? AND mode = ? AND rail_payee_ref = ?').bind(rail, mode, e.railPayeeRef).first<{ owner_user_id: string }>()
+				: e.type === 'payout.updated'
+					? await store.prepare('SELECT y.owner_user_id FROM support_payouts p JOIN support_payees y ON y.id = p.payee_id WHERE p.id = ?').bind(e.payoutId).first<{ owner_user_id: string }>()
+					: null;
+		if (r?.owner_user_id) out.push(r.owner_user_id);
+	}
+	return out;
+}
+
 /** Errors that retrying can't fix: the event is marked failed and the admin is told now. */
-function permanent(error: unknown): boolean {
-	return error instanceof UnmatchedSupportEventError || (error instanceof LedgerError) || (error instanceof CollectorError && error.permanent) || (error instanceof RailError && error.permanent);
+function permanent(error: unknown, job?: Pick<AdminJob, 'attempts'>): boolean {
+	// An event that matches nothing yet may be early (a renewal before its checkout is stored): it
+	// retries with backoff, and only the last attempt gives up and flags the admin
+	if (error instanceof UnmatchedSupportEventError) return !job || job.attempts >= ADMIN_JOB_MAX_ATTEMPTS;
+	return error instanceof LedgerError || (error instanceof CollectorError && error.permanent) || (error instanceof RailError && error.permanent);
 }
 
 const text = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
@@ -115,8 +133,18 @@ export async function runSupportWebhookJob(env: SupportJobEnv, job: AdminJob, no
 	const config = await readSupportConfig(store);
 	const ctx = vendorContext(env, row.mode === 'live' ? 'live' : 'test', () => now);
 	const delivery = { eventId: row.event_id, type: row.type, occurredAt: row.received_at, payload: JSON.parse(row.payload || '{}') };
-	const finish = (status: string, error: string | null, userId: string | null = null) =>
-		store.prepare('UPDATE support_events SET status = ?, error = ?, user_id = COALESCE(?, user_id), processed_at = ? WHERE id = ?').bind(status, error, userId, now.toISOString(), row.id).run();
+	/**
+	 * Erasure finds an event's payload through its user id (processor user-traces.ts). One person: the
+	 * id is kept. Several people in one delivery: the payload is emptied once applied, so nobody's
+	 * details outlive their erasure.
+	 */
+	const finish = (status: string, error: string | null, userIds: string[] = []) => {
+		const ids = [...new Set(userIds.filter(Boolean))];
+		return store
+			.prepare(`UPDATE support_events SET status = ?, error = ?, user_id = COALESCE(?, user_id), payload = CASE WHEN ? > 1 THEN '{}' ELSE payload END, processed_at = ? WHERE id = ?`)
+			.bind(status, error, ids.length === 1 ? ids[0] : null, ids.length, now.toISOString(), row.id)
+			.run();
+	};
 	try {
 		if (side === 'collector') {
 			const adapter = collectorFor(env, vendor as SupportCollectorId);
@@ -124,7 +152,7 @@ export async function runSupportWebhookJob(env: SupportJobEnv, job: AdminJob, no
 			const events = await adapter.normalize(ctx, delivery);
 			const result = await applyCollectorEvents({ db: store, collector: vendor, mode: row.mode, policy: config.policy, now }, events);
 			for (const ref of result.pledgesToCancel) await adapter.cancelPledge(ctx, ref, 'erasure');
-			await finish(result.applied ? 'processed' : 'ignored', null, result.userIds[0] ?? null);
+			await finish(result.applied ? 'processed' : 'ignored', null, result.userIds);
 			resolveNeedsAction(env, undefined, needsActionKey(job.id));
 			return { done: true, result: { applied: result.applied, ignored: result.ignored } };
 		}
@@ -136,11 +164,11 @@ export async function runSupportWebhookJob(env: SupportJobEnv, job: AdminJob, no
 			const payee = await store.prepare('SELECT id FROM support_payees WHERE rail = ? AND mode = ? AND rail_payee_ref = ?').bind(vendor, row.mode, ref).first<{ id: string }>();
 			if (payee) await createJob(env, { kind: 'support.payee-sync', targetKind: 'support', targetId: payee.id, params: { payeeId: payee.id }, actorId: `webhook:${row.vendor}` });
 		}
-		await finish(result.applied ? 'processed' : 'ignored', null);
+		await finish(result.applied ? 'processed' : 'ignored', null, await railEventOwners(store, vendor, row.mode, events));
 		resolveNeedsAction(env, undefined, needsActionKey(job.id));
 		return { done: true, result: { applied: result.applied, ignored: result.ignored } };
 	} catch (error) {
-		if (permanent(error)) {
+		if (permanent(error, job)) {
 			await finish('failed', text(error));
 			flagSupportJob(env, undefined, job, text(error));
 			logger.error('[Support] Event cannot be applied', { eventId, vendor: row.vendor, error: text(error) });
@@ -362,6 +390,10 @@ export function flagSupportJob(env: SupportJobEnv, ctx: ExecutionContextLike | u
 
 /** The last queue attempt failed. */
 export async function onSupportJobFailed(env: SupportJobEnv, job: AdminJob, error: string): Promise<void> {
+	// A webhook job that ran out of attempts leaves its event 'failed' (not 'queued'), so Retry finds it
+	if (job.kind === 'support.webhook' && env.SEARCH_DB) {
+		await env.SEARCH_DB.prepare("UPDATE support_events SET status = 'failed', error = ? WHERE id = ? AND status = 'queued'").bind(error.slice(0, 500), String(job.params.eventId ?? job.targetId)).run();
+	}
 	flagSupportJob(env, undefined, job, error);
 }
 

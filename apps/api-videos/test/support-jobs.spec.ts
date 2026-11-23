@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { money } from '@al-ummah/shared-types';
-import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
+import { ADMIN_JOB_MAX_ATTEMPTS, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { writeSupportPolicy } from '../src/lib/support/config';
 import { releaseDueGifts } from '../src/lib/support/events';
@@ -34,7 +34,7 @@ class JobsQueue {
 			let retried = false;
 			const msg: JobMessage = { body: d.body, attempts: d.attempts, ack: () => undefined, retry: () => { retried = true; } };
 			await handleAdminJobBatch({ messages: [msg] }, env as never, ADMIN_JOB_HANDLERS, (job, error) => onSupportJobFailed(env as SupportJobEnv, job, error));
-			if (retried && d.attempts < 5) this.pending.push({ ...d, attempts: d.attempts + 1 });
+			if (retried && d.attempts < ADMIN_JOB_MAX_ATTEMPTS) this.pending.push({ ...d, attempts: d.attempts + 1 });
 		}
 	}
 }
@@ -229,7 +229,7 @@ describe('reconciliation', () => {
 		await postEntry(t.sql as never, { entryKey: 'fund:1', kind: 'rail_funding', createdBy: 'usr_fin', lines: railFundingLines(usd(500)) });
 		await testRailFund(vendorContext(t.env, 'test'), usd(500));
 		await writeSupportPolicy(t.sql as never, { primaryRail: 'test' }, 'usr_fin', 0);
-		const day = '2026-11-21';
+		const day = new Date().toISOString().slice(0, 10);
 		await t.sql.prepare("INSERT INTO support_bank_statements (id, date, account, currency, balance, entered_by, created_at) VALUES ('bs1', ?, 'creator_funds', 'USD', 441, 'usr_fin', 'now')").bind(day).run();
 		const { createJob } = await import('../src/lib/admin/jobs');
 		await createJob(t.env, { kind: 'support.reconcile', targetKind: 'support', targetId: day, params: { day }, actorId: 'test' });
@@ -240,7 +240,7 @@ describe('reconciliation', () => {
 		await t.sql.prepare("UPDATE support_bank_statements SET balance = 400").run();
 		await createJob(t.env, { kind: 'support.reconcile', targetKind: 'support', targetId: day, params: { day }, actorId: 'test' });
 		await t.drain();
-		assert.equal((await t.sql.prepare('SELECT status, gap FROM support_reconciliations').first<{ status: string; gap: number }>())!.gap, -41);
+		assert.equal((await t.sql.prepare('SELECT status, gap FROM support_reconciliations').first<{ status: string; gap: number }>())!.gap, 41, 'absolute: a bank gap and an opposite rail gap never cancel out');
 		assert.equal(await lastReconcileOk(t.sql as never), false);
 		assert.ok(reported.some((r) => r.includes('support-reconcile:USD')));
 	});
@@ -260,5 +260,92 @@ describe('crons', () => {
 		await t.drain();
 		const failed = await t.sql.prepare("SELECT COUNT(*) AS n FROM admin_jobs WHERE status = 'failed'").first<{ n: number }>();
 		assert.equal(failed!.n, 0);
+	});
+});
+
+describe('review fixes (cross-provider review of #1761, #1758)', () => {
+	it('a refunded gift never releases another gift that is still held', async () => {
+		const t = setup();
+		await writeSupportPolicy(t.sql as never, { holdDays: 30, negativeBalancePolicy: 'netAgainstFutureGifts' }, 'usr_fin', 0);
+		const a = await pay(t, 'sco_ra', 'one_time', 1000);
+		const refA = (a.paid.events[1] as { paymentRef: string }).paymentRef;
+		await deliverCollector(t.env, 'tevt_refund_a', [{ type: 'payment.refunded', paymentRef: refA, refundRef: 'tref_a', amount: usd(1000), occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		await pay(t, 'sco_rb', 'one_time', 1000);
+		// A's hold ends first; B is still held
+		await t.sql.prepare('UPDATE support_payments SET available_at = ? WHERE collector_payment_ref = ?').bind(new Date(Date.now() - 1000).toISOString(), refA).run();
+		await releaseDueGifts(t.sql as never, { ...(await (await import('../src/lib/support/config')).readSupportConfig(t.sql as never)).policy }, new Date());
+		const bal = (await creatorBalance(t.sql as never, CH)).USD!;
+		// A's refund took its 941 and A's 59 fee from the creator (MEM-D21 net); B's 941 stays held
+		assert.deepEqual({ pending: bal.pending, available: bal.available }, { pending: 941, available: -59 });
+	});
+
+	it('a gift under an open dispute waits; two refunds of one payment both count', async () => {
+		const t = setup();
+		await writeSupportPolicy(t.sql as never, { holdDays: 0, negativeBalancePolicy: 'netAgainstFutureGifts' }, 'usr_fin', 0);
+		const { paid } = await pay(t, 'sco_dq', 'one_time', 2000);
+		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
+		await deliverCollector(t.env, 'tevt_r1', [{ type: 'payment.refunded', paymentRef: ref, refundRef: 'tref_1', amount: usd(300), occurredAt: new Date().toISOString() }]);
+		await deliverCollector(t.env, 'tevt_r2', [{ type: 'payment.refunded', paymentRef: ref, refundRef: 'tref_2', amount: usd(200), occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		assert.deepEqual({ ...(await t.sql.prepare('SELECT refunded, status FROM support_payments').first()) }, { refunded: 500, status: 'partially_refunded' });
+		await deliverCollector(t.env, 'tevt_d', [{ type: 'dispute.opened', paymentRef: ref, disputeRef: 'tdis_q', amount: usd(100), fee: usd(0), evidenceDueAt: null, occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		assert.equal((await releaseDueGifts(t.sql as never, { ...(await (await import('../src/lib/support/config')).readSupportConfig(t.sql as never)).policy }, new Date(Date.now() + 1000))).released, 0);
+		// The dispute event names the supporter (erasure finds its payload)
+		assert.equal((await t.sql.prepare("SELECT user_id FROM support_events WHERE event_id = 'tevt_d'").first<{ user_id: string }>())!.user_id, SUPPORTER);
+	});
+
+	it('a refund in another currency is refused, not booked', async () => {
+		const t = setup();
+		const { paid } = await pay(t, 'sco_cur', 'one_time', 1000);
+		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
+		await deliverCollector(t.env, 'tevt_eur', [{ type: 'payment.refunded', paymentRef: ref, refundRef: 'tref_eur', amount: money(100, 'EUR'), occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		assert.equal((await t.sql.prepare("SELECT status FROM support_events WHERE event_id = 'tevt_eur'").first<{ status: string }>())!.status, 'failed');
+		assert.equal(t.sql.count('support_refunds'), 0);
+	});
+
+	it('an event that matches nothing retries before it gives up', async () => {
+		const t = setup();
+		await deliverCollector(t.env, 'tevt_early', [{ type: 'payment.refunded', paymentRef: 'tpay_later', refundRef: 'r9', amount: usd(100), occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		const job = await t.sql.prepare("SELECT attempts FROM admin_jobs WHERE kind = 'support.webhook'").first<{ attempts: number }>();
+		assert.ok(job!.attempts > 1, `retried (attempts ${job!.attempts})`);
+	});
+
+	it('rail events: "returned" before "paid" books both; "paid" for a payout we canceled is a conflict, never booked', async () => {
+		const t = setup();
+		await writeSupportPolicy(t.sql as never, { payoutFeeBearer: 'creatorFromPayout' }, 'usr_fin', 0);
+		const seed = async (id: string, status: string) => {
+			await t.sql.prepare(`INSERT INTO support_payouts (id, batch_id, payee_id, channel_id, rail, mode, amount, currency, rail_fee, status, created_at, updated_at) VALUES (?, 'b1', ?, ?, 'test', 'test', 1000, 'USD', 50, ?, 'now', 'now')`).bind(id, `pe_${id}`, CH, status).run();
+			if (status === 'sent') await postEntry(t.sql as never, { entryKey: `payout:${id}:sent`, kind: 'payout', createdBy: 'system', channelId: CH, lines: [{ account: `creator:${CH}:available`, amount: 1000, currency: 'USD' }, { account: `creator:${CH}:in_payout`, amount: -1000, currency: 'USD' }] });
+		};
+		const rail = async (id: string, payoutId: string, status: string) => {
+			const body = JSON.stringify({ id, events: [{ type: 'payout.updated', payoutId, railPayoutRef: 'r', status, failureCode: status === 'returned' ? 'bank_rejected' : null, occurredAt: new Date().toISOString() }] });
+			await receiveSupportWebhook(t.env, 'rail', 'test', body, await signTestRailDelivery(body, new Date()));
+			await t.drain();
+		};
+		await seed('po_r', 'sent');
+		await rail('trev_r', 'po_r', 'returned');
+		assert.equal((await t.sql.prepare("SELECT status FROM support_payouts WHERE id = 'po_r'").first<{ status: string }>())!.status, 'returned');
+		const bal = (await creatorBalance(t.sql as never, CH)).USD!;
+		assert.equal(bal.in_payout, 0);
+		assert.equal(bal.available, -1000 + 950, 'what came back (amount less the fee) is available again');
+		await seed('po_c', 'canceled');
+		await rail('trev_c', 'po_c', 'paid');
+		assert.equal((await t.sql.prepare("SELECT status FROM support_events WHERE event_id = 'trev_c'").first<{ status: string }>())!.status, 'failed');
+		assert.equal((await t.sql.prepare("SELECT status FROM support_payouts WHERE id = 'po_c'").first<{ status: string }>())!.status, 'canceled');
+	});
+
+	it('reconciliation of a day leaves out what was booked after it ended', async () => {
+		const t = setup();
+		await postEntry(t.sql as never, { entryKey: 'fund:old', kind: 'rail_funding', createdBy: 'usr_fin', lines: railFundingLines(usd(500)), now: new Date('2026-11-21T10:00:00Z') });
+		await postEntry(t.sql as never, { entryKey: 'fund:new', kind: 'rail_funding', createdBy: 'usr_fin', lines: railFundingLines(usd(300)), now: new Date('2026-11-22T00:30:00Z') });
+		await t.sql.prepare("INSERT INTO support_bank_statements (id, date, account, currency, balance, entered_by, created_at) VALUES ('bs', '2026-11-21', 'creator_funds', 'USD', -500, 'usr_fin', 'now')").run();
+		const { reconcileDay } = await import('../src/lib/support/reconcile');
+		const out = await reconcileDay({ db: t.sql as never, day: '2026-11-21', now: new Date('2026-11-22T01:00:00Z'), collector: null, rail: null });
+		assert.equal(out.lines[0].ledgerBank, -500);
+		assert.equal(out.lines[0].gap, 0);
 	});
 });

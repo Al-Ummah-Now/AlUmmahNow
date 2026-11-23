@@ -105,8 +105,11 @@ describe('owner decisions are parameters', () => {
 		await postEntry(d, { ...sys, entryKey: 'dispute:d1', kind: 'dispute', lines: disputeLines(CH, usd(500), usd(1500), bal, 'organizationAbsorbs'), channelId: CH });
 		assert.deepEqual((await creatorBalance(d, CH)).USD, { pending: 0, available: 0, in_payout: 0, reserve: 0 });
 		assert.equal(await accountTotal(d, 'loss:org_reserve', 'USD'), 2000 - 455);
-		await postEntry(d, { ...sys, entryKey: 'dispute:d1:won', kind: 'dispute_reversal', lines: disputeWonLines(CH, usd(500), usd(0)), channelId: CH });
-		assert.equal((await creatorBalance(d, CH)).USD!.available, 500);
+		// Won: the organization's write-off is repaid first (review of #1758); the creator gets the rest
+		await postEntry(d, { ...sys, entryKey: 'dispute:d1:won', kind: 'dispute_reversal', lines: disputeWonLines(CH, usd(500), usd(0), usd(2000 - 455)), channelId: CH });
+		assert.equal((await creatorBalance(d, CH)).USD!.available, 0);
+		assert.equal(await accountTotal(d, 'loss:org_reserve', 'USD'), 2000 - 455 - 500);
+		assert.equal(await unbalancedEntries(d), 0);
 	});
 
 	it('MEM-D20: payout fee bearer changes who pays the rail fee; open refuses', async () => {

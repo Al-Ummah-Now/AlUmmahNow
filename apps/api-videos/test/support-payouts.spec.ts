@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { money } from '@al-ummah/shared-types';
-import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
+import { ADMIN_JOB_MAX_ATTEMPTS, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { writeSupportPolicy } from '../src/lib/support/config';
 import { onSupportJobFailed, runSupportPayoutFundJob, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
@@ -39,7 +39,7 @@ class JobsQueue {
 			let retried = false;
 			const msg: JobMessage = { body: d.body, attempts: d.attempts, ack: () => undefined, retry: () => { retried = true; } };
 			await handleAdminJobBatch({ messages: [msg] }, env as never, ADMIN_JOB_HANDLERS, (job, error) => onSupportJobFailed(env as SupportJobEnv, job, error));
-			if (retried && d.attempts < 5) this.pending.push({ ...d, attempts: d.attempts + 1 });
+			if (retried && d.attempts < ADMIN_JOB_MAX_ATTEMPTS) this.pending.push({ ...d, attempts: d.attempts + 1 });
 		}
 	}
 }
