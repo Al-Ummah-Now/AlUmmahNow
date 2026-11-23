@@ -123,12 +123,25 @@ export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefine
       update();
     };
 
+    // The caption box moves with the controls (88px or 16px, plus the credit row) over 200 ms. Video.js
+    // lays cues out in pixels when it draws them, so a cue drawn mid-move (a seek or a credit row that
+    // came or went while the controls were showing or hiding) would keep the old box's position and could
+    // sit over the controls. Once the move has ended, the shown cues are drawn again in the box as it is.
+    const displayEl = player.el?.()?.querySelector<HTMLElement>('.vjs-text-track-display') ?? null;
+    const settled = (e: TransitionEvent) => {
+      if (e.target !== displayEl || e.propertyName !== 'bottom' || !showingCaptionTrack(list)) return;
+      (player.getChild?.('textTrackDisplay') ?? player.getChild?.('TextTrackDisplay'))?.updateDisplay?.();
+      if (shown) measure(captionDir(showingCaptionTrack(list)?.language || 'en'));
+    };
+
     bind();
     list.addEventListener?.('addtrack', bind);
     list.addEventListener?.('change', update);
     player.on?.(RESIZE_EVENTS, update);
+    displayEl?.addEventListener('transitionend', settled);
     return () => {
       cancelAnimationFrame(frame);
+      displayEl?.removeEventListener('transitionend', settled);
       list.removeEventListener?.('addtrack', bind);
       list.removeEventListener?.('change', update);
       player.off?.(RESIZE_EVENTS, update);
