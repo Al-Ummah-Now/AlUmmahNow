@@ -181,6 +181,20 @@ describe('ingest and grouping', () => {
     assert.equal(g.daily.length, 14);
   });
 
+  it('first/last seen and their releases follow event times, not arrival order (AUDIT-2, 2026-11-22)', async () => {
+    const at = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+    // Newest first, as a browser batch or a retried queue message can deliver them
+    await ingestErrorEvents(db, [ev({ occurredAt: at(0), release: 'rel3' })], ctx());
+    await ingestErrorEvents(db, [ev({ occurredAt: at(5), release: 'rel1' })], ctx());
+    await ingestErrorEvents(db, [ev({ occurredAt: at(2), release: 'rel2' })], ctx());
+    const [g] = (await listErrorGroups(db, { limit: 10, offset: 0 }, NOW)).groups;
+    assert.equal(g.occurrences, 3);
+    assert.equal(g.first_seen, at(5));
+    assert.equal(g.last_seen, at(0));
+    assert.equal(g.first_release, 'rel1');
+    assert.equal(g.last_release, 'rel3');
+  });
+
   it('filters groups by origin and counts samples per origin', async () => {
     const o = (surface: 'web' | 'ios', device: 'desktop' | 'phone') => ({ context: { origin: { surface, source: 'direct', device } } }) as Partial<ErrorEventInput>;
     await ingestErrorEvents(db, [ev(o('web', 'desktop')), ev(o('ios', 'phone')), ev(o('ios', 'phone'))], ctx());

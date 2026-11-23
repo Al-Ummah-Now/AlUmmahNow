@@ -24,6 +24,7 @@ import { LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCa
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
+import { keepLastWordsTogether } from '@/lib/format/titleWrap';
 
 /**
  * Grid layout component for live stream cards (RTL)
@@ -121,7 +122,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
         {t.live?.liveStreams || 'البث المباشر'}
       </h1>
       <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base text-right text-balance">
-        {t.live?.liveStreamsDescription || 'شاهد البث المباشر من قنوات المجتمع'}
+        {keepLastWordsTogether(t.live?.liveStreamsDescription || 'شاهد البث المباشر من قنوات المجتمع')}
       </p>
     </div>
   );

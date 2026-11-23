@@ -281,9 +281,13 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, 0, 0, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(environment, fingerprint) DO UPDATE SET
            occurrences = occurrences + excluded.occurrences,
+           -- Events can arrive out of order (browser batches, retries, up to a day late): first/last seen
+           -- and their releases follow the event times, not the arrival order. Before, an older event
+           -- arriving later left "First seen" at the newest event while the timeline drew it hours back
+           first_seen = MIN(first_seen, excluded.first_seen),
            last_seen = MAX(last_seen, excluded.last_seen),
-           last_release = COALESCE(excluded.last_release, last_release),
-           first_release = COALESCE(first_release, excluded.first_release),
+           last_release = CASE WHEN excluded.last_seen >= last_seen THEN COALESCE(excluded.last_release, last_release) ELSE COALESCE(last_release, excluded.last_release) END,
+           first_release = CASE WHEN excluded.first_seen < first_seen THEN COALESCE(excluded.first_release, first_release) ELSE COALESCE(first_release, excluded.first_release) END,
            message = excluded.message,
            kind = excluded.kind,
            culprit = COALESCE(excluded.culprit, culprit),
@@ -313,7 +317,7 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
         db
           .prepare(
             `INSERT INTO error_group_releases (group_id, release, occurrences, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)
-             ON CONFLICT(group_id, release) DO UPDATE SET occurrences = occurrences + excluded.occurrences, last_seen = MAX(last_seen, excluded.last_seen)`,
+             ON CONFLICT(group_id, release) DO UPDATE SET occurrences = occurrences + excluded.occurrences, first_seen = MIN(first_seen, excluded.first_seen), last_seen = MAX(last_seen, excluded.last_seen)`,
           )
           .bind(gid, e.release, count, occurredAt, occurredAt),
       );
