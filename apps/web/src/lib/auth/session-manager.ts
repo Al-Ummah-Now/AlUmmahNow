@@ -14,6 +14,12 @@ import type { AccessibleChannel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
+import {
+  SessionInfrastructureError,
+  isNextControlFlowError,
+  reportWebServerError,
+  safeErrorMeta,
+} from '@/lib/errors/server-report';
 import { isSafeAccountKey, ownAccount } from './own-account';
 import {
   SESSION_COOKIE_NAME,
@@ -138,27 +144,55 @@ export type RefreshAccountResult =
  */
 export class SessionManager {
   /**
-   * Get the current session data from cookies
+   * Get the current session data from cookies.
+   *
+   * Returns null ONLY when the visitor genuinely has no session (or has a
+   * corrupt/unparseable cookie, which is logged and reported). Infrastructure
+   * or runtime failures are logged, reported to the admin Errors page, and
+   * rethrown as SessionInfrastructureError instead of silently signing users out (#302).
    */
   private static async getSessionData(): Promise<SessionData | null> {
+    let cookieStore: Awaited<ReturnType<typeof cookies>>;
+    let sessionValue: string | undefined;
     try {
-      const cookieStore = await cookies();
-      const sessionValue = readSessionValue(cookieStore);
+      cookieStore = await cookies();
+      sessionValue = readSessionValue(cookieStore);
+    } catch (error) {
+      if (isNextControlFlowError(error)) throw error;
+      logger.error('[SessionManager] Failed to read session cookies', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:session-manager', extra: { stage: 'read_cookies' } });
+      throw new SessionInfrastructureError('Failed to read session cookies', error);
+    }
 
-      if (!sessionValue) {
-        // Try to migrate from legacy cookies
-        return await this.migrateFromLegacy();
+    if (!sessionValue) {
+      // Try to migrate from legacy cookies
+      return await this.migrateFromLegacy();
+    }
+
+    // Parse JSON from the cookie (and its chunks)
+    let sessionData: SessionData;
+    try {
+      const parsed = JSON.parse(sessionValue) as SessionData | null;
+      if (!parsed || typeof parsed !== 'object' || !parsed.accounts || typeof parsed.accounts !== 'object') {
+        throw new SyntaxError('Session cookie missing accounts map');
       }
+      sessionData = parsed;
+    } catch (error) {
+      logger.warn('[SessionManager] Malformed session cookie', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:session-manager', extra: { stage: 'parse_cookie' } });
+      return null;
+    }
 
-      // Parse JSON from the cookie (and its chunks)
-      const sessionData = JSON.parse(sessionValue) as SessionData;
+    try {
       // Another request in this isolate may have rotated a refresh token this
       // cookie still holds; use the newer pair (persisted on the next write)
       applyKnownRotations(sessionData);
       return sessionData;
     } catch (error) {
-      logger.error('[SessionManager] Failed to get session data:', error);
-      return null;
+      if (isNextControlFlowError(error)) throw error;
+      logger.error('[SessionManager] Failed to process session data', safeErrorMeta(error));
+      await reportWebServerError(error, { route: 'auth:session-manager', extra: { stage: 'process_session' } });
+      throw new SessionInfrastructureError('Failed to process session data', error);
     }
   }
 
