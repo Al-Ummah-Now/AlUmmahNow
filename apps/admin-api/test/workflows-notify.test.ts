@@ -30,7 +30,6 @@ const request: WorkflowRequestView = {
   reason: 'Nonprofit rate approved by PayGood',
   proposedBy: 'fin1',
   proposedAt: '2026-11-23T12:00:00.000Z',
-  effectiveAt: '2026-12-01T00:00:00.000Z',
   expiresAt: '2026-11-30T12:00:00.000Z',
   status: 'pending',
   approvalsNeeded: 2,

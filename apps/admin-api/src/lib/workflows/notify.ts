@@ -81,7 +81,6 @@ const COPY = {
     changes: 'What changes',
     approvals: (n: number, of: number) => `Approvals: ${n} of ${of}`,
     expires: (d: string) => `Waiting until ${d} (UTC).`,
-    effective: (d: string) => `Takes effect on ${d} (UTC).`,
     cta: 'Review request',
     yes: 'Yes',
     no: 'No',
@@ -118,7 +117,6 @@ const COPY = {
     changes: 'ما الذي يتغيّر',
     approvals: (n: number, of: number) => `الموافقات: ${arDigits(n)} من ${arDigits(of)}`,
     expires: (d: string) => `ينتظر حتى ${d} (بالتوقيت العالمي).`,
-    effective: (d: string) => `يصبح نافذًا في ${d} (بالتوقيت العالمي).`,
     cta: 'مراجعة الطلب',
     yes: 'نعم',
     no: 'لا',
@@ -203,7 +201,6 @@ export function renderWorkflowEmail(input: {
     after.push({ kind: 'small', text: c.approvals(r.approvalsCount, r.approvalsNeeded) });
     if (r.status === 'pending') after.push({ kind: 'small', text: c.expires(dateText(r.expiresAt, locale)) });
   }
-  if (r.effectiveAt) after.push({ kind: 'small', text: c.effective(dateText(r.effectiveAt, locale)) });
   const doc: EmailDoc = {
     locale,
     subject: `${envTag(input.environment)}${c.subject[event](title)}`,
