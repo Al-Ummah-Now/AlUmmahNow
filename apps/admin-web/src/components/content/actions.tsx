@@ -92,6 +92,8 @@ interface ConfirmDialogContent {
   cancelLabel?: string;
   title: string;
   body: string;
+  /** What the change does, one point per line under the body (a list, so each can be found at a glance) */
+  bullets?: readonly string[];
   confirmLabel: string;
   /** Asks for a reason (sent with the change). */
   withReason?: boolean;
@@ -140,7 +142,7 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
  * change by accident); the reason and type-to-confirm fields are one Tab away.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, cancelLabel, withReason, reasonHint, reasonMaxLength, reasonMinLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, bullets, confirmLabel, cancelLabel, withReason, reasonHint, reasonMaxLength, reasonMinLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -206,6 +208,13 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
         <p id={`${ids}-body`} className="text-fg-muted text-sm [text-wrap:balance]">
           {body}
         </p>
+        {bullets && bullets.length > 0 && (
+          <ul className="list-disc ps-5 space-y-1 text-sm text-fg-muted" data-testid={`${testId}-bullets`}>
+            {bullets.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
         {withReason && (
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-reason`} className="text-sm text-fg-muted">
