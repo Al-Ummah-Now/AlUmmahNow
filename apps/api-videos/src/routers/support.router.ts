@@ -4,11 +4,18 @@
  *
  *   POST /jobs/retry { jobId, kind }  the Errors page's Retry of a support job that gave up
  *                                     (admin-api requires support:manage)
+ *   POST /batches/plan { period, actorId }          a manual payout run (queues support.payout-plan)
+ *   POST /batches/:id/approve { actorId }           one approval (MEM-D24); the last one queues the funding check
+ *   POST /batches/:id/stop { actorId, reason }      stops a batch; payouts not sent yet are canceled
+ *
+ * admin-api allows the batch routes only to people on the organisation's finance list, with a
+ * step-up, and audits them; approve checks the finance list again here.
  */
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { getJob, retryJob } from '../lib/admin/jobs';
+import { createJob, getJob, retryJob } from '../lib/admin/jobs';
 import type { SupportJobEnv } from '../lib/support/jobs';
+import { approveBatch, PayoutError, stopBatch } from '../lib/support/payouts';
 
 const app = new Hono<{ Bindings: SupportJobEnv }>();
 
@@ -32,6 +39,54 @@ app.post('/jobs/retry', async (c) => {
 	}
 	const retried = await retryJob(c.env, jobId);
 	return c.json({ success: true, result: { ok: retried?.status !== 'failed', status: retried?.status ?? null, result: retried?.status === 'failed' ? retried.lastError : 'Queued again' } });
+});
+
+const Actor = z.string().min(1).max(100);
+const PlanBody = z.object({ period: z.string().regex(/^(\d{4}-\d{2}|manual-\d{8}T\d{6})$/), actorId: Actor }).strict();
+const ApproveBody = z.object({ actorId: Actor }).strict();
+const StopBody = z.object({ actorId: Actor, reason: z.string().min(1).max(300) }).strict();
+
+const PAYOUT_ERROR_STATUS: Record<PayoutError['code'], 400 | 403 | 404 | 409> = {
+	decision_open: 409,
+	not_clean: 409,
+	held: 409,
+	not_found: 404,
+	not_finance: 403,
+	already_approved: 409,
+	wrong_status: 409,
+	exists: 409,
+	not_built: 409,
+};
+
+function payoutFailure(c: { json: (body: unknown, status: number) => Response }, error: unknown) {
+	if (error instanceof PayoutError) return c.json({ success: false, code: `support_${error.code}`, detail: error.detail }, PAYOUT_ERROR_STATUS[error.code]);
+	throw error;
+}
+
+app.post('/batches/plan', async (c) => {
+	const parsed = PlanBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	const job = await createJob(c.env, { kind: 'support.payout-plan', targetKind: 'support', targetId: `plan:${parsed.data.period}`, params: { period: parsed.data.period, preparedBy: parsed.data.actorId }, actorId: parsed.data.actorId });
+	return c.json({ success: true, result: { jobId: job.id } }, 202);
+});
+
+app.post('/batches/:id/approve', async (c) => {
+	const parsed = ApproveBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	const batchId = c.req.param('id');
+	try {
+		const r = await approveBatch(c.env.SEARCH_DB!, batchId, parsed.data.actorId, new Date());
+		if (r.approved) await createJob(c.env, { kind: 'support.payout-fund', targetKind: 'support', targetId: batchId, params: { batchId }, actorId: parsed.data.actorId });
+		return c.json({ success: true, result: r });
+	} catch (error) {
+		return payoutFailure(c as never, error);
+	}
+});
+
+app.post('/batches/:id/stop', async (c) => {
+	const parsed = StopBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	return c.json({ success: true, result: await stopBatch(c.env.SEARCH_DB!, c.req.param('id'), parsed.data.reason, new Date()) });
 });
 
 export default app;

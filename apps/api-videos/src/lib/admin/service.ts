@@ -10,7 +10,7 @@
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { runTranscodeAction } from '../media/troubleshoot';
 import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
-import { runSupportDisputeDeadlineJob, runSupportDormantJob, runSupportPayeeSyncJob, runSupportReconcileJob, runSupportReleaseJob, runSupportWebhookJob } from '../support/jobs';
+import { runSupportDisputeDeadlineJob, runSupportDormantJob, runSupportPayeeSyncJob, runSupportPayoutFundJob, runSupportPayoutPlanJob, runSupportPayoutSendJob, runSupportPayoutStatusJob, runSupportReconcileJob, runSupportReleaseJob, runSupportWebhookJob } from '../support/jobs';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1729,6 +1729,10 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'support.payee-sync': (env, job) => runSupportPayeeSyncJob(env as never, job),
 	'support.dispute-deadline': (env, job) => runSupportDisputeDeadlineJob(env as never, job),
 	'support.dormant': (env, job) => runSupportDormantJob(env as never, job),
+	'support.payout-plan': (env, job) => runSupportPayoutPlanJob(env as never, job),
+	'support.payout-fund': (env, job) => runSupportPayoutFundJob(env as never, job),
+	'support.payout-send': (env, job) => runSupportPayoutSendJob(env as never, job),
+	'support.payout-status': (env, job) => runSupportPayoutStatusJob(env as never, job),
 	// Discovery ranking (lib/ranking/job.ts): hourly from the cron, or "Run now" in the videos admin
 	'discovery.rank': (env, job) => runDiscoveryRankJob(env as DiscoveryEnv, job),
 	// Objects whose index write failed, rewritten one by one from R2 (lib/search/repairs.ts)
