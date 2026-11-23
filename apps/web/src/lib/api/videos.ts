@@ -1075,10 +1075,9 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
  * Related videos for the watch page (Epic 7.3): recommendations for `videoId`,
  * topped up from the general feed, without the current video. If those stay
  * empty after a retry: trending, then the last shelf this tab loaded.
- */
-/**
- * The watch page's related shelf. Resolves an empty list when the API answered with nothing to
- * show; rejects with RelatedUnavailableError when no source could be reached (#1552).
+ *
+ * Resolves an empty list when the API answered with nothing to show; rejects
+ * with RelatedUnavailableError when no source could be reached (#1552).
  */
 export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
     let recommendedCount = 0;

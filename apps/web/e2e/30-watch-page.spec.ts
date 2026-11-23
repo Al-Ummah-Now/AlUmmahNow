@@ -138,6 +138,50 @@ test.describe('watch page - anonymous', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByTestId('video-metrics')).toBeVisible();
   });
+
+  // #1552: an empty answer is not a failure. The shelf's three API sources are answered in the
+  // browser (the video itself still loads from the stack), so the result doesn't depend on what
+  // other specs have published.
+  const RELATED_SOURCES = [/\/api\/recommendations\?/, /\/api\/trending\?/, /\/api\/videos\?/];
+
+  test('WATCH-015 an empty related answer hides the shelf, with no error or retry', async ({ page }) => {
+    const video = ownLecture(1);
+    let trendingAsked: () => void = () => undefined;
+    const lastSourceAsked = new Promise<void>((resolve) => { trendingAsked = resolve; });
+    for (const source of RELATED_SOURCES) {
+      await page.route(source, async (route) => {
+        if (/\/api\/trending\?/.test(route.request().url())) trendingAsked();
+        // The API is another origin: answer the way it does (credentialed requests need the origin echoed)
+        const origin = route.request().headers()['origin'];
+        await route.fulfill({
+          json: { cursor: null, data: [] },
+          headers: origin ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', vary: 'Origin' } : {},
+        });
+      });
+    }
+    await openWatch(page, video);
+    // Trending is asked last, after the empty first try and its retry
+    await lastSourceAsked;
+
+    await expect(page.getByTestId('related-videos')).toHaveCount(0);
+    await expect(page.getByTestId('watch-secondary')).toHaveCount(0);
+    await expect(page.getByText('We couldn’t load related videos right now.')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  });
+
+  test('WATCH-016 a failed related load offers Try again, which loads the shelf', async ({ page }) => {
+    const video = ownLecture(1);
+    for (const source of RELATED_SOURCES) await page.route(source, (route) => route.abort('failed'));
+    await openWatch(page, video);
+
+    const failed = page.getByTestId('related-videos-failed').locator('visible=true');
+    await expect(failed.getByRole('status')).toHaveText('We couldn’t load related videos right now.', { timeout: 30000 });
+    // The API is back: the retry shows this file's other videos
+    for (const source of RELATED_SOURCES) await page.unroute(source);
+    await failed.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByTestId('related-video').locator('visible=true').first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('related-videos-failed')).toHaveCount(0);
+  });
 });
 
 test.describe('watch page - dark theme', () => {
