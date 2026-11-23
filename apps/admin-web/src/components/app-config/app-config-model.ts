@@ -5,7 +5,7 @@
  * before saving), the order of rules (the first match decides a key), and api-videos' own
  * problems placed on the rule and field they name.
  */
-import { APP_CONFIG_APPS, APP_CONFIG_MAX_RULES, APP_CONFIG_PLATFORMS, APP_CONFIG_RULE_KEY, APP_CONFIG_SEMVER, compareAppVersions, parseDigits, type AppConfigRule, type AppConfigVersionPolicy, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_MAX_RULES, APP_CONFIG_PLATFORMS, APP_CONFIG_RULE_KEY, APP_CONFIG_SEMVER, compareAppVersionCores, compareAppVersions, parseDigits, type AppConfigRule, type AppConfigVersionPolicy, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 
 export type RulesKind = 'flags' | 'config';
 
@@ -110,7 +110,7 @@ export function draftToRule(d: RuleDraft, kind: RulesKind): { rule: AppConfigRul
   const max = d.maxVersion.trim();
   if (min && !APP_CONFIG_SEMVER.test(min)) add('minVersion', 'versionFormat');
   if (max && !APP_CONFIG_SEMVER.test(max)) add('maxVersion', 'versionFormat');
-  if (min && max && APP_CONFIG_SEMVER.test(min) && APP_CONFIG_SEMVER.test(max) && compareAppVersions(min, max) > 0) add('maxVersion', 'versionOrder');
+  if (min && max && APP_CONFIG_SEMVER.test(min) && APP_CONFIG_SEMVER.test(max) && compareAppVersionCores(min, max) > 0) add('maxVersion', 'versionOrder');
   const locales = splitLocales(d.locales);
   if (locales.some((l) => !LOCALE.test(l) || l.length > 16)) add('locales', 'localeFormat');
   const rolloutText = d.rollout.trim();

@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 import { APP_CONFIG_MAX_RULES, APP_CONFIG_RULE_KEY } from '@al-ummah/shared-types';
-import { APPS, PLATFORMS, SEMVER, compareVersions } from './app-config';
+import { APPS, PLATFORMS, SEMVER, compareVersionCores as compareVersions } from './app-config';
 import type { AppName, Platform } from './app-config';
 import { readAppConfigDocument } from './app-config-store';
 

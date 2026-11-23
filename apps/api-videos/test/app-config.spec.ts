@@ -20,11 +20,12 @@ async function call(query: string, env: Record<string, unknown> = {}) {
 }
 
 describe('compareVersions / updateStatus', () => {
-	it('compares numerically, ignoring pre-release suffixes', () => {
+	it('compares numerically; a pre-release is below its release (AUN-APP-UPDATES §2.1)', () => {
 		assert.equal(compareVersions('1.10.0', '1.9.9'), 1);
 		assert.equal(compareVersions('1.2.3', '1.2.3'), 0);
 		assert.equal(compareVersions('0.9.0', '1.0.0'), -1);
-		assert.equal(compareVersions('1.2.0-beta.1', '1.2.0'), 0);
+		assert.equal(compareVersions('1.2.0-beta.1', '1.2.0'), -1);
+		assert.equal(compareVersions('1.2.0+build.1', '1.2.0'), 0);
 		assert.throws(() => compareVersions('1.2', '1.0.0'));
 	});
 	it('required below the minimum, recommended below the latest', () => {
