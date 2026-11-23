@@ -95,8 +95,8 @@ export function FeatureHistorySheet({ featureKey, load: fetchPage, onClose }: { 
             <ul className="space-y-4" aria-hidden="true">
               {[0, 1, 2, 3].map((i) => (
                 <li key={i} className="space-y-2">
-                  <div className="h-5 w-40 animate-pulse rounded bg-surface-2" />
-                  <div className="h-4 w-56 animate-pulse rounded bg-surface-2" />
+                  <div className="h-5 w-40 animate-pulse rounded bg-fg/10" />
+                  <div className="h-4 w-56 animate-pulse rounded bg-fg/10" />
                 </li>
               ))}
             </ul>
