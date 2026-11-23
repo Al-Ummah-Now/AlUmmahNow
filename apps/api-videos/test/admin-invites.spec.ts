@@ -123,6 +123,32 @@ describe('invited users in videos', () => {
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'Other', handle: 'tafsir-daily' })).body.code, 'handle_taken');
 	});
 
+	it('stores bilingual nameLocalized and descriptionLocalized when creating a channel for a user', async () => {
+		const { call } = await setup();
+		await call('POST', '/users/provision', { userId: INVITED, email: 'bilingual@example.com' });
+		const bad = await call('POST', `/users/${INVITED}/channels`, {
+			nameLocalized: { en: 'Only English', ar: '' },
+		});
+		assert.equal(bad.status, 400);
+		const res = await call('POST', `/users/${INVITED}/channels`, {
+			nameLocalized: { en: 'Tafsir Daily', ar: 'التفسير اليومي' },
+			descriptionLocalized: { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' },
+			handle: 'tafsir-bi',
+		});
+		assert.equal(res.status, 200);
+		const ch = res.body.result.channel;
+		assert.equal(ch.name, 'Tafsir Daily');
+		assert.deepEqual(ch.nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		assert.equal(ch.description, 'Short daily lessons');
+		assert.deepEqual(ch.descriptionLocalized, { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' });
+
+		const listed = await call('GET', `/channels?ownerId=${INVITED}`);
+		assert.deepEqual(listed.body.result.items[0].nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		const detail = await call('GET', `/channels/${ch.id}`);
+		assert.deepEqual(detail.body.result.nameLocalized, { en: 'Tafsir Daily', ar: 'التفسير اليومي' });
+		assert.deepEqual(detail.body.result.descriptionLocalized, { en: 'Short daily lessons', ar: 'دروس يومية قصيرة' });
+	});
+
 	it('needs the profile first', async () => {
 		const { call } = await setup();
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'X' })).body.code, 'user_not_found');

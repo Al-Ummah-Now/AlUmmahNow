@@ -1364,3 +1364,50 @@ describe('soft deletes (Recently deleted, restore, cleanup)', () => {
 		assert.equal((await call('POST', '/deletions/bogus/x/restore')).status, 404);
 	});
 });
+
+describe('admin bilingual channel and video edits', () => {
+	it('reads and updates channel nameLocalized and descriptionLocalized, rejecting one-sided pairs', async () => {
+		const { call } = await setup();
+		assert.equal((await call('PATCH', '/channels/ch1', { nameLocalized: { en: 'Only EN', ar: '' } })).status, 400);
+		assert.equal((await call('PATCH', '/channels/ch1', { descriptionLocalized: { en: 'Only EN', ar: '' } })).status, 400);
+
+		const patched = await call('PATCH', '/channels/ch1', {
+			name: 'Fiqh Academy',
+			nameLocalized: { en: 'Fiqh Academy', ar: 'أكاديمية الفقه' },
+			description: 'Structured courses',
+			descriptionLocalized: { en: 'Structured courses', ar: 'دورات منظمة' },
+		});
+		assert.equal(patched.status, 200);
+		const detail = (await call('GET', '/channels/ch1')).body.result;
+		assert.equal(detail.name, 'Fiqh Academy');
+		assert.deepEqual(detail.nameLocalized, { en: 'Fiqh Academy', ar: 'أكاديمية الفقه' });
+		assert.equal(detail.description, 'Structured courses');
+		assert.deepEqual(detail.descriptionLocalized, { en: 'Structured courses', ar: 'دورات منظمة' });
+
+		// Clearing optional description with empty localized pair
+		const cleared = await call('PATCH', '/channels/ch1', { descriptionLocalized: { en: '', ar: '' } });
+		assert.equal(cleared.status, 200);
+		const afterClear = (await call('GET', '/channels/ch1')).body.result;
+		assert.equal(afterClear.description, '');
+		assert.equal(afterClear.descriptionLocalized, undefined);
+	});
+
+	it('reads and updates video titleLocalized and descriptionLocalized without wiping them', async () => {
+		const { call } = await setup();
+		assert.equal((await call('PATCH', '/videos/v1', { titleLocalized: { en: 'Lesson 1', ar: '' } })).status, 400);
+		assert.equal((await call('PATCH', '/videos/v1', { descriptionLocalized: { en: '', ar: 'وصف فقط' } })).status, 400);
+
+		const patched = await call('PATCH', '/videos/v1', {
+			title: 'Tafsir Lesson 1',
+			titleLocalized: { en: 'Tafsir Lesson 1', ar: 'درس التفسير الأول' },
+			description: 'Opening remarks',
+			descriptionLocalized: { en: 'Opening remarks', ar: 'مقدمة الدرس' },
+		});
+		assert.equal(patched.status, 200);
+		const detail = (await call('GET', '/videos/v1')).body.result;
+		assert.equal(detail.title, 'Tafsir Lesson 1');
+		assert.deepEqual(detail.titleLocalized, { en: 'Tafsir Lesson 1', ar: 'درس التفسير الأول' });
+		assert.equal(detail.description, 'Opening remarks');
+		assert.deepEqual(detail.descriptionLocalized, { en: 'Opening remarks', ar: 'مقدمة الدرس' });
+	});
+});

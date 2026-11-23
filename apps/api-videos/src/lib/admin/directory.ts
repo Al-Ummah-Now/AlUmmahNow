@@ -280,9 +280,17 @@ export async function hydrateChannels(env: AdminEnv, rows: Row[]): Promise<Admin
 	const ownerEmail = new Map((owners.results ?? []).map((o) => [o.id, o.email]));
 	return rows.map((r) => {
 		const ch = objects.get(r.id) ?? {};
+		const rawLoc = ch.nameLocalized && typeof ch.nameLocalized === 'object' ? (ch.nameLocalized as Record<string, unknown>) : null;
+		const nameLocalized: Record<string, string> = {};
+		if (rawLoc) {
+			for (const lang of ['en', 'ar'] as const) {
+				if (typeof rawLoc[lang] === 'string' && rawLoc[lang].trim()) nameLocalized[lang] = rawLoc[lang].trim();
+			}
+		}
 		return {
 			id: r.id,
 			name: (ch.name as string) || r.admin_title || r.id,
+			...(Object.keys(nameLocalized).length ? { nameLocalized } : {}),
 			handle: (ch.handle as string) || r.handle || null,
 			ownerId: r.owner_id ?? null,
 			ownerEmail: ownerEmail.get(r.owner_id) ?? r.email ?? null,

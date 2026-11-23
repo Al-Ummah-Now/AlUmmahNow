@@ -237,6 +237,16 @@ function finish(result: Record<string, unknown>, failed: number): JobOutcome {
 // Channels
 // ---------------------------------------------------------------------------
 
+function cleanLocalizedText(raw: unknown, max?: number): Record<string, string> | undefined {
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+	const out: Record<string, string> = {};
+	for (const lang of ['en', 'ar'] as const) {
+		const value = (raw as Record<string, unknown>)[lang];
+		if (typeof value === 'string' && value.trim()) out[lang] = max ? value.trim().slice(0, max) : value.trim();
+	}
+	return Object.keys(out).length ? out : undefined;
+}
+
 export async function channelDetail(env: AdminServiceEnv, id: string): Promise<AdminChannelDetail> {
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel) throw new AdminError(404, 'channel_not_found');
@@ -262,9 +272,11 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 			created_at: Date.parse(channel.dateCreated) || null,
 		},
 	]);
+	const descriptionLocalized = cleanLocalizedText(channel.descriptionLocalized);
 	return {
 		...row,
 		description: channel.description ?? '',
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		coverUrl: channel.coverUrl ?? null,
 		isMain: channel.isMain === true,
 		suspension: (channel.suspension as SuspensionInfo | undefined) ?? null,
@@ -280,8 +292,10 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 
 export interface ChannelEdit {
 	name?: string;
+	nameLocalized?: Record<string, string>;
 	handle?: string;
 	description?: string;
+	descriptionLocalized?: Record<string, string>;
 	avatarUrl?: string | null;
 	coverUrl?: string | null;
 }
@@ -301,7 +315,19 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	let previousHandle: string | undefined;
 	const saved = await channels.updateObject(id, (fresh) => {
 		previousHandle = fresh.handle;
+		if (edit.nameLocalized !== undefined) {
+			const cleaned = cleanLocalizedText(edit.nameLocalized, 100);
+			if (cleaned) fresh.nameLocalized = cleaned;
+			else delete fresh.nameLocalized;
+			if (edit.name === undefined && cleaned) fresh.name = cleaned.en ?? cleaned.ar ?? fresh.name;
+		}
 		if (edit.name !== undefined) fresh.name = edit.name;
+		if (edit.descriptionLocalized !== undefined) {
+			const cleaned = cleanLocalizedText(edit.descriptionLocalized, 5000);
+			if (cleaned) fresh.descriptionLocalized = cleaned;
+			else delete fresh.descriptionLocalized;
+			if (edit.description === undefined) fresh.description = cleaned?.en ?? cleaned?.ar ?? '';
+		}
 		if (edit.description !== undefined) fresh.description = edit.description;
 		if (edit.avatarUrl !== undefined) fresh.avatarUrl = edit.avatarUrl ?? undefined;
 		if (edit.coverUrl !== undefined) fresh.coverUrl = edit.coverUrl ?? undefined;
@@ -313,7 +339,7 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 		await releaseReplacedHandle(env.channel_tabs, env.channels, previousHandle, id);
 	}
 	// The channel's Bunny collections follow its name (lib/channelCollection.ts)
-	if (edit.name !== undefined && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
+	if ((edit.name !== undefined || edit.nameLocalized !== undefined) && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId });
 	return saved;
 }
@@ -762,10 +788,14 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 	}
 	const countComments = (list: unknown): number =>
 		Array.isArray(list) ? list.reduce((n: number, c: Row) => n + (c?.isDeleted ? 0 : 1) + countComments(c?.replies), 0) : 0;
+	const titleLocalized = cleanLocalizedText(video.titleLocalized);
+	const descriptionLocalized = cleanLocalizedText(video.descriptionLocalized);
 	return {
 		id,
 		title: video.title ?? '',
+		...(titleLocalized ? { titleLocalized } : {}),
 		description: video.description ?? '',
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		channelId: video.channelId ?? null,
 		channelName: channel?.name ?? null,
 		ownerId: video.userId ?? null,
@@ -803,20 +833,34 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 
 export interface VideoEdit {
 	title?: string;
+	titleLocalized?: Record<string, string>;
 	description?: string;
+	descriptionLocalized?: Record<string, string>;
 	isPublic?: boolean;
 	thumbnailUrl?: string;
 }
 
 export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoEdit): Promise<Row> {
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
+		if (edit.titleLocalized !== undefined) {
+			const cleaned = cleanLocalizedText(edit.titleLocalized, 200);
+			if (cleaned) fresh.titleLocalized = cleaned;
+			else delete fresh.titleLocalized;
+			if (edit.title === undefined && cleaned) fresh.title = cleaned.en ?? cleaned.ar ?? fresh.title;
+		}
 		if (edit.title !== undefined) {
 			fresh.title = edit.title;
-			if (fresh.titleLocalized && typeof fresh.titleLocalized === 'object') delete fresh.titleLocalized;
+			if (edit.titleLocalized === undefined && fresh.titleLocalized && typeof fresh.titleLocalized === 'object') delete fresh.titleLocalized;
+		}
+		if (edit.descriptionLocalized !== undefined) {
+			const cleaned = cleanLocalizedText(edit.descriptionLocalized, 10000);
+			if (cleaned) fresh.descriptionLocalized = cleaned;
+			else delete fresh.descriptionLocalized;
+			if (edit.description === undefined) fresh.description = cleaned?.en ?? cleaned?.ar ?? '';
 		}
 		if (edit.description !== undefined) {
 			fresh.description = edit.description;
-			if (fresh.descriptionLocalized && typeof fresh.descriptionLocalized === 'object') delete fresh.descriptionLocalized;
+			if (edit.descriptionLocalized === undefined && fresh.descriptionLocalized && typeof fresh.descriptionLocalized === 'object') delete fresh.descriptionLocalized;
 		}
 		if (edit.isPublic !== undefined) fresh.isPublic = edit.isPublic;
 		if (edit.thumbnailUrl !== undefined) {

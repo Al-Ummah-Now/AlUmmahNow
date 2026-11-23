@@ -164,15 +164,29 @@ app.get('/:id', async (c) => {
 });
 
 interface ChannelPlan {
-  create: Array<{ name: string; handle: string | null }>;
+  create: Array<{ name: string; nameLocalized?: { en: string; ar: string }; handle: string | null }>;
   transfer: string[];
 }
 
 function channelPlan(input: unknown): ChannelPlan {
   const raw = (input && typeof input === 'object' ? input : {}) as { create?: unknown; transfer?: unknown };
-  const create = (Array.isArray(raw.create) ? raw.create : [])
-    .map((ch) => ({ name: str((ch as { name?: unknown })?.name, 100), handle: str((ch as { handle?: unknown })?.handle, 60) }))
-    .filter((ch): ch is { name: string; handle: string | null } => !!ch.name);
+  const create: ChannelPlan['create'] = [];
+  for (const ch of Array.isArray(raw.create) ? raw.create : []) {
+    const item = ch as { name?: unknown; nameLocalized?: unknown; handle?: unknown } | null;
+    const rawLoc = item?.nameLocalized && typeof item.nameLocalized === 'object' && !Array.isArray(item.nameLocalized)
+      ? (item.nameLocalized as Record<string, unknown>)
+      : null;
+    let nameLocalized: { en: string; ar: string } | undefined;
+    if (rawLoc) {
+      const en = str(rawLoc.en, 100);
+      const ar = str(rawLoc.ar, 100);
+      if ((en && !ar) || (!en && ar)) throw new HttpError(400, 'invalid_request', 'Channel name requires both English and Arabic');
+      if (en && ar) nameLocalized = { en, ar };
+    }
+    const name = str(item?.name, 100) ?? nameLocalized?.en ?? null;
+    if (!name) continue;
+    create.push({ name, ...(nameLocalized ? { nameLocalized } : {}), handle: str(item?.handle, 60) });
+  }
   const transfer = [...new Set((Array.isArray(raw.transfer) ? raw.transfer : []).filter((id): id is string => typeof id === 'string' && !!id.trim()))];
   if (create.length + transfer.length > 10) throw new HttpError(400, 'invalid_request', 'At most 10 channels per invite');
   return { create, transfer };

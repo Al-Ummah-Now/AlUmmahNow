@@ -149,9 +149,52 @@ describe('/api/admin/import', () => {
     assert.equal((await req('/api/admin/import/channels', post({ name: ' ' }))).status, 400);
     assert.equal((await req('/api/admin/import/channels', post({ name: 'x'.repeat(101) }))).status, 400);
     assert.equal((await req('/api/admin/import/channels', post({ name: 'X', ownerId: '../admin' }))).status, 400);
+    assert.equal((await req('/api/admin/import/channels', post({ nameLocalized: { en: 'Lessons', ar: '' } }))).status, 400);
+    assert.equal((await req('/api/admin/import/channels', post({ nameLocalized: { en: '', ar: 'دروس' } }))).status, 400);
+    assert.equal((await req('/api/admin/import/channels', post({ nameLocalized: { en: 'Lessons', ar: 'دروس' }, descriptionLocalized: { en: 'Only English', ar: '' } }))).status, 400);
     assert.equal(calls.length, 0);
     assert.deepEqual(parseNewChannel({ name: 'A', handle: ' ', description: 'd' }), { ok: true, value: { name: 'A', description: 'd' } });
+    assert.deepEqual(
+      parseNewChannel({
+        nameLocalized: { en: '  Fiqh Lessons  ', ar: '  دروس الفقه  ' },
+        handle: 'fiqh',
+        descriptionLocalized: { en: 'Weekly series', ar: 'سلسلة أسبوعية' },
+      }),
+      {
+        ok: true,
+        value: {
+          name: 'Fiqh Lessons',
+          nameLocalized: { en: 'Fiqh Lessons', ar: 'دروس الفقه' },
+          handle: 'fiqh',
+          description: 'Weekly series',
+          descriptionLocalized: { en: 'Weekly series', ar: 'سلسلة أسبوعية' },
+        },
+      },
+    );
     assert.equal(parseNewChannel({ name: 'A', handle: 5 }).ok, false);
+    assert.equal(parseNewChannel({ name: 'A', description: 5 }).ok, false);
+  });
+
+  it('POST /channels forwards nameLocalized and descriptionLocalized to api-videos', async () => {
+    const { req, calls } = setup(['Admin']);
+    const res = await req(
+      '/api/admin/import/channels',
+      post({
+        name: 'Fiqh Lessons',
+        nameLocalized: { en: 'Fiqh Lessons', ar: 'دروس الفقه' },
+        description: 'Weekly series',
+        descriptionLocalized: { en: 'Weekly series', ar: 'سلسلة أسبوعية' },
+        handle: 'fiqh',
+      }),
+    );
+    assert.equal(res.status, 201);
+    assert.deepEqual(calls[0]!.body, {
+      name: 'Fiqh Lessons',
+      nameLocalized: { en: 'Fiqh Lessons', ar: 'دروس الفقه' },
+      handle: 'fiqh',
+      description: 'Weekly series',
+      descriptionLocalized: { en: 'Weekly series', ar: 'سلسلة أسبوعية' },
+    });
   });
 });
 

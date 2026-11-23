@@ -98,6 +98,16 @@ export async function provisionProfile(env: AdminServiceEnv, input: { userId: st
 	return { profile: (stored ?? initial) as Row, created };
 }
 
+function cleanLocalizedMap(raw: unknown, max: number): Record<string, string> | undefined {
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+	const out: Record<string, string> = {};
+	for (const lang of ['en', 'ar'] as const) {
+		const value = (raw as Record<string, unknown>)[lang];
+		if (typeof value === 'string' && value.trim()) out[lang] = value.trim().slice(0, max);
+	}
+	return Object.keys(out).length ? out : undefined;
+}
+
 /**
  * A new channel owned by `userId` (an admin making it for an invited creator):
  * the same object, default or chosen @handle and queue message as POST
@@ -106,10 +116,19 @@ export async function provisionProfile(env: AdminServiceEnv, input: { userId: st
 export async function createChannelFor(
 	env: AdminServiceEnv,
 	userId: string,
-	input: { name: string; handle?: string | null; description?: string | null },
+	input: {
+		name?: string;
+		nameLocalized?: Record<string, string> | null;
+		handle?: string | null;
+		description?: string | null;
+		descriptionLocalized?: Record<string, string> | null;
+	},
 ): Promise<Row> {
-	const name = String(input.name ?? '').trim();
+	const nameLocalized = cleanLocalizedMap(input.nameLocalized, 100);
+	const descriptionLocalized = cleanLocalizedMap(input.descriptionLocalized, 5000);
+	const name = String(input.name ?? nameLocalized?.en ?? nameLocalized?.ar ?? '').trim();
 	if (!name || name.length > 100) throw new AdminError(400, 'invalid_request', 'name is required (at most 100 characters)');
+	const description = String(input.description ?? descriptionLocalized?.en ?? descriptionLocalized?.ar ?? '').trim();
 	const profile = await new R2Repository<Row>(env.profiles).getObject(userId);
 	if (!profile) throw new AdminError(404, 'user_not_found', 'The user has no videos profile');
 	if (input.handle) {
@@ -134,7 +153,9 @@ export async function createChannelFor(
 		userId,
 		email: profile.email,
 		name,
-		...(input.description?.trim() ? { description: input.description.trim() } : {}),
+		...(nameLocalized ? { nameLocalized } : {}),
+		...(description ? { description } : {}),
+		...(descriptionLocalized ? { descriptionLocalized } : {}),
 		isMain: owned.every((ch) => !ch || ch.isDeleted),
 		playlists: [],
 		videos: [],

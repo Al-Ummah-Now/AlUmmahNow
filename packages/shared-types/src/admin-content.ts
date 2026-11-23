@@ -204,6 +204,8 @@ export interface AdminChannelQuery {
 export interface AdminChannelRow {
   id: string;
   name: string;
+  /** Localized names per language ('en', 'ar') when set on the channel. */
+  nameLocalized?: Record<string, string>;
   handle: string | null;
   ownerId: string | null;
   ownerEmail: string | null;
@@ -220,6 +222,8 @@ export interface AdminChannelRow {
 
 export interface AdminChannelDetail extends AdminChannelRow {
   description: string;
+  /** Localized descriptions per language ('en', 'ar') when set on the channel. */
+  descriptionLocalized?: Record<string, string>;
   coverUrl: string | null;
   isMain: boolean;
   suspension: SuspensionInfo | null;
@@ -295,6 +299,8 @@ export interface AdminVideoRow {
 
 export interface AdminVideoDetail extends AdminVideoRow {
   description: string;
+  /** Localized descriptions per language ('en', 'ar') when set on the video. */
+  descriptionLocalized?: Record<string, string>;
   playUrl: string | null;
   videoUrl: string | null;
   availableResolutions: string[];
