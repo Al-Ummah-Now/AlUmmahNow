@@ -18,6 +18,7 @@
 --   apps/processor/migrations-notifications/0016_review_alerts.sql
 --   apps/processor/migrations-notifications/0017_notifications_hidden.sql
 --   apps/processor/migrations-notifications/0018_discovery_viewers.sql
+--   apps/processor/migrations-notifications/0019_live_reminders.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -31,6 +32,7 @@ CREATE TABLE channel_subscriptions (channel_id TEXT NOT NULL, subscriber_channel
 CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type INTEGER, type_name TEXT NOT NULL, source TEXT NOT NULL, dlq TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 1, failure_reason TEXT, body_json TEXT NOT NULL, body_truncated INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, replayed_at INTEGER, ids_hashed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE discovery_viewers (day TEXT NOT NULL, video_id TEXT NOT NULL, viewer TEXT NOT NULL, PRIMARY KEY (day, video_id, viewer)) WITHOUT ROWID;
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));
+CREATE TABLE live_reminders (stream_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (stream_id, user_id)) WITHOUT ROWID;
 CREATE TABLE notification_email_prefs (user_id TEXT PRIMARY KEY, account_email INTEGER NOT NULL DEFAULT 1, email_locale TEXT CHECK (email_locale IN ('en', 'ar')), updated_at INTEGER NOT NULL);
 CREATE TABLE notification_seen (user_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE notification_settings (user_id TEXT NOT NULL, category TEXT NOT NULL, enabled INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, category));
@@ -49,6 +51,7 @@ CREATE INDEX idx_dead_letters_type ON dead_letters(type_name, received_at DESC);
 CREATE INDEX idx_liked_videos_liked_at ON liked_videos (liked_at);
 CREATE INDEX idx_liked_videos_user ON liked_videos(user_id, liked_at DESC, video_id);
 CREATE INDEX idx_liked_videos_video ON liked_videos(video_id);
+CREATE INDEX idx_live_reminders_user ON live_reminders (user_id, created_at, stream_id);
 CREATE INDEX idx_notifications_created ON notifications(created_at);
 CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_notifications_entity ON notifications (entity_id) WHERE entity_id IS NOT NULL;

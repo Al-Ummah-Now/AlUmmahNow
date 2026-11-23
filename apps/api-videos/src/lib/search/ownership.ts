@@ -45,6 +45,7 @@ import {
   StudioVideoStatus,
   indexRepairStatement,
   pendingRepairCount,
+  liveMetadataStatements,
   OWNERSHIP_SOURCES,
   ALL_OWNERSHIP_KINDS,
 } from '@al-ummah/shared-types';
@@ -764,6 +765,7 @@ export async function backfillOwnershipPage(
         // Gone between list and get: a delete as of now (PR-8 order guard)
         statements.push(tombstoneStatement(db, ownershipTombstone(kind), id, now), ownershipDeleteStatement(db, kind, id, now));
         if (kind === 'channel') statements.push(...channelAccessStatements(db, id, null, now));
+        if (kind === 'stream') statements.push(...liveMetadataStatements(db, id, null, now));
         removed++;
         return;
       }
@@ -778,6 +780,8 @@ export async function backfillOwnershipPage(
       expected.push(id);
       // The channel's role rows (channel_access) are rebuilt with it
       if (kind === 'channel') statements.push(...channelAccessStatements(db, id, value, version));
+      // A live stream's upcoming-model row (wiki E17 §4.1), same version and guards
+      if (kind === 'stream') statements.push(...liveMetadataStatements(db, id, value, version));
       // Admin comment list: rewritten only when the video's comments changed
       if (kind === 'video') await syncCommentIndex(db, id, value);
     } catch (error) {

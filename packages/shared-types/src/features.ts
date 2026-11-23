@@ -26,6 +26,14 @@ export const USER_FEATURE_KEYS = [
   'createChannel',
   /** A live provider is on and configured, and the (channel owner's) tier includes live */
   'live',
+  /** Moderated live chat and VOD chat replay on live streams and premieres (switch liveChat, wiki E17) */
+  'liveChat',
+  /** Scheduling an uploaded video as a live premiere with countdown (switch livePremieres, wiki E17) */
+  'livePremieres',
+  /** Viewer reminders and calendar export on scheduled streams and premieres (switch liveReminders, wiki E17) */
+  'liveReminders',
+  /** Community event stream tags and filters (Jumu’ah, Taraweeh, conference, halqa; switch liveEvents, wiki E17) */
+  'liveEvents',
   /** Transcription can run here, and the plan has caption minutes (tier, grants or packs) */
   'captionsTranscribe',
   /** Caption translation is switched on (admin) */

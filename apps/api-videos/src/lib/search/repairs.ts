@@ -30,6 +30,7 @@ import {
 	projectSearchDocument,
 	r2Version,
 	repairBackoffMs,
+	syncLiveMetadata,
 	syncOwnership,
 	syncSearchDocument,
 	type AdminJob,
@@ -157,12 +158,14 @@ async function tombstoneVersion(db: SearchDb, entity: string, id: string): Promi
  */
 async function repairOwnership(db: SearchDb, kind: OwnershipKind, id: string, value: Record<string, unknown> | null, version: number, now: number): Promise<void> {
 	await syncOwnership(db, kind, id, value, now, version);
+	if (kind === 'stream') await syncLiveMetadata(db, id, value, version);
 	if (!value || !projectOwnership(kind, id, value)) return;
 	const row = await db.prepare('SELECT source_version FROM content_ownership WHERE kind = ? AND id = ?').bind(kind, id).first<{ source_version: number }>();
 	if (row) return;
 	const tomb = await tombstoneVersion(db, ownershipTombstone(kind), id);
 	if (tomb === null) throw new Error(`ownership row of ${kind} ${id} was not written`);
 	await syncOwnership(db, kind, id, value, now, tomb + 1);
+	if (kind === 'stream') await syncLiveMetadata(db, id, value, tomb + 1);
 	const after = await db.prepare('SELECT 1 AS x FROM content_ownership WHERE kind = ? AND id = ?').bind(kind, id).first<{ x: number }>();
 	if (!after) throw new Error(`ownership row of ${kind} ${id} is still refused`);
 }

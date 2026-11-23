@@ -66,8 +66,8 @@ export function jobTargetHref(job: Pick<AdminJob, 'targetKind' | 'targetId'> & P
   if (job.kind === 'videos.repair-thumbnails') return '/processing';
   // The index rebuild covers a whole bucket: its flag lives on the Errors page
   if (job.kind === 'search.rebuild-ownership' || job.kind === 'search.reconcile' || job.kind === 'search.repair-objects') return '/errors';
-  // The discovery ranking covers the whole site: it stays on the jobs list
-  if (job.kind === 'discovery.rank') return '/jobs';
+  // The discovery ranking and the live purge cover the whole site: they stay on the jobs list
+  if (job.kind === 'discovery.rank' || job.kind === 'live.purge-streams') return '/jobs';
   const base = job.targetKind === 'channel' ? '/channels' : job.targetKind === 'video' ? '/videos' : '/users';
   return `${base}/${encodeURIComponent(job.targetId)}`;
 }

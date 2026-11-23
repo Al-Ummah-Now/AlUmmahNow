@@ -50,6 +50,7 @@ import { footprintTargets, footprintsComplete, forgetFootprints } from './footpr
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseLiveSessionOwner } from '../live/store';
+import { LIVE_DELETE_BATCH, eraseLiveChat, eraseLiveReminders, exportLiveChat, exportLiveReminders, isMissingTable } from '../live/metadata';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
@@ -270,6 +271,10 @@ export interface UserDataExport {
 	channelMemberships: Json[];
 	/** Channel invitations sent to or by the account (SEARCH_DB channel_invites). */
 	channelInvites: Json[];
+	/** Live chat messages the account wrote (SEARCH_DB live_chat_messages, wiki E17). */
+	liveChatMessages: Json[];
+	/** Live streams and premieres the account asked to be reminded of (NOTIFICATIONS_DB live_reminders). */
+	liveReminders: Json[];
 }
 
 /** Array sections of the export; partial exports are merged by concatenating these. */
@@ -296,6 +301,8 @@ export const EXPORT_LIST_FIELDS = [
 	'notificationState',
 	'channelMemberships',
 	'channelInvites',
+	'liveChatMessages',
+	'liveReminders',
 ] as const;
 
 const EXPORT_NOTES = [
@@ -367,6 +374,25 @@ export async function collectUserData(
 					}
 				}),
 			);
+
+	const exportPages = async (
+		ctx: PhaseContext,
+		database: D1Database | undefined,
+		read: (d: D1Database, user: string, cursor: string | null) => Promise<{ rows: Json[]; cursor: string | null }>,
+		into: Json[],
+	) => {
+		if (!database) return;
+		try {
+			do {
+				ctx.budget.spend();
+				const page = await read(database, userId, ctx.checkpoint.c ?? null);
+				into.push(...page.rows);
+				ctx.checkpoint.c = page.cursor ?? undefined;
+			} while (ctx.checkpoint.c);
+		} catch (error) {
+			if (!isMissingTable(error)) throw error;
+		}
+	};
 
 	const phases: Phase[] = [
 		async (ctx) => {
@@ -501,6 +527,9 @@ export async function collectUserData(
 				const [seenAt, settings, email] = await Promise.all([getSeenAt(ndb, userId), getSettings(ndb, userId), getEmailSettings(ndb, userId)]);
 				out.notificationState.push({ menuSeenAt: seenAt === null ? null : new Date(seenAt).toISOString(), categories: settings, email });
 			}),
+		// Live chat and reminders (wiki E17), a page at a time until done
+		(ctx) => exportPages(ctx, env.SEARCH_DB as D1Database | undefined, exportLiveChat, out.liveChatMessages),
+		(ctx) => exportPages(ctx, env.NOTIFICATIONS_DB, exportLiveReminders, out.liveReminders),
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE);
@@ -604,8 +633,8 @@ function anonymizeVideoComments(comments: unknown, userId: string, summary: Eras
 	return changed;
 }
 
-/** Format of erase resume tokens: 2 since the index-driven phases (#1073). */
-const ERASE_TOKEN_VERSION = 2;
+/** Format of erase resume tokens: 2 since the index-driven phases (#1073), 3 with the live chat phase (wiki E17). */
+const ERASE_TOKEN_VERSION = 3;
 
 /** Bound parameters per IN (...) list (D1 allows 100). */
 const IN_CHUNK = 90;
@@ -1130,6 +1159,25 @@ export async function eraseUserData(
 					for (const { key } of objects) await eraseReportKey(ctx, key);
 				}),
 		),
+
+		// Live chat and reminders (wiki E17): every row the person wrote or set, in bounded batches. Their own
+		// streams' chat goes with the stream records above (admin job 'live.purge-streams')
+		async (ctx) => {
+			try {
+				for (let n = LIVE_DELETE_BATCH; db && n === LIVE_DELETE_BATCH; ) {
+					ctx.budget.spend();
+					n = await eraseLiveChat(db as unknown as D1Database, userId);
+					if (n > 0) bump(summary.deleted, 'liveChatMessages', n);
+				}
+				for (let n = LIVE_DELETE_BATCH; env.NOTIFICATIONS_DB && n === LIVE_DELETE_BATCH; ) {
+					ctx.budget.spend();
+					n = await eraseLiveReminders(env.NOTIFICATIONS_DB, userId);
+					if (n > 0) bump(summary.deleted, 'liveReminders', n);
+				}
+			} catch (error) {
+				if (!isMissingTable(error)) throw error;
+			}
+		},
 
 		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile last
 		async (ctx) => {

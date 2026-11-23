@@ -58,6 +58,7 @@ import csamInternalRouter from "./routers/csam.router";
 import { handleLiveEdge, isLiveHost } from "./lib/live/edge";
 import type { LiveEnv } from "./lib/live/providers";
 import { sweepLiveSessions } from "./lib/live/service";
+import { maintainLiveMetadata } from './lib/live/metadata';
 import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
 import { pruneLiveData } from "./lib/live/qoe";
 import { loggingMiddleware } from "./middleware/logging";
@@ -666,7 +667,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		);
 		// Every minute: end self-hosted sessions whose encoder went quiet, poll live Bunny sessions (lib/live/service.ts)
 		ctx.waitUntil(
-			sweepLiveSessions(rawEnv as unknown as LiveEnv)
+			// Through the search-sync wrapper: an ended stream's index rows follow its record (wiki E17)
+			sweepLiveSessions(withSearchSync(rawEnv, ctx) as unknown as LiveEnv)
 				.then((r) => (r.idleEnded || r.bunnyPolled ? logger.info('[Live] Sweep', r) : undefined))
 				.catch((error) => logger.error('[Live] Sweep failed', { error: error instanceof Error ? error.message : String(error) })),
 		);
@@ -765,6 +767,14 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 					logger.error('[PrivacyFootprints] Pass upkeep failed', { error: error instanceof Error ? error.message : String(error) });
 					reportJobFailure(rawEnv, ctx, 'privacy-footprints', error);
 				}),
+		);
+		// Hourly: the upcoming model is filled once from R2; a deleted stream's chat and reminders are removed
+		// even if the job's message was lost (lib/live/metadata.ts, wiki E17)
+		ctx.waitUntil(
+			maintainLiveMetadata(rawEnv as never).catch((error) => {
+				logger.error('[Live] Metadata upkeep failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'live-metadata', error);
+			}),
 		);
 		// Hourly: creator support (lib/support/jobs.ts): release held gifts; at 01 UTC reconcile, disputes, payees.
 		// Nothing is queued until support has data (one keyed read).

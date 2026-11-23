@@ -30,7 +30,9 @@ import {
 	DEFAULT_UNLIMITED_TIER,
 	NO_DEFAULT_TIER,
 	SIGNUP_TIER_ASSIGNER,
+	TIER_LIVE_CAPABILITIES,
 	TIER_RANK_STEP,
+	type TierLiveCapability,
 	tierRank,
 	type CreatorTier,
 	type CreatorTierVia,
@@ -75,6 +77,9 @@ interface TierRow {
 	live_hours_month?: number | null;
 	live_max_concurrent?: number | null;
 	live_max_stream_minutes?: number | null;
+	live_chat?: number | null;
+	live_premieres?: number | null;
+	live_events?: number | null;
 	offline_downloads?: number | null;
 	offline_max_quality?: string | null;
 	offline_max_videos?: number | null;
@@ -104,6 +109,15 @@ function liveFields(row: TierRow): Pick<CreatorTier, 'live' | 'liveHoursMonth' |
 		liveMaxConcurrent: Number(row.live_max_concurrent) || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
 		liveMaxStreamMinutes: Number(row.live_max_stream_minutes) || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
 	};
+}
+
+/** Set on the tier itself only; NULL follows `live` (wiki E17 §3.2). */
+function liveCapabilityFields(row: TierRow): Partial<Pick<CreatorTier, TierLiveCapability>> {
+	const out: Partial<Pick<CreatorTier, TierLiveCapability>> = {};
+	for (const [field, value] of [['liveChat', row.live_chat], ['livePremieres', row.live_premieres], ['liveEvents', row.live_events]] as const) {
+		if (value !== undefined && value !== null) out[field] = Number(value) === 1;
+	}
+	return out;
 }
 
 function offlineFields(row: TierRow): Pick<CreatorTier, 'offlineDownloads' | 'offlineMaxQuality' | 'offlineMaxVideos' | 'offlineLicenseDays'> {
@@ -154,6 +168,7 @@ function toTier(row: TierRow): CreatorTier {
 		audioTracksPerVideo: Number(row.audio_tracks_per_video ?? 0) || 0,
 		// Rows from before migration 0060 have no live columns: the shipped tier's defaults
 		...liveFields(row),
+		...liveCapabilityFields(row),
 		// Rows from before migration 0079 have no offline columns: the shipped tier's defaults
 		...offlineFields(row),
 		updatedAt: row.updated_at ?? null,
@@ -430,6 +445,9 @@ export interface TierInput {
 	liveHoursMonth?: unknown;
 	liveMaxConcurrent?: unknown;
 	liveMaxStreamMinutes?: unknown;
+	liveChat?: unknown;
+	livePremieres?: unknown;
+	liveEvents?: unknown;
 	offlineDownloads?: unknown;
 	offlineMaxQuality?: unknown;
 	offlineMaxVideos?: unknown;
@@ -507,6 +525,14 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	// Live: a boolean, and its limits are kept (validated) even while live is off, so turning it back on restores them
 	if (input.live !== undefined && typeof input.live !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'live must be true or false');
 	const live: boolean = input.live === undefined ? current?.live ?? false : input.live === true;
+	// true, false, or null = follow `live`; left out keeps what is stored
+	const liveCapabilities: Partial<Pick<CreatorTier, TierLiveCapability>> = {};
+	for (const field of TIER_LIVE_CAPABILITIES) {
+		const value = input[field] === undefined ? current?.[field] : input[field];
+		if (value === undefined || value === null) continue;
+		if (typeof value !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', `${field} must be true, false or null`);
+		liveCapabilities[field] = value;
+	}
 	// A limit left at an unlimited tier's 0 (the tier just stopped being unlimited) starts from the Creator default
 	const liveLimit = (field: 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes') =>
 		intIn(input[field] ?? (current?.[field] || DEFAULT_CREATOR_TIER[field]), field);
@@ -523,6 +549,7 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	return {
 		id, name, ...text, unlimited, uploads, channels, requestable, hidden, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo,
 		live, liveHoursMonth: liveLimit('liveHoursMonth'), liveMaxConcurrent: liveLimit('liveMaxConcurrent'), liveMaxStreamMinutes: liveLimit('liveMaxStreamMinutes'),
+		...liveCapabilities,
 		offlineDownloads, offlineMaxQuality: rawQuality, offlineMaxVideos, offlineLicenseDays,
 	};
 }
@@ -607,9 +634,9 @@ export async function saveTier(
 		.prepare(
 			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, hidden, sort_order,
 			   per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video,
-			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes,
+			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes, live_chat, live_premieres, live_events,
 			   offline_downloads, offline_max_quality, offline_max_videos, offline_license_days, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_ar = excluded.name_ar, description = excluded.description,
 			   description_ar = excluded.description_ar, unlimited = excluded.unlimited, uploads = excluded.uploads, channels = excluded.channels,
 			   requestable = excluded.requestable, hidden = excluded.hidden, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
@@ -617,6 +644,7 @@ export async function saveTier(
 			   caption_minutes_month = excluded.caption_minutes_month, import_counts_limits = excluded.import_counts_limits, audio_tracks_per_video = excluded.audio_tracks_per_video,
 			   live = excluded.live, live_hours_month = excluded.live_hours_month,
 			   live_max_concurrent = excluded.live_max_concurrent, live_max_stream_minutes = excluded.live_max_stream_minutes,
+			   live_chat = excluded.live_chat, live_premieres = excluded.live_premieres, live_events = excluded.live_events,
 			   offline_downloads = excluded.offline_downloads, offline_max_quality = excluded.offline_max_quality,
 			   offline_max_videos = excluded.offline_max_videos, offline_license_days = excluded.offline_license_days,
 			   updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
@@ -625,6 +653,7 @@ export async function saveTier(
 			id, tier.name, tier.nameAr, tier.description, tier.descriptionAr, tier.unlimited ? 1 : 0, tier.uploads ? 1 : 0, tier.channels ? 1 : 0,
 			tier.requestable ? 1 : 0, tier.hidden ? 1 : 0, tier.sortOrder, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth,
 			tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes,
+			...TIER_LIVE_CAPABILITIES.map((field) => (tier[field] === undefined ? null : tier[field] ? 1 : 0)),
 			tier.offlineDownloads ? 1 : 0, tier.offlineMaxQuality ?? '480p', tier.offlineMaxVideos === undefined ? 25 : tier.offlineMaxVideos, tier.offlineLicenseDays ?? 30,
 			now, actorId,
 		)

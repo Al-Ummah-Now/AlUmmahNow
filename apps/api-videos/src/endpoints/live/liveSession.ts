@@ -25,7 +25,7 @@ import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
 import { canManageLiveStream } from '../../lib/channelAccess';
 import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
-import { isLiveVodWithheld } from '@al-ummah/shared-types';
+import { isLiveVodWithheld, liveRecordingWithheld } from '@al-ummah/shared-types';
 import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/live/tier-gate';
 import type { SessionTier } from '../../lib/live/service';
 import { featureOff } from '../../lib/features/off';
@@ -39,17 +39,8 @@ const Err = (description: string) => ({ description, content: { 'application/jso
 const env = (c: AppContext) => c.env as unknown as StreamsEnv;
 const fail = (c: AppContext, status: number, code: string, error: string) => c.json({ success: false, code, error }, status as 400);
 
-/**
- * The stream whose recording a person must decide (or rejected) reaches its owner only. Never tied
- * to `status` or a provisioned session (the owner controls both): only the current session really
- * going live (markStreamLive: first segment, or Bunny publishing) makes it public again, since live
- * is never pre-reviewed (VR9).
- */
-export function liveRecordingWithheld(stream: object): boolean {
-	const s = stream as { sessionId?: string | null; review?: { status?: string }; liveAgainSessionId?: string };
-	if (!isLiveVodWithheld(s.review)) return false;
-	return !s.sessionId || s.liveAgainSessionId !== s.sessionId;
-}
+// Who may see a stream whose recording is held (VR9): shared, so its chat follows the same rule (wiki E17)
+export { liveRecordingWithheld };
 
 /** A held or rejected recording's URL never reaches anyone but the owner, whatever the stream does next. */
 export function recordingHidden(s: object, isOwner: boolean): boolean {
