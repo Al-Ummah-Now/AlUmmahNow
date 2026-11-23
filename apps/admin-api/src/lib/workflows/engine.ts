@@ -34,6 +34,7 @@ import {
   type WorkflowApprovalBlock,
   type WorkflowErrorCode,
   type WorkflowField,
+  type WorkflowFloor,
   type WorkflowLocalized,
   type WorkflowRequestView,
   type WorkflowRuleConfig,
@@ -110,9 +111,18 @@ export async function ruleInForce(ctx: WorkflowCtx, type: WorkflowActionType, sc
   return { id: null, version: 0, scope: '', config: seeded };
 }
 
+/**
+ * The floor for an action and scope. Changes to money rules (rule-change scope 'money') carry the money
+ * floor, so the finance list, never tech staff or the owner, decides on them.
+ */
+export function floorFor(type: WorkflowActionType, scope: string): WorkflowFloor {
+  if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return { minApprovals: 1, money: true, minStepUp: 'approve' };
+  return WORKFLOW_ACTIONS[type].floor;
+}
+
 /** The rule with its floor applied: a stored rule can never be weaker than the floor (§4.3). */
-function enforceFloor(type: WorkflowActionType, rule: WorkflowRuleConfig, minApprovals: number): WorkflowRuleConfig {
-  const floor = WORKFLOW_ACTIONS[type].floor;
+function enforceFloor(type: WorkflowActionType, scope: string, rule: WorkflowRuleConfig, minApprovals: number): WorkflowRuleConfig {
+  const floor = floorFor(type, scope);
   const problems = checkWorkflowFloor(floor, rule, minApprovals);
   if (!problems.length) return rule;
   const out: WorkflowRuleConfig = JSON.parse(JSON.stringify(rule));
@@ -226,8 +236,7 @@ function cleanText(v: unknown, max: number, required: boolean): string | null {
 // ---------------------------------------------------------------------------------------------------
 
 /** Accounts that may approve this request right now (for the inbox and notices), excluding the proposer. */
-async function eligibleApprovers(ctx: WorkflowCtx, type: WorkflowActionType, rule: WorkflowRuleConfig, proposedBy: string, subject: string | null, decidedBy: string[], approvedBy: string[]): Promise<string[]> {
-  const floor = WORKFLOW_ACTIONS[type].floor;
+async function eligibleApprovers(ctx: WorkflowCtx, floor: WorkflowFloor, rule: WorkflowRuleConfig, proposedBy: string, subject: string | null, decidedBy: string[], approvedBy: string[]): Promise<string[]> {
   const ids = await ctx.directory.candidates(rule.approvers);
   const out: string[] = [];
   for (const id of ids) {
@@ -260,14 +269,16 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
   const executor = executorFor(input.type);
   const action = WORKFLOW_ACTIONS[input.type];
   const reason = cleanText(input.reason, WORKFLOW_LIMITS.maxReasonLength, true) as string;
-  if (workflowProposeBlocks(action.floor, actor).length || !(await executor.canPropose(ctx, actor))) {
-    throw new WorkflowError(403, 'propose_not_allowed', { blocks: workflowProposeBlocks(action.floor, actor) });
-  }
+  // Money is refused before anything else is read; the payload decides the scope (and so the floor).
+  if (workflowProposeBlocks(action.floor, actor).length) throw new WorkflowError(403, 'propose_not_allowed', { blocks: workflowProposeBlocks(action.floor, actor) });
   const payload = await executor.validate(ctx, input.payload);
   const scope = executor.scope?.(payload) ?? '';
   if (scope.length > WORKFLOW_LIMITS.scopeMaxLength) throw new WorkflowError(400, 'invalid_request');
+  const floor = floorFor(input.type, scope);
+  const blocks = workflowProposeBlocks(floor, actor);
+  if (blocks.length || !(await executor.canPropose(ctx, actor, payload))) throw new WorkflowError(403, 'propose_not_allowed', { blocks });
   const inForce = await ruleInForce(ctx, input.type, scope);
-  const rule = enforceFloor(input.type, inForce.config, (await executor.minApprovals?.(ctx)) ?? 0);
+  const rule = enforceFloor(input.type, scope, inForce.config, (await executor.minApprovals?.(ctx)) ?? 0);
   if (rule.stepUp === 'propose_and_approve' && !ctx.steppedUp) throw new WorkflowError(403, 'propose_not_allowed', { stepUp: true });
 
   const now = ctx.now();
@@ -294,8 +305,8 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
     .bind(
       id,
       input.type,
-      inForce.scope,
-      action.domain,
+      scope,
+      floor.money ? 'money' : action.domain,
       inForce.id,
       JSON.stringify(rule),
       target.kind,
@@ -315,7 +326,7 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
       applyAt ? applyAt.toISOString() : null,
       at,
     );
-  const approvers = direct ? [] : await eligibleApprovers(ctx, input.type, rule, actor.userId, subject, [actor.userId], []);
+  const approvers = direct ? [] : await eligibleApprovers(ctx, floor, rule, actor.userId, subject, [actor.userId], []);
   const inbox = approvers.map((u) => ctx.db.prepare('INSERT OR IGNORE INTO workflow_inbox (user_id, request_id, created_at) VALUES (?, ?, ?)').bind(u, id, at));
   try {
     await ctx.db.batch([insert, stepStatement(ctx, id, null, actor.userId, 'propose', null, at), ...inbox]);
@@ -352,7 +363,7 @@ function facts(row: RequestRow, steps: StepRow[]) {
 
 async function blocksFor(ctx: WorkflowCtx, row: RequestRow, steps: StepRow[], actor: WorkflowActor): Promise<WorkflowApprovalBlock[]> {
   const rule = JSON.parse(row.rule) as WorkflowRuleConfig;
-  return workflowApprovalBlocks(rule, WORKFLOW_ACTIONS[row.action_type].floor, facts(row, steps), actor);
+  return workflowApprovalBlocks(rule, floorFor(row.action_type, row.scope), facts(row, steps), actor);
 }
 
 /** Marks a request stale (the target changed): nobody can approve it, the proposer proposes again. */
@@ -566,7 +577,7 @@ export async function getRequestView(ctx: WorkflowCtx, id: string, viewer?: Work
     id: row.id,
     type: row.action_type,
     scope: row.scope,
-    domain: WORKFLOW_ACTIONS[row.action_type].domain,
+    domain: row.domain as WorkflowRequestView['domain'],
     title: diff.title,
     target: { kind: row.target_kind, id: row.target_id },
     fields: diff.fields,
@@ -600,6 +611,8 @@ export type RequestListView = 'waiting' | 'mine' | 'open' | 'history';
 export interface RequestListItem {
   id: string;
   type: WorkflowActionType;
+  /** 'money' also for changes to money rules */
+  domain: string;
   title: WorkflowLocalized;
   status: WorkflowStatus;
   proposedBy: string;
@@ -621,7 +634,7 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   const cursorArgs = cAt ? [cAt, cAt, cId ?? ''] : [];
   let sql: string;
   let args: unknown[];
-  const cols = 'r.id, r.action_type, r.diff, r.status, r.proposed_by, r.proposed_at, r.effective_at, r.expires_at, r.approvals_needed, r.approvals_count';
+  const cols = 'r.id, r.action_type, r.domain, r.diff, r.status, r.proposed_by, r.proposed_at, r.effective_at, r.expires_at, r.approvals_needed, r.approvals_count';
   switch (opts.view) {
     case 'waiting':
       sql = `SELECT ${cols} FROM workflow_inbox i JOIN workflow_requests r ON r.id = i.request_id WHERE i.user_id = ?${cursorSql} ORDER BY r.proposed_at DESC, r.id DESC LIMIT ?`;
@@ -655,6 +668,7 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   const items = page.map((r) => ({
     id: r.id,
     type: r.action_type,
+    domain: r.domain,
     title: (JSON.parse(r.diff) as { title: WorkflowLocalized }).title,
     status: r.status,
     proposedBy: r.proposed_by,
