@@ -73,6 +73,7 @@ import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '
 import { dropAudit, readAudit, setAuditPrevious, setAuditSubject, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
+import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
 import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -909,7 +910,7 @@ app.put('/captions/settings', async (c) => {
     });
     if (changed) {
       logger.warn('[Captions] Super-admin-only switch change refused', { userId: c.get('auth')?.userId, feature: changed.key });
-      return c.json({ success: false, code: 'forbidden', feature: changed.key, error: 'Only a super admin can change this' }, 403);
+      return apiError(c, 403, 'forbidden', { feature: changed.key, error: 'Only a super admin can change this' });
     }
   }
   return ok(c, await audited(c, { kind: 'captions-settings', id: 'settings', action: 'edit', details: patch, previous: current.settings }, () =>

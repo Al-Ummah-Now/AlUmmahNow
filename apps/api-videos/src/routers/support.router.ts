@@ -11,9 +11,10 @@
  * admin-api allows the batch routes only to people on the organisation's finance list, with a
  * step-up, and audits them; approve checks the finance list again here.
  */
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { createJob, getJob, retryJob } from '../lib/admin/jobs';
+import { apiError } from '../lib/api-error';
 import type { SupportJobEnv } from '../lib/support/jobs';
 import { approveBatch, PayoutError, stopBatch } from '../lib/support/payouts';
 
@@ -23,10 +24,10 @@ const RetryBody = z.object({ jobId: z.guid(), kind: z.string().max(40) }).strict
 
 app.post('/jobs/retry', async (c) => {
 	const parsed = RetryBody.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	const { jobId, kind } = parsed.data;
 	const job = await getJob(c.env, jobId);
-	if (!job || !job.kind.startsWith('support.') || job.kind !== kind) return c.json({ success: false, code: 'support_job_not_found' }, 404);
+	if (!job || !job.kind.startsWith('support.') || job.kind !== kind) return apiError(c, 404, 'support_job_not_found');
 	const store = c.env.SEARCH_DB!;
 	if (job.status !== 'failed') {
 		// A webhook job that gave up early (event marked failed) finished "succeeded": queue it again from its event
@@ -58,34 +59,34 @@ const PAYOUT_ERROR_STATUS: Record<PayoutError['code'], 400 | 403 | 404 | 409> = 
 	not_built: 409,
 };
 
-function payoutFailure(c: { json: (body: unknown, status: number) => Response }, error: unknown) {
-	if (error instanceof PayoutError) return c.json({ success: false, code: `support_${error.code}`, detail: error.detail }, PAYOUT_ERROR_STATUS[error.code]);
+function payoutFailure(c: Context<any, any, any>, error: unknown) {
+	if (error instanceof PayoutError) return apiError(c, PAYOUT_ERROR_STATUS[error.code], `support_${error.code}`, { detail: error.detail });
 	throw error;
 }
 
 app.post('/batches/plan', async (c) => {
 	const parsed = PlanBody.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	const job = await createJob(c.env, { kind: 'support.payout-plan', targetKind: 'support', targetId: `plan:${parsed.data.period}`, params: { period: parsed.data.period, preparedBy: parsed.data.actorId }, actorId: parsed.data.actorId });
 	return c.json({ success: true, result: { jobId: job.id } }, 202);
 });
 
 app.post('/batches/:id/approve', async (c) => {
 	const parsed = ApproveBody.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	const batchId = c.req.param('id');
 	try {
 		const r = await approveBatch(c.env.SEARCH_DB!, batchId, parsed.data.actorId, new Date());
 		if (r.approved) await createJob(c.env, { kind: 'support.payout-fund', targetKind: 'support', targetId: batchId, params: { batchId }, actorId: parsed.data.actorId });
 		return c.json({ success: true, result: r });
 	} catch (error) {
-		return payoutFailure(c as never, error);
+		return payoutFailure(c, error);
 	}
 });
 
 app.post('/batches/:id/stop', async (c) => {
 	const parsed = StopBody.safeParse(await c.req.json().catch(() => null));
-	if (!parsed.success) return c.json({ success: false, code: 'invalid_request' }, 400);
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	return c.json({ success: true, result: await stopBatch(c.env.SEARCH_DB!, c.req.param('id'), parsed.data.reason, new Date()) });
 });
 
