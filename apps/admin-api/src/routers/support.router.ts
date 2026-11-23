@@ -3,7 +3,8 @@
  *
  * Who may do what:
  *   read (overview, settings, batches, countries, finance list)  support:read (super admins) or anyone on the finance list
- *   finance list and tech-staff marks                             super admins, two-person changes (lib/support-finance.ts)
+ *   finance list and tech-staff marks                             super admins, two-person changes on the approval workflow
+ *                                                                 (lib/workflows/support-finance-actions.ts); removal and marking are immediate
  *   countries                                                     support:manage (super admins)
  *   owner decisions, organization formed, holds, payout batches   the finance list only: support:providers for settings,
  *                                                                 support:payouts for batches. A super admin role alone is not
@@ -20,8 +21,14 @@ import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '
 import { dropAudit, setAuditPrevious, writeAudit, type AuditAction } from '../lib/content/audit';
 import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
-import { approveFinanceMember, FinanceError, financeAllows, financeMember, isTechStaff, listFinanceMembers, markTechStaff, proposeFinanceMember, removeFinanceMember, unmarkTechStaff } from '../lib/support-finance';
+import { approveFinanceMember, FinanceError, financeAllows, financeMember, isTechStaff, listFinanceMembers, markTechStaff, removeFinanceMember } from '../lib/support-finance';
 import { normalizeRoles } from '../lib/roles';
+import { approveRequest, proposeChange, WorkflowError } from '../lib/workflows/engine';
+import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
+import { workflowCtx } from './workflows.router';
+import { stepUpAnswer } from '../middleware/passkeys';
+
+registerSupportFinanceExecutors();
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -70,6 +77,7 @@ app.onError((error, c) => {
     return apiError(c, error.status, error.code);
   }
   if (error instanceof FinanceError) return apiError(c, error.status, error.code);
+  if (error instanceof WorkflowError) return apiError(c, error.status, error.code, error.extra as never);
   if (error instanceof VideosError) return apiError(c, (error.status >= 400 && error.status < 600 ? error.status : 502) as 400, error.code, error.details as never);
   logger.error('[Support] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return apiError(c, 500, 'internal_error');
@@ -123,17 +131,42 @@ app.get('/finance', async (c) => {
 // Finance list and tech staff (super admins, two people)
 // ---------------------------------------------------------------------------
 
+/**
+ * Adding someone (or changing their money permissions) is a change request on the approval workflow
+ * (wiki AUN-WORKFLOWS WF-5, action support.financeList.add): 202 with the request; a second super admin
+ * approves it on the Approvals page, or here. Nobody adds themselves.
+ */
+const wf = (c: C) => workflowCtx(c.env as never, { steppedUp: stepUpAnswer(c as never) === null });
+
 app.post('/finance', async (c) => {
   needSuperAdmin(c);
   const input = await body(c);
   const userId = typeof input.userId === 'string' ? input.userId : '';
-  return ok(c, await audited(c, { kind: 'support-finance', id: userId || '-', action: 'propose', details: { permissions: input.permissions } }, () => proposeFinanceMember(db(c), { userId, permissions: input.permissions, proposedBy: actorOf(c) }, new Date())));
+  if (userId && userId === actorOf(c)) throw new FinanceError(409, 'support_same_person', 'You can’t add yourself');
+  const ctx = wf(c);
+  const actor = await ctx.directory.actor(actorOf(c), c.get('auth')?.roles ?? []);
+  const out = await proposeChange(ctx, actor, { type: 'support.financeList.add', payload: { userId, permissions: input.permissions }, reason: typeof input.reason === 'string' && input.reason.trim() ? input.reason : 'Finance list' });
+  return c.json({ success: true, result: out }, out.status === 'applied' ? 200 : 202);
 });
 
+/**
+ * Approves the open request for this person. A proposal made before the workflow existed (a member row
+ * with no approver and no request) is still approved the old way, so nothing in flight is lost.
+ */
 app.post('/finance/:userId/approve', async (c) => {
   needSuperAdmin(c);
   const userId = c.req.param('userId');
-  return ok(c, await audited(c, { kind: 'support-finance', id: userId, action: 'approve' }, () => approveFinanceMember(db(c), userId, actorOf(c))));
+  const ctx = wf(c);
+  const open = await ctx.db.prepare('SELECT id FROM workflow_requests WHERE open_key = ?').bind(`support.financeList.add:finance-member:${userId}`).first<{ id: string }>();
+  if (!open) return ok(c, await audited(c, { kind: 'support-finance', id: userId, action: 'approve' }, () => approveFinanceMember(db(c), userId, actorOf(c))));
+  const actor = await ctx.directory.actor(actorOf(c), c.get('auth')?.roles ?? []);
+  try {
+    return ok(c, await approveRequest(ctx, actor, open.id, {}));
+  } catch (e) {
+    const blocks = e instanceof WorkflowError ? ((e.extra.blocks as string[] | undefined) ?? []) : [];
+    if (blocks.includes('own_request') || blocks.includes('subject')) throw new FinanceError(409, 'support_same_person', 'A second person has to approve');
+    throw e;
+  }
 });
 
 app.delete('/finance/:userId', async (c) => {
@@ -150,11 +183,14 @@ app.post('/tech-staff', async (c) => {
   return ok(c, { userId, techStaff: true });
 });
 
+/** Removing a tech-staff mark is a change request (support.techStaff.unmark); whoever marked them never approves it. */
 app.delete('/tech-staff/:userId', async (c) => {
   needSuperAdmin(c);
   const userId = c.req.param('userId');
-  await audited(c, { kind: 'support-tech-staff', id: userId, action: 'unmark' }, () => unmarkTechStaff(db(c), userId, actorOf(c)));
-  return ok(c, { userId, techStaff: false });
+  const ctx = wf(c);
+  const actor = await ctx.directory.actor(actorOf(c), c.get('auth')?.roles ?? []);
+  const out = await proposeChange(ctx, actor, { type: 'support.techStaff.unmark', payload: { userId }, reason: 'Remove tech-staff mark' });
+  return c.json({ success: true, result: out }, out.status === 'applied' ? 200 : 202);
 });
 
 // ---------------------------------------------------------------------------

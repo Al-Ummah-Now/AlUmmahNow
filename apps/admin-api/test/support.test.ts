@@ -69,7 +69,8 @@ function setup() {
     const app = new Hono();
     app.use('*', errorEnvelope);
     app.use('*', async (c, next) => {
-      c.set('auth' as never, { userId, roles } as never);
+      // a fresh sign-in: the approval workflow needs a step-up to propose and approve money changes
+      c.set('auth' as never, { userId, roles, payload: { auth_time: Math.floor(Date.now() / 1000) } } as never);
       await next();
     });
     app.route('/api/support', supportRouter as never);
@@ -84,20 +85,31 @@ const OWNER = 'usr_owner';
 const SUPER_B = 'usr_super_b';
 const FIN = 'usr_finance';
 
-describe('the finance list is a two-person change', () => {
+describe('the finance list is a two-person change (approval workflow, AUN-WORKFLOWS WF-5)', () => {
   it('a super admin proposes, a different one approves; then the person holds only the permissions given', async () => {
     const t = setup();
     const a = t.as(OWNER, ['super_admin']);
     const b = t.as(SUPER_B, ['super_admin']);
-    assert.equal((await a('POST', '/finance', { userId: FIN, permissions: ['support:payouts'] })).status, 200);
+    const proposed = await a('POST', '/finance', { userId: FIN, permissions: ['support:payouts'], reason: 'New treasurer' });
+    assert.equal(proposed.status, 202);
+    const request = ((await proposed.json()) as { result: { status: string; request: { id: string; fields: { key: string; after: unknown }[] } } }).result;
+    assert.equal(request.status, 'pending_approval');
+    assert.deepEqual(request.request.fields.find((f) => f.key === 'permissions')?.after, ['support:payouts']);
     assert.equal(await financeAllows(t.search as never, FIN, 'support:payouts'), false, 'not before the approval');
     const self = await a('POST', `/finance/${FIN}/approve`);
     assert.equal(self.status, 409);
     assert.equal(((await self.json()) as { code: string }).code, 'support_same_person');
+    assert.equal((await t.as(FIN, ['super_admin'])('POST', `/finance/${FIN}/approve`)).status, 409, 'the person added never approves it');
     assert.equal((await b('POST', `/finance/${FIN}/approve`)).status, 200);
     assert.equal(await financeAllows(t.search as never, FIN, 'support:payouts'), true);
     assert.equal(await financeAllows(t.search as never, FIN, 'support:refund'), false);
-    assert.ok((await t.audits()).results.length >= 2);
+    const member = (await t.search.prepare('SELECT added_by, approved_by FROM support_finance_members WHERE user_id = ?').bind(FIN).first()) as { added_by: string; approved_by: string };
+    assert.deepEqual(member, { added_by: OWNER, approved_by: SUPER_B });
+    const steps = (await t.search.prepare("SELECT kind FROM workflow_steps ORDER BY seq").all()).results.map((r) => (r as { kind: string }).kind);
+    assert.deepEqual(steps, ['propose', 'approve', 'apply']);
+    const second = await a('POST', '/finance', { userId: FIN, permissions: ['support:payouts', 'support:refund'] });
+    assert.equal(second.status, 202, 'changing permissions is a new request');
+    assert.equal(((await (await b('POST', '/finance', { userId: FIN, permissions: ['support:ledger'] })).json()) as { code: string }).code, 'change_pending');
   });
 
   it('nobody adds themselves, and only super admins change the list', async () => {
@@ -107,7 +119,15 @@ describe('the finance list is a two-person change', () => {
     assert.equal((await t.as(OWNER, ['super_admin'])('POST', '/finance', { userId: FIN, permissions: ['billing:refund'] })).status, 400);
   });
 
-  it('tech staff (the owner) can never be on it; marking removes them; unmarking needs a second person', async () => {
+  it('a proposal made before the workflow is still approved the old way', async () => {
+    const t = setup();
+    t.search.raw.exec(`INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('${FIN}', '["support:payouts"]', '${OWNER}', NULL, '2026-11-20T00:00:00Z')`);
+    assert.equal((await t.as(OWNER, ['super_admin'])('POST', `/finance/${FIN}/approve`)).status, 409);
+    assert.equal((await t.as(SUPER_B, ['super_admin'])('POST', `/finance/${FIN}/approve`)).status, 200);
+    assert.equal(await financeAllows(t.search as never, FIN, 'support:payouts'), true);
+  });
+
+  it('tech staff (the owner) can never be on it; marking removes them; unmarking needs a second person who did not mark them', async () => {
     const t = setup();
     const a = t.as(OWNER, ['super_admin']);
     const b = t.as(SUPER_B, ['super_admin']);
@@ -120,8 +140,16 @@ describe('the finance list is a two-person change', () => {
     assert.equal(await financeAllows(t.search as never, FIN, 'support:providers'), true);
     await a('POST', '/tech-staff', { userId: FIN });
     assert.equal(await financeAllows(t.search as never, FIN, 'support:providers'), false);
-    assert.equal(((await (await a('DELETE', `/tech-staff/${FIN}`)).json()) as { code: string }).code, 'support_same_person');
-    assert.equal((await b('DELETE', `/tech-staff/${FIN}`)).status, 200);
+    // Unmarking is a request: whoever marked them (a) never approves it
+    const proposed = await b('DELETE', `/tech-staff/${FIN}`);
+    assert.equal(proposed.status, 202);
+    const id = ((await proposed.json()) as { result: { request: { id: string } } }).result.request.id;
+    const { approveRequest } = await import('../src/lib/workflows/engine');
+    const { workflowCtx } = await import('../src/routers/workflows.router');
+    const ctx = workflowCtx(t.env as never, { steppedUp: true });
+    await assert.rejects(approveRequest(ctx, await ctx.directory.actor(OWNER, ['super_admin']), id, {}), (e: { code?: string; extra?: { blocks?: string[] } }) => e.code === 'approval_not_allowed' && !!e.extra?.blocks?.includes('marked_them'));
+    assert.equal((await approveRequest(ctx, await ctx.directory.actor('usr_super_c', ['super_admin']), id, {})).status, 'applied');
+    assert.equal(t.search.raw.prepare('SELECT COUNT(*) AS n FROM support_tech_staff WHERE user_id = ?').get(FIN)!.n, 0);
   });
 });
 
