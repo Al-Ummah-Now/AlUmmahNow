@@ -21,6 +21,7 @@ import { LiveStreamCard, LiveStreamCardSkeleton } from '@/components/live-stream
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
+import { keepLastWordsTogether } from '@/lib/format/titleWrap';
 
 /**
  * Grid layout component for live stream cards
@@ -117,7 +118,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
         {t.live?.liveStreams || 'Live Streams'}
       </h1>
       <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base text-balance">
-        {t.live?.liveStreamsDescription || 'Watch live streams from channels across the community'}
+        {keepLastWordsTogether(t.live?.liveStreamsDescription || 'Watch live streams from channels across the community')}
       </p>
     </div>
   );

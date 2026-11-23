@@ -21,6 +21,7 @@ import { RelativeDate } from '@/components/RelativeDate';
 import { channelLabel } from '@/lib/channel-name';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
+import { keepLastWordsTogether } from '@/lib/format/titleWrap';
 function PostResultCard({ post }: { post: SearchPostPayload }) {
   const { t, lang } = useLanguage();
   const date = post.createdAt ? new Date(post.createdAt) : null;
@@ -51,7 +52,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           </p>
         </div>
       </div>
-      <p dir="auto" className="text-sm text-gray-800 dark:text-gray-100 line-clamp-4 whitespace-pre-line text-balance">{post.content}</p>
+      <p dir="auto" className="text-sm text-gray-800 dark:text-gray-100 line-clamp-4 whitespace-pre-line text-balance">{keepLastWordsTogether(post.content)}</p>
       {post.imageUrl && (
         <div className="relative aspect-video overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800">
           <Image src={resolveUrl(post.imageUrl)} alt="" fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover" />
