@@ -174,6 +174,20 @@ export interface NotificationCenterTranslations {
     enableError: string;
     disableError: string;
   };
+  /** Settings: daily quiet hours & prayer-time quiet windows (Epic 22, E22-D6). */
+  quietHours: {
+    title: string;
+    description: string;
+    dailyToggle: string;
+    dailyDescription: string;
+    startTime: string;
+    endTime: string;
+    timezone: string;
+    timezoneDescription: string;
+    prayerToggle: string;
+    prayerDescription: string;
+    alwaysAccountNote: string;
+  };
   justNow: string;
   /** Relative times are CLDR plural tables (Arabic needs all six forms); `{count}` is the localized number. */
   minutesAgo: PluralTexts;
@@ -359,6 +373,19 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
     enableError: 'Couldn’t turn on browser notifications. Try again.',
     disableError: 'Couldn’t turn off browser notifications. Try again.',
   },
+  quietHours: {
+    title: 'Quiet hours',
+    description: 'Pause push notifications overnight or during prayer times; optional notifications wait quietly in your inbox.',
+    dailyToggle: 'Daily quiet window',
+    dailyDescription: 'Hold optional push alerts between your start and end times each day',
+    startTime: 'From',
+    endTime: 'Until',
+    timezone: 'Time zone',
+    timezoneDescription: 'Quiet hours follow local time in this zone',
+    prayerToggle: 'Quiet during prayer times',
+    prayerDescription: 'Pause optional push alerts during the five daily prayers calculated on this device without sharing your location',
+    alwaysAccountNote: 'Account and security notices always come through, with no summary push afterwards.',
+  },
   justNow: 'Just now',
   minutesAgo: { other: '{count} min ago' },
   hoursAgo: { other: '{count} h ago' },
@@ -465,6 +492,19 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
     iosHint: 'على iPhone وiPad، أضف الأمة الآن إلى الشاشة الرئيسية، ثم افتحه منها لتفعيل الإشعارات.',
     enableError: 'تعذّر تفعيل إشعارات المتصفح. حاول مرة أخرى.',
     disableError: 'تعذّر إيقاف إشعارات المتصفح. حاول مرة أخرى.',
+  },
+  quietHours: {
+    title: 'ساعات الهدوء',
+    description: 'أوقف التنبيهات الفورية مؤقتًا خلال الليل أو أوقات الصلاة؛ تنتظرك الإشعارات الاختيارية بهدوء في صندوقك.',
+    dailyToggle: 'فترة هدوء يومية',
+    dailyDescription: 'إيقاف التنبيهات الاختيارية بين وقت البدء ووقت الانتهاء كل يوم',
+    startTime: 'من',
+    endTime: 'إلى',
+    timezone: 'المنطقة الزمنية',
+    timezoneDescription: 'تُطبَّق ساعات الهدوء وفق التوقيت المحلي لهذه المنطقة',
+    prayerToggle: 'هدوء أثناء أوقات الصلاة',
+    prayerDescription: 'إيقاف التنبيهات الاختيارية خلال أوقات الصلوات الخمس المحسوبة محليًا على جهازك دون مشاركة موقعك',
+    alwaysAccountNote: 'تصلك إشعارات الحساب والأمان دائمًا، ولا يُرسَل ملخّص بعد انتهاء ساعات الهدوء.',
   },
   justNow: 'الآن',
   minutesAgo: { one: 'منذ دقيقة', two: 'منذ دقيقتين', few: 'منذ {count} دقائق', many: 'منذ {count} دقيقة', other: 'منذ {count} دقيقة' },
