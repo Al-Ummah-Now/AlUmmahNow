@@ -36,12 +36,28 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
  */
 async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void> {
   const header = page.locator('header.ah');
-  const logo = (await header.locator('.aun-brand').boundingBox())!;
-  const upload = (await header.getByTestId('header-upload').boundingBox())!;
-  const input = header.getByTestId('header-search-input');
-  const search = (await ((await input.isVisible()) ? header.locator('.ah-search-wrap .ah-search') : header.getByTestId('header-search-open')).boundingBox())!;
-  const rtl = locale === 'ar';
   await expect(header.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
+  // The header re-renders when the session's channels change (a channel just made in the account menu):
+  // wait until its parts are shown, then measure them in one go, so no part is read mid-render
+  await expect(header.locator('.aun-brand')).toBeVisible();
+  await expect(header.getByTestId('header-upload')).toBeVisible();
+  await expect(header.locator('.ah-search-wrap .ah-search').or(header.getByTestId('header-search-open')).first()).toBeVisible();
+  const { logo, upload, search } = await header.evaluate((el) => {
+    const box = (node: Element | null) => {
+      const r = node?.getBoundingClientRect();
+      return r && r.width > 0 && r.height > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+    };
+    const input = el.querySelector('[data-testid="header-search-input"]');
+    const inputShown = !!input && (input as HTMLElement).offsetParent !== null;
+    return {
+      logo: box(el.querySelector('.aun-brand')),
+      upload: box(el.querySelector('[data-testid="header-upload"]')),
+      search: box(inputShown ? el.querySelector('.ah-search-wrap .ah-search') : el.querySelector('[data-testid="header-search-open"]')),
+    };
+  });
+  expect(logo && upload && search, 'the logo, Upload and the search are all shown').toBeTruthy();
+  if (!logo || !upload || !search) return;
+  const rtl = locale === 'ar';
   const fromSearch = rtl ? search.x - (upload.x + upload.width) : upload.x - (search.x + search.width);
   expect(fromSearch, `Upload does not follow the search (gap ${fromSearch}px)`).toBeGreaterThanOrEqual(0);
   expect(Math.round(upload.height), 'Upload is a 40px header control').toBe(40);
