@@ -34,6 +34,10 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'support.payee-sync': 'adminJobs.kinds.supportPayeeSync',
   'support.dispute-deadline': 'adminJobs.kinds.supportDisputeDeadline',
   'support.dormant': 'adminJobs.kinds.supportDormant',
+  'support.payout-plan': 'adminJobs.kinds.supportPayoutPlan',
+  'support.payout-fund': 'adminJobs.kinds.supportPayoutFund',
+  'support.payout-send': 'adminJobs.kinds.supportPayoutSend',
+  'support.payout-status': 'adminJobs.kinds.supportPayoutStatus',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

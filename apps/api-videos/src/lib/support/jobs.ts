@@ -29,6 +29,7 @@ import { applyCollectorEvents, applyRailEvents, releaseDueGifts, UnmatchedSuppor
 import { LedgerError } from './ledger';
 import { RailError, type RailContext } from './rail';
 import { reconcileDay } from './reconcile';
+import { fundingShortfall, PayoutError, planBatch, refreshPayoutStatuses, sendOnePayout } from './payouts';
 import { CollectorError } from './collector';
 
 export interface SupportJobEnv extends Omit<JobEnv, 'INTERNAL_API_KEY'>, SupportAdapterEnv, ErrorReporterEnv {
@@ -240,6 +241,77 @@ export async function runSupportDormantJob(env: SupportJobEnv, _job: AdminJob, n
 }
 
 // ---------------------------------------------------------------------------
+// Payouts (MEM-23, payouts.ts)
+// ---------------------------------------------------------------------------
+
+/** Plans a batch (monthly cron, or an approver's manual run through admin-api). Waits for approval. */
+export async function runSupportPayoutPlanJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const period = typeof job.params.period === 'string' ? job.params.period : now.toISOString().slice(0, 7);
+	const preparedBy = typeof job.params.preparedBy === 'string' ? job.params.preparedBy : 'system';
+	try {
+		const r = await planBatch(env, { period, preparedBy, now, ctxFor: (mode) => vendorContext(env, mode, () => now) });
+		if (r.payouts.length) {
+			reportNeedsAction('api-videos', env, undefined, { key: `support-batch:${r.batchId}`, source: 'admin-job', title: 'Payout batch waiting for approval', message: `${r.payouts.length} payouts for ${period} are ready. People on the organisation’s finance list approve them on the Payouts page.`, itemType: 'support-batch', itemId: r.batchId ?? '', itemUrl: '/support/payouts' });
+		}
+		return { done: true, result: { batchId: r.batchId, payouts: r.payouts.length, skipped: r.skipped.length } };
+	} catch (error) {
+		if (error instanceof PayoutError && error.code !== 'not_found') {
+			// Not a fault to retry: say why on the Errors page (an open decision, an unclean reconciliation, a hold)
+			if (error.code !== 'exists') flagSupportJob(env, undefined, job, error.message);
+			return { done: true, result: { refused: error.code, ...error.detail } };
+		}
+		throw error;
+	}
+}
+
+/** An approved batch: checks the rail is funded, then queues one send per payout. Waits (and says so) while short. */
+export async function runSupportPayoutFundJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const store = db(env);
+	const batchId = String(job.params.batchId ?? job.targetId);
+	const batch = await store.prepare('SELECT id, status, totals FROM support_payout_batches WHERE id = ?').bind(batchId).first<{ id: string; status: string; totals: string }>();
+	if (!batch || (batch.status !== 'approved' && batch.status !== 'funding')) return { done: true, result: { skipped: batch?.status ?? 'gone' } };
+	const rail = await store.prepare("SELECT DISTINCT rail, mode FROM support_payouts WHERE batch_id = ? AND status = 'queued'").bind(batchId).all<{ rail: string; mode: 'test' | 'live' }>();
+	const totals = JSON.parse(batch.totals || '{}') as Record<string, number>;
+	for (const r of rail.results ?? []) {
+		const adapter = railFor(env, r.rail as never);
+		if (!adapter) throw new RailError(`Payout service ${r.rail} is not available here`, null, true);
+		const short = await fundingShortfall(adapter, vendorContext(env, r.mode, () => now), totals);
+		if (Object.keys(short).length) {
+			await store.prepare("UPDATE support_payout_batches SET status = 'funding', updated_at = ? WHERE id = ?").bind(now.toISOString(), batchId).run();
+			reportNeedsAction('api-videos', env, undefined, { key: `support-fund:${batchId}`, source: 'admin-job', title: 'Fund the payout service', message: `Payout batch ${batchId} needs ${Object.entries(short).map(([c, a]) => `${a} ${c} (minor units)`).join(', ')} more at ${r.rail} before it can be sent. The organisation’s finance person moves it from the creator-funds account; payouts start once it arrives.`, itemType: 'support-batch', itemId: batchId, itemUrl: '/support/payouts' });
+			return { done: false, params: { batchId }, delaySeconds: 3600, result: { short } };
+		}
+	}
+	resolveNeedsAction(env, undefined, `support-fund:${batchId}`);
+	await store.prepare("UPDATE support_payout_batches SET status = 'sending', updated_at = ? WHERE id = ?").bind(now.toISOString(), batchId).run();
+	const payouts = await store.prepare("SELECT id FROM support_payouts WHERE batch_id = ? AND status = 'queued'").bind(batchId).all<{ id: string }>();
+	for (const po of payouts.results ?? []) await createJob(env, { kind: 'support.payout-send', targetKind: 'support', targetId: po.id, params: { payoutId: po.id }, actorId: `batch:${batchId}` });
+	return { done: true, result: { queued: payouts.results?.length ?? 0 } };
+}
+
+export async function runSupportPayoutSendJob(env: SupportJobEnv, job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	const payoutId = String(job.params.payoutId ?? job.targetId);
+	try {
+		const outcome = await sendOnePayout(env, payoutId, (mode) => vendorContext(env, mode, () => now), now);
+		if (outcome === 'failed') {
+			const row = await db(env).prepare('SELECT channel_id, failure_code FROM support_payouts WHERE id = ?').bind(payoutId).first<{ channel_id: string; failure_code: string | null }>();
+			reportNeedsAction('api-videos', env, undefined, { key: `support-payout:${payoutId}`, source: 'admin-job', title: 'Payout failed', message: `Payout ${payoutId} to channel ${row?.channel_id ?? '?'} failed (${row?.failure_code ?? 'no reason given'}). The money is back in the creator’s available balance and they are asked to fix their payout account.`, itemType: 'support-payout', itemId: payoutId, itemUrl: '/support/payouts' });
+		}
+		return { done: true, result: { outcome } };
+	} catch (error) {
+		if (error instanceof RailError && error.permanent) {
+			flagSupportJob(env, undefined, job, text(error));
+			return { done: true, result: { failed: text(error) } };
+		}
+		throw error;
+	}
+}
+
+export async function runSupportPayoutStatusJob(env: SupportJobEnv, _job: AdminJob, now = new Date()): Promise<JobOutcome> {
+	return { done: true, result: await refreshPayoutStatuses(env, (mode) => vendorContext(env, mode, () => now), now) };
+}
+
+// ---------------------------------------------------------------------------
 // Failures and crons
 // ---------------------------------------------------------------------------
 
@@ -250,6 +322,10 @@ const TITLES: Record<string, string> = {
 	'support.payee-sync': 'Creator payout account not refreshed',
 	'support.dispute-deadline': 'Dispute deadlines not checked',
 	'support.dormant': 'Unclaimed balances not listed',
+	'support.payout-plan': 'Payout batch not planned',
+	'support.payout-fund': 'Payout batch funding not checked',
+	'support.payout-send': 'Payout not sent',
+	'support.payout-status': 'Payout statuses not refreshed',
 };
 
 export const needsActionKey = (jobId: string) => `support-job:${jobId}`;
@@ -291,6 +367,11 @@ export async function queueSupportCron(env: SupportJobEnv, now = new Date()): Pr
 		queued.push(kind);
 	};
 	await job('support.release', `release:${now.toISOString().slice(0, 13)}`);
+	// Every 6 hours: payouts still sent or unknown are read from the rail
+	if (now.getUTCHours() % 6 === 0) {
+		const inFlight = await env.SEARCH_DB.prepare("SELECT 1 AS x FROM support_payouts WHERE status IN ('sent', 'unknown') LIMIT 1").first<{ x: number }>();
+		if (inFlight) await job('support.payout-status', `payout-status:${now.toISOString().slice(0, 13)}`);
+	}
 	if (now.getUTCHours() === 1) {
 		const day = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
 		await job('support.reconcile', `reconcile:${day}`, { day });
@@ -298,6 +379,12 @@ export async function queueSupportCron(env: SupportJobEnv, now = new Date()): Pr
 		const payees = await env.SEARCH_DB.prepare("SELECT id FROM support_payees WHERE status NOT IN ('closed', 'not_started') ORDER BY updated_at LIMIT 50").all<{ id: string }>();
 		for (const p of payees.results ?? []) await job('support.payee-sync', p.id, { payeeId: p.id });
 		if (now.getUTCDate() === 1) await job('support.dormant', `dormant:${day.slice(0, 7)}`);
+		// MEM-D19: the payout day; nothing is planned while the decision is open
+		const config = await readSupportConfig(env.SEARCH_DB);
+		if (config.policy.payoutDayOfMonth !== null && now.getUTCDate() === config.policy.payoutDayOfMonth) {
+			const period = now.toISOString().slice(0, 7);
+			await job('support.payout-plan', `plan:${period}`, { period, preparedBy: 'system' });
+		}
 	}
 	return queued;
 }

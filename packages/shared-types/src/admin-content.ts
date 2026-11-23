@@ -640,6 +640,11 @@ export const ADMIN_JOB_KINDS = [
   'support.payee-sync',
   'support.dispute-deadline',
   'support.dormant',
+  /** Payouts (wiki AUN-MEMBERS §2.6, MEM-23): plan a batch, check the rail is funded, send one payout, read statuses. */
+  'support.payout-plan',
+  'support.payout-fund',
+  'support.payout-send',
+  'support.payout-status',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -736,6 +741,12 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'support.payee-sync': ['support:manage'],
   'support.dispute-deadline': ['support:manage'],
   'support.dormant': ['support:manage'],
+  // A payout retry never pays twice (the payout id is the rail's idempotency key) and only resumes a batch the
+  // organisation's finance list already approved; approving is the finance list's own action (admin-api)
+  'support.payout-plan': ['support:manage'],
+  'support.payout-fund': ['support:manage'],
+  'support.payout-send': ['support:manage'],
+  'support.payout-status': ['support:manage'],
 };
 
 // ---------------------------------------------------------------------------

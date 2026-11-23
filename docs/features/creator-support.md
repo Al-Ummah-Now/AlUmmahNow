@@ -55,6 +55,25 @@ Never Stripe (decision T2), including payout services built on Stripe.
   organisation enters, and the rail's funding balance. A gap, or an entry that doesn't balance,
   stops new payout batches (`lastReconcileOk`; never reconciled counts as not clean).
 
+## Payouts (MEM-23)
+
+`lib/support/payouts.ts`, with the jobs in `jobs.ts`:
+
+- **Plan** (`support.payout-plan`). Runs monthly on the MEM-D19 payout day, or when an approver starts a run through `/internal/support/batches/plan`.
+  - It takes every active, unheld payee with a tax form on file whose available USD balance reaches the threshold (the creator's own higher threshold if MEM-D19 allows one), and quotes the rail's fee.
+  - It refuses while MEM-D17, D19, D20, D21 or D24 is open, while payouts are held, or after an unclean or missing reconciliation.
+  - It refuses the MEM-D21 reserve option, which isn't built (#1762).
+- **Approve** (`/internal/support/batches/:id/approve`). Only people on the finance list can approve, and MEM-D24 sets how many must.
+  - With two approvers, the preparer can't approve their own batch.
+  - A batch the system prepared needs both people.
+  - The last approval queues the funding check.
+- **Fund** (`support.payout-fund`). The rail's funding balance must cover the batch. Until it does, the Errors page says "Fund the payout service" and the job checks again every hour. It never moves bank money itself.
+- **Send** (`support.payout-send`, one job per payout). The payout id is the rail's idempotency key.
+  - The ledger moves available → in payout before the call.
+  - A lost answer marks the payout `unknown`, and the retry asks the rail before sending anything.
+  - A stopped batch, a held payee or a balance that dropped since planning cancels the payout without paying.
+- **Status** (`support.payout-status`, every 6 hours while payouts are in flight). Paid, failed and returned payouts are booked, and failed ones put the money back.
+
 ## Owner decisions are settings, never code
 
 Every open decision is a field of `SupportPolicy`, stored in `support_config.policy` and read as
@@ -64,14 +83,14 @@ guessing.
 
 | Decision | Policy fields | Code that reads it |
 |---|---|---|
-| MEM-D17 payout rail | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee` |
+| MEM-D17 payout rail | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee`; `payouts.ts` `payoutDecisionsOpen` |
 | MEM-D18 hold | `holdDays` | `events.ts` (`available_at` stays empty while open) and `releaseDueGifts` |
-| MEM-D19 threshold and schedule | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | payout plan job (MEM-23); `support_settings.payout_threshold` |
+| MEM-D19 threshold and schedule | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | `payouts.ts` `planBatch`; `jobs.ts` `queueSupportCron` (payout day); `support_settings.payout_threshold` |
 | MEM-D20 payout and FX fees | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
 | MEM-D21 chargebacks after payout | `negativeBalancePolicy`, `reserveBasisPoints`, `reserveDays` | `ledger.ts` `debitCreator` (refunds, disputes) |
 | MEM-D22 dormant balances | `dormantPolicy`, `dormantReminderMonths` | `jobs.ts` `runSupportDormantJob` (lists only while open) |
 | MEM-D23 gifts before payee active | `collectBeforePayeeActive` | server checks (MEM-5) |
-| MEM-D24 approvals | `batchApprovers`, `adjustmentApprovers` | `switch.ts` `supportReadiness`; batch approval and adjustments (MEM-8, MEM-23) |
+| MEM-D24 approvals | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
 | MEM-D3 card fee payer | `collectorFeePayer` | `effectiveCoverFees` (shared-types) |
 | MEM-D4 minimum and presets | `minimumUsdMinor`, `presetsUsdMinor` | support sheet (MEM-7) |
 | MEM-D9 ages | `minSupporterAge`, `minCreatorAge` | server checks (MEM-5) |
@@ -85,4 +104,5 @@ guessing.
 - `apps/api-videos/test/support-ledger.spec.ts`: real SQL on the search migrations: postings,
   append-only triggers, idempotency, balances, MEM-D20/D21 as parameters, settings writes.
 - `apps/api-videos/test/support-jobs.spec.ts`: signed webhooks through the queue to the ledger, redelivery, refunds and disputes, release, rail payout events, reconciliation, crons.
+- `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
 - `apps/processor/src/__tests__/user-traces-erase.test.ts`: erasure of support rows.

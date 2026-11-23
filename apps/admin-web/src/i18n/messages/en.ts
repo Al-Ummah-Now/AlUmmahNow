@@ -974,6 +974,10 @@ const en = {
       supportPayeeSync: 'Refresh a creator’s payout account',
       supportDisputeDeadline: 'Flag disputes that are due',
       supportDormant: 'List unclaimed creator balances',
+      supportPayoutPlan: 'Plan a payout batch',
+      supportPayoutFund: 'Check the payout service is funded',
+      supportPayoutSend: 'Send a payout',
+      supportPayoutStatus: 'Refresh payout statuses',
     },
     statuses: {
       queued: 'Queued',

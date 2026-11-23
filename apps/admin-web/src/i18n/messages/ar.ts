@@ -973,6 +973,10 @@ const ar: Messages = {
       supportPayeeSync: 'تحديث حساب استلام الدفعات لصانع المحتوى',
       supportDisputeDeadline: 'التنبيه على النزاعات المستحقة',
       supportDormant: 'حصر أرصدة صنّاع المحتوى غير المطالب بها',
+      supportPayoutPlan: 'إعداد دفعة تحويلات',
+      supportPayoutFund: 'التحقق من تمويل خدمة الدفع',
+      supportPayoutSend: 'إرسال تحويل',
+      supportPayoutStatus: 'تحديث حالات التحويلات',
     },
     statuses: {
       queued: 'في الانتظار',
