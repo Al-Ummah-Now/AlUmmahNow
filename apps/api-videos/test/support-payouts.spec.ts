@@ -10,7 +10,7 @@ import { money } from '@al-ummah/shared-types';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { writeSupportPolicy } from '../src/lib/support/config';
-import { onSupportJobFailed, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
+import { onSupportJobFailed, runSupportPayoutFundJob, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
 import { accountTotal, creatorBalance, giftLines, postEntry, railFundingLines, releaseLines } from '../src/lib/support/ledger';
 import { approveBatch, planBatch, PayoutError, sendOnePayout, stopBatch } from '../src/lib/support/payouts';
 import { testRail, testRailFund, testRailOnboard, TEST_RAIL_UNKNOWN_ONCE_AMOUNT } from '../src/lib/support/test-rail';
@@ -295,5 +295,73 @@ describe('review fixes (cross-provider review of #1763)', () => {
 		await createJob(t.env, { kind: 'support.payout-fund', targetKind: 'support', targetId: batchId, params: { batchId }, actorId: 'test' });
 		await t.drain();
 		assert.equal((await t.sql.prepare('SELECT status FROM support_payout_batches WHERE id = ?').bind(batchId).first<{ status: string }>())!.status, 'done');
+	});
+
+	it('funding is checked per rail, mode and currency, with the rail fee on top only when the organization bears it (MEM-D20)', async () => {
+		async function fundNeeds(bearer: 'creatorFromPayout' | 'organization') {
+			const t = await setup();
+			await writeSupportPolicy(t.sql as never, { payoutFeeBearer: bearer }, FIN_A, 1);
+			await t.sql.prepare("INSERT INTO support_payout_batches (id, period, status, totals, count, prepared_by, created_at, updated_at) VALUES ('spb_f', '2026-12', 'approved', '{}', 4, ?, 'now', 'now')").bind(FIN_A).run();
+			const rows: [string, string, string, number, number][] = [
+				['spo_1', 'test', 'USD', 1000, 50],
+				['spo_2', 'test', 'USD', 2000, 60],
+				['spo_3', 'test', 'EUR', 500, 20],
+				['spo_4', 'live', 'USD', 400, 10],
+			];
+			for (const [id, mode, currency, amount, fee] of rows) {
+				await t.sql.prepare("INSERT INTO support_payouts (id, batch_id, payee_id, channel_id, rail, mode, amount, currency, rail_fee, status, created_at, updated_at) VALUES (?, 'spb_f', ?, ?, 'test', ?, ?, ?, ?, 'queued', 'now', 'now')").bind(id, `pe_${id}`, `ch_${id}`, mode, amount, currency, fee).run();
+			}
+			await testRailFund(t.ctx, usd(3000));
+			const out = await runSupportPayoutFundJob(t.env, { id: 'j', kind: 'support.payout-fund', targetId: 'spb_f', params: { batchId: 'spb_f' } } as never, NOW);
+			return (out as { result?: { short?: Record<string, number> } }).result?.short;
+		}
+		// The creator bears the fee: test-mode USD needs exactly the 3000 funded; the live payout is its own
+		// group (summed with test it would be 400 short); EUR has nothing funded
+		assert.deepEqual(await fundNeeds('creatorFromPayout'), { EUR: 500 });
+		// The organization bears it: each currency needs its fees on top
+		assert.deepEqual(await fundNeeds('organization'), { USD: 110, EUR: 520 });
+	});
+
+	it('Retry on the Errors page runs a payout job that finished by flagging (plan, send, fund, payee sync)', async () => {
+		const t = await setup({ decided: false });
+		const { createJob } = await import('../src/lib/admin/jobs');
+		await createJob(t.env, { kind: 'support.payout-plan', targetKind: 'support', targetId: 'plan:2026-12', params: { period: '2026-12' }, actorId: 'cron' });
+		// A payee on a rail that isn't available here: payee sync flags it and finishes
+		await t.sql.prepare("INSERT INTO support_payees (id, channel_id, owner_user_id, rail, mode, rail_payee_ref, country, status, tax_form, sanctions_status, created_at, updated_at) VALUES ('pe_w', 'ch_w', 'o', 'wise', 'test', 'ref', 'GB', 'active', 'w8ben', 'clear', 'now', 'now')").run();
+		await createJob(t.env, { kind: 'support.payee-sync', targetKind: 'support', targetId: 'pe_w', params: { payeeId: 'pe_w' }, actorId: 'cron' });
+		await t.drain();
+		const retry = async (kind: string) => {
+			const job = await t.sql.prepare('SELECT id, status FROM admin_jobs WHERE kind = ?').bind(kind).first<{ id: string; status: string }>();
+			assert.equal(job!.status, 'succeeded', kind);
+			const res = await supportRouter.request('/jobs/retry', { method: 'POST', body: JSON.stringify({ jobId: job!.id, kind }), headers: { 'Content-Type': 'application/json' } }, t.env);
+			assert.equal(res.status, 200);
+			return ((await res.json()) as { result: { result: string } }).result.result;
+		};
+		assert.notEqual(await retry('support.payout-plan'), 'Nothing to retry');
+		assert.notEqual(await retry('support.payee-sync'), 'Nothing to retry');
+		// A job that simply succeeded is not run again
+		await t.sql.prepare("UPDATE admin_jobs SET result = '{\"status\":\"active\"}', status = 'succeeded' WHERE kind = 'support.payee-sync'").run();
+		assert.equal(await retry('support.payee-sync'), 'Nothing to retry');
+	});
+
+	it('two retries of the same unknown payout: the attempts count lets only one claim it', async () => {
+		const t = await setup();
+		await creator(t, 'ch_race', 4000);
+		await testRailFund(t.ctx, usd(10_000));
+		const { payouts } = await approvedBatch(t);
+		const id = payouts[0].payoutId;
+		await t.sql.prepare("UPDATE support_payouts SET status = 'unknown', attempts = 1 WHERE id = ?").bind(id).run();
+		await Promise.all([sendOnePayout(t.env, id, () => t.ctx, NOW), sendOnePayout(t.env, id, () => t.ctx, NOW)]);
+		assert.equal((await t.sql.prepare('SELECT attempts FROM support_payouts WHERE id = ?').bind(id).first<{ attempts: number }>())!.attempts, 2, 'claimed once');
+		assert.deepEqual(await testRail.getFundingBalance(t.ctx), [usd(6000)]);
+	});
+
+	it('two plans for different periods racing past the in-flight check: only one batch is written', async () => {
+		const t = await setup();
+		await creator(t, 'ch_p', 4000);
+		const results = await Promise.allSettled([plan(t), planBatch(t.env, { period: 'manual-20261215T010000', preparedBy: FIN_A, now: NOW, ctxFor: () => t.ctx })]);
+		assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+		assert.equal(t.sql.count('support_payout_batches'), 1);
+		assert.equal(t.sql.count('support_payouts'), 1);
 	});
 });
