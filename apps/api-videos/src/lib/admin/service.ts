@@ -56,7 +56,7 @@ import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePos
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
 import { endSession, ensureProviderStopped } from '../live/service';
 import type { LiveSessionRow } from '../live/store';
-import { notifyTeam } from '../channelTeam';
+import { notifyTeam, recordTeamActivity } from '../channelTeam';
 import { channelParams } from '../channelName';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
@@ -432,7 +432,13 @@ async function promoteNextMain(env: AdminServiceEnv, userId: string, leavingId: 
  * owner must have a videos profile and must not be banned (checked now); the
  * move itself is a job. Per-channel roles live with the channel and move with it.
  */
-export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string): Promise<{ job: AdminJob }> {
+/** What a move keeps (wiki AUN-CHANNEL-CLAIM §3.3, §3.4): both off unless the admin ticks them. */
+export interface TransferOptions {
+	keepPreviousOwnerAsAdmin?: boolean;
+	keepContactEmail?: boolean;
+}
+
+export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
 	if (channel.userId === newOwnerId) throw new AdminError(409, 'already_owner');
@@ -458,7 +464,7 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
-			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain },
+			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true },
 		});
 	} catch (error) {
 		await releaseTransferLock(env, id, '');
@@ -820,7 +826,9 @@ async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, fro
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
-	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean };
+	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean };
+	const keepAsAdmin = keepPreviousOwnerAsAdmin === true && !!previousOwnerId && previousOwnerId !== newOwnerId;
+	let keptAsAdmin = false;
 	const newOwner = await repo(env.profiles).getObject(newOwnerId);
 	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
 	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
@@ -842,6 +850,12 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.transferredAt = now();
 		// Owners hold no member role: a new owner who was a member loses that entry
 		if (Array.isArray(fresh.members)) fresh.members = fresh.members.filter((m: { userId?: string }) => m?.userId !== newOwnerId);
+		// Kept on as channel admin when the admin chose it (§3.4); otherwise the previous owner loses access
+		if (keepAsAdmin) {
+			const members: Array<{ userId?: string; role?: string }> = Array.isArray(fresh.members) ? fresh.members : [];
+			fresh.members = [...members.filter((m) => m?.userId !== previousOwnerId), { userId: previousOwnerId, role: 'admin', addedBy: job.actorId, addedAt: now() }];
+			keptAsAdmin = true;
+		}
 		fresh.dateModified = now();
 		return true;
 	});
@@ -860,6 +874,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (wasMain) await promoteNextMain(env, previousOwnerId, id);
 	}
 	await moveHandleEntry(env, id, saved.handle, newOwnerId);
+	if (keptAsAdmin) await recordTeamActivity(env as never, undefined, [{ channelId: id, actorId: job.actorId, action: 'transfer_kept_old_owner', targetUserId: previousOwnerId, newRole: 'admin' }]);
 	// Every video, soft-deleted ones included (a restore must not hand one back to the previous owner).
 	// Only records on the previous owner move; any other owner is an anomaly, left and counted.
 	const videoIds = await idsOf(env, 'video', { channelId: id }, { includeDeleted: true });

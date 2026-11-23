@@ -198,7 +198,7 @@ export function ChannelActions({ channel, permissions, labelHistory = [] }: Prop
 
       {can('channels:transfer') && (
         <ChannelTransfer
-          channel={{ id: channel.id, name: channel.name, handle: channel.handle, ownerId: channel.ownerId, videos: channel.videos, playlists: channel.playlists }}
+          channel={{ id: channel.id, name: channel.name, handle: channel.handle, ownerId: channel.ownerId, videos: channel.videos, playlists: channel.playlists, isVerified: channel.isVerified }}
         />
       )}
 

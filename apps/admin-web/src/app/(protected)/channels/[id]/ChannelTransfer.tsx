@@ -10,10 +10,10 @@
  * (the page refreshes and shows the new owner) or fails (its error is shown).
  * Outcomes are shown in this section, next to the button that caused them.
  */
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdminJob, AdminUserSearchItem } from '@/lib/api/content-types';
-import { readJob, searchTransferCandidates, transferChannel } from '@/lib/api/content';
+import { readJob, searchTransferCandidates, transferChannel, type TransferOptions } from '@/lib/api/content';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
@@ -30,7 +30,7 @@ const POLL_MS = 2000;
 const POLL_LIMIT_MS = 5 * 60 * 1000;
 
 interface Props {
-  channel: { id: string; name: string; handle: string | null; ownerId: string | null; videos: number; playlists: number };
+  channel: { id: string; name: string; handle: string | null; ownerId: string | null; videos: number; playlists: number; isVerified: boolean };
 }
 
 interface Followed {
@@ -49,6 +49,7 @@ export function ChannelTransfer({ channel }: Props) {
   const { run, busy, error, message, setError } = useContentAction();
   const [target, setTarget] = useState<AdminUserSearchItem | null>(null);
   const [followed, setFollowed] = useState<Followed | null>(null);
+  const [options, setOptions] = useState<TransferOptions>(NO_OPTIONS);
 
   // The transfer's own search (super admins only): the current owner left out, each user with
   // their channel count and role here; the full rows are kept for the confirm dialog
@@ -100,18 +101,28 @@ export function ChannelTransfer({ channel }: Props) {
     return () => window.clearTimeout(timer);
   }, [jobId]);
 
-  async function confirm() {
+  async function confirm(reason: string) {
     if (!target) {
       setError(t('channels.transferPickFirst'));
       return;
     }
     const to = target;
-    const result = await run('transfer', () => transferChannel(channel.id, to.id));
+    const result = await run('transfer', () => transferChannel(channel.id, to.id, reason, options));
     if (result?.job) {
       setFollowed({ job: result.job, to });
       setTarget(null);
+      setOptions(NO_OPTIONS);
     }
   }
+
+  // What the move changes besides the owner, in the dialog's own words (§3.4, §3.5)
+  const consequences = [
+    t(options.keepPreviousOwnerAsAdmin ? 'channels.transferKeepsOldOwner' : 'channels.transferOldOwnerLoses'),
+    ...(options.keepContactEmail ? [] : [t('channels.transferClearsContact')]),
+    ...(channel.isVerified && !options.keepBadge ? [t('channels.transferDropsBadge')] : []),
+    t('channels.transferLiveKeys'),
+  ].join(' ');
+  const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
 
   const name = target ? userName(target) : '';
   const email = target?.email ?? '';
@@ -153,6 +164,14 @@ export function ChannelTransfer({ channel }: Props) {
             testId="channel-transfer-owner"
           />
         </div>
+        <fieldset className="flex flex-col gap-2" disabled={!!busy}>
+          <legend className="text-sm text-fg-muted mb-1">{t('channels.transferOptions')}</legend>
+          <TransferOption id={`${ids}-keep-admin`} checked={options.keepPreviousOwnerAsAdmin} onChange={toggle('keepPreviousOwnerAsAdmin')} label={t('channels.transferKeepOldOwner')} testId="channel-transfer-keep-admin" />
+          <TransferOption id={`${ids}-keep-contact`} checked={options.keepContactEmail} onChange={toggle('keepContactEmail')} label={t('channels.transferKeepContact')} testId="channel-transfer-keep-contact" />
+          {channel.isVerified && (
+            <TransferOption id={`${ids}-keep-badge`} checked={options.keepBadge} onChange={toggle('keepBadge')} label={t('channels.transferKeepBadge')} testId="channel-transfer-keep-badge" />
+          )}
+        </fieldset>
         <div>
           <ConfirmButton
             label={t('channels.transfer')}
@@ -162,7 +181,11 @@ export function ChannelTransfer({ channel }: Props) {
               name: iso(name),
               videos: formatNumber(channel.videos, locale),
               playlists: formatNumber(channel.playlists, locale),
-            })}
+            }) + ' ' + consequences}
+            withReason
+            reasonHint={t('channels.transferReasonHint')}
+            reasonMinLength={10}
+            reasonMaxLength={500}
             confirmLabel={t('channels.transfer')}
             typeToConfirm={confirmValues}
             typeToConfirmLabel={
@@ -179,6 +202,19 @@ export function ChannelTransfer({ channel }: Props) {
         </div>
       </div>
     </SectionCard>
+  );
+}
+
+const NO_OPTIONS: TransferOptions = { keepPreviousOwnerAsAdmin: false, keepContactEmail: false, keepBadge: false };
+
+function TransferOption({ id, checked, onChange, label, testId }: { id: string; checked: boolean; onChange: (e: ChangeEvent<HTMLInputElement>) => void; label: string; testId: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <input id={id} type="checkbox" checked={checked} onChange={onChange} className="mt-1 h-4 w-4 shrink-0" data-testid={testId} />
+      <label htmlFor={id} className="text-sm text-fg">
+        {label}
+      </label>
+    </div>
   );
 }
 

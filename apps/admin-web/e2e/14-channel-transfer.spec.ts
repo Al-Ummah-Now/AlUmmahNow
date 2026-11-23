@@ -127,17 +127,26 @@ test.describe('channel transfer', () => {
     await search(page, creator.email!);
     await option(page, creator.id).click();
     await expect(page.getByTestId('channel-transfer-owner-selected')).toContainText(creator.displayName);
+    // Options (AUN-CHANNEL-CLAIM CC-3): the dialog says what each one means
+    await page.getByTestId('channel-transfer-keep-admin').check();
 
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(`Move this channel to ${creator.displayName} (${creator.email})?`);
     await expect(dialog).toContainText(/videos and \d+ playlists/);
+    await expect(dialog).toContainText('The current owner stays on the team as channel admin.');
+    await expect(dialog).toContainText('The public contact email is cleared.');
     const confirm = page.getByTestId('channel-transfer-submit-confirm');
     await expect(confirm).toBeDisabled();
     await page.getByTestId('channel-transfer-submit-typed').fill('not it');
     await expect(confirm).toBeDisabled();
     await page.getByTestId('channel-transfer-submit-typed').fill(creator.email!);
+    // A reason of at least 10 characters is required
+    await expect(confirm).toBeDisabled();
+    await page.getByTestId('channel-transfer-submit-reason').fill('short');
+    await expect(confirm).toBeDisabled();
+    await page.getByTestId('channel-transfer-submit-reason').fill('Moved at the creator’s request (E2E)');
     await expect(confirm).toBeEnabled();
     await confirm.click();
     await expect(dialog).toBeHidden();
@@ -164,7 +173,13 @@ test.describe('channel transfer', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('channel-transfer-owner-change')).toBeFocused();
 
-    // Tab to Transfer, open the dialog; Escape closes it without a change
+    // Tab past the two options (Space ticks one) to Transfer, open the dialog; Escape closes it without a change
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('channel-transfer-keep-admin')).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('channel-transfer-keep-admin')).toBeChecked();
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('channel-transfer-keep-contact')).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(page.getByTestId('channel-transfer-submit')).toBeFocused();
     await page.keyboard.press('Enter');
@@ -176,6 +191,8 @@ test.describe('channel transfer', () => {
     await page.getByTestId('channel-transfer-submit').focus();
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
+    await page.getByTestId('channel-transfer-submit-reason').focus();
+    await page.keyboard.type('Keyboard-only move (E2E)');
     const typed = page.getByTestId('channel-transfer-submit-typed');
     await typed.focus();
     await page.keyboard.type(channel.handle ? `@${channel.handle}` : creator.email!);
@@ -199,6 +216,8 @@ test.describe('channel transfer', () => {
     // Latin text and its parentheses stay in place inside the right-to-left sentence
     const iso = (value: string) => `\u2068${value}\u2069`;
     await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} (${iso(creator.email!)})؟`);
+    await expect(dialog).toContainText('يفقد المالك الحالي كل وصول إلى القناة.');
+    await page.getByTestId('channel-transfer-submit-reason').fill('نقل بطلب صاحب القناة (اختبار)');
     await page.getByTestId('channel-transfer-submit-typed').fill(creator.email!);
     await page.getByTestId('channel-transfer-submit-confirm').click();
     await expect(page.getByTestId('channel-transfer-status')).toHaveAttribute('data-status', 'succeeded', { timeout: 60_000 });

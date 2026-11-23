@@ -239,9 +239,16 @@ app.post('/channels/:id/images/:kind', async (c) => {
 app.post('/channels/:id/suspend', async (c) => ok(c, await admin.suspendChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/channels/:id/unsuspend', async (c) => ok(c, await admin.unsuspendChannel(c.env, c.req.param('id'), actor(c))));
 app.post('/channels/:id/transfer', async (c) => {
-	const { newOwnerId } = parse(z.object({ newOwnerId: z.string().trim().min(1).max(200) }), await body(c));
-	if (!USER_ID.test(newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
-	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), newOwnerId, actor(c)));
+	const input = parse(
+		z.object({
+			newOwnerId: z.string().trim().min(1).max(200),
+			keepPreviousOwnerAsAdmin: z.boolean().optional(),
+			keepContactEmail: z.boolean().optional(),
+		}),
+		await body(c),
+	);
+	if (!USER_ID.test(input.newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
+	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), input.newOwnerId, actor(c), { keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true, keepContactEmail: input.keepContactEmail === true }));
 });
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 

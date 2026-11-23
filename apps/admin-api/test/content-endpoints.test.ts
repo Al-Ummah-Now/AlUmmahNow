@@ -3,6 +3,7 @@
  * do what, the audit row each change writes (and drops when api-videos
  * refuses), the report counts added to lists, and the call made to api-videos.
  */
+import { MemoryR2 } from './r2-fake';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
@@ -163,15 +164,46 @@ describe('content endpoints: permissions', () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos({ 'GET /channels/ch_1': () => ({ body: { success: true, result: channelDetail } }) });
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
-    const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', user: 'super-1', json: { newOwnerId: 'usr_2' } });
+    const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', user: 'super-1', json: { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true } });
     assert.equal(res.status, 200);
     const transfer = calls.find((c) => c.path === '/channels/ch_1/transfer')!;
-    assert.deepEqual(transfer.body, { newOwnerId: 'usr_2' });
+    assert.deepEqual(transfer.body, { newOwnerId: 'usr_2', keepPreviousOwnerAsAdmin: true, keepContactEmail: false });
     assert.equal(transfer.actor, 'super-1');
     assert.equal(transfer.key, 'internal-key');
     assert.equal(log.length, 1);
-    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'transfer', details: { newOwnerId: 'usr_2' } });
+    assert.deepEqual(JSON.parse(log[0].new_value), {
+      action: 'transfer',
+      details: { newOwnerId: 'usr_2', reason: 'Owner asked by email', keepPreviousOwnerAsAdmin: true, keepContactEmail: false, keepBadge: false },
+    });
     assert.deepEqual(JSON.parse(log[0].old_value!), { ownerId: 'usr_owner' });
+  });
+
+  it('a transfer needs a reason of 10 to 500 characters, checked before anything is audited (AUN-CHANNEL-CLAIM CC-3)', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos();
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    for (const reason of [undefined, '', 'too short', 'x'.repeat(501)]) {
+      const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId: 'usr_2', reason } });
+      assert.equal(res.status, 400);
+      assert.equal(((await res.json()) as { code: string }).code, 'transfer_reason_required');
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(log.length, 0);
+  });
+
+  it("a moved channel loses its verification badge unless the admin keeps it (CC-D8)", async () => {
+    for (const keepBadge of [false, true]) {
+      const { db } = fakeDb();
+      const { fetcher } = fakeVideos({ 'GET /channels/ch_1': () => ({ body: { success: true, result: channelDetail } }) });
+      const channels = new MemoryR2();
+      channels.set('ch_1', { id: 'ch_1', name: 'Noor', isVerified: true });
+      const sent: unknown[] = [];
+      const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher, channels, queue: { send: async (m: unknown) => { sent.push(m); } } });
+      const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId: 'usr_2', reason: 'Scholar moved accounts', keepBadge } });
+      assert.equal(res.status, 200);
+      assert.equal(channels.read('ch_1').isVerified, keepBadge, `keepBadge ${keepBadge}`);
+      assert.equal(sent.length, keepBadge ? 0 : 1, 'the search row follows the badge');
+    }
   });
 
   it('a transfer without a user id is refused before anything is audited', async () => {
