@@ -53,7 +53,8 @@ import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
-import { rotateChannelLiveKeys } from '../channelTeam';
+import { endSession, ensureProviderStopped } from '../live/service';
+import type { LiveSessionRow } from '../live/store';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -177,6 +178,8 @@ async function indexedIdsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by:
 }
 
 /** Live stream records scanned per cascade (they are few; this bounds one request). */
+/** A move must see every stream of the channel; this only stops a runaway scan (the job then fails loudly). */
+const MOVE_STREAM_SCAN_LIMIT = 50_000;
 const LIVE_STREAM_SCAN_LIMIT = 2000;
 
 /**
@@ -185,7 +188,7 @@ const LIVE_STREAM_SCAN_LIMIT = 2000;
  * scan; `truncated` is true when it stopped at the limit before the end, and
  * the caller reports the cascade as incomplete so the admin retries it.
  */
-async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; ownerId?: string }): Promise<{ keys: string[]; truncated: boolean }> {
+async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; ownerId?: string }, limit = LIVE_STREAM_SCAN_LIMIT): Promise<{ keys: string[]; truncated: boolean }> {
 	const keys: string[] = [];
 	let cursor: string | undefined;
 	let scanned = 0;
@@ -197,7 +200,7 @@ async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; 
 			if (by.channelId ? value.channelId === by.channelId : value.userId === by.ownerId) keys.push(key);
 		}
 		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
-	} while (cursor && scanned < LIVE_STREAM_SCAN_LIMIT);
+	} while (cursor && scanned < limit);
 	if (cursor) logger.warn('[Admin] Live stream scan stopped at its limit; the cascade is incomplete', { ...by, scanned });
 	return { keys, truncated: !!cursor };
 }
@@ -431,7 +434,6 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	// A banned (suspended) videos user cannot receive a channel
 	if (env.SEARCH_DB && (await readBan(env.SEARCH_DB, newOwnerId))) throw new AdminError(409, 'new_owner_banned');
 	// One move of a channel at a time: a second would race the first's records
-	if (await openTransferJob(env, id)) throw new AdminError(409, 'transfer_in_progress');
 	// A broadcast on air keeps its ingest; the move would end it mid-stream
 	if (await channelIsLive(env, id)) throw new AdminError(409, 'channel_is_live');
 	// Creator support stays with the person supporters chose: until CC-D10 is decided a supported channel is not moved (#1812)
@@ -439,25 +441,74 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	logger.info('[Admin] Channel transfer queued', { channelId: id, newOwnerId, previousOwnerId: channel.userId ?? null, actorId });
 	// Decided now, so a retried job does not re-decide from a half-moved state
 	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
-	return {
-		job: await createJob(env, {
+	// One move at a time, taken atomically; checks above are only cheap early answers
+	const refused = await takeTransferLock(env, id, now());
+	if (refused) throw new AdminError(409, refused);
+	let job: AdminJob;
+	try {
+		job = await createJob(env, {
 			kind: 'channel.transfer',
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
 			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain },
-		}),
-	};
+		});
+	} catch (error) {
+		await releaseTransferLock(env, id, '');
+		throw error;
+	}
+	await setTransferLockJob(env, id, job.id);
+	return { job };
 }
 
 /** The channel's move job that hasn't finished, if any (indexed: admin_jobs by target). */
 export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<string | null> {
-	if (!env.SEARCH_DB) return null;
-	const row = await (env.SEARCH_DB as D1Database)
-		.prepare(`SELECT id FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer' AND status IN ('queued', 'running', 'retrying') LIMIT 1`)
+	const lock = await readTransferLock(env, channelId);
+	return lock && lock.status !== 'succeeded' ? lock.jobId : null;
+}
+
+/**
+ * The channel's move lock (channel_transfer_locks, wiki AUN-CHANNEL-CLAIM §3.3) with its job's
+ * status. A lock whose job succeeded or no longer exists is stale.
+ */
+async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<{ jobId: string; status: string } | null> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return null;
+	const row = await db
+		.prepare(`SELECT l.job_id AS job_id, j.status AS status FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id WHERE l.channel_id = ?`)
 		.bind(channelId)
-		.first<{ id: string }>();
-	return row?.id ?? null;
+		.first<{ job_id: string; status: string | null }>();
+	if (!row) return null;
+	return { jobId: row.job_id, status: row.status ?? (row.job_id ? 'missing' : 'starting') };
+}
+
+/**
+ * Takes the channel's move lock atomically (primary key insert): two requests can't both start a
+ * move. A failed move keeps its lock, so the channel can't go to a third account while records
+ * still sit on the first one (finish it with Retry). Returns the refusal code, or null when taken.
+ */
+async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: string): Promise<'transfer_in_progress' | 'transfer_unfinished' | null> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return null;
+	const lock = await readTransferLock(env, channelId);
+	if (lock) {
+		if (lock.status === 'failed') return 'transfer_unfinished';
+		if (lock.status !== 'succeeded' && lock.status !== 'missing') return 'transfer_in_progress';
+		await db.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id = ?').bind(channelId, lock.jobId).run();
+	}
+	const inserted = await db
+		.prepare('INSERT OR IGNORE INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES (?, ?, ?)')
+		.bind(channelId, '', at)
+		.run();
+	return Number(inserted.meta?.changes ?? 0) === 1 ? null : 'transfer_in_progress';
+}
+
+async function setTransferLockJob(env: AdminServiceEnv, channelId: string, jobId: string): Promise<void> {
+	await (env.SEARCH_DB as D1Database | undefined)?.prepare(`UPDATE channel_transfer_locks SET job_id = ? WHERE channel_id = ? AND job_id = ''`).bind(jobId, channelId).run();
+}
+
+async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobId: string): Promise<void> {
+	await (env.SEARCH_DB as D1Database | undefined)?.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id IN (?, \'\')').bind(channelId, jobId).run();
 }
 
 /** An active support payee or a live pledge on the channel (support tables, indexed by channel). */
@@ -492,19 +543,36 @@ async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<b
  * key are known to the previous owner, so the next Go live provisions fresh ones.
  */
 async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; rotated: number; failed: number }> {
-	const { keys, truncated } = await liveStreamKeysOf(env, { channelId });
+	// Every stream record: stream.userId alone grants access (canManageLiveStream), so the scan has no
+	// small cap here; plus the streams the channel's sessions name (indexed), in case a record moved
+	const { keys: scanned, truncated } = await liveStreamKeysOf(env, { channelId }, MOVE_STREAM_SCAN_LIMIT);
+	const db = env.SEARCH_DB as D1Database | undefined;
+	const sessions = db
+		? ((await db
+				.prepare(`SELECT * FROM live_sessions WHERE channel_id = ? AND (status IN ('provisioned', 'live') OR (status = 'ended' AND error IS NOT NULL))`)
+				.bind(channelId)
+				.all<LiveSessionRow>()).results ?? [])
+		: [];
+	const keys = [...new Set([...scanned, ...sessions.map((s) => `livestream:${s.stream_id}`)])];
 	const moved = await cascade(env.videos, keys, (s) => {
-		if (s.userId === to || (from && s.userId !== from)) return false;
+		if (s.channelId !== channelId || s.userId === to || (from && s.userId !== from)) return false;
 		s.userId = to;
 		return true;
 	});
+	// Every session that isn't over is ended, on air or not (the job only flips after checking the
+	// channel isn't live, so one on air started in the last moments), and the provider must confirm:
+	// the previous owner knows its ingest key. A provider that refuses fails the step, so the job retries.
 	let rotated = 0;
 	let failed = moved.failed + (truncated ? 1 : 0);
-	try {
-		rotated = await rotateChannelLiveKeys(env as never, channelId);
-	} catch (error) {
-		failed++;
-		logger.warn('[Admin] Live key rotation failed on a channel move', { channelId, error: error instanceof Error ? error.message : String(error) });
+	for (const session of sessions) {
+		try {
+			const ended = session.status === 'ended' ? session : await endSession(env as never, session, 'channel_transferred');
+			await ensureProviderStopped(env as never, ended);
+			if (session.status !== 'ended') rotated++;
+		} catch (error) {
+			failed++;
+			logger.warn('[Admin] Live session stop failed on a channel move', { channelId, sessionId: session.id, error: error instanceof Error ? error.message : String(error) });
+		}
 	}
 	return { changed: moved.changed, rotated, failed };
 }
@@ -581,8 +649,10 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.dateModified = now();
 		return true;
 	});
-	if (!saved) return { done: true, result: { skipped: 'channel_not_found' } };
-	if (saved.isDeleted) return { done: true, result: { skipped: 'channel_deleted' } };
+	if (!saved || saved.isDeleted) {
+		await releaseTransferLock(env, id, job.id);
+		return { done: true, result: { skipped: saved ? 'channel_deleted' : 'channel_not_found' } };
+	}
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
 		const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];
 		if (list.includes(id)) return false;
@@ -617,7 +687,10 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	});
 	const posts = await movePosts(env, id, previousOwnerId, newOwnerId);
 	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
-	if (failed === 0) await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
+	if (failed === 0) {
+		await releaseTransferLock(env, id, job.id);
+		await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
+	}
 	return finish(
 		{ videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, anomalies, previousOwnerId },
 		failed,

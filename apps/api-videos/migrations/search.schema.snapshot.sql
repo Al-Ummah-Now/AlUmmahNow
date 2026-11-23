@@ -60,6 +60,7 @@
 --   apps/api-videos/migrations/search/0081_import_sources.sql
 --   apps/api-videos/migrations/search/0082_import_takeout.sql
 --   apps/api-videos/migrations/search/0085_approval_workflows.sql
+--   apps/api-videos/migrations/search/0086_channel_transfer_locks.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -91,6 +92,7 @@ CREATE TABLE channel_comments (comment_id TEXT PRIMARY KEY, channel_id TEXT NOT 
 CREATE TABLE channel_comments_index_state (channel_id TEXT PRIMARY KEY, indexed_at TEXT, status TEXT NOT NULL CHECK (status IN ('building', 'ready', 'stale', 'failed')), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_invites (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'moderator')), invitee_user_id TEXT, invitee_email TEXT, by_email INTEGER NOT NULL DEFAULT 0, invited_by TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'accepted', 'declined', 'cancelled', 'expired')), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, responded_at TEXT);
 CREATE TABLE channel_quran_translations (channel_id TEXT NOT NULL, lang TEXT NOT NULL, qf_translation_id INTEGER NOT NULL, name TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (channel_id, lang)) WITHOUT ROWID;
+CREATE TABLE channel_transfer_locks (channel_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_translation_settings (channel_id TEXT PRIMARY KEY, viewer_titles INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, status TEXT, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
@@ -320,6 +322,7 @@ CREATE INDEX idx_live_events_kind ON live_events (kind, at);
 CREATE INDEX idx_live_events_session ON live_events (session_id, at);
 CREATE INDEX idx_live_qoe_at ON live_qoe (at, provider);
 CREATE INDEX idx_live_qoe_session ON live_qoe (session_id, at);
+CREATE INDEX idx_live_sessions_channel ON live_sessions (channel_id, status);
 CREATE INDEX idx_live_sessions_created ON live_sessions (created_at, provider);
 CREATE INDEX idx_live_sessions_owner ON live_sessions (owner_id, created_at);
 CREATE INDEX idx_live_sessions_status ON live_sessions (status, provider);
