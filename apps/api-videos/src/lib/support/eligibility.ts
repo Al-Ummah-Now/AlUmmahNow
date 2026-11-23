@@ -84,7 +84,7 @@ export async function receiverEligibility(env: EligibilityEnv, channel: Receiver
 	if (settings.admin_paused === 1) return { ok: false, reason: 'channel_paused' };
 	const payee = await db
 		.prepare('SELECT status, tax_form, sanctions_status, payouts_held, country FROM support_payees WHERE channel_id = ? AND mode = ? ORDER BY CASE rail WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, updated_at DESC LIMIT 1')
-		.bind(channel.channelId, c.mode, c.policy.primaryRail ?? '', c.policy.fallbackRail ?? '')
+		.bind(channel.channelId, c.mode, c.policy.primaryRail ?? '', c.policy.fallbackRail === 'none' ? '' : (c.policy.fallbackRail ?? ''))
 		.first<{ status: string; tax_form: string; sanctions_status: string; payouts_held: number; country: string | null }>();
 	const payeeReady = !!payee && payee.status === 'active' && payee.tax_form !== 'none' && payee.sanctions_status === 'clear' && payee.payouts_held === 0;
 	// MEM-D23: without an active payee, gifts are collected only when the decision allows it
