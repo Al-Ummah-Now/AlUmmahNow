@@ -19,6 +19,7 @@ import {
   ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
+  FEATURE_REGISTRY,
   type AdminDeletionKind,
   type AdminDeletionPage,
   contentPermissionsFor,
@@ -883,10 +884,34 @@ app.get('/captions/settings', async (c) => {
   return ok(c, { ...current, audit });
 });
 
+/**
+ * Caption settings fields that are also super-admin-only Features page switches (their registry
+ * `legacy` path under `captions.`): changing one here needs super admin too, so the old page can't
+ * bypass the Features page's rule (viewer caption download, QF terms). Unchanged values pass, as
+ * the page sends the whole form.
+ */
+const SUPER_ADMIN_CAPTION_FIELDS: ReadonlyArray<{ key: string; path: string[] }> = FEATURE_REGISTRY
+  .filter((d) => d.toggle === 'superAdmin' && d.legacy?.startsWith('captions.'))
+  .map((d) => ({ key: d.key, path: d.legacy!.slice('captions.'.length).split('.') }));
+
+function fieldAt(obj: unknown, path: string[]): unknown {
+  return path.reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), obj);
+}
+
 app.put('/captions/settings', async (c) => {
   need(c, 'creators:manage');
   const patch = await body(c);
   const current = await videos<CaptionSettingsView>(c, '/captions/settings');
+  if (!isSuperAdmin(c.get('auth')?.roles ?? [])) {
+    const changed = SUPER_ADMIN_CAPTION_FIELDS.find(({ path }) => {
+      const next = fieldAt(patch, path);
+      return next !== undefined && next !== fieldAt(current.settings, path);
+    });
+    if (changed) {
+      logger.warn('[Captions] Super-admin-only switch change refused', { userId: c.get('auth')?.userId, feature: changed.key });
+      return c.json({ success: false, code: 'forbidden', feature: changed.key, error: 'Only a super admin can change this' }, 403);
+    }
+  }
   return ok(c, await audited(c, { kind: 'captions-settings', id: 'settings', action: 'edit', details: patch, previous: current.settings }, () =>
     videos(c, '/captions/settings', { method: 'PUT', json: patch })));
 });

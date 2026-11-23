@@ -23,6 +23,7 @@ import {
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
 import { logger } from '../logger';
+import { overlaySwitch } from '../features/switches';
 
 export const YT_SETTINGS_KEY = 'youtube-import/settings.json';
 export const YT_SECRET_KEY = 'youtube-import/client-secret.json';
@@ -59,7 +60,14 @@ function defaults(env: YtSettingsEnv): YoutubeImportSettings {
 	};
 }
 
-export async function readYtSettings(env: YtSettingsEnv): Promise<YoutubeImportSettings> {
+export async function readYtSettings(env: YtSettingsEnv, opts: { raw?: boolean } = {}): Promise<YoutubeImportSettings> {
+	const settings = await readStoredYtSettings(env);
+	if (opts.raw) return settings;
+	// The Features page switch decides `enabled` once set (lib/features/switches.ts)
+	return { ...settings, enabled: await overlaySwitch(env as never, 'youtubeImport', settings.enabled) };
+}
+
+async function readStoredYtSettings(env: YtSettingsEnv): Promise<YoutubeImportSettings> {
 	const fallback = defaults(env);
 	try {
 		const stored = await env.global_settings?.get(YT_SETTINGS_KEY);
@@ -247,7 +255,7 @@ export async function saveYtSettings(
 		clientId = patch.clientId.trim();
 		if (!isGoogleClientId(clientId)) throw new YtSettingsError('invalid_settings', 'clientId must be a Google OAuth Web client id (…apps.googleusercontent.com)');
 	}
-	const previous = await readYtSettings(env);
+	const previous = await readYtSettings(env, { raw: true });
 	const settings: YoutubeImportSettings = {
 		enabled: patch.enabled === undefined ? previous.enabled : (patch.enabled as boolean),
 		clientId: clientId ?? previous.clientId,

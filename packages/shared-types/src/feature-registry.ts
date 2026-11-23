@@ -545,3 +545,30 @@ export function uncoveredUserFeatureKeys(keys: readonly UserFeatureKey[]): UserF
   const covered = new Set<string>(FEATURE_REGISTRY.flatMap((d) => d.userFeatureKeys));
   return keys.filter((k) => !covered.has(k) && !(k in AUTOMATIC_FEATURE_KEYS));
 }
+
+/**
+ * What a switch that is on still needs before it works (the Features page's "Needs setup" line;
+ * api-videos and admin-api decide `ready`, wiki AUN-FEATURES §3).
+ */
+export const FEATURE_SETUP_NOTES: Readonly<Partial<Record<FeatureKey, FeatureText>>> = Object.freeze({
+  youtubeImport: { en: 'Needs the Google client ID and secret.', ar: 'يحتاج إلى معرّف عميل جوجل وكلمته السرية.' },
+  audioTracks: { en: 'Needs the media transcoder.', ar: 'يحتاج إلى خدمة تحويل الوسائط.' },
+  live: { en: 'Needs a live provider that can take streams.', ar: 'يحتاج إلى مزوّد بث مباشر يستقبل البث.' },
+  captionsTranscribe: { en: 'Needs a monthly caption budget.', ar: 'يحتاج إلى ميزانية شهرية للترجمة النصية.' },
+  captionsTranslate: { en: 'Needs a monthly caption budget.', ar: 'يحتاج إلى ميزانية شهرية للترجمة النصية.' },
+  inlineTranslate: { en: 'Needs a daily allowance and a monthly budget.', ar: 'يحتاج إلى حصة يومية وميزانية شهرية.' },
+  viewerTranslatedTitles: { en: 'Needs a monthly translation budget.', ar: 'يحتاج إلى ميزانية شهرية للترجمة.' },
+  quranEditions: { en: 'Needs the Quran Foundation credentials.', ar: 'يحتاج إلى بيانات اعتماد مؤسسة القرآن.' },
+  socialAutopost: { en: 'Needs at least one network connected and on.', ar: 'يحتاج إلى شبكة واحدة على الأقل مربوطة ومفعّلة.' },
+  aiCategorySuggest: { en: 'Needs the category suggestion queue.', ar: 'يحتاج إلى طابور اقتراح التصنيفات.' },
+  siteDomains: { en: 'Needs own-domain hosting set up.', ar: 'يحتاج إلى إعداد استضافة النطاقات الخاصة.' },
+  newsletter: { en: 'Needs an email sending key.', ar: 'يحتاج إلى مفتاح لإرسال البريد.' },
+});
+
+/** What api-videos reports per switch for the Features page (GET /internal/admin/features/state). */
+export interface FeatureStateReport {
+  /** The old setting's value for switches that have one (used while a switch has no row) */
+  legacy: Partial<Record<FeatureKey, boolean>>;
+  /** Set up enough to work when on; null: decided elsewhere (newsletter: admin-api) */
+  ready: Partial<Record<FeatureKey, boolean | null>>;
+}

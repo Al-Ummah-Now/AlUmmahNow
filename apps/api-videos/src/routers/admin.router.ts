@@ -63,6 +63,7 @@ import { SubtitleService } from '../lib/subtitles';
 import { PREBUILT_LIMITS, ingestTargets, type VideoMediaProviders, type VideoObject } from '@al-ummah/shared-types';
 import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltEnv, type PrebuiltOutcome, type StagePlan, type WithPrebuilt } from '../lib/media/prebuiltUploads';
 import { readMediaSettings } from '../lib/media/settings';
+import { featureSwitchState } from '../lib/features';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -695,6 +696,9 @@ const deeplKeyBound = async (c: Context<Env>) => {
 	const v = (c.env as { AI_KEY_DEEPL?: string | { get(): Promise<string> } }).AI_KEY_DEEPL;
 	return !!v && !!(typeof v === 'string' ? v : await v.get().catch(() => ''));
 };
+// Features page (FEAT-4, wiki AUN-FEATURES §5.3): old settings and set-up state; admin-api owns the switches
+app.get('/features/state', async (c) => ok(c, await featureSwitchState(c.env as never)));
+
 app.get('/captions/settings', async (c) => {
 	const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
 	const [settings, editions, translations] = await Promise.all([

@@ -824,6 +824,31 @@ describe('content endpoints: caption and translation settings', () => {
     assert.equal(page.result.audit.length, 1);
   });
 
+  it('viewer caption download is super-admin-only here too, as on the Features page; unchanged values pass', async () => {
+    const { db, log } = fakeDb();
+    let settings: Record<string, unknown> = { inline: { enabled: true }, viewerDownload: { enabled: false } };
+    const { fetcher, calls } = fakeVideos({
+      'GET /captions/settings': () => ({ body: { success: true, result: view(settings) } }),
+      'PUT /captions/settings': (call) => {
+        settings = { ...settings, ...(call.body as object) };
+        return { body: { success: true, result: { settings } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const turnOn = { viewerDownload: { enabled: true } };
+    const refused = await call('/api/content/captions/settings', { method: 'PUT', roles: 'admin', json: turnOn });
+    assert.equal(refused.status, 403);
+    assert.equal(((await refused.json()) as { feature?: string }).feature, 'viewerCaptionDownload');
+    assert.ok(!calls.some((c) => c.method === 'PUT'), 'the refused change never reaches api-videos');
+    assert.equal(log.length, 0);
+
+    // The page sends the whole form: an admin saving other fields with the value unchanged passes
+    const whole = { inline: { enabled: false }, viewerDownload: { enabled: false } };
+    assert.equal((await call('/api/content/captions/settings', { method: 'PUT', roles: 'admin', json: whole })).status, 200);
+    assert.equal((await call('/api/content/captions/settings', { method: 'PUT', roles: 'admin,super_admin', json: turnOn })).status, 200);
+    assert.deepEqual(settings.viewerDownload, { enabled: true });
+  });
+
   it("the platform's Quran edition: creators:manage, audited with the edition it replaces; a reset is audited too", async () => {
     const { db, log } = fakeDb();
     const { fetcher, calls } = fakeVideos({

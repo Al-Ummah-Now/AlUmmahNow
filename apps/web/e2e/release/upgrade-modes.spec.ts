@@ -23,9 +23,20 @@ async function sql(statement: string): Promise<void> {
   const res = await fetch(`${CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: statement });
   expect(res.ok, `stack SQL: ${await res.text()}`).toBe(true);
 }
-const setRequests = (on: boolean) =>
-  sql(`INSERT INTO creator_tier_settings (key, value, updated_by, updated_at) VALUES ('tier_requests_enabled', '${on ? 1 : 0}', 'e2e', '${new Date().toISOString()}')
+/**
+ * "Allow tier requests" is the Features page's tierRequests switch (FEAT-4): its row in
+ * feature_switches decides, and the old setting is kept in step as the old page does. Servers keep
+ * switch rows for up to 30 s, so every check after a change waits for it to land.
+ */
+async function setRequests(on: boolean): Promise<void> {
+  const at = new Date().toISOString();
+  await sql(`INSERT INTO creator_tier_settings (key, value, updated_by, updated_at) VALUES ('tier_requests_enabled', '${on ? 1 : 0}', 'e2e', '${at}')
        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+  await sql(`INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('tierRequests', ${on ? 1 : 0}, 1, 'e2e', '${at}')
+       ON CONFLICT (key) DO UPDATE SET enabled = excluded.enabled, version = feature_switches.version + 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+}
+/** A switch change reaches every server within 30 s (wiki AUN-FEATURES §5.3). */
+const SWITCH_LANDS = { timeout: 60_000, intervals: [1_000, 2_000, 5_000] };
 
 test.describe('Release: the Upgrade page modes', () => {
   test.beforeAll(() => {
@@ -42,8 +53,10 @@ test.describe('Release: the Upgrade page modes', () => {
       const ask = () =>
         apiFetch(user, '/api/me/tier-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tierId: 'creator', name: 'E2E Modes', about: 'Checking which mode the Upgrade page is in right now.' }) });
       const open = async (locale: 'en' | 'ar', mode: string) => {
-        await gotoSettled(page, `${target().web}/${locale}/upgrade`);
-        await expect(page.getByTestId('upgrade-page')).toHaveAttribute('data-mode', mode, { timeout: 30000 });
+        await expect(async () => {
+          await gotoSettled(page, `${target().web}/${locale}/upgrade`);
+          await expect(page.getByTestId('upgrade-page')).toHaveAttribute('data-mode', mode, { timeout: 5000 });
+        }).toPass(SWITCH_LANDS);
       };
 
       // request
@@ -55,8 +68,10 @@ test.describe('Release: the Upgrade page modes', () => {
       // closed: /upgrade is an off feature (owner decision 2026-11-19): the site's 404, no entry point, the server agrees
       await setRequests(false);
       for (const locale of ['en', 'ar'] as const) {
-        await gotoSettled(page, `${target().web}/${locale}/upgrade`);
-        await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
+        await expect(async () => {
+          await gotoSettled(page, `${target().web}/${locale}/upgrade`);
+          await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 5000 });
+        }).toPass(SWITCH_LANDS);
         await expect(page.getByTestId('upgrade-page')).toHaveCount(0);
         await expect(page.getByTestId('header-request-access')).toHaveCount(0);
       }
@@ -79,7 +94,7 @@ test.describe('Release: the Upgrade page modes', () => {
       await open('en', 'pay');
       await expect(page.getByTestId('tier-creator-request')).toHaveCount(0);
       await expect(page.getByTestId('upgrade-beta-notice')).toHaveCount(0);
-      expect((await ask()).status).toBe(403);
+      await expect.poll(async () => (await ask()).status, SWITCH_LANDS).toBe(403);
     } finally {
       await sql(`DELETE FROM billing_providers WHERE id = 'fake' AND updated_by = '${marker}'`);
       await setRequests(true);

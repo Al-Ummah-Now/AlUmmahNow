@@ -53,6 +53,7 @@
 --   apps/api-videos/migrations/search/0071_admin_job_log.sql
 --   apps/api-videos/migrations/search/0072_caption_translate_source.sql
 --   apps/api-videos/migrations/search/0076_creator_support.sql
+--   apps/api-videos/migrations/search/0077_feature_switches.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -96,6 +97,8 @@ CREATE TABLE discovery_home_rails (rail TEXT PRIMARY KEY, position INTEGER NOT N
 CREATE TABLE discovery_pins (id TEXT PRIMARY KEY, rail TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('video', 'channel')), target_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 1, starts_at INTEGER, ends_at INTEGER, note TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL, UNIQUE (rail, kind, target_id));
 CREATE TABLE discovery_rail_items (rail TEXT NOT NULL, scope TEXT NOT NULL, position INTEGER NOT NULL, video_id TEXT NOT NULL, score REAL NOT NULL DEFAULT 0, reason TEXT NOT NULL, PRIMARY KEY (rail, scope, position)) WITHOUT ROWID;
 CREATE TABLE discovery_rails (rail TEXT NOT NULL, scope TEXT NOT NULL, mode TEXT NOT NULL, label TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, signal_items INTEGER NOT NULL DEFAULT 0, hash TEXT NOT NULL, computed_at INTEGER NOT NULL, PRIMARY KEY (rail, scope)) WITHOUT ROWID;
+CREATE TABLE feature_switch_changes (id TEXT PRIMARY KEY, key TEXT NOT NULL, version INTEGER NOT NULL, old_enabled INTEGER CHECK (old_enabled IS NULL OR old_enabled IN (0, 1)), new_enabled INTEGER NOT NULL CHECK (new_enabled IN (0, 1)), actor_id TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('features_page', 'undo', 'legacy_page', 'migration')), created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)), version INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
@@ -281,6 +284,7 @@ CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
+CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);

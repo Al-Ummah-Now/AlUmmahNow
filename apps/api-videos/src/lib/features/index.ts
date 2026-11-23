@@ -19,6 +19,10 @@
  */
 import {
 	NO_FEATURES,
+	FEATURE_REGISTRY,
+	applySwitchesToUserFeatures,
+	type FeatureKey,
+	type FeatureStateReport,
 	CATEGORIZE_VISIBILITY_KEY,
 	SOCIAL_NETWORKS,
 	captionPeriod,
@@ -49,6 +53,8 @@ import { readSettings as readSiteSettings, type SitesEnv } from '../sites/store'
 import { logger } from '../logger';
 import { enabledProviders } from '../billing/config';
 import { readQuranCurrent } from '../quran/copy';
+import { forgetFeatureSwitches, overlaySwitch, readFeatureSwitches } from './switches';
+import { readRequestsAllowed } from '../upgradeMode';
 
 export { featureOff } from './off';
 
@@ -139,6 +145,7 @@ export function liveConfigured(env: FeaturesEnv, now = Date.now()): Promise<bool
 export function forgetFeatureCaches(): void {
 	liveMemo.forget();
 	saasMemo.forget();
+	forgetFeatureSwitches();
 }
 
 /** Transcription can run: its queues and database are bound and the month's budget is above 0. */
@@ -208,6 +215,15 @@ export async function youtubeImportConfigured(env: FeaturesEnv): Promise<boolean
 /** AI category suggestions: the admin switch (mirrored; no file = on, its default) and the env kill switch. */
 export async function aiCategoryConfigured(env: FeaturesEnv): Promise<boolean> {
 	if (env.AI_CATEGORIZE_ENABLED === 'false' || !env.queue) return false;
+	try {
+		return await overlaySwitch(env, 'aiCategorySuggest', await categorizeVisibilityStored(env));
+	} catch {
+		return false;
+	}
+}
+
+/** The categorize visibility file's own value (no file: on, its default; unreadable: off). */
+export async function categorizeVisibilityStored(env: FeaturesEnv): Promise<boolean> {
 	try {
 		const stored = await env.global_settings?.get(CATEGORIZE_VISIBILITY_KEY);
 		if (!stored) return true;
@@ -280,6 +296,20 @@ const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[
  * the caller's role there; a caller without a role sees none of it.
  */
 export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
+	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
+	// The Features page switches (FEAT-4): a switch that is off, or blocked by one, hides its keys
+	return applySwitchesToUserFeatures(features, switches.effective);
+}
+
+/**
+ * Switches with an old setting are already decided inside the old readers (overlaySwitch), so they
+ * count as on here unless a row or a required switch says otherwise.
+ */
+const NEUTRAL_LEGACY: Partial<Record<FeatureKey, boolean>> = Object.fromEntries(
+	FEATURE_REGISTRY.filter((d) => d.legacy).map((d) => [d.key, true]),
+);
+
+async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
 	const settings = await readCaptionSettings(env);
 	const [quran, quranText] = await Promise.all([quranEditionsConfigured(env), quranTextAvailable(env)]);
 	const features: UserFeatures = {
@@ -373,4 +403,61 @@ export async function captionFeatureFor(env: FeaturesEnv, kind: 'transcribe' | '
 	if (kind === 'transcribe' ? !transcribeConfigured(env, settings) : !captionTranslateConfigured(env, settings)) return false;
 	const creator = await resolveCreator(db, who);
 	return hasCaptionMinutes(db, creator.subjectId, creator.tier, creator.via === 'super_admin' || !!creator.tier?.unlimited);
+}
+
+/**
+ * The Features page's view from here (GET /internal/admin/features/state): each switch's old
+ * setting, read raw (not overlaid), and whether the feature is set up enough to work when on.
+ * The set-up checks are the `*Configured` readers with the switch itself taken as on.
+ */
+export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureStateReport> {
+	const settled = <T>(p: Promise<T>, fallback: T) => p.catch((error: unknown) => {
+		logger.warn('[Features] State read failed', { error: error instanceof Error ? error.message : String(error) });
+		return fallback;
+	});
+	const raw = await readCaptionSettings(env, { raw: true });
+	const on = {
+		...raw,
+		translation: { ...raw.translation, enabled: true },
+		inline: { ...raw.inline, enabled: true },
+		viewerTitles: { ...raw.viewerTitles, enabled: true },
+	};
+	const db = env.SEARCH_DB;
+	const [yt, ytSecret, social, networks, categorize, requests, live, quran, saas] = await Promise.all([
+		settled(readYtSettings(env, { raw: true }), null),
+		settled(googleClientSecret(env).then((v) => !!v), false),
+		settled(readPlatformSettings(env as never, { raw: true }), null),
+		settled(networkReadiness(env as unknown as SocialEnv), null),
+		categorizeVisibilityStored(env),
+		db ? settled(readRequestsAllowed(db, { raw: true }).then((r) => r.allowed), true) : Promise.resolve(true),
+		settled(liveConfigured(env), false),
+		settled(quranEditionsConfigured(env), false),
+		settled(saasConfigured(env), false),
+	]);
+	return {
+		legacy: {
+			youtubeImport: yt?.enabled ?? false,
+			captionsTranslate: raw.translation.enabled,
+			inlineTranslate: raw.inline.enabled,
+			viewerTranslatedTitles: raw.viewerTitles.enabled,
+			viewerCaptionDownload: raw.viewerDownload.enabled,
+			socialAutopost: social?.enabled ?? false,
+			aiCategorySuggest: categorize,
+			tierRequests: requests,
+		},
+		ready: {
+			youtubeImport: !!yt?.clientId && ytSecret,
+			audioTracks: !!env.MEDIA_ORIGINALS && !!env.TRANSCODE_QUEUE,
+			live,
+			captionsTranscribe: transcribeConfigured(env, raw),
+			captionsTranslate: captionTranslateConfigured(env, on),
+			inlineTranslate: inlineTranslateConfigured(env, on),
+			viewerTranslatedTitles: viewerTitlesConfigured(env, on),
+			quranEditions: quran,
+			socialAutopost: !!social && !!networks && SOCIAL_NETWORKS.some((n) => networks[n].configured && social.networks[n].enabled),
+			aiCategorySuggest: env.AI_CATEGORIZE_ENABLED !== 'false' && !!env.queue,
+			siteDomains: saas,
+			newsletter: null,
+		},
+	};
 }

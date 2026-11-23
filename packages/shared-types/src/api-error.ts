@@ -59,6 +59,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   playlist_not_found: { action: 'none', en: 'This playlist isn’t available.', ar: 'قائمة التشغيل هذه غير متاحة.' },
   method_not_allowed: { action: 'none', en: 'This action isn’t possible here.', ar: 'لا يمكن القيام بهذا الإجراء هنا.' },
   conflict: { action: 'retry', en: 'This changed while you were working on it. Reload and try again.', ar: 'تغيّر هذا أثناء عملك عليه. أعد التحميل وحاول مرة أخرى.' },
+  feature_precondition: { action: 'none', en: 'This can’t be turned on yet.', ar: 'لا يمكن تشغيل هذا بعد.' },
   feature_changed: { action: 'none', en: 'Someone else changed this a moment ago.', ar: 'غيّر شخص آخر هذا قبل لحظات.' },
   payload_too_large: { action: 'none', en: 'This is too large to send.', ar: 'هذا أكبر من أن يُرسل.' },
   rate_limited: { action: 'retry', en: 'That was a lot of requests in a short time. Please wait a moment and try again.', ar: 'كانت هذه طلبات كثيرة في وقت قصير. يُرجى الانتظار قليلًا ثم المحاولة مرة أخرى.' },

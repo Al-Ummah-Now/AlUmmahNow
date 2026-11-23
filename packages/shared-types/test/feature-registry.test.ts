@@ -44,6 +44,16 @@ test('Arabic copy follows the glossary and the number rule', () => {
   }
 });
 
+test('setup notes are bilingual, whole sentences and follow the Arabic rules', () => {
+  for (const [key, note] of Object.entries(r.FEATURE_SETUP_NOTES)) {
+    assert.ok(r.isFeatureKey(key), key);
+    assert.match(note!.en, /[.]$/);
+    assert.match(note!.ar, /[.]$/);
+    assert.ok(!/['"]/.test(note!.en), `${key}: straight quote`);
+    assert.ok(!LATIN.test(note!.ar) && !ASCII_DIGIT.test(note!.ar) && !/[,"]/.test(note!.ar), `${key}: ${note!.ar}`);
+  }
+});
+
 test('requirements name real keys and have no cycles', () => {
   for (const d of r.FEATURE_REGISTRY) {
     for (const req of d.requires) assert.ok(r.isFeatureKey(req), `${d.key} requires unknown ${req}`);
