@@ -101,6 +101,7 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'PUT', '/api/videos/:videoId/recitation-metadata', 'recitationTools'),
   r('api-videos', 'GET', '/api/prayer-times', 'prayerTimes'),
   r('api-videos', 'GET', '/api/hijri', 'hijriCalendar'),
+  r('api-videos', 'GET', '/api/islamic/season', 'ramadanMode'),
   // Islamic preferences: reachable while any of prayer times, Qibla, Hijri or Ramadan mode is on (E21.1b)
   r('api-videos', 'GET', '/api/profile/islamic', 'prayerTimes', 'handler'),
   r('api-videos', 'PUT', '/api/profile/islamic', 'prayerTimes', 'handler'),
@@ -150,6 +151,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'api-videos', prefix: '/api/library/notes', key: 'studyNotes' },
   { app: 'api-videos', prefix: '/api/prayer-times', key: 'prayerTimes' },
   { app: 'api-videos', prefix: '/api/hijri', key: 'hijriCalendar' },
+  { app: 'api-videos', prefix: '/api/islamic', key: 'ramadanMode' },
   { app: 'api-videos', prefix: '/api/social/channel', key: 'socialAutopost' },
   { app: 'api-videos', prefix: '/api/videos/category-suggestions', key: 'aiCategorySuggest' },
   { app: 'admin-api', prefix: '/api/sites/:channelId/domains', key: 'siteDomains' },
@@ -280,7 +282,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   offlineDownloads: 'E14-S3 adds the offline download routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
-  ramadanMode: 'E21.2 adds the season routes and maps them here',
   ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',
   parentsGuide: 'the Help topic page of apps/web reads GET /api/me/features and is a 404 while off (E20-S1)',
   appUpdates: 'GET /api/v1/app-config stays public while off and answers update.enabled false with no notice (wiki AUN-APP-UPDATES §4.1); it also serves flags and config',
