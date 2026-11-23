@@ -192,11 +192,26 @@ export function ListenAudioProvider({ children }: { children: React.ReactNode })
       return;
     }
     if (typeof MediaMetadata !== 'undefined') {
-      ms.metadata = new MediaMetadata({
-        title: current.title,
-        artist: current.channelName,
-        artwork: current.thumbnailUrl ? [{ src: current.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
-      });
+      let artwork: MediaImage[] = [];
+      if (current.thumbnailUrl) {
+        try {
+          const parsed = new URL(current.thumbnailUrl, typeof window !== 'undefined' ? window.location.origin : 'https://alummahnow.com');
+          if (parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'data:') {
+            artwork = [{ src: parsed.href, sizes: '512x512' }];
+          }
+        } catch {
+          // Omit invalid artwork URL rather than throwing inside MediaMetadata
+        }
+      }
+      try {
+        ms.metadata = new MediaMetadata({
+          title: current.title,
+          artist: current.channelName,
+          artwork,
+        });
+      } catch {
+        // Ignore MediaMetadata errors on browsers with strict artwork URL checks
+      }
     }
     ms.playbackState = isPlaying ? 'playing' : 'paused';
     const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
