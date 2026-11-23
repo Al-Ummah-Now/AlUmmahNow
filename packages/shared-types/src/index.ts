@@ -181,3 +181,4 @@ export * from './feature-registry';
 export * from './api-error';
 export * from './feature-switch-store';
 export * from './feature-routes';
+export * from './workflows';
