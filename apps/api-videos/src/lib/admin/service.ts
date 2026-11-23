@@ -941,6 +941,45 @@ async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, fro
 	}
 }
 
+/** How long after a move its records are checked again (§3.3): an old-owner write that read before the flip. */
+const REVERIFY_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Daily: moves finished in the last 48 hours are verified again, and a record that went back to the
+ * previous owner (an edit that read before the flip, an upload that finished after it) is moved
+ * again by re-running the move's idempotent steps, quietly (no second notice). Read through
+ * idx_admin_jobs_status. Returns how many were checked and repaired.
+ */
+export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.now()): Promise<{ checked: number; repaired: number; failed: number }> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return { checked: 0, repaired: 0, failed: 0 };
+	const since = new Date(at - REVERIFY_WINDOW_MS).toISOString();
+	const { results } = await db
+		.prepare(`SELECT id, target_id, params, actor_id FROM admin_jobs WHERE status = 'succeeded' AND updated_at >= ? AND kind = 'channel.transfer'`)
+		.bind(since)
+		.all<{ id: string; target_id: string; params: string; actor_id: string }>();
+	let repaired = 0;
+	let failed = 0;
+	for (const row of results ?? []) {
+		try {
+			const params = JSON.parse(row.params || '{}') as { newOwnerId: string; previousOwnerId: string | null };
+			const channel = await repo(env.channels).getObject(row.target_id);
+			// Moved on again since (or deleted): a later move owns the check
+			if (!channel || channel.isDeleted || channel.userId !== params.newOwnerId) continue;
+			const videoIds = await idsOf(env, 'video', { channelId: row.target_id }, { includeDeleted: true });
+			const problems = await verifyTransfer(env, row.target_id, params.previousOwnerId, params.newOwnerId, videoIds);
+			if (!problems.length) continue;
+			logger.warn('[Admin] A moved channel had records back on the previous owner; moving them again', { channelId: row.target_id, jobId: row.id, problems });
+			await runTransfer(env, { id: row.id, kind: 'channel.transfer', targetKind: 'channel', targetId: row.target_id, actorId: row.actor_id, params: { ...params, reverify: true } } as unknown as AdminJob);
+			repaired++;
+		} catch (error) {
+			failed++;
+			logger.error('[Admin] Channel move re-verify failed', { jobId: row.id, channelId: row.target_id, error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	return { checked: results?.length ?? 0, repaired, failed };
+}
+
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
@@ -978,7 +1017,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		return true;
 	});
 	if (!saved || saved.isDeleted) {
-		await releaseTransferLock(env, id, job.id);
+		if (!job.params.reverify) await releaseTransferLock(env, id, job.id);
 		return { done: true, result: { skipped: saved ? 'channel_deleted' : 'channel_not_found' } };
 	}
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
@@ -1022,9 +1061,11 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	if (failed === 0) {
 		const problems = await verifyTransfer(env, id, previousOwnerId, newOwnerId, videoIds);
 		if (problems.length) throw new Error(`Channel move verify found records on the previous owner (${problems.join(', ')}); retrying`);
-		await releaseTransferLock(env, id, job.id);
-		await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
-		await notifyMove(env, job, saved, previousOwnerId, newOwnerId);
+		if (!job.params.reverify) {
+			await releaseTransferLock(env, id, job.id);
+			await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
+			await notifyMove(env, job, saved, previousOwnerId, newOwnerId);
+		}
 	}
 	return finish(result, failed);
 }

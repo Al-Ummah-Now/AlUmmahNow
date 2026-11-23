@@ -95,7 +95,7 @@ import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
 import { handleAdminJobBatch, type JobMessage } from './lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, purgeDeletion } from './lib/admin/service';
+import { ADMIN_JOB_HANDLERS, purgeDeletion, reverifyRecentTransfers } from './lib/admin/service';
 import { runDeletionCleanup } from './lib/admin/deletions';
 import { startIndexReconcile } from './lib/search/reconcileJobs';
 import { kickRepairJobIfPending } from './lib/search/repairs';
@@ -945,6 +945,15 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			}
 			// Comments a channel removed more than 90 days ago (lib/channelComments/jobs.ts; queued pages, never throws)
 			await startCommentPurge(rawEnv as never, ctx);
+			try {
+				// Channel moves of the last 48 hours checked again (wiki AUN-CHANNEL-CLAIM §3.3)
+				const moves = await reverifyRecentTransfers(withSearchSync(rawEnv, ctx) as never);
+				if (moves.checked) logger.info('[ChannelMoves] Re-verify run', moves);
+				if (moves.failed) reportJobFailure(rawEnv, ctx, 'channel-move-reverify', new Error(`${moves.failed} channel move(s) could not be re-verified`));
+			} catch (error) {
+				logger.error('[ChannelMoves] Re-verify run failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'channel-move-reverify', error);
+			}
 			try {
 				// Live QoE, events and segment indexes past 90 days (lib/live/qoe.ts)
 				if (rawEnv.SEARCH_DB) await pruneLiveData(rawEnv.SEARCH_DB);

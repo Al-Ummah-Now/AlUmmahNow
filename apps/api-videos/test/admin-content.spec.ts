@@ -36,7 +36,7 @@ import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion } from '../src/lib/admin/service';
+import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, reverifyRecentTransfers } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -675,6 +675,25 @@ describe('channel actions', () => {
 		assert.equal(refused.body.code, 'official_handle_take_back');
 		assert.ok(!raw.channel_tabs.store.has('channel-handles/lamahat'), 'nothing claimed');
 		assert.equal((await call('PATCH', '/channels/ch1', { handle: 'plainname' })).status, 200, 'other handles still change');
+	});
+
+	it('the daily re-verify moves a record that went back to the previous owner, quietly, for 48 hours (CC-1c)', async () => {
+		const { raw, env, call, jobOf, db, flush } = await setup();
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded');
+		// A late edit by the previous owner writes the old owner back on one video
+		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+		const before = raw.queue.messages.length;
+		const result = await reverifyRecentTransfers(env as never);
+		await flush();
+		assert.deepEqual(result, { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
+		assert.equal(raw.queue.messages.slice(before).filter((m: any) => m.payload?.notificationKey).length, 0, 'no second notice');
+		// Clean now: checked, nothing to repair; past 48 hours it is not checked at all
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
+		assert.deepEqual(await reverifyRecentTransfers(env as never, Date.now() + 49 * 3600 * 1000), { checked: 0, repaired: 0, failed: 0 });
+		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM admin_jobs WHERE status = 'succeeded' AND updated_at >= '2026' AND kind = 'channel.transfer'`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.match(plan, /idx_admin_jobs_status/, plan);
 	});
 
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
