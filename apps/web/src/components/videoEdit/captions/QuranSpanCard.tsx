@@ -11,7 +11,7 @@
  */
 import React, { useEffect, useId, useState } from 'react';
 import { BookOpen, Check, ExternalLink, Loader2, X } from 'lucide-react';
-import { parseQuranRange, quranAyahLabel, quranComUrl, type CaptionQuranSegment } from '@al-ummah/shared-types';
+import { QURAN_FOUNDATION_URL, parseQuranRange, quranAyahLabel, quranComUrl, type CaptionQuranSegment } from '@al-ummah/shared-types';
 import type { CaptionsTranslations } from '@al-ummah/shared-types';
 import { getQuranPassage, type QuranPassage } from '@/lib/api/caption-drafts-client';
 import { parseShortReference } from './editor-state';
@@ -142,7 +142,12 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
                 {t.translationEdition.split('{name}')[1]}
               </p>
             )}
-            <p className="text-[11px] text-muted-foreground">{t.attribution}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {/* QF's short credit, linked (QF 2026-11-23) */}
+              <a href={QURAN_FOUNDATION_URL} target="_blank" rel="noopener" aria-label={t.attributionLinkLabel} data-testid="quran-credit-link" className="underline underline-offset-2 hover:text-foreground">
+                {t.attribution}
+              </a>
+            </p>
           </figure>
         ) : (
           <p className="text-xs text-muted-foreground">{t.textUnavailable}</p>

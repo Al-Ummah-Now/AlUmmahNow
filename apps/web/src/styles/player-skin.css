@@ -869,6 +869,85 @@
   border-radius: 4px;
 }
 
+/* ---------- In-player links (components/VideoPlayer/PlayerLinkOverlay.tsx) ----------
+   caption-end: a compact link at the inline end of the caption band, one row under the captions
+   (they move up a row while it shows), following the band as the controls show and hide. Small hit
+   area, away from the centre of the video, the big play button and the control bar. First use: Quran
+   Foundation's credit next to Quran captions (QF 2026-11-23). */
+
+.video-js.vjs-fanous.vjs-fanous-caption-credit .vjs-text-track-display {
+  bottom: calc(88px + var(--fanous-link-row, 26px));
+}
+
+.video-js.vjs-fanous.vjs-fanous-caption-credit.vjs-user-inactive.vjs-playing:not(.vjs-menu-open) .vjs-text-track-display {
+  bottom: calc(16px + var(--fanous-link-row, 26px));
+}
+
+.video-js.vjs-fanous .vjs-fanous-links[data-placement="caption-end"] {
+  position: absolute;
+  z-index: 3;
+  bottom: 88px;
+  inset-inline-end: 12px;
+  display: flex;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
+  transition: bottom 200ms ease;
+}
+
+.video-js.vjs-fanous.vjs-user-inactive.vjs-playing:not(.vjs-menu-open) .vjs-fanous-links[data-placement="caption-end"] {
+  bottom: 16px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-link {
+  pointer-events: auto;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--fanous-player-cue);
+  color: var(--fanous-player-icon);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .video-js.vjs-fanous .vjs-fanous-link:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+.video-js.vjs-fanous .vjs-fanous-link:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 2px;
+}
+
+/* A small player (mini player, a narrow embed): smaller, and closer to the edge */
+@container fanous-player (max-width: 419px) {
+  .video-js.vjs-fanous .vjs-fanous-links[data-placement="caption-end"] {
+    inset-inline-end: 6px;
+    max-width: calc(100% - 12px);
+  }
+
+  .video-js.vjs-fanous .vjs-fanous-link {
+    padding: 1px 6px;
+    font-size: 11px;
+    line-height: 16px;
+  }
+
+  .video-js.vjs-fanous.vjs-fanous-caption-credit .vjs-text-track-display {
+    --fanous-link-row: 22px;
+  }
+}
+
 /* Caption style, opened in the player layer (lib/video/components.ts layerCaptionSettings) */
 .vjs-fanous-layer .vjs-modal-dialog.vjs-text-track-settings.vjs-fanous-caption-dialog {
   position: relative;

@@ -162,14 +162,14 @@ describe('caption drafts', () => {
 		assert.equal(served.status, 200);
 		const vtt = await served.text();
 		assert.match(vtt, /﴿قُلْ هُوَ ٱللَّهُ أَحَدٌ﴾ \(الإخلاص ١١٢:١\)/);
-		// QF terms (2026-11-21): the cue with Quran text ends with QF's attribution (right to left), once;
+		// QF (2026-11-23): the cue with Quran text ends with QF's short credit (right to left), once;
 		// the reference-only cue has none
 		const blocks = vtt.split(/\n{2,}/);
 		const quranCue = blocks.find((b) => b.includes('﴿'))!;
-		// No-break spaces keep «مؤسسة القرآن (https://…)» together when the cue wraps
-		assert.equal(quranCue.split('\n').at(-1), '\u200fبيانات القرآن مقدَّمة من مؤسسة\u00a0القرآن\u00a0(https://quran.foundation/\u200e)');
-		assert.equal(vtt.split('بيانات القرآن مقدَّمة من مؤسسة\u00a0القرآن\u00a0(https://quran.foundation/\u200e)').length - 1, 1);
-		assert.ok(!blocks.find((b) => b.includes('quran.com/112/2'))!.includes('quran.foundation'));
+		assert.equal(quranCue.split('\n').at(-1), '\u200fالمصدر: مؤسسة القرآن');
+		assert.equal(vtt.split('المصدر: مؤسسة القرآن').length - 1, 1);
+		assert.ok(!vtt.includes('بيانات القرآن مقدَّمة'), 'the full line belongs on the Credits page and in downloads, not in a cue');
+		assert.ok(!blocks.find((b) => b.includes('quran.com/112/2'))!.includes('مؤسسة القرآن'));
 		assert.match(vtt, /\[القرآن ١١٢:٢ · quran\.com\/112\/2\]/, 'an unconfirmed suggestion is a reference only');
 		assert.ok(!vtt.includes('ٱلصَّمَدُ'), 'the suggestion has no Quran text');
 		assert.ok(!vtt.includes(HEARD));

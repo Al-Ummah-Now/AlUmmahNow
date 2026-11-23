@@ -4,7 +4,7 @@
  * Used by Studio's caption editor and the Quran passage card. Public and cacheable.
  */
 import { z } from 'zod';
-import { QURAN_ATTRIBUTION, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type QuranRange } from '@al-ummah/shared-types';
+import { QURAN_ATTRIBUTION, QURAN_CREDIT, QURAN_FOUNDATION_URL, formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type QuranRange } from '@al-ummah/shared-types';
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
 import { readQuranPassage, readQuranSurah } from '../../lib/quran/copy';
@@ -53,7 +53,8 @@ const PassageResponse = z.object({
 	surah: z.object({ number: z.number(), nameArabic: z.string(), nameSimple: z.string() }),
 	ayat: z.array(z.object({ ayah: z.number(), text: z.string().describe('Uthmani text, verbatim from Quran Foundation'), partial: z.boolean() })),
 	quranComUrl: z.string(),
-	attribution: z.object({ en: z.string(), ar: z.string() }),
+	attribution: z.object({ en: z.string(), ar: z.string() }).describe("QF's full attribution line"),
+	credit: z.object({ en: z.string(), ar: z.string(), url: z.string() }).describe('QF\'s short credit to show next to the text, linked to url (QF 2026-11-23)'),
 	version: z.string(),
 });
 
@@ -98,6 +99,7 @@ export class QuranPassageGet extends PublicRoute {
 			ayat,
 			quranComUrl: quranComUrl(range),
 			attribution: { ...QURAN_ATTRIBUTION },
+			credit: { ...QURAN_CREDIT, url: QURAN_FOUNDATION_URL },
 			version: current.version,
 		});
 	}

@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Player } from 'video.js';
 import { SettingsMenu, wholeRowEndPadding } from '../SettingsMenu';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
+import { liftQuranCredits } from '@/lib/video/quran-credit';
 
 function fakePlayer({ live = false, tracked }: { live?: boolean; tracked?: boolean } = {}) {
   const el = document.createElement('div');
@@ -173,6 +174,30 @@ describe('SettingsMenu', () => {
     fireEvent.click(document.querySelector('[data-row="0"]')!);
     fireEvent.click(document.querySelector('[data-row="captions"]')!);
     expect(rowIds()).not.toContain('download');
+  });
+
+  it('lists Quran Foundation’s credit, linked, while the shown track has Quran text from QF (QF 2026-11-23)', () => {
+    const f = fakePlayer();
+    // The Arabic track carries a cue with QF text; the web player has lifted its credit line
+    Object.assign(f.text[1]!, { cues: [{ text: '﴿قُلْ هُوَ ٱللَّهُ أَحَدٌ﴾\n\u200fالمصدر: مؤسسة القرآن' }] });
+    liftQuranCredits(f.text[1] as never);
+    render(<SettingsMenu player={f.player as unknown as Player} lang="ar" onShowShortcuts={jest.fn()} />);
+    openMenu(f);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).not.toContain('source');
+    fireEvent.click(document.querySelector('[data-row="1"]')!);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).toEqual(['back', 'off', '0', '1', 'extra', 'source']);
+    const link = screen.getByTestId('player-menu-quran-credit');
+    expect(link).toHaveAttribute('href', 'https://quran.foundation/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener');
+    expect(link).toHaveTextContent('المصدر: مؤسسة القرآن');
+    expect(link).toHaveAccessibleName('المصدر: مؤسسة القرآن (يفتح في علامة تبويب جديدة)');
+    // The English track has no QF text: no credit
+    fireEvent.click(document.querySelector('[data-row="0"]')!);
+    fireEvent.click(document.querySelector('[data-row="captions"]')!);
+    expect(rowIds()).not.toContain('source');
   });
 
   it('hides speed for live streams', () => {

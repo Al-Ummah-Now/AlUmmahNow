@@ -47,6 +47,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import type { AudioTrackView } from '@al-ummah/shared-types';
+import { QURAN_CREDIT_LINK_LABEL, QURAN_FOUNDATION_URL, quranCreditFor } from '@al-ummah/shared-types';
 import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
@@ -76,6 +77,8 @@ import { setupAccessibility } from '@/lib/video/accessibility';
 import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { SettingsMenu } from './SettingsMenu';
+import { PlayerLinkOverlay, type PlayerOverlayLink } from './PlayerLinkOverlay';
+import { useQuranCaptionCredit, type CreditPlayerLike } from './useQuranCaptionCredit';
 import { ProgressTooltip } from './ProgressTooltip';
 import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
@@ -215,6 +218,11 @@ export default function CustomVideoPlayer({
   const addedTextTracksRef = useRef<Array<{ track: unknown }>>([]);
   const [playerReady, setPlayerReady] = useState(false);
   useAudioTrackChoice(playerReady ? (playerRef.current as unknown as Parameters<typeof useAudioTrackChoice>[0]) : null, audioTracks, lang);
+  // QF's short credit, linked, next to Quran captions while they show (QF 2026-11-23)
+  const quranCredit = useQuranCaptionCredit(playerReady ? (playerRef.current as unknown as CreditPlayerLike) : null, playerReady);
+  const playerLinks: PlayerOverlayLink[] = quranCredit
+    ? [{ id: 'quran-foundation', label: quranCreditFor(lang), ariaLabel: lang === 'ar' ? QURAN_CREDIT_LINK_LABEL.ar : QURAN_CREDIT_LINK_LABEL.en, href: QURAN_FOUNDATION_URL, placement: 'caption-end', testId: 'player-quran-credit' }]
+    : [];
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [ended, setEnded] = useState(false);
@@ -1400,6 +1408,7 @@ export default function CustomVideoPlayer({
             autoAdvanceSeconds={playerUi.autoplayNext ? AUTO_ADVANCE_SECONDS : 0}
           />
         )}
+        <PlayerLinkOverlay links={ended ? [] : playerLinks} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />
         {mini && <MiniPlayerButtons onClose={closeMini} onReturn={returnFromMini} t={t} />}
 
         {/* Real-time viewer count (WebSocket) */}

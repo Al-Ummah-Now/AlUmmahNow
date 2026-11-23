@@ -28960,6 +28960,120 @@
         }
       }
     },
+    "/api/v1/quran/credits": {
+      "get": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "Quran credits",
+        "description": "🌐 Public. Quran Foundation's attribution and short credit, and every translation edition translated caption tracks can show (the shipped defaults, the platform's and the channels' picks), named as QF's catalogue gives them. 404 `feature_off` when no Quran text from QF is shown here.",
+        "operationId": "get_QuranCreditsGet",
+        "responses": {
+          "200": {
+            "description": "Credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attribution": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "ar": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en",
+                            "ar"
+                          ]
+                        },
+                        "credit": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "ar": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en",
+                            "ar",
+                            "url"
+                          ]
+                        },
+                        "quranText": {
+                          "type": "boolean"
+                        },
+                        "editions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number",
+                                "description": "QF translation resource id"
+                              },
+                              "name": {
+                                "type": "string",
+                                "description": "The edition's name, as QF gives it"
+                              },
+                              "author": {
+                                "type": "string",
+                                "description": "The translator, as QF gives it"
+                              },
+                              "language": {
+                                "type": "string",
+                                "description": "ISO 639-1"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "language"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "attribution",
+                        "credit",
+                        "quranText",
+                        "editions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No Quran text from Quran Foundation on this site (feature_off)"
+          }
+        }
+      }
+    },
     "/api/v1/quran/passage": {
       "get": {
         "tags": [
@@ -29054,7 +29168,28 @@
                       "required": [
                         "en",
                         "ar"
-                      ]
+                      ],
+                      "description": "QF's full attribution line"
+                    },
+                    "credit": {
+                      "type": "object",
+                      "properties": {
+                        "en": {
+                          "type": "string"
+                        },
+                        "ar": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "en",
+                        "ar",
+                        "url"
+                      ],
+                      "description": "QF's short credit to show next to the text, linked to url (QF 2026-11-23)"
                     },
                     "version": {
                       "type": "string"
@@ -29067,6 +29202,7 @@
                     "ayat",
                     "quranComUrl",
                     "attribution",
+                    "credit",
                     "version"
                   ]
                 }

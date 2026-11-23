@@ -194,7 +194,7 @@ describe('Quran translation editions (O7)', () => {
 		const served = await fillServedTrack(vtt, 'en', undefined, { env: env as never, edition: { id: 20, name: 'Saheeh International', language: 'en' } });
 		assert.match(served, /“\[fixture translation 20 of 112:1\] \[fixture translation 20 of 112:2\]” \(Saheeh International · Surah 112 112:1–2\)/);
 		assert.doesNotMatch(served, //);
-		assert.match(served, /\(Saheeh International · Surah 112 112:1–2\)\nQuran data provided by Quran\u00a0Foundation\u00a0\(https:\/\/quran\.foundation\/\)\n*$/, 'the edition by name, then QF’s attribution (its name and URL kept together)');
+		assert.match(served, /\(Saheeh International · Surah 112 112:1–2\)\nSource: Quran Foundation\n*$/, 'the edition by name, then QF’s short credit (QF 2026-11-23)');
 
 		const many = { ...draft, cues: Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, startMs: i * 5000, endMs: i * 5000 + 4000, segments: [{ type: 'quran' as const, range: `2:${i * 20 + 1}:1-2:${i * 20 + 20}:1`, status: 'accepted' as const }] })) };
 		const capped = await fillServedTrack(renderCaptionVtt(many), 'en', undefined, { env: env as never, edition: { id: 20, name: 'Saheeh International', language: 'en' } });
