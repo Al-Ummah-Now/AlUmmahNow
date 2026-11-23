@@ -155,6 +155,24 @@ export async function ensureChannelIndexed(env: ChannelCommentsJobEnv, ctx: Exec
 }
 
 /** One page of a channel's rebuild. Returns the next message, or null when it finished. */
+/**
+ * Writes the index rows of one post's comments from R2 (its `comments/<postId>/` prefix): the rebuild
+ * step, and a restored post (its rows were dropped when it was deleted). Throws on a read or D1 failure.
+ */
+export async function reindexPostComments(db: SearchDb, bucket: R2Bucket, postId: string, channelId: string): Promise<void> {
+	let cursor: string | undefined;
+	do {
+		const page = await bucket.list({ prefix: `comments/${postId}/`, cursor });
+		for (const item of page.objects) {
+			if (!/\/(top-level|replies\/[^/]+)\/[^/]+\.json$/.test(item.key) || item.key.endsWith('/index.json')) continue;
+			const stored = await bucket.get(item.key);
+			if (stored) await writePostCommentRow(db, postId, channelId, (await stored.json()) as PostComment);
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	await refreshPostThreads(db, postId);
+}
+
 export async function runRebuildStep(env: ChannelCommentsJobEnv, message: RebuildMessage): Promise<RebuildMessage | null> {
 	const db = dbOf(env);
 	const { channelId } = message;
@@ -183,17 +201,7 @@ export async function runRebuildStep(env: ChannelCommentsJobEnv, message: Rebuil
 			await deletePostCommentRows(db, postId);
 			continue;
 		}
-		let cursor: string | undefined;
-		do {
-			const page = await env.community_posts.list({ prefix: `comments/${postId}/`, cursor });
-			for (const item of page.objects) {
-				if (!/\/(top-level|replies\/[^/]+)\/[^/]+\.json$/.test(item.key) || item.key.endsWith('/index.json')) continue;
-				const stored = await env.community_posts.get(item.key);
-				if (stored) await writePostCommentRow(db, postId, channelId, (await stored.json()) as PostComment);
-			}
-			cursor = page.truncated ? page.cursor : undefined;
-		} while (cursor);
-		await refreshPostThreads(db, postId);
+		await reindexPostComments(db, env.community_posts, postId, channelId);
 	}
 	if (listed.truncated && listed.cursor) return { ...message, after: listed.cursor };
 	return null;

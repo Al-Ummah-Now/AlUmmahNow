@@ -85,6 +85,7 @@ export interface NotificationToastTranslations {
     newSubscriber: PluralTexts;
     newVideo: PluralTexts;
     liveStarted: PluralTexts;
+    newPost: PluralTexts;
     commentReply: PluralTexts;
     other: PluralTexts;
   };
@@ -118,6 +119,7 @@ export interface NotificationCenterTranslations {
   categories: {
     new_videos: string;
     live: string;
+    posts: string;
     replies: string;
     comments: string;
     subscribers: string;
@@ -126,6 +128,7 @@ export interface NotificationCenterTranslations {
   categoryDescriptions: {
     new_videos: string;
     live: string;
+    posts: string;
     replies: string;
     comments: string;
     subscribers: string;
@@ -302,6 +305,7 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   categories: {
     new_videos: 'New videos',
     live: 'Live streams',
+    posts: 'Posts',
     replies: 'Replies',
     comments: 'Comments on my videos',
     subscribers: 'New subscribers',
@@ -310,6 +314,7 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   categoryDescriptions: {
     new_videos: 'New uploads from channels you subscribe to (per-channel bell applies)',
     live: 'When a channel you subscribe to goes live',
+    posts: 'New posts from channels you subscribe to (per-channel bell applies)',
     replies: 'Replies to your comments',
     comments: 'Comments on videos you uploaded',
     subscribers: 'Someone subscribes to your channel',
@@ -318,9 +323,9 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   channelBell: {
     label: 'Notification settings for this channel',
     all: 'All',
-    allDescription: 'Every upload and live stream',
+    allDescription: 'Every upload, live stream and post',
     highlights: 'Highlights',
-    highlightsDescription: 'Long videos and live streams, no Lamahat',
+    highlightsDescription: 'Long videos, live streams and posts, no Lamahat',
     none: 'None',
     noneDescription: 'No notifications from this channel',
     saved: 'Channel notifications updated',
@@ -376,6 +381,7 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
       newSubscriber: { one: '{count} new subscriber', other: '{count} new subscribers' },
       newVideo: { one: '{count} new video from your subscriptions', other: '{count} new videos from your subscriptions' },
       liveStarted: { one: '{count} channel went live', other: '{count} channels went live' },
+      newPost: { one: '{count} new post from your subscriptions', other: '{count} new posts from your subscriptions' },
       commentReply: { one: '{count} new reply to your comments', other: '{count} new replies to your comments' },
       other: { one: '{count} new notification', other: '{count} new notifications' },
     },
@@ -409,6 +415,7 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
   categories: {
     new_videos: 'مرئيات جديدة',
     live: 'البث المباشر',
+    posts: 'المنشورات',
     replies: 'الردود',
     comments: 'التعليقات على مرئياتي',
     subscribers: 'مشتركون جدد',
@@ -417,6 +424,7 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
   categoryDescriptions: {
     new_videos: 'المرئيات الجديدة من القنوات التي تشترك فيها (حسب جرس كل قناة)',
     live: 'عندما تبدأ قناة تشترك فيها بثًا مباشرًا',
+    posts: 'المنشورات الجديدة من القنوات التي تشترك فيها (حسب جرس كل قناة)',
     replies: 'الردود على تعليقاتك',
     comments: 'التعليقات على المرئيات التي رفعتها',
     subscribers: 'عندما يشترك أحد في قناتك',
@@ -425,9 +433,9 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
   channelBell: {
     label: 'إعدادات إشعارات هذه القناة',
     all: 'الكل',
-    allDescription: 'كل مرئي جديد وكل بث مباشر',
+    allDescription: 'كل مرئي جديد وكل بث مباشر وكل منشور',
     highlights: 'الأبرز',
-    highlightsDescription: 'المرئيات الطويلة والبث المباشر دون اللمحات',
+    highlightsDescription: 'المرئيات الطويلة والبث المباشر والمنشورات دون اللمحات',
     none: 'بدون',
     noneDescription: 'لا إشعارات من هذه القناة',
     saved: 'تم تحديث إشعارات القناة',
@@ -518,6 +526,13 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
         few: 'بدأت {count} قنوات بثًا مباشرًا',
         many: 'بدأت {count} قناة بثًا مباشرًا',
         other: 'بدأت {count} قناة بثًا مباشرًا',
+      },
+      newPost: {
+        one: 'منشور جديد من اشتراكاتك',
+        two: 'منشوران جديدان من اشتراكاتك',
+        few: '{count} منشورات جديدة من اشتراكاتك',
+        many: '{count} منشورًا جديدًا من اشتراكاتك',
+        other: '{count} منشور جديد من اشتراكاتك',
       },
       commentReply: {
         one: 'رد جديد على تعليقاتك',

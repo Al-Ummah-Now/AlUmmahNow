@@ -92,15 +92,23 @@ test.describe('Release: Studio channel pages', () => {
         await expect(page).toHaveURL(posts, { timeout: 30000 });
         await expect.poll(async () => (await listPosts(user, channelId)).find((p) => p.id === id)?.content).toBe(`${marker} edited`);
 
-        // Delete through the in-app confirm, never a browser prompt
+        // Delete has no confirm (a 30-day soft delete): the post leaves the list at once and an
+        // Undo toast can put it back. Undo once, then delete for good.
         const edited = page.getByTestId('managed-post').filter({ hasText: `${marker} edited` });
         await expectListed(page, edited);
-        await edited.getByTestId('post-actions').click();
-        await page.getByRole('menuitem', { name: ui.del }).click();
-        const confirm = page.getByRole('alertdialog');
-        await expect(confirm).toBeVisible();
-        await confirm.getByRole('button', { name: ui.del, exact: true }).click();
-        await expect(edited).toHaveCount(0);
+        const remove = async () => {
+          await edited.getByTestId('post-actions').click();
+          await page.getByRole('menuitem', { name: ui.del }).click();
+          await expect(page.getByRole('alertdialog')).toHaveCount(0);
+          await expect(edited).toHaveCount(0);
+          await expect(page.getByTestId('post-delete-toast')).toBeVisible();
+        };
+        await remove();
+        await expect.poll(async () => (await listPosts(user, channelId)).some((p) => p.id === id)).toBe(false);
+        await page.getByTestId('post-delete-toast-undo').click();
+        await expect(edited).toHaveCount(1, { timeout: 20000 });
+        await expect.poll(async () => (await listPosts(user, channelId)).some((p) => p.id === id)).toBe(true);
+        await remove();
         await expect.poll(async () => (await listPosts(user, channelId)).some((p) => p.id === id)).toBe(false);
       } finally {
         await deletePostsContaining(user, channelId, marker);

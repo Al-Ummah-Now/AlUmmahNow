@@ -9,7 +9,9 @@ import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox'
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PostCard } from '@/components/Community/management/PostCard';
-import { deleteCommunityPost, listCommunityPosts } from '@/lib/api/community-posts';
+import { listCommunityPosts, updateCommunityPost } from '@/lib/api/community-posts';
+import { deletePostWithUndo } from '@/lib/community/delete-post';
+import { reportError } from '@/lib/errors/reporter';
 import { matchesSearch } from '@/lib/search/match';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
@@ -20,8 +22,8 @@ const TYPE_OPTIONS: PostType[] = [PostType.TEXT, PostType.IMAGE, PostType.POLL, 
 
 /**
  * Content → Posts (spec §4.4.3): the channel's posts by status, with search,
- * a type filter, New post, Edit and Delete. Moved from
- * /settings/channel/{id}/community. Status is in the URL (?status=).
+ * a type filter, New post, Edit, Delete (with Undo) and, for a scheduled post,
+ * Publish now. Moved from /settings/channel/{id}/community. Status is in the URL (?status=).
  */
 export function PostsTab({ locale, channelId, status }: { locale: string; channelId: string; status: PostListStatus }) {
   const router = useRouter();
@@ -39,7 +41,8 @@ export function PostsTab({ locale, channelId, status }: { locale: string; channe
     try {
       const response = await listCommunityPosts({ channelId, status, page: 1, limit: 50 }, { channelId });
       if (!response) throw new Error('no response');
-      setPosts(response.posts ?? []);
+      // The API's published list also carries the channel's scheduled posts: each tab shows its own
+      setPosts((response.posts ?? []).filter((p) => p.status === status));
       setState('ready');
     } catch (error) {
       logger.error('[Studio] Posts not loaded', { channelId, status, error });
@@ -69,17 +72,35 @@ export function PostsTab({ locale, channelId, status }: { locale: string; channe
       (filterType === 'all' || post.type === filterType),
   );
 
-  // Posts are shown on the channel page's Community tab (there is no per-post page)
-  const handleView = () => router.push(`/${locale}/channels/${channelId}?tab=community`);
+  // A post's own page (/post/{id})
+  const handleView = (post: CommunityPost) => router.push(`/${locale}/post/${encodeURIComponent(post.id)}`);
   const handleEdit = (post: CommunityPost) => router.push(`${base}/${encodeURIComponent(post.id)}/edit`);
+  // No confirm: a 30-day soft delete; the Undo toast puts the post back in its place
   const handleDelete = async (postId: string) => {
-    const result = await deleteCommunityPost(channelId, postId, { channelId });
+    let removed: { post: CommunityPost; index: number } | null = null;
+    await deletePostWithUndo({ id: postId, channelId }, t.community, {
+      onRemoved: () =>
+        setPosts((prev) => {
+          const index = prev.findIndex((p) => p.id === postId);
+          if (index >= 0) removed = { post: prev[index], index };
+          return prev.filter((p) => p.id !== postId);
+        }),
+      onRestored: () =>
+        setPosts((prev) => {
+          if (!removed || prev.some((p) => p.id === postId)) return prev;
+          return [...prev.slice(0, removed.index), removed.post, ...prev.slice(removed.index)];
+        }),
+    });
+  };
+  // A scheduled post goes live now (subscribers are notified by the processor); it leaves the Scheduled tab
+  const handlePublishNow = async (post: CommunityPost) => {
+    const result = await updateCommunityPost(channelId, post.id, { publishNow: true }, { channelId });
     if (result?.success) {
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      setNotice(t.studio.posts.deleted);
+      setPosts((prev) => prev.filter((p) => p.id !== post.id));
+      setNotice(t.studio.posts.publishedNow);
     } else {
-      logger.error('[Studio] Post not deleted', { channelId, postId });
-      setNotice(t.errors.genericError);
+      reportError(new Error('Publish post now refused'), { shown: true, extra: { channelId, postId: post.id, action: 'publish_post_now' } });
+      setNotice(t.community.publishFailed);
     }
   };
 
@@ -171,7 +192,7 @@ export function PostsTab({ locale, channelId, status }: { locale: string; channe
         ) : (
           <div className="space-y-4">
             {filteredPosts.map((post) => (
-              <PostCard key={post.id} post={post} locale={locale} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
+              <PostCard key={post.id} post={post} locale={locale} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} onPublishNow={handlePublishNow} />
             ))}
           </div>
         )}

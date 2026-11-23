@@ -30,6 +30,7 @@ export const STUDIO_REDIRECTS: StudioRedirect[] = [
   { source: `/${L}/settings/channel/:id/playlists/:playlistId`, destination: '/:locale/studio/:id/playlists/:playlistId', statusCode: 301 },
   { source: `/${L}/settings/channel/:id/community`, destination: '/:locale/studio/:id/content/posts', statusCode: 301 },
   { source: `/${L}/settings/channel/:id/community/new`, destination: '/:locale/studio/:id/content/posts/new', statusCode: 301 },
+  { source: `/${L}/settings/channel/:id/community/:postId/edit`, destination: '/:locale/studio/:id/content/posts/:postId/edit', statusCode: 301 },
   { source: `/${L}/settings/channel/:id/team`, destination: '/:locale/studio/:id/settings/permissions', statusCode: 301 },
   { source: `/${L}/settings/channel/:id/members`, destination: '/:locale/studio/:id/settings/permissions', statusCode: 301 },
   { source: `/${L}/video/:id/edit`, destination: '/:locale/studio/video/:id/edit', statusCode: 301 },

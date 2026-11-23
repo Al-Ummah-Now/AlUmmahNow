@@ -62,35 +62,8 @@ export async function publishDuePosts(env: ScheduledEnv, now = new Date()): Prom
 			continue;
 		}
 		if (m.at > nowIso) break; // sorted: everything after is later
-		const key = `posts/${m.channelId}/${m.postId}.json`;
-		let went = false;
-		const saved = await new R2Repository<CommunityPost>(env.community_posts).updateObject(key, (p) => {
-			const at = p.scheduledAt ? new Date(Date.parse(p.scheduledAt)).toISOString() : null;
-			if (p.status !== PostStatus.SCHEDULED || at !== m.at) return false;
-			p.status = PostStatus.PUBLISHED;
-			p.createdAt = m.at;
-			p.updatedAt = nowIso;
-			went = true;
-			return true;
-		});
-		if (saved && went) {
-			type PostIndex = { postIds: string[]; lastUpdated: string };
-			await new R2Repository<PostIndex>(env.community_posts).updateObject(
-				`posts/${m.channelId}/index.json`,
-				(index) => {
-					index.postIds = [m.postId, ...index.postIds.filter((id) => id !== m.postId)].slice(0, 1000);
-					index.lastUpdated = nowIso;
-				},
-				{ initial: () => ({ postIds: [], lastUpdated: nowIso }) },
-			);
-			if (env.queue) {
-				await new Queue(env.queue as never).send(MessageType.CommunityPostCreated, {
-					postId: m.postId,
-					channelId: m.channelId,
-					actor: { userId: saved.userId, channelId: m.channelId },
-					timestamp: m.at,
-				});
-			}
+		const saved = await goLive(env, m.channelId, m.postId, m.at, m.at, nowIso);
+		if (saved) {
 			out.published++;
 			logger.info('[ScheduledPosts] published', { channelId: m.channelId, postId: m.postId });
 		} else {
@@ -99,4 +72,54 @@ export async function publishDuePosts(env: ScheduledEnv, now = new Date()): Prom
 		await env.community_posts.delete(obj.key);
 	}
 	return out;
+}
+
+/**
+ * A scheduled post goes live at `at`: status published, createdAt = `at`, first in the channel's
+ * index, and CommunityPostCreated (the processor notifies subscribers and syncs the scholar
+ * reference). `expectAt` = only while it is still scheduled for that time (the cron; a post
+ * rescheduled since keeps waiting); null = whatever its time (Publish now). Null when nothing changed.
+ */
+export async function goLive(
+	env: ScheduledEnv,
+	channelId: string,
+	postId: string,
+	expectAt: string | null,
+	at: string,
+	nowIso = new Date().toISOString(),
+	actor?: { userId: string; channelId?: string },
+): Promise<CommunityPost | null> {
+	const key = `posts/${channelId}/${postId}.json`;
+	let went = false;
+	const saved = await new R2Repository<CommunityPost>(env.community_posts).updateObject(key, (p) => {
+		if (p.status !== PostStatus.SCHEDULED) return false;
+		if (expectAt !== null) {
+			const t = p.scheduledAt ? Date.parse(p.scheduledAt) : Number.NaN;
+			if (Number.isNaN(t) || new Date(t).toISOString() !== expectAt) return false;
+		}
+		p.status = PostStatus.PUBLISHED;
+		p.createdAt = at;
+		p.updatedAt = nowIso;
+		went = true;
+		return true;
+	});
+	if (!saved || !went) return null;
+	type PostIndex = { postIds: string[]; lastUpdated: string };
+	await new R2Repository<PostIndex>(env.community_posts).updateObject(
+		`posts/${channelId}/index.json`,
+		(index) => {
+			index.postIds = [postId, ...index.postIds.filter((id) => id !== postId)].slice(0, 1000);
+			index.lastUpdated = nowIso;
+		},
+		{ initial: () => ({ postIds: [], lastUpdated: nowIso }) },
+	);
+	if (env.queue) {
+		await new Queue(env.queue as never).send(MessageType.CommunityPostCreated, {
+			postId,
+			channelId,
+			actor: actor ?? { userId: saved.userId, channelId },
+			timestamp: at,
+		});
+	}
+	return saved;
 }

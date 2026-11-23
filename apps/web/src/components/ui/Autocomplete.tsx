@@ -507,7 +507,9 @@ export function Autocomplete(props: AutocompleteProps) {
                     <Highlight text={option.label} query={query} />
                   </span>
                   {option.subtitle && (
-                    <span dir="auto" className="block truncate text-xs text-[var(--fanous-color-text-secondary)] text-left [html[dir=rtl]_&]:text-right">{option.subtitle}</span>
+                    // Lined up with the page (main); the row's direction places it, and <bdi> keeps a Latin code
+                    // (a zone id under an Arabic city) in its own reading order
+                    <span className="block truncate text-xs text-[var(--fanous-color-text-secondary)] text-left [html[dir=rtl]_&]:text-right"><bdi>{option.subtitle}</bdi></span>
                   )}
                 </span>
                 {option.selected && <Check className="h-4 w-4 shrink-0 text-brand" aria-label={a.selected} />}

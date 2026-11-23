@@ -132,7 +132,7 @@ export default function CommentForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn('flex gap-3')}
+      className="flex gap-3"
     >
       {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
       <ComposerAvatar src={userAvatar} name={userDisplayName} as={channelId ? 'channel' : 'member'} className="w-10 h-10" />
@@ -150,16 +150,10 @@ export default function CommentForm({
                 ? 'أضف تعليقاً عاماً...'
                 : 'Add a public comment...'
             }
-            className={cn(
-              'w-full px-4 py-2 rounded-lg resize-none transition-all',
-              'border-b-2 bg-transparent',
-              'focus:outline-none',
-              isFocused
-                ? 'border-gray-900 dark:border-gray-100'
-                : 'border-gray-300 dark:border-gray-600',
-              'text-gray-900 dark:text-gray-100',
-              'placeholder:text-gray-500 dark:placeholder:text-gray-400'
-            )}
+            // The shared field (theme/system.css .f-input: the theme's control surface, edge and
+            // focus ring), not a fill or underline of its own
+            className="f-input w-full resize-none py-2 text-start"
+            data-testid="post-comment-input"
             rows={isFocused ? 4 : 1}
             disabled={loading}
           />

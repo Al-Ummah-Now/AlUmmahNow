@@ -206,9 +206,7 @@ export function TemplateSelector({
               w-full
               px-4
               py-2
-              pr-10
-              rtl:pl-10
-              rtl:pr-4
+              pe-10
               border
               border-gray-300
               dark:border-gray-600

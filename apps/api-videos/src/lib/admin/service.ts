@@ -55,6 +55,7 @@ import { deleteVideoSideRecords } from '../videoSideRecords';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
+import { reindexPostComments } from '../channelComments/jobs';
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
@@ -1247,11 +1248,28 @@ async function postIndexPosition(env: AdminServiceEnv, channelId: string, postId
 	return lo;
 }
 
-export async function restorePost(env: AdminServiceEnv, postId: string): Promise<void> {
+/**
+ * Restores a soft-deleted post (restorable for 30 days). An admin restores admin deletes and the owner's
+ * own deletes alike; `owner` (the channel's own Undo, Story 29.4) restores only the owner's own delete of
+ * a post on that channel. Its comments are indexed again (their rows were dropped with the post).
+ */
+export async function restorePost(env: AdminServiceEnv, postId: string, owner?: { channelId: string }): Promise<void> {
 	const deletion = await restorable(env, 'post', postId);
 	const channelId = deletion.parentId!;
+	if (owner && owner.channelId !== channelId) throw new AdminError(404, 'deletion_not_found');
+	let byAdmin = false;
+	let takenDown = false;
 	const saved = await repo(env.community_posts).updateObject(postKey(channelId, postId), (post) => {
-		// An admin restores admin deletes and the owner's own deletes alike
+		// A CSAM takedown (lib/csam/contain.ts) keeps any earlier delete mark beside its own; no restore
+		// ever undoes it, by the owner or an admin (it ends only in the containment's purge)
+		if (post.csamTakedown) {
+			takenDown = true;
+			return false;
+		}
+		if (owner && post.adminDeletion) {
+			byAdmin = true;
+			return false;
+		}
 		const mark = (post.adminDeletion ?? post.ownerDeletion) as (AdminDeletionMark & { previousStatus?: string }) | undefined;
 		if (!mark || post.status !== 'deleted') return false;
 		post.status = mark.previousStatus ?? 'published';
@@ -1260,8 +1278,15 @@ export async function restorePost(env: AdminServiceEnv, postId: string): Promise
 		post.updatedAt = now();
 		return true;
 	});
+	// The owner hears only that an admin removed it; an admin learns why it can't come back
+	if (takenDown) throw owner ? new AdminError(403, 'deleted_by_admin', 'An admin removed this post') : new AdminError(409, 'csam_takedown', 'This post was taken down and cannot be restored');
+	if (byAdmin) throw new AdminError(403, 'deleted_by_admin', 'An admin removed this post');
 	if (!saved || saved.status === 'deleted') throw new AdminError(404, 'post_not_found');
 	await removeDeletion(env.SEARCH_DB!, 'post', postId);
+	await reindexPostComments(env.SEARCH_DB as never, env.community_posts, postId, channelId).catch((error) =>
+		// The post is back; a Studio visit rebuilds a stale index, so a failure here is only logged
+		logger.warn('[Admin] Could not index the restored post comments', { postId, channelId, error: error instanceof Error ? error.message : String(error) }),
+	);
 	const createdAt = Date.parse(saved.createdAt ?? '') || 0;
 	const current = (await repo<PostIndex>(env.community_posts).getObject(postIndexKey(channelId)).catch(() => null))?.postIds ?? [];
 	const position = await postIndexPosition(env, channelId, current.filter((id) => id !== postId), createdAt);

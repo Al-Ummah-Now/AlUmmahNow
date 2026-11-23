@@ -8,6 +8,7 @@ import { LocateCommunityPost } from '../endpoints/community/locate-post';
 import { CreateCommunityPost } from '../endpoints/community/create-post';
 import { UpdateCommunityPost } from '../endpoints/community/update-post';
 import { DeleteCommunityPost } from '../endpoints/community/delete-post';
+import { RestoreCommunityPost } from '../endpoints/community/restore-post';
 
 // Community Posts - Interactions
 import { LikeCommunityPost } from '../endpoints/community/like-post';
@@ -45,6 +46,7 @@ communityRouter.get('/posts/:postId', LocateCommunityPost);
 communityRouter.post('/channels/:channelId/posts', CreateCommunityPost);
 communityRouter.put('/channels/:channelId/posts/:postId', UpdateCommunityPost);
 communityRouter.delete('/channels/:channelId/posts/:postId', DeleteCommunityPost);
+communityRouter.post('/channels/:channelId/posts/:postId/restore', RestoreCommunityPost);
 
 // Posts - Interactions (auth required)
 communityRouter.post('/channels/:channelId/posts/:postId/like', LikeCommunityPost);

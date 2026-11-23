@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PostType, PostVisibility, CreateCommunityPostRequest, type CommunityPost, type UpdateCommunityPostRequest } from '@al-ummah/shared-types';
+import { PostStatus, PostType, PostVisibility, CreateCommunityPostRequest, type CommunityPost, type UpdateCommunityPostRequest } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { StudioBackLink } from '@/components/studio/StudioBackLink';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -26,6 +26,7 @@ import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community
 import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
 import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
 import { tooLargeMessage } from '@/lib/community/upload-limits';
+import { PostSchedulePicker, scheduleProblem, scheduleStateFrom, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { createCommunityPost, updateCommunityPost } from '@/lib/api/community-posts';
 import { Loader2 } from 'lucide-react';
 
@@ -38,9 +39,23 @@ interface PostFormProps {
 
 /**
  * Types whose content can't change after publishing: the API's update takes
- * text, articles, links, visibility and comments, not media, polls or quizzes.
+ * text, articles, cards, links, visibility and comments, not media, polls or quizzes.
  */
-const CONTENT_LOCKED = new Set<PostType>([PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.GIF, PostType.CARDS]);
+const CONTENT_LOCKED = new Set<PostType>([PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.GIF]);
+
+/** An existing cards post's title and cards, as the cards form edits them */
+function cardsFrom(post: CommunityPost): CardsFormData {
+  return {
+    title: post.title ?? '',
+    cards: (post.slides ?? []).map((slide, i) => ({
+      id: slide.id || `card-${i + 1}`,
+      image: slide.image ?? null,
+      heading: slide.heading ?? '',
+      body: slide.body ?? '',
+      position: slide.position ?? 'bottom',
+    })),
+  };
+}
 
 /**
  * Content → Posts → New post, or a post's Edit page (spec §4.4.3). Moved from
@@ -63,6 +78,10 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
   const [selectedType, setSelectedType] = useState<PostType | null>(post?.type ?? null);
   const [visibility, setVisibility] = useState<PostVisibility>(post?.visibility ?? PostVisibility.PUBLIC);
   const [commentsEnabled, setCommentsEnabled] = useState(post?.commentsEnabled ?? true);
+  // Publish now, or at a set time (Story 29.4); a scheduled post's time can change, or it can go out now
+  const isScheduled = post?.status === PostStatus.SCHEDULED;
+  const [schedule, setSchedule] = useState<ScheduleState>(() => scheduleStateFrom(isScheduled ? post?.scheduledAt : null));
+  const [scheduleError, setScheduleError] = useState<ScheduleProblem | null>(null);
 
   const [textContent, setTextContent] = useState(post?.type === PostType.TEXT ? post.content ?? '' : '');
   const [images, setImages] = useState<ImageWithCaption[]>([]);
@@ -89,7 +108,9 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
   );
   // Media in an existing image, GIF or cards post is kept as it is (CONTENT_LOCKED)
   const [imageCaption, setImageCaption] = useState(post && CONTENT_LOCKED.has(post.type) ? post.content ?? '' : '');
-  const [cards, setCards] = useState<CardsFormData>(emptyCards);
+  const [cards, setCards] = useState<CardsFormData>(() => (post?.type === PostType.CARDS ? cardsFrom(post) : emptyCards()));
+  // A link-only mirror of a CMS article (no body) is edited in the CMS (api-videos validateUpdatePost)
+  const cmsArticle = post?.type === PostType.ARTICLE && typeof post.article?.body !== 'string';
   const [link, setLink] = useState<LinkFormData>(() =>
     post?.link
       ? { url: post.link.url, title: post.link.title ?? '', description: post.link.description ?? '', siteName: post.link.siteName ?? '', image: post.link.image ?? null, comment: post.content ?? '' }
@@ -154,18 +175,36 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
     return null;
   };
 
-  const handleSave = async () => {
+  const handleSave = async (publishNow = false) => {
     if (!post || !selectedType) return;
-    const validationError = CONTENT_LOCKED.has(selectedType) ? null : validatePost();
+    const validationError = CONTENT_LOCKED.has(selectedType) || cmsArticle ? null : validatePost();
     if (validationError) {
       setError(validationError);
       return;
     }
+    // A scheduled post: a changed time is checked like a new one; an unchanged time that has come
+    // close (or passed) is left as it is. Publish now sends no time.
+    let scheduledAt: string | undefined;
+    if (isScheduled && !publishNow) {
+      const iso = scheduledIso({ ...schedule, later: true });
+      const before = post.scheduledAt ? new Date(post.scheduledAt).toISOString() : null;
+      if (iso !== before) {
+        const timing = scheduleProblem(schedule.local);
+        setScheduleError(timing);
+        if (timing) return;
+        scheduledAt = iso ?? undefined;
+      }
+    }
     setLoading(true);
     setError('');
     try {
-      const update: UpdateCommunityPostRequest = { visibility, commentsEnabled, locale: postLocale };
-      switch (selectedType) {
+      const update: UpdateCommunityPostRequest = { visibility, commentsEnabled };
+      if (!cmsArticle) update.locale = postLocale;
+      if (scheduledAt) update.scheduledAt = scheduledAt;
+      if (publishNow) update.publishNow = true;
+      switch (cmsArticle ? null : selectedType) {
+        case null:
+          break;
         case PostType.TEXT:
           update.content = textContent;
           break;
@@ -180,6 +219,10 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
           update.content = link.comment.trim() || undefined;
           update.link = { url: link.url.trim(), title: link.title.trim() || null, siteName: link.siteName.trim() || null, description: link.description.trim() || null, image: link.image };
           break;
+        case PostType.CARDS:
+          update.title = cards.title.trim();
+          update.slides = cards.cards.filter((c) => c.image).map((c) => ({ id: c.id, image: c.image!, heading: c.heading.trim() || null, body: c.body.trim() || null, position: c.position }));
+          break;
         default:
           update.content = imageCaption;
       }
@@ -187,11 +230,11 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
       if (result?.success) {
         router.push(postsHref);
       } else {
-        setError(t.studio.posts.saveFailed);
+        setError(publishNow ? t.community.publishFailed : t.studio.posts.saveFailed);
       }
     } catch (err) {
-      logger.error('[Studio] Post not saved', { channelId: id, postId: post.id, error: err });
-      setError(t.studio.posts.saveFailed);
+      logger.error('[Studio] Post not saved', { channelId: id, postId: post.id, publishNow, error: err });
+      setError(publishNow ? t.community.publishFailed : t.studio.posts.saveFailed);
     } finally {
       setLoading(false);
     }
@@ -203,6 +246,9 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
       setError(validationError);
       return;
     }
+    const timing = schedule.later ? scheduleProblem(schedule.local) : null;
+    setScheduleError(timing);
+    if (timing) return;
 
     setLoading(true);
     setError('');
@@ -214,6 +260,8 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
         commentsEnabled,
         locale: postLocale
       };
+      const scheduledAt = scheduledIso(schedule);
+      if (scheduledAt) baseData.scheduledAt = scheduledAt;
 
       switch (selectedType) {
         case PostType.TEXT:
@@ -326,7 +374,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
     }
   };
 
-  const contentLocked = editing && !!selectedType && CONTENT_LOCKED.has(selectedType);
+  const contentLocked = editing && !!selectedType && (CONTENT_LOCKED.has(selectedType) || cmsArticle);
 
   return (
     <div className="max-w-6xl" data-testid={editing ? 'studio-post-edit' : 'studio-post-new'}>
@@ -338,11 +386,18 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
             {editing ? t.studio.posts.editHeading : t.community.newPost}
           </h2>
         </div>
-        {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish is offered */}
-        <Button onClick={editing ? handleSave : handlePublish} disabled={loading || !selectedType} className="min-h-11" data-testid={editing ? 'post-save' : 'post-publish'}>
-          {loading && <Loader2 aria-hidden="true" className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
-          {editing ? t.studio.posts.save : t.studio.postForm.publish}
-        </Button>
+        {/* Drafts are not supported by the API (posts are published or scheduled), so only Publish (or Schedule) is offered */}
+        <div className="flex flex-wrap gap-2">
+          {editing && isScheduled && (
+            <Button variant="outline" onClick={() => void handleSave(true)} disabled={loading} className="min-h-11" data-testid="edit-post-publish-now">
+              {t.community.publishNow}
+            </Button>
+          )}
+          <Button onClick={editing ? () => void handleSave() : handlePublish} disabled={loading || !selectedType} className="min-h-11" data-testid={editing ? 'post-save' : 'post-publish'}>
+            {loading && <Loader2 aria-hidden="true" className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
+            {editing ? t.studio.posts.save : schedule.later ? t.community.schedule : t.studio.postForm.publish}
+          </Button>
+        </div>
       </div>
       {editing && error && (
         <p role="alert" className="mb-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="post-save-error">{error}</p>
@@ -366,17 +421,23 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
 
             {contentLocked && (
               <Card className="p-4 md:p-6" data-testid="post-edit-locked">
-                <p className="text-sm text-muted-foreground">{t.studio.posts.lockedFields}</p>
-                <label htmlFor="post-edit-caption" className="mt-4 block text-sm font-medium text-foreground">{t.community.text}</label>
-                <textarea
-                  id="post-edit-caption"
-                  dir="auto"
-                  rows={4}
-                  maxLength={5000}
-                  value={imageCaption}
-                  onChange={(e) => setImageCaption(e.target.value)}
-                  className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
+                {cmsArticle ? (
+                  <p className="text-sm text-muted-foreground">{t.community.articleManagedInCms}</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">{t.studio.posts.lockedFields}</p>
+                    <label htmlFor="post-edit-caption" className="mt-4 block text-sm font-medium text-foreground">{t.community.text}</label>
+                    <textarea
+                      id="post-edit-caption"
+                      dir="auto"
+                      rows={4}
+                      maxLength={5000}
+                      value={imageCaption}
+                      onChange={(e) => setImageCaption(e.target.value)}
+                      className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </>
+                )}
               </Card>
             )}
 
@@ -468,6 +529,16 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
               </h3>
 
               <div className="space-y-4">
+                {(!editing || isScheduled) && (
+                  <PostSchedulePicker
+                    timeOnly={editing}
+                    value={schedule}
+                    onChange={(next) => { setSchedule(next); setScheduleError(null); }}
+                    problem={scheduleError}
+                    disabled={loading}
+                  />
+                )}
+
                 <div>
                   <Label htmlFor="community-post-language" className="text-sm md:text-base">
                     {t.community.postLanguage}

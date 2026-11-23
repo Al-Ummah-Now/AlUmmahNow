@@ -128,6 +128,25 @@ export async function deleteCommunityPost(
 }
 
 /**
+ * Undo a post delete (the delete is a 30-day soft delete)
+ * POST /api/community/channels/{channelId}/posts/{postId}/restore
+ */
+export async function restoreCommunityPost(
+  channelId: string,
+  postId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<{ success: boolean } | null> {
+  return apiRequestServer<{ success: boolean }>({
+    method: 'POST',
+    url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/restore`),
+    functionName: 'restoreCommunityPost'
+  }, async () => ({
+    channelId: headers.channelId,
+    accessToken: (await getServerAuthContext())?.accessToken || '',
+  }), true);
+}
+
+/**
  * Like a community post
  * POST /api/community/channels/{channelId}/posts/{postId}/like
  */

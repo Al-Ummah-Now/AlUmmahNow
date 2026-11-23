@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { STUDIO_COMMENTS_BULK_MAX } from '@al-ummah/shared-types';
+import { MessageType, STUDIO_COMMENTS_BULK_MAX } from '@al-ummah/shared-types';
 import { withSearchSync } from '../src/lib/search/sync';
 import { CommentList } from '../src/endpoints/video/commentList';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
@@ -25,6 +25,8 @@ import { ApprovePostComment, HoldPostComment, RestorePostComment } from '../src/
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { UpdateCommunityPost } from '../src/endpoints/community/update-post';
 import { DeleteCommunityPost } from '../src/endpoints/community/delete-post';
+import { RestoreCommunityPost } from '../src/endpoints/community/restore-post';
+import { AdminError, restorePost } from '../src/lib/admin/service';
 import { publicCommentsCount } from '../src/lib/comments';
 import { memberMayActAs } from '../src/lib/channelAccess';
 import { CHANNEL_COMMENTS_KIND, handleChannelCommentsBatch, rebuildNeedsActionKey, runPurgeStep, startCommentPurge } from '../src/lib/channelComments/jobs';
@@ -79,6 +81,7 @@ function routes(r: any) {
 	r.post('/api/community/channels/:channelId/posts', CreateCommunityPost);
 	r.put('/api/community/channels/:channelId/posts/:postId', UpdateCommunityPost);
 	r.delete('/api/community/channels/:channelId/posts/:postId', DeleteCommunityPost);
+	r.post('/api/community/channels/:channelId/posts/:postId/restore', RestoreCommunityPost);
 	r.get('/api/community/channels/:channelId/posts/:postId/comments', ListPostComments);
 	r.post('/api/community/channels/:channelId/posts/:postId/comments', CreatePostComment);
 	r.delete('/api/community/channels/:channelId/posts/:postId/comments/:commentId', DeletePostComment);
@@ -477,6 +480,63 @@ describe('channel blocks', () => {
 		assert.equal(unblock.removed, true);
 		await s.call('troll', 'POST', '/api/videos/v1/comments', { text: 'again' }, { channelId: 'troll-ch' });
 		assert.equal(publicCommentsCount(s.video().comments), 1, 'published once unblocked');
+	});
+});
+
+describe('undoing a post delete (Story 29.4)', () => {
+	const del = (s: Awaited<ReturnType<typeof setup>>, userId: string) => s.call(userId, 'DELETE', `/api/community/channels/${CH}/posts/p1`, undefined, { channelId: CH });
+	const restore = (s: Awaited<ReturnType<typeof setup>>, userId: string) => s.call(userId, 'POST', `/api/community/channels/${CH}/posts/p1/restore`, undefined, { channelId: CH });
+
+	it('brings the post back in its place with its comments; only post.manage may, and only once', async () => {
+		const s = await setup();
+		await s.ready();
+		assert.equal((await s.call('u1', 'POST', `/api/community/channels/${CH}/posts/p1/comments`, { content: 'hi' }, { channelId: 'u1-ch' })).status, 201);
+		assert.equal(s.rows("target_kind = 'post'").length, 1);
+
+		assert.equal((await del(s, 'sara')).status, 200);
+		assert.equal(s.raw.community_posts.read(`posts/${CH}/p1.json`).status, 'deleted');
+		assert.deepEqual(s.raw.community_posts.read(`posts/${CH}/index.json`).postIds, []);
+		assert.equal(s.rows("target_kind = 'post'").length, 0, 'rows dropped with the post');
+
+		assert.equal((await restore(s, 'mod')).status, 403, 'a moderator cannot');
+		assert.equal((await restore(s, 'u1')).status, 403, 'a stranger cannot');
+		const res = await restore(s, 'sara');
+		assert.equal(res.status, 200, await res.clone().text());
+		const post = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		assert.equal(post.status, 'published');
+		assert.equal(post.ownerDeletion, undefined);
+		assert.deepEqual(s.raw.community_posts.read(`posts/${CH}/index.json`).postIds, ['p1']);
+		assert.equal(s.rows("target_kind = 'post'").length, 1, 'its comments are indexed again');
+		assert.equal(s.db.db.prepare(`SELECT COUNT(*) AS n FROM admin_deletions WHERE kind = 'post' AND target_id = 'p1'`).get().n, 0, 'no longer in the trash');
+		assert.equal(s.raw.queue.messages.filter((m: any) => m.type === MessageType.CommunityPostCreated).length, 0, 'subscribers are not told again');
+
+		assert.equal((await restore(s, 'sara')).status, 404, 'nothing left to restore');
+	});
+
+	it('never undoes an admin removal', async () => {
+		const s = await setup();
+		assert.equal((await del(s, OWNER)).status, 200);
+		const stored = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		await s.raw.community_posts.put(`posts/${CH}/p1.json`, JSON.stringify({ ...stored, adminDeletion: { at: stored.updatedAt, by: 'admin' } }));
+		const res = await restore(s, OWNER);
+		assert.equal(res.status, 403);
+		assert.equal((await json(res)).code, 'deleted_by_admin');
+		assert.equal(s.raw.community_posts.read(`posts/${CH}/p1.json`).status, 'deleted');
+	});
+
+	it('never undoes a CSAM takedown of a post the owner had deleted, for the owner or an admin', async () => {
+		const s = await setup();
+		assert.equal((await del(s, OWNER)).status, 200);
+		const stored = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		// Containment adds its own mark beside the owner's delete (lib/csam/contain.ts)
+		await s.raw.community_posts.put(`posts/${CH}/p1.json`, JSON.stringify({ ...stored, csamTakedown: { caseId: 'case-1', at: stored.updatedAt, previousStatus: 'deleted' } }));
+		const res = await restore(s, OWNER);
+		assert.equal(res.status, 403);
+		assert.equal((await json(res)).code, 'deleted_by_admin');
+		await assert.rejects(restorePost(s.env as never, 'p1'), (error: unknown) => error instanceof AdminError && error.code === 'csam_takedown');
+		const after = s.raw.community_posts.read(`posts/${CH}/p1.json`);
+		assert.equal(after.status, 'deleted');
+		assert.ok(after.ownerDeletion, 'the owner mark stays with the takedown');
 	});
 });
 

@@ -16,6 +16,7 @@
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useTextDirection } from '@/hooks/useTextDirection';
 
 export interface ConfirmOptions {
   title: string;
@@ -54,6 +55,7 @@ export function ConfirmDialog({
   testId = 'confirm-dialog',
 }: ConfirmDialogProps) {
   const { t } = useLanguage();
+  const dir = useTextDirection();
   const ids = useId();
   const [typed, setTyped] = useState('');
   const ready = typedMatches(typed, typeToConfirm);
@@ -72,6 +74,8 @@ export function ConfirmDialog({
           onClick={() => finish(false)}
         />
         <AlertDialogPrimitive.Content
+          // Portalled to the body: the page direction is set here (Arabic: right to left)
+          dir={dir}
           data-testid={testId}
           data-slot="alert-dialog-content"
           className="fixed inset-0 z-50 m-auto grid h-fit w-[calc(100%-2rem)] max-w-md gap-4 p-6 text-start"

@@ -85,6 +85,7 @@ export const STUDIO_EN = {
     back: 'Back to posts',
     statusLabel: 'Post status',
     deleted: 'Post deleted.',
+    publishedNow: 'Post published.',
   },
   playlistsPage: {
     heading: 'Playlists',
@@ -787,6 +788,7 @@ export const STUDIO_AR: StudioTranslations = {
     back: 'العودة إلى المنشورات',
     statusLabel: 'حالة المنشور',
     deleted: 'حُذف المنشور.',
+    publishedNow: 'نُشر المنشور.',
   },
   playlistsPage: {
     heading: 'قوائم التشغيل',
