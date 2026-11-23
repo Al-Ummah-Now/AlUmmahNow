@@ -6,6 +6,7 @@
 import {
   WORKFLOW_ACTIONS,
   WORKFLOW_RULE_CHANGE_MONEY_SCOPE,
+  isMoneyRule,
   isWorkflowActionType,
   validateWorkflowRule,
   type WorkflowActionType,
@@ -49,12 +50,13 @@ function ruleFields(before: WorkflowRuleConfig, after: WorkflowRuleConfig): Work
 
 export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: number }> = {
   type: 'workflows.rule.set',
-  scope: (p) => (WORKFLOW_ACTIONS[p.type].domain === 'money' || (p.type === 'workflows.rule.set' && p.scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) ? WORKFLOW_RULE_CHANGE_MONEY_SCOPE : ''),
+  // A rule whose floor is money (money actions, the creatorSupport switch, the money rule-change rule):
+  // its change is scoped 'money', so the finance list decides it under the money floor.
+  scope: (p) => (isMoneyRule(p.type, p.scope) ? WORKFLOW_RULE_CHANGE_MONEY_SCOPE : ''),
   target: (p) => ({ kind: 'workflow-rule', id: `${p.type}:${p.scope}` }),
   // Money rules: the finance list (tech staff and the owner are refused by the engine's money floor);
   // every other rule: super admins.
-  canPropose: async (_ctx, actor, p) =>
-    WORKFLOW_ACTIONS[p.type].domain === 'money' || (p.type === 'workflows.rule.set' && p.scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) ? actor.financePermissions.length > 0 : actor.roles.includes('super_admin'),
+  canPropose: async (_ctx, actor, p) => (isMoneyRule(p.type, p.scope) ? actor.financePermissions.length > 0 : actor.roles.includes('super_admin')),
   async validate(_ctx, input) {
     const i = (input ?? {}) as { type?: unknown; scope?: unknown; config?: unknown };
     if (!isWorkflowActionType(i.type)) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
@@ -63,18 +65,13 @@ export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: 
     if (scope && !def.scoped) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
     if (!/^[A-Za-z0-9._:-]{0,64}$/.test(scope)) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
     const min = (await minApprovalsHooks.get(i.type)?.()) ?? 0;
-    const res = validateWorkflowRule(i.type, i.config, { minApprovals: min });
+    const res = validateWorkflowRule(i.type, i.config, { minApprovals: min, scope });
     // (admin-api compiles without strict null checks, so the result union is narrowed by hand)
     if (!res.ok) {
       const problems = (res as Extract<typeof res, { ok: false }>).problems;
       throw new WorkflowError(400, problems.some((p) => p.startsWith('below_floor')) ? 'rule_below_floor' : 'rule_invalid', { problems });
     }
     const valid = res as Extract<typeof res, { ok: true }>;
-    // The rule that governs money rule changes keeps the money floor too (finance approvers, exclusions).
-    if (i.type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) {
-      const r = valid.rule;
-      if (!r.approvers.every((a) => a.kind === 'finance') || !r.exclusions.techStaff || !r.exclusions.owner) throw new WorkflowError(400, 'rule_below_floor', { problems: ['below_floor_money_approvers'] });
-    }
     return { type: i.type, scope, config: valid.rule };
   },
   async describe(ctx, p) {
