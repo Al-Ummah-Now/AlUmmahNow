@@ -18,6 +18,7 @@ import { notFound } from 'next/navigation';
 import ProfileGuard from '@/components/ProfileGuard';
 import { HtmlLocaleAttributes } from '@/components/HtmlLocaleAttributes';
 import { NavigationRecorder } from '@/components/analytics/NavigationRecorder';
+import { ListenAudioProvider } from '@/components/listen/ListenAudioProvider';
 import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
 
 interface LocaleLayoutProps {
@@ -67,9 +68,11 @@ export default async function LocaleLayout({
     <ProfileGuard>
       <HtmlLocaleAttributes locale={locale} dir={dir} />
       <NavigationRecorder />
-      <div dir={dir} lang={locale}>
-        {children}
-      </div>
+      <ListenAudioProvider>
+        <div dir={dir} lang={locale}>
+          {children}
+        </div>
+      </ListenAudioProvider>
     </ProfileGuard>
   );
 }

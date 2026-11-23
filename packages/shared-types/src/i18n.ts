@@ -2770,6 +2770,30 @@ export interface AppTranslations {
     deleteNotificationTitle: string;
     deleteNotificationBody: string;
   };
+  listen?: {
+    listenMode: string;
+    watchVideo: string;
+    audioOnly: string;
+    playing: string;
+    paused: string;
+    play: string;
+    pause: string;
+    back15: string;
+    forward30: string;
+    speed: string;
+    sleepTimer: string;
+    sleepOff: string;
+    sleepMinutes: string;
+    sleepEndOfEpisode: string;
+    queue: string;
+    queueEmpty: string;
+    addToQueue: string;
+    clearQueue: string;
+    removeFromQueue: string;
+    closeMiniPlayer: string;
+    openWatchPage: string;
+    loadingAudio: string;
+  };
 }
 
 /**
