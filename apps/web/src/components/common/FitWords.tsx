@@ -20,6 +20,17 @@ export function fitWords(text: string, fits: (candidate: string) => boolean): st
 }
 
 /**
+ * The width a name may take in its slot (exported for tests). A slot with a max width (the header chip:
+ * `max-inline-size: 9rem`, auto width) is as wide as the text it holds, so its own width shrinks after
+ * each cut and the next fit cuts again ("Al-Fajr Reminders…" became "Al-Fajr…"): its max width is the
+ * room. A slot with no max width uses its laid-out width.
+ */
+export function slotRoom(clientWidth: number, maxInlineSize: string): number {
+  const max = parseFloat(maxInlineSize);
+  return Number.isFinite(max) && max > 0 ? max : clientWidth;
+}
+
+/**
  * A one-line name in a fixed-width slot (the header's account chip) cut at a word, never mid-word
  * (AUDIT-2: «…والتق»). The parent element is the slot: it keeps `overflow: hidden` and its CSS
  * ellipsis as the fallback. Candidates are measured in a hidden copy with the slot's font, so React
@@ -32,13 +43,13 @@ export function FitWords({ text }: { text: string }) {
   const fit = useCallback(() => {
     const slot = ref.current?.parentElement;
     if (!slot) return;
-    const room = slot.clientWidth;
+    const cs = getComputedStyle(slot);
+    const room = slotRoom(slot.clientWidth, cs.maxInlineSize);
     if (room <= 1) {
       setShown(text);
       return;
     }
     const probe = document.createElement('span');
-    const cs = getComputedStyle(slot);
     probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;inset-inline-start:0;top:0;';
     probe.style.font = cs.font;
     probe.style.letterSpacing = cs.letterSpacing;
