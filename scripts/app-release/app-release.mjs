@@ -12,8 +12,8 @@
  *         [--published-at <iso>] [--private] --out <app-release.json>
  *       Write app-release.json. spec.json: [{ "app", "platform", "arch"?, "kind", "file" }]; each
  *       file is hashed (SHA-256) and listed under this repo's release for the tag (or, with
- *       --private, the private admin bucket). The version defaults to the tag without "v"; an
- *       Apple tag v1.2.3-4 becomes 1.2.3.4.
+ *       --private, the private admin bucket). The version is the tag's (prefixes v, admin-v,
+ *       admin-windows-v; a trailing -N is the 4th part: v1.2.3-4 → 1.2.3.4); --version must match it.
  *   sign --in <file> [--key-env NAME]... [--require]
  *       Write <file>.sig with one signature per key read from the named environment variables
  *       (default UPDATE_SIGNING_KEY). With no key set: prints a ::notice:: and writes nothing,
@@ -120,11 +120,27 @@ export async function verifyBytes(bytes, sigText, publicKeys) {
 	return null;
 }
 
-/** Tag → version: v2026.11.22.2 → 2026.11.22.2; v1.2.3-preview.4 → 1.2.3-preview.4; Apple v1.2.3-4 → 1.2.3.4. */
+/** Release tag prefixes, longest first (wiki AUN-APP-UPDATES §2.1; the same rule as shared-types parseAppReleaseTag). */
+export const TAG_PREFIXES = ['admin-windows-v', 'admin-v', 'v'];
+const TAG = /^(?:admin-windows-v|admin-v|v)[0-9A-Za-z.+-]{1,64}$/;
+
+/**
+ * A release tag's prefix and version, or null: v2026.11.22.2 → 2026.11.22.2; v1.2.3-preview.4 → 1.2.3-preview.4;
+ * a trailing -N of one or two digits is the 4th part (Apple v1.2.3-4 → 1.2.3.4, admin-v1.2.3-4 → 1.2.3.4).
+ */
+export function parseReleaseTag(tag) {
+	if (typeof tag !== 'string' || !TAG.test(tag)) return null;
+	const prefix = TAG_PREFIXES.find((p) => tag.startsWith(p));
+	const bare = tag.slice(prefix.length);
+	const rebuild = /^(\d+\.\d+\.\d+)-(\d{1,2})$/.exec(bare);
+	const version = rebuild ? `${rebuild[1]}.${rebuild[2]}` : bare;
+	if (!SEMVER.test(version)) return null;
+	return { prefix, version, adminOnly: prefix !== 'v' };
+}
+
+/** The version a tag releases, or null. */
 export function versionFromTag(tag) {
-	const bare = tag.replace(/^v/, '');
-	const apple = /^(\d+\.\d+\.\d+)-(\d{1,2})$/.exec(bare);
-	return apple ? `${apple[1]}.${apple[2]}` : bare;
+	return parseReleaseTag(tag)?.version ?? null;
 }
 
 function readNotes(file, lang) {
@@ -137,15 +153,18 @@ function readNotes(file, lang) {
 
 export function buildManifest(o) {
 	if (!REPOS.includes(o.repo)) throw new UsageError(`unknown repo ${o.repo}`);
-	if (!/^v[0-9A-Za-z.+-]{1,64}$/.test(o.tag)) throw new UsageError(`bad tag ${o.tag}`);
-	const version = o.version ?? versionFromTag(o.tag);
-	if (!SEMVER.test(version)) throw new UsageError(`bad version ${version}`);
+	const tag = parseReleaseTag(o.tag);
+	if (!tag) throw new UsageError(`bad tag ${o.tag} (v…, admin-v… or admin-windows-v…)`);
+	// The version is the tag's: the server refuses a manifest whose version differs from its tag
+	const version = tag.version;
+	if (o.version !== undefined && o.version !== version) throw new UsageError(`--version ${o.version} is not the tag's version ${version}`);
 	if (!['stable', 'beta'].includes(o.channel)) throw new UsageError('--channel must be stable or beta');
 	const prefix = o.private ? `r2://app-releases/${o.repo}/${o.tag}/` : `https://github.com/Al-Ummah-Now/${o.repo}/releases/download/${o.tag}/`;
 	const artifacts = o.artifacts.map((a, i) => {
 		if (!APPS.includes(a.app) || !PLATFORMS.includes(a.platform) || !KINDS.includes(a.kind)) throw new UsageError(`artifact ${i}: bad app, platform or kind`);
 		if (a.arch !== undefined && !ARCHES.includes(a.arch)) throw new UsageError(`artifact ${i}: bad arch`);
 		if (o.private && a.app !== 'admin') throw new UsageError(`artifact ${i}: only admin builds go to the private bucket`);
+		if (tag.adminOnly && a.app !== 'admin') throw new UsageError(`artifact ${i}: an ${tag.prefix} tag releases only the Admin app`);
 		const bytes = readFileSync(a.file);
 		if (!bytes.byteLength) throw new UsageError(`artifact ${i}: empty file ${a.file}`);
 		return {
@@ -160,6 +179,7 @@ export function buildManifest(o) {
 	});
 	const stores = (o.stores ?? []).map((s, i) => {
 		if (!APPS.includes(s.app) || !PLATFORMS.includes(s.platform) || !SOURCES.includes(s.source)) throw new UsageError(`store ${i}: bad app, platform or source`);
+		if (tag.adminOnly && s.app !== 'admin') throw new UsageError(`store ${i}: an ${tag.prefix} tag releases only the Admin app`);
 		return { app: s.app, platform: s.platform, source: s.source };
 	});
 	for (const v of o.yanked ?? []) if (!SEMVER.test(v)) throw new UsageError(`bad yanked version ${v}`);

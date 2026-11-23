@@ -20,10 +20,10 @@ function workdir() {
 	return { dir, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-test('versions from tags, Apple rebuilds included', () => {
-	assert.equal(tool.versionFromTag('v2026.11.22'), '2026.11.22');
-	assert.equal(tool.versionFromTag('v2026.11.22.2'), '2026.11.22.2');
-	assert.equal(tool.versionFromTag('v1.5.0-preview.3'), '1.5.0-preview.3');
+test('release tags: the table shared with shared-types and aun-core (AlUmmahNowCore spec/app-updates/tags.json)', () => {
+	const t = JSON.parse(readFileSync(fileURLToPath(new URL('../../../apps/api-videos/test/fixtures/app-updates/tags.json', import.meta.url)), 'utf8'));
+	for (const [tag, prefix, version, adminOnly] of t.valid) assert.deepEqual(tool.parseReleaseTag(tag), { prefix, version, adminOnly }, tag);
+	for (const bad of t.invalid) assert.equal(tool.parseReleaseTag(bad), null, bad);
 	assert.equal(tool.versionFromTag('v1.2.3-4'), '1.2.3.4');
 });
 
@@ -56,6 +56,10 @@ test('build refuses bad input: repo, channel, notes length, private non-admin fi
 		assert.throws(() => tool.buildManifest({ ...base, channel: 'nightly' }));
 		assert.throws(() => tool.buildManifest({ ...base, private: true }), /only admin/);
 		assert.throws(() => tool.buildManifest({ ...base, artifacts: [] }), /at least one/);
+		assert.throws(() => tool.buildManifest({ ...base, version: '2026.11.24' }), /tag's version/);
+		assert.throws(() => tool.buildManifest({ ...base, tag: 'admin-windows-v1.4.0' }), /only the Admin app/);
+		const admin = tool.buildManifest({ ...base, tag: 'admin-windows-v1.4.0', artifacts: [{ ...base.artifacts[0], app: 'admin', kind: 'msix' }] });
+		assert.equal(admin.version, '1.4.0');
 		const priv = tool.buildManifest({ ...base, private: true, artifacts: [{ ...base.artifacts[0], app: 'admin', kind: 'msix' }] });
 		assert.match(priv.artifacts[0].url, /^r2:\/\/app-releases\/AlUmmahNowTools\/v2026.11.23\//);
 	} finally {
