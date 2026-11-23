@@ -31,7 +31,7 @@ The owner asked for:
 | Quran translations | QF `translations` by id, fetched live. **Each channel picks its edition per language** from the QF list; platform default Saheeh International (en), changeable by admins; edition name shown (O7) | quran.com only |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
 | Inline title translation | **Free on every tier with a daily fair-use limit** (decided O5); the $20/month budget is the backstop | 100,000 title translations cost about $2–7 (§6.4) |
-| Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
+| Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590/month, so spend is bounded by tier minutes and a monthly budget stop | §7 |
 
 ## 2. Principles
 
@@ -40,7 +40,7 @@ The owner asked for:
 3. **Quran is never machine-written.** ASR text is never shown for Quran, and Quran is never machine-translated or machine-spoken (no text-to-speech or dubbing of ayat). Only the official text from the synced store is rendered, after creator confirmation. Translations are recognised editions with attribution.
 4. **Workers AI first.** Third-party providers are pluggable adapters. An admin turns them on per environment, and their keys live in Secrets Store (product constraints).
 5. **Tier-aware.** Every limit is an Epic 27 entitlement key edited in admin-web. Nothing is hard-coded.
-6. **Inside the $500/month cap.** A hard monthly budget per environment stops spending and queues work. It never fails jobs silently. Tests never spend it: automated suites use mocked providers (§7.5).
+6. **Cost-conscious with hard stops.** A hard monthly budget per environment stops spending and queues work. It never fails jobs silently. Tests never spend it: automated suites use mocked providers (§7.5).
 7. **Arabic and English parity.** Every UI string, error and notification exists in en and ar, RTL-correct.
 
 ## 3. User experience
@@ -573,9 +573,9 @@ The owner said: "this is for testing only, if we want to use it we need a higher
 - **Quran second opinion only:** using Scribe just as the second check on Quran minutes (§5.5 step 8), at about 10% of 1,000 h, fits Creator.
 - **Budget:** the plan fee counts against the AI budget (§7.4).
 
-### 7.4 Where the $500 cap bites, and how it stays sustainable
-- **Default stack:** 10,000 h/month (~$590) alone breaks the cap. The platform also pays for delivery, workers and other AI.
-- **Captions budget (decided 4/13):** `monthlyBudgetUsd` defaults to **$100** (admin-editable, max $500), the same pattern as the CMS. Inline translation has its own **$20** budget, also admin-editable. That buys ≈ **1,700 h/month** on the default stack, ≈ 450 h on Scribe, or ≈ 96 h on DeepL Pro translation.
+### 7.4 Keeping caption costs sustainable
+- **Default stack:** 10,000 h/month costs roughly ~$590/month on its own, alongside delivery, workers and other AI.
+- **Captions budget (decided 4/13):** `monthlyBudgetUsd` defaults to **$100** (admin-editable per environment), the same pattern as the CMS. Inline translation has its own **$20** budget, also admin-editable. That buys ≈ **1,700 h/month** on the default stack, ≈ 450 h on Scribe, or ≈ 96 h on DeepL Pro translation.
   - **Daily slices:** spending is recorded in the existing `ai_budget_daily` with feature `captions`, plus `inline-translate` with its own $20 default. A daily slice (monthly ÷ days remaining × 1.5) stops one day's spike from using the whole month.
   - **When reached:** new jobs go to `waiting_budget` with the en/ar message "Busy right now; your subtitles will start within 24 h". Reserved minutes aren't charged while waiting. An admin alert goes through the cost-monitoring hooks (AUN-COST).
 - **DeepL jobs** (high-accuracy STT, DeepL translation) use their own per-provider monthly cap (§10). On a tier that includes them, they use **caption minutes at 30×** (DeepL Voice STT) and **20×** (DeepL translation), matching their cost ratio to the default.
@@ -862,7 +862,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O1 | ElevenLabs Scribe | **Measured 2026-11-11 (R§14), best on Quran.** It is the preferred optional high-accuracy STT, off by default, never in tests or QA. The current key is test-only (owner): production needs a plan (§7.3a). Secret `elevenlabs-api-key` to be deleted after the test |
 | O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
 | O3 | Caption allowances and pack pricing | **Decided 3/13:** set by the site-wide subscription plan (pending, planned with all subscriptions on the site). Until then, captions are available by admin grant only |
-| O4 | Captions monthly budget | **Decided 4/13 (2026-11-11), as proposed:** captions $100/month and inline translation $20/month, both admin-editable per environment (max $500); daily slices; on reaching the budget, jobs wait in `waiting_budget` and admins get an alert (§7.4) |
+| O4 | Captions monthly budget | **Decided 4/13 (2026-11-11), as proposed:** captions $100/month and inline translation $20/month, both admin-editable per environment; daily slices; on reaching the budget, jobs wait in `waiting_budget` and admins get an alert (§7.4) |
 | O5 | Inline title/description translation | **Decided 2026-11-11:** free on every tier with a daily fair-use limit (`translate.inline.dailyItems`); the $20/month inline-translation budget is the backstop |
 | O6 | Viewer-side machine-translated titles | **Decided 2026-11-11: yes.** Labelled "auto-translated", cached, never overwriting creator text; each channel can opt out (§5.9) |
 | O7 | Quran translation edition | **Decided 2026-11-11:** each channel picks its edition per language from the QF translations list. The platform default is Saheeh International (en), changeable by admins. The edition name is shown on screen |

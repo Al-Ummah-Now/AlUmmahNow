@@ -1,6 +1,6 @@
 /**
  * Delivery comparison page (epic #687): playback and cost arithmetic, the
- * projection against the $500 cap, the daily chart (0-based axis, RTL,
+ * scale projections, the daily chart (0-based axis, RTL,
  * legend), en/ar strings and the role gate.
  */
 import { before, describe, it } from 'node:test';

@@ -131,7 +131,7 @@ export function validateCostCredential(provider: CostProvider, value: unknown): 
 // ---------------------------------------------------------------------------------------------
 
 export interface CostAlertSettings {
-  /** Monthly budget for the whole platform (O1: $500). */
+  /** Admin-configured monthly spend alert threshold for the platform. */
   budgetUsd: number;
   /** Shares of the budget that open an alert, ascending, e.g. [0.5, 0.8, 1]. */
   budgetLevels: number[];

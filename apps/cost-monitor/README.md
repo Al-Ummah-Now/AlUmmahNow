@@ -36,7 +36,7 @@ Scheduled collector of platform analytics for the videos admin's Operations page
   shared with other projects.
 - **Cost:** `src/pricing.ts` list prices per resource-day (`ops_daily.cost_usd`), KV reads/writes/
   storage and DO requests, duration (`gb_seconds`, 128 MB per active object) and storage units
-  included. admin-api adds Bunny, transcoding and Workers AI for the $500 budget (`lib/opsCost.ts`).
+  included. admin-api adds Bunny, transcoding and Workers AI for the configured monthly budget (`lib/opsCost.ts`).
 - **Deployments:** production collects production, stage and QA (`COLLECT_ENVS`), so the
   production admin can switch env; stage and QA collect only themselves. No route, no workers.dev.
 - **Storage:** D1 `al-ummah-now-costs[-qa|-stage]` (`migrations/`), read by admin-api `/api/ops/*`

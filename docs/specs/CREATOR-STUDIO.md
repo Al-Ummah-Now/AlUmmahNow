@@ -704,7 +704,7 @@ Every feature is tiered and managed by admins through Epic 27, so each new capab
 
 All new keys have a permissive fallback, following the catalogue's rule that an outage must not lock creators out. A hit limit explains the limit and which plan setting it comes from, and offers no payment link.
 
-Cost: the new reads are D1 and replace many R2 reads per list. This is well within the $500 per month cap.
+Cost: the new reads are D1 and replace many R2 reads per list, reducing per-request read cost.
 
 ### 8.4 Retention and traffic data collection
 
@@ -739,7 +739,7 @@ The batch `context` carries `trafficSource` and `referrerHost`. The route forwar
 
 **History.** There's no backfill, because the events were never kept. Charts start on the day collection is deployed.
 
-**Cost.** At most a handful of retention messages per session. Their counter increments are summed per queue batch and written in one D1 transaction. Well within the $500 per month cap.
+**Cost.** At most a handful of retention messages per session. Their counter increments are summed per queue batch and written in one D1 transaction, keeping write cost negligible.
 
 ## 9. Testing requirements
 

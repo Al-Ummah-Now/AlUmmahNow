@@ -65,7 +65,7 @@ export interface OpsSpike {
   baseline: number;
 }
 
-/** admin-api GET /api/ops/costs: spend across every source against the $500 budget. */
+/** admin-api GET /api/ops/costs: spend across every source against the configured monthly budget. */
 export interface OpsCosts {
   env: 'all' | OpsEnv;
   budget: {

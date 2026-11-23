@@ -85,10 +85,10 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /api/ops/overview?env=prod` | Tiles: requests and error rate for 24h vs the previous 24h, CPU p99, D1 p99 latency, worst queue backlog, cache-hit ratio, MTD cost estimate + linear and trailing projection against the **$500/month cap**, data age |
+| `GET /api/ops/overview?env=prod` | Tiles: requests and error rate for 24h vs the previous 24h, CPU p99, D1 p99 latency, worst queue backlog, cache-hit ratio, MTD cost estimate + linear and trailing projection against the **configured monthly budget**, data age |
 | `GET /api/ops/series?env&kind&resource&metric&range=24h\|7d\|30d\|13m` | Hourly points for ≤7 days, daily points beyond, ready for the shared chart (§A.4) |
 | `GET /api/ops/resources?env&kind` | One row per resource with latest-day numbers and a 7-day sparkline (`kind` also `kv`, `do`) |
-| `GET /api/ops/costs?env=all\|<env>` | Spend (owner, 2026-11-14): the **$500/month budget** across every source (Cloudflare in every env from `ops_daily`, Bunny and transcoding from `delivery_cost_daily`, Workers AI from `ai_usage_daily`, the $5 plan) with month to date, projected month end and the 50/80/100% level; the **projected idle cost** (each driver at its quietest of the last 7 full days × 30, a missing day $0, plus the plan) against the $50 target; 30 days of daily spend per env and source; the top 25 drivers with month to date, idle per month, 14 days of daily cost and any jump (`lib/opsCost.ts`) |
+| `GET /api/ops/costs?env=all\|<env>` | Spend (owner, 2026-11-14): the **configured monthly budget** across every source (Cloudflare in every env from `ops_daily`, Bunny and transcoding from `delivery_cost_daily`, Workers AI from `ai_usage_daily`, the $5 plan) with month to date, projected month end and the 50/80/100% level; the **projected idle cost** (each driver at its quietest of the last 7 full days × 30, a missing day $0, plus the plan) against the $50 target; 30 days of daily spend per env and source; the top 25 drivers with month to date, idle per month, 14 days of daily cost and any jump (`lib/opsCost.ts`) |
 | `GET/PUT /api/ops/thresholds` | Threshold rules (PUT needs `ops:manage`, super admin; audited) |
 
 ### A.4 Pages
@@ -109,7 +109,7 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
   - queue backlog > 1,000 or any DLQ message;
   - cache-hit ratio on the media host < 80% for 6 hours;
   - spend (admin-api hourly tick, `lib/opsCost.ts` `syncCostAlerts`, open set in `ops_cost_alerts`):
-    the month's spend at 50%, 80% and 100% of the $500 budget and a projected month end over it
+    the month's spend at 50%, 80% and 100% of the configured monthly budget and a projected month end over it
     (production admin only, keys `ops-cost:budget:<month>:<level>` / `ops-cost:projected:<month>`,
     resolved when the month turns); a daily spend jump per env total or per driver (yesterday or
     today so far at ≥ 2× the previous 7 days' average and ≥ $0.50 above it, $2 for a total; key

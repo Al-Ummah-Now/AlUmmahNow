@@ -123,7 +123,7 @@ The spec's `is_default` is an addition: it lets the default be data, as T1 requi
 
 A key absent from a plan falls through to the next level.
 
-**Cache:** KV at `entitlements:v1:{type}:{id}` with a 60 s TTL. admin-api gets a binding to the same namespace and deletes the key on every write (bulk migrations rely on the TTL). Only gated write paths read it, never views or playback, so KV cost is negligible against the $500/month cap.
+**Cache:** KV at `entitlements:v1:{type}:{id}` with a 60 s TTL. admin-api gets a binding to the same namespace and deletes the key on every write (bulk migrations rely on the TTL). Only gated write paths read it, never views or playback, so KV cost is negligible.
 
 **api-videos**
 - `GET /api/entitlements?subject=channel:{id}|user:{id}` → `{ subject, plan: { slug, name_en, name_ar }, entitlements, usage }`. Requires auth; the subject must be the caller or a channel the caller owns (admins may read any). Otherwise 403.

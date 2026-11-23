@@ -1,5 +1,5 @@
 /**
- * Platform spend for the Operations page and its alerts (owner, 2026-11-14): one $500/month
+ * Platform spend for the Operations page and its alerts (owner, 2026-11-14): one admin-configured monthly
  * budget for everything (Cloudflare, Bunny, Workers AI), warnings at 50% and 80% of it, a
  * projected end-of-month figure, a projected idle cost (what the platform costs with nobody on
  * it; target under $50) and an alert when daily spend or any single driver jumps.

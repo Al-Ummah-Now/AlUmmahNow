@@ -320,8 +320,8 @@ export interface SocialPlatformSettings {
   enabled: boolean;
   networks: Record<SocialNetwork, { enabled: boolean }>;
   /**
-   * Monthly cap on X spend, US dollars. 0 = nothing is posted to X. The platform's whole budget is $500 a month
-   * (wiki O1), so the cap starts at 0 and an admin sets it.
+   * Monthly cap on X spend, US dollars. 0 = nothing is posted to X. Starts at 0 so an admin must set it
+   * explicitly before any paid X API calls run.
    */
   xMonthlyCapUsd: number;
 }

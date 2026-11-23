@@ -197,8 +197,8 @@ from R2 on every request, at Class B cost and with no edge cache.
     to `max` busy.
   - If Cloudflare raises the account limit, change `max_instances` and `MEDIA_TRANSCODE_CEILING` in
     `apps/media/wrangler*.jsonc` and `apps/api-videos/wrangler*.jsonc` together (a unit test checks
-    they match) and release. The cost line shows the worst case at the admin's max, so keep max within
-    the $500/month budget: each busy slot is about $0.40 an hour.
+    they match) and release. The cost line shows the worst case at the admin's max so operators can keep
+    container spend controlled: each busy slot is about $0.40 an hour.
 - **One video:** its admin page has an R2 card with the status, the failure details when a
   transcode failed, and "Transcode again" (`media:manage`).
 - **Dead letters** (`al-ummah-now-transcode-dlq-*`): only when api-videos could not be told that a
@@ -302,5 +302,5 @@ Private and unlisted videos have it too, under `priv/`, and never expose it.
 - **R2:** storage and operations, for both media buckets.
 - **Media host:** requests and cache status.
 
-All three appear on the admin Delivery comparison page. Against the $500/month cap, see the cost
+All three appear on the admin Delivery comparison page. For unit-cost projections at scale, see the cost
 model in the plan.

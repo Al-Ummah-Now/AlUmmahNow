@@ -103,7 +103,7 @@ function loadError(error: unknown, t: Translator): string {
 /**
  * Operations (docs/admin/LIVE_OPS.md Part A): platform health and usage per
  * environment from the hourly collector's rollups (admin-api /api/ops, ops:read),
- * with spend against the $500/month budget (every source), the projected idle cost and open alerts.
+ * with spend against the configured monthly budget (every source), the projected idle cost and open alerts.
  */
 export default async function OperationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
