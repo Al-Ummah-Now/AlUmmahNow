@@ -1773,6 +1773,10 @@ async function verifyFrame(page: Page, clip: { x: number; y: number; width: numb
       const cutY = b.y < frame.y - 0.5 || b.y + b.h > frame.y + frame.h + 0.5;
       const cutX = b.x < frame.x - 0.5 || b.x + b.w > frame.x + frame.w + 0.5;
       const full = el.getBoundingClientRect();
+      // A pinned layout column that runs from the header to the bottom of the screen (Studio's rail,
+      // sticky under the header) is page chrome like the bars: the picture's edge may cross it
+      const pos = getComputedStyle(el).position;
+      if ((pos === 'sticky' || pos === 'fixed') && full.top <= barTop + 1 && full.bottom >= barBottom - 1) continue;
       if ((cutY && full.height <= barBottom - barTop) || (cutX && full.width < innerWidth - 1 && full.height <= barBottom - barTop)) out.push(`card ${whatOf(el)} at ${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.w)}x${Math.round(b.h)} is cut by the picture's edge`);
     }
     // A scrolling list never cuts an icon or picture at its edge (audit r4: the rail's last icon)
