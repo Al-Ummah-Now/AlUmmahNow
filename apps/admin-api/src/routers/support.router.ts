@@ -245,6 +245,25 @@ app.put('/settings/fields', async (c) => {
 });
 
 /**
+ * MEM-D15 (owner 2026-11-23, "add the apps, it's a setting"): where the native apps may show Support.
+ * All hidden by default; the server applies the interlocks (perks on, fees not whole, EU attestation,
+ * US-only link, no storefront) whatever is saved here.
+ */
+app.put('/settings/apps', async (c) => {
+  await needFinance(c, 'support:providers');
+  const input = await body(c);
+  return ok(
+    c,
+    await audited(
+      c,
+      { kind: 'support-settings', id: 'apps', action: 'edit', details: { apps: input.apps } },
+      () => videos<{ before: Record<string, unknown> }>(c, '/settings/apps', { method: 'PUT', json: { apps: input.apps, expectedVersion: input.expectedVersion, actorId: actorOf(c) } }),
+      (r) => r.before,
+    ),
+  );
+});
+
+/**
  * Fee settings (O43, owner 2026-11-23: "we need to be able to change the fee if there are changes in
  * terms"): the collector's and the rails' fees per currency and method, with an effective date. Only
  * the finance list (support:providers) adds one; every change is audited with the date it applies from

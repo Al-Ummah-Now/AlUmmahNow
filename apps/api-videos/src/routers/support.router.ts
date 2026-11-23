@@ -12,6 +12,7 @@
  *   GET  /settings                                   the settings, open decisions and readiness
  *   PUT  /settings/policy { patch, expectedVersion, actorId }       records owner decisions
  *   PUT  /settings/fields { fields, expectedVersion, actorId }      organization formed, emergency stop, hold all payouts
+ *   PUT  /settings/apps { apps, expectedVersion, actorId }          MEM-D15: Support in the native apps (platforms, storefront modes, cadence)
  *   GET  /batches                                    the newest payout batches
  *   GET  /fees                                       fee settings (collector and rails) with their history, and presets
  *   POST /fees { kind, provider, currency, method, basisPoints, fixedMinor, effectiveFrom, presetId, actorId }  a new fee setting (O43)
@@ -27,7 +28,7 @@ import { createJob, getJob, retryJob } from '../lib/admin/jobs';
 import { apiError } from '../lib/api-error';
 import type { SupportJobEnv } from '../lib/support/jobs';
 import { approveBatch, PayoutError, stopBatch } from '../lib/support/payouts';
-import { readSupportConfig, SupportConfigError, writeSupportConfigFields, writeSupportPolicy } from '../lib/support/config';
+import { readSupportConfig, SupportConfigError, writeSupportApps, writeSupportConfigFields, writeSupportPolicy } from '../lib/support/config';
 import { undecidedSupportDecisions } from '@al-ummah/shared-types';
 import { supportCanTurnOn } from '../lib/support/readiness';
 import { accountTotal } from '../lib/support/ledger';
@@ -177,6 +178,17 @@ app.put('/settings/fields', async (c) => {
 	if (!parsed.success) return apiError(c, 400, 'invalid_request');
 	try {
 		return c.json({ success: true, result: await writeSupportConfigFields(db(c), parsed.data.fields, parsed.data.actorId, parsed.data.expectedVersion) });
+	} catch (error) {
+		return stale(c as never, error);
+	}
+});
+
+const AppsBody = z.object({ apps: z.record(z.string(), z.unknown()), expectedVersion: z.number().int().min(0), actorId: Actor }).strict();
+app.put('/settings/apps', async (c) => {
+	const parsed = AppsBody.safeParse(await c.req.json().catch(() => null));
+	if (!parsed.success) return apiError(c, 400, 'invalid_request');
+	try {
+		return c.json({ success: true, result: await writeSupportApps(db(c), parsed.data.apps, parsed.data.actorId, parsed.data.expectedVersion) });
 	} catch (error) {
 		return stale(c as never, error);
 	}

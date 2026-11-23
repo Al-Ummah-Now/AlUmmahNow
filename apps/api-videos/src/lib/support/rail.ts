@@ -99,6 +99,8 @@ export interface PayoutRail {
 	createPayeeLink(ctx: RailContext, creator: CreatorRef, returnUrl: string): Promise<{ url: string; expiresAt: string; railPayeeRef: string }>;
 	getPayee(ctx: RailContext, railPayeeRef: string): Promise<PayeeState>;
 	quotePayout(ctx: RailContext, railPayeeRef: string, amount: Money): Promise<PayoutQuote>;
+	/** MEM-D19: the rail's own smallest payout in a currency, when it has one (the threshold is the higher of this and the setting) */
+	minimumPayout?(ctx: RailContext, currency: Money['currency']): Promise<Money | null>;
 	/** Idempotent on payoutId. */
 	sendPayout(ctx: RailContext, p: { payoutId: string; railPayeeRef: string; amount: Money }): Promise<PayoutAck>;
 	getPayout(ctx: RailContext, payoutId: string): Promise<PayoutState | null>;

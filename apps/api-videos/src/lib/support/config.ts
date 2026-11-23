@@ -7,10 +7,12 @@
  * saw (two admins at once: the second write is refused, not merged) and return the old and new
  * values for the audit log.
  */
-import { parseSupportPolicy, type PolicyProblem, type SearchDb, type SupportCollectorId, type SupportMode, type SupportPolicy } from '@al-ummah/shared-types';
+import { parseAppSupport, parseSupportPolicy, type AppSupportSettings, type PolicyProblem, type SearchDb, type SupportCollectorId, type SupportMode, type SupportPolicy } from '@al-ummah/shared-types';
 
 export interface SupportConfig {
 	policy: SupportPolicy;
+	/** MEM-D15: where the native apps may show Support (hidden unless an admin says otherwise) */
+	apps: AppSupportSettings;
 	collector: SupportCollectorId;
 	mode: SupportMode;
 	organizationFormed: boolean;
@@ -27,6 +29,7 @@ interface ConfigRow {
 	collector: SupportCollectorId;
 	mode: SupportMode;
 	collector_fees: string;
+	app_support?: string | null;
 	organisation_formed: number;
 	organisation_name: string | null;
 	emergency_stop: number;
@@ -47,9 +50,10 @@ function json(text: string | null | undefined): unknown {
 }
 
 export async function readSupportConfig(db: SearchDb): Promise<SupportConfig> {
-	const row = await db.prepare('SELECT policy, collector, mode, collector_fees, organisation_formed, organisation_name, emergency_stop, hold_all_payouts, version, updated_at, updated_by FROM support_config WHERE id = ?').bind(ID).first<ConfigRow>();
+	const row = await db.prepare('SELECT policy, app_support, collector, mode, collector_fees, organisation_formed, organisation_name, emergency_stop, hold_all_payouts, version, updated_at, updated_by FROM support_config WHERE id = ?').bind(ID).first<ConfigRow>();
 	return {
 		policy: parseSupportPolicy(json(row?.policy)).policy,
+		apps: parseAppSupport(json(row?.app_support)).value,
 		collector: row?.collector ?? 'test',
 		mode: row?.mode ?? 'test',
 		organizationFormed: row?.organisation_formed === 1,
@@ -139,4 +143,26 @@ export async function writeSupportConfigFields(db: SearchDb, fields: SupportConf
 		.run()) as { meta?: { changes?: number } };
 	if (!res.meta?.changes) throw new SupportConfigError('stale');
 	return { before, after, version };
+}
+
+/**
+ * MEM-D15: the native apps' settings (shared-types support-apps.ts). Refuses invalid settings and a
+ * stale version; returns before and after for the audit log.
+ */
+export async function writeSupportApps(db: SearchDb, input: unknown, actor: string, expectedVersion: number, now = new Date()): Promise<{ before: AppSupportSettings; after: AppSupportSettings; version: number }> {
+	const current = await readSupportConfig(db);
+	if (current.version !== expectedVersion) throw new SupportConfigError('stale');
+	const parsed = parseAppSupport(input);
+	if (!parsed.ok) throw new SupportConfigError('invalid');
+	const version = current.version + 1;
+	const res = (await db
+		.prepare(
+			`INSERT INTO support_config (id, app_support, version, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT(id) DO UPDATE SET app_support = excluded.app_support, version = excluded.version, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+			 WHERE support_config.version = ?`,
+		)
+		.bind(ID, JSON.stringify(parsed.value), version, now.toISOString(), actor, expectedVersion)
+		.run()) as { meta?: { changes?: number } };
+	if (!res.meta?.changes) throw new SupportConfigError('stale');
+	return { before: current.apps, after: parsed.value, version };
 }

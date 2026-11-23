@@ -66,6 +66,7 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'DELETE', path: '/api/support/tech-staff/:userId', what: 'Remove a tech-staff mark' },
   { method: 'PUT', path: '/api/support/settings/policy', what: 'Record creator-support decisions' },
   { method: 'PUT', path: '/api/support/settings/fields', what: 'Organization formed, emergency stop, hold all payouts' },
+  { method: 'PUT', path: '/api/support/settings/apps', what: 'Creator support in the native apps' },
   { method: 'POST', path: '/api/support/batches/plan', what: 'Plan a payout batch' },
   { method: 'POST', path: '/api/support/batches/:id/approve', what: 'Approve a payout batch' },
   { method: 'POST', path: '/api/support/batches/:id/stop', what: 'Stop a payout batch' },

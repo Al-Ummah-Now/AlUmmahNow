@@ -14,7 +14,7 @@
  *   POST /api/me/support/pledges/:id/stop                  stops a monthly pledge at once
  */
 import type { Context } from 'hono';
-import { CLIENT_HEADER, channelRoleOf, isSupportCurrency } from '@al-ummah/shared-types';
+import { type AppSupportDecision, CLIENT_HEADER, channelRoleOf, isSupportCurrency, STOREFRONT_HEADER } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { checkHuman, TURNSTILE_HEADER } from '../../lib/bot-guard';
 import { loadChannelRecord, roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
@@ -23,7 +23,7 @@ import { featureOff } from '../../lib/features/off';
 import { logger } from '../../lib/logger';
 import { CheckoutError, myCheckout, mySupport, quote, saveChannelSupportSettings, startSupportCheckout, stopMyPledge } from '../../lib/support/checkout';
 import { readSupportConfig } from '../../lib/support/config';
-import { receiverEligibility, supporterEligibility } from '../../lib/support/eligibility';
+import { appDecisionFor, receiverEligibility, type SupportRequest, supporterEligibility } from '../../lib/support/eligibility';
 import { vendorContext, type SupportJobEnv } from '../../lib/support/jobs';
 import { supportSwitch } from '../../lib/support/switch';
 import { CollectorError } from '../../lib/support/collector';
@@ -42,6 +42,18 @@ function failure(c: Context, error: unknown) {
 	throw error;
 }
 
+/** Where this request comes from: country, and for the native apps their client and storefront (MEM-D15). */
+const where = (c: Context, perksOn: boolean): Omit<SupportRequest, 'userId'> => ({ country: country(c), client: c.req.header(CLIENT_HEADER) ?? null, storefront: c.req.header(STOREFRONT_HEADER) ?? null, perksOn });
+
+/**
+ * MEM-D15 in a native app: whether monthly may be offered, and the hint that the checkout opens in
+ * the system browser (never Apple or Google in-app purchase). Null on the web.
+ */
+function appView(app: AppSupportDecision | null) {
+	if (!app) return null;
+	return { mode: app.mode, monthlyAllowed: app.cadence === 'one_time_and_monthly', openIn: 'external_browser' as const };
+}
+
 /** The channel, if it may receive; else null (the route answers feature_off). */
 async function receivingChannel(c: Context, env: Env) {
 	const channelId = c.req.param('channelId') ?? '';
@@ -55,7 +67,8 @@ async function receivingChannel(c: Context, env: Env) {
 
 export async function handleSupportSheet(c: Context) {
 	const env = c.env as Env;
-	if (!(await supportSwitch(env)).on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
+	const sw = await supportSwitch(env);
+	if (!sw.on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
 	const [settings, config] = await Promise.all([
@@ -66,6 +79,9 @@ export async function handleSupportSheet(c: Context) {
 	const currency = (c.req.query('currency') ?? 'USD').toUpperCase();
 	const rule = isSupportCurrency(currency) ? config.policy.amounts?.[currency] : undefined;
 	if (!rule) return featureOff(c, 'creatorSupport');
+	// MEM-D15: an app whose platform and storefront have no mode sees nothing; its cadence limits monthly
+	const app = appDecisionFor(config, { userId: null, ...where(c, sw.perksOn) });
+	if (app?.mode === 'hidden') return featureOff(c, 'creatorSupport');
 	let presets: number[] = [];
 	try {
 		presets = settings?.currency === currency ? (JSON.parse(settings?.presets || '[]') as number[]).filter((x) => x >= rule.minimum) : [];
@@ -81,7 +97,7 @@ export async function handleSupportSheet(c: Context) {
 			currency,
 			currencies: Object.keys(config.policy.amounts ?? {}),
 			oneTime: settings?.one_time_enabled === 1,
-			monthly: settings?.monthly_enabled === 1,
+			monthly: settings?.monthly_enabled === 1 && (!app || app.cadence === 'one_time_and_monthly'),
 			presets,
 			minimum: rule.minimum,
 			// MEM-D3: the fee is always shown; covering it is offered and starts unticked
@@ -89,6 +105,7 @@ export async function handleSupportSheet(c: Context) {
 			coverFeesDefault: false,
 			minAge: config.policy.minSupporterAge,
 			thankYouNote: settings?.thank_you_note ?? null,
+			app: appView(app),
 		},
 	});
 }
@@ -109,13 +126,15 @@ export async function handleSupportQuote(c: Context) {
 
 export async function handleSupportCheckout(c: Context) {
 	const env = c.env as Env;
-	if (!(await supportSwitch(env)).on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
+	const sw = await supportSwitch(env);
+	if (!sw.on || !env.SEARCH_DB) return featureOff(c, 'creatorSupport');
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return apiError(c, 401, 'authentication_required');
 	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
-	const supporter = await supporterEligibility(env, { userId, country: country(c), client: c.req.header(CLIENT_HEADER) ?? null });
+	const request: SupportRequest = { userId, ...where(c, sw.perksOn) };
+	const supporter = await supporterEligibility(env, request);
 	// Not eligible here, or their own channel (self-support is refused, §2.3). The role comes from the
 	// channel record already read, so a storage error can't let a team member through.
 	const role = channelRoleOf(channel.record, userId);
@@ -125,6 +144,9 @@ export async function handleSupportCheckout(c: Context) {
 	if (!human.allowed) return apiError(c, 403, 'human_check_failed');
 	const kind = body.kind === 'monthly' ? 'monthly' : body.kind === 'one_time' ? 'one_time' : null;
 	if (!kind) return apiError(c, 400, 'invalid_request');
+	const app = appDecisionFor(await readSupportConfig(env.SEARCH_DB), request);
+	// MEM-D15 cadence: an app limited to one-time gifts can't start monthly support
+	if (kind === 'monthly' && app && app.cadence !== 'one_time_and_monthly') return apiError(c, 400, 'invalid_request');
 	const settings = await env.SEARCH_DB.prepare('SELECT one_time_enabled, monthly_enabled FROM support_settings WHERE channel_id = ?').bind(channel.channelId).first<{ one_time_enabled: number; monthly_enabled: number }>();
 	if ((kind === 'monthly' ? settings?.monthly_enabled : settings?.one_time_enabled) !== 1) return apiError(c, 400, 'invalid_request');
 	const web = String(env.VIDEOS_WEB_URL ?? '').replace(/\/$/, '');
@@ -151,7 +173,7 @@ export async function handleSupportCheckout(c: Context) {
 			vendorContext(env, config.mode, () => now),
 			now,
 		);
-		return c.json({ success: true, result: { checkoutId: r.checkoutId, url: r.url, quote: r.quote } });
+		return c.json({ success: true, result: { checkoutId: r.checkoutId, url: r.url, quote: r.quote, ...(app ? { openIn: 'external_browser' as const } : {}) } });
 	} catch (error) {
 		return failure(c, error);
 	}

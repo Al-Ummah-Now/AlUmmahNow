@@ -10,21 +10,23 @@ import { writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { computeFeatures, forgetFeatureCaches, type FeaturesEnv } from '../src/lib/features';
-import { writeSupportPolicy } from '../src/lib/support/config';
+import { writeSupportApps, writeSupportPolicy } from '../src/lib/support/config';
 import { receiverEligibility, supporterEligibility, supportFeatureKeys } from '../src/lib/support/eligibility';
 
 const OWNER = 'usr_owner';
 const VIEWER = 'usr_viewer';
 const CH = 'ch_support';
-const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000, 2500] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
+const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000, 2500] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner' };
 
-async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknown> | false; payee?: 'active' | 'pending' | 'hold' | 'none'; enabled?: boolean } = {}) {
+async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknown> | false; payee?: 'active' | 'pending' | 'hold' | 'none'; enabled?: boolean; apps?: Record<string, unknown>; perks?: boolean } = {}) {
 	const db = new SqliteD1();
 	const channels = new MemoryBucket();
 	await channels.put(CH, JSON.stringify({ id: CH, userId: OWNER, members: [] }));
 	const env = { SEARCH_DB: db, channels, channel_sections: new MemoryBucket(), channel_tabs: new MemoryBucket(), global_settings: new MemoryBucket(), queue: new MemoryQueue(), ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' } as unknown as FeaturesEnv;
 	if (opts.switchOn !== false) await writeFeatureSwitch(env, { key: 'creatorSupport', enabled: true, expectedVersion: 0, actorId: 'usr_super', currentStored: false });
 	if (opts.decided !== false) await writeSupportPolicy(db as never, { ...DECIDED, ...(opts.decided ?? {}) }, 'usr_fin', 0);
+	if (opts.apps) await writeSupportApps(db as never, opts.apps, 'usr_fin', opts.decided !== false ? 1 : 0);
+	if (opts.perks) await writeFeatureSwitch(env, { key: 'supportPerks', enabled: true, expectedVersion: 0, actorId: 'usr_super', currentStored: false });
 	if (opts.enabled !== false) await db.prepare("INSERT INTO support_settings (channel_id, enabled, updated_at, updated_by) VALUES (?, 1, 'now', ?)").bind(CH, OWNER).run();
 	const payee = opts.payee ?? 'active';
 	if (payee !== 'none') {
@@ -34,7 +36,7 @@ async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknow
 			.run();
 	}
 	forgetFeatureCaches();
-	const keys = async (userId: string | null, request: { country?: string | null; client?: string | null } = {}, channelId: string | null = CH) => {
+	const keys = async (userId: string | null, request: { country?: string | null; client?: string | null; storefront?: string | null } = {}, channelId: string | null = CH) => {
 		const f = await computeFeatures(env, { userId, roles: [] }, channelId, request);
 		return { support: f.support, supportReceive: f.supportReceive };
 	};
@@ -68,11 +70,32 @@ describe('/api/me/features support keys', () => {
 		assert.equal((await t.keys(VIEWER, { country: 'IR' })).support, false);
 	});
 
-	it('MEM-D15: native apps see it only once the apps are allowed', async () => {
+	it('MEM-D15: native apps see nothing until an admin gives their platform and storefront a mode', async () => {
+		const IOS = 'aun-ios/1.0 (iOS 19)';
 		const off = await setup();
-		assert.equal((await off.keys(VIEWER, { client: 'aun-ios/1.0 (iOS 19)' })).support, false);
-		const on = await setup({ decided: { appsEnabled: true } });
-		assert.equal((await on.keys(VIEWER, { client: 'aun-ios/1.0 (iOS 19)' })).support, true);
+		assert.equal((await off.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, false, 'the default is hidden everywhere');
+		assert.equal((await off.keys(VIEWER, { country: 'GB' })).support, true, 'the web is unaffected');
+		const us = await setup({ apps: { platforms: { ios: true }, rules: [{ platform: 'ios', region: 'US', mode: 'external_browser_us_link', cadence: 'one_time_and_monthly' }] } });
+		assert.equal((await us.keys(VIEWER, { client: IOS, storefront: 'US' })).support, true);
+		assert.equal((await us.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, false, 'no rule for GB');
+		assert.equal((await us.keys(VIEWER, { client: IOS })).support, false, 'no storefront from the app');
+		assert.equal((await us.keys(VIEWER, { client: 'aun-android/1.0 (Android 16)', storefront: 'US' })).support, false, 'Android is off');
+		assert.equal((await us.keys(VIEWER, { client: 'aun-tv/1.0 (tvOS 19)', storefront: 'US' })).support, false, 'not an app platform');
+	});
+
+	it('MEM-D15 interlocks: P2P needs the whole gift to reach the creator (or the stores’ written OK) and no perks', async () => {
+		const IOS = 'aun-ios/1.0 (iOS 19)';
+		const rules = [{ platform: 'ios', region: 'ROW', mode: 'external_browser_p2p', cadence: 'one_time_only' }];
+		// The decided policy lets the creator bear fees, so P2P stays hidden without the stores' confirmation
+		assert.equal((await (await setup({ apps: { platforms: { ios: true }, rules } })).keys(VIEWER, { client: IOS, storefront: 'GB' })).support, false);
+		const ok = await setup({ apps: { platforms: { ios: true }, rules, storeConfirmedProcessorFeeDeduction: true } });
+		assert.equal((await ok.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, true);
+		const whole = await setup({ decided: { collectorFeePayer: 'supporterAlways', payoutFeeBearer: 'organization' }, apps: { platforms: { ios: true }, rules } });
+		assert.equal((await whole.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, true);
+		const perks = await setup({ perks: true, apps: { platforms: { ios: true }, rules, storeConfirmedProcessorFeeDeduction: true } });
+		assert.equal((await perks.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, false, 'a perk switch on hides P2P');
+		const eu = await setup({ apps: { platforms: { ios: true }, rules: [{ platform: 'ios', region: 'EU_EEA', mode: 'external_browser_eu_entitled', cadence: 'one_time_only' }] } });
+		assert.equal((await eu.keys(VIEWER, { client: IOS, storefront: 'FR' })).support, false, 'EU mode needs the attestation');
 	});
 
 	it('MEM-D23: no gifts before the payee is active unless the decision allows it; a screening hold always stops them', async () => {
