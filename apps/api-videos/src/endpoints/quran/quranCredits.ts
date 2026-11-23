@@ -57,7 +57,13 @@ const CREDITS_ROWS_ISOLATE_TTL_MS = 5 * 60_000;
 // Settled per-isolate cache keyed by D1 instance so concurrent/test DBs never share stale rows
 let isolateRowsCache: { db: D1Database; at: number; rows: Row[] } | null = null;
 
-/** Drops the cached edition picks after a channel or platform translation changes (and in tests). */
+/**
+ * Drops the cached edition picks in this isolate and the local colo's Cache API entry after a
+ * channel or platform translation changes (and in tests).
+ * Freshness bound: writing isolate / local colo immediately, other isolates in the same colo
+ * within 5 minutes (CREDITS_ROWS_ISOLATE_TTL_MS), and other colos within 1 hour
+ * (CREDITS_ROWS_EDGE_TTL_S, matching the endpoint's public Cache-Control: max-age=3600).
+ */
 export async function invalidateQuranCreditsCache(): Promise<void> {
 	isolateRowsCache = null;
 	const cache = edgeCache();

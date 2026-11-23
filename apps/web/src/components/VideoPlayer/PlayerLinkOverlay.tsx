@@ -35,9 +35,10 @@ export interface PlayerOverlayLink {
 }
 
 /**
- * Protocol allowlist for in-player links: only absolute `https:` URLs and same-origin root-relative
- * paths (`/…`, never protocol-relative `//…` or `/\…`). Anything else (`javascript:`, `data:`,
- * `http:`, control characters, empty) is rejected.
+ * Protocol allowlist for in-player links: only absolute `https:` URLs (without userinfo or
+ * host-less `https:///…` forms) and same-origin root-relative paths (`/…`, never protocol-relative
+ * `//…` or `/\…`). Anything else (`javascript:`, `data:`, `http:`, control characters, empty) is
+ * rejected.
  */
 export function safePlayerHref(href: string): string | null {
   if (typeof href !== 'string') return null;
@@ -53,10 +54,11 @@ export function safePlayerHref(href: string): string | null {
       return null;
     }
   }
-  if (!/^https:\/\//i.test(trimmed)) return null;
+  // Reject host-less (`https:///evil.com`) and authority userinfo (`https://user:pw@evil.com/`, `https://@evil.com/`)
+  if (!/^https:\/\/[^/\\]/i.test(trimmed) || /^https:\/\/[^/?#]*@/i.test(trimmed)) return null;
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'https:' || !parsed.hostname) return null;
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) return null;
     return trimmed;
   } catch {
     return null;
