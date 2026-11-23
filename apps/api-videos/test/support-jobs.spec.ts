@@ -13,7 +13,7 @@ import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { writeSupportPolicy } from '../src/lib/support/config';
 import { releaseDueGifts } from '../src/lib/support/events';
 import { onSupportJobFailed, queueSupportCron, receiveSupportWebhook, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
-import { creatorBalance, postEntry, railFundingLines } from '../src/lib/support/ledger';
+import { accountTotal, creatorBalance, postEntry, railFundingLines } from '../src/lib/support/ledger';
 import { lastReconcileOk } from '../src/lib/support/reconcile';
 import { signTestDelivery, testPay } from '../src/lib/support/test-collector';
 import { signTestRailDelivery, testRailFund } from '../src/lib/support/test-rail';
@@ -347,5 +347,108 @@ describe('review fixes (cross-provider review of #1761, #1758)', () => {
 		const out = await reconcileDay({ db: t.sql as never, day: '2026-11-21', now: new Date('2026-11-22T01:00:00Z'), collector: null, rail: null });
 		assert.equal(out.lines[0].ledgerBank, -500);
 		assert.equal(out.lines[0].gap, 0);
+	});
+});
+
+describe('erasure trail (cross-provider review of #1782)', () => {
+	const eventRow = (t: ReturnType<typeof setup>, id: string) => t.sql.prepare('SELECT status, user_id, payload FROM support_events WHERE event_id = ?').bind(id).first<{ status: string; user_id: string | null; payload: string }>();
+	const OTHER = 'usr_other_supporter';
+
+	it('every collector event names its supporter: payment.failed, dispute.closed, pledge.updated', async () => {
+		const t = setup();
+		await writeSupportPolicy(t.sql as never, { negativeBalancePolicy: 'netAgainstFutureGifts' }, 'usr_fin', 0);
+		await openCheckout(t.sql, 'sco_f', 'one_time', 500);
+		await deliverCollector(t.env, 'tevt_fail', [{ type: 'payment.failed', paymentRef: null, pledgeRef: null, checkoutId: 'sco_f', reason: 'card_declined', occurredAt: new Date().toISOString() }]);
+		const { paid } = await pay(t, 'sco_dc', 'one_time', 2000);
+		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
+		await deliverCollector(t.env, 'tevt_do', [{ type: 'dispute.opened', paymentRef: ref, disputeRef: 'tdis_c', amount: usd(100), fee: usd(0), evidenceDueAt: null, occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		await deliverCollector(t.env, 'tevt_dc', [{ type: 'dispute.closed', paymentRef: ref, disputeRef: 'tdis_c', outcome: 'lost', occurredAt: new Date().toISOString() }]);
+		const { paid: monthly } = await pay(t, 'sco_pl', 'monthly', 1000);
+		const pledgeRef = (monthly.events[1] as { pledgeRef: string }).pledgeRef;
+		await deliverCollector(t.env, 'tevt_pu', [{ type: 'pledge.updated', pledgeRef, status: 'past_due', currentPeriodEnd: null, occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		for (const id of ['tevt_fail', 'tevt_dc', 'tevt_pu']) assert.equal((await eventRow(t, id))!.user_id, SUPPORTER, id);
+	});
+
+	it('rail events name the payee’s owner: payee.updated and payout.updated', async () => {
+		const t = setup();
+		await t.sql.prepare("INSERT INTO support_payees (id, channel_id, owner_user_id, rail, mode, rail_payee_ref, country, status, tax_form, sanctions_status, created_at, updated_at) VALUES ('pe_o', ?, 'usr_creator', 'test', 'test', 'trpe_o', 'GB', 'active', 'w8ben', 'clear', 'now', 'now')").bind(CH).run();
+		await t.sql.prepare("INSERT INTO support_payouts (id, batch_id, payee_id, channel_id, rail, mode, amount, currency, rail_fee, status, created_at, updated_at) VALUES ('po_o', 'b1', 'pe_o', ?, 'test', 'test', 1000, 'USD', 50, 'canceled', 'now', 'now')").bind(CH).run();
+		const rail = async (id: string, events: unknown[]) => {
+			const body = JSON.stringify({ id, events });
+			await receiveSupportWebhook(t.env, 'rail', 'test', body, await signTestRailDelivery(body, new Date()));
+			await t.drain();
+		};
+		await rail('trev_pe', [{ type: 'payee.updated', railPayeeRef: 'trpe_o', occurredAt: new Date().toISOString() }]);
+		// A "paid" for a payout we canceled fails (a conflict), and still names its owner
+		await rail('trev_po', [{ type: 'payout.updated', payoutId: 'po_o', railPayoutRef: 'r', status: 'paid', failureCode: null, occurredAt: new Date().toISOString() }]);
+		assert.equal((await eventRow(t, 'trev_pe'))!.user_id, 'usr_creator');
+		const po = (await eventRow(t, 'trev_po'))!;
+		assert.equal(po.status, 'failed');
+		assert.equal(po.user_id, 'usr_creator');
+	});
+
+	it('one delivery about several people: applied, its payload is emptied; failed, its personal fields are removed but Retry still has the refs', async () => {
+		const t = setup();
+		await openCheckout(t.sql, 'sco_m1', 'one_time', 500);
+		await t.sql.prepare(`INSERT INTO support_checkouts (id, supporter_user_id, channel_id, kind, collector, mode, gift, charged, currency, created_at) VALUES ('sco_m2', ?, ?, 'one_time', 'test', 'test', 500, 500, 'USD', ?)`).bind(OTHER, CH, new Date().toISOString()).run();
+		const at = new Date().toISOString();
+		await deliverCollector(t.env, 'tevt_two', [
+			{ type: 'payment.failed', paymentRef: null, pledgeRef: null, checkoutId: 'sco_m1', reason: 'x', occurredAt: at, email: 'a@example.com' },
+			{ type: 'payment.failed', paymentRef: null, pledgeRef: null, checkoutId: 'sco_m2', reason: 'x', occurredAt: at, email: 'b@example.com' },
+		]);
+		await t.drain();
+		const applied = (await eventRow(t, 'tevt_two'))!;
+		assert.equal(applied.user_id, null);
+		assert.equal(applied.payload, '{}');
+
+		const { paid: p1 } = await pay(t, 'sco_x1', 'one_time', 1000);
+		await t.sql.prepare(`INSERT INTO support_checkouts (id, supporter_user_id, channel_id, kind, collector, mode, gift, charged, currency, created_at) VALUES ('sco_x2', ?, ?, 'one_time', 'test', 'test', 1000, 1000, 'USD', ?)`).bind(OTHER, CH, at).run();
+		const p2 = await testPay(vendorContext(t.env, 'test'), { checkoutId: 'sco_x2', kind: 'one_time', charged: usd(1000), supporterCountry: 'FR' });
+		await deliverCollector(t.env, p2.eventId, p2.events);
+		await t.drain();
+		const ref1 = (p1.events[1] as { paymentRef: string }).paymentRef;
+		const ref2 = (p2.events[1] as { paymentRef: string }).paymentRef;
+		// Refunds in the wrong currency for both: refused, the event fails
+		await deliverCollector(t.env, 'tevt_bad', [
+			{ type: 'payment.refunded', paymentRef: ref1, refundRef: 'tr_a', amount: money(100, 'EUR'), occurredAt: at, email: 'a@example.com' },
+			{ type: 'payment.refunded', paymentRef: ref2, refundRef: 'tr_b', amount: money(100, 'EUR'), occurredAt: at, email: 'b@example.com' },
+		]);
+		await t.drain();
+		const failed = (await eventRow(t, 'tevt_bad'))!;
+		assert.equal(failed.status, 'failed');
+		assert.equal(failed.user_id, null);
+		assert.ok(!failed.payload.includes('example.com'), 'personal fields removed');
+		assert.ok(failed.payload.includes(ref1) && failed.payload.includes(ref2), 'refs kept for Retry');
+	});
+
+	it('a failed event about one person keeps their id, so erasure finds it', async () => {
+		const t = setup();
+		const { paid } = await pay(t, 'sco_one', 'one_time', 1000);
+		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
+		await deliverCollector(t.env, 'tevt_eur1', [{ type: 'payment.refunded', paymentRef: ref, refundRef: 'tr_1', amount: money(100, 'EUR'), occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		const row = (await eventRow(t, 'tevt_eur1'))!;
+		assert.equal(row.status, 'failed');
+		assert.equal(row.user_id, SUPPORTER);
+	});
+
+	it('a won dispute after the organization wrote off the loss: the write-off is repaid first, the rest is the creator’s', async () => {
+		const t = setup();
+		await writeSupportPolicy(t.sql as never, { negativeBalancePolicy: 'organizationAbsorbs' }, 'usr_fin', 0);
+		const { paid } = await pay(t, 'sco_wo', 'one_time', 2000);
+		const ref = (paid.events[1] as { paymentRef: string }).paymentRef;
+		// 2000 − 88 fee = 1912 owed; a 2000 dispute + 1500 fee takes 3500: 1912 from the creator, 1588 written off
+		await deliverCollector(t.env, 'tevt_wo_o', [{ type: 'dispute.opened', paymentRef: ref, disputeRef: 'tdis_wo', amount: usd(2000), fee: usd(1500), evidenceDueAt: null, occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		assert.equal(await accountTotal(t.sql as never, 'loss:org_reserve', 'USD'), 1588);
+		const mid = (await creatorBalance(t.sql as never, CH)).USD!;
+		assert.equal(mid.pending + mid.available, 0);
+		await deliverCollector(t.env, 'tevt_wo_w', [{ type: 'dispute.closed', paymentRef: ref, disputeRef: 'tdis_wo', outcome: 'won', occurredAt: new Date().toISOString() }]);
+		await t.drain();
+		assert.equal(await accountTotal(t.sql as never, 'loss:org_reserve', 'USD'), 0, 'write-off repaid');
+		const after = (await creatorBalance(t.sql as never, CH)).USD!;
+		assert.equal(after.pending + after.available, 2000 - 1588);
 	});
 });

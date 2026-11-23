@@ -100,6 +100,7 @@ export async function applyCollectorEvents(c: ApplyContext, events: readonly Col
 				if (!owner) throw new UnmatchedSupportEventError(`Payment ${e.paymentRef} matches no checkout or pledge`);
 				// Money received is booked even for an ended pledge (it is the creator's); the pledge is stopped at the collector
 				if (pledge && (pledge.status === 'canceled' || pledge.status === 'ended') && e.pledgeRef) out.pledgesToCancel.push(e.pledgeRef);
+				// An unreadable time from the vendor reads as now (created_at feeds the hold date backfill)
 				const occurred = Number.isFinite(Date.parse(e.occurredAt)) ? Date.parse(e.occurredAt) : c.now.getTime();
 				const available = c.policy.holdDays === null ? null : new Date(occurred + c.policy.holdDays * DAY).toISOString();
 				await c.db
@@ -107,7 +108,7 @@ export async function applyCollectorEvents(c: ApplyContext, events: readonly Col
 						`INSERT INTO support_payments (id, pledge_id, checkout_id, supporter_user_id, channel_id, collector, mode, collector_payment_ref, gross, currency, collector_fee, tax, status, available_at, message, anonymous, supporter_country, created_at, updated_at)
 						 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'succeeded', ?, ?, ?, ?, ?, ?) ON CONFLICT (collector, mode, collector_payment_ref) DO NOTHING`,
 					)
-					.bind(newId('spay'), pledge?.id ?? null, co?.id ?? null, owner.supporter_user_id, owner.channel_id, c.collector, c.mode, e.paymentRef, e.gross.amount, e.gross.currency, e.fee.amount, e.tax.amount, available, co?.message ?? null, owner.anonymous, e.supporterCountry, e.occurredAt, at)
+					.bind(newId('spay'), pledge?.id ?? null, co?.id ?? null, owner.supporter_user_id, owner.channel_id, c.collector, c.mode, e.paymentRef, e.gross.amount, e.gross.currency, e.fee.amount, e.tax.amount, available, co?.message ?? null, owner.anonymous, e.supporterCountry, new Date(occurred).toISOString(), at)
 					.run();
 				const p = await paymentByRef(c, e.paymentRef);
 				if (!p) throw new Error(`Payment ${e.paymentRef} was not stored`);
