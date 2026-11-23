@@ -7,7 +7,7 @@ const RelatedVideosFailed: React.FC<{ onRetry?: () => void }> = ({ onRetry }) =>
   const { t } = useLanguage();
   return (
     <div data-testid="related-videos-failed" className="mx-4 md:mx-0 py-8 text-center">
-      <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t.video.relatedLoadFailed}</p>
+      <p className="mb-4 text-sm text-muted-foreground">{t.video.relatedLoadFailed}</p>
       {onRetry && (
         <button
           type="button"

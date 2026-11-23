@@ -143,7 +143,6 @@
   "apps/web/src/components/notifications/NotificationSettingsPanel.tsx": 19,
   "apps/web/src/components/notifications/NotificationsPage.tsx": 33,
   "apps/web/src/components/privacySettings/PrivacySettingsView.tsx": 18,
-  "apps/web/src/components/related/RelatedVideosEmpty.tsx": 6,
   "apps/web/src/components/related/RelatedVideosSkeleton.tsx": 6,
   "apps/web/src/components/related/index.tsx": 4,
   "apps/web/src/components/related/rtl/index.tsx": 4,
