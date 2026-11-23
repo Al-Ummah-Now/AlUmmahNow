@@ -56,6 +56,12 @@ export const USER_FEATURE_KEYS = [
   'aiCategorySuggest',
   /** Bulk scheduling in Studio Videos */
   'bulkSchedule',
+  /** Viewers may send creator support (one-time or monthly; switch creatorSupport, wiki MEMBERS) */
+  'support',
+  /** The caller's channel may receive creator support (switch creatorSupport) */
+  'supportReceive',
+  /** Supporter perks can be offered and shown (switch supportPerks) */
+  'supportPerks',
   /** Settings › Billing: a payment provider is on, or the account has subscriptions or payments (wiki AUN-SUBS) */
   'billing',
 ] as const;
