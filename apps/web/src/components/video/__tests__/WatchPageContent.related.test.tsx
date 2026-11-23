@@ -11,7 +11,7 @@ jest.mock('next/link', () => ({ __esModule: true, default: ({ children }: { chil
 jest.mock('@/lib/api/videos', () => ({ fetchRelatedVideos: jest.fn(), fetchVideoById: jest.fn() }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('@/hooks/useLanguage', () => ({
-  useLanguage: () => ({ t: { video: { relatedVideos: 'Related', relatedEmpty: 'Nothing here', relatedEmptyRetry: 'Retry shelf' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
+  useLanguage: () => ({ t: { video: { relatedVideos: 'Related videos', relatedEmpty: 'We couldn’t load related videos right now.', relatedEmptyRetry: 'Try again' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
 }));
 jest.mock('@al-ummah/shared-types', () => ({ ...jest.requireActual('@al-ummah/shared-types'), getLocalizedValue: (_: unknown, title: string) => title }));
 jest.mock('@/components/relatedVideo', () => ({ __esModule: true, default: ({ id }: { id: string }) => <div data-testid={`card-${id}`} /> }));
@@ -69,23 +69,35 @@ describe('WatchPageContent related shelf', () => {
     expect(related).toHaveBeenCalledTimes(1);
   });
 
-  it.each([[false], [true]])('offers a retry on an empty shelf, then shows the videos (rtl=%s)', async (rtl) => {
+  it.each([[false], [true]])('hides a successful empty shelf without an error or retry (rtl=%s)', async (rtl) => {
     mockIsRTL = rtl;
-    related.mockResolvedValueOnce([]).mockResolvedValue([card('rec-1')] as never);
+    related.mockResolvedValue([]);
     render(<WatchPageContent videoId="cur" />);
-    const [retry] = await screen.findAllByRole('button', { name: 'Retry shelf' });
-    expect(screen.getAllByText('Nothing here').length).toBeGreaterThan(0);
+
+    await waitFor(() => expect(screen.queryByTestId('related-videos-skeleton')).toBeNull());
+    expect(screen.queryByTestId('related-videos-error')).toBeNull();
+    expect(screen.queryByTestId('related-videos-list')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Related videos' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it.each([[false], [true]])('offers a retry on a failed shelf, then shows the videos (rtl=%s)', async (rtl) => {
+    mockIsRTL = rtl;
+    related.mockRejectedValueOnce(new Error('down')).mockResolvedValue([card('rec-1')] as never);
+    render(<WatchPageContent videoId="cur" />);
+    const [retry] = await screen.findAllByRole('button', { name: 'Try again' });
+    expect(screen.getAllByText('We couldn’t load related videos right now.').length).toBeGreaterThan(0);
 
     fireEvent.click(retry);
     expect((await screen.findAllByTestId('card-rec-1')).length).toBeGreaterThan(0);
     expect(related).toHaveBeenCalledTimes(2);
-    expect(screen.queryByTestId('related-videos-empty')).toBeNull();
+    expect(screen.queryByTestId('related-videos-error')).toBeNull();
   });
 
-  it('shows the empty state when the request fails', async () => {
+  it('shows the failure state when the request fails', async () => {
     related.mockRejectedValue(new Error('down'));
     render(<WatchPageContent videoId="cur" />);
-    expect((await screen.findAllByTestId('related-videos-empty')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByTestId('related-videos-error')).length).toBeGreaterThan(0);
   });
 
   it('clears the skeleton when the request fails', async () => {

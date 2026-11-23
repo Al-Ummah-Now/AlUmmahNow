@@ -540,7 +540,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     videoLikes: 'Likes',
     videoComments: 'Comments',
     videoShares: 'Shares',
-    relatedVideos: 'Related Videos',
+    relatedVideos: 'Related videos',
     relatedEmpty: "We couldn’t load related videos right now.",
     relatedEmptyRetry: 'Try again',
     watchLater: 'Watch Later',
