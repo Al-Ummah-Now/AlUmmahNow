@@ -510,19 +510,20 @@ export class WebSocketManager {
   }
 
   /**
-   * Send the access token, fetching a fresh one on each (re)connect when a getter is configured.
+   * Fetch a fresh WebSocket credential for each authentication when a getter is configured.
    */
   private async authenticate(): Promise<void> {
+    const socket = this.ws;
     try {
       const token = this.config.getAuthToken
         ? await this.config.getAuthToken()
         : this.config.authToken;
-      if (token) {
+      if (token && this.ws === socket && socket?.readyState === WebSocket.OPEN) {
         this.sendAuthMessage(token);
       }
     } catch (error) {
       // Realtime stays signed out until the next reconnect asks again: not an error of the page
-      logger.warn('[WebSocket] No access token for now', error);
+      logger.warn('[WebSocket] No realtime credential for now', error);
     }
   }
 

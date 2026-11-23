@@ -59,8 +59,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
 
     if (user?.id) {
       defaultConfig.userId = user.id;
-      // The server verifies this OpenAuth access token and derives the user from it;
-      // the manager fetches a fresh one on every (re)connect (#228).
+      // The manager mints a fresh user-bound ticket on every (re)connect (#230).
       defaultConfig.getAuthToken = fetchRealtimeToken;
     }
     let cancelled = false;
@@ -77,7 +76,7 @@ export function WebSocketProvider({ children, user, config = {} }: WebSocketProv
     });
 
     // Auto-connect for both authenticated and anonymous users. Authenticated
-    // users send their access token (from getAuthToken) in the first message.
+    // users send a WebSocket ticket in the first message.
     void (async () => {
       if (cancelled) return;
       manager.connect(user?.id).catch((error) => {

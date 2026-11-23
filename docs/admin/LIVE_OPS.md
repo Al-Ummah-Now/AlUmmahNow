@@ -221,7 +221,7 @@ Producers already hold both bindings (api-videos, processor, admin-api, media).
 
 ### B.5 Client (admin-web)
 
-- `GET /api/realtime/token`, a same-origin route (`sec-fetch-site` check, `no-store`), returns `{ url, token, expiresAt }` from the admin session. The URL comes from the server's `REALTIME_URL` var, so there's no build-time client variable.
+- `GET /api/realtime/token`, a same-origin route (`sec-fetch-site` check, `no-store`), exchanges the admin's server-side access token via `POST /internal/ws-ticket` (`INTERNAL_API_KEY`) for a 60-second, single-use, user-bound opaque `wst_...` ticket and returns `{ url, token, expiresAt, ticketExpiresAt }` (the OpenAuth access token stays server-side, #230). The URL comes from the server's `REALTIME_URL` var, so there's no build-time client variable.
 - `lib/live/admin-live.ts` is **one socket per tab**, shared by every hook. It doesn't need a provider, so the held shell's `layout.tsx` (#820) stays untouched.
   - It authenticates, then subscribes to the topics in use.
   - It reconnects with exponential backoff (1 s → 30 s, with jitter) and re-authenticates on `AUTH_EXPIRED`.

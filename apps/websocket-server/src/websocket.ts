@@ -15,7 +15,9 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously, isLiveChat, isPublicFeed } from './auth';
+import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously, isLiveChat, isPublicFeed, type AuthPayload } from './auth';
+import { isTokenRevoked } from './token-revocation';
+import { TicketStore, WS_TICKET_DO_NAME, isWebSocketTicket, type TicketClaims } from './tickets';
 import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket, type ViewIndex } from './view-counter';
@@ -74,6 +76,7 @@ export class WebSocketDurableObject extends DurableObject {
   private subscribers: Map<string, Set<WebSocket>> = new Map();
   private viewCounter?: ViewCounter;
   private postViewCounter?: PostViewCounter;
+  private ticketStore?: TicketStore;
   /** Directory joins in flight, shared by sockets subscribing to the same channel meanwhile. */
   private joining: Map<string, Promise<boolean>> = new Map();
   /** Bumped on every failed join, so a readiness probe running meanwhile does not vouch for it. */
@@ -185,6 +188,15 @@ export class WebSocketDurableObject extends DurableObject {
 
     if (url.pathname === '/presence' && request.method === 'GET') {
       return Response.json({ sessions: this.userSessionCount(url.searchParams.get('userId') ?? '') });
+    }
+
+    // Short-lived single-use WebSocket ticket store (object named ws-tickets, #230);
+    // reachable only through the internal DO binding (never forwarded publicly).
+    if (url.pathname === '/tickets/mint' && request.method === 'POST') {
+      return await this.handleTicketMint(request);
+    }
+    if (url.pathname === '/tickets/redeem' && request.method === 'POST') {
+      return await this.handleTicketRedeem(request);
     }
 
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -363,9 +375,11 @@ export class WebSocketDurableObject extends DurableObject {
     if (!state) return;
 
     try {
-      // Signature, issuer, expiry and client are checked in authenticateToken;
-      // unsigned tokens are only accepted when ENVIRONMENT=development.
-      const authPayload = await authenticateToken(token, this.env as Env);
+      // Short-lived single-use tickets minted by web/admin-web (#230) are redeemed
+      // atomically via the ws-tickets DO; OpenAuth JWTs (native apps) verify via JWKS.
+      const authPayload = isWebSocketTicket(token)
+        ? await this.redeemTicket(token)
+        : await authenticateToken(token, this.env as Env);
       if (!authPayload) {
         this.sendMessage(ws, { type: 'error', error: 'Invalid or expired token', code: 'AUTH_FAILED' });
         return;
@@ -938,6 +952,84 @@ export class WebSocketDurableObject extends DurableObject {
       }
     }
     return Response.json(out);
+  }
+
+  private getTicketStore(): TicketStore {
+    return (this.ticketStore ??= new TicketStore());
+  }
+
+  private async handleTicketMint(request: Request): Promise<Response> {
+    let body: Partial<TicketClaims>;
+    try {
+      body = (await request.json()) as Partial<TicketClaims>;
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (typeof body.sub !== 'string' || !body.sub || typeof body.authExpiresAt !== 'number') {
+      return Response.json({ error: 'Invalid ticket claims' }, { status: 400 });
+    }
+    const minted = this.getTicketStore().mint({
+      sub: body.sub,
+      email: typeof body.email === 'string' ? body.email : undefined,
+      roles: Array.isArray(body.roles) ? body.roles.filter((r): r is string => typeof r === 'string') : undefined,
+      authExpiresAt: body.authExpiresAt,
+      sid: typeof body.sid === 'string' ? body.sid : undefined,
+      authTime: typeof body.authTime === 'number' ? body.authTime : undefined,
+      iat: typeof body.iat === 'number' ? body.iat : undefined,
+    });
+    if (!minted) {
+      return Response.json({ error: 'Token already expired' }, { status: 400 });
+    }
+    return Response.json(minted, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  private async handleTicketRedeem(request: Request): Promise<Response> {
+    let ticket: unknown;
+    try {
+      ticket = ((await request.json()) as { ticket?: unknown }).ticket;
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (typeof ticket !== 'string' || !isWebSocketTicket(ticket)) {
+      return Response.json({ error: 'Invalid ticket' }, { status: 401 });
+    }
+    const claims = this.getTicketStore().redeem(ticket);
+    if (!claims) {
+      return Response.json({ error: 'Invalid or expired ticket' }, { status: 401 });
+    }
+    return Response.json(claims, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  /** Atomically redeems a single-use WebSocket ticket and re-checks token revocation. */
+  private async redeemTicket(ticket: string): Promise<AuthPayload | null> {
+    const env = this.env as SocketEnv;
+    let claims: TicketClaims | null = null;
+    if (env.WEBSOCKET_DO) {
+      const stub = env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(WS_TICKET_DO_NAME));
+      const res = await stub.fetch(new Request('http://internal/tickets/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+      }));
+      if (!res.ok) return null;
+      claims = (await res.json()) as TicketClaims;
+    } else {
+      claims = this.getTicketStore().redeem(ticket);
+    }
+    if (!claims?.sub || !Number.isFinite(claims.authExpiresAt)) return null;
+    if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId: claims.sub, sid: claims.sid, authTime: claims.authTime, iat: claims.iat })) {
+      logger.warn('WebSocket ticket rejected: sign-in revoked');
+      return null;
+    }
+    return {
+      sub: claims.sub,
+      email: claims.email,
+      roles: claims.roles,
+      exp: claims.authExpiresAt,
+      iat: claims.iat,
+      sid: claims.sid,
+      authTime: claims.authTime,
+    };
   }
 
   private handleStatsRequest(): Response {

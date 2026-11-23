@@ -21,7 +21,8 @@ async function fetchTicket(): Promise<RealtimeTicket | null> {
   const res = await fetch('/api/realtime/token', { cache: 'no-store', credentials: 'same-origin' });
   if (!res.ok) return null;
   const body = (await res.json()) as Partial<RealtimeTicket>;
-  return body.url && body.token ? { url: body.url, token: body.token, expiresAt: body.expiresAt } : null;
+  if (!body.url || typeof body.token !== 'string' || !body.token.startsWith('wst_')) return null;
+  return { url: body.url, token: body.token, expiresAt: body.expiresAt };
 }
 
 /** The tab's client (created on first use, in the browser only). */
