@@ -12,7 +12,12 @@ import { HeaderBrand, HeaderEnvBadge, HeaderSignIn } from './shell/HeaderParts';
  * light/dark, then the account or Sign in), content centred. The header has no links to other
  * sites (owner, 2026-11-15), so the footer links Website and Videos at every width.
  */
-export async function PublicShell({ children }: { children: React.ReactNode }) {
+/**
+ * `top`: the content starts below the header at the page's own width (the error card, which places
+ * itself like the videos site's: top-aligned, 16px from each edge on a phone), instead of centred in a
+ * padded box (sign-in, access denied).
+ */
+export async function PublicShell({ children, top = false }: { children: React.ReactNode; top?: boolean }) {
   const { locale, t } = await getI18n();
   const issuer = process.env.Issuer;
   const session = await getAdminSession().catch(() => null);
@@ -35,7 +40,7 @@ export async function PublicShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
-      <main id="main-content" className="flex-1 flex items-center justify-center px-4 pb-12">
+      <main id="main-content" className={top ? 'flex-1 flex flex-col pb-12' : 'flex-1 flex items-center justify-center px-4 pb-12'}>
         {children}
       </main>
       {sites.length > 0 && (

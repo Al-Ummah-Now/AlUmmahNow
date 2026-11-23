@@ -74,7 +74,7 @@ test.describe('navigation', () => {
     expect(response?.status()).toBe(404);
     await expect(page.getByTestId('not-found')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-    await page.getByRole('link', { name: 'Go to Dashboard' }).click();
+    await page.getByRole('link', { name: 'Home page' }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
   });
 

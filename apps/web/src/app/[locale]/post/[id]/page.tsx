@@ -12,6 +12,7 @@ import { breadcrumbLd, siteName } from '@/lib/seo/structured-data';
 import { loadSiteLink, sitePostCanonical } from '@/lib/seo/site-link';
 import { LARGE_CARD, ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import { isIndexablePost, postChannelName, postDescription, postHeadline, postCardUrl, postPermalink, socialMediaPostingLd } from '@/lib/seo/post';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 interface PostPageProps {
   params: Promise<{ locale: string; id: string }>;
@@ -32,6 +33,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const { locale, id } = await params;
   const lang = locale === 'ar' ? 'ar' : 'en';
   const read = await loadPermalinkPost(id);
+  // A missing post is the 404 page: its title and robots, not ours
+  if (read.status === 'missing') return notFoundMetadata();
   if (read.status !== 'ok') return { robots: { index: false, follow: false } };
   const { post } = read;
   const title = postHeadline(post, lang);

@@ -31,6 +31,20 @@ describe('FriendlyError', () => {
     expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '/en/contact?ref=ERR-CLNT-0001');
   });
 
+  it('the tab names the error ahead of the route\'s own title, and gives it back on unmount', async () => {
+    document.head.innerHTML = '<title>Error test | Al Ummah Now</title>';
+    const { unmount } = render(<FriendlyError error={new Error(RAW)} reset={() => undefined} boundary="locale" />);
+    await waitFor(() => expect(document.title).toBe('Something went wrong | Al Ummah Now'));
+    // The route's metadata title streams in after the screen mounted: the screen's title still wins
+    const late = document.createElement('title');
+    late.textContent = 'Error test | Al Ummah Now';
+    document.head.insertBefore(late, document.head.firstChild);
+    await waitFor(() => expect(document.title).toBe('Something went wrong | Al Ummah Now'));
+    unmount();
+    expect(document.title).toBe('Error test | Al Ummah Now');
+    document.head.innerHTML = '';
+  });
+
   it('a server render error uses the reference derived from the digest (same as the server event)', async () => {
     const error = Object.assign(new Error('An error occurred in the Server Components render.'), { digest: '2714329351' });
     render(<FriendlyError error={error} boundary="locale" />);

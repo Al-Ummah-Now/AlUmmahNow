@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger-client';
 
 import React from 'react';
 import type { Metadata } from 'next';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 import { notFound } from 'next/navigation';
 import ProfileGuard from '@/components/ProfileGuard';
@@ -31,7 +32,8 @@ interface LocaleLayoutProps {
  */
 export async function generateMetadata({ params }: Pick<LocaleLayoutProps, 'params'>): Promise<Metadata> {
   const { locale } = await params;
-  if (!isLocaleSupported(locale)) return {};
+  // The layout answers 404 for it: the error page's title and robots
+  if (!isLocaleSupported(locale)) return notFoundMetadata();
   const appName = getTranslations(locale === 'ar' ? 'ar' : 'en').common.appName;
   // "{page} | site" on every page that sets its own title; the site name alone otherwise (wiki AUN-SEO)
   return { title: { default: appName, template: `%s | ${appName}` } };

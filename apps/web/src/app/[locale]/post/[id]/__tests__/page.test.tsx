@@ -95,7 +95,8 @@ describe('post permalink page', () => {
   it('a post nobody may see is a 404; an API outage is a 503', async () => {
     load.mockResolvedValue({ status: 'missing' });
     await expect(PostPage(params('en'))).rejects.toThrow('NEXT_NOT_FOUND');
-    expect((await generateMetadata(params('en'))).robots).toEqual({ index: false, follow: false });
+    // The 404 page's metadata: the family's tab title and no robots of its own (Next's noindex is the one)
+    expect(await generateMetadata(params('en'))).toEqual({ title: { absolute: 'Page not found | Al Ummah Now' }, robots: null });
     load.mockResolvedValue({ status: 'unavailable' });
     await expect(PostPage(params('en'))).rejects.toBeInstanceOf(ContentUnavailableError);
   });

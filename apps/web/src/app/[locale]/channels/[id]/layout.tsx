@@ -7,6 +7,7 @@ import { getCurrentUserId } from '@/lib/channel-utils';
 import { ChannelPageShell } from '@/components/Channel/ChannelPageShell';
 import { buildChannelJsonLd, buildChannelMetadata } from '@/lib/channel-metadata';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 interface ChannelLayoutProps {
   children: React.ReactNode;
@@ -19,7 +20,10 @@ interface ChannelLayoutProps {
 /** Canonical link points at /{locale}/@{handle} when the channel has a handle. */
 export async function generateMetadata({ params }: Pick<ChannelLayoutProps, 'params'>): Promise<Metadata> {
   const { locale, id } = await params;
-  return buildChannelMetadata(await loadChannelById(id), locale);
+  const channel = isLocaleSupported(locale) ? await loadChannelById(id) : null;
+  // The layout answers 404 (or the Worker 410): the error page's title and robots
+  if (!channel) return notFoundMetadata();
+  return buildChannelMetadata(channel, locale);
 }
 
 /**

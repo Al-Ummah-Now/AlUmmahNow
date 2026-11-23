@@ -10,6 +10,7 @@ import { ContentUnavailableError } from '@/lib/seo/availability';
 import { videoAvailability } from '@/lib/seo/availability-server';
 import { breadcrumbLd, videoObjectLd } from '@/lib/seo/structured-data';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 interface WatchLayoutProps {
   children: React.ReactNode;
@@ -26,7 +27,8 @@ const NOINDEX: Metadata = { robots: { index: false, follow: false } };
  */
 export async function generateMetadata({ params }: Pick<WatchLayoutProps, 'params'>): Promise<Metadata> {
   const { locale, id } = await params;
-  if (!isValidContentId(id)) return NOINDEX;
+  // The layout answers 404 (or the Worker 410) for these: the error page's title and robots, not ours
+  if (!isValidContentId(id) || (await videoAvailability(id)) === 'missing') return notFoundMetadata();
   const video = await loadPublicVideo(id);
   // Not playable for everyone (private, processing, removed): noindex
   if (!video) return NOINDEX;

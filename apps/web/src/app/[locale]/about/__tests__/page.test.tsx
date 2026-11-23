@@ -98,9 +98,10 @@ describe('About page', () => {
     expect(html).toContain('About Al Ummah Now');
   });
 
-  it('gone from the CMS in both languages: 404 and noindex', async () => {
+  it('gone from the CMS in both languages: 404 with the 404 page\'s title and one robots meta', async () => {
     load.mockResolvedValue({ status: 'not_found' });
-    expect(await generateMetadata(params('en'))).toEqual({ robots: { index: false, follow: false } });
+    // No robots of its own: Next's noindex on the 404 is the page's only one (lib/seo/error-robots.ts)
+    expect(await generateMetadata(params('en'))).toEqual({ title: { absolute: 'Page not found | Al Ummah Now' }, robots: null });
     await expect(AboutRoute(params('en'))).rejects.toThrow('NEXT_NOT_FOUND');
   });
 

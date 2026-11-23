@@ -10,6 +10,7 @@ import { LARGE_CARD, ogImages, twitterImages } from '@/lib/seo/site-share-image'
 import { channelCardUrl, videoCardUrl } from '@/lib/share-card/layout';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { playlistAvailability } from '@/lib/seo/availability-server';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 interface PlaylistLayoutProps {
   children: React.ReactNode;
@@ -19,9 +20,11 @@ interface PlaylistLayoutProps {
 /** A playlist only the signed-in viewer can see (private) is never indexed. */
 export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'params'>): Promise<Metadata> {
   const { locale, id } = await params;
-  if (!isValidContentId(id) || (await playlistAvailability(id)) !== 'public') {
-    return { robots: { index: false, follow: false } };
-  }
+  if (!isValidContentId(id)) return notFoundMetadata();
+  const availability = await playlistAvailability(id);
+  // The layout answers 404 (or the Worker 410): the error page's title and robots, not ours
+  if (availability === 'missing') return notFoundMetadata();
+  if (availability !== 'public') return { robots: { index: false, follow: false } };
   const host = (await headers()).get('host');
   if (!host) return {};
   // Each language is its own canonical; x-default is English (D-SEO-1)

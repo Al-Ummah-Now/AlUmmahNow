@@ -7,6 +7,7 @@ import { decodeHandleSegment, loadChannelByHandle } from '@/lib/channel-loaders'
 import { ChannelPageShell } from '@/components/Channel/ChannelPageShell';
 import { buildChannelJsonLd, buildChannelMetadata } from '@/lib/channel-metadata';
 import { JsonLd } from '@/components/seo/JsonLd';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 interface HandleLayoutProps {
   children: React.ReactNode;
@@ -18,7 +19,10 @@ interface HandleLayoutProps {
 
 export async function generateMetadata({ params }: Pick<HandleLayoutProps, 'params'>): Promise<Metadata> {
   const { locale, handle } = await params;
-  return buildChannelMetadata(await loadChannelByHandle(decodeHandleSegment(handle)), locale);
+  const channel = isLocaleSupported(locale) ? await loadChannelByHandle(decodeHandleSegment(handle)) : null;
+  // The layout answers 404 (or the Worker 410): the error page's title and robots
+  if (!channel) return notFoundMetadata();
+  return buildChannelMetadata(channel, locale);
 }
 
 /**

@@ -6,6 +6,7 @@ import { loadPage } from '@/lib/about/cms-page';
 import { ABOUT_FALLBACK } from '@/lib/about/fallback';
 import { ABOUT_SLUG, aboutMetadata } from '@/lib/about/metadata';
 import { deriveWwwUrl } from '@/lib/scholars/sites';
+import { notFoundMetadata } from '@/lib/seo/not-found-metadata';
 
 /**
  * About (/[locale]/about): the CMS About page, the one www serves at /{l}/about/. Editors change it in
@@ -37,7 +38,8 @@ const load = cache(async (locale: 'en' | 'ar') => {
 export async function generateMetadata({ params }: AboutRouteProps): Promise<Metadata> {
   const l = lang((await params).locale);
   const r = await load(l);
-  if (r.status !== 'ok') return { robots: { index: false, follow: false } };
+  // The page answers 404 then: the error page's title and robots
+  if (r.status !== 'ok') return notFoundMetadata();
   return aboutMetadata(r.page, l, wwwUrl());
 }
 

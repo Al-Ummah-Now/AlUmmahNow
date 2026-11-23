@@ -3,6 +3,8 @@
    compiled from packages/theme-packages into these two files; a custom package's CSS is inlined
    by the root layout. html[data-theme] is the theme id and the .dark class the mode. */
 @import '../../../web/src/theme/site-themes.css';
+/* The error card (components/FriendlyError.tsx; wiki guides/error-pages.md) */
+@import '../../../../packages/fanous-tokens/errors/aun-error-page.css';
 @import '../../../web/src/theme/materials.css';
 /* Header account button and menus: the shared nav contract (docs/design/NAV.md) */
 @import '../../../../packages/fanous-tokens/nav/aun-nav.css';
@@ -339,8 +341,10 @@ html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
 
 /* Text that sits on the page itself (a page's title, its intro and the back link above it) rests
    on a plate of page colour, so no lantern or string ever runs through its glyphs (owner
-   2026-11-22: the street never crosses text). Text inside cards already has a solid surface. */
-html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)),
+   2026-11-22: the street never crosses text). Text inside cards already has a solid surface: the
+   error card's heading and body are never plated, or their page-colour shadow would cover the
+   card's badge and heading (the not-found page). */
+html.fanous-street #main-content :is(h1, h1 ~ p, h1 ~ span, :is(a, p, span, nav):has(+ h1), div:has(> h1) ~ :is(p, span)):not(.ep-card *),
 html.fanous-street .street-plate {
   width: fit-content;
   max-width: 100%;
@@ -462,4 +466,10 @@ html.fanous-street .street-plate {
   outline: none !important;
   box-shadow: none !important;
   --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+/* Inside the admin layout or the public shell the error card needs no page height of its own */
+.ep-inline {
+  min-height: 0;
+  padding-block: 24px;
 }
