@@ -32,6 +32,7 @@ import {
 	liveIneligibility,
 	tierAllowsChannels,
 	tierAllowsLive,
+	tierAllowsOfflineDownloads,
 	tierAllowsUploads,
 	type ChannelCapability,
 	type ChannelRole,
@@ -352,6 +353,8 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
 		viewerCaptionDownload: viewerCaptionDownloadConfigured(settings),
 		quranText,
+		// Listen mode works for signed-out and signed-in viewers once the admin switch is on (wiki E14-D3)
+		listenMode: true,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -416,6 +419,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.youtubeImport = youtube;
 	features.aiCategorySuggest = aiCategory;
 	features.bulkSchedule = bulk && roleMay(scope, 'video.schedule');
+	features.offlineDownloads = !pending && tierAllowsOfflineDownloads(tier);
 	return features;
 }
 
@@ -495,6 +499,8 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			aiCategorySuggest: env.AI_CATEGORIZE_ENABLED !== 'false' && !!env.queue,
 			siteDomains: saas,
 			newsletter: null,
+			listenMode: true,
+			offlineDownloads: !!env.SEARCH_DB,
 		},
 	};
 }

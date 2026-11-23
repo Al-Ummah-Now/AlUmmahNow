@@ -64,6 +64,10 @@ export const USER_FEATURE_KEYS = [
   'supportPerks',
   /** Settings › Billing: a payment provider is on, or the account has subscriptions or payments (wiki AUN-SUBS) */
   'billing',
+  /** Audio-first Listen mode, mini audio bar, sleep timer and background audio (wiki E14) */
+  'listenMode',
+  /** Encrypted offline downloads on native apps and creator download settings (wiki E14) */
+  'offlineDownloads',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];
