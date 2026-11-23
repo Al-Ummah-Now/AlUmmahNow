@@ -1,4 +1,4 @@
-import { LAST_GOOD_SHELF_KEY, RELATED_LIMIT, loadRelated, mergeRelated, readLastGoodShelf, saveLastGoodShelf, toVideoInfo } from '../related';
+import { LAST_GOOD_SHELF_KEY, RELATED_LIMIT, loadRelated, loadRelatedWithStatus, mergeRelated, readLastGoodShelf, saveLastGoodShelf, toVideoInfo } from '../related';
 import type { VideoInfo } from '@/interfaces';
 
 const info = (id: string) => toVideoInfo({ id, title: id });
@@ -113,6 +113,66 @@ describe('related shelf (Epic 7.3)', () => {
 
       it('resolves empty when everything is empty', async () => {
         await expect(loadWith({ recommended: none, feed: none, lastResort: [none] })).resolves.toEqual([]);
+      });
+    });
+
+    describe('loadRelatedWithStatus (empty vs failed)', () => {
+      const down = () => Promise.reject(new Error('down'));
+      const missing = async () => undefined;
+      const none = async () => [] as VideoInfo[];
+      const statusWith = (sources: Parameters<typeof loadRelatedWithStatus>[1]) =>
+        loadRelatedWithStatus('cur', sources, RELATED_LIMIT, 0);
+
+      it('returns loaded when recommendations or feed yield other videos', async () => {
+        const result = await statusWith({ recommended: async () => [info('r1')], feed: none });
+        expect(result.status).toBe('loaded');
+        expect(result.videos.map((v) => v.id)).toEqual(['r1']);
+      });
+
+      it('returns empty when sources succeed with no other videos (including only the current video)', async () => {
+        await expect(statusWith({ recommended: none, feed: none, lastResort: [none] })).resolves.toEqual({
+          status: 'empty',
+          videos: [],
+        });
+        await expect(statusWith({ recommended: async () => [info('cur')], feed: async () => [info('cur')] })).resolves.toEqual({
+          status: 'empty',
+          videos: [],
+        });
+      });
+
+      it('returns empty when recommendations fail but the general feed succeeds with no other videos', async () => {
+        await expect(statusWith({ recommended: down, feed: async () => [info('cur')] })).resolves.toEqual({
+          status: 'empty',
+          videos: [],
+        });
+      });
+
+      it('returns failed when upstream sources reject or return undefined and no fallback has videos', async () => {
+        await expect(statusWith({ recommended: down, feed: down, lastResort: [down, none] })).resolves.toEqual({
+          status: 'failed',
+          videos: [],
+        });
+        await expect(statusWith({ recommended: missing, feed: missing, lastResort: [missing, none] })).resolves.toEqual({
+          status: 'failed',
+          videos: [],
+        });
+      });
+
+      it('returns failed when recommendations are empty and the general feed fails', async () => {
+        await expect(statusWith({ recommended: none, feed: missing, lastResort: [none] })).resolves.toEqual({
+          status: 'failed',
+          videos: [],
+        });
+      });
+
+      it('returns loaded when upstream sources fail but a last-resort fallback has videos', async () => {
+        const result = await statusWith({
+          recommended: down,
+          feed: down,
+          lastResort: [down, async () => [info('saved')]],
+        });
+        expect(result.status).toBe('loaded');
+        expect(result.videos.map((v) => v.id)).toEqual(['saved']);
       });
     });
   });

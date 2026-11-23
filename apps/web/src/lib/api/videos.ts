@@ -3,7 +3,7 @@
 import { audioTracksOf } from '@/lib/video/audio-tracks';
 import { VideoObject, VideoInfo } from "@/interfaces";
 import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
-import { loadRelated, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
+import { loadRelatedWithStatus, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
 import { playbackSourcesOf } from "@/lib/video/delivery";
 import {
@@ -688,17 +688,12 @@ async function discoveryHeaders(): Promise<Record<string, string>> {
   };
 }
 
-/**
- * Get Trending Content
- * GET /api/trending
- * Returns an empty list when there is no trending activity or the API is unavailable.
- */
-export async function getTrendingVideos(
+async function requestTrendingVideos(
   period: 'hour' | 'day' | 'week' | 'month' = 'day',
   category?: string,
   limit: number = 20,
   language?: string
-): Promise<VideoObject[]> {
+): Promise<VideoObject[] | undefined> {
   try {
     const queryParams = new URLSearchParams({
       period,
@@ -719,15 +714,29 @@ export async function getTrendingVideos(
 
     if (!response.ok) {
       logger.warn('[getTrendingVideos] API error', { status: response.status });
-      return [];
+      return undefined;
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.data || data.videos || [];
   } catch (error) {
     logger.error('[getTrendingVideos] Request failed', { error });
-    return [];
+    return undefined;
   }
+}
+
+/**
+ * Get Trending Content
+ * GET /api/trending
+ * Returns an empty list when there is no trending activity or the API is unavailable.
+ */
+export async function getTrendingVideos(
+  period: 'hour' | 'day' | 'week' | 'month' = 'day',
+  category?: string,
+  limit: number = 20,
+  language?: string
+): Promise<VideoObject[]> {
+  return (await requestTrendingVideos(period, category, limit, language)) ?? [];
 }
 
 /**
@@ -756,15 +765,10 @@ export async function getTrendingRail(
   }
 }
 
-/**
- * Get Recommended Videos
- * GET /api/recommendations
- * Sends the session token (when signed in) so the API can use watch history.
- */
-export async function getRecommendedVideos(
+async function requestRecommendedVideos(
   request: RecommendationRequest,
   headers?: ApiHeaders
-): Promise<VideoObject[]> {
+): Promise<VideoObject[] | undefined> {
   try {
     const queryParams = new URLSearchParams();
 
@@ -785,15 +789,27 @@ export async function getRecommendedVideos(
 
     if (!response.ok) {
       logger.warn('[getRecommendedVideos] API error', { status: response.status });
-      return [];
+      return undefined;
     }
 
     const data = await response.json() as { videos?: VideoObject[], data?: VideoObject[] };
     return data.data || data.videos || [];
   } catch (error) {
     logger.error('[getRecommendedVideos] Request failed', { error });
-    return [];
+    return undefined;
   }
+}
+
+/**
+ * Get Recommended Videos
+ * GET /api/recommendations
+ * Sends the session token (when signed in) so the API can use watch history.
+ */
+export async function getRecommendedVideos(
+  request: RecommendationRequest,
+  headers?: ApiHeaders
+): Promise<VideoObject[]> {
+  return (await requestRecommendedVideos(request, headers)) ?? [];
 }
 
 /**
@@ -1060,22 +1076,30 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
  */
 export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> {
     let recommendedCount = 0;
-    const related = await loadRelated(videoId, {
+    const result = await loadRelatedWithStatus(videoId, {
         recommended: async () => {
-            const recommended = await getRecommendedVideos({ videoId, limit: RELATED_LIMIT });
+            const recommended = await requestRecommendedVideos({ videoId, limit: RELATED_LIMIT });
+            if (!recommended) return undefined;
             recommendedCount = recommended.length;
             return recommended.map(v => toVideoInfo(v as never));
         },
         feed: () => fetchVideos(null),
         lastResort: [
             // The widest period: a quiet day must not leave the shelf empty.
-            async () => (await getTrendingVideos('month', undefined, RELATED_LIMIT)).map(v => toVideoInfo(v as never)),
+            async () => {
+                const trending = await requestTrendingVideos('month', undefined, RELATED_LIMIT);
+                return trending ? trending.map(v => toVideoInfo(v as never)) : undefined;
+            },
             async () => readLastGoodShelf(),
         ],
     });
-    saveLastGoodShelf(related);
-    logger.debug('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommendedCount, total: related.length });
-    return related;
+    if (result.status === 'failed') {
+        logger.warn('[fetchRelatedVideos] Related shelf failed to load', { videoId });
+        throw new Error('Failed to load related videos');
+    }
+    saveLastGoodShelf(result.videos);
+    logger.debug('[fetchRelatedVideos] Related shelf', { videoId, status: result.status, recommended: recommendedCount, total: result.videos.length });
+    return result.videos;
 }
 
 export async function fetchVideos(cursor: string | null = null): Promise<VideoInfo[] | undefined> {

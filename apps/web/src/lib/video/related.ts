@@ -75,12 +75,19 @@ export function mergeRelated(
 
 type RelatedSource = () => Promise<VideoInfo[] | undefined>;
 
-/** A source that fails counts as empty. */
-async function read(source: RelatedSource): Promise<VideoInfo[]> {
+export type RelatedShelfOutcome =
+  | { status: 'loaded'; videos: VideoInfo[] }
+  | { status: 'empty'; videos: [] }
+  | { status: 'failed'; videos: [] };
+
+/** Reads a source while distinguishing a failure (`undefined` or thrown error) from an empty array. */
+async function read(source: RelatedSource): Promise<{ ok: boolean; videos: VideoInfo[] }> {
   try {
-    return (await source()) ?? [];
+    const videos = await source();
+    if (videos === undefined) return { ok: false, videos: [] };
+    return { ok: true, videos };
   } catch {
-    return [];
+    return { ok: false, videos: [] };
   }
 }
 
@@ -92,16 +99,55 @@ async function buildShelf(
   currentVideoId: string,
   sources: { recommended: RelatedSource; feed: RelatedSource },
   limit: number,
-): Promise<VideoInfo[]> {
+): Promise<{ videos: VideoInfo[]; feedOk: boolean; anyFailed: boolean }> {
   const recommended = await read(sources.recommended);
-  const shelf = mergeRelated(currentVideoId, recommended, [], limit);
-  if (shelf.length >= limit) return shelf;
-  return mergeRelated(currentVideoId, recommended, await read(sources.feed), limit);
+  const shelf = mergeRelated(currentVideoId, recommended.videos, [], limit);
+  if (shelf.length >= limit) {
+    return { videos: shelf, feedOk: true, anyFailed: false };
+  }
+  const feed = await read(sources.feed);
+  return {
+    videos: mergeRelated(currentVideoId, recommended.videos, feed.videos, limit),
+    feedOk: feed.ok,
+    anyFailed: !recommended.ok || !feed.ok,
+  };
 }
 
 /**
- * Build the shelf, retrying once when it comes back empty. The API helpers
- * report failures as empty results, so an empty shelf is the retry signal.
+ * Build the shelf and distinguish "nothing related" (`empty`) from upstream
+ * failure (`failed`). Retries once when the first pass produces no videos,
+ * then tries `lastResort` sources in order.
+ */
+export async function loadRelatedWithStatus(
+  currentVideoId: string,
+  sources: {
+    recommended: RelatedSource;
+    feed: RelatedSource;
+    lastResort?: RelatedSource[];
+  },
+  limit: number = RELATED_LIMIT,
+  retryDelayMs: number = RELATED_RETRY_DELAY_MS,
+): Promise<RelatedShelfOutcome> {
+  let attempt = await buildShelf(currentVideoId, sources, limit);
+  if (attempt.videos.length > 0) return { status: 'loaded', videos: attempt.videos };
+
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  attempt = await buildShelf(currentVideoId, sources, limit);
+  let shelf = attempt.videos;
+
+  for (const source of sources.lastResort ?? []) {
+    if (shelf.length > 0) break;
+    const fallback = await read(source);
+    shelf = mergeRelated(currentVideoId, fallback.videos, [], limit);
+  }
+
+  if (shelf.length > 0) return { status: 'loaded', videos: shelf };
+  if (attempt.feedOk || !attempt.anyFailed) return { status: 'empty', videos: [] };
+  return { status: 'failed', videos: [] };
+}
+
+/**
+ * Build the shelf, retrying once when it comes back empty.
  * `lastResort` sources are tried in order only after that retry.
  */
 export async function loadRelated(
@@ -114,17 +160,8 @@ export async function loadRelated(
   limit: number = RELATED_LIMIT,
   retryDelayMs: number = RELATED_RETRY_DELAY_MS,
 ): Promise<VideoInfo[]> {
-  let shelf = await buildShelf(currentVideoId, sources, limit);
-  if (shelf.length > 0) return shelf;
-
-  await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-  shelf = await buildShelf(currentVideoId, sources, limit);
-
-  for (const source of sources.lastResort ?? []) {
-    if (shelf.length > 0) break;
-    shelf = mergeRelated(currentVideoId, await read(source), [], limit);
-  }
-  return shelf;
+  const result = await loadRelatedWithStatus(currentVideoId, sources, limit, retryDelayMs);
+  return result.videos;
 }
 
 /** Remember a shelf for when every source is down. Storage may be unavailable. */

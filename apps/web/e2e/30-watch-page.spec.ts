@@ -66,7 +66,7 @@ test.describe('watch page - anonymous', () => {
       await expect(page.getByRole('heading', { level: 1, name: arTitle })).toBeVisible();
       await expect(page.getByTestId('video-metrics-views')).toHaveText(/مشاهد/);
       await expect(page.getByTestId('video-metrics')).toHaveAccessibleName('إحصائيات المرئي');
-      await expect(page.getByRole('heading', { name: /ذات الصلة/ }).first()).toBeAttached();
+      await expect(page.getByRole('heading', { name: /ذات (ال)?صلة/ }).first()).toBeAttached();
     });
   }
 
