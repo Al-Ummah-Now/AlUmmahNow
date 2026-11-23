@@ -7,6 +7,7 @@ import { batchJob, constantTimeEqual, envelopeResponse, reportServerError, withE
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
+import { runReleaseIndex } from './lib/app-updates/run';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
@@ -773,6 +774,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				.catch((error) => {
 					logger.error('[Support] Cron queueing failed', { error: error instanceof Error ? error.message : String(error) });
 					reportJobFailure(rawEnv, ctx, 'support-cron', error);
+				}),
+		);
+		// Hourly: the app release index (wiki AUN-APP-UPDATES §3.2): new signed release manifests and
+		// App Store versions into APP_CONFIG `releases`. A few small HTTPS reads; skipped while one runs.
+		ctx.waitUntil(
+			runReleaseIndex(rawEnv as never, ctx)
+				.then((r) => (r.added.length || r.problems.length || r.feedErrors.length ? logger.info('[AppUpdates] Release index', { added: r.added, problems: r.problems.length, feedErrors: r.feedErrors }) : undefined))
+				.catch((error) => {
+					logger.error('[AppUpdates] Release index failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'app-release-index', error);
 				}),
 		);
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)

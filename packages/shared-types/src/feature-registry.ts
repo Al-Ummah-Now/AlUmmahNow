@@ -102,6 +102,7 @@ export const FEATURE_KEYS = [
   'newsletter',
   'listenMode',
   'offlineDownloads',
+  'appUpdates',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -613,6 +614,23 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'off',
     requires: [],
     userFeatureKeys: ['offlineDownloads'],
+    offline: 'lastKnownElseHidden',
+  },
+  // --- Apps -----------------------------------------------------------------
+  {
+    key: 'appUpdates',
+    group: 'site',
+    name: { en: 'App update notices', ar: 'تنبيهات تحديث التطبيقات' },
+    help: {
+      en: 'The phone, TV and desktop apps stop telling people about new versions and stop installing updates themselves. The minimum version on the App config page stops applying, so builds below it keep working.',
+      ar: 'تتوقف تطبيقات الهاتف والتلفاز وسطح المكتب عن إخبار الناس بالإصدارات الجديدة وعن تثبيت التحديثات بنفسها. ويتوقف تطبيق الحد الأدنى للإصدار في صفحة إعدادات التطبيقات، فتبقى الإصدارات الأقدم منه تعمل.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'off',
+    requires: [],
+    userFeatureKeys: [],
+    setupHref: '/app-config',
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);

@@ -110,9 +110,11 @@ export const AppReleaseManifestSchema = z
     }
     // Every file comes from this repo's release for this tag, over HTTPS: a manifest can never
     // point an app at another host, another repo or another release.
-    const prefix = appReleaseDownloadPrefix(m.repo, m.tag);
+    // Staff-only admin builds live in the private release bucket instead (wiki §3.6).
+    const prefixes = [appReleaseDownloadPrefix(m.repo, m.tag), appReleasePrivatePrefix(m.repo, m.tag)];
     m.artifacts.forEach((a, i) => {
-      if (!a.url.startsWith(prefix)) ctx.addIssue({ code: 'custom', path: ['artifacts', i, 'url'], message: `must start with ${prefix}` });
+      if (!prefixes.some((p) => a.url.startsWith(p))) ctx.addIssue({ code: 'custom', path: ['artifacts', i, 'url'], message: `must start with ${prefixes.join(' or ')}` });
+      if (a.url.startsWith(prefixes[1]) && a.app !== 'admin') ctx.addIssue({ code: 'custom', path: ['artifacts', i, 'url'], message: 'only admin builds live in the private bucket' });
     });
   });
 export type AppReleaseManifest = z.infer<typeof AppReleaseManifestSchema>;
@@ -149,6 +151,11 @@ export type AppUpdateKeyList = z.infer<typeof AppUpdateKeyListSchema>;
 
 export function appReleaseDownloadPrefix(repo: string, tag: string): string {
   return `https://github.com/Al-Ummah-Now/${repo}/releases/download/${tag}/`;
+}
+
+/** Where a staff-only admin release keeps its files: the private release bucket (wiki §3.6). */
+export function appReleasePrivatePrefix(repo: string, tag: string): string {
+  return `r2://app-releases/${repo}/${tag}/`;
 }
 
 /** The release keys a verifier trusts for one repo, and what it has learned to refuse. */
