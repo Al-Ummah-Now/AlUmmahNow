@@ -754,7 +754,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   search: {
-    searchPlaceholder: 'Search videos, channels, and more...',
+    searchPlaceholder: 'Search videos, channels, and more…',
     searchResults: 'Search Results',
     searchVideos: 'Videos',
     searchChannels: 'Channels',

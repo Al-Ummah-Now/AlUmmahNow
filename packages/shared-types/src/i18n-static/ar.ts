@@ -752,7 +752,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   search: {
-    searchPlaceholder: 'ابحث عن مرئيات وقنوات والمزيد...',
+    searchPlaceholder: 'ابحث عن مرئيات وقنوات والمزيد…',
     searchResults: 'نتائج البحث',
     searchVideos: 'المرئيات',
     searchChannels: 'القنوات',
