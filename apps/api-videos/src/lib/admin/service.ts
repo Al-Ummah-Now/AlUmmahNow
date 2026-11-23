@@ -52,7 +52,9 @@ import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsFor
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
-import { deleteVideoSideRecords } from '../videoSideRecords';
+import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
+import { endSession } from '../live/service';
+import { readSession } from '../live/store';
 import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -145,8 +147,8 @@ async function eachLimited<T>(items: T[], limit: number, task: (item: T) => Prom
  * Ids of a channel's or a user's videos (and a user's channels). The ownership
  * index answers once complete; otherwise the bucket is scanned.
  */
-async function idsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { channelId?: string; ownerId?: string }): Promise<string[]> {
-	if (env.SEARCH_DB && (await ensureAdminIndex(env, kind))) return contentIds(env.SEARCH_DB, kind, by);
+async function idsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { channelId?: string; ownerId?: string }, opts: { includeDeleted?: boolean } = {}): Promise<string[]> {
+	if (env.SEARCH_DB && (await ensureAdminIndex(env, kind))) return contentIds(env.SEARCH_DB, kind, by, opts);
 	const bucket = kind === 'video' ? env.videos : env.channels;
 	const ids: string[] = [];
 	let cursor: string | undefined;
@@ -154,7 +156,7 @@ async function idsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { chan
 		const page = await bucket.list({ limit: 100, cursor });
 		const objects = await readMany(bucket, page.objects.map((o) => o.key).filter((k) => !k.includes(':') && !k.includes('/')));
 		for (const [key, value] of objects) {
-			if (value.isDeleted === true) continue;
+			if (value.isDeleted === true && !opts.includeDeleted) continue;
 			if (by.channelId ? value.channelId === by.channelId : value.userId === by.ownerId) ids.push(key);
 		}
 		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
@@ -429,6 +431,10 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	if (!target || target.isDeleted === true) throw new AdminError(404, 'new_owner_not_found');
 	// A banned (suspended) videos user cannot receive a channel
 	if (env.SEARCH_DB && (await readBan(env.SEARCH_DB, newOwnerId))) throw new AdminError(409, 'new_owner_banned');
+	// One move of a channel at a time: a second would race the first's records
+	if (await openTransferJob(env, id)) throw new AdminError(409, 'transfer_in_progress');
+	// A broadcast on air keeps its ingest; the move would end it mid-stream
+	if (await channelIsLive(env, id)) throw new AdminError(409, 'channel_is_live');
 	logger.info('[Admin] Channel transfer queued', { channelId: id, newOwnerId, previousOwnerId: channel.userId ?? null, actorId });
 	// Decided now, so a retried job does not re-decide from a half-moved state
 	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
@@ -443,15 +449,116 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	};
 }
 
+/** The channel's move job that hasn't finished, if any (indexed: admin_jobs by target). */
+async function openTransferJob(env: AdminServiceEnv, channelId: string): Promise<string | null> {
+	if (!env.SEARCH_DB) return null;
+	const row = await (env.SEARCH_DB as D1Database)
+		.prepare(`SELECT id FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer' AND status IN ('queued', 'running', 'retrying') LIMIT 1`)
+		.bind(channelId)
+		.first<{ id: string }>();
+	return row?.id ?? null;
+}
+
+async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<boolean> {
+	const { keys } = await liveStreamKeysOf(env, { channelId });
+	const streams = await readMany(env.videos, keys);
+	return [...streams.values()].some((s) => s.status === 'live');
+}
+
+/**
+ * The channel's live streams move to the new owner, and any session provisioned but not on air is
+ * ended: its ingest URL and key are known to the previous owner, so the next Go live provisions
+ * fresh ones. Returns the counts and failures (a failure retries the job).
+ */
+async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; rotated: number; failed: number }> {
+	const { keys, truncated } = await liveStreamKeysOf(env, { channelId });
+	const moved = await cascade(env.videos, keys, (s) => {
+		if (s.userId === to || (from && s.userId !== from)) return false;
+		s.userId = to;
+		return true;
+	});
+	let rotated = 0;
+	let failed = moved.failed + (truncated ? 1 : 0);
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (db) {
+		const streams = await readMany(env.videos, keys);
+		for (const stream of streams.values()) {
+			if (typeof stream.sessionId !== 'string' || !stream.sessionId) continue;
+			try {
+				const session = await readSession(db, stream.sessionId);
+				if (session?.status !== 'provisioned') continue;
+				await endSession(env as never, session, 'channel_transferred');
+				rotated++;
+			} catch (error) {
+				failed++;
+				logger.warn('[Admin] Live session rotation failed on a channel move', { channelId, streamKey: stream.id, error: error instanceof Error ? error.message : String(error) });
+			}
+		}
+	}
+	return { changed: moved.changed, rotated, failed };
+}
+
+/** The scheduler's entries of the moved videos that are still scheduled: publish notices follow the owner. */
+async function moveScheduleEntries(env: AdminServiceEnv, videoIds: string[], from: string | null, to: string): Promise<{ changed: number; failed: number }> {
+	const bucket = ((env as Record<string, unknown>).SCHEDULED_VIDEOS ?? (env as Record<string, unknown>)['scheduled-videos']) as R2Bucket | undefined;
+	if (!bucket) return { changed: 0, failed: 0 };
+	const videos = await readMany(env.videos, videoIds);
+	const keys: string[] = [];
+	for (const [id, video] of videos) {
+		if (video.scheduledPublishStatus !== 'scheduled' || typeof video.scheduledPublishDate !== 'string') continue;
+		const date = new Date(video.scheduledPublishDate);
+		if (!Number.isNaN(date.getTime())) keys.push(scheduleKey(date, id));
+	}
+	return cascade(bucket, keys, (entry) => {
+		if (entry.userId === to || (from && entry.userId !== from)) return false;
+		entry.userId = to;
+		return true;
+	});
+}
+
+/** The channel's community posts (`posts/{channelId}/{postId}.json`); `authorId` (who wrote it) is kept. */
+async function movePosts(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; failed: number }> {
+	const bucket = (env as Record<string, unknown>).community_posts as R2Bucket | undefined;
+	if (!bucket) return { changed: 0, failed: 0 };
+	const keys: string[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await bucket.list({ prefix: `posts/${channelId}/`, limit: 1000, cursor });
+		for (const o of page.objects) if (/^posts\/[^/]+\/[^/]+\.json$/.test(o.key) && !o.key.endsWith('/index.json')) keys.push(o.key);
+		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
+	} while (cursor);
+	return cascade(bucket, keys, (post) => {
+		if (typeof post.id !== 'string' || post.userId === to || (from && post.userId !== from)) return false;
+		post.userId = to;
+		return true;
+	});
+}
+
+/** The handle index entry (`channel-handles/{handle}` in channel_tabs) names the owner too. */
+async function moveHandleEntry(env: AdminServiceEnv, channelId: string, handle: unknown, to: string): Promise<void> {
+	if (!env.channel_tabs || typeof handle !== 'string' || !handle) return;
+	await repo(env.channel_tabs).updateObject(handleKey(handle), (entry) => {
+		if (entry.channelId !== channelId || entry.userId === to) return false;
+		entry.userId = to;
+		return true;
+	});
+}
+
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
-	const { newOwnerId, previousOwnerId, wasMain, makeMain } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean };
+	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean };
+	const newOwner = await repo(env.profiles).getObject(newOwnerId);
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		if (fresh.isDeleted) return false;
 		if (fresh.userId === newOwnerId) return false;
 		fresh.userId = newOwnerId;
 		fresh.isMain = makeMain;
+		// The previous owner's addresses: the account email follows the owner, the public contact is cleared
+		if (typeof newOwner?.email === 'string' && newOwner.email) fresh.email = newOwner.email;
+		else delete fresh.email;
+		if (!keepContactEmail) delete fresh.contactEmail;
+		fresh.transferredAt = now();
 		// Owners hold no member role: a new owner who was a member loses that entry
 		if (Array.isArray(fresh.members)) fresh.members = fresh.members.filter((m: { userId?: string }) => m?.userId !== newOwnerId);
 		fresh.dateModified = now();
@@ -469,20 +576,35 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		await removeFromProfile(env, previousOwnerId, id);
 		if (wasMain) await promoteNextMain(env, previousOwnerId, id);
 	}
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => {
+	await moveHandleEntry(env, id, saved.handle, newOwnerId);
+	// Every video, soft-deleted ones included (a restore must not hand one back to the previous owner).
+	// Only records on the previous owner move; any other owner is an anomaly, left and counted.
+	const videoIds = await idsOf(env, 'video', { channelId: id }, { includeDeleted: true });
+	let anomalies = 0;
+	const videos = await cascade(env.videos, videoIds, (v) => {
 		if (v.userId === newOwnerId) return false;
+		if (previousOwnerId && v.userId !== previousOwnerId) {
+			anomalies++;
+			return false;
+		}
 		v.userId = newOwnerId;
 		return true;
 	});
+	const schedules = await moveScheduleEntries(env, videoIds, previousOwnerId, newOwnerId);
+	const live = await moveLiveStreams(env, id, previousOwnerId, newOwnerId);
 	const playlistIds = Array.isArray(saved.playlists) ? (saved.playlists as string[]).filter((p) => typeof p === 'string') : [];
 	const playlists = await cascade(env.playlists, playlistIds, (p) => {
 		if (p.channelId !== id || p.userId === newOwnerId) return false;
 		p.userId = newOwnerId;
 		return true;
 	});
-	const failed = videos.failed + playlists.failed;
+	const posts = await movePosts(env, id, previousOwnerId, newOwnerId);
+	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
 	if (failed === 0) await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
-	return finish({ videos: videos.changed, playlists: playlists.changed, previousOwnerId }, failed);
+	return finish(
+		{ videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, anomalies, previousOwnerId },
+		failed,
+	);
 }
 
 /**

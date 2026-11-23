@@ -428,6 +428,63 @@ describe('channel actions', () => {
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER })).body.code, 'already_owner');
 	});
 
+	it('a move takes every record that names the owner: deleted videos, handle, posts, schedules, live streams and emails (AUN-CHANNEL-CLAIM CC-1)', async () => {
+		const { raw, env, call, jobOf, db } = await setup({
+			channels: { ch1: channel('ch1', { contactEmail: 'public@example.com' }) },
+			videos: {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				gone: videoFixture({ id: 'gone', title: 'In the trash', userId: OWNER, channelId: 'ch1', isDeleted: true }),
+				later: videoFixture({ id: 'later', title: 'Next week', userId: OWNER, channelId: 'ch1', isPublic: false, scheduledPublishStatus: 'scheduled', scheduledPublishDate: '2030-01-02T03:00:00.000Z' }),
+				odd: videoFixture({ id: 'odd', title: 'Someone else', userId: 'usr_stray', channelId: 'ch1' }),
+				'livestream:ls1': { id: 'ls1', title: 'Friday', userId: OWNER, channelId: 'ch1', status: 'scheduled', sessionId: 'sess1' },
+			},
+		});
+		const scheduled = new MemoryBucket({ '2030-01-02/03/later.json': { videoId: 'later', userId: OWNER, channelId: 'ch1' } });
+		(env as Record<string, unknown>).SCHEDULED_VIDEOS = scheduled;
+		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
+		await raw.community_posts.put('posts/ch1/p1.json', JSON.stringify({ id: 'p1', channelId: 'ch1', userId: OWNER, authorId: 'usr_editor' }));
+		await raw.community_posts.put('posts/ch1/index.json', JSON.stringify({ posts: ['p1'] }));
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('sess1', 'ls1', 'ch1', 'selfhosted', 'provisioned', 'test', 1)`).run();
+
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		const job = await jobOf(res);
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		const read = (bucket: MemoryBucket, key: string) => JSON.parse(bucket.store.get(key)!);
+		const moved = read(raw.channels, 'ch1');
+		assert.equal(moved.email, `${OTHER}@example.com`, 'the account email follows the owner');
+		assert.equal(moved.contactEmail, undefined, "the previous owner's public contact is cleared");
+		assert.ok(moved.transferredAt);
+		assert.equal(read(raw.videos, 'gone').userId, OTHER, 'a soft-deleted video moves too');
+		assert.equal(read(raw.videos, 'odd').userId, 'usr_stray', 'a record on someone else is left alone');
+		assert.equal(job.result.anomalies, 1);
+		assert.equal(read(raw.channel_tabs, 'channel-handles/ch1').userId, OTHER);
+		const post = read(raw.community_posts, 'posts/ch1/p1.json');
+		assert.deepEqual([post.userId, post.authorId], [OTHER, 'usr_editor'], 'the writer stays the writer');
+		assert.deepEqual(read(raw.community_posts, 'posts/ch1/index.json'), { posts: ['p1'] });
+		assert.equal(read(scheduled, '2030-01-02/03/later.json').userId, OTHER);
+		assert.equal(read(raw.videos, 'livestream:ls1').userId, OTHER);
+		const session = db.db.prepare(`SELECT status, end_reason FROM live_sessions WHERE id = 'sess1'`).get() as { status: string; end_reason: string };
+		assert.deepEqual([session.status, session.end_reason], ['ended', 'channel_transferred'], 'the ingest key the previous owner knows stops working');
+		assert.equal(job.result.liveSessionsEnded, 1);
+	});
+
+	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
+		const { raw, env, jobs, call } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+		});
+		const first = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		assert.equal(first.status, 200);
+		const second = await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }, { hold: true });
+		assert.equal(second.status, 409);
+		assert.equal(second.body.code, 'transfer_in_progress');
+		await jobs.drain(env);
+
+		await raw.videos.put('livestream:on', JSON.stringify({ id: 'on', title: 'Now', userId: OTHER, channelId: 'ch1', status: 'live' }));
+		const live = await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' });
+		assert.equal(live.status, 409);
+		assert.equal(live.body.code, 'channel_is_live');
+	});
+
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
 		const { call, raw } = await setup({
 			profiles: {

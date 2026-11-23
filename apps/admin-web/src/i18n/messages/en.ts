@@ -1950,6 +1950,8 @@ const en = {
       invalid_request: 'Some values are not valid.',
       move_failed: 'The video could not be moved.',
       new_owner_banned: 'That user is banned on videos.',
+      transfer_in_progress: 'This channel is already being moved. Wait until that move finishes.',
+      channel_is_live: 'This channel is live now. Move it after the broadcast ends.',
       invalid_new_owner: 'Choose the new owner from the search results.',
       new_owner_not_found: 'That user has no videos profile (or it was deleted).',
       no_file: 'Choose an image first.',
