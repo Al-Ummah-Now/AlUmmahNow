@@ -55,6 +55,21 @@ Never Stripe (decision T2), including payout services built on Stripe.
   organisation enters, and the rail's funding balance. A gap, or an entry that doesn't balance,
   stops new payout batches (`lastReconcileOk`; never reconciled counts as not clean).
 
+## Payee onboarding (MEM-22)
+
+`lib/support/payees.ts`, `endpoints/support/supportPayee.ts`:
+
+- The channel's owner starts hosted onboarding at the payout rail with `POST /api/channels/:channelId/support/payee/onboard`, body `{ country, returnPath }`. The answer is the rail's link.
+  - Identity, bank account or wallet, and the tax form (W-9 / W-8BEN) go straight to the rail.
+  - We keep only the rail's payee reference, the status, the method's kind and which form is on file.
+- `GET /api/channels/:channelId/support/payee` shows that state to the owner and the channel's admins.
+- `POST .../payee/refresh` re-reads it from the rail.
+- Every route answers `404 feature_off` while `creatorSupport` is off.
+- Refused while MEM-D17 is open, for countries the Countries page blocks, waitlists or limits to an external link, and for countries no rail reaches.
+- One payee per channel, rail and mode, however often onboarding starts.
+- A sanctions hold from the rail holds the payee's payouts and flags the admin. It never auto-releases.
+- The test rail's onboarding page, for QA and the local stack only, is `/webhooks/support/rail/test/onboard/:ref`. The tester picks the outcome, and it goes through the signed rail webhook → `support.payee-sync`.
+
 ## Payouts (MEM-23)
 
 `lib/support/payouts.ts`, with the jobs in `jobs.ts`:
@@ -83,7 +98,7 @@ guessing.
 
 | Decision | Policy fields | Code that reads it |
 |---|---|---|
-| MEM-D17 payout rail | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee`; `payouts.ts` `payoutDecisionsOpen` |
+| MEM-D17 payout rail | `primaryRail`, `fallbackRail` | `adapters.ts` `railForPayee`; `payees.ts` `startPayeeOnboarding`; `payouts.ts` `payoutDecisionsOpen` |
 | MEM-D18 hold | `holdDays` | `events.ts` (`available_at` stays empty while open) and `releaseDueGifts` |
 | MEM-D19 threshold and schedule | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | `payouts.ts` `planBatch`; `jobs.ts` `queueSupportCron` (payout day); `support_settings.payout_threshold` |
 | MEM-D20 payout and FX fees | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
@@ -105,4 +120,5 @@ guessing.
   append-only triggers, idempotency, balances, MEM-D20/D21 as parameters, settings writes.
 - `apps/api-videos/test/support-jobs.spec.ts`: signed webhooks through the queue to the ledger, redelivery, refunds and disputes, release, rail payout events, reconciliation, crons.
 - `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
+- `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
 - `apps/processor/src/__tests__/user-traces-erase.test.ts`: erasure of support rows.

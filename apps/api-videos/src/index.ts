@@ -70,6 +70,8 @@ import { handleAbandonCheckout, handlePaymentReceipt, handleBillingPlans, handle
 import billingInternalRouter from "./routers/billing.router";
 import supportInternalRouter from "./routers/support.router";
 import { handleSupportWebhook } from "./endpoints/support/supportWebhooks";
+import { handleSupportPayee, handleSupportPayeeOnboard, handleSupportPayeeRefresh } from "./endpoints/support/supportPayee";
+import { handleTestRailOnboardPage, handleTestRailOnboardSubmit } from "./endpoints/support/supportTestRail";
 import { onSupportJobFailed, queueSupportCron } from "./lib/support/jobs";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
 import { DISCOVERY_RANK_JOB, flagDiscoveryRankFailed, startDiscoveryRank } from "./lib/ranking/job";
@@ -328,7 +330,14 @@ app.post('/webhooks/billing/fake/checkout/:id/pay', handleFakePay);
 app.post('/webhooks/billing/fake/checkout/:id/cancel', handleFakeCancel);
 app.post('/webhooks/billing/:provider', handleWebhook);
 // Creator support (wiki AUN-MEMBERS): collector and payout-rail webhooks; 404 for any vendor not available here
+// The test rail's hosted onboarding page (QA and local only; registered before the webhook route)
+app.get('/webhooks/support/rail/test/onboard/:ref', handleTestRailOnboardPage);
+app.post('/webhooks/support/rail/test/onboard/:ref', handleTestRailOnboardSubmit);
 app.post('/webhooks/support/:side/:vendor', handleSupportWebhook);
+// Studio › Support payee (lib/support/payees.ts): owner sets up payouts through the rail's hosted onboarding; 404 feature_off while support is off
+app.get('/api/channels/:channelId/support/payee', authMiddleware, handleSupportPayee);
+app.post('/api/channels/:channelId/support/payee/onboard', authMiddleware, handleSupportPayeeOnboard);
+app.post('/api/channels/:channelId/support/payee/refresh', authMiddleware, handleSupportPayeeRefresh);
 app.get('/api/me/tier-requests', authMiddleware, handleMyTierRequests);
 app.post('/api/me/tier-requests', authMiddleware, handleCreateTierRequest);
 app.post('/api/me/tier-requests/:id/withdraw', authMiddleware, handleWithdrawTierRequest);
