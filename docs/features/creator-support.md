@@ -182,4 +182,13 @@ guessing.
 - `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
 - `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps, payee state and pauses.
 - `apps/api-videos/test/support-checkout.spec.ts`: the sheet, the breakdown, the test checkout through the webhook to the ledger, monthly consent, stopping, the owner's settings, the refusals.
+- `apps/web/e2e/release/support-flow.spec.ts` runs on the local stack (MEM-21), in the shared-state project because it turns the switch on. It covers:
+  - the creator's payee onboarding at the test rail;
+  - `/api/me/features`;
+  - the breakdown;
+  - a one-time and a monthly gift on the test collector's hosted page;
+  - stopping the monthly gift;
+  - `feature_off` with the switch off.
+
+  It writes the settings and the switch with stack SQL and puts them back however it ends.
 - `apps/processor/src/__tests__/user-traces-erase.test.ts`: erasure of support rows.
