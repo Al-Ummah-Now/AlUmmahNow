@@ -40,7 +40,11 @@ describe('CreditsPage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('المصادر');
     expect(screen.getByTestId('credits-qf-attribution')).toHaveTextContent('بيانات القرآن مقدَّمة من مؤسسة القرآن (https://quran.foundation/)');
     const items = within(screen.getByTestId('credits-editions')).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('M.A.S. Abdel Haleem، ترجمة Abdel Haleem · الإنجليزية');
+    expect(items.map((li) => li.textContent)).toEqual([
+      'M.A.S. Abdel Haleem، ترجمة Abdel Haleem، الإنجليزية',
+      'Saheeh International، الإنجليزية',
+      'Muhammad Hamidullah، ترجمة Hamidullah، الفرنسية',
+    ]);
   });
 
   it('with the list unavailable: QF’s line still shows, and says so', () => {

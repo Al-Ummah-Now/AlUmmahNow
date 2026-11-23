@@ -140,6 +140,32 @@ for (const lang of ['en', 'ar'] as const) {
   });
 }
 
+for (const lang of ['en', 'ar'] as const) {
+  test(`${lang}: after the credit and hidden controls, a speech cue still clears the controls when they wake`, async ({ page }) => {
+    const player = await openHarness(page, { lang, captions: { en: EN, ar: AR } });
+    await startPlayback(page, player);
+    await pauseAt(page, player, 5);
+    await showTrack(page, player, lang === 'ar' ? '1' : '0');
+    // Playing on the Quran cue with the controls hidden (the credit row is up)
+    await page.evaluate(() => { const v = document.querySelector('video')!; v.currentTime = 15; void v.play(); });
+    await expect(credit(page)).toBeVisible();
+    await page.evaluate(() => (document.querySelector('.video-js') as unknown as { player?: { userActive(v: boolean): void } }).player?.userActive(false));
+    await expect(player).toHaveClass(/vjs-user-inactive/);
+    // The caption box has finished moving down with the controls
+    await page.waitForTimeout(300);
+    await animationsDone(player.locator('.vjs-text-track-display'));
+    // Pause on a speech cue: the controls wake, the credit row goes, the caption box moves up
+    await pauseAt(page, player, 5);
+    await expect(credit(page)).toHaveCount(0);
+    await animationsDone(player.locator('.vjs-text-track-display'));
+    await expect.poll(async () => {
+      const cue = await layoutBox(cueBox(player));
+      const bar = await layoutBox(player.locator('.vjs-progress-holder'));
+      return cue.bottom <= bar.y;
+    }, { message: 'the speech cue never sits over the progress bar' }).toBe(true);
+  });
+}
+
 test('a 320px-wide player: the credit stays clear of the control bar and inside the frame', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   const player = await openHarness(page, { lang: 'ar', width: 320, captions: { en: EN, ar: AR } });

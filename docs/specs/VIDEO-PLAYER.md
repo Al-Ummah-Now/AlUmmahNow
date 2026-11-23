@@ -260,7 +260,9 @@ link text only (`pointer-events` are off around it), and a press on it never rea
 play or pause, no seek gesture). Every link is an `<a href>` in the tab order with a visible focus
 ring; a link to another site opens in a new tab with `rel="noopener"` and says so in its accessible
 name. A link whose moment has passed stays while it has focus or the pointer, until blur or pointer
-leave, so focus is never lost. It is inside the player element, so it is there in fullscreen, the mini
+leave, so focus is never lost. Video.js lays cues out in pixels when it draws them, so once the caption box
+has finished moving with the controls (its 200 ms `bottom` transition) the shown cues are drawn again
+in the box as it is: a cue drawn mid-move never stays behind the controls. It is inside the player element, so it is there in fullscreen, the mini
 player and embeds. Nothing shows on the end screen.
 
 First use: Quran Foundation's credit (QF 2026-11-23; docs/specs/TRANSCRIPTION-TRANSLATION.md §9.7).
