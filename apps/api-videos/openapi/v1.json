@@ -57033,6 +57033,403 @@
         }
       }
     },
+    "/api/v1/videos/{videoId}/recitation": {
+      "get": {
+        "tags": [
+          "Recitation"
+        ],
+        "summary": "A video's confirmed recitation references and reciter metadata",
+        "description": "References and published cue timings only. No Quran or ASR text is returned. Official Uthmani text and recognized translations use the existing Quran Foundation passage and edition APIs. Hidden videos use the video read rule; a fresh Quran copy is required.",
+        "operationId": "get_VideoRecitationGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recitation references and attribution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "videoId": {
+                          "type": "string"
+                        },
+                        "reciter": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "nameLocalized": {
+                              "type": "object",
+                              "properties": {
+                                "en": {
+                                  "type": "string"
+                                },
+                                "ar": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "riwayah": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "range": {
+                                "type": "string"
+                              },
+                              "startMs": {
+                                "type": "number"
+                              },
+                              "endMs": {
+                                "type": "number"
+                              },
+                              "boundary": {
+                                "type": "string",
+                                "enum": [
+                                  "cue"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "range",
+                              "startMs",
+                              "endMs",
+                              "boundary"
+                            ]
+                          }
+                        },
+                        "credit": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "ar": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en",
+                            "ar",
+                            "url"
+                          ]
+                        },
+                        "creditsPath": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "videoId",
+                        "reciter",
+                        "items",
+                        "credit",
+                        "creditsPath"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found, hidden, or recitation is off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/recitation-metadata": {
+      "put": {
+        "tags": [
+          "Recitation"
+        ],
+        "summary": "Set a video's human-supplied reciter metadata",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nOwner or video.edit, under the channel owner’s admin-managed tier. No Quran text or ASR inference is accepted.",
+        "operationId": "put_VideoRecitationMetadataPut",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reciter": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "nameLocalized": {
+                        "type": "object",
+                        "properties": {
+                          "en": {
+                            "type": "string",
+                            "maxLength": 400
+                          },
+                          "ar": {
+                            "type": "string",
+                            "maxLength": 400
+                          }
+                        }
+                      },
+                      "riwayah": {
+                        "type": "string",
+                        "maxLength": 160
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "reciter"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recitation": {
+                          "type": "object",
+                          "properties": {
+                            "reciter": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "nameLocalized": {
+                                  "type": "object",
+                                  "properties": {
+                                    "en": {
+                                      "type": "string"
+                                    },
+                                    "ar": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "riwayah": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name"
+                              ]
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            },
+                            "updatedBy": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "reciter",
+                            "updatedAt",
+                            "updatedBy"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "recitation"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A reciter needs an English or Arabic name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found or the feature is off for this tier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{videoId}/renditions": {
       "post": {
         "tags": [
