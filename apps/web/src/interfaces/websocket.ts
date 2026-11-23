@@ -96,6 +96,7 @@ export type RealtimeNotificationKey =
   | 'tierChanged'
   | 'channelMovedIn'
   | 'channelMovedOutByTeam'
+  | 'channelMovedOutByTeamWithReason'
   /** Move from YouTube finished (params: ready, failed, channelTitle; wiki AUN-YT-IMPORT) */
   | 'youtubeImportFinished';
 

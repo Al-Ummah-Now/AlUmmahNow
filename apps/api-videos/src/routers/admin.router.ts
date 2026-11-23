@@ -244,11 +244,12 @@ app.post('/channels/:id/transfer', async (c) => {
 			newOwnerId: z.string().trim().min(1).max(200),
 			keepPreviousOwnerAsAdmin: z.boolean().optional(),
 			keepContactEmail: z.boolean().optional(),
+			reason: z.string().trim().max(500).optional(),
 		}),
 		await body(c),
 	);
 	if (!USER_ID.test(input.newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
-	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), input.newOwnerId, actor(c), { keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true, keepContactEmail: input.keepContactEmail === true }));
+	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), input.newOwnerId, actor(c), { keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true, keepContactEmail: input.keepContactEmail === true, reason: input.reason || undefined }));
 });
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 

@@ -78,6 +78,7 @@ function KindIcon({ kind }: { kind: string }) {
     case 'channelMemberLeft':
     case 'channelMovedIn':
     case 'channelMovedOutByTeam':
+    case 'channelMovedOutByTeamWithReason':
       return <Users {...props} />;
     case 'reviewApproved':
       return <Video {...props} />;
