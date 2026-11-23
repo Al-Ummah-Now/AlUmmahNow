@@ -267,7 +267,7 @@ function FeatureRowView({
   return (
     <li
       id={item.key}
-      className={`scroll-mt-28 px-5 py-5 ${targeted ? 'bg-chip-reviewing-bg' : ''}`}
+      className={`scroll-mt-28 px-5 pb-5 pt-3 ${targeted ? 'bg-chip-reviewing-bg' : ''}`}
       data-testid="feature-row"
       data-key={item.key}
       data-enabled={String(item.enabled)}
@@ -276,16 +276,23 @@ function FeatureRowView({
       data-lock={lock ?? ''}
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h3 id={nameId} className="text-base font-semibold text-fg [text-wrap:balance]">
-            {def.name[locale]}
-          </h3>
-          <p id={helpId} className="mt-1 max-w-3xl text-sm text-fg-muted [text-wrap:pretty]" data-testid="feature-help">
-            {def.help[locale]}
-          </p>
-        </div>
-        <FeatureSwitch checked={item.enabled} words={words} labelledBy={nameId} describedBy={helpId} locked={lock !== null} busy={busy} onChange={onToggle} testId={`feature-switch-${item.key}`} />
+        <h3 id={nameId} className="min-w-0 flex-1 pt-2.5 text-base font-semibold text-fg [text-wrap:balance]">
+          {def.name[locale]}
+        </h3>
+        <FeatureSwitch
+          checked={item.enabled && !item.envOverride}
+          words={words}
+          labelledBy={nameId}
+          describedBy={helpId}
+          locked={lock !== null}
+          busy={busy}
+          onChange={onToggle}
+          testId={`feature-switch-${item.key}`}
+        />
       </div>
+      <p id={helpId} className="max-w-3xl text-sm text-fg-muted [text-wrap:pretty]" data-testid="feature-help">
+        {def.help[locale]}
+      </p>
 
       {(notes.length > 0 || lock === 'superAdminOnly') && (
         <ul className="mt-3 space-y-1.5" data-testid="feature-notes">
@@ -347,14 +354,19 @@ function NoteLine({ note, locale }: { note: FeatureNote; locale: Locale }) {
     }
     case 'needsSetup':
       return (
-        <li className="flex flex-wrap items-start gap-x-2 gap-y-1 text-sm text-fg" data-note="needsSetup">
+        <li className="flex items-start gap-2 text-sm text-fg" data-note="needsSetup">
           <Icon name="alert" className="mt-0.5 size-4 shrink-0 text-warning-fg" />
-          <span>{note.note ? t('features.notes.needsSetup', { note: note.note }) : t('features.notes.needsSetupPlain')}</span>
-          {note.href && (
-            <AppLink href={note.href} className={linkClass} data-testid="feature-setup-link">
-              {t('features.notes.setUp')}
-            </AppLink>
-          )}
+          <span>
+            {note.note ? t('features.notes.needsSetup', { note: note.note }) : t('features.notes.needsSetupPlain')}
+            {note.href && (
+              <>
+                {' '}
+                <AppLink href={note.href} className={`${linkClass} whitespace-nowrap`} data-testid="feature-setup-link">
+                  {t('features.notes.setUp')}
+                </AppLink>
+              </>
+            )}
+          </span>
         </li>
       );
     case 'envOverride':
@@ -386,13 +398,10 @@ function RowMessageView({ message }: { message: RowMessage }) {
   }
   if (message.kind === 'precondition') {
     return (
-      <div role="alert" className="mt-3 rounded-lg border border-warning-fg/60 bg-chip-pending-bg px-3 py-2 text-sm text-fg" data-testid="feature-precondition">
-        <p className="flex items-center gap-2 font-semibold">
-          <Icon name="alert" className="size-4 shrink-0" />
-          {t('features.preconditionTitle')}
-        </p>
-        <p className="mt-1 ps-6">{message.message}</p>
-      </div>
+      <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-warning-fg/60 bg-chip-pending-bg px-3 py-2 text-sm text-fg" data-testid="feature-precondition">
+        <Icon name="alert" className="mt-0.5 size-4 shrink-0" />
+        <span>{message.message}</span>
+      </p>
     );
   }
   return (

@@ -2366,7 +2366,6 @@ const ar: Messages = {
     },
     conflict: 'غيّرها {name} قبل لحظات.',
     conflictNobody: 'غيّرها شخص آخر قبل لحظات.',
-    preconditionTitle: 'لا يمكن تشغيلها بعد',
     writeFailed: 'لم يُحفظ التغيير. حاول مرة أخرى.',
     toastOn: 'شُغّلت «{name}»',
     toastOff: 'أُوقفت «{name}»',
