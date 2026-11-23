@@ -109,6 +109,26 @@ Never Stripe (decision T2), including payout services built on Stripe.
   - Under MEM-D5 `tierCapability`, the owner's tier has `supportReceive`.
   - Signed-out viewers also get this key, because they see the button and sign in first.
 
+## Supporting a channel: the server side (MEM-7)
+
+`lib/support/checkout.ts` and `endpoints/support/supportCheckout.ts`. Every route answers `404 feature_off` while the switch is off or the checks say no.
+
+- `GET /api/channels/:channelId/support` returns what the sheet shows: presets (the channel's own, or the decided defaults), one-time and monthly, the minimum, whether "cover the fees" is offered (MEM-D3), the age, and the thank-you note.
+- `GET .../support/quote?amount=&currency=USD&coverFees=1&lang=ar` returns the breakdown, including "Al Ummah Now takes $0.00", plus the same amounts as text in the asked language.
+- `POST .../support/checkout` checks, in order:
+  - the human check (Turnstile);
+  - supporter and receiver eligibility; the channel's own team is refused;
+  - the kind is open on the channel;
+  - the minimum (MEM-D4) and USD only for now;
+  - the age confirmation (MEM-D9);
+  - for monthly, the consent "Charge me {amount} every month until I stop.", stored word for word in English or Arabic;
+  - at most 10 checkouts per account per hour.
+
+  It answers with the collector's hosted page, and the return URL gets `?support=<checkoutId>`.
+- `PUT .../support/settings` is the owner's own on/off, kinds, presets (at or above the minimum) and thank-you note.
+- `GET /api/me/support`, `GET /api/me/support/checkouts/:id` and `POST /api/me/support/pledges/:id/stop` cover Settings › Support. Stopping cancels at the collector first. A person with existing support can always see and stop it, even with the switch off.
+- The test collector's hosted page, for QA and the local stack only, is `/webhooks/support/test/checkout/:id`. "Pay (test)" goes through the signed webhook to the ledger; "Cancel" leaves the checkout unpaid.
+
 ## Admin API and the finance list (MEM-8)
 
 admin-api `/api/support/*` (`routers/support.router.ts`, `lib/support-finance.ts`). Every change needs a step-up and is audited (`support-*` audit kinds).
@@ -161,4 +181,5 @@ guessing.
 - `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
 - `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
 - `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps, payee state and pauses.
+- `apps/api-videos/test/support-checkout.spec.ts`: the sheet, the breakdown, the test checkout through the webhook to the ledger, monthly consent, stopping, the owner's settings, the refusals.
 - `apps/processor/src/__tests__/user-traces-erase.test.ts`: erasure of support rows.

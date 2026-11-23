@@ -81,6 +81,14 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'GET', '/api/channels/:channelId/support/payee', 'creatorSupport', 'handler'),
   r('api-videos', 'POST', '/api/channels/:channelId/support/payee/onboard', 'creatorSupport', 'handler'),
   r('api-videos', 'POST', '/api/channels/:channelId/support/payee/refresh', 'creatorSupport', 'handler'),
+  // The support sheet, the channel's own settings and Settings › Support (MEM-7); the handlers also check eligibility
+  r('api-videos', 'GET', '/api/channels/:channelId/support', 'creatorSupport', 'handler'),
+  r('api-videos', 'GET', '/api/channels/:channelId/support/quote', 'creatorSupport', 'handler'),
+  r('api-videos', 'POST', '/api/channels/:channelId/support/checkout', 'creatorSupport', 'handler'),
+  r('api-videos', 'PUT', '/api/channels/:channelId/support/settings', 'creatorSupport', 'handler'),
+  r('api-videos', 'GET', '/api/me/support', 'creatorSupport', 'handler'),
+  r('api-videos', 'GET', '/api/me/support/checkouts/:id', 'creatorSupport', 'handler'),
+  r('api-videos', 'POST', '/api/me/support/pledges/:id/stop', 'creatorSupport', 'handler'),
   // Upgrade mode (O37): the page shows "not available" rather than refusing
   r('api-videos', 'GET', '/api/tiers/upgrade', 'tierRequests', 'handler'),
   r('api-videos', 'POST', '/api/me/tier-requests', 'tierRequests', 'handler'),
@@ -110,6 +118,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'api-videos', prefix: '/api/me/tier-requests', key: 'tierRequests' },
   // Creator support (wiki AUN-MEMBERS): every channel support route is the switch's
   { app: 'api-videos', prefix: '/api/channels/:channelId/support', key: 'creatorSupport' },
+  { app: 'api-videos', prefix: '/api/me/support', key: 'creatorSupport' },
   { app: 'admin-api', prefix: '/internal/newsletter', key: 'newsletter' },
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
 ]);
