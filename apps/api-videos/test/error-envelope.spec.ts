@@ -10,6 +10,7 @@ import {
 	API_ERROR_CATALOGUE,
 	buildErrorEnvelope,
 	negotiateErrorLang,
+	errorLangOf,
 	parseApiError,
 	FEATURE_OFF_BODY,
 } from '@al-ummah/shared-types';
@@ -20,16 +21,23 @@ import { featureOff } from '../src/lib/features/off';
 const LATIN = /[A-Za-z]/;
 
 describe('negotiateErrorLang', () => {
-	it('takes the first en/ar tag by quality, then X-App-Locale, then English', () => {
-		assert.equal(negotiateErrorLang('ar-EG,ar;q=0.9,en;q=0.8'), 'ar');
-		assert.equal(negotiateErrorLang('en-US,en;q=0.9,ar;q=0.8'), 'en');
-		assert.equal(negotiateErrorLang('fr-FR,ar;q=0.5,en;q=0.4'), 'ar');
-		assert.equal(negotiateErrorLang('en;q=0.2,ar;q=0.7'), 'ar');
-		assert.equal(negotiateErrorLang('ar;q=0,en'), 'en');
-		assert.equal(negotiateErrorLang('fr', 'ar'), 'ar');
-		assert.equal(negotiateErrorLang(null, 'ar_SA'), 'ar');
-		assert.equal(negotiateErrorLang('*', null), 'en');
+	it('follows the app language, then the URL, else English, and never the browser', () => {
+		assert.equal(negotiateErrorLang('ar'), 'ar');
+		assert.equal(negotiateErrorLang('ar_SA'), 'ar');
+		assert.equal(negotiateErrorLang('en', 'https://x.example/api/a?lang=ar'), 'en');
+		assert.equal(negotiateErrorLang(null, 'https://x.example/api/a?lang=ar'), 'ar');
+		assert.equal(negotiateErrorLang('fr', 'https://x.example/ar/watch'), 'ar');
+		assert.equal(negotiateErrorLang(undefined, '/en/x?lang=zz'), 'en');
+		assert.equal(negotiateErrorLang(null, 'https://x.example/api/arabic'), 'en');
 		assert.equal(negotiateErrorLang(undefined, undefined), 'en');
+	});
+
+	it('ignores Accept-Language: an Arabic browser on the English interface gets English', () => {
+		const req = new Request('https://x.example/api/a', { headers: { 'Accept-Language': 'ar-EG,ar;q=0.9' } });
+		assert.equal(errorLangOf(req), 'en');
+		const chosen = new Request('https://x.example/api/a', { headers: { 'Accept-Language': 'ar', 'X-App-Locale': 'en' } });
+		assert.equal(errorLangOf(chosen), 'en');
+		assert.equal(errorLangOf(new Request('https://x.example/api/a', { headers: { 'X-App-Locale': 'ar' } })), 'ar');
 	});
 });
 
@@ -147,10 +155,11 @@ describe('errorEnvelope middleware', () => {
 	});
 
 	it('localizes feature_off and keeps the 404 and no-store', async () => {
-		const res = await get('/off', { 'Accept-Language': 'ar' });
+		const res = await get('/off', { 'X-App-Locale': 'ar' });
 		assert.equal(res.status, 404);
 		assert.equal(res.headers.get('cache-control'), 'private, no-store');
-		assert.match(res.headers.get('vary') ?? '', /Accept-Language/);
+		assert.match(res.headers.get('vary') ?? '', /X-App-Locale/);
+		assert.doesNotMatch(res.headers.get('vary') ?? '', /Accept-Language/);
 		assert.equal(res.headers.get('content-language'), 'ar');
 		const body = await res.json();
 		assert.equal(body.code, 'feature_off');
@@ -159,8 +168,10 @@ describe('errorEnvelope middleware', () => {
 		assert.ok(body.message.length > 0 && !LATIN.test(body.message));
 	});
 
-	it('uses X-App-Locale when there is no Accept-Language', async () => {
-		const body = await (await get('/limited', { 'X-App-Locale': 'ar' })).json();
+	it('answers in English for an Arabic browser that chose no language', async () => {
+		const en = await (await get('/limited', { 'Accept-Language': 'ar' })).json();
+		assert.equal(en.lang, 'en');
+		const body = await (await get('/limited?lang=ar')).json();
 		assert.equal(body.lang, 'ar');
 		assert.equal(body.retryAfter, 12);
 		assert.equal(body.action, 'retry');

@@ -60319,6 +60319,10 @@
               "socialAutopost",
               "aiCategorySuggest",
               "siteDomains",
+              "creatorSupport",
+              "supportExternalLinks",
+              "charityDonations",
+              "supportPerks",
               "tierRequests",
               "newsletter"
             ],
