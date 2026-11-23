@@ -327,7 +327,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
 }
 
 export function SitesView({ sites, q, canManage, title }: { sites: SiteListItem[] | null; q: string; canManage: boolean; title: string }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -336,7 +336,7 @@ export function SitesView({ sites, q, canManage, title }: { sites: SiteListItem[
 
   return (
     <div ref={top}>
-      <PageHeader title={title} subtitle={t('scholarSites.intro')} t={t} />
+      <PageHeader locale={locale} title={title} subtitle={t('scholarSites.intro')} t={t} />
       {notice && <Notice testId="sites-notice">{notice}</Notice>}
       {canManage && (
         <SectionCard title={t('scholarSites.grantTitle')} testId="sites-grant">

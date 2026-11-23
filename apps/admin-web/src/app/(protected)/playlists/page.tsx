@@ -39,7 +39,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader deletedKind="playlist" title={t('playlists.title')} subtitle={t('playlists.subtitle')} t={t} />
+      <PageHeader locale={locale} deletedKind="playlist" title={t('playlists.title')} subtitle={t('playlists.subtitle')} t={t} />
       <FilterForm
         action="/playlists"
         label={t('playlists.title')}
@@ -83,7 +83,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                         {!p.channelId && <span className="md:hidden"><Chip tone="neutral">{t('playlists.personal')}</Chip></span>}
                       </div>
                       {/* Phone: the channel, owner, size and date (their columns are hidden) */}
-                      <MetaLine
+                      <MetaLine locale={locale}
                         className="block md:hidden text-xs text-fg-muted mt-2"
                         testId="playlist-meta"
                         parts={[

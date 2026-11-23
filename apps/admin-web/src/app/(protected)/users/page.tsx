@@ -52,7 +52,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader deletedKind="user" title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t}>
+      <PageHeader locale={locale} deletedKind="user" title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t}>
         <div className="flex flex-wrap gap-2">
           <Link href="/users/invites" className={secondaryButtonClass} data-testid="users-invites-link">{t('invites.listLink')}</Link>
           <Link href="/users/invites/new" className={primaryButtonClass} data-testid="users-invite-new">{t('invites.inviteButton')}</Link>

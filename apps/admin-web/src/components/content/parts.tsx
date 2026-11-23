@@ -10,6 +10,7 @@ import { cardClass, linkClass } from '@/components/ui';
 
 import { LocalTime } from '@/components/LocalTime';
 import { Sep } from '@/components/Sep';
+import { metaMark } from '@al-ummah/shared-types';
 export type ChipTone = 'neutral' | 'good' | 'info' | 'warn' | 'bad';
 
 const toneClasses: Record<ChipTone, string> = {
@@ -65,13 +66,14 @@ export const dangerButtonClass =
 export const primarySmallButtonClass =
   'inline-flex items-center justify-center px-3 py-2 rounded border border-transparent bg-accent hover:bg-accent-hover text-on-accent text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 
-export function PageHeader({ title, subtitle, total, t, children, deletedKind }: { title: string; subtitle: string; total?: number; t: Translator; children?: React.ReactNode; deletedKind?: string }) {
+export function PageHeader({ title, subtitle, total, t, locale, children, deletedKind }: { title: string; subtitle: string; total?: number; t: Translator; locale: Locale; children?: React.ReactNode; deletedKind?: string }) {
   return (
     <div className="flex flex-wrap justify-between items-end gap-4 mb-6">
       <div>
         <h1 className="text-3xl font-bold text-fg">{title}</h1>
         {/* One line of facts: the separators are clipped at a line edge, so a wrap never leaves one dangling */}
         <MetaLine
+          locale={locale}
           className="block text-fg-muted mt-1"
           parts={[
             subtitle,
@@ -259,15 +261,18 @@ export function BackLink({ href, label, testId }: { href: string; label: string;
  * a gutter at its start, and the line is shifted back by one gutter and clipped, so when the line
  * wraps the separator that would start (or end) a line is cut off instead of dangling.
  */
-export function MetaLine({ parts, className = '', testId }: { parts: React.ReactNode[]; className?: string; testId?: string }) {
+export function MetaLine({ parts, locale, className = '', testId }: { parts: React.ReactNode[]; locale: Locale | string; className?: string; testId?: string }) {
   const shown = parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '');
+  // The shared mark (metaMark): «،» in Arabic, where a dot next to Arabic digits reads as zero (O38),
+  // held against the value before it (the gutter's start edge); English keeps a centred «•»
+  const arabic = locale === 'ar';
   return (
     // Links inside a line of text are underlined, so they never rely on colour alone (WCAG 1.4.1)
     <span className={`${className} overflow-hidden [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
       <span className="flex flex-wrap -ms-[1em]">
         {shown.map((part, i) => (
           <span key={i} className="relative min-w-0 ps-[1em]">
-            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">•</span>
+            <span aria-hidden="true" data-meta-sep={arabic ? 'ar' : 'en'} className={`absolute start-0 w-[1em] ${arabic ? 'text-start' : 'text-center'}`}>{metaMark(arabic ? 'ar' : 'en')}</span>
             <bdi>{part}</bdi>
           </span>
         ))}

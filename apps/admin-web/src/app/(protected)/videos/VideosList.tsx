@@ -345,7 +345,7 @@ export function VideosList() {
 
   return (
     <div data-testid="videos-list" data-list-ready={list.isLoading ? undefined : 'true'}>
-      <PageHeader deletedKind="video" title={t('videos.title')} subtitle={t('videos.subtitle')} total={list.total} t={t} />
+      <PageHeader locale={locale} deletedKind="video" title={t('videos.title')} subtitle={t('videos.subtitle')} total={list.total} t={t} />
 
       <SavedViews
         views={views}
