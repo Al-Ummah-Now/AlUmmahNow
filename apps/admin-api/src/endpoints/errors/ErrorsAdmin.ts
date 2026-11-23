@@ -34,6 +34,7 @@ import {
   openActionCount,
   recordActionAttempt,
 } from '../../lib/errors-store';
+import { apiError } from '../../lib/api-error';
 import { parseRetry, retryPermissions, retrySitePermissions, runRetry } from '../../lib/errors-actions';
 import { hasContentPermission } from '@al-ummah/shared-types';
 
@@ -317,7 +318,7 @@ export class ErrorActionRetry extends ErrorsRoute {
     for (const permission of retrySitePermissions(spec)) {
       if (hasPermission(this.getRoles(c), permission)) continue;
       logger.warn('[Errors] Retry permission denied', { userId: this.getUserId(c), permission, item: item.id });
-      return c.json({ success: false, error: `Permission required: ${permission}` }, 403);
+      return apiError(c, 403, 'forbidden', { error: `Permission required: ${permission}` });
     }
     for (const permission of retryPermissions(spec)) {
       if (hasContentPermission(this.getRoles(c), permission)) continue;
