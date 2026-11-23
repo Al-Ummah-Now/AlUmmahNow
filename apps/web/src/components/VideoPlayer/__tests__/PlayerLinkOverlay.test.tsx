@@ -11,11 +11,12 @@ describe('safePlayerHref', () => {
   it('allows https URLs and same-origin root-relative paths', () => {
     expect(safePlayerHref('https://quran.foundation/')).toBe('https://quran.foundation/');
     expect(safePlayerHref('  https://example.com/path?a=1#b  ')).toBe('https://example.com/path?a=1#b');
+    expect(safePlayerHref('https://alummahnow.com/@channel')).toBe('https://alummahnow.com/@channel');
     expect(safePlayerHref('/en/credits')).toBe('/en/credits');
     expect(safePlayerHref('/ar/watch/v1?t=12')).toBe('/ar/watch/v1?t=12');
   });
 
-  it('rejects javascript:, data:, http:, protocol-relative, and malformed hrefs', () => {
+  it('rejects javascript:, data:, http:, userinfo, host-less, protocol-relative, and malformed hrefs', () => {
     for (const href of [
       '',
       '   ',
@@ -27,6 +28,12 @@ describe('safePlayerHref', () => {
       'vbscript:msgbox(1)',
       'http://quran.foundation/',
       'http://example.com/insecure',
+      'https://user:pw@evil.com/',
+      'https://user@evil.com/',
+      'https://:pw@evil.com/',
+      'https://@evil.com/',
+      'https:///evil.com',
+      'https://\\evil.com',
       '//evil.example/path',
       '/\\evil.example/path',
       'mailto:test@example.com',
