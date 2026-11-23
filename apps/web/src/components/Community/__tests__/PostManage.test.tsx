@@ -214,6 +214,9 @@ describe('localized date, time and zone', () => {
     // The offset is a left-to-right isolate, so it never reads «(٥−GMT)»
     expect(ar).toContain('(\u2066GMT−٥\u2069)');
     expect(ar).not.toContain('America/New_York');
+    // The same name as English: «التوقيت الشرقي», without CLDR's «لأمريكا الشمالية» that "Eastern Time" doesn't say
+    expect(ar).toBe('التوقيت الشرقي\u00a0(\u2066GMT−٥\u2069)');
+    expect(zoneLabel('America/Chicago', 'ar', winter)).toBe('التوقيت المركزي\u00a0(\u2066GMT−٦\u2069)');
     expect(offsetLabel('Asia/Kolkata', 'ar', winter)).toBe('GMT+٥:٣٠');
     expect(offsetLabel('UTC', 'en', winter)).toBe('GMT');
   });

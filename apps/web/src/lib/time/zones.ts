@@ -83,7 +83,11 @@ export function offsetLabel(zone: string, locale: string, at = new Date()): stri
   return `GMT${sign}${h}${mm}`;
 }
 
-/** The zone's localized generic name ("Eastern Time", «توقيت شرق أمريكا الشمالية»), else its city. */
+/**
+ * The zone's localized generic name ("Eastern Time", «التوقيت الشرقي»), else its city. Arabic CLDR adds
+ * «لأمريكا الشمالية» to the Eastern, Central and Mountain names where English says only "Eastern Time":
+ * that suffix is dropped, so both languages name the zone the same way (AUDIT-2).
+ */
 export function zoneName(zone: string, locale: string, at = new Date()): string {
   if (zone === 'UTC' || zone === 'Etc/UTC') return locale === 'ar' ? 'التوقيت العالمي المنسق' : 'Coordinated Universal Time';
   try {
@@ -91,7 +95,7 @@ export function zoneName(zone: string, locale: string, at = new Date()): string 
       .formatToParts(at)
       .find((p) => p.type === 'timeZoneName')?.value;
     // A bare offset ("GMT+03:00") is no name: fall back to the city
-    if (part && !/^(GMT|UTC|غرينتش)/.test(part)) return part;
+    if (part && !/^(GMT|UTC|غرينتش)/.test(part)) return part.replace(/\s+لأمريكا الشمالية$/, '');
   } catch {
     // An unknown zone: the city below
   }
@@ -126,7 +130,7 @@ export function zoneCity(zone: string): string {
 }
 
 /**
- * "Eastern Time (GMT−5)" / «التوقيت الشرقي لأمريكا الشمالية (GMT−٥)», joined by a no-break space. In Arabic the offset is a
+ * "Eastern Time (GMT−5)" / «التوقيت الشرقي (GMT−٥)», joined by a no-break space. In Arabic the offset is a
  * left-to-right isolate (U+2066 … U+2069): without it the bidi algorithm shows «(٥−GMT)».
  */
 export function zoneLabel(zone: string, locale: string, at = new Date()): string {
