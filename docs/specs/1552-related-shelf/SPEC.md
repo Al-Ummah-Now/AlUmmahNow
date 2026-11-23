@@ -78,9 +78,10 @@ No numbers in this copy.
   in unit tests). `30-watch-page.spec.ts` WATCH-002 matched the RTL component's hard-coded heading
   (/ذات الصلة/); it now asserts the i18n heading «مرئيات ذات صلة» as an `h2`. The release specs
   (`related.spec.ts`, `theatre`, `watch-layout`) seed related videos and use `related-videos-list`.
-- E2E (local stack, `30-watch-page.spec.ts`): WATCH-015 answers the three related sources empty in the
-  browser and checks the shelf and side column are gone with no error or retry; WATCH-016 aborts them,
-  checks the failure message, restores the API and checks Try again loads the shelf.
+- No new E2E for the empty or failed state: `fetchRelatedVideos` is a server action (`lib/api/videos.ts`
+  is `'use server'`), so its API calls never pass through the browser and `page.route` cannot answer
+  them; the local stack always has other public videos, so a real empty answer cannot be set up there
+  either. Both states are covered by the unit tests above.
 
 ## Risks
 - **Layout shift when empty:** on wide screens the side column shows a skeleton, then disappears when
