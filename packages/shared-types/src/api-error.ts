@@ -183,6 +183,11 @@ export function buildErrorEnvelope(body: Record<string, unknown>, ctx: EnvelopeC
     action,
   };
   if (!('error' in body)) out.error = code;
+  // A 5xx keeps no handler text: a code-shaped legacy error stays, anything else is replaced
+  if (status >= 500) {
+    if (typeof out.error !== 'string' || !CODE_SHAPE.test(out.error)) out.error = 'Internal server error';
+    if (!(alreadyLocalized && endpointMessage)) out.message = apiErrorMessage(code, status, lang);
+  }
   if (feature) out.feature = feature;
   else delete out.feature;
 

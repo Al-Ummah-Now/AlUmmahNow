@@ -100,6 +100,8 @@ describe('buildErrorEnvelope', () => {
 		assert.equal(five.code, 'server_error');
 		assert.equal(five.message, API_ERROR_CATALOGUE.server_error.en);
 		assert.equal(five.reference, 'ERR-ABCD-EFGH');
+		assert.equal(five.error, 'Internal server error');
+		assert.ok(!JSON.stringify(five).includes('D1_ERROR'));
 		assert.equal(buildErrorEnvelope({ success: false, error: 'Unauthorized' }, { status: 401, lang: 'en' }).action, 'sign_in');
 	});
 
@@ -174,6 +176,12 @@ describe('errorEnvelope middleware', () => {
 		assert.equal(body.action, 'retry');
 		assert.equal(body.error, 'Internal server error');
 		assert.equal(body.reference, res.headers.get('x-error-ref'));
+	});
+
+	it('a URL that only names localhost is not development (no debug, no stack)', async () => {
+		const res = await get('/boom?next=http://localhost/x');
+		const text = await res.text();
+		assert.ok(!text.includes('debug') && !text.includes('SEARCH_DB') && !text.includes('stack'), text);
 	});
 
 	it('leaves non-JSON and non-object bodies alone', async () => {

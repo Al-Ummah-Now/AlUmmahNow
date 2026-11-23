@@ -13,8 +13,14 @@ import { markErrorLogged } from './logging';
  */
 export function isDevelopmentMode(c: Context): boolean {
 	// Check 1: URL-based detection (wrangler dev runs on localhost)
-	const url = c.req.url;
-	if (url.includes('localhost') || url.includes('127.0.0.1')) {
+	// The parsed hostname, compared exactly: a path or query naming localhost must not count
+	let hostname = '';
+	try {
+		hostname = new URL(c.req.url).hostname;
+	} catch {
+		hostname = '';
+	}
+	if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
 		return true;
 	}
 
