@@ -14,7 +14,7 @@ const VIDEOS_API = 'https://videos.api.alummahnow.net';
 
 /** Production must not carry test-only material or point at QA / stage / preview. */
 const PROD_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowedHosts'> = {
-	forbiddenNames: ['E2E_CODE_SINK_SECRET', 'TEST_PROMOTE_SECRET', /^E2E_/, /^TEST_/, /^MOCK_/, 'PAYMENTS_FAKE_PROVIDER', 'PAYMENTS_SECRETS_LOCAL_SHIM'],
+	forbiddenNames: ['E2E_CODE_SINK_SECRET', 'TEST_PROMOTE_SECRET', /^E2E_/, /^TEST_/, /^MOCK_/, 'PAYMENTS_FAKE_PROVIDER', 'PAYMENTS_SECRETS_LOCAL_SHIM', 'SUPPORT_TEST_PROVIDERS'],
 	forbiddenValues: [/\.(qa|stage|staging|preview)\.alummahnow\.net/],
 	allowedHosts: ['alummahnow.net', '*.alummahnow.net'],
 };

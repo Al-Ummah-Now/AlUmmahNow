@@ -149,6 +149,8 @@
 
     "VIDEO_REVIEW_ALLOWED": "false",
     "ENVIRONMENT": "qa",
+    // Creator support's test collector and test rail exist here (Features page precondition; wiki AUN-MEMBERS); never production or stage
+    "SUPPORT_TEST_PROVIDERS": "1",
     // Bot protection (lib/bot-guard.ts): Turnstile on Contact us; off | monitor | enforce
     "TURNSTILE_MODE": "enforce",
     "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",

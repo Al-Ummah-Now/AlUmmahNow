@@ -50,6 +50,8 @@ export interface AdminBindings {
   // Environment variables
   /** Default daily neuron cap shown when D1 has none (mirrors the processor's var) */
   AI_MODERATION_DAILY_NEURON_CAP?: string;
+  /** "1" where the creator-support test collector and test rail exist (QA, local; never production; wiki AUN-MEMBERS) */
+  SUPPORT_TEST_PROVIDERS?: string;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
   Issuer: string;
