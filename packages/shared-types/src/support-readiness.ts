@@ -32,7 +32,10 @@ export function payoutRailAvailable(env: SupportEnv, id: PayoutRailId): boolean 
   return BUILT_PAYOUT_RAILS.includes(id) && (id !== 'test' || testAllowed(env));
 }
 
-const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail'];
+const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_fees', 'no_rail'];
+
+/** Collectors whose adapter returns a live fee quote (O43: the live quote wins; no setting needed). */
+export const LIVE_FEE_COLLECTORS: readonly SupportCollectorId[] = Object.freeze(['test']);
 
 export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadiness> {
   const db = env.SEARCH_DB;
@@ -60,11 +63,25 @@ export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadines
     raw = {};
   }
   const policy = parseSupportPolicy(raw).policy;
+  const collector = row?.collector ?? 'test';
+  let feesKnown = true;
+  if (!LIVE_FEE_COLLECTORS.includes(collector) && policy.amounts) {
+    try {
+      const now = new Date().toISOString();
+      for (const currency of Object.keys(policy.amounts)) {
+        const fee = await db.prepare("SELECT 1 AS x FROM support_fee_schedules WHERE kind = 'collector' AND provider = ? AND currency = ? AND effective_from <= ? LIMIT 1").bind(collector, currency, now).first<{ x: number }>();
+        if (!fee) feesKnown = false;
+      }
+    } catch {
+      feesKnown = false;
+    }
+  }
   return supportReadiness({
+    feesKnown,
     organizationFormed: row?.organisation_formed === 1,
     financeApprovers: Number(members?.n ?? 0),
     policy,
-    collectorAvailable: supportCollectorAvailable(env, row?.collector ?? 'test'),
+    collectorAvailable: supportCollectorAvailable(env, collector),
     railAvailable: policy.primaryRail !== null && payoutRailAvailable(env, policy.primaryRail),
   });
 }

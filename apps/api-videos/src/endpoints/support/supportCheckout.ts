@@ -14,7 +14,7 @@
  *   POST /api/me/support/pledges/:id/stop                  stops a monthly pledge at once
  */
 import type { Context } from 'hono';
-import { CLIENT_HEADER, channelRoleOf } from '@al-ummah/shared-types';
+import { CLIENT_HEADER, channelRoleOf, isSupportCurrency } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { checkHuman, TURNSTILE_HEADER } from '../../lib/bot-guard';
 import { loadChannelRecord, roleOnChannel, type ChannelAccessEnv } from '../../lib/channelAccess';
@@ -59,27 +59,34 @@ export async function handleSupportSheet(c: Context) {
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
 	const [settings, config] = await Promise.all([
-		env.SEARCH_DB.prepare('SELECT one_time_enabled, monthly_enabled, presets, thank_you_note FROM support_settings WHERE channel_id = ?').bind(channel.channelId).first<{ one_time_enabled: number; monthly_enabled: number; presets: string; thank_you_note: string | null }>(),
+		env.SEARCH_DB.prepare('SELECT one_time_enabled, monthly_enabled, presets, currency, thank_you_note FROM support_settings WHERE channel_id = ?').bind(channel.channelId).first<{ one_time_enabled: number; monthly_enabled: number; presets: string; currency: string; thank_you_note: string | null }>(),
 		readSupportConfig(env.SEARCH_DB),
 	]);
+	// MEM-D4: the amounts of the asked currency (USD unless the page asks for another)
+	const currency = (c.req.query('currency') ?? 'USD').toUpperCase();
+	const rule = isSupportCurrency(currency) ? config.policy.amounts?.[currency] : undefined;
+	if (!rule) return featureOff(c, 'creatorSupport');
 	let presets: number[] = [];
 	try {
-		presets = JSON.parse(settings?.presets || '[]');
+		presets = settings?.currency === currency ? (JSON.parse(settings?.presets || '[]') as number[]).filter((x) => x >= rule.minimum) : [];
 	} catch {
 		presets = [];
 	}
-	if (!presets.length) presets = config.policy.presetsUsdMinor ?? [];
+	if (!presets.length) presets = rule.presets;
 	c.header('Cache-Control', 'private, no-store');
 	return c.json({
 		success: true,
 		result: {
 			channelId: channel.channelId,
-			currency: 'USD',
+			currency,
+			currencies: Object.keys(config.policy.amounts ?? {}),
 			oneTime: settings?.one_time_enabled === 1,
 			monthly: settings?.monthly_enabled === 1,
 			presets,
-			minimum: config.policy.minimumUsdMinor,
+			minimum: rule.minimum,
+			// MEM-D3: the fee is always shown; covering it is offered and starts unticked
 			coverFeesChoice: config.policy.collectorFeePayer === 'creatorSupporterMayCover',
+			coverFeesDefault: false,
 			minAge: config.policy.minSupporterAge,
 			thankYouNote: settings?.thank_you_note ?? null,
 		},
@@ -92,7 +99,8 @@ export async function handleSupportQuote(c: Context) {
 	if (!(await receivingChannel(c, env))) return featureOff(c, 'creatorSupport');
 	try {
 		const config = await readSupportConfig(env.SEARCH_DB);
-		const q = quote(env, config, { amount: Number(c.req.query('amount')), currency: c.req.query('currency') ?? 'USD', supporterTicked: c.req.query('coverFees') === '1' }, lang(c));
+		const now = new Date();
+		const q = await quote(env, config, { amount: Number(c.req.query('amount')), currency: (c.req.query('currency') ?? 'USD').toUpperCase(), supporterTicked: c.req.query('coverFees') === '1', method: c.req.query('method') ?? null }, lang(c), vendorContext(env, config.mode, () => now), now);
 		return c.json({ success: true, result: q });
 	} catch (error) {
 		return failure(c, error);
@@ -130,7 +138,7 @@ export async function handleSupportCheckout(c: Context) {
 			{
 				kind,
 				amount: Number(body.amount),
-				currency: typeof body.currency === 'string' ? body.currency : 'USD',
+				currency: typeof body.currency === 'string' ? body.currency.toUpperCase() : 'USD',
 				coverFees: body.coverFees === true,
 				anonymous: body.anonymous === true,
 				message: typeof body.message === 'string' ? body.message : null,

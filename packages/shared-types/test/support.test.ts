@@ -102,7 +102,7 @@ test('policy parsing keeps nulls, refuses bad values and never fills a default',
   assert.equal(policy.primaryRail, null);
   assert.deepEqual(problems.map((p) => p.field).sort(), ['payoutDayOfMonth', 'primaryRail']);
   assert.ok(!('bogus' in policy));
-  assert.ok(s.parseSupportPolicy({ minimumUsdMinor: 300, presetsUsdMinor: [100] }).problems.some((p) => p.field === 'presetsUsdMinor'));
+  assert.ok(s.parseSupportPolicy({ amounts: { USD: { minimum: 300, presets: [100] } } }).problems.some((p) => p.field === 'amounts'));
   assert.ok(s.parseSupportPolicy({ primaryRail: 'wise', fallbackRail: 'wise' }).problems.some((p) => p.field === 'fallbackRail'));
 });
 
@@ -136,4 +136,17 @@ test('review of #1757: the card fee is on everything charged, and a gift the fee
   const covered = s.quoteGift({ gift: usd(1000), fee, supporterCovers: true, taxBasisPoints: 1000 });
   assert.ok(covered.creatorReceives.amount >= 1000);
   assert.throws(() => s.quoteGift({ gift: usd(30), fee: { basisPoints: 290, fixed: usd(30) }, supporterCovers: false }), /more than the card fee/);
+});
+
+test('O43 settings: amounts per currency, 18+ only, fee entries checked, presets never applied by themselves', () => {
+  const ok = s.parseSupportPolicy({ amounts: { USD: { minimum: 300, presets: [500, 1000] }, EUR: { minimum: 200, presets: [200] } } });
+  assert.equal(ok.problems.length, 0);
+  assert.ok(s.parseSupportPolicy({ amounts: { XXX: { minimum: 1, presets: [1] } } }).problems.length);
+  assert.ok(s.parseSupportPolicy({ amounts: {} }).problems.length);
+  assert.ok(s.parseSupportPolicy({ minSupporterAge: 16 }).problems.some((p) => p.field === 'minSupporterAge'));
+  assert.ok(s.parseSupportPolicy({ minCreatorAge: 17 }).problems.some((p) => p.field === 'minCreatorAge'));
+  assert.deepEqual(s.feeScheduleProblems({ kind: 'collector', provider: 'paygood', currency: 'USD', method: 'card', basisPoints: 290, fixedMinor: 30, effectiveFrom: '2026-12-01T00:00:00Z' }), []);
+  assert.deepEqual(s.feeScheduleProblems({ kind: 'collector', provider: 'Stripe!', currency: 'USD', basisPoints: 2.9, fixedMinor: -1, effectiveFrom: 'soon' }).sort(), ['basisPoints', 'effectiveFrom', 'fixedMinor', 'provider']);
+  assert.ok(s.FEE_PRESETS.every((p) => !/stripe/i.test(p.provider)));
+  assert.ok(s.supportReadiness({ organizationFormed: true, financeApprovers: 2, policy: s.UNDECIDED_SUPPORT_POLICY, collectorAvailable: true, railAvailable: true, feesKnown: false }).blockers.includes('no_fees'));
 });

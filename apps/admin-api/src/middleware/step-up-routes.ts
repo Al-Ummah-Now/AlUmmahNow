@@ -76,6 +76,7 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/workflows/requests/:id/reject', what: 'Reject a change request (when its rule asks for a step-up)', when: requestNeedsStepUp },
   { method: 'POST', path: '/api/workflows/rules/:type', what: 'Propose a change to an approval rule' },
   { method: 'PUT', path: '/api/features/:key', what: 'Switch a feature whose approval rule asks for a step-up to propose', when: featureProposalNeedsStepUp },
+  { method: 'POST', path: '/api/support/fees', what: 'Change a creator-support fee setting' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {

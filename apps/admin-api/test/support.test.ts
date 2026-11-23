@@ -187,3 +187,19 @@ describe('money actions are for the finance list only', () => {
     assert.equal((await t.as('usr_admin', ['admin'])('GET', '/settings')).status, 403);
   });
 });
+
+describe('fee settings (O43)', () => {
+  it('only the finance list (support:providers) changes a fee; it is audited with its effective date', async () => {
+    const t = setup();
+    const fee = { kind: 'collector', provider: 'paygood', currency: 'USD', basisPoints: 190, fixedMinor: 30, effectiveFrom: '2026-12-01T00:00:00Z', presetId: 'paygood-nonprofit-usd' };
+    const refused = await t.as(OWNER, ['super_admin'])('POST', '/fees', fee);
+    assert.equal(refused.status, 403);
+    assert.equal(((await refused.json()) as { code: string }).code, 'support_not_finance');
+    await t.as(SUPER_B, ['super_admin'])('POST', '/finance', { userId: FIN, permissions: ['support:providers'] });
+    await t.as(OWNER, ['super_admin'])('POST', `/finance/${FIN}/approve`);
+    assert.equal((await t.as(FIN, ['moderator'])('POST', '/fees', fee)).status, 200);
+    assert.equal(t.calls.at(-1)!.path, '/internal/support/fees');
+    const keys = (await t.audits()).results.map((r) => r.key);
+    assert.ok(keys.includes('content:support-fees:collector:paygood:USD:any'));
+  });
+});

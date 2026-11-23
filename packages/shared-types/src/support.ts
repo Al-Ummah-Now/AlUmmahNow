@@ -199,9 +199,12 @@ export interface SupportPolicy {
   adjustmentApprovers: 1 | 2 | null;
   /** MEM-D3 */
   collectorFeePayer: CollectorFeePayer | null;
-  /** MEM-D4: smallest gift, USD minor units, and the preset amounts offered */
-  minimumUsdMinor: number | null;
-  presetsUsdMinor: number[] | null;
+  /**
+   * MEM-D4 (decided 2026-11-23, O43: an admin setting per currency, no fixed default): per currency, the
+   * smallest gift and the preset buttons, in that currency's minor units. A currency without an entry
+   * can't be given in.
+   */
+  amounts: SupportAmounts | null;
   /** MEM-D9: youngest age that may support / receive */
   minSupporterAge: number | null;
   minCreatorAge: number | null;
@@ -234,8 +237,7 @@ export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   batchApprovers: null,
   adjustmentApprovers: null,
   collectorFeePayer: null,
-  minimumUsdMinor: null,
-  presetsUsdMinor: null,
+  amounts: null,
   minSupporterAge: null,
   minCreatorAge: null,
   receiversRule: null,
@@ -247,7 +249,7 @@ export type SupportDecisionId = 'MEM-D3' | 'MEM-D4' | 'MEM-D5' | 'MEM-D9' | 'MEM
 /** Which policy fields answer which owner decision (wiki AUN-MEMBERS §15). */
 export const SUPPORT_DECISION_FIELDS: Readonly<Record<SupportDecisionId, readonly (keyof SupportPolicy)[]>> = Object.freeze({
   'MEM-D3': ['collectorFeePayer'],
-  'MEM-D4': ['minimumUsdMinor', 'presetsUsdMinor'],
+  'MEM-D4': ['amounts'],
   'MEM-D5': ['receiversRule'],
   'MEM-D9': ['minSupporterAge', 'minCreatorAge'],
   'MEM-D15': ['appsEnabled'],
@@ -282,6 +284,20 @@ const oneOf = <T extends string>(list: readonly T[]) => (v: unknown) => typeof v
 const bool = (v: unknown) => typeof v === 'boolean';
 const intList = (lo: number, hi: number, max: number) => (v: unknown) => Array.isArray(v) && v.length > 0 && v.length <= max && v.every((x) => intIn(x, lo, hi));
 
+/** MEM-D4 per currency: the smallest gift and up to 6 preset buttons, minor units of that currency. */
+export type SupportAmounts = Partial<Record<SupportCurrency, { minimum: number; presets: number[] }>>;
+
+function validAmounts(v: unknown): boolean {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const entries = Object.entries(v as Record<string, unknown>);
+  if (!entries.length) return false;
+  return entries.every(([currency, a]) => {
+    if (!isSupportCurrency(currency) || !a || typeof a !== 'object') return false;
+    const { minimum, presets } = a as { minimum?: unknown; presets?: unknown };
+    return intIn(minimum, 1, 100_000_000) && Array.isArray(presets) && presets.length >= 1 && presets.length <= 6 && presets.every((x) => intIn(x, minimum as number, 1_000_000_000));
+  });
+}
+
 const POLICY_CHECKS: Readonly<Record<keyof SupportPolicy, (v: unknown) => boolean>> = {
   primaryRail: oneOf(PAYOUT_RAIL_IDS),
   fallbackRail: (v) => v === 'none' || oneOf(PAYOUT_RAIL_IDS)(v),
@@ -299,10 +315,10 @@ const POLICY_CHECKS: Readonly<Record<keyof SupportPolicy, (v: unknown) => boolea
   batchApprovers: (v) => v === 1 || v === 2,
   adjustmentApprovers: (v) => v === 1 || v === 2,
   collectorFeePayer: oneOf(COLLECTOR_FEE_PAYERS),
-  minimumUsdMinor: (v) => intIn(v, 1, 1_000_000),
-  presetsUsdMinor: intList(1, 10_000_000, 6),
-  minSupporterAge: (v) => intIn(v, 13, 99),
-  minCreatorAge: (v) => intIn(v, 13, 99),
+  amounts: (v) => validAmounts(v),
+  // MEM-D9 (decided 2026-11-23, O43): 18+ to send and to receive; a setting that can only be 18 or more
+  minSupporterAge: (v) => intIn(v, 18, 99),
+  minCreatorAge: (v) => intIn(v, 18, 99),
   receiversRule: oneOf(RECEIVERS_RULES),
   appsEnabled: bool,
 };
@@ -322,9 +338,6 @@ export function parseSupportPolicy(input: unknown): { policy: SupportPolicy; pro
     else problems.push({ field: key, code: 'invalid' });
   }
   const p = policy as unknown as SupportPolicy;
-  if (p.presetsUsdMinor && p.minimumUsdMinor !== null && p.presetsUsdMinor.some((x) => x < (p.minimumUsdMinor as number))) {
-    problems.push({ field: 'presetsUsdMinor', code: 'invalid' });
-  }
   if (p.primaryRail && p.fallbackRail && p.fallbackRail === p.primaryRail) problems.push({ field: 'fallbackRail', code: 'invalid' });
   return { policy: p, problems };
 }
@@ -464,7 +477,7 @@ export const FINANCE_ONLY_SUPPORT_PERMISSIONS: readonly SupportPermission[] = Ob
 // Features page precondition (AUN-FEATURES FEAT-4).
 // ---------------------------------------------------------------------------
 
-export type SupportTurnOnBlocker = 'organization_not_formed' | 'no_finance_approver' | 'decisions_open' | 'no_collector' | 'no_rail';
+export type SupportTurnOnBlocker = 'organization_not_formed' | 'no_finance_approver' | 'decisions_open' | 'no_collector' | 'no_fees' | 'no_rail';
 
 export interface SupportReadiness {
   /** The switch may be turned on */
@@ -479,13 +492,15 @@ export interface SupportReadiness {
  * MEM-D24 (two-person approval needs two), every owner decision is recorded, and a collector and a
  * rail are available in this environment.
  */
-export function supportReadiness(input: { organizationFormed: boolean; financeApprovers: number; policy: SupportPolicy; collectorAvailable: boolean; railAvailable: boolean }): SupportReadiness {
+export function supportReadiness(input: { organizationFormed: boolean; financeApprovers: number; policy: SupportPolicy; collectorAvailable: boolean; railAvailable: boolean; feesKnown?: boolean }): SupportReadiness {
   const blockers: SupportTurnOnBlocker[] = [];
   if (!input.organizationFormed) blockers.push('organization_not_formed');
   if (input.financeApprovers < Math.max(1, input.policy.batchApprovers ?? 1, input.policy.adjustmentApprovers ?? 1)) blockers.push('no_finance_approver');
   const openDecisions = undecidedSupportDecisions(input.policy);
   if (openDecisions.length) blockers.push('decisions_open');
   if (!input.collectorAvailable) blockers.push('no_collector');
+  // O43: every currency people may give in has the collector's fee (a live quote or a fee setting)
+  if (input.collectorAvailable && input.feesKnown === false) blockers.push('no_fees');
   if (!input.railAvailable) blockers.push('no_rail');
   return { ready: blockers.length === 0, blockers, openDecisions };
 }
@@ -496,6 +511,56 @@ export const SUPPORT_TURN_ON_REASONS: Readonly<Record<SupportTurnOnBlocker, { en
   no_finance_approver: { en: 'Add enough people to the organization’s finance list to approve payouts first.', ar: 'أضف أولًا عددًا كافيًا من الأشخاص إلى قائمة المالية في المؤسسة لاعتماد الدفعات.' },
   decisions_open: { en: 'Some decisions about holds, payouts and fees haven’t been recorded yet on the Support settings page.', ar: 'لم تُسجَّل بعد بعض القرارات الخاصة بفترة الحجز والدفعات والرسوم في صفحة إعدادات الدعم.' },
   no_collector: { en: 'No payment provider is set up to collect support here.', ar: 'لا يوجد مزوّد دفع مُعدّ لتحصيل الدعم هنا.' },
+  no_fees: { en: 'Enter the payment provider’s fee for every currency people can give in, on the Support settings page.', ar: 'أدخل رسوم مزوّد الدفع لكل عملة يمكن الدعم بها، في صفحة إعدادات الدعم.' },
   no_rail: { en: 'No payout service is set up to pay creators here.', ar: 'لا توجد خدمة دفع مُعدّة لتحويل الأموال إلى صنّاع المحتوى هنا.' },
 });
 
+
+// ---------------------------------------------------------------------------
+// Fee schedules (decided 2026-11-23, O43): admin settings with an effective date, changed by the
+// finance list and audited. A vendor's live quote wins; the setting is the fallback; with neither,
+// nobody can pay (the collector) or no payout is planned (the rail).
+// ---------------------------------------------------------------------------
+
+export const FEE_SCHEDULE_KINDS = ['collector', 'rail'] as const;
+export type FeeScheduleKind = (typeof FEE_SCHEDULE_KINDS)[number];
+
+export interface FeeScheduleEntry {
+  id: string;
+  kind: FeeScheduleKind;
+  /** 'paygood', 'test', or a payout rail id */
+  provider: string;
+  currency: SupportCurrency;
+  /** A payment method ('card', 'bank', …) or null for any */
+  method: string | null;
+  basisPoints: number;
+  fixedMinor: number;
+  /** When it applies from (ISO); the newest entry already in force wins */
+  effectiveFrom: string;
+  createdBy: string;
+  createdAt: string;
+  /** The preset it was filled from, if any */
+  presetId: string | null;
+}
+
+/**
+ * Published rates to fill the form from (never applied on their own). Source: the spec's PayGood fee
+ * table, 2026-11-22 (wiki AUN-MEMBERS §5.1).
+ */
+export const FEE_PRESETS: readonly { id: string; kind: FeeScheduleKind; provider: string; currency: SupportCurrency; basisPoints: number; fixedMinor: number; name: { en: string; ar: string } }[] = Object.freeze([
+  { id: 'paygood-standard-usd', kind: 'collector', provider: 'paygood', currency: 'USD', basisPoints: 290, fixedMinor: 30, name: { en: 'PayGood standard: 2.9% + 30¢', ar: 'PayGood العادي: ٢٫٩٪ + ٣٠ سنتًا' } },
+  { id: 'paygood-nonprofit-usd', kind: 'collector', provider: 'paygood', currency: 'USD', basisPoints: 190, fixedMinor: 30, name: { en: 'PayGood nonprofit: 1.9% + 30¢', ar: 'PayGood للمؤسسات غير الربحية: ١٫٩٪ + ٣٠ سنتًا' } },
+]);
+
+/** Checks one fee schedule entry the finance list submits. */
+export function feeScheduleProblems(input: { kind?: unknown; provider?: unknown; currency?: unknown; method?: unknown; basisPoints?: unknown; fixedMinor?: unknown; effectiveFrom?: unknown }): string[] {
+  const out: string[] = [];
+  if (!(FEE_SCHEDULE_KINDS as readonly unknown[]).includes(input.kind)) out.push('kind');
+  if (typeof input.provider !== 'string' || !/^[a-z][a-z0-9-]{1,39}$/.test(input.provider)) out.push('provider');
+  if (!isSupportCurrency(input.currency)) out.push('currency');
+  if (input.method !== null && input.method !== undefined && (typeof input.method !== 'string' || !/^[a-z][a-z0-9_-]{1,29}$/.test(input.method))) out.push('method');
+  if (!intIn(input.basisPoints, 0, 2_000)) out.push('basisPoints');
+  if (!intIn(input.fixedMinor, 0, 100_000)) out.push('fixedMinor');
+  if (typeof input.effectiveFrom !== 'string' || !Number.isFinite(Date.parse(input.effectiveFrom))) out.push('effectiveFrom');
+  return out;
+}

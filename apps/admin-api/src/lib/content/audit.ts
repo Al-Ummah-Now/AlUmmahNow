@@ -59,6 +59,8 @@ export type ContentKind =
   | 'support-country'
   /** Approval workflows (wiki AUN-WORKFLOWS): one row per step of a change request (id = request id). */
   | 'workflow'
+  /** Creator support: a fee setting (id = kind:provider:currency:method; details carry the effective date) */
+  | 'support-fees'
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
   | 'import'
   /** A social import source (id = source id; wiki TOOLS-ADMIN TA-9): added, changed, synced, removed. */

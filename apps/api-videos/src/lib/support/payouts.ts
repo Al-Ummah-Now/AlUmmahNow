@@ -16,9 +16,10 @@
  * The ledger moves available → in_payout when a payout is sent, and in_payout → rail on paid
  * (ledger.ts); a failed payout puts the money back in the creator's available balance.
  */
-import { type SearchDb, type SupportCurrency, type SupportPolicy } from '@al-ummah/shared-types';
+import { basisPoints, type SearchDb, type SupportCurrency, type SupportPolicy } from '@al-ummah/shared-types';
 import { railFor, type SupportAdapterEnv } from './adapters';
 import { readSupportConfig } from './config';
+import { feeSetting } from './fees';
 import { applyRailEvents } from './events';
 import { creatorBalance, payoutFailedLines, payoutSentLines, postEntry } from './ledger';
 import { RailError, type PayoutRail, type RailContext } from './rail';
@@ -124,8 +125,15 @@ export async function planBatch(
 				continue;
 			}
 			const amount = { amount: bal.available, currency };
-			const quote = await rail.quotePayout(input.ctxFor(payee.mode), payee.rail_payee_ref as string, amount);
-			payouts.push({ payoutId: newId('spo'), payeeId: payee.id, channelId: payee.channel_id, amount: bal.available, currency, railFee: quote.fee.amount });
+			// O43: the rail's live quote wins; the admin's fee setting is the fallback; with neither, no payout
+			const live = await rail.quotePayout(input.ctxFor(payee.mode), payee.rail_payee_ref as string, amount).catch(() => null);
+			const set = live ? null : await feeSetting(db, 'rail', rail.id, currency, null, input.now);
+			const railFee = live ? live.fee.amount : set ? basisPoints(amount, set.basisPoints, 'up').amount + set.fixed.amount : null;
+			if (railFee === null) {
+				skipped.push({ channelId: payee.channel_id, reason: 'no_rail_fee' });
+				continue;
+			}
+			payouts.push({ payoutId: newId('spo'), payeeId: payee.id, channelId: payee.channel_id, amount: bal.available, currency, railFee });
 		}
 	}
 	// Nobody to pay: no batch (an empty one would hold the period and never finish)

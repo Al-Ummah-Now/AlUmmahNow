@@ -50,7 +50,7 @@ export interface EligibilityEnv extends SupportAdapterEnv {
 /** The owner's tier flag (MEM-D5 'tierCapability'); injected so this module stays free of tier storage. */
 export type OwnerTierAllows = (ownerId: string) => Promise<boolean>;
 
-const SUPPORTER_DECISIONS: (keyof SupportPolicy)[] = ['collectorFeePayer', 'minimumUsdMinor', 'presetsUsdMinor', 'minSupporterAge', 'appsEnabled'];
+const SUPPORTER_DECISIONS: (keyof SupportPolicy)[] = ['collectorFeePayer', 'amounts', 'minSupporterAge', 'appsEnabled'];
 const RECEIVER_DECISIONS: (keyof SupportPolicy)[] = ['receiversRule', 'primaryRail', 'fallbackRail', 'collectBeforePayeeActive', 'minCreatorAge'];
 
 const open = (p: SupportPolicy, fields: (keyof SupportPolicy)[]) => fields.some((f) => p[f] === null);

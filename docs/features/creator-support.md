@@ -146,6 +146,17 @@ admin-api `/api/support/*` (`routers/support.router.ts`, `lib/support-finance.ts
   - Planning, approving and stopping payout batches need `support:payouts`. api-videos checks the finance list again on approval.
 - **Country rules** need `support:manage` (super admins).
 
+## Fee settings (O43)
+
+Owner, 2026-11-23: "we need to be able to change the fee if there are changes in terms."
+
+- The collector's and the payout rails' fees live in `support_fee_schedules` (search migration 0116), not in code. Each row is a percent plus a fixed amount, per provider, currency and (optionally) payment method, with an **effective date**.
+- Rows are append-only: a change is a new row, and the newest row already in force applies.
+- admin-api `POST /api/support/fees` is for the finance list only (`support:providers`, never tech staff). It needs a step-up and is audited (`support-fees`, with the effective date and the setting it replaces).
+- `FEE_PRESETS` (PayGood 2.9% + 30¢, nonprofit 1.9% + 30¢) only fill the form.
+- `checkout.ts` `collectorFeeFor` uses the collector's live quote (`liveFee`) when the adapter gives one, else the setting, else none, and the sheet then refuses to take a payment. `payouts.ts` does the same with the rail's `quotePayout` and its fee setting; with neither, the payee is skipped (`no_rail_fee`).
+- Readiness blocks turning support on (`no_fees`) until every currency in MEM-D4's amounts has a collector fee.
+
 ## Owner decisions are settings, never code
 
 Every open decision is a field of `SupportPolicy`, stored in `support_config.policy` and read as
@@ -163,8 +174,8 @@ guessing.
 | MEM-D22 dormant balances | `dormantPolicy`, `dormantReminderMonths` | `jobs.ts` `runSupportDormantJob` (lists only while open) |
 | MEM-D23 gifts before payee active | `collectBeforePayeeActive` | `eligibility.ts` `receiverEligibility` |
 | MEM-D24 approvals | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
-| MEM-D3 card fee payer | `collectorFeePayer` | `effectiveCoverFees` (shared-types) |
-| MEM-D4 minimum and presets | `minimumUsdMinor`, `presetsUsdMinor` | support sheet (MEM-7) |
+| MEM-D3 card fee payer (decided 2026-11-23, O43: always shown, cover optional and unticked) | `collectorFeePayer` | `effectiveCoverFees` (shared-types); the sheet's `coverFeesDefault: false` |
+| MEM-D4 minimum and presets (decided O43: per currency, no default) | `amounts` | `checkout.ts` `quote`; the sheet; readiness |
 | MEM-D9 ages | `minSupporterAge`, `minCreatorAge` | `eligibility.ts` (must be recorded); the age confirmation on the support sheet (MEM-7) |
 | MEM-D5 who may receive | `receiversRule` (+ `CreatorTier.supportReceive`) | `eligibility.ts` `receiverEligibility` |
 | MEM-D15 apps | `appsEnabled` | `eligibility.ts` `supporterEligibility` (`X-AUN-Client`) |

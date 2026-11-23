@@ -8,7 +8,7 @@
  * Every call that moves or could move money takes an idempotency key: a retry with the same key
  * never charges or refunds twice. Card data never reaches us (hosted checkout, PCI SAQ A).
  */
-import type { Money, SupportCollectorId, SupportMode } from '@al-ummah/shared-types';
+import type { CollectorFeeSchedule, Money, SupportCollectorId, SupportMode } from '@al-ummah/shared-types';
 import type { TestStateStore } from './test-state';
 
 export interface CollectorContext {
@@ -87,6 +87,11 @@ export interface SupportCollector {
 	id: SupportCollectorId;
 	/** Hosted checkout. Idempotent on `input.checkoutId`. */
 	createCheckout(ctx: CollectorContext, input: SupportCheckoutInput): Promise<{ url: string; checkoutRef: string }>;
+	/**
+	 * The vendor's live fee for a currency and payment method, when its API gives one (O43: a live quote
+	 * wins over the admin's fee setting). Null or absent: use the setting.
+	 */
+	liveFee?(ctx: CollectorContext, currency: Money['currency'], method: string | null): Promise<CollectorFeeSchedule | null>;
 	/** Stops a monthly pledge at once (no further charges). Idempotent. */
 	cancelPledge(ctx: CollectorContext, pledgeRef: string, reason: CancelReason): Promise<void>;
 	/** Refund from the organization's merchant account. `amount` omitted = the rest of the payment. */

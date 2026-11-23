@@ -163,10 +163,6 @@ describe('support settings (owner decisions)', () => {
 		assert.equal((await readSupportConfig(d)).policy.holdDays, null);
 	});
 
-	it('collector fee schedules drop anything malformed', async () => {
-		const { parseCollectorFees } = await import('../src/lib/support/config');
-		assert.deepEqual(parseCollectorFees({ USD: { basisPoints: 290, fixed: 30 }, EUR: { basisPoints: 2.9, fixed: 30 }, XXX: { basisPoints: 1, fixed: 1 } }), { USD: { basisPoints: 290, fixed: { amount: 30, currency: 'USD' } } });
-	});
 });
 
 describe('test adapter state in D1', () => {
@@ -198,7 +194,7 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 		const { supportCanTurnOn } = await import('../src/lib/support/readiness');
 		const { writeSupportPolicy } = await import('../src/lib/support/config');
 		const d = db();
-		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }, 'usr_fin', 0);
+		await writeSupportPolicy(d, { primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 100, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 1, adjustmentApprovers: 1, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }, 'usr_fin', 0);
 		await d.prepare("UPDATE support_config SET organisation_formed = 1 WHERE id = 'default'").run();
 		await d.prepare("INSERT INTO support_finance_members (user_id, roles, added_by, approved_by, added_at) VALUES ('usr_fin', '[\"support:payouts\"]', 'usr_board', 'usr_board2', 'now')").run();
 		assert.equal((await supportCanTurnOn({ SEARCH_DB: d, ENVIRONMENT: 'qa', SUPPORT_TEST_PROVIDERS: '1' })).ready, true);
