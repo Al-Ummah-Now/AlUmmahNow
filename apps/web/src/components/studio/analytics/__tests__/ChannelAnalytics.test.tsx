@@ -60,7 +60,9 @@ describe('ChannelAnalytics', () => {
     const rows = await screen.findAllByTestId('studio-top-row');
     expect(rows[0]).toHaveTextContent('V b');
     expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', '/en/studio/c1/content/videos/b/analytics');
+    expect(top).toHaveBeenCalledWith('c1', expect.any(Object), undefined, 'views');
     fireEvent.click(screen.getAllByRole('button', { name: text.metrics.watchTime }).at(-1)!);
+    await waitFor(() => expect(top).toHaveBeenCalledWith('c1', expect.any(Object), undefined, 'watchTime'));
     expect((await screen.findAllByTestId('studio-top-row'))[0]).toHaveTextContent('V a');
   });
 

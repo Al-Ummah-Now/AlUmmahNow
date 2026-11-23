@@ -42,10 +42,14 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
   const [topCursor, setTopCursor] = useState<string | null>(null);
   const [topFailed, setTopFailed] = useState(false);
   const request = useRef(0);
+  const topRequest = useRef(0);
+  const sortRef = useRef<SortKey>(sort);
+  sortRef.current = sort;
   const windows = useMemo(() => rangeDates(range, new Date(), channelCreated), [range, channelCreated]);
 
   const load = useCallback(async () => {
     const id = ++request.current;
+    const topId = ++topRequest.current;
     setLoading(true);
     setOverviewFailed(false);
     setTopFailed(false);
@@ -56,15 +60,17 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
     const [current, before, content] = await Promise.all([
       getStudioChannelAnalytics(channelId, windows.current).catch(failed),
       windows.previous ? getStudioChannelAnalytics(channelId, windows.previous).catch(failed) : Promise.resolve(null),
-      getTopContent(channelId, windows.current).catch(failed),
+      getTopContent(channelId, windows.current, undefined, sortRef.current).catch(failed),
     ]);
     if (id !== request.current) return;
     setOverview(current);
     setPrevious(before);
     setOverviewFailed(!current);
-    setTop(content?.items ?? []);
-    setTopCursor(content?.cursor ?? null);
-    setTopFailed(!content);
+    if (topId === topRequest.current) {
+      setTop(content?.items ?? []);
+      setTopCursor(content?.cursor ?? null);
+      setTopFailed(!content);
+    }
     setLoading(false);
   }, [channelId, windows]);
 
@@ -72,12 +78,12 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
     void load();
   }, [load]);
 
-  /** Top content alone, so its Retry doesn't reload the whole page. */
-  const loadTop = useCallback(async () => {
-    const id = request.current;
+  /** Top content alone, so its Retry or sort change doesn't reload the whole page. */
+  const loadTop = useCallback(async (nextSort: SortKey = sortRef.current) => {
+    const topId = ++topRequest.current;
     setTopFailed(false);
-    const content = await getTopContent(channelId, windows.current).catch(() => null);
-    if (id !== request.current) return;
+    const content = await getTopContent(channelId, windows.current, undefined, nextSort).catch(() => null);
+    if (topId !== topRequest.current) return;
     setTop(content?.items ?? []);
     setTopCursor(content?.cursor ?? null);
     setTopFailed(!content);
@@ -96,10 +102,18 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
 
   const loadMore = async () => {
     if (!topCursor) return;
-    const content = await getTopContent(channelId, windows.current, topCursor).catch(() => null);
+    const topId = topRequest.current;
+    const content = await getTopContent(channelId, windows.current, topCursor, sort).catch(() => null);
+    if (topId !== topRequest.current) return;
     if (!content) return setTopFailed(true);
     setTop((items) => [...items, ...content.items]);
     setTopCursor(content.cursor);
+  };
+
+  const changeSort = (key: SortKey) => {
+    setSort(key);
+    setTopCursor(null);
+    void loadTop(key);
   };
 
   const number = numberFormat(locale);
@@ -119,7 +133,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
   const retryTop = <Button variant="outline" onClick={() => void loadTop()}>{text.retry}</Button>;
   const sortHeader = (key: SortKey, label: string) => (
     <th className="p-2 text-end font-medium sm:whitespace-nowrap" aria-sort={sort === key ? 'descending' : 'none'}>
-      <button type="button" className="min-h-11 hover:text-foreground" onClick={() => setSort(key)}>{label}</button>
+      <button type="button" className="min-h-11 hover:text-foreground" onClick={() => changeSort(key)}>{label}</button>
     </th>
   );
 

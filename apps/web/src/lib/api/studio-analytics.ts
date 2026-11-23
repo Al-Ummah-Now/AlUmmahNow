@@ -62,9 +62,16 @@ export async function getVideoRetention(videoId: string, window: DateWindow): Pr
   return get(`/api/analytics/videos/${encodeURIComponent(videoId)}/retention${buildQueryParams({ ...window })}`, 'getVideoRetention');
 }
 
-export async function getTopContent(channelId: string, window: DateWindow, cursor?: string): Promise<{ items: TopContentItem[]; cursor: string | null } | null> {
+export type TopContentSort = 'views' | 'watchTime' | 'avgViewDuration';
+
+export async function getTopContent(
+  channelId: string,
+  window: DateWindow,
+  cursor?: string,
+  sort?: TopContentSort,
+): Promise<{ items: TopContentItem[]; cursor: string | null } | null> {
   const response = await get<{ result: { items: TopContentItem[]; cursor: string | null } }>(
-    `/api/channels/${encodeURIComponent(channelId)}/analytics/top-content${buildQueryParams({ ...window, cursor })}`,
+    `/api/channels/${encodeURIComponent(channelId)}/analytics/top-content${buildQueryParams({ ...window, cursor, sort })}`,
     'getTopContent',
   );
   return response?.result ?? null;
