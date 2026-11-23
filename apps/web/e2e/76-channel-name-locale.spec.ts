@@ -44,9 +44,9 @@ test.describe('Channel name in the page language', () => {
       await expect(card).toContainText(title);
       await expect(card).not.toContainText(otherTitle);
       // YouTube style (owner, 2026-11-13): the card reads "views • 1 day ago"; its date's tooltip says
-      // what the date is, with a verb and the exact date and time
+      // what the date is, with a verb and the exact date and time (the hour has no leading zero)
       const published = lang === 'ar' ? 'نُشر في' : 'Published on';
-      await expect(card.locator('time.rel-date')).toHaveAttribute('title', new RegExp(`^${published} .*[0-9٠-٩]{2}:[0-9٠-٩]{2}`));
+      await expect(card.locator('time.rel-date')).toHaveAttribute('title', new RegExp(`^${published} .*[0-9٠-٩]{1,2}:[0-9٠-٩]{2}`));
 
       await page.goto(`/${lang}/video/${own.videos()[0].id}`);
       const channelLink = page.locator(`a[href="/${lang}/channels/${own.channelId()}"]`).filter({ hasText: expected }).first();

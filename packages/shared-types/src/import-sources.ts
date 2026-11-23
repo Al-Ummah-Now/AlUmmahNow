@@ -36,7 +36,7 @@ export type ImportItemKind = 'text' | 'image' | 'link' | 'video';
  * reason in `note`. awaiting_file: the file has to come from the owner (YouTube: the Takeout export,
  * matched by the app; Telegram: a video over the Bot API's 20 MB download limit).
  */
-export type ImportItemState = 'pending' | 'posted' | 'skipped' | 'awaiting_file';
+export type SourceItemState = 'pending' | 'posted' | 'skipped' | 'awaiting_file';
 
 /** Why an item was skipped or waits for its file. */
 export const IMPORT_ITEM_NOTES = [
@@ -76,7 +76,7 @@ export interface ImportSourceView {
   lastSyncAt: string | null;
   lastJobId: string | null;
   lastError: string | null;
-  counts: Partial<Record<ImportItemState, number>>;
+  counts: Partial<Record<SourceItemState, number>>;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -86,7 +86,7 @@ export interface ImportSourceItemView {
   sourceId: string;
   itemId: string;
   kind: ImportItemKind | null;
-  state: ImportItemState;
+  state: SourceItemState;
   note: ImportItemNote | null;
   postId: string | null;
   videoId: string | null;

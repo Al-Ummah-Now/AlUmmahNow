@@ -7,7 +7,7 @@ import {
 	type D1Database,
 	type ImportItemKind,
 	type ImportItemNote,
-	type ImportItemState,
+	type SourceItemState,
 	type ImportSourceAuth,
 	type ImportSourceItemView,
 	type ImportSourceNetwork,
@@ -65,7 +65,7 @@ export interface ItemRow {
 	source_id: string;
 	item_id: string;
 	kind: ImportItemKind | null;
-	state: ImportItemState;
+	state: SourceItemState;
 	payload: string | null;
 	post_id: string | null;
 	video_id: string | null;
@@ -78,7 +78,7 @@ export interface ItemRow {
 
 const iso = (ms: number | null) => (ms === null || ms === undefined ? null : new Date(ms).toISOString());
 
-export function sourceView(row: SourceRow, counts: Partial<Record<ImportItemState, number>> = {}): ImportSourceView {
+export function sourceView(row: SourceRow, counts: Partial<Record<SourceItemState, number>> = {}): ImportSourceView {
 	return {
 		id: row.id,
 		channelId: row.channel_id,
@@ -122,13 +122,13 @@ export async function readSource(env: SourceDbEnv, id: string): Promise<SourceRo
 	return sourceDb(env).prepare('SELECT * FROM import_sources WHERE id = ?').bind(id).first<SourceRow>();
 }
 
-async function countsFor(env: SourceDbEnv, ids: string[]): Promise<Map<string, Partial<Record<ImportItemState, number>>>> {
-	const out = new Map<string, Partial<Record<ImportItemState, number>>>();
+async function countsFor(env: SourceDbEnv, ids: string[]): Promise<Map<string, Partial<Record<SourceItemState, number>>>> {
+	const out = new Map<string, Partial<Record<SourceItemState, number>>>();
 	if (!ids.length) return out;
 	const { results } = await sourceDb(env)
 		.prepare(`SELECT source_id, state, COUNT(*) AS n FROM import_source_items WHERE source_id IN (${ids.map(() => '?').join(',')}) GROUP BY source_id, state`)
 		.bind(...ids)
-		.all<{ source_id: string; state: ImportItemState; n: number }>();
+		.all<{ source_id: string; state: SourceItemState; n: number }>();
 	for (const r of results ?? []) {
 		const c = out.get(r.source_id) ?? {};
 		c[r.state] = Number(r.n);
@@ -266,7 +266,7 @@ export async function sourcesFor(env: SourceDbEnv, network: ImportSourceNetwork,
 export interface NewItem {
 	itemId: string;
 	kind: ImportItemKind | null;
-	state: ImportItemState;
+	state: SourceItemState;
 	payload: unknown;
 	originalUrl: string | null;
 	originalAt: number | null;
@@ -299,7 +299,7 @@ export async function pendingItems(env: SourceDbEnv, sourceId: string, limit: nu
 	return results ?? [];
 }
 
-export async function listItems(env: SourceDbEnv, sourceId: string, query: { state?: ImportItemState; limit?: number } = {}): Promise<ImportSourceItemView[]> {
+export async function listItems(env: SourceDbEnv, sourceId: string, query: { state?: SourceItemState; limit?: number } = {}): Promise<ImportSourceItemView[]> {
 	const db = sourceDb(env);
 	const limit = Math.min(Math.max(query.limit ?? 100, 1), 500);
 	const { results } = query.state
