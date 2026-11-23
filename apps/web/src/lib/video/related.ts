@@ -4,6 +4,10 @@
  * by watch history when signed in), topped up from the general feed when the
  * API returns too few. When every source comes back empty it retries once,
  * then falls through the last-resort sources.
+ *
+ * An empty shelf is either an answer (the sources were reached and found
+ * nothing: a channel's only video, a new site) or a failure (no source could
+ * be reached). Only the failure is an error the viewer can retry (#1552).
  */
 import type { VideoInfo, VideoObject } from '@/interfaces';
 
@@ -73,36 +77,54 @@ export function mergeRelated(
   return out;
 }
 
+/**
+ * One source of the shelf. An array, even an empty one, is an answer; `undefined` or a throw
+ * means the source could not be reached (the API helpers resolve `undefined` on a failed request).
+ */
 type RelatedSource = () => Promise<VideoInfo[] | undefined>;
 
-/** A source that fails counts as empty. */
-async function read(source: RelatedSource): Promise<VideoInfo[]> {
+/** Every related source failed: nothing answered, so the empty shelf is not an answer. */
+export class RelatedUnavailableError extends Error {
+  constructor() {
+    super('No related source answered');
+    this.name = 'RelatedUnavailableError';
+  }
+}
+
+/** The source's videos, or null when it could not answer. */
+async function read(source: RelatedSource): Promise<VideoInfo[] | null> {
   try {
-    return (await source()) ?? [];
+    return (await source()) ?? null;
   } catch {
-    return [];
+    return null;
   }
 }
 
 /**
  * Recommendations alone when they fill the shelf, otherwise topped up from the
- * feed, which is only requested in that case.
+ * feed, which is only requested in that case. `answered` is whether any source
+ * it asked gave an answer.
  */
 async function buildShelf(
   currentVideoId: string,
   sources: { recommended: RelatedSource; feed: RelatedSource },
   limit: number,
-): Promise<VideoInfo[]> {
+): Promise<{ shelf: VideoInfo[]; answered: boolean }> {
   const recommended = await read(sources.recommended);
-  const shelf = mergeRelated(currentVideoId, recommended, [], limit);
-  if (shelf.length >= limit) return shelf;
-  return mergeRelated(currentVideoId, recommended, await read(sources.feed), limit);
+  const shelf = mergeRelated(currentVideoId, recommended ?? [], [], limit);
+  if (shelf.length >= limit) return { shelf, answered: true };
+  const feed = await read(sources.feed);
+  return { shelf: mergeRelated(currentVideoId, recommended ?? [], feed ?? [], limit), answered: recommended !== null || feed !== null };
 }
 
 /**
- * Build the shelf, retrying once when it comes back empty. The API helpers
- * report failures as empty results, so an empty shelf is the retry signal.
- * `lastResort` sources are tried in order only after that retry.
+ * Build the shelf, retrying once when it comes back empty (a failed request
+ * and a quiet moment look alike to a single try). `lastResort` sources are
+ * tried in order only after that retry.
+ *
+ * Resolves the shelf, empty when the sources answered with nothing to show.
+ * Rejects with RelatedUnavailableError when the shelf is empty and no source
+ * answered at all, so the page can tell a failure from an empty answer.
  */
 export async function loadRelated(
   currentVideoId: string,
@@ -114,16 +136,21 @@ export async function loadRelated(
   limit: number = RELATED_LIMIT,
   retryDelayMs: number = RELATED_RETRY_DELAY_MS,
 ): Promise<VideoInfo[]> {
-  let shelf = await buildShelf(currentVideoId, sources, limit);
-  if (shelf.length > 0) return shelf;
+  const first = await buildShelf(currentVideoId, sources, limit);
+  if (first.shelf.length > 0) return first.shelf;
 
   await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-  shelf = await buildShelf(currentVideoId, sources, limit);
+  const second = await buildShelf(currentVideoId, sources, limit);
+  let shelf = second.shelf;
+  let answered = first.answered || second.answered;
 
   for (const source of sources.lastResort ?? []) {
     if (shelf.length > 0) break;
-    shelf = mergeRelated(currentVideoId, await read(source), [], limit);
+    const videos = await read(source);
+    if (videos !== null) answered = true;
+    shelf = mergeRelated(currentVideoId, videos ?? [], [], limit);
   }
+  if (shelf.length === 0 && !answered) throw new RelatedUnavailableError();
   return shelf;
 }
 

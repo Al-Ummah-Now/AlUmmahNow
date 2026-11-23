@@ -1,4 +1,4 @@
-import { LAST_GOOD_SHELF_KEY, RELATED_LIMIT, loadRelated, mergeRelated, readLastGoodShelf, saveLastGoodShelf, toVideoInfo } from '../related';
+import { LAST_GOOD_SHELF_KEY, RELATED_LIMIT, RelatedUnavailableError, loadRelated, mergeRelated, readLastGoodShelf, saveLastGoodShelf, toVideoInfo } from '../related';
 import type { VideoInfo } from '@/interfaces';
 
 const info = (id: string) => toVideoInfo({ id, title: id });
@@ -82,7 +82,7 @@ describe('related shelf (Epic 7.3)', () => {
         expect(lastResort).not.toHaveBeenCalled();
       });
 
-      it('treats helpers that swallow errors (empty and undefined) as a failure', async () => {
+      it('retries when a source answers empty or cannot be reached (undefined)', async () => {
         const recommended = jest.fn().mockResolvedValueOnce([]).mockResolvedValue([info('r1')]);
         const feed = jest.fn().mockResolvedValue(undefined);
         await expect(loadWith({ recommended, feed })).resolves.toHaveLength(1);
@@ -106,13 +106,49 @@ describe('related shelf (Epic 7.3)', () => {
         expect(shelf.map(v => v.id)).toEqual(['t1']);
       });
 
-      it('survives a source that throws synchronously', async () => {
+      it('survives a source that throws synchronously (a failure, not a crash)', async () => {
         const boom = () => { throw new Error('sync'); };
-        await expect(loadWith({ recommended: boom, feed: boom, lastResort: [boom] })).resolves.toEqual([]);
+        await expect(loadWith({ recommended: boom, feed: boom, lastResort: [boom] })).rejects.toBeInstanceOf(RelatedUnavailableError);
       });
 
       it('resolves empty when everything is empty', async () => {
         await expect(loadWith({ recommended: none, feed: none, lastResort: [none] })).resolves.toEqual([]);
+      });
+
+      describe('failed vs empty (#1552)', () => {
+        const unreachable = async () => undefined;
+
+        it('rejects when no source answered, after the retry and every last resort', async () => {
+          const recommended = jest.fn(down);
+          const feed = jest.fn(unreachable);
+          const lastResort = [jest.fn(down), jest.fn(unreachable)];
+          await expect(loadWith({ recommended, feed, lastResort })).rejects.toBeInstanceOf(RelatedUnavailableError);
+          expect(recommended).toHaveBeenCalledTimes(2);
+          expect(feed).toHaveBeenCalledTimes(2);
+          lastResort.forEach((source) => expect(source).toHaveBeenCalledTimes(1));
+        });
+
+        it('resolves empty when one source answered with nothing, though the others failed', async () => {
+          await expect(loadWith({ recommended: down, feed: none, lastResort: [down] })).resolves.toEqual([]);
+        });
+
+        it('resolves empty when the only answer held just the current video', async () => {
+          await expect(loadWith({ recommended: down, feed: async () => [info('cur')] })).resolves.toEqual([]);
+        });
+
+        it('counts an answer from the first try, even when the retry fails', async () => {
+          const recommended = jest.fn().mockResolvedValueOnce([]).mockRejectedValue(new Error('down'));
+          await expect(loadWith({ recommended, feed: down })).resolves.toEqual([]);
+        });
+
+        it('counts a last resort that answers empty as an answer', async () => {
+          await expect(loadWith({ recommended: down, feed: down, lastResort: [none] })).resolves.toEqual([]);
+        });
+
+        it('lists a last resort\'s videos even when every API source failed', async () => {
+          const shelf = await loadWith({ recommended: down, feed: down, lastResort: [async () => [info('saved')]] });
+          expect(shelf.map(v => v.id)).toEqual(['saved']);
+        });
       });
     });
   });

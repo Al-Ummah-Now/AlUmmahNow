@@ -23,10 +23,10 @@ import ShareDialog from "@/components/video/ShareDialog";
 import { MenuButton } from "@/components/common/MenuButton";
 import { useActionRowFit } from "@/hooks/useActionRowFit";
 import { parseTime } from "@/lib/embed/params";
-import { VideoInfo } from "@/interfaces";
 import { PlayerOptions, isVideoProcessing } from "@/components/VideoPagePlayer/interface";
 import { VideoProcessingState } from "@/components/video/VideoProcessingState";
-import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
+import { fetchVideoById } from "@/lib/api/videos";
+import { useRelatedVideos } from "@/hooks/useRelatedVideos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
@@ -82,10 +82,8 @@ type VideoState =
  */
 export default function WatchPageContent({ videoId, skeleton }: { videoId: string; skeleton?: React.ReactNode }) {
   const [state, setState] = useState<VideoState>({ status: 'loading' });
-  const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
-  const [relatedLoading, setRelatedLoading] = useState(true);
-  const [relatedAttempt, setRelatedAttempt] = useState(0);
-  const retryRelated = useCallback(() => setRelatedAttempt((attempt) => attempt + 1), []);
+  // Started alongside the video details, not after them
+  const { videos: relatedVideos, status: relatedStatus, retry: retryRelated } = useRelatedVideos(videoId);
   const { user } = useAuth();
   const { t, lang, isRTL } = useLanguage();
   // ?t=754 / ?t=12m34s starts the video there (share links "at current time")
@@ -219,10 +217,13 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
         hrefFor={playback.hrefFor}
       />
     ) : null;
+  // Nothing related (the list may also have held only this video): the shelf is hidden, never an error (#1552)
+  const shelfStatus = relatedStatus === 'loaded' && related.length === 0 ? 'empty' : relatedStatus;
   const renderRelated = (keyPrefix: string) =>
     isRTL
-      ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} onRetry={retryRelated} />
-      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} loading={relatedLoading} onRetry={retryRelated} />;
+      ? <RelatedVideosSectionRTL relatedVideos={related} status={shelfStatus} onRetry={retryRelated} />
+      : <RelatedVideosSection relatedVideos={related} keyPrefix={keyPrefix} status={shelfStatus} onRetry={retryRelated} />;
+  const sidePane = renderPane('side');
 
   useEffect(() => {
     let cancelled = false;
@@ -239,28 +240,6 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
       cancelled = true;
     };
   }, [videoId]);
-
-  useEffect(() => {
-    // Started alongside the video details. The shelf is related to the video,
-    // so it is not requested again when the auth state settles, only when the
-    // viewer asks to retry an empty shelf.
-    let cancelled = false;
-    setRelatedVideos([]);
-    setRelatedLoading(true);
-    fetchRelatedVideos(videoId)
-      .then((videos) => {
-        if (!cancelled) setRelatedVideos(videos);
-      })
-      .catch((error) => {
-        logger.warn('[WatchPage] Related videos failed to load', { videoId, error });
-      })
-      .finally(() => {
-        if (!cancelled) setRelatedLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [videoId, relatedAttempt]);
 
   const videoDetails = state.status === 'ready' ? state.video : null;
   // The tab title follows the video shown. /video/[id] sets it from the server's metadata too; the
@@ -410,16 +389,21 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
         </div>
 
         {/* Not a scroll box either (it has no height of its own, so overflow-auto only clipped): the
-            clip cut the related card's glow at the column's top and outer edge (re-audit 7) */}
-        <div className={`hidden lg:block min-w-0 ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4`} data-testid="watch-secondary">
-          {renderPane('side')}
-          {renderRelated("t_")}
-        </div>
+            clip cut the related card's glow at the column's top and outer edge (re-audit 7).
+            With nothing to hold (no playlist pane, no related videos) the column goes and the player takes the width (#1552) */}
+        {(sidePane || shelfStatus !== 'empty') && (
+          <div className={`hidden lg:block min-w-0 ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4`} data-testid="watch-secondary">
+            {sidePane}
+            {renderRelated("t_")}
+          </div>
+        )}
       </div>
 
-      <div className="block lg:hidden w-full min-w-0 mt-4 px-4" data-testid="watch-secondary-below">
-        {renderRelated("b_")}
-      </div>
+      {shelfStatus !== 'empty' && (
+        <div className="block lg:hidden w-full min-w-0 mt-4 px-4" data-testid="watch-secondary-below">
+          {renderRelated("b_")}
+        </div>
+      )}
     </main>
   );
 }
