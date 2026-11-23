@@ -758,8 +758,8 @@ export interface AppTranslations {
     videoComments: string;
     videoShares: string;
     relatedVideos: string;
-    relatedEmpty: string;
-    relatedEmptyRetry: string;
+    relatedLoadFailed: string;
+    relatedLoadFailedRetry: string;
     watchLater: string;
     addToPlaylist: string;
     noVideoSelected: string;

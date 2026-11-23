@@ -55,6 +55,31 @@ test.describe('Release: related videos on the watch page', () => {
     });
   }
 
+  // #1552: a successful empty answer is not a load failure. On a site with nothing
+  // to relate (a channel's only video, a fresh stack) the shelf hides — the owner's
+  // "no hollow sections" rule — and no error message or Try again appears.
+  for (const locale of ['en', 'ar'] as const) {
+    test(`a successful empty shelf is hidden, never shown as an error (${locale})`, async ({ page }) => {
+      const video = await own('landscape');
+      test.skip(!video, NO_PLAYABLE_VIDEO);
+      // Every source of the shelf (recommendations, feed top-up, trending) answers
+      // a successful empty list; the video itself is fetched without a query string.
+      const emptyList = { status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) };
+      await page.route(/\/api\/(recommendations|trending)\?/, (route) => route.fulfill(emptyList));
+      await page.route(/\/api\/videos\?/, (route) => route.fulfill(emptyList));
+
+      await page.goto(watchUrl(video!.id, locale));
+      // The skeleton is in the first paint; it going away means the shelf settled
+      const skeleton = page.getByTestId('related-videos-skeleton');
+      await expect(skeleton.first()).toBeVisible({ timeout: 30000 });
+      await expect(skeleton).toHaveCount(0, { timeout: 30000 });
+
+      await expect(page.getByTestId('related-videos-failed')).toHaveCount(0);
+      await expect(page.getByTestId('related-videos-list')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^(Try again|حاول مرة أخرى)$/ })).toHaveCount(0);
+    });
+  }
+
   // Stage only: PR runs target QA, which still serves the previous main.
   test('recommendations answer within the latency budget', { tag: '@load' }, async () => {
     test.skip(process.env.E2E_ENV !== 'stage', 'the budget is enforced on the release candidate (stage)');
