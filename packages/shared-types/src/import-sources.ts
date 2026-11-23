@@ -2,7 +2,7 @@
  * Social import sources (wiki TOOLS-ADMIN TA-9): public feeds of a channel's owner, imported as the
  * channel's community posts (videos through the normal upload path), on demand and on a schedule.
  *
- * Stored in api-videos SEARCH_DB (migration search/0079_import_sources.sql); managed by super admins
+ * Stored in api-videos SEARCH_DB (migration search/0080_import_sources.sql); managed by super admins
  * (`import_sources:manage`) through admin-api /api/admin/import/sources*; synced by the admin job
  * 'import.source-sync'. Nothing is scraped from web pages: each network is read through its public
  * API or feed, and only for a channel whose owner authorized the source.
