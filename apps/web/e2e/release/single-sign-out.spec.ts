@@ -117,6 +117,24 @@ test.describe('Release: single sign-out', () => {
     // Header → account menu → Sign out of <account>
     await page.goto(`${target().web}/en`);
     expect(await webSignedIn(page)).toBe(true);
+
+    // Copy the session cookie and access token before sign-out (#437, #762)
+    const copiedCookies = (await page.context().cookies(target().web)).filter((c) => /^al_ummah_session(\.\d+)?$/.test(c.name));
+    expect(copiedCookies.length).toBeGreaterThan(0);
+    const copiedToken = await page.evaluate(async () => {
+      const res = await fetch('/api/auth/token', { credentials: 'same-origin', cache: 'no-store' });
+      const body = (await res.json().catch(() => ({}))) as { accessToken?: string | null };
+      return body.accessToken ?? null;
+    });
+    if (!copiedToken) throw new Error('Missing access token after sign-in');
+    const profileStatus = async () => {
+      const res = await page.request.get(`${target().api}/api/profile`, {
+        headers: { Authorization: `Bearer ${copiedToken}` },
+      });
+      return res.status();
+    };
+    expect(await profileStatus()).toBe(200);
+
     await signOutThroughAuthServer(page, `${target().web}/en`, () => clickHeaderSignOut(page));
 
     // Load the page again: still signed out (retried: the landing page may
@@ -125,6 +143,14 @@ test.describe('Release: single sign-out', () => {
       await page.goto(`${target().web}/en`, { waitUntil: 'load' });
     }).toPass({ timeout: 30000 });
     expect(await webSignedIn(page)).toBe(false);
+
+    // A copied al_ummah_session cookie stops working immediately on web (#762)
+    await page.context().addCookies(copiedCookies);
+    expect(await webSignedIn(page)).toBe(false);
+    await page.context().clearCookies({ name: /^al_ummah_session/ });
+
+    // The API can have a cached miss from the pre-logout request.
+    await expect.poll(profileStatus, { timeout: 75_000, intervals: [500, 1000, 2000] }).toBe(401);
 
     // The profile app is signed out too
     await expectProfileSignedOut(page);

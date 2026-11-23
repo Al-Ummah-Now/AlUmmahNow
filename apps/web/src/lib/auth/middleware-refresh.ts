@@ -13,9 +13,14 @@ import type { NextRequest } from 'next/server';
 import { presentSessionCookieNames, readSessionValue, writeSessionValue } from './session-cookie';
 import type { SessionData } from './session-manager';
 import { applyKnownRotations, refreshAccountInSession, shouldRefresh, type RefreshOptions } from './token-refresh';
+import { isWebTokenRevoked, type RevocationKv } from './token-revocation';
+
+export interface MiddlewareRefreshOptions extends RefreshOptions {
+  revocationKv?: RevocationKv | null;
+}
 
 /** The new session cookie value when it changed, otherwise null. */
-export async function refreshSessionCookie(request: NextRequest, options: RefreshOptions = {}): Promise<string | null> {
+export async function refreshSessionCookie(request: NextRequest, options: MiddlewareRefreshOptions = {}): Promise<string | null> {
   try {
     // The session may be split across al_ummah_session(.N) (several accounts)
     const raw = readSessionValue(request.cookies);
@@ -28,7 +33,10 @@ export async function refreshSessionCookie(request: NextRequest, options: Refres
     let changed = applyKnownRotations(data, now);
 
     const active = data.accounts[data.activeUserId];
-    if (active && shouldRefresh(active, now)) {
+    if (active && !active.needsSignIn && (await isWebTokenRevoked(active.accessToken, active.userId, { kv: options.revocationKv, now }))) {
+      active.needsSignIn = true;
+      changed = true;
+    } else if (active && shouldRefresh(active, now)) {
       const result = await refreshAccountInSession(data, data.activeUserId, options);
       if (result === 'refreshed' || result === 'needs-sign-in') changed = true;
     }

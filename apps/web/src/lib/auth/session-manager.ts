@@ -51,6 +51,7 @@ import {
   type AccountRefreshResult,
 } from './token-refresh';
 import { revokeTokensOnSignOut } from './revoke-on-sign-out';
+import { isWebTokenRevoked } from './token-revocation';
 
 
 // Session configuration
@@ -625,6 +626,14 @@ export class SessionManager {
       return null;
     }
 
+    // Revoked sign-in (single sign-out, sign-out-all, account deletion, password reset, suspend: #437, #762)
+    if (await isWebTokenRevoked(activeAccount.accessToken, activeAccount.userId)) {
+      logger.debug('[SessionManager.getActiveSession] Active account token revoked', {
+        userId: activeAccount.userId,
+      });
+      return null;
+    }
+
     logger.trace('[SessionManager.getActiveSession] Before filter', {
       userId: activeAccount.userId,
       activeChannelId: sessionData.activeChannelId,
@@ -884,6 +893,11 @@ export class SessionManager {
     const account = sessionData ? ownAccount(sessionData.accounts, userId) : null;
     if (!sessionData || !account) return { result: 'missing', account: null };
     if (account.needsSignIn) return { result: 'needs-sign-in', account };
+    if (await isWebTokenRevoked(account.accessToken, account.userId)) {
+      account.needsSignIn = true;
+      await this.persistIfWritable(sessionData);
+      return { result: 'needs-sign-in', account };
+    }
 
     const alreadyRenewed = options.staleAccessToken !== undefined && account.accessToken !== options.staleAccessToken;
     if (!shouldRefresh(account) && (!options.force || alreadyRenewed)) {
@@ -921,7 +935,8 @@ export class SessionManager {
   static async ensureFreshActiveSession(): Promise<SessionContext | null> {
     const sessionData = await this.getSessionData();
     if (sessionData?.accounts[sessionData.activeUserId]) {
-      await this.refreshAccount(sessionData.activeUserId);
+      const { result } = await this.refreshAccount(sessionData.activeUserId);
+      if (result === 'needs-sign-in') return null;
     }
     return this.getActiveSession();
   }
@@ -968,6 +983,7 @@ export class SessionManager {
     try {
       const { account } = await this.refreshAccount(userId);
       if (!account || account.needsSignIn) return null;
+      if (await isWebTokenRevoked(account.accessToken, account.userId)) return null;
       return account.accessToken;
     } catch (error) {
       logger.error('[SessionManager.getValidAccessToken] Failed', { userId, error });

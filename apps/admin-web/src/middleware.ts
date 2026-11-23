@@ -5,6 +5,7 @@
  */
 import type { NextRequest } from 'next/server';
 import { refreshSessionMiddleware } from './lib/session-middleware';
+import { isAdminTokenRevoked } from './lib/token-revocation';
 import type { VerifyToken } from './lib/verified-refresh';
 
 let verifier: Promise<VerifyToken> | null = null;
@@ -15,7 +16,7 @@ const verify: VerifyToken = async (accessToken) => {
 };
 
 export function middleware(request: NextRequest) {
-  return refreshSessionMiddleware(request, { issuer: process.env.Issuer, verify });
+  return refreshSessionMiddleware(request, { issuer: process.env.Issuer, verify, isRevoked: isAdminTokenRevoked });
 }
 
 export const config = {

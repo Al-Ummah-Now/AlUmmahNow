@@ -1,28 +1,33 @@
 /**
- * Token revocation check (#437) and the legacy 30-day token check (#663). Keep in sync: the same file lives in
- * apps/api-videos, apps/admin-api and apps/websocket-server.
+ * Token revocation check (#437, #762) and the legacy 30-day token check (#663).
+ * Keep in sync across apps/api-videos, apps/admin-api, apps/websocket-server,
+ * apps/web and apps/admin-web.
  *
- * The auth worker writes one entry per user to the TOKEN_REVOCATIONS KV when
- * the user signs out of all devices, deletes the account, resets the
- * password or is suspended/signed out by an admin:
- *   key `u:<usr_id>` → { v: 1, before: unix_s, reason, updatedAt }
- * and one entry per browser sign-in when that one device is signed out (by
- * the user or an admin, #442):
- *   key `s:<sid>` → same layout; `sid` is the access token's claim
- * A token is revoked when its sign-in (`auth_time`, else `iat`) is before
- * the `before` of either entry. (Single sign-out deletes the refresh token
- * at the auth server; the short-lived access token then just expires.)
+ * Entries in TOKEN_REVOCATIONS KV:
+ * - `u:<usr_id>` → { v: 1, before: unix_s, reason, updatedAt } (Auth: sign-out-all,
+ *   account deletion, password reset, suspension, admin force logout)
+ * - `s:<sid>`    → same layout (Auth: one signed-out device / terminated session #442;
+ *   web/admin-web: single sign-out #762)
+ * - `t:<sha256>` → same layout (fallback only when a signed-out token has no `sid` claim)
  *
- * Cost: one KV read per user (and per sid) per isolate per CACHE_MS at most (entries and
- * "no entry" are both cached in the isolate; KV's edge cache absorbs the
- * rest). Revocation takes effect within ~CACHE_MS + KV_CACHE_TTL_S + KV
- * propagation (about 2 minutes). KV errors fail open: the token is still
+ * A token is revoked when its sign-in (`auth_time`, else `iat`) is before the `before`
+ * of a matching entry.
+ *
+ * Cost: cached per isolate for CACHE_MS (10 s) plus KV edge cache; tokens with `sid`
+ * check `u:` and `s:` in parallel (never `t:`). KV errors fail open: tokens remain
  * signature-checked and short-lived.
  */
 
 export interface RevocationEntry {
 	v: number;
 	before?: number;
+	reason?: string;
+	updatedAt?: number;
+}
+
+export interface RevocationKv {
+	get<T = unknown>(key: string, options?: { type: 'json'; cacheTtl?: number }): Promise<T | null>;
+	put?(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
 }
 
 export interface TokenTimes {
@@ -31,15 +36,17 @@ export interface TokenTimes {
 	sid?: string;
 	authTime?: number;
 	iat?: number;
+	/** Raw verified JWT, checked under `t:<sha256>` only when `sid` is absent. */
+	token?: string;
 }
 
-export const CACHE_MS = 30_000;
+export const CACHE_MS = 10_000;
 export const KV_CACHE_TTL_S = 30;
 const MAX_CACHED = 5_000;
 
 const cache = new Map<string, { entry: RevocationEntry | null; until: number }>();
 
-export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit<TokenTimes, 'userId' | 'sid'>): boolean {
+export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit<TokenTimes, 'userId' | 'sid' | 'token'>): boolean {
 	if (!entry) return false;
 	if (entry.before === undefined) return false;
 	const signedInAt = token.authTime ?? token.iat;
@@ -47,7 +54,15 @@ export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit
 	return signedInAt < entry.before;
 }
 
-async function lookup(kv: KVNamespace, key: string, now: number): Promise<RevocationEntry | null> {
+/** Stable `t:<base64url(sha256(token))>` key for tokens without a `sid` claim (never stores raw tokens). */
+export async function tokenHashKey(rawToken: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawToken));
+	let binary = '';
+	for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte);
+	return `t:${btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+}
+
+async function lookup(kv: RevocationKv, key: string, now: number): Promise<RevocationEntry | null> {
 	const hit = cache.get(key);
 	if (hit && hit.until > now) return hit.entry;
 	const entry = await kv.get<RevocationEntry>(key, { type: 'json', cacheTtl: KV_CACHE_TTL_S });
@@ -56,14 +71,22 @@ async function lookup(kv: KVNamespace, key: string, now: number): Promise<Revoca
 	return entry ?? null;
 }
 
+/** Immediately reflect a revocation written by this isolate in its local cache. */
+export function recordLocalRevocation(key: string, entry: RevocationEntry, now = Date.now()): void {
+	if (cache.size >= MAX_CACHED) cache.clear();
+	const prev = cache.get(key)?.entry;
+	const merged = prev?.before !== undefined && entry.before !== undefined && prev.before > entry.before ? prev : entry;
+	cache.set(key, { entry: merged, until: now + CACHE_MS });
+}
+
 /** Whether the (already signature-verified) token belongs to a revoked sign-in. */
-export async function isTokenRevoked(kv: KVNamespace | undefined, token: TokenTimes, now = Date.now()): Promise<boolean> {
-	if (!kv || !token.userId) return false;
+export async function isTokenRevoked(kv: RevocationKv | undefined, token: TokenTimes, now = Date.now()): Promise<boolean> {
+	if (!kv || (!token.userId && !token.sid && !token.token)) return false;
 	try {
-		// The user's entry (everywhere) and this sign-in's entry (one device), read together
+		const sessionKey = token.sid ? `s:${token.sid}` : token.token ? await tokenHashKey(token.token) : null;
 		const [user, session] = await Promise.all([
-			lookup(kv, `u:${token.userId}`, now),
-			token.sid ? lookup(kv, `s:${token.sid}`, now) : null,
+			token.userId ? lookup(kv, `u:${token.userId}`, now) : null,
+			sessionKey ? lookup(kv, sessionKey, now) : null,
 		]);
 		return isRevoked(user, token) || isRevoked(session, token);
 	} catch (error) {

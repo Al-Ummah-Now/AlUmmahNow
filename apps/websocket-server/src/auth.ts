@@ -170,7 +170,7 @@ async function verifySignedToken(
     // Signed out everywhere / account deleted / suspended / this device signed out since this sign-in
     const authTime = typeof payload.auth_time === 'number' ? payload.auth_time : undefined;
     const sid = typeof payload.sid === 'string' && payload.sid ? payload.sid : undefined;
-    if (await isTokenRevoked(revocations, { userId, sid, authTime, iat: payload.iat }, deps.now !== undefined ? deps.now * 1000 : undefined)) {
+    if (await isTokenRevoked(revocations, { userId, sid, authTime, iat: payload.iat, token }, deps.now !== undefined ? deps.now * 1000 : undefined)) {
       logger.warn('WebSocket token rejected: sign-in revoked');
       return null;
     }

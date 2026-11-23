@@ -67,10 +67,10 @@ export const APPS: AppRule[] = [
 				WEBSOCKET_URL: 'wss://realtime.alummahnow.net/ws',
 			},
 			// INTERNAL_API_KEY: the Contact us route calls admin-api /internal/contact
-			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }],
+			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, { kind: 'kv_namespaces', name: 'TOKEN_REVOCATIONS' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-stage', addresses: 'own-hosts-and-versions', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }] }),
+		stage: stageRule({ name: 'al-ummah-now-stage', addresses: 'own-hosts-and-versions', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, { kind: 'kv_namespaces', name: 'TOKEN_REVOCATIONS' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }] }),
 	},
 	{
 		app: 'admin-web',
@@ -92,14 +92,14 @@ export const APPS: AppRule[] = [
 				ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors',
 			},
 			// INTERNAL_API_KEY: browser and SSR error reports to admin-api /internal/errors
-			requiredBindings: [INTERNAL_API_KEY],
+			requiredBindings: [{ kind: 'kv_namespaces', name: 'TOKEN_REVOCATIONS' }, INTERNAL_API_KEY],
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
 			name: 'al-ummah-admin-web-stage', addresses: 'own-hosts-and-versions',
 			requireRoutes: true,
 			vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, ADMIN_API_URL: 'https://admin.api.stage.alummahnow.net', NEXT_PUBLIC_BASE_URL: 'https://admin.stage.alummahnow.net', ERRORS_INGEST_URL: 'https://admin.api.stage.alummahnow.net/internal/errors' },
-			requiredBindings: [INTERNAL_API_KEY],
+			requiredBindings: [{ kind: 'kv_namespaces', name: 'TOKEN_REVOCATIONS' }, INTERNAL_API_KEY],
 		}),
 	},
 	{
