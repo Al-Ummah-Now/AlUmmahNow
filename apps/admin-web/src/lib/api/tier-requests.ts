@@ -55,15 +55,3 @@ export interface TierRequestSettings {
 export async function getTierRequestSettings(): Promise<TierRequestSettings> {
   return (await requestAdmin('/api/content/tier-requests/settings')).result as TierRequestSettings;
 }
-
-/** Turns "Allow tier requests" on or off (creators:manage, audited); `undo` marks the change that puts it back. */
-export async function setTierRequestsAllowed(allowed: boolean, opts: { undo?: boolean } = {}): Promise<ActionResult<{ previous: boolean; allowed: boolean; mode: string }>> {
-  try {
-    const res = await requestAdmin('/api/content/tier-requests/settings', { method: 'PUT', body: JSON.stringify({ allowed, ...(opts.undo ? { undo: true } : {}) }) });
-    return { ok: true, data: res.result as { previous: boolean; allowed: boolean; mode: string } };
-  } catch (error) {
-    await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };
-    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}

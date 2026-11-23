@@ -27,6 +27,8 @@ interface ShowOptions {
   undo: () => Promise<unknown>;
   /** What "Undone" says (default: the shared "Undone"). */
   undoneMessage?: string;
+  /** How long Undo is offered (default UNDO_WINDOW_MS, about 8 s; the Features page offers 10 s). */
+  windowMs?: number;
 }
 
 interface UndoContextValue {
@@ -94,7 +96,7 @@ export function UndoToastProvider({ children }: { children: React.ReactNode }) {
   const show = useCallback((options: ShowOptions) => {
     const id = `undo-${++seq}`;
     handlers.current.set(id, options);
-    dispatch({ type: 'add', id, message: options.message, now: Date.now() });
+    dispatch({ type: 'add', id, message: options.message, now: Date.now(), ...(options.windowMs ? { windowMs: options.windowMs } : {}) });
     if (paused.current) dispatch({ type: 'pause', now: Date.now() });
     return id;
   }, []);
@@ -197,6 +199,8 @@ export interface UndoableRun<R> {
   /** What happened ("Video unpublished"); a function gets the change's result. */
   message: string | ((result: R) => string);
   undoneMessage?: string;
+  /** How long Undo is offered, in ms (default about 8 s) */
+  windowMs?: number;
 }
 
 /**
@@ -207,10 +211,10 @@ export interface UndoableRun<R> {
 export function useUndoableAction() {
   const context = useContext(UndoContext);
   const run = useCallback(
-    async <R,>({ action, undo, message, undoneMessage }: UndoableRun<R>): Promise<R> => {
+    async <R,>({ action, undo, message, undoneMessage, windowMs }: UndoableRun<R>): Promise<R> => {
       const result = await action();
       const text = typeof message === 'function' ? message(result) : message;
-      if (context) context.show({ message: text, undo: () => undo(result), undoneMessage });
+      if (context) context.show({ message: text, undo: () => undo(result), undoneMessage, ...(windowMs ? { windowMs } : {}) });
       else logger.warn('[undo] No UndoToastProvider: the change ran without an undo offer');
       return result;
     },

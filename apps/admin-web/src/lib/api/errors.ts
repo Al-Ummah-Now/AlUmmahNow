@@ -12,6 +12,8 @@ export class AdminApiError extends Error {
     public readonly problems?: { problem: string; detail?: string }[],
     /** Per-field error codes (e.g. { labelEn: 'required' }), when given. */
     public readonly fields?: Record<string, string>,
+    /** The whole error body, for callers that read more of it (the Features page's 409 carries the feature as it is now). */
+    public readonly body?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AdminApiError';

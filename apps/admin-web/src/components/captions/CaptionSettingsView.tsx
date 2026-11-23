@@ -12,6 +12,8 @@ import { fillNodes } from '@/components/audit/fill';
 import { CAPTION_MONTHLY_BUDGET_MAX_USD, parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
+import { FeatureStatusLine } from '@/components/features/FeatureStatusLine';
+import type { FeatureStates } from '@/lib/features/states';
 
 import { LocalTime } from '@/components/LocalTime';
 const MODELS = [
@@ -26,7 +28,7 @@ const LANG = /^[a-z]{2,3}$/;
  * title/description translation (kill switch, fair use, budget), viewer-side titles and the
  * platform's Quran translation edition per language.
  */
-export function CaptionSettingsView({ view, canManage }: { view: View; canManage: boolean }) {
+export function CaptionSettingsView({ view, canManage, features = {} }: { view: View; canManage: boolean; features?: FeatureStates }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -92,10 +94,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
           <section className={cardClass} aria-labelledby={`${ids}-translation`}>
             <h2 id={`${ids}-translation`} className="text-lg font-semibold text-fg mb-1">{t('captionSettings.translationTitle')}</h2>
             <p className="text-sm text-fg-muted mb-4">{t('captionSettings.translationHint')}</p>
-            <label className="flex items-start gap-2 mb-4">
-              <input type="checkbox" className={checkbox} checked={form.translation.enabled} onChange={(e) => setTranslation({ enabled: e.target.checked })} data-testid="translation-enabled" />
-              <span className="text-fg">{t('captionSettings.translationEnabled')}</span>
-            </label>
+            <FeatureStatusLine featureKey="captionsTranslate" item={features.captionsTranslate} className="mb-4" />
             <div className="grid gap-4 sm:grid-cols-2">
               {(['model', 'fallbackModel'] as const).map((key) => (
                 <div key={key}>
@@ -143,10 +142,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
           <section className={cardClass} aria-labelledby={`${ids}-inline`}>
             <h2 id={`${ids}-inline`} className="text-lg font-semibold text-fg mb-1">{t('captionSettings.inlineTitle')}</h2>
             <p className="text-sm text-fg-muted mb-4">{t('captionSettings.inlineHint')}</p>
-            <label className="flex items-start gap-2 mb-4">
-              <input type="checkbox" className={checkbox} checked={form.inline.enabled} onChange={(e) => setInline({ enabled: e.target.checked })} data-testid="inline-enabled" />
-              <span className="text-fg">{t('captionSettings.inlineEnabled')}</span>
-            </label>
+            <FeatureStatusLine featureKey="inlineTranslate" item={features.inlineTranslate} className="mb-4" />
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-daily`}>{t('captionSettings.dailyItems')}</label>
@@ -157,35 +153,9 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
                 <NumberField id={`${ids}-inline-budget`} min={0} max={200} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.monthlyBudgetUsd} onChange={(e) => setInline({ monthlyBudgetUsd: Number(parseDigits(e.target.value)) })} data-testid="inline-budget" />
               </div>
             </div>
-            <div className="mt-6 border-t border-border pt-4">
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className={checkbox}
-                  checked={form.viewerTitles.enabled}
-                  onChange={(e) => setForm((f) => ({ ...f, viewerTitles: { enabled: e.target.checked } }))}
-                  aria-describedby={`${ids}-viewer-hint`}
-                  data-testid="viewer-titles-enabled"
-                />
-                <span>
-                  <span className="block text-fg">{t('captionSettings.viewerTitles')}</span>
-                  <span id={`${ids}-viewer-hint`} className="block text-sm text-fg-muted">{t('captionSettings.viewerTitlesHint')}</span>
-                </span>
-              </label>
-              <label className="mt-4 flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className={checkbox}
-                  checked={form.viewerDownload.enabled}
-                  onChange={(e) => setForm((f) => ({ ...f, viewerDownload: { enabled: e.target.checked } }))}
-                  aria-describedby={`${ids}-viewer-download-hint`}
-                  data-testid="viewer-download-enabled"
-                />
-                <span>
-                  <span className="block text-fg">{t('captionSettings.viewerDownload')}</span>
-                  <span id={`${ids}-viewer-download-hint`} className="block text-sm text-fg-muted">{t('captionSettings.viewerDownloadHint')}</span>
-                </span>
-              </label>
+            <div className="mt-6 space-y-2 border-t border-border pt-4">
+              <FeatureStatusLine featureKey="viewerTranslatedTitles" item={features.viewerTranslatedTitles} />
+              <FeatureStatusLine featureKey="viewerCaptionDownload" item={features.viewerCaptionDownload} />
             </div>
           </section>
         </fieldset>

@@ -111,7 +111,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
   if (!response.ok || body.success === false) {
     const message = envelopeError(body, `Admin API error: ${response.status} ${response.statusText}`);
     logger.error(`[API Error] ${response.status} ${method} ${endpoint}`, { requestId, status: response.status, error: message });
-    throw new AdminApiError(message, response.ok ? 500 : response.status, typeof body.code === 'string' ? body.code : undefined, problemsOf(body.problems), fieldsOf(body.fields));
+    throw new AdminApiError(message, response.ok ? 500 : response.status, typeof body.code === 'string' ? body.code : undefined, problemsOf(body.problems), fieldsOf(body.fields), body);
   }
 
   return body;

@@ -28,6 +28,8 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { FeatureStatusLine } from '@/components/features/FeatureStatusLine';
+import type { FeatureItem } from '@/lib/api/features';
 
 import { LocalTime } from '@/components/LocalTime';
 const BADGE: Record<YoutubeImportReadiness, { tone: ChipTone; label: MessageKey }> = {
@@ -74,9 +76,12 @@ export function YoutubeImportSetting({
   canEdit,
   save: saveSettings,
   saveSecret,
+  feature,
 }: {
   view: YoutubeImportSettingsView;
   canEdit: boolean;
+  /** The "Move from YouTube" switch (Features page) */
+  feature?: Pick<FeatureItem, 'effective'> | null;
   save: SaveAction<YoutubeImportPatch>;
   saveSecret: SaveAction<string>;
 }) {
@@ -185,21 +190,7 @@ export function YoutubeImportSetting({
 
       <form onSubmit={save} className="space-y-5" noValidate>
         <fieldset disabled={!canEdit || busy} className="space-y-5">
-          <label className="flex items-start gap-3 rounded border border-border p-3 cursor-pointer has-[:checked]:border-accent has-[:checked]:bg-surface-2">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={form.enabled}
-              onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
-              className="mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-              aria-describedby={`${ids}-enabled-hint`}
-              data-testid="youtube-import-enabled"
-            />
-            <span>
-              <span className="block text-fg font-medium">{t('youtubeImport.enabled')}</span>
-              <span id={`${ids}-enabled-hint`} className="block text-sm text-fg-muted">{t('youtubeImport.enabledHint')}</span>
-            </span>
-          </label>
+          <FeatureStatusLine featureKey="youtubeImport" item={feature} className="rounded border border-border p-3" />
 
           <label className="flex flex-col gap-1 max-w-2xl">
             <span className={term}>{t('youtubeImport.clientId')}</span>

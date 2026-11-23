@@ -13,7 +13,7 @@ import { decisionFailure, emailTone, parseTierRequestFilter, requesterName, tier
 import { NAV_ITEMS } from '../src/components/shell/nav-model';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { TierRequestActions } from '../src/components/tier-requests/TierRequestActions';
-import { AllowRequestsSwitch } from '../src/components/tier-requests/AllowRequestsSwitch';
+import { UpgradePageMode } from '../src/components/tier-requests/UpgradePageMode';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -85,9 +85,8 @@ describe('tier requests queue', () => {
 
 describe('Allow tier requests (the Upgrade page mode)', () => {
   const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
-  const noop = async () => ({ ok: true as const, data: { previous: true, allowed: true, mode: 'request' } });
   const html = (props: Record<string, unknown>, locale = 'en') =>
-    renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, React.createElement(AllowRequestsSwitch as unknown as React.FC<Record<string, unknown>>, { canManage: true, setAllowed: noop, ...props })) as never);
+    renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, React.createElement(UpgradePageMode as unknown as React.FC<Record<string, unknown>>, { ...props })) as never);
 
   it('says what the Upgrade page does in each of the three states', () => {
     assert.match(html({ allowed: true, providerEnabled: false }), /data-mode="request"[\s\S]*shows the request form/);
@@ -97,8 +96,12 @@ describe('Allow tier requests (the Upgrade page mode)', () => {
     assert.match(html({ allowed: false, providerEnabled: false }, 'ar'), /الطلبات متوقفة/);
   });
 
-  it('is read-only without creators:manage', () => {
-    assert.match(html({ allowed: true, providerEnabled: false, canManage: false }), /disabled=""[^>]*data-testid="tier-requests-allow-switch"|data-testid="tier-requests-allow-switch"[^>]*disabled=""/);
+  it('has no switch of its own: one status line that links to the Features page (AUN-FEATURES)', () => {
+    const page = html({ allowed: false, providerEnabled: false, feature: { effective: false } });
+    assert.doesNotMatch(page, /role="switch"/);
+    assert.match(page, /Tier requests is off/);
+    assert.match(page, /href="\/features#tierRequests"/);
+    assert.match(html({ allowed: true, providerEnabled: false, feature: { effective: true } }, 'ar'), /«طلبات الفئات» مفعّلة/);
   });
 });
 

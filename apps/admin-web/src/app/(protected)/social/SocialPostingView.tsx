@@ -11,6 +11,8 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
 import { logger } from '@/lib/logger-client';
 import { NumberField } from '@/components/forms/NumberField';
+import { FeatureStatusLine } from '@/components/features/FeatureStatusLine';
+import type { FeatureStates } from '@/lib/features/states';
 
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -22,7 +24,7 @@ function usd(value: number, locale: string): string {
 }
 
 /** Admin → Social posting: kill switches, the X cap, network setup, activity, failures and the change history. */
-export function SocialPostingView({ view, history, canEdit }: { view: SocialAdminView; history: SocialHistoryEntry[]; canEdit: boolean }) {
+export function SocialPostingView({ view, history, canEdit, features = {} }: { view: SocialAdminView; history: SocialHistoryEntry[]; canEdit: boolean; features?: FeatureStates }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -173,13 +175,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
         <h2 id={`${ids}-switches`} className="text-lg font-semibold text-fg mb-4">{t('socialPosting.switchesTitle')}</h2>
         <form onSubmit={saveSettings} className="space-y-5" noValidate>
           <fieldset disabled={!canEdit || busy === 'settings'} className="space-y-4">
-            <label className="flex items-start gap-3">
-              <input type="checkbox" className={`${checkbox} mt-0.5`} checked={settings.enabled} onChange={(e) => setSettings((s) => ({ ...s, enabled: e.target.checked }))} aria-describedby={`${ids}-enabled-hint`} data-testid="social-enabled" />
-              <span>
-                <span className="block font-medium text-fg">{t('socialPosting.enabled')}</span>
-                <span id={`${ids}-enabled-hint`} className="block text-sm text-fg-muted">{t('socialPosting.enabledHint')}</span>
-              </span>
-            </label>
+            <FeatureStatusLine featureKey="socialAutopost" item={features.socialAutopost} />
             <div className="grid gap-2 sm:grid-cols-2">
               {SOCIAL_NETWORKS.map((n) => (
                 <label key={n} className="flex min-h-11 items-center gap-3 rounded border border-border px-3">
@@ -187,7 +183,6 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                     type="checkbox"
                     className={checkbox}
                     checked={settings.networks[n].enabled}
-                    disabled={!settings.enabled}
                     onChange={(e) => setSettings((s) => ({ ...s, networks: { ...s.networks, [n]: { enabled: e.target.checked } } }))}
                     data-testid={`social-network-${n}`}
                   />
