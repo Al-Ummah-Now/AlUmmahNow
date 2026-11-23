@@ -25,7 +25,10 @@ export type SessionTokenVerdict =
 export async function verifySessionTokens(
   tokens: { accessToken: string; refreshToken: string },
   verify: (accessToken: string) => Promise<VerifyOutcome>,
-  nowSeconds: number = Math.floor(Date.now() / 1000),
+  { nowSeconds = Math.floor(Date.now() / 1000), isRevoked }: {
+    nowSeconds?: number;
+    isRevoked?: (token: { userId: string; accessToken: string }) => Promise<boolean>;
+  } = {},
 ): Promise<SessionTokenVerdict> {
   // Past its own time: nothing to verify (and not a failed verification), it is refreshed
   const exp = decodeJwtExp(tokens.accessToken);
@@ -40,5 +43,8 @@ export async function verifySessionTokens(
     return tokens.refreshToken ? { kind: 'refresh', reason: 'legacy' } : { kind: 'signed-out' };
   }
   const { id, email, roles } = verified.subject.properties;
+  if (isRevoked && (await isRevoked({ userId: id, accessToken: tokens.accessToken }))) {
+    return { kind: 'signed-out' };
+  }
   return { kind: 'valid', user: { id, email, role: highestAdminRole(roles) } };
 }

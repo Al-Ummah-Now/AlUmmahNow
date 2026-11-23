@@ -214,8 +214,8 @@ async function validateJWTWithSignature(token: string, env?: any, route?: string
         return null;
       }
 
-      // Signed out everywhere / account deleted / suspended since this sign-in (#437)
-      if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, sid: claims.sid, authTime: claims.auth_time, iat: claims.iat })) {
+      // Signed out everywhere / account deleted / suspended / single sign-out (#437, #762)
+      if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, sid: claims.sid, authTime: claims.auth_time, iat: claims.iat, token })) {
         logger.debug('Rejected a revoked token', { userId });
         return null;
       }

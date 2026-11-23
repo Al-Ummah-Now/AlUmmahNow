@@ -20,6 +20,8 @@ import {
   reportWebServerError,
   safeErrorMeta,
 } from "@/lib/errors/server-report"
+import { isWebTokenRevoked } from "./auth/token-revocation"
+import { revokeTokensOnSignOut } from "./auth/revoke-on-sign-out"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -99,9 +101,13 @@ export async function authenticated(): Promise<AuthSubject | false> {
     return false;
   }
 
-  if ('tokens' in verified) {
+  if (!('subject' in verified) || !verified.subject) return false;
+  const rotated = 'tokens' in verified ? verified.tokens : undefined;
+  if (await isWebTokenRevoked(rotated?.access ?? accessToken.value, verified.subject.properties.id)) return false;
+
+  if (rotated) {
     try {
-      await setTokens(verified.tokens!.access, verified.tokens!.refresh);
+      await setTokens(rotated.access, rotated.refresh);
     } catch (setTokenError) {
       // Server Component renders have read-only cookies; log a warning without failing a valid verification
       if (isNextControlFlowError(setTokenError)) throw setTokenError;
@@ -110,11 +116,7 @@ export async function authenticated(): Promise<AuthSubject | false> {
   }
 
   // Only the verified subject: never the token's payload read without its signature
-  if ('subject' in verified && verified.subject) {
-    return verified.subject;
-  }
-
-  return false;
+  return verified.subject;
 }
 
 export async function login(locale: string = 'en', returnTo?: unknown) {
@@ -198,8 +200,13 @@ export async function logout(locale: string = 'en') {
     // SessionManager not available, continue with legacy cleanup
   }
 
-  // Clear legacy cookies
+  // Revoke and clear legacy cookies
   const cookies = await getCookies()
+  const legacyAccess = cookies.get("access_token")?.value
+  const legacyRefresh = cookies.get("refresh_token")?.value
+  if (legacyAccess || legacyRefresh) {
+    await revokeTokensOnSignOut([{ userId: "", accessToken: legacyAccess, refreshToken: legacyRefresh ?? "" }])
+  }
   cookies.delete("access_token")
   cookies.delete("refresh_token")
 

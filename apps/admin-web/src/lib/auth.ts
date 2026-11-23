@@ -12,6 +12,7 @@ import { hasPanelAccess, isReviewOnly, reviewOnlyRedirect, type PanelRole } from
 import { adminAuth } from './auth-client';
 import { logger } from './logger';
 import { verifySessionTokens } from './session-state';
+import { isAdminTokenRevoked } from './token-revocation';
 import {
   LEGACY_ACCESS_COOKIE,
   LEGACY_REFRESH_COOKIE,
@@ -68,7 +69,9 @@ export const getAdminSessionState = cache(async (): Promise<{ session: AdminSess
       return { session: null, expired: false };
     }
 
-    const verdict = await verifySessionTokens(tokens, verifyAccessToken);
+    const verdict = await verifySessionTokens(tokens, verifyAccessToken, {
+      isRevoked: ({ userId, accessToken }) => isAdminTokenRevoked(accessToken, userId),
+    });
 
     if (verdict.kind !== 'valid') {
       if (verdict.kind === 'refresh' && verdict.reason === 'legacy') {

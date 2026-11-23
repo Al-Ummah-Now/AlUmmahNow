@@ -32,6 +32,17 @@ describe('local configs', () => {
     });
   }
 
+  it('shares token revocations between browser apps and resource servers', () => {
+    const namespaceIds = ['api-videos', 'admin-api', 'websocket', 'web', 'admin-web'].map((app) => {
+      const worker = videosWorkers.find((w) => w.app === app)!;
+      const { config } = localConfig(raw(worker.dir, worker.config), worker, names);
+      const binding = (config.kv_namespaces as Json[] | undefined)?.find((kv) => kv.binding === 'TOKEN_REVOCATIONS');
+      assert.ok(binding?.id, `${app} has no local token revocation namespace`);
+      return binding.id;
+    });
+    assert.equal(new Set(namespaceIds).size, 1);
+  });
+
   it('uses local realtime origins and the same test key for ticket minting', () => {
     const configFor = (app: string) => {
       const worker = videosWorkers.find((w) => w.app === app)!;

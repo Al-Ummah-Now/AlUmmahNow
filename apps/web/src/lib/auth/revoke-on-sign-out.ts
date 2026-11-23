@@ -13,50 +13,100 @@
  * sign-out path that drops tokens goes through this.
  */
 import { logger } from '@/lib/logger-server';
+import { getRevocationKv, revokeVerifiedAccessToken, type RevocationKv } from './token-revocation';
 
 export interface RevocableTokens {
   userId: string;
   refreshToken: string;
+  accessToken?: string;
 }
 
 /** How long one revocation may take before sign-out goes on without it. */
 export const REVOKE_TIMEOUT_MS = 3000;
 
 type Fetch = typeof fetch;
+type VerifyAccessToken = (token: string) => Promise<boolean>;
+
+async function defaultVerifyAccessToken(token: string): Promise<boolean> {
+  try {
+    const [{ getOpenAuthClient }, { subjects }] = await Promise.all([
+      import('./openauth-client'),
+      import('../auth'),
+    ]);
+    const verified = await getOpenAuthClient().verify(subjects, token);
+    return !verified.err && Boolean(verified.subject);
+  } catch {
+    return false;
+  }
+}
 
 export async function revokeTokensOnSignOut(
   accounts: RevocableTokens[],
-  deps: { issuer?: string; clientId?: string; fetch?: Fetch } = {},
+  deps: {
+    issuer?: string;
+    clientId?: string;
+    fetch?: Fetch;
+    kv?: RevocationKv | null;
+    verifyAccessToken?: VerifyAccessToken;
+    now?: number;
+  } = {},
 ): Promise<void> {
   const issuer = deps.issuer ?? process.env.Issuer;
   const clientId = deps.clientId ?? process.env.ClientId;
   const doFetch = deps.fetch ?? fetch;
-  const tokens = accounts.map((a) => a?.refreshToken).filter((t): t is string => typeof t === 'string' && t.length > 0);
-  if (!issuer || tokens.length === 0) return;
+  const refreshTokens = accounts.map((a) => a?.refreshToken).filter((t): t is string => typeof t === 'string' && t.length > 0);
+  const accessTokens = [...new Set(accounts.map((a) => a?.accessToken).filter((t): t is string => typeof t === 'string' && t.length > 0))];
 
-  let endpoint: string;
-  try {
-    endpoint = new URL('/token/revoke', new URL(issuer).origin).toString();
-  } catch {
-    logger.warn('[auth] Cannot revoke tokens on sign-out: the issuer URL is invalid');
-    return;
+  const tasks: Promise<unknown>[] = [];
+
+  if (issuer && refreshTokens.length > 0) {
+    let endpoint: string | null = null;
+    try {
+      endpoint = new URL('/token/revoke', new URL(issuer).origin).toString();
+    } catch {
+      logger.warn('[auth] Cannot revoke tokens on sign-out: the issuer URL is invalid');
+    }
+    if (endpoint) {
+      for (const token of refreshTokens) {
+        tasks.push(
+          (async () => {
+            const body = new URLSearchParams({ token, token_type_hint: 'refresh_token' });
+            if (clientId) body.set('client_id', clientId);
+            try {
+              const res = await doFetch(endpoint!, {
+                method: 'POST',
+                body,
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
+              });
+              if (!res.ok) logger.warn('[auth] Refresh token revocation was refused', { status: res.status });
+            } catch (error) {
+              logger.warn('[auth] Refresh token revocation failed', { error: error instanceof Error ? error.name : String(error) });
+            }
+          })(),
+        );
+      }
+    }
   }
 
-  await Promise.all(
-    tokens.map(async (token) => {
-      const body = new URLSearchParams({ token, token_type_hint: 'refresh_token' });
-      if (clientId) body.set('client_id', clientId);
-      try {
-        const res = await doFetch(endpoint, {
-          method: 'POST',
-          body,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
-        });
-        if (!res.ok) logger.warn('[auth] Refresh token revocation was refused', { status: res.status });
-      } catch (error) {
-        logger.warn('[auth] Refresh token revocation failed', { error: error instanceof Error ? error.name : String(error) });
-      }
-    }),
-  );
+  // Also mark verified access tokens revoked in TOKEN_REVOCATIONS KV so copied
+  // session cookies stop working immediately across web, admin-web and APIs (#762).
+  if (accessTokens.length > 0) {
+    tasks.push(
+      (async () => {
+        const kv = deps.kv === undefined ? await getRevocationKv() : (deps.kv ?? undefined);
+        if (!kv?.put) return;
+        const verify = deps.verifyAccessToken ?? defaultVerifyAccessToken;
+        await Promise.all(
+          accessTokens.map(async (token) => {
+            if (await verify(token)) {
+              await revokeVerifiedAccessToken(kv, token, 'single_sign_out', deps.now);
+            }
+          }),
+        );
+      })(),
+    );
+  }
+
+  await Promise.all(tasks);
 }

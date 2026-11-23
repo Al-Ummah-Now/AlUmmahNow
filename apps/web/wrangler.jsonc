@@ -50,5 +50,9 @@
       "binding": "videos",
       "bucket_name": "videos"
     }
+  ],
+  "kv_namespaces": [
+    // Token revocation list shared with auth and APIs (#437, #762)
+    { "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" }
   ]
 }

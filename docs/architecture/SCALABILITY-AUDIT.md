@@ -290,7 +290,7 @@ Key facts that drive most findings:
 | Upload rate limits | KV `RATE_LIMIT_KV` | `rate_limit:<operation>:<userId>` | Blind KV RMW (get→put), no CAS possible |
 | Watch-time rate limit | CF Rate Limiting binding `WATCH_TIME_LIMITER` | `<session>:<video>` | Native limiter (OK) |
 | TUS proxy sessions | KV `TUS_SESSIONS` | session key | KV put on create; get→put per PATCH (offset taken from Bunny response) |
-| Token revocations | KV `TOKEN_REVOCATIONS` (written by auth worker) | `u:<userId>`, `s:<sid>` (one signed-out device, #442) | read-only here + 30 s isolate cache |
+| Token revocations | KV `TOKEN_REVOCATIONS` (written by auth worker + web/admin-web single sign-out) | `u:<userId>`, `s:<sid>` (#442, #762), `t:<sha256>` (no-sid fallback) | read-only here + 10 s isolate cache |
 | App config / flags | KV (APP_CONFIG) | `flags`, `config`, `versions` | Admin full-document replace; 60 s isolate cache |
 | Edge caches | Cache API (per colo) | `<origin>/__edge-cache/...` | anon first page of videos, recommendations (per user-hash key) |
 | In-memory | module scope | openauth client, revocation map, app-config map | see OK section |

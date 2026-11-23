@@ -5,13 +5,20 @@ import { revokeTokensOnSignOut, type RevocableTokens } from "@/lib/auth/revoke-o
 import { forgetRotations } from "@/lib/auth/token-refresh"
 
 function storedAccounts(request: NextRequest): RevocableTokens[] {
+  const out: RevocableTokens[] = [];
   try {
     const raw = readSessionValue(request.cookies)
     const accounts = raw ? (JSON.parse(raw) as { accounts?: Record<string, RevocableTokens> }).accounts : undefined
-    return accounts ? Object.values(accounts) : []
+    if (accounts) out.push(...Object.values(accounts))
   } catch {
-    return []
+    // ignore malformed session cookie
   }
+  const legacyAccess = request.cookies.get("access_token")?.value
+  const legacyRefresh = request.cookies.get("refresh_token")?.value
+  if (legacyAccess || legacyRefresh) {
+    out.push({ userId: "", accessToken: legacyAccess, refreshToken: legacyRefresh ?? "" })
+  }
+  return out
 }
 
 /**

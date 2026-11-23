@@ -51,6 +51,10 @@
       "bucket_name": "videos-preview"
     }
   ],
+  "kv_namespaces": [
+    // Token revocation list shared with auth and APIs (#437, #762)
+    { "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" }
+  ],
   // Worker version id sent with error reports (admin Errors page)
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "secrets_store_secrets": [

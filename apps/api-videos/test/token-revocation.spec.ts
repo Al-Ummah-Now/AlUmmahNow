@@ -184,6 +184,13 @@ describe('authMiddleware with the revocation list', () => {
 		assert.equal((await call(await sign({ sid: 'sid_other', auth_time: nowS() - 3600 }), { TOKEN_REVOCATIONS: kv })).status, 200);
 	});
 
+	it('rejects a token revoked by hash (t:<sha256>) when it carries no sid claim (#762)', async () => {
+		const { tokenHashKey } = await import('../src/lib/token-revocation');
+		const tok = await sign({ auth_time: nowS() - 60 });
+		const { kv } = fakeKv({ [await tokenHashKey(tok)]: { v: 1, before: nowS() + 1 } });
+		assert.equal((await call(tok, { TOKEN_REVOCATIONS: kv })).status, 401);
+	});
+
 	it('without the binding nothing changes (rollout safety)', async () => {
 		assert.equal((await call(await sign({ auth_time: nowS() - 3600 }), {})).status, 200);
 	});

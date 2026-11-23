@@ -197,9 +197,37 @@ test.describe('log out (single sign-out)', () => {
 
   test('AUTH-12 logout from the nav signs out everywhere', async ({ page }) => {
     test.skip(!RUN_ID, RUN_ACCOUNTS_ONLY);
+    test.setTimeout(120_000);
     await skipUntilSignInDeployed();
     await uiLogin(page, accounts.admin);
+    // Copy admin_session before sign-out; replaying it afterwards must be refused (#762)
+    const copied = (await page.context().cookies(ADMIN_WEB_URL)).find((c) => c.name === 'admin_session');
+    if (!copied) throw new Error('Missing admin_session after sign-in');
+    const resource = {
+      headers: {
+        cookie: `${copied.name}=${copied.value}`,
+        'sec-fetch-site': 'same-origin',
+      },
+      maxRedirects: 0,
+    };
+    const tokenUrl = `${ADMIN_WEB_URL}/api/realtime/token`;
+    expect((await page.request.get(tokenUrl, resource)).status()).toBe(200);
     await logOutThroughAuthServer(page, () => clickSignOut(page));
+
+    // Retry with the same copied cookie while KV converges across request paths.
+    await expect.poll(async () => {
+      const token = await page.request.get(tokenUrl, resource);
+      const dashboard = await page.request.get(`${ADMIN_WEB_URL}/dashboard`, resource);
+      const location = dashboard.headers()['location'];
+      return {
+        token: token.status(),
+        dashboard: location ? new URL(location, ADMIN_WEB_URL).pathname : null,
+      };
+    }, { timeout: 75_000, intervals: [500, 1000, 2000] }).toEqual({ token: 401, dashboard: '/login' });
+    await page.context().addCookies([copied]);
+    await page.goto('/dashboard');
+    await page.waitForURL((u) => u.href.startsWith(OPENAUTH_URL), { timeout: 30_000 });
+    await expect(page.locator('input[name="password"]')).toBeVisible();
   });
 
   test('AUTH-13 logout endpoint answers 303 to the auth server sign-out (no form re-POST)', async ({ request }) => {

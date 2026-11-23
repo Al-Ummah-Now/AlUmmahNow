@@ -28,6 +28,7 @@ export interface SessionMiddlewareDeps {
   verify: VerifyToken;
   now?: () => number;
   log?: Pick<Console, 'info' | 'warn'>;
+  isRevoked?: (accessToken: string) => Promise<boolean>;
 }
 
 export async function refreshSessionMiddleware(
@@ -48,6 +49,13 @@ export async function refreshSessionMiddleware(
     // account in silently or shows the form. /login is outside the matcher.
     const status = request.method === 'GET' || request.method === 'HEAD' ? 307 : 303;
     return NextResponse.redirect(new URL(loginPath(path), request.url), status);
+  }
+  if (deps.isRevoked && (await deps.isRevoked(found.tokens.accessToken))) {
+    // Copied session cookie after sign-out / account deletion / admin revoke (#762)
+    log.warn(`${LOG_PREFIX} access token revoked, clearing session`, { path: request.nextUrl.pathname });
+    const response = NextResponse.redirect(new URL(loginPath(path), request.url), 303);
+    dropSession(response.cookies);
+    return response;
   }
   // Review-only accounts (VR7) stay in the review shell on every request, client-side navigations
   // included (the protected layout is not re-rendered between its pages). Routing only: the roles
