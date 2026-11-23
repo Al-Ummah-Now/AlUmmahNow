@@ -109,6 +109,23 @@ Never Stripe (decision T2), including payout services built on Stripe.
   - Under MEM-D5 `tierCapability`, the owner's tier has `supportReceive`.
   - Signed-out viewers also get this key, because they see the button and sign in first.
 
+## Admin API and the finance list (MEM-8)
+
+admin-api `/api/support/*` (`routers/support.router.ts`, `lib/support-finance.ts`). Every change needs a step-up and is audited (`support-*` audit kinds).
+
+- **Reading** (overview, settings with the open decisions and readiness, batches, countries, the finance list) is for super admins (`support:read`) and for people on the finance list.
+- **The finance list** is a two-person change.
+  - A super admin proposes a person with their money permissions: `support:refund`, `support:disputes`, `support:payouts`, `support:ledger`, `support:providers`. A different super admin approves.
+  - Nobody adds or approves themselves. Removal takes effect at once.
+- **Tech staff** (search migration 0078, `support_tech_staff`) are never on the finance list.
+  - The owner is a tech employee of the organization and is marked tech staff.
+  - Marking someone removes them from the list at once.
+  - Unmarking needs a different super admin from the one who marked them.
+- **Money actions are for the finance list only.** A super admin role alone is not enough.
+  - Recording owner decisions, the organization being formed, the emergency stop and holding all payouts need `support:providers`.
+  - Planning, approving and stopping payout batches need `support:payouts`. api-videos checks the finance list again on approval.
+- **Country rules** need `support:manage` (super admins).
+
 ## Owner decisions are settings, never code
 
 Every open decision is a field of `SupportPolicy`, stored in `support_config.policy` and read as

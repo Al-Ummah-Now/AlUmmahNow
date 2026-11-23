@@ -97,6 +97,16 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   support_no_rail_for_country: { action: 'none', en: 'No payout service we use reaches this country yet.', ar: 'لا تصل أيٌّ من خدمات الدفع التي نستخدمها إلى هذه الدولة بعد.' },
   support_rail_unavailable: { action: 'retry', en: 'The payout service didn’t answer. Please try again in a moment.', ar: 'لم تستجب خدمة الدفع. يُرجى المحاولة بعد قليل.' },
   support_no_payee: { action: 'none', en: 'Set up payouts first.', ar: 'أعدّ استلام الدفعات أولًا.' },
+  // Creator support admin (wiki AUN-MEMBERS §9.6): finance list, payouts, settings
+  support_not_finance: { action: 'none', en: 'Only people on the organization’s finance list can do this.', ar: 'لا يقوم بهذا إلا من هم في قائمة المالية في المؤسسة.' },
+  support_tech_staff: { action: 'none', en: 'Tech staff can’t be on the finance list or hold money permissions.', ar: 'لا يمكن أن يكون فريق التقنية في قائمة المالية أو أن يملك صلاحيات الأموال.' },
+  support_same_person: { action: 'none', en: 'A second person has to do this.', ar: 'يجب أن يقوم بهذا شخص ثانٍ.' },
+  support_not_clean: { action: 'none', en: 'The last reconciliation has a gap or hasn’t run, so payouts are stopped.', ar: 'في آخر مطابقة فرق أو لم تُجرَ بعد، لذا توقفت التحويلات.' },
+  support_held: { action: 'none', en: 'All payouts are on hold.', ar: 'جميع التحويلات موقوفة.' },
+  support_already_approved: { action: 'none', en: 'You already approved this, or you prepared it.', ar: 'سبق أن اعتمدت هذا، أو أنك من أعدّه.' },
+  support_wrong_status: { action: 'retry', en: 'This changed while you were looking at it. Reload and try again.', ar: 'تغيّر هذا أثناء اطلاعك عليه. أعد التحميل وحاول مرة أخرى.' },
+  support_exists: { action: 'none', en: 'A payout batch for this period already exists.', ar: 'توجد دفعة تحويلات لهذه الفترة بالفعل.' },
+  support_not_built: { action: 'none', en: 'This option isn’t available yet.', ar: 'هذا الخيار غير متاح بعد.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
