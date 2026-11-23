@@ -228,6 +228,15 @@ export const HELP_EN: HelpTranslations = {
           ],
         },
         {
+          id: 'event-calendar',
+          feature: 'eventCalendar',
+          heading: 'Upcoming events and calendar',
+          blocks: [
+            { type: 'p', text: 'Open **[Events](/events)** from the side menu to see upcoming live streams, premieres and halqas across channels, with both Gregorian and Hijri dates.' },
+            { type: 'p', text: 'Filter by event type or by channels you subscribe to, select **Notify me** for a reminder before an event starts, or add the feed to your own calendar app with **Subscribe (.ics)**.' },
+          ],
+        },
+        {
           id: 'shorts',
           heading: 'Shorts',
           blocks: [
@@ -680,6 +689,15 @@ export const HELP_AR: HelpTranslations = {
             { type: 'p', text: 'يُظهر الجرس في الشريط العلوي عدد الإشعارات التي وصلت منذ آخر مرة فتحته فيها (حتى **٩+**). وفتحه يمسح هذا العدد في كل نوافذك وأجهزتك.' },
             { type: 'p', text: 'يبقى الإشعار غير مقروء حتى تفتحه أو تختار **تحديد كمقروء**؛ و**تحديد الكل كمقروء** يشملها كلها، و**تحديد كغير مقروء** يعيد إشعارًا إلى غير المقروء. وبحسب إعدادات الموقع، قد يجعل فتح الجرس ما يعرضه مقروءًا أيضًا.' },
             { type: 'p', text: 'تصلك الإشعارات على حسابك أيًّا كانت القناة التي تتصرّف باسمها.' },
+          ],
+        },
+        {
+          id: 'event-calendar',
+          feature: 'eventCalendar',
+          heading: 'الفعاليات القادمة والتقويم',
+          blocks: [
+            { type: 'p', text: 'افتح **[الفعاليات](/events)** من القائمة الجانبية لترى البثوث المباشرة والعروض الأولى والحلقات القادمة في القنوات، بالتاريخين الميلادي والهجري.' },
+            { type: 'p', text: 'صفِّ العرض بحسب نوع الفعالية أو القنوات المشترك فيها، واختر **نبّهني** ليصلك تذكير قبل البدء، أو أضف الخلاصة إلى تطبيق التقويم لديك عبر **الاشتراك (ملف تقويم)**.' },
           ],
         },
         {

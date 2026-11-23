@@ -24,12 +24,12 @@ const BAR_ROW = /player-(bar-row|track)\.player\.spec\.ts$/;
 /**
  * Specs that change state no run owns: errors.spec.ts reopens, resolves and
  * deletes the shared test error group; site-theme.spec.ts switches the global
- * site theme; support-flow.spec.ts turns creator support on (local stack only). CI (release-e2e.yml) runs the suite with E2E_SHARED_STATE=skip,
+ * site theme; support-flow.spec.ts and event-calendar.spec.ts toggle their features on the local stack. CI (release-e2e.yml) runs the suite with E2E_SHARED_STATE=skip,
  * then these alone with E2E_SHARED_STATE=only under the cross-run qa-global lock
  * (scripts/ci/qa-lock.ts), so concurrent PR runs never collide on them. Unset
  * (local runs): everything in one go, as before.
  */
-const SHARED_STATE = /\/(errors|site-theme|support-flow)\.spec\.ts$/;
+const SHARED_STATE = /\/(errors|site-theme|support-flow|event-calendar)\.spec\.ts$/;
 const SHARED_MODE = process.env.E2E_SHARED_STATE;
 /**
  * Specs that upload to Bunny and wait for it (encode ready within ~9 min, the R2 transcode, a

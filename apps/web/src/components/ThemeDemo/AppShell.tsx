@@ -6,7 +6,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, BookOpenText, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, BookOpenText, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -23,8 +23,8 @@ import { useFeatures } from '@/hooks/useFeatures';
 import { CREDITS_COPY } from '@/lib/credits/copy';
 
 const L = {
-  en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', close: 'Close menu' },
-  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', close: 'إغلاق القائمة' },
+  en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', events: 'Events', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', close: 'Close menu' },
+  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', more: 'المزيد', events: 'الفعاليات', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
@@ -66,6 +66,7 @@ export function AppShell() {
       { label: t.navigation.homeLink, href: `${base}/`, icon: Home, tab: true },
       { label: t.navigation.explore, href: `${base}/explore`, icon: Compass, tab: true },
       { label: t.navigation.subscriptions, href: `${base}/subscriptions`, icon: Tv, tab: true },
+      ...(features.eventCalendar ? [{ label: c.events, href: `${base}/events`, icon: CalendarDays, testId: 'nav-events' }] : []),
     ] },
     { items: [
       { label: t.navigation.library, href: `${base}/library`, icon: CircleUserRound, tab: true, hub: true },
@@ -147,7 +148,7 @@ export function AppShell() {
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                 </a>
               ) : (
-                <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : undefined} aria-current={it.href === currentRail ? 'page' : undefined} title={it.label}>
+                <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : it.testId} aria-current={it.href === currentRail ? 'page' : undefined} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                   {it.hub && (rtl ? <ChevronLeft className="nv-chev" aria-hidden="true" /> : <ChevronRight className="nv-chev" aria-hidden="true" />)}
                 </Link>
