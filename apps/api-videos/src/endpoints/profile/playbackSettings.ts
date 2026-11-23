@@ -1,7 +1,7 @@
 /**
  * The signed-in viewer's playback settings (lib/playback-settings.ts)
- * GET /api/profile/playback  -> { autoplayNext }
- * PUT /api/profile/playback  { autoplayNext } -> { autoplayNext }
+ * GET /api/profile/playback  -> { autoplayNext, autoplayNextSetByUser }
+ * PUT /api/profile/playback  { autoplayNext } -> { autoplayNext, autoplayNextSetByUser: true }
  */
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -10,7 +10,11 @@ import { getPlaybackSettings, setPlaybackSettings } from "../../lib/playback-set
 import { logger } from "../../lib/logger";
 
 const PlaybackSettingsSchema = z.object({
-	autoplayNext: z.boolean().describe("When a video ends, the next one plays after the 3 s countdown (default true)"),
+	autoplayNext: z.boolean().describe("When a video ends, the next one plays after the 3 s countdown (default false)"),
+	autoplayNextSetByUser: z.boolean().describe("True when the viewer saved a choice; false means autoplayNext is the default"),
+});
+const PlaybackSettingsInput = z.object({
+	autoplayNext: z.boolean(),
 });
 
 export class PlaybackSettingsGet extends AuthenticatedRoute {
@@ -36,7 +40,7 @@ export class PlaybackSettingsUpdate extends AuthenticatedRoute {
 		{
 			tags: ["Profiles"],
 			summary: "Update the current user's playback settings",
-			request: { body: { content: { "application/json": { schema: PlaybackSettingsSchema } } } },
+			request: { body: { content: { "application/json": { schema: PlaybackSettingsInput } } } },
 			responses: {
 				"200": { description: "Updated settings", content: { "application/json": { schema: PlaybackSettingsSchema } } },
 				"400": { description: "Invalid request data" },

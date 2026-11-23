@@ -1,6 +1,6 @@
 /**
  * Autoplay like YouTube (docs/specs/PLAYLIST-PLAYBACK.md, phase 1b): the viewer's "Autoplay next"
- * setting is kept on their account (GET/PUT /api/profile/playback), defaults to on, never shows on
+ * setting is kept on their account (GET/PUT /api/profile/playback), defaults to off (E21-D7), never shows on
  * public profile reads; and autoplayed views are flagged on the queued VideoView.
  */
 import { describe, it } from 'node:test';
@@ -28,30 +28,48 @@ async function call(env: unknown, userId: string | null, method: string, path: s
 }
 
 describe('GET/PUT /api/profile/playback', () => {
-	it('defaults to autoplay on, saves the choice on the account, and keeps it off public reads', async () => {
-		const profiles = new MemoryBucket({ u1: { id: 'u1', email: 'u1@test.local', displayName: 'U', dateCreated: '2026-01-01T00:00:00.000Z', dateModified: '2026-01-01T00:00:00.000Z', channels: [] } });
-		const env = { profiles };
-		assert.deepEqual((await call(env, 'u1', 'GET', '/api/profile/playback')).body, { autoplayNext: true });
+	const base = { email: 'u@test.local', displayName: 'U', dateCreated: '2026-01-01T00:00:00.000Z', dateModified: '2026-01-01T00:00:00.000Z', channels: [] };
 
-		const off = await call(env, 'u1', 'PUT', '/api/profile/playback', { autoplayNext: false });
-		assert.equal(off.status, 200);
-		assert.deepEqual(off.body, { autoplayNext: false });
+	it('defaults to autoplay off (E21-D7), saves the choice on the account, and keeps it off public reads', async () => {
+		const profiles = new MemoryBucket({ u1: { id: 'u1', ...base } });
+		const env = { profiles };
+		assert.deepEqual((await call(env, 'u1', 'GET', '/api/profile/playback')).body, { autoplayNext: false, autoplayNextSetByUser: false });
+
+		const on = await call(env, 'u1', 'PUT', '/api/profile/playback', { autoplayNext: true });
+		assert.equal(on.status, 200);
+		assert.deepEqual(on.body, { autoplayNext: true, autoplayNextSetByUser: true });
 		// Another device of the same account reads the same choice
-		assert.deepEqual((await call(env, 'u1', 'GET', '/api/profile/playback')).body, { autoplayNext: false });
+		assert.deepEqual((await call(env, 'u1', 'GET', '/api/profile/playback')).body, { autoplayNext: true, autoplayNextSetByUser: true });
 		assert.equal(profiles.read('u1').displayName, 'U', 'the rest of the profile is kept');
 
 		const pub = await call(env, null, 'GET', '/api/profiles/u1');
 		assert.doesNotMatch(JSON.stringify(pub.body), /autoplayNext|playback/);
 
-		assert.deepEqual((await call(env, 'u1', 'PUT', '/api/profile/playback', { autoplayNext: true })).body, { autoplayNext: true });
+		assert.deepEqual((await call(env, 'u1', 'PUT', '/api/profile/playback', { autoplayNext: false })).body, { autoplayNext: false, autoplayNextSetByUser: true });
+		assert.deepEqual(profiles.read('u1').playback, { autoplayNext: false, autoplayNextSetByUser: true });
 	});
 
-	it('a user without a profile yet gets one holding the setting; bad bodies are refused', async () => {
+	it('keeps a choice saved before E21-D7 as an explicit choice, on or off', async () => {
+		const profiles = new MemoryBucket({
+			legacyOn: { id: 'legacyOn', ...base, playback: { autoplayNext: true } },
+			legacyOff: { id: 'legacyOff', ...base, playback: { autoplayNext: false } },
+		});
+		const env = { profiles };
+		assert.deepEqual((await call(env, 'legacyOn', 'GET', '/api/profile/playback')).body, { autoplayNext: true, autoplayNextSetByUser: true });
+		assert.deepEqual((await call(env, 'legacyOff', 'GET', '/api/profile/playback')).body, { autoplayNext: false, autoplayNextSetByUser: true });
+		assert.deepEqual(profiles.read('legacyOn').playback, { autoplayNext: true }, 'reads never rewrite the profile');
+
+		// Saving the same value writes the flag once
+		assert.deepEqual((await call(env, 'legacyOn', 'PUT', '/api/profile/playback', { autoplayNext: true })).body, { autoplayNext: true, autoplayNextSetByUser: true });
+		assert.deepEqual(profiles.read('legacyOn').playback, { autoplayNext: true, autoplayNextSetByUser: true });
+	});
+
+	it('a user without a profile yet reads the default and gets one holding the setting; bad bodies are refused', async () => {
 		const profiles = new MemoryBucket();
 		const env = { profiles };
-		assert.deepEqual((await call(env, 'u2', 'GET', '/api/profile/playback')).body, { autoplayNext: true });
-		assert.deepEqual((await call(env, 'u2', 'PUT', '/api/profile/playback', { autoplayNext: false })).body, { autoplayNext: false });
-		assert.equal(profiles.read('u2').playback.autoplayNext, false);
+		assert.deepEqual((await call(env, 'u2', 'GET', '/api/profile/playback')).body, { autoplayNext: false, autoplayNextSetByUser: false });
+		assert.deepEqual((await call(env, 'u2', 'PUT', '/api/profile/playback', { autoplayNext: false })).body, { autoplayNext: false, autoplayNextSetByUser: true });
+		assert.deepEqual(profiles.read('u2').playback, { autoplayNext: false, autoplayNextSetByUser: true });
 		assert.equal((await call(env, 'u2', 'PUT', '/api/profile/playback', { autoplayNext: 'no' })).status, 400);
 	});
 });
