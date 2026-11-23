@@ -1,3 +1,4 @@
+import { shortLinkOriginFor } from '@al-ummah/shared-types';
 import { getMobileApps, getMobileAppsHistory } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManagePlatformSettings } from '@/lib/roles';
@@ -41,7 +42,13 @@ export default async function MobileAppsPage() {
         <p className="text-fg-muted mt-1">{t('mobileApps.subtitle')}</p>
       </div>
       {state ? (
-        <MobileAppsForm state={state} history={history} canEdit={canManagePlatformSettings(session?.user.role)} siteUrl={videosSiteUrl(process.env.API_URL)} />
+        <MobileAppsForm
+          state={state}
+          history={history}
+          canEdit={canManagePlatformSettings(session?.user.role)}
+          siteUrl={videosSiteUrl(process.env.API_URL)}
+          shortLinkUrl={shortLinkOriginFor(videosSiteUrl(process.env.API_URL))}
+        />
       ) : (
         <ErrorAlert testId="mobile-apps-error">{t('mobileApps.loadFailed')}</ErrorAlert>
       )}
