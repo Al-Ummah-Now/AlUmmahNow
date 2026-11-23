@@ -78,7 +78,10 @@ for (const lang of ['en', 'ar'] as const) {
       await expect(player.locator('.vjs-text-track-display')).not.toContainText(label);
 
       // Directly under the cue, at the cue's end side (the cue's direction, not the page's), clear of the bar
-      await animationsDone(player);
+      // The caption band's 200 ms move is a transition on the band and the credit (the whole player has
+      // never-ending animations on WebKit, e.g. the spinner): wait for those two
+      await animationsDone(player.locator('.vjs-text-track-display'));
+      await animationsDone(link.locator('..'));
       const cue = await layoutBox(cueBox(player));
       const box = await layoutBox(link);
       const bar = await layoutBox(player.locator('.vjs-progress-holder'));
@@ -145,7 +148,7 @@ test('a 320px-wide player: the credit stays clear of the control bar and inside 
   await showTrack(page, player, '1');
   await pauseAt(page, player, 20);
   await expect(credit(page)).toBeVisible();
-  await animationsDone(player);
+  await animationsDone(credit(page).locator('..'));
   const box = await layoutBox(credit(page));
   const bar = await layoutBox(player.locator('.vjs-progress-holder'));
   const frame = await layoutBox(player);
