@@ -78,9 +78,9 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (caption download, creator support and offline/listen start off)', () => {
+test('defaults keep today’s behaviour (caption download, creator support, offline/listen and event calendar start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
-  assert.deepEqual(off, ['viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'listenMode', 'offlineDownloads']);
+  assert.deepEqual(off, ['viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'eventCalendar', 'listenMode', 'offlineDownloads']);
 });
 
 test('super-admin-only switches are the ones the specs name', () => {

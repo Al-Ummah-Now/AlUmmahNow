@@ -60521,6 +60521,7 @@
               "charityDonations",
               "supportPerks",
               "tierRequests",
+              "eventCalendar",
               "newsletter",
               "listenMode",
               "offlineDownloads"

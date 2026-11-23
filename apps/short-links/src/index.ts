@@ -112,6 +112,8 @@ function fallbackPath(target: ShortLinkTarget): (Lookup & { path: string }) | nu
       return { path: `/@${e(target.handle)}`, type: 'channel' };
     case 'playlist':
       return { path: `/playlist/${e(target.id)}`, type: 'playlist' };
+    case 'live':
+      return { path: `/live/${e(target.id)}`, type: 'live' };
     case 'home':
       return { path: '/', type: 'home' };
     default:

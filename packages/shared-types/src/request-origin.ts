@@ -67,6 +67,12 @@ export function parseClientHeader(value: string | null | undefined): ParsedClien
   };
 }
 
+/** True when `X-AUN-Client` names an Ummah Kids client (`kids/...`, `aun-kids-ios/...`, etc.). */
+export function isKidsClientApp(value: string | null | undefined): boolean {
+  const parsed = parseClientHeader(value);
+  return !!parsed && /^(?:aun-)?kids(?:-|$)/i.test(parsed.app);
+}
+
 const NATIVE_OS: [RegExp, ClientSurface][] = [
   [/^ipados$/, 'ipados'],
   [/^(ios|iphoneos)$/, 'ios'],

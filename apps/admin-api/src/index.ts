@@ -14,7 +14,7 @@ import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
 import { mobileAppsEnvironment, readMobileApps } from './lib/mobileApps';
-import { appleAppSiteAssociation, assetLinks } from '@al-ummah/shared-types';
+import { appleAppSiteAssociation, assetLinks, shortLinksAppleAppSiteAssociation, shortLinksAssetLinks } from '@al-ummah/shared-types';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
@@ -189,6 +189,14 @@ app.get('/public/mobile-apps/:file{apple-app-site-association|assetlinks\\.json}
   const env = c.env as AdminBindings;
   const { settings } = await readMobileApps(env.REPORTS_DB, mobileAppsEnvironment(env.ENVIRONMENT));
   const doc = c.req.param('file') === 'assetlinks.json' ? assetLinks(settings) : appleAppSiteAssociation(settings);
+  if (!doc) return c.json({ error: 'not_configured' }, 404, { 'Cache-Control': 'public, max-age=60' });
+  return c.json(doc, 200, { 'Cache-Control': 'public, max-age=60' });
+});
+// Domain association files for alummahnow.link (Viewer universal links + App Clips + Instant Apps, E22-D8)
+app.get('/public/mobile-apps/short-links/:file{apple-app-site-association|assetlinks\\.json}', async (c) => {
+  const env = c.env as AdminBindings;
+  const { settings } = await readMobileApps(env.REPORTS_DB, mobileAppsEnvironment(env.ENVIRONMENT));
+  const doc = c.req.param('file') === 'assetlinks.json' ? shortLinksAssetLinks(settings) : shortLinksAppleAppSiteAssociation(settings);
   if (!doc) return c.json({ error: 'not_configured' }, 404, { 'Cache-Control': 'public, max-age=60' });
   return c.json(doc, 200, { 'Cache-Control': 'public, max-age=60' });
 });

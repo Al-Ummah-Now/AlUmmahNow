@@ -45,6 +45,8 @@ function fakeApi(overrides: Record<string, { status: number; body?: unknown }> =
     '/api/playlists/pl_1': { status: 200, body: { success: true, result: { id: 'pl_1' } } },
     '/api/playlists/pl_private': { status: 404, body: { success: false, error: 'Playlist not found' } },
     '/api/playlists/pl_purged': { status: 410, body: { success: false, error: 'Gone' } },
+    '/api/live-streams/ls_1': { status: 200, body: { success: true, result: { id: 'ls_1', status: 'scheduled' } } },
+    '/api/live-streams/ls_private': { status: 200, body: { success: true, result: { id: 'ls_private', isPrivate: true } } },
     '/api/community/posts/post_1': { status: 200, body: { id: 'post_1', channelId: 'ch_1' } },
     ...overrides,
   };
@@ -86,6 +88,7 @@ describe('shared-types: short link paths and URLs', () => {
     assert.deepEqual(parseShortLinkPath('/c/ch_1'), { kind: 'channel', id: 'ch_1' });
     assert.deepEqual(parseShortLinkPath('/p/post_1/'), { kind: 'post', id: 'post_1' });
     assert.deepEqual(parseShortLinkPath('/l/pl_1'), { kind: 'playlist', id: 'pl_1' });
+    assert.deepEqual(parseShortLinkPath('/e/ls_1'), { kind: 'live', id: 'ls_1' });
     assert.deepEqual(parseShortLinkPath('/@scholar.one'), { kind: 'handle', handle: 'scholar.one' });
     assert.deepEqual(parseShortLinkPath('/'), { kind: 'home' });
     for (const bad of ['/x/abc', '/v/', '/v/a/b', '/v/..', '/v/%2e%2e', '/@ab', '/@-bad', '/v/<script>', '/v/' + 'a'.repeat(65), '/%E0%A4%A']) {
@@ -148,10 +151,13 @@ describe('redirects', () => {
     assert.equal(res.headers.get('location'), `https://videos.alummahnow.net/ar/shorts/${SHORT}`);
   });
 
-  it('channel by id and by handle, playlist, post, home', async () => {
+  it('channel by id and by handle, playlist, live event, post, home', async () => {
     assert.equal((await run('/c/ch_1')).res.headers.get('location'), 'https://videos.alummahnow.net/channels/ch_1');
     assert.equal((await run('/@scholar.one?lang=ar')).res.headers.get('location'), 'https://videos.alummahnow.net/ar/@Scholar.One');
     assert.equal((await run('/l/pl_1')).res.headers.get('location'), 'https://videos.alummahnow.net/playlist/pl_1');
+    const liveRun = await run('/e/ls_1?lang=ar');
+    assert.equal(liveRun.res.headers.get('location'), 'https://videos.alummahnow.net/ar/live/ls_1');
+    assert.deepEqual(liveRun.clicks[0].events, [{ type: 'live', source: 'direct' }]);
     assert.equal(
       (await run('/p/post_1?lang=en')).res.headers.get('location'),
       'https://videos.alummahnow.net/en/channels/ch_1?tab=community&post=post_1#post-post_1',
@@ -162,7 +168,7 @@ describe('redirects', () => {
 });
 
 describe('not found', () => {
-  for (const path of [`/v/${PRIVATE}`, '/l/pl_private', '/l/pl_purged', '/p/missing', '/c/nope', '/x/whatever', '/v/a.b']) {
+  for (const path of [`/v/${PRIVATE}`, '/l/pl_private', '/l/pl_purged', '/e/ls_private', '/e/missing', '/p/missing', '/c/nope', '/x/whatever', '/v/a.b']) {
     it(`${path} → 404 page, noindex, nothing about the item`, async () => {
       const { res } = await run(path);
       assert.equal(res.status, 404);
@@ -235,12 +241,15 @@ describe('robots and other requests', () => {
 });
 
 describe('API down', () => {
-  it('a video still redirects (302, not cached); a post answers 503', async () => {
-    const down = fakeApi({ [`/api/videos/${VID}`]: { status: 502 }, '/api/community/posts/post_1': { status: 500 } });
+  it('a video or live event still redirects (302, not cached); a post answers 503', async () => {
+    const down = fakeApi({ [`/api/videos/${VID}`]: { status: 502 }, '/api/live-streams/ls_1': { status: 502 }, '/api/community/posts/post_1': { status: 500 } });
     const v = await run(`/v/${VID}?lang=ar`, {}, down);
     assert.equal(v.res.status, 302);
     assert.equal(v.res.headers.get('location'), `https://videos.alummahnow.net/ar/video/${VID}`);
     assert.equal(v.res.headers.get('cache-control'), 'no-store');
+    const live = await run('/e/ls_1?lang=ar', {}, down);
+    assert.equal(live.res.status, 302);
+    assert.equal(live.res.headers.get('location'), 'https://videos.alummahnow.net/ar/live/ls_1');
     assert.equal((await run('/p/post_1', {}, down)).res.status, 503);
   });
 });

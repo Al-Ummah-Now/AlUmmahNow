@@ -25,6 +25,7 @@ export type ShortLinkTarget =
   | { kind: 'handle'; handle: string }
   | { kind: 'post'; id: string }
   | { kind: 'playlist'; id: string }
+  | { kind: 'live'; id: string }
   | { kind: 'home' };
 
 export type ShortLinkKind = ShortLinkTarget['kind'];
@@ -35,6 +36,7 @@ const PREFIX: Record<Exclude<ShortLinkKind, 'handle' | 'home'>, string> = {
   channel: 'c',
   post: 'p',
   playlist: 'l',
+  live: 'e',
 };
 const KIND_BY_PREFIX: Record<string, Exclude<ShortLinkKind, 'handle' | 'home'>> = {
   v: 'video',
@@ -42,6 +44,7 @@ const KIND_BY_PREFIX: Record<string, Exclude<ShortLinkKind, 'handle' | 'home'>> 
   c: 'channel',
   p: 'post',
   l: 'playlist',
+  e: 'live',
 };
 
 /** Ids are UUIDs or slug-like keys; anything else is not a short link (no lookup is made). */
@@ -163,7 +166,7 @@ export function shortLinkLang(params: URLSearchParams): 'en' | 'ar' | null {
 }
 
 /** Link types counted for clicks ('unknown': a short link that did not resolve). */
-export const SHORT_LINK_CLICK_TYPES = ['video', 'short', 'channel', 'post', 'playlist', 'home', 'unknown'] as const;
+export const SHORT_LINK_CLICK_TYPES = ['video', 'short', 'channel', 'post', 'playlist', 'live', 'home', 'unknown'] as const;
 export type ShortLinkClickType = (typeof SHORT_LINK_CLICK_TYPES)[number];
 
 /** One short link click, as the short link Worker reports it (no id, no identifier). */

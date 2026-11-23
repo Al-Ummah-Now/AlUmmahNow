@@ -75,6 +75,11 @@ export async function lookupTarget(target: ShortLinkTarget, env: ResolveEnv, fet
       const playlist = await apiJson(env, fetchImpl, `/api/playlists/${enc(target.id)}`);
       return { path: playlist ? `/playlist/${enc(target.id)}` : null, type: 'playlist' };
     }
+    case 'live': {
+      const stream = await apiJson(env, fetchImpl, `/api/live-streams/${enc(target.id)}`);
+      const hidden = stream && (stream.isPrivate === true || stream.isHidden === true || stream.isDeleted === true);
+      return { path: stream && !hidden ? `/live/${enc(target.id)}` : null, type: 'live' };
+    }
     case 'post': {
       const post = await apiJson(env, fetchImpl, `/api/community/posts/${enc(target.id)}`);
       const channelId = typeof post?.channelId === 'string' ? post.channelId : null;

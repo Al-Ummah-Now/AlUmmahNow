@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { featureGate, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { buildErrorEnvelope, featureGate, isKidsClientApp, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
@@ -136,6 +136,14 @@ describe('/api/me/features', () => {
 		assert.equal(after.bulkSchedule, false);
 		assert.equal(after.audioTracks, false, 'audio tracks require uploads');
 		assert.equal(after.support, false, 'creator support is off by default');
+		assert.equal(after.eventCalendar, false, 'event calendar is off by default');
+		await set('eventCalendar', true);
+		assert.equal((await computeFeatures(env, { userId: null })).eventCalendar, true, 'eventCalendar turns on for viewers');
+		assert.equal(
+			(await computeFeatures(env, { userId: 'alice', roles: [] }, null, { client: 'aun-kids-ios/1.0.0 (iOS 18.1)' })).eventCalendar,
+			false,
+			'eventCalendar stays hidden on Ummah Kids clients',
+		);
 	});
 
 	it('has a body ETag: a match gets 304; signed out is public for 30 s', async () => {
@@ -202,5 +210,17 @@ describe('featureGate', () => {
 		await set('captionsTranscribe', false);
 		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'alice' }), false);
 		assert.equal(await captionFeatureFor(env, 'translate', { userId: 'alice' }), true);
+	});
+
+	it('isKidsClientApp and kids_mode_restricted localized envelope', () => {
+		assert.equal(isKidsClientApp('kids/1.0.0 (iOS 18.1)'), true);
+		assert.equal(isKidsClientApp('aun-kids-ios/1.2.0 (iOS 18.1)'), true);
+		assert.equal(isKidsClientApp('aun-kids-android/1.2.0 (Android 15)'), true);
+		assert.equal(isKidsClientApp('aun-ios/1.4.0 (iOS 18.1)'), false);
+		assert.equal(isKidsClientApp(null), false);
+		const en = buildErrorEnvelope({ success: false, code: 'kids_mode_restricted' }, { status: 403, lang: 'en' });
+		const ar = buildErrorEnvelope({ success: false, code: 'kids_mode_restricted' }, { status: 403, lang: 'ar' });
+		assert.equal(en.message, 'This isn’t available in Ummah Kids.');
+		assert.equal(ar.message, 'هذا غير متاح في أمة الصغار.');
 	});
 });

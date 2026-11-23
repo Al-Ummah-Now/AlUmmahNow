@@ -135,6 +135,8 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   not_matched: { action: 'none', en: 'Only a matched file can be uploaded.', ar: 'لا يُرفع إلا ملف تمت مطابقته.' },
   has_file: { action: 'none', en: 'That record already has its video.', ar: 'لذلك السجل مرئي بالفعل.' },
   not_uploading: { action: 'none', en: 'This file isn’t being uploaded.', ar: 'هذا الملف لا يُرفع الآن.' },
+  // Kids isolation (Epic 20 / Epic 22)
+  kids_mode_restricted: { action: 'none', en: 'This isn’t available in Ummah Kids.', ar: 'هذا غير متاح في أمة الصغار.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
