@@ -160,7 +160,10 @@ export const NEGATIVE_BALANCE_POLICIES = ['netAgainstFutureGifts', 'reserveFromP
 export type NegativeBalancePolicy = (typeof NEGATIVE_BALANCE_POLICIES)[number];
 
 /** MEM-D22: balances whose creator never completes payout setup, or disappears. */
-export const DORMANT_POLICIES = ['unclaimedPropertyRule', 'refundSupporters'] as const;
+/** MEM-D22 (decided 2026-11-23: unclaimed balances go to the Waqf, a charity, after 12 months; the
+ * transfer itself sits behind the supportDormantTransfer switch until counsel confirms that state
+ * unclaimed-property law allows it). */
+export const DORMANT_POLICIES = ['transferToWaqf', 'unclaimedPropertyRule', 'refundSupporters'] as const;
 export type DormantPolicy = (typeof DORMANT_POLICIES)[number];
 
 /**
@@ -191,6 +194,8 @@ export interface SupportPolicy {
   dormantPolicy: DormantPolicy | null;
   /** MEM-D22: months without an active payee at which the creator is reminded */
   dormantReminderMonths: number[] | null;
+  /** MEM-D22 'transferToWaqf': months unclaimed before the balance moves to the Waqf (at or after the last reminder) */
+  dormantTransferMonths: number | null;
   /** MEM-D23: gifts may be collected before the creator's payee is active (money waits in the balance) */
   collectBeforePayeeActive: boolean | null;
   /** MEM-D24: people needed for a payout batch: one prepares, the others approve (1 or 2) */
@@ -233,8 +238,10 @@ export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   negativeBalancePolicy: 'netAgainstFutureGifts',
   reserveBasisPoints: null,
   reserveDays: null,
-  dormantPolicy: null,
-  dormantReminderMonths: null,
+  // MEM-D22: reminders at 3, 6 and 12 months; after 12 unclaimed the balance goes to the Waqf
+  dormantPolicy: 'transferToWaqf',
+  dormantReminderMonths: [3, 6, 12],
+  dormantTransferMonths: 12,
   // MEM-D23 (owner 2026-11-23): no gifts before the payee is active; Support shows only after payout setup
   collectBeforePayeeActive: false,
   // MEM-D24: two people from the Waqf's finance list, one prepares and another approves; never the
@@ -262,7 +269,7 @@ export const SUPPORT_DECISION_FIELDS: Readonly<Record<SupportDecisionId, readonl
   'MEM-D19': ['payoutThresholdUsdMinor', 'payoutDayOfMonth', 'creatorMayRaiseThreshold'],
   'MEM-D20': ['payoutFeeBearer'],
   'MEM-D21': ['negativeBalancePolicy'],
-  'MEM-D22': ['dormantPolicy', 'dormantReminderMonths'],
+  'MEM-D22': ['dormantPolicy', 'dormantReminderMonths', 'dormantTransferMonths'],
   'MEM-D23': ['collectBeforePayeeActive'],
   'MEM-D24': ['batchApprovers', 'adjustmentApprovers'],
 });
@@ -315,6 +322,7 @@ const POLICY_CHECKS: Readonly<Record<keyof SupportPolicy, (v: unknown) => boolea
   reserveDays: (v) => intIn(v, 0, 365),
   dormantPolicy: oneOf(DORMANT_POLICIES),
   dormantReminderMonths: intList(1, 60, 6),
+  dormantTransferMonths: (v) => intIn(v, 1, 120),
   collectBeforePayeeActive: bool,
   batchApprovers: (v) => v === 1 || v === 2,
   adjustmentApprovers: (v) => v === 1 || v === 2,
@@ -342,6 +350,8 @@ export function parseSupportPolicy(input: unknown): { policy: SupportPolicy; pro
   }
   const p = policy as unknown as SupportPolicy;
   if (p.primaryRail && p.fallbackRail && p.fallbackRail === p.primaryRail) problems.push({ field: 'fallbackRail', code: 'invalid' });
+  // The transfer never comes before the last reminder
+  if (p.dormantTransferMonths !== null && p.dormantReminderMonths?.length && p.dormantTransferMonths < Math.max(...p.dormantReminderMonths)) problems.push({ field: 'dormantTransferMonths', code: 'invalid' });
   return { policy: p, problems };
 }
 
@@ -446,7 +456,7 @@ export type PayoutBatchStatus = (typeof PAYOUT_BATCH_STATUSES)[number];
 export const CREATOR_BUCKETS = ['pending', 'available', 'in_payout', 'reserve'] as const;
 export type CreatorBucket = (typeof CREATOR_BUCKETS)[number];
 
-export const SYSTEM_ACCOUNTS = ['clearing:collector', 'bank:creator_funds', 'rail:funding', 'fees:collector', 'fees:rail', 'fees:fx', 'loss:org_reserve', 'org:fee_contributions'] as const;
+export const SYSTEM_ACCOUNTS = ['clearing:collector', 'bank:creator_funds', 'rail:funding', 'fees:collector', 'fees:rail', 'fees:fx', 'loss:org_reserve', 'org:fee_contributions', 'org:waqf_dormant'] as const;
 export type SystemAccount = (typeof SYSTEM_ACCOUNTS)[number];
 
 export type LedgerAccount = SystemAccount | `creator:${string}:${CreatorBucket}`;
@@ -462,7 +472,7 @@ export function isLedgerAccount(value: string): value is LedgerAccount {
   return !!m && (CREATOR_BUCKETS as readonly string[]).includes(m[2]);
 }
 
-export const LEDGER_KINDS = ['gift', 'collector_fee', 'settlement', 'release', 'refund', 'dispute', 'dispute_fee', 'dispute_reversal', 'payout', 'payout_paid', 'payout_fee', 'payout_return', 'rail_funding', 'fx', 'adjustment', 'write_off'] as const;
+export const LEDGER_KINDS = ['gift', 'collector_fee', 'settlement', 'release', 'refund', 'dispute', 'dispute_fee', 'dispute_reversal', 'payout', 'payout_paid', 'payout_fee', 'payout_return', 'rail_funding', 'fx', 'adjustment', 'write_off', 'dormant_transfer'] as const;
 export type LedgerKind = (typeof LEDGER_KINDS)[number];
 
 // ---------------------------------------------------------------------------
