@@ -11,6 +11,7 @@
 import {
 	CAPTION_JOB_ERRORS,
 	CAPTION_JOB_STATUSES,
+	CAPTION_MONTHLY_BUDGET_MAX_USD,
 	CAPTION_TRANSLATE_MODELS,
 	INLINE_TRANSLATE_DEFAULT_DAILY_ITEMS,
 	MessageType,
@@ -138,7 +139,7 @@ export function cleanCaptionSettings(raw: unknown, base: CaptionSettings): Capti
 	const vt = (r.viewerTitles && typeof r.viewerTitles === 'object' ? r.viewerTitles : {}) as Partial<CaptionSettings['viewerTitles']>;
 	const vd = (r.viewerDownload && typeof r.viewerDownload === 'object' ? r.viewerDownload : {}) as Partial<CaptionSettings['viewerDownload']>;
 	return {
-		monthlyBudgetUsd: typeof r.monthlyBudgetUsd === 'number' && r.monthlyBudgetUsd >= 0 && r.monthlyBudgetUsd <= 500 ? r.monthlyBudgetUsd : base.monthlyBudgetUsd,
+		monthlyBudgetUsd: typeof r.monthlyBudgetUsd === 'number' && r.monthlyBudgetUsd >= 0 && r.monthlyBudgetUsd <= CAPTION_MONTHLY_BUDGET_MAX_USD ? r.monthlyBudgetUsd : base.monthlyBudgetUsd,
 		model: typeof r.model === 'string' && MODEL_ID.test(r.model) ? r.model : base.model,
 		translation: {
 			enabled: typeof tr.enabled === 'boolean' ? tr.enabled : base.translation.enabled,

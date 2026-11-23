@@ -9,7 +9,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
-import { parseDigits } from '@al-ummah/shared-types';
+import { CAPTION_MONTHLY_BUDGET_MAX_USD, parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
 import { Select } from '@/components/select/Select';
 
@@ -80,7 +80,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
             <NumberField decimal
               id={`${ids}-budget-usd`}
               min={0}
-              max={500}
+              max={CAPTION_MONTHLY_BUDGET_MAX_USD}
               step={1}
               className={`${fieldClass} mt-1 w-40`}
               value={form.monthlyBudgetUsd}

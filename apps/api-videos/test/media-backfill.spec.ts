@@ -5,6 +5,7 @@ import { purgeVideoMedia } from '../src/lib/media/r2-delivery';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
+	BACKFILL_LIMITS,
 	backfillCost,
 	durationMatches,
 	parseBackfillScope,
@@ -268,7 +269,7 @@ describe('backfill helpers (shared-types)', () => {
 	it('validates settings', () => {
 		assert.deepEqual(parseBackfillSettings({ concurrency: 3, budgetUsd: 1.234 }, DEFAULT_BACKFILL_SETTINGS), { ok: true, settings: { ...DEFAULT_BACKFILL_SETTINGS, concurrency: 3, budgetUsd: 1.23 } });
 		assert.equal(parseBackfillSettings({ concurrency: 0 }, DEFAULT_BACKFILL_SETTINGS).ok, false);
-		assert.equal(parseBackfillSettings({ budgetUsd: 501 }, DEFAULT_BACKFILL_SETTINGS).ok, false);
+		assert.equal(parseBackfillSettings({ budgetUsd: BACKFILL_LIMITS.maxBudgetUsd + 1 }, DEFAULT_BACKFILL_SETTINGS).ok, false);
 	});
 	it('budget, duration and playlist helpers', () => {
 		assert.equal(withinBudget(0, 0, 0, 0), false, 'no cap never passes');

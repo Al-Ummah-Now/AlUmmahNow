@@ -17,6 +17,9 @@
  * retry of a platform failure is free.
  */
 
+/** Technical upper bound for the admin-configured monthly caption budget (USD). */
+export const CAPTION_MONTHLY_BUDGET_MAX_USD = 10_000;
+
 export const CAPTION_JOB_STATUSES = ['queued', 'waiting_budget', 'extracting', 'transcribing', 'translating', 'postprocessing', 'ready', 'failed', 'cancelled'] as const;
 export type CaptionJobStatus = (typeof CAPTION_JOB_STATUSES)[number];
 
