@@ -464,7 +464,7 @@ describe('channel actions', () => {
 		assert.equal(read(scheduled, '2030-01-02/03/later.json').userId, OTHER);
 		assert.equal(read(raw.videos, 'livestream:ls1').userId, OTHER);
 		const session = db.db.prepare(`SELECT status, end_reason FROM live_sessions WHERE id = 'sess1'`).get() as { status: string; end_reason: string };
-		assert.deepEqual([session.status, session.end_reason], ['ended', 'channel_transferred'], 'the ingest key the previous owner knows stops working');
+		assert.deepEqual([session.status, session.end_reason], ['ended', 'key_rotated'], 'the ingest key the previous owner knows stops working');
 		assert.equal(job.result.liveSessionsEnded, 1);
 	});
 
