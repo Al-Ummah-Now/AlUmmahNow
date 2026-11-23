@@ -4,8 +4,9 @@ import { PriorityTabs } from '@/components/PriorityTabs';
 import { getI18n } from '@/i18n/server';
 import { formatNumber, translateDynamic, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
-import { approveTierRequest, declineTierRequest, getTierRequestSettings, listTierRequests, setTierRequestsAllowed, type TierRequestSettings } from '@/lib/api/tier-requests';
-import { AllowRequestsSwitch } from '@/components/tier-requests/AllowRequestsSwitch';
+import { approveTierRequest, declineTierRequest, getTierRequestSettings, listTierRequests, type TierRequestSettings } from '@/lib/api/tier-requests';
+import { UpgradePageMode } from '@/components/tier-requests/UpgradePageMode';
+import { featureStates, type FeatureStates } from '@/lib/features/states';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { emailTone, parseTierRequestFilter, requesterName, tierRequestsHref, type EmailTone } from '@/lib/tier-requests';
@@ -54,13 +55,15 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
   const filter = parseTierRequestFilter(rawFilter);
   let page: AdminTierRequestsPage | null = null;
   let settings: TierRequestSettings | null = null;
+  let features: FeatureStates = {};
   try {
-    [page, settings] = await Promise.all([
+    [page, settings, features] = await Promise.all([
       listTierRequests({ filter, cursor, pageSize: 25 }),
       getTierRequestSettings().catch((e) => {
         logger.warn('[tier-requests] Could not load the settings', { error: e instanceof Error ? e.message : String(e) });
         return null;
       }),
+      featureStates(),
     ]);
   } catch (error) {
     logger.error('[tier-requests] Failed to load', { filter, error: error instanceof Error ? error.message : String(error) });
@@ -73,7 +76,7 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
         <p className="text-fg-muted mt-2 max-w-prose">{t('tierRequests.subtitle')}</p>
         {!canDecide && <p className="text-fg-muted mt-2 text-sm" data-testid="tier-requests-read-only">{t('tierRequests.readOnly')}</p>}
       </div>
-      {settings && <AllowRequestsSwitch allowed={settings.allowed} providerEnabled={settings.providerEnabled} canManage={canDecide} setAllowed={setTierRequestsAllowed} />}
+      {settings && <UpgradePageMode allowed={settings.allowed} providerEnabled={settings.providerEnabled} feature={features.tierRequests} />}
 
       {/* One row: the tabs that fit, the rest under "More" (#1669: never a tab cut at the edge or wrapped) */}
       <PriorityTabs

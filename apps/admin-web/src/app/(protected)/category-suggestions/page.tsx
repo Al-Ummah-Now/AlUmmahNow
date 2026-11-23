@@ -10,6 +10,7 @@ import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { CategorizeSettings, CategoryBackfill } from './CategorizeControls';
+import { featureStates, type FeatureStates } from '@/lib/features/states';
 import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
@@ -39,10 +40,12 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
 
   let list: CategorySuggestionList | null = null;
   let stats: CategorySuggestionStats | null = null;
+  let features: FeatureStates = {};
   try {
-    [list, stats] = await Promise.all([
+    [list, stats, features] = await Promise.all([
       listCategorySuggestions({ view, category, videoId, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
       getCategorySuggestionStats(),
+      featureStates(),
     ]);
   } catch (e) {
     logger.error('[category-suggestions] Failed to load', { error: e instanceof Error ? e.message : String(e) });
@@ -160,7 +163,7 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
 
       {stats?.canEdit && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <CategorizeSettings initial={stats.config} />
+          <CategorizeSettings initial={stats.config} feature={features.aiCategorySuggest} />
           <CategoryBackfill />
         </div>
       )}

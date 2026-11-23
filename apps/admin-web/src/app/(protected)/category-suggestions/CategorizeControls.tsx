@@ -1,6 +1,6 @@
 'use client';
 
-/** Settings (kill switch, daily cap, preselect threshold) and the paged, dry-run-first backfill. */
+/** Settings (daily cap, preselect threshold; on/off is on the Features page) and the paged, dry-run-first backfill. */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { runCategoryBackfill, updateCategorizeConfig } from '@/lib/api/admin';
@@ -11,11 +11,12 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { logger } from '@/lib/logger-client';
 import { parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
+import { FeatureStatusLine } from '@/components/features/FeatureStatusLine';
+import type { FeatureItem } from '@/lib/api/features';
 
-export function CategorizeSettings({ initial }: { initial: CategorizeConfigView }) {
+export function CategorizeSettings({ initial, feature }: { initial: CategorizeConfigView; feature?: Pick<FeatureItem, 'effective'> | null }) {
   const router = useRouter();
   const { t } = useLanguage();
-  const [enabled, setEnabled] = useState(initial.enabled);
   const [cap, setCap] = useState(String(initial.dailyNeuronCap));
   const [threshold, setThreshold] = useState(String(initial.threshold));
   const [busy, setBusy] = useState(false);
@@ -29,8 +30,8 @@ export function CategorizeSettings({ initial }: { initial: CategorizeConfigView 
     try {
       const capNumber = Number(parseDigits(cap));
       const thresholdNumber = Number(parseDigits(threshold));
+      // On or off is the Features page's "AI category suggestions" switch (wiki AUN-FEATURES); this saves only the limits
       const result = await updateCategorizeConfig({
-        enabled,
         ...(cap !== '' && Number.isFinite(capNumber) ? { dailyNeuronCap: Math.round(capNumber) } : {}),
         ...(threshold !== '' && Number.isFinite(thresholdNumber) ? { threshold: thresholdNumber } : {}),
       });
@@ -53,13 +54,7 @@ export function CategorizeSettings({ initial }: { initial: CategorizeConfigView 
     <section className={`${cardClass} space-y-4`} aria-labelledby="categorize-settings-title" data-testid="categorize-settings">
       <h2 id="categorize-settings-title" className="font-semibold text-fg">{t('categorySuggestions.settingsTitle')}</h2>
       {error && <ErrorAlert testId="categorize-settings-error">{error}</ErrorAlert>}
-      <label htmlFor="categorize-enabled" className="flex items-start gap-3">
-        <input id="categorize-enabled" type="checkbox" checked={enabled} onChange={(e) => { setEnabled(e.target.checked); setSaved(false); }} className="mt-1 h-4 w-4" data-testid="categorize-enabled" />
-        <span>
-          <span className="block font-medium text-fg">{t('categorySuggestions.enabled')}</span>
-          <span className="block text-sm text-fg-muted">{t('categorySuggestions.enabledHint')}</span>
-        </span>
-      </label>
+      <FeatureStatusLine featureKey="aiCategorySuggest" item={feature} />
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-fg">{t('categorySuggestions.cap')}</span>

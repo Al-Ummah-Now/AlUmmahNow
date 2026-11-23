@@ -150,6 +150,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Approval workflows (wiki AUN-WORKFLOWS §10): every admin role sees requests; admin-api decides who may act
   { href: '/approvals', label: 'nav.approvals', icon: 'check', group: 'site', badge: 'approvals', badgeTestId: 'approvals-nav-badge', badgeLabel: 'workflows.navBadge' },
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
+  // Features (wiki AUN-FEATURES, O39): every switchable feature on one page; every admin reads (features:read), admins change (features:manage)
+  { href: '/features', label: 'nav.features', icon: 'toggle', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
   // Settings › Emails: the system emails' wording in en + ar, versions, preview, test send (emails:manage)
   { href: '/settings/emails', label: 'nav.emails', icon: 'inbox', group: 'site', requires: (a) => a.emails === true },

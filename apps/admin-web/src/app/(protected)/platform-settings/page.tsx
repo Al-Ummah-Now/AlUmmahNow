@@ -16,6 +16,7 @@ import { logger } from '@/lib/logger';
 import { NotificationMenuSetting } from './NotificationMenuSetting';
 import { DownloadRateLimitSetting } from './DownloadRateLimitSetting';
 import { YoutubeImportSetting } from './YoutubeImportSetting';
+import { featureStates, type FeatureStates } from '@/lib/features/states';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,14 +30,16 @@ export default async function PlatformSettingsPage() {
   // YouTube import (wiki AUN-YT-IMPORT): admin-api needs media:manage even to read it, so only those roles load it
   const showYoutube = canManageMedia(session?.user.role);
   const canEditPlatform = canManagePlatformSettings(session?.user.role);
-  const [settingsResult, historyResult, downloadRateLimitResult, downloadRateLimitHistoryResult, youtubeResult] =
-    await Promise.allSettled([
+  const [[settingsResult, historyResult, downloadRateLimitResult, downloadRateLimitHistoryResult, youtubeResult], features] = await Promise.all([
+    Promise.allSettled([
       getNotificationPlatformSettings(),
       getNotificationSettingsHistory(),
       getDownloadRateLimitSettings(),
       getDownloadRateLimitHistory(),
       showYoutube ? getYoutubeImportSettings() : Promise.resolve(null),
-    ]);
+    ]),
+    showYoutube ? featureStates() : Promise.resolve({} as FeatureStates),
+  ]);
   if (youtubeResult.status === 'rejected') {
     logger.error('[platform-settings] Could not load the YouTube import settings', { error: String(youtubeResult.reason) });
   }
@@ -78,7 +81,7 @@ export default async function PlatformSettingsPage() {
       )}
       {showYoutube &&
         (youtube ? (
-          <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} saveSecret={saveYoutubeImportClientSecret} />
+          <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} saveSecret={saveYoutubeImportClientSecret} feature={features.youtubeImport} />
         ) : (
           <ErrorAlert testId="youtube-import-load-error">{t('youtubeImport.loadFailed')}</ErrorAlert>
         ))}

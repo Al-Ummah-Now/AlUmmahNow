@@ -5,6 +5,7 @@ import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { SocialPostingView } from './SocialPostingView';
+import { featureStates } from '@/lib/features/states';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export default async function SocialPostingPage() {
   const { t } = await getI18n();
   const session = await getAdminSession();
-  const [viewResult, historyResult] = await Promise.allSettled([getSocialAdmin(), getSocialHistory()]);
+  const [[viewResult, historyResult], features] = await Promise.all([Promise.allSettled([getSocialAdmin(), getSocialHistory()]), featureStates()]);
   if (viewResult.status === 'rejected') logger.error('[social] Could not load the social posting settings', { error: String(viewResult.reason) });
   const view = viewResult.status === 'fulfilled' ? viewResult.value : null;
   const history = historyResult.status === 'fulfilled' ? historyResult.value.entries : [];
@@ -28,7 +29,7 @@ export default async function SocialPostingPage() {
         <p className="text-fg-muted mt-1">{t('socialPosting.subtitle')}</p>
       </div>
       {view ? (
-        <SocialPostingView view={view} history={history} canEdit={canManagePlatformSettings(session?.user.role)} />
+        <SocialPostingView view={view} history={history} canEdit={canManagePlatformSettings(session?.user.role)} features={features} />
       ) : (
         <ErrorAlert testId="social-posting-error">{t('socialPosting.loadFailed')}</ErrorAlert>
       )}

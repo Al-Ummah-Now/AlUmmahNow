@@ -42,6 +42,9 @@ const PATHS = {
   card: 'M3 6h18v12H3zM3 10h18M7 15h4',
   sliders: 'M4 6h16M4 12h16M4 18h16M14 4v4M8 10v4M16 16v4',
   phone: 'M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2',
+  /** A switch, on (the Features page) */
+  toggle: 'M8 6h8a6 6 0 0 1 0 12H8A6 6 0 0 1 8 6zM16 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
+  lock: 'M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
 } as const;
 
 export type IconName = keyof typeof PATHS;
