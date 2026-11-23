@@ -618,6 +618,8 @@ export interface AppTranslations {
     aboutDetails: string;
     contactEmail: string;
     contactEmailHelp: string;
+    defaultAllowDownloads?: string;
+    defaultAllowDownloadsHelp?: string;
     invalidEmail: string;
     location: string;
     locationPlaceholder: string;
@@ -922,6 +924,9 @@ export interface AppTranslations {
     videoPrivacy?: string;
     publicVideo?: string;
     privateVideo?: string;
+    allowDownloadsLabel?: string;
+    allowDownloadsToggle?: string;
+    allowDownloadsHelp?: string;
     /** Shorts viewer (D-SEO-10) */
     nextShort?: string;
     previousShort?: string;

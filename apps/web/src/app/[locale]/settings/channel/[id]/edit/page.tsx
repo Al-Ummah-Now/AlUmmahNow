@@ -18,6 +18,7 @@ import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
@@ -37,6 +38,7 @@ interface ChannelData {
   links?: Array<{ title: string; url: string }>;
   contactEmail?: string;
   location?: string;
+  defaultAllowDownloads?: boolean;
 }
 
 function ChannelEditPage() {
@@ -60,6 +62,8 @@ function ChannelEditPage() {
   const [cropping, setCropping] = useState<{ type: 'avatar' | 'cover'; file: File } | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [about, setAbout] = useState<ChannelAboutValues>({ handle: '', links: [], contactEmail: '', location: '' });
+  const [defaultAllowDownloads, setDefaultAllowDownloads] = useState(true);
+  const offlineDownloadsOn = useFeatures(channelId).features.offlineDownloads;
   const [handleStatus, setHandleStatus] = useState<HandleStatus>({ state: 'idle' });
   const [formData, setFormData] = useState({
     name: '',
@@ -103,6 +107,7 @@ function ChannelEditPage() {
             contactEmail: channelData.contactEmail || '',
             location: channelData.location || '',
           });
+          setDefaultAllowDownloads((channelData as ChannelData).defaultAllowDownloads !== false);
         }
       } catch (error) {
         logger.error('Error fetching channel', { error, channelId });
@@ -145,6 +150,7 @@ function ChannelEditPage() {
         links: about.links.filter((l) => l.title.trim() || l.url.trim()).map((l) => ({ title: l.title.trim(), url: l.url.trim() })),
         contactEmail: about.contactEmail.trim(),
         location: about.location.trim(),
+        ...(offlineDownloadsOn ? { defaultAllowDownloads } : {}),
       });
 
       if (result.ok === false) {
@@ -431,6 +437,26 @@ function ChannelEditPage() {
               disabled={isSaving}
               handleLocked={handleLocked}
             />
+
+            {/* Channel default offline downloads setting (E14-S5; hidden when offlineDownloads switch is off) */}
+            {offlineDownloadsOn && (
+              <div className="pt-2" data-testid="channel-edit-downloads">
+                <label className="flex items-start gap-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <input
+                    type="checkbox"
+                    checked={defaultAllowDownloads}
+                    disabled={isSaving}
+                    onChange={(e) => setDefaultAllowDownloads(e.target.checked)}
+                    className="w-4 h-4 mt-0.5"
+                    data-testid="channel-edit-default-allow-downloads"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">{t.channel.defaultAllowDownloads}</div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{t.channel.defaultAllowDownloadsHelp}</p>
+                  </div>
+                </label>
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex gap-4 pt-4">
