@@ -43,8 +43,9 @@ import {
   projectOwnership,
   STUDIO_VIDEO_STATUSES,
   StudioVideoStatus,
+  INDEX_REPAIRS_TABLE,
   indexRepairStatement,
-  pendingRepairCount,
+  ownershipObjectKey,
   liveMetadataStatements,
   LIVE_METADATA_TABLE,
   type LiveEventType,
@@ -56,6 +57,7 @@ import { logger } from '../logger';
 import { IndexUnavailableError } from './index-unavailable';
 import { syncCommentIndex } from '../admin/commentIndex';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
+import { kickRepairJob, type RepairJobEnv } from './repairs';
 
 /** R2 binding of each kind (live streams share the videos bucket under `livestream:`). */
 const BUCKET_FOR_KIND = Object.fromEntries(Object.entries(OWNERSHIP_SOURCES).map(([kind, source]) => [kind, source.bucket])) as Record<OwnershipKind, string>;
@@ -924,7 +926,7 @@ export async function backfillOwnershipPage(
     }
     const deleted = new Set<string>();
     await Promise.all(tombstoned.map(async id => {
-      if (!(await bucket.head(id))) deleted.add(id);
+      if (!(await bucket.head(ownershipObjectKey(kind, id)))) deleted.add(id);
     }));
     removed += deleted.size;
     refused = refused.filter(id => !deleted.has(id));
@@ -1053,14 +1055,31 @@ export async function runOwnershipPass(
   let state: PassState = (await readPass(db, kind)) ?? { cursor: null, startedAt: clock(), failed: 0, skipped: 0, stored: 0, problemIds: [], counted: true };
 
   while (result.pages < maxPages) {
-    const page = await backfillOwnershipPage(env, kind, { cursor: state.cursor, limit: options.pageSize, now: clock() });
+    // Never write an indexed_at older than state.startedAt (guards against clock skew across isolates
+    // in a multi-step rebuild job, so rows seen on later steps are never pruned by this pass)
+    const pageNow = Math.max(clock(), state.startedAt);
+    const page = await backfillOwnershipPage(env, kind, { cursor: state.cursor, limit: options.pageSize, now: pageNow });
     // Objects the page could not index: repaired one by one, never blocking the pass
+    const repairNow = clock();
     const repairs = [
-      ...page.refusedIds.map(id => indexRepairStatement(db, { entity: kind, id, reason: 'pass-refused', error: 'a delete newer than the stored object blocked the write' }, clock())),
-      ...page.failedIds.map(id => indexRepairStatement(db, { entity: kind, id, reason: 'pass-unreadable', error: 'the pass could not read the object' }, clock())),
+      ...page.refusedIds.map(id => ({ id, reason: 'pass-refused' as const, error: 'a delete newer than the stored object blocked the write' })),
+      ...page.failedIds.map(id => ({ id, reason: 'pass-unreadable' as const, error: 'the pass could not read the object' })),
     ];
-    for (let i = 0; i < repairs.length; i += 50) await db.batch(repairs.slice(i, i + 50));
-    if (repairs.length) result.queuedRepairs = (result.queuedRepairs ?? 0) + repairs.length;
+    // These objects were listed. Preserve any existing row until the repair job refreshes it.
+    for (let i = 0; i < repairs.length; i += 25) {
+      await db.batch(repairs.slice(i, i + 25).flatMap(repair => [
+        indexRepairStatement(db, { ...repair, entity: kind, key: ownershipObjectKey(kind, repair.id) }, repairNow),
+        ownershipSeenStatement(db, kind, repair.id, pageNow),
+      ]));
+    }
+    if (repairs.length) {
+      result.queuedRepairs = (result.queuedRepairs ?? 0) + repairs.length;
+      try {
+        await kickRepairJob(env as RepairJobEnv, repairNow);
+      } catch (error) {
+        logger.warn('[Ownership] Could not kick repair job after queueing pass repairs', { kind, queued: repairs.length, error: errorText(error) });
+      }
+    }
     result.pages++;
     result.scanned += page.scanned;
     state = {
@@ -1123,16 +1142,21 @@ export async function runOwnershipPass(
  * `stored` in the flag is the listed count minus objects deleted meanwhile.
  */
 async function recordOwnershipDrift(db: SearchDb, kind: OwnershipKind, state: PassState, now: number): Promise<OwnershipDrift | null> {
-  const row = await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} WHERE kind = ?`).bind(kind).first<{ n: number }>();
-  const indexed = Number(row?.n ?? 0);
   // Objects deleted while the pass ran were listed but rightly have no row (their tombstone is newer than the pass start)
   const deleted = await db.prepare('SELECT COUNT(*) AS n FROM search_tombstones WHERE entity = ? AND version >= ? AND version <= ?')
     .bind(ownershipTombstone(kind), state.startedAt, now).first<{ n: number }>();
   const stored = Math.max(0, (state.stored ?? 0) - Number(deleted?.n ?? 0));
   const skipped = state.skipped ?? 0;
   const counted = state.counted !== false;
-  // Objects queued for repair are on their way into the index, not missing
-  const queued = await pendingRepairCount(db, kind);
+  // Count both in one snapshot so a concurrent repair moving from the queue to the index
+  // cannot be missed. A queued repair only covers an object that has no row yet.
+  const counts = await db.prepare(
+    `SELECT (SELECT COUNT(*) FROM ${OWNERSHIP_TABLE} WHERE kind = ?) AS indexed,
+            (SELECT COUNT(*) FROM ${INDEX_REPAIRS_TABLE} r WHERE r.entity = ? AND r.status = 'pending'
+             AND NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} o WHERE o.kind = r.entity AND o.id = r.id)) AS queued`,
+  ).bind(kind, kind).first<{ indexed: number; queued: number }>();
+  const indexed = Number(counts?.indexed ?? 0);
+  const queued = Number(counts?.queued ?? 0);
   if (indexed + queued >= stored) {
     // Partial counts from an older build's state give no verdict; the next pass decides
     if (counted) await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipDriftKey(kind)).run();
