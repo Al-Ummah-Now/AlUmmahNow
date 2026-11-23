@@ -84,7 +84,7 @@ export function ListenMiniBar() {
       dir={isRTL ? 'rtl' : 'ltr'}
       aria-label={labels.listenMode}
       data-testid="listen-mini-bar"
-      className="fixed bottom-0 inset-x-0 z-50 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-lg"
+      className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-0 inset-x-0 lg:start-[var(--rail,72px)] z-[55] border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-lg"
     >
       {/* Sleep timer popover */}
       {showSleep && (
@@ -198,44 +198,44 @@ export function ListenMiniBar() {
       </div>
 
       {/* Main controls row */}
-      <div className="max-w-7xl mx-auto px-3 py-2 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-3 py-2 flex items-center justify-between gap-2 sm:gap-3">
         {/* Track metadata */}
         <Link
           href={`/${lang}/video/${encodeURIComponent(current.videoId)}`}
           aria-label={labels.openWatchPage}
           data-testid="listen-track-link"
-          className="flex items-center gap-2.5 min-w-0 flex-1"
+          className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1"
         >
           {current.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={current.thumbnailUrl}
               alt=""
-              className="w-10 h-10 rounded object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-800"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-800"
             />
           ) : (
-            <div className="w-10 h-10 rounded bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
               <Headphones className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
             </div>
           )}
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white truncate" data-testid="listen-track-title">
+            <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate" data-testid="listen-track-title">
               {current.title}
             </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
-              {current.channelName} · {formatClock(currentTime, lang)} / {formatClock(duration, lang)}
+            <div className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 truncate">
+              {current.channelName}{isRTL ? '، ' : ' · '}{formatClock(currentTime, lang)} / {formatClock(duration, lang)}
             </div>
           </div>
         </Link>
 
         {/* Playback buttons */}
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
           <button
             type="button"
             aria-label={labels.back15}
             data-testid="listen-back-15"
             onClick={() => skipBy(-15)}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden sm:inline-flex p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -244,7 +244,7 @@ export function ListenMiniBar() {
             aria-label={isPlaying ? labels.pause : labels.play}
             data-testid="listen-play-toggle"
             onClick={togglePlay}
-            className="p-2.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            className="p-2 sm:p-2.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
           >
             {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
           </button>
@@ -253,20 +253,20 @@ export function ListenMiniBar() {
             aria-label={labels.forward30}
             data-testid="listen-forward-30"
             onClick={() => skipBy(30)}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="hidden sm:inline-flex p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <RotateCw className="w-4 h-4" />
           </button>
         </div>
 
         {/* Speed, sleep timer, queue, close */}
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1.5 flex-shrink-0">
           <button
             type="button"
             aria-label={labels.speed}
             data-testid="listen-speed-button"
             onClick={nextSpeed}
-            className="px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="px-1.5 sm:px-2 py-1 rounded text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             {localizeDigits(lang, `${playbackRate}×`)}
           </button>
@@ -278,7 +278,7 @@ export function ListenMiniBar() {
               setShowSleep((v) => !v);
               setShowQueue(false);
             }}
-            className={`px-2 py-1.5 rounded flex items-center gap-1 text-xs ${
+            className={`p-1.5 sm:px-2 sm:py-1.5 rounded flex items-center gap-1 text-xs ${
               sleepTimer !== 'off'
                 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 font-medium'
                 : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -295,7 +295,7 @@ export function ListenMiniBar() {
               setShowQueue((v) => !v);
               setShowSleep(false);
             }}
-            className="px-2 py-1.5 rounded flex items-center gap-1 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="p-1.5 sm:px-2 sm:py-1.5 rounded flex items-center gap-1 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <ListMusic className="w-4 h-4" />
             {queue.length > 0 && <span>{localizeDigits(lang, queue.length)}</span>}
