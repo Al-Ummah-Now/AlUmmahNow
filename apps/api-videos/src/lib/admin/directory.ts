@@ -280,7 +280,8 @@ export async function hydrateChannels(env: AdminEnv, rows: Row[]): Promise<Admin
 		: { results: [] };
 	const ownerEmail = new Map((owners.results ?? []).map((o) => [o.id, o.email]));
 	return rows.map((r) => {
-		const ch = objects.get(r.id) ?? {};
+		const live = objects.get(r.id);
+		const ch = live ?? {};
 		const rawLoc = ch.nameLocalized && typeof ch.nameLocalized === 'object' ? (ch.nameLocalized as Record<string, unknown>) : null;
 		const nameLocalized: Record<string, string> = {};
 		if (rawLoc) {
@@ -296,7 +297,7 @@ export async function hydrateChannels(env: AdminEnv, rows: Row[]): Promise<Admin
 			ownerId: r.owner_id ?? null,
 			ownerEmail: ownerEmail.get(r.owner_id) ?? null,
 			avatarUrl: (ch.avatarUrl as string) || null,
-			isVerified: ch.isVerified === true || r.is_verified === 1,
+			isVerified: live ? ch.isVerified === true : r.is_verified === 1,
 			isSuspended: ch.isSuspended === true || r.is_suspended === 1,
 			isPrivate: ch.isPrivate === true || r.is_public === 0,
 			isDeleted: ch.isDeleted === true || r.is_deleted === 1,

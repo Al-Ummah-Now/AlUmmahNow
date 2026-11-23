@@ -144,7 +144,11 @@ export function buildTypeStatement(
     binds.push(now - SEARCH_DATE_WINDOWS_MS[query.date]);
   }
   if (query.verified) {
-    where.push('(d.is_verified = 1 OR c.is_verified = 1)');
+    // Channel verification comes from search_channels (c) at query time when the channel row exists,
+    // so unverifying a channel takes effect immediately even if denormalized rows (e.g. posts) lag (#380).
+    where.push(type === 'channel'
+      ? 'd.is_verified = 1'
+      : '((c.id IS NOT NULL AND c.is_verified = 1) OR (c.id IS NULL AND d.is_verified = 1))');
   }
 
   const sort = query.sort ?? 'relevance';
@@ -198,7 +202,7 @@ export function toResultItem(type: SearchEntityType, row: IndexRow): SearchResul
       if (channel) {
         Object.assign(post, channelNameFields(channel, post.channelName ?? ''));
         post.channelAvatar = channel.avatarUrl ?? post.channelAvatar;
-        post.channelVerified = channel.isVerified || post.channelVerified;
+        post.channelVerified = channel.isVerified;
       }
       return { type, id: row.id, score, post, channel };
     }
@@ -246,7 +250,7 @@ export async function searchTranscripts(db: SearchDb, query: SearchQuery, match:
   }
   if (query.format) where.push(query.format === 'short' ? 'd.is_short = 1' : '(d.is_short = 0 AND d.is_live = 0)');
   if (query.date) { where.push('d.created_at >= ?'); binds.push(now - SEARCH_DATE_WINDOWS_MS[query.date]); }
-  if (query.verified) where.push('(d.is_verified = 1 OR c.is_verified = 1)');
+  if (query.verified) where.push('((c.id IS NOT NULL AND c.is_verified = 1) OR (c.id IS NULL AND d.is_verified = 1))');
   const sql = `SELECT t.video_id AS video_id, t.language AS language, t.start_ms AS start_ms, t.text AS text,
       d.payload AS payload, c.payload AS channel_payload
     FROM search_transcripts_fts
