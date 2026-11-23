@@ -75,6 +75,7 @@ let search: ReturnType<typeof searchD1>;
 let reports: D1Database;
 let events: WorkflowEvent[];
 let failNextApply = false;
+let throwOnVersion = false;
 
 const ctx = (over: Partial<WorkflowCtx> = {}): WorkflowCtx => ({
   db: search as unknown as D1Database,
@@ -108,7 +109,10 @@ function settingExecutor(type: WorkflowActionType, can: (a: WorkflowActor) => bo
       baseVersion: value(p.key) ?? '',
       subjectUserId: p.key === 'about-u-sa2' ? 'u-sa2' : null,
     }),
-    currentVersion: async (_c, p) => value(p.key) ?? '',
+    currentVersion: async (_c, p) => {
+      if (throwOnVersion) throw new Error('D1 is unavailable');
+      return value(p.key) ?? '';
+    },
     applyStatements: async (c, p) => {
       if (failNextApply) {
         failNextApply = false;
@@ -142,6 +146,7 @@ beforeEach(async () => {
   reports = sqliteD1();
   events = [];
   failNextApply = false;
+  throwOnVersion = false;
   clearWorkflowExecutors();
   settingExecutor('features.set');
   settingExecutor('support.fees.set', (a) => a.financePermissions.includes('support:providers'));
@@ -173,9 +178,9 @@ describe('direct rules', () => {
     assert.equal(out.status, 'scheduled');
     assert.equal(value('banner'), null);
     clock = new Date('2026-11-24T23:59:00Z');
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 0, failed: 0 });
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 0, failed: 0, errors: 0 });
     clock = new Date('2026-11-25T00:00:00Z');
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 1, failed: 0 });
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, applied: 1, failed: 0, errors: 0 });
     assert.equal(value('banner'), 'eid');
   });
 
@@ -390,5 +395,58 @@ describe('rules and storage', () => {
       const scans = plan.filter((d) => /^SCAN /.test(d) && !/USING (COVERING )?INDEX|USING PRIMARY KEY/.test(d));
       assert.deepEqual(scans, [], `${q}\n${plan.join('\n')}`);
     }
+  });
+});
+
+describe('review fixes (#1825)', () => {
+  it('an error in the stale check while applying ends in failed (lock released for retry), never stuck in applying', async () => {
+    await setRule('features.set', 'banner', { effectiveDate: { allowed: true, maxDaysAhead: 30 } });
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'banner', value: 'eid' }, reason: 'Eid', effectiveAt: '2026-11-25T00:00:00Z' });
+    const id = out.status === 'scheduled' ? out.request.id : '';
+    clock = new Date('2026-11-25T00:00:00Z');
+    throwOnVersion = true;
+    const r = await runDueWorkflows(ctx());
+    assert.deepEqual(r, { expired: 0, applied: 0, failed: 1, errors: 0 });
+    assert.equal((await getRequestView(ctx(), id)).status, 'failed');
+    throwOnVersion = false;
+    assert.equal((await retryRequest(ctx(), await actor('u-sa2', ['super_admin']), id)).status, 'applied');
+  });
+
+  it('a failed direct change says failed, not pending_approval', async () => {
+    failNextApply = true;
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'uploads', value: 'on' }, reason: 'r' });
+    assert.equal(out.status, 'failed');
+    assert.equal(out.status === 'failed' && out.request.status, 'failed');
+  });
+
+  it('applied and failed notices go to the approvers too', async () => {
+    await setRule('features.set', 'live', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }], stepUp: 'approve' });
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'live', value: 'on' }, reason: 'r' });
+    const id = out.status === 'pending_approval' ? out.request.id : '';
+    await approveRequest(ctx(), await actor('u-sa2', ['super_admin']), id, {});
+    const applied = events.find((e) => e.kind === 'applied')!;
+    assert.deepEqual(applied.recipients.sort(), ['u-sa1', 'u-sa2']);
+  });
+
+  it('lists filter by action in every view, and open includes approved', async () => {
+    await setRule('features.set', '', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] });
+    await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'a', value: '1' }, reason: 'r' });
+    finance('u-fin9', ['support:providers']);
+    await proposeChange(ctx(), await actor('u-fin1'), { type: 'support.fees.set', payload: { key: 'fee', value: '1' }, reason: 'r' });
+    assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open' })).items.length, 2);
+    assert.deepEqual((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'support.fees.set' })).items.map((i) => i.type), ['support.fees.set']);
+    assert.deepEqual((await listRequests(ctx(), 'u-fin9', { view: 'waiting', type: 'features.set' })).items, []);
+    assert.equal((await listRequests(ctx(), 'u-fin9', { view: 'waiting', type: 'support.fees.set' })).items.length, 1);
+    search.raw.exec("UPDATE workflow_requests SET status = 'approved' WHERE action_type = 'features.set'");
+    assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'features.set' })).items.length, 1);
+  });
+
+  it('the creatorSupport switch rule carries the money floor: finance approvers, the owner excluded', async () => {
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'creatorSupport', value: 'on' }, reason: 'Launch' });
+    const id = out.status === 'pending_approval' ? out.request.id : '';
+    assert.ok(id, 'needs an approver');
+    await rejects(approveRequest(ctx(), await actor('owner', ['super_admin']), id, {}), 'approval_not_allowed');
+    await rejects(approveRequest(ctx(), await actor('u-sa2', ['super_admin']), id, {}), 'approval_not_allowed');
+    assert.equal((await approveRequest(ctx(), await actor('u-fin2'), id, {})).status, 'applied');
   });
 });
