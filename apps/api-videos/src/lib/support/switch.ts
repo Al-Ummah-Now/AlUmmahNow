@@ -15,21 +15,18 @@ import { logger } from '../logger';
 export interface SupportSwitchState {
 	on: boolean;
 	reason: 'switched_off' | 'unreadable' | null;
-	/** The supportPerks switch (MEM-D15 interlock: perks on hides the apps' P2P mode); unknown reads as on */
-	perksOn: boolean;
 }
 
-export async function supportSwitch(env: unknown, override?: { on: boolean; perksOn?: boolean }): Promise<SupportSwitchState> {
-	if (override) return { on: override.on, reason: override.on ? null : 'switched_off', perksOn: override.perksOn ?? true };
+export async function supportSwitch(env: unknown, override?: { on: boolean }): Promise<SupportSwitchState> {
+	if (override) return { on: override.on, reason: override.on ? null : 'switched_off' };
 	const e = (env ?? {}) as SwitchesEnv;
-	if (!e.SEARCH_DB) return { on: false, reason: 'unreadable', perksOn: true };
+	if (!e.SEARCH_DB) return { on: false, reason: 'unreadable' };
 	try {
 		const { effective } = await readFeatureSwitches(e);
-		const perksOn = effective.supportPerks !== false;
-		return effective.creatorSupport ? { on: true, reason: null, perksOn } : { on: false, reason: 'switched_off', perksOn };
+		return effective.creatorSupport ? { on: true, reason: null } : { on: false, reason: 'switched_off' };
 	} catch (error) {
 		logger.warn('[Support] Feature switches unreadable; support treated as off', { error: error instanceof Error ? error.message : String(error) });
-		return { on: false, reason: 'unreadable', perksOn: true };
+		return { on: false, reason: 'unreadable' };
 	}
 }
 

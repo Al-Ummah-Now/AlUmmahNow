@@ -35,8 +35,6 @@ export interface SupportRequest {
 	client: string | null;
 	/** X-AUN-Storefront: the app store's storefront country (MEM-D15; stores apply rules by storefront) */
 	storefront?: string | null;
-	/** Whether the supportPerks switch is on (MEM-D15 interlock); unknown counts as on, so P2P stays hidden */
-	perksOn?: boolean;
 }
 
 export interface ReceiverChannel {
@@ -66,7 +64,7 @@ export function appDecisionFor(c: SupportConfig, req: SupportRequest): AppSuppor
 	if (!req.client) return null;
 	const platform = appPlatformOfOs(parseClientHeader(req.client)?.os);
 	if (!platform) return { mode: 'hidden', cadence: 'one_time_only', hiddenBecause: 'platform_off' };
-	return appSupportMode({ settings: c.apps, platform, storefront: req.storefront ?? null, perksOn: req.perksOn !== false, policy: c.policy });
+	return appSupportMode({ settings: c.apps, platform, storefront: req.storefront ?? null, policy: c.policy });
 }
 
 const open = (p: SupportPolicy, fields: (keyof SupportPolicy)[]) => fields.some((f) => p[f] === null);

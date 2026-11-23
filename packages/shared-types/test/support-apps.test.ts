@@ -13,7 +13,7 @@ const settings = (over: Partial<a.AppSupportSettings> = {}): a.AppSupportSetting
 test('no in-app purchase mode exists, and every platform starts hidden', () => {
   assert.ok(!a.APP_SUPPORT_MODES.some((m) => /iap|in_app/i.test(m)));
   for (const platform of a.APP_PLATFORMS) {
-    assert.equal(a.appSupportMode({ settings: a.DEFAULT_APP_SUPPORT, platform, storefront: 'US', perksOn: false, policy: whole }).mode, 'hidden');
+    assert.equal(a.appSupportMode({ settings: a.DEFAULT_APP_SUPPORT, platform, storefront: 'US', policy: whole }).mode, 'hidden');
   }
 });
 
@@ -24,27 +24,27 @@ test('a storefront country rule beats its region group; no storefront is hidden'
       { platform: 'ios', region: 'GB', mode: 'hidden', cadence: 'one_time_only' },
     ],
   });
-  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'EG', perksOn: false, policy: whole }).mode, 'external_browser_p2p');
-  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'GB', perksOn: false, policy: whole }).hiddenBecause, 'no_rule');
-  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: null, perksOn: false, policy: whole }).hiddenBecause, 'no_storefront');
-  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'FR', perksOn: false, policy: whole }).hiddenBecause, 'no_rule', 'FR is EU_EEA, not ROW');
+  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'EG', policy: whole }).mode, 'external_browser_p2p');
+  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'GB', policy: whole }).hiddenBecause, 'no_rule');
+  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: null, policy: whole }).hiddenBecause, 'no_storefront');
+  assert.equal(a.appSupportMode({ settings: s, platform: 'ios', storefront: 'FR', policy: whole }).hiddenBecause, 'no_rule', 'FR is EU_EEA, not ROW');
 });
 
-test('interlocks: perks, fees not whole, EU attestation, US-only link', () => {
+test('interlocks: fees not whole, EU attestation, US-only link', () => {
   const p2p = settings({ rules: [{ platform: 'android', region: 'ROW', mode: 'external_browser_p2p', cadence: 'one_time_only' }] });
-  assert.equal(a.appSupportMode({ settings: p2p, platform: 'android', storefront: 'EG', perksOn: true, policy: whole }).hiddenBecause, 'perks_on');
-  assert.equal(a.appSupportMode({ settings: p2p, platform: 'android', storefront: 'EG', perksOn: false, policy: notWhole }).hiddenBecause, 'fees_not_whole');
-  assert.equal(a.appSupportMode({ settings: { ...p2p, storeConfirmedProcessorFeeDeduction: true }, platform: 'android', storefront: 'EG', perksOn: false, policy: notWhole }).mode, 'external_browser_p2p');
+  assert.equal(a.appSupportMode({ settings: p2p, platform: 'android', storefront: 'EG', policy: whole }).mode, 'external_browser_p2p');
+  assert.equal(a.appSupportMode({ settings: p2p, platform: 'android', storefront: 'EG', policy: notWhole }).hiddenBecause, 'fees_not_whole');
+  assert.equal(a.appSupportMode({ settings: { ...p2p, storeConfirmedProcessorFeeDeduction: true }, platform: 'android', storefront: 'EG', policy: notWhole }).mode, 'external_browser_p2p');
   const eu = settings({ rules: [{ platform: 'ios', region: 'EU_EEA', mode: 'external_browser_eu_entitled', cadence: 'one_time_only' }] });
-  assert.equal(a.appSupportMode({ settings: eu, platform: 'ios', storefront: 'DE', perksOn: true, policy: notWhole }).hiddenBecause, 'eu_not_ready');
-  assert.equal(a.appSupportMode({ settings: { ...eu, euEntitlementReady: true }, platform: 'ios', storefront: 'DE', perksOn: true, policy: notWhole }).mode, 'external_browser_eu_entitled', 'perks do not block the EU mode');
+  assert.equal(a.appSupportMode({ settings: eu, platform: 'ios', storefront: 'DE', policy: notWhole }).hiddenBecause, 'eu_not_ready');
+  assert.equal(a.appSupportMode({ settings: { ...eu, euEntitlementReady: true }, platform: 'ios', storefront: 'DE', policy: notWhole }).mode, 'external_browser_eu_entitled');
   const us = settings({ rules: [{ platform: 'ios', region: 'CA', mode: 'external_browser_us_link', cadence: 'one_time_only' }] });
-  assert.equal(a.appSupportMode({ settings: us, platform: 'ios', storefront: 'CA', perksOn: false, policy: whole }).hiddenBecause, 'us_link_outside_us');
+  assert.equal(a.appSupportMode({ settings: us, platform: 'ios', storefront: 'CA', policy: whole }).hiddenBecause, 'us_link_outside_us');
 });
 
 test('the cadence gate comes from the matching rule', () => {
   const s = settings({ rules: [{ platform: 'desktop', region: 'US', mode: 'external_browser_us_link', cadence: 'one_time_only' }] });
-  assert.equal(a.appSupportMode({ settings: s, platform: 'desktop', storefront: 'us', perksOn: false, policy: notWhole }).cadence, 'one_time_only');
+  assert.equal(a.appSupportMode({ settings: s, platform: 'desktop', storefront: 'us', policy: notWhole }).cadence, 'one_time_only');
 });
 
 test('parsing refuses malformed settings, duplicates and unknown modes; missing reads as hidden', () => {

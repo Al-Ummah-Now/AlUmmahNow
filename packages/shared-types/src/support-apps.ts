@@ -18,14 +18,16 @@
  * - Never Apple or Google in-app purchase: it would take a store cut (breaking 0% to the platform)
  *   and settle to the developer instead of the organization. There is no IAP mode.
  *
+ * The gift stays strictly a gift: no perks ever (MEM-D13, owner 2026-11-23) and no digital content
+ * in return, which is what keeps the stores' person-to-person exemption simple.
+ *
  * Interlocks (the server forces `hidden`, whatever the rule says):
- *   1. any paid perk switch on → no P2P mode (a perk voids the P2P gift exemption);
- *   2. P2P needs 100% of the gift to reach the creator: the supporter always covers the card fee and
+ *   1. P2P needs 100% of the gift to reach the creator: the supporter always covers the card fee and
  *      the organization bears payout fees, unless the admin records the stores' written OK for
  *      deducting third-party processor fees;
- *   3. the EU entitled mode needs the entitlement / age-gate attestation;
- *   4. the US link mode only on the US storefront;
- *   5. no storefront country from the app → hidden (stores apply rules by storefront, not by IP).
+ *   2. the EU entitled mode needs the entitlement / age-gate attestation;
+ *   3. the US link mode only on the US storefront;
+ *   4. no storefront country from the app → hidden (stores apply rules by storefront, not by IP).
  */
 import type { SupportPolicy } from './support';
 
@@ -126,11 +128,11 @@ export interface AppSupportDecision {
   mode: AppSupportMode;
   cadence: AppCadence;
   /** Why it is hidden, when it is */
-  hiddenBecause: null | 'platform_off' | 'no_storefront' | 'no_rule' | 'perks_on' | 'fees_not_whole' | 'eu_not_ready' | 'us_link_outside_us';
+  hiddenBecause: null | 'platform_off' | 'no_storefront' | 'no_rule' | 'fees_not_whole' | 'eu_not_ready' | 'us_link_outside_us';
 }
 
 /** What a native app on `platform`, in the store of `storefront`, may show (never more than the rule). */
-export function appSupportMode(input: { settings: AppSupportSettings; platform: AppPlatform; storefront: string | null; perksOn: boolean; policy: Pick<SupportPolicy, 'collectorFeePayer' | 'payoutFeeBearer'> }): AppSupportDecision {
+export function appSupportMode(input: { settings: AppSupportSettings; platform: AppPlatform; storefront: string | null; policy: Pick<SupportPolicy, 'collectorFeePayer' | 'payoutFeeBearer'> }): AppSupportDecision {
   const hidden = (why: AppSupportDecision['hiddenBecause']): AppSupportDecision => ({ mode: 'hidden', cadence: 'one_time_only', hiddenBecause: why });
   const { settings, platform } = input;
   if (!settings.platforms[platform]) return hidden('platform_off');
@@ -139,7 +141,6 @@ export function appSupportMode(input: { settings: AppSupportSettings; platform: 
   const rule = settings.rules.find((r) => r.platform === platform && r.region === storefront) ?? settings.rules.find((r) => r.platform === platform && r.region === regionGroup(storefront));
   if (!rule || rule.mode === 'hidden') return hidden('no_rule');
   if (rule.mode === 'external_browser_p2p') {
-    if (input.perksOn) return hidden('perks_on');
     const whole = input.policy.collectorFeePayer === 'supporterAlways' && input.policy.payoutFeeBearer === 'organization';
     if (!whole && !settings.storeConfirmedProcessorFeeDeduction) return hidden('fees_not_whole');
   }

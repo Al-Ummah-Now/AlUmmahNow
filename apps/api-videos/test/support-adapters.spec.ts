@@ -49,21 +49,21 @@ describe('the switch seam', () => {
 		const { SqliteD1 } = await import('./search-sqlite-d1');
 		const { forgetFeatureSwitches } = await import('@al-ummah/shared-types');
 		forgetFeatureSwitches();
-		assert.deepEqual(await supportSwitch({}), { on: false, reason: 'unreadable', perksOn: true });
+		assert.deepEqual(await supportSwitch({}), { on: false, reason: 'unreadable' });
 		const db = new SqliteD1();
-		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: false, reason: 'switched_off', perksOn: false });
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: false, reason: 'switched_off' });
 		forgetFeatureSwitches();
 		await db.prepare("INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('creatorSupport', 1, 1, 'usr_super', 'now')").run();
-		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: true, reason: null, perksOn: false });
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db }), { on: true, reason: null });
 		forgetFeatureSwitches();
-		assert.deepEqual(await supportSwitch({ SEARCH_DB: db, FEATURES_FORCE_OFF: 'creatorSupport' }), { on: false, reason: 'switched_off', perksOn: false });
+		assert.deepEqual(await supportSwitch({ SEARCH_DB: db, FEATURES_FORCE_OFF: 'creatorSupport' }), { on: false, reason: 'switched_off' });
 		forgetFeatureSwitches();
 	});
 	it('can not be readied while the organization, approvers or decisions are missing', () => {
 		const r = supportReadiness({ organizationFormed: false, financeApprovers: 0, policy: UNDECIDED_SUPPORT_POLICY, collectorAvailable: false, railAvailable: false });
 		assert.equal(r.ready, false);
 		assert.deepEqual(r.blockers, ['organization_not_formed', 'no_finance_approver', 'decisions_open', 'no_collector', 'no_rail']);
-		assert.ok(r.openDecisions.includes('MEM-D24'));
+		assert.ok(r.openDecisions.includes('MEM-D17'));
 	});
 	it('two-person approval (MEM-D24) needs two finance people', () => {
 		const policy = parseSupportPolicy({ primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 1, payoutDayOfMonth: 1, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorAlways', amounts: { USD: { minimum: 100, presets: [100] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner' }).policy;

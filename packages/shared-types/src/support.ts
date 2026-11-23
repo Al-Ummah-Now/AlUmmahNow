@@ -235,9 +235,13 @@ export const UNDECIDED_SUPPORT_POLICY: SupportPolicy = Object.freeze({
   reserveDays: null,
   dormantPolicy: null,
   dormantReminderMonths: null,
-  collectBeforePayeeActive: null,
-  batchApprovers: null,
-  adjustmentApprovers: null,
+  // MEM-D23 (owner 2026-11-23): no gifts before the payee is active; Support shows only after payout setup
+  collectBeforePayeeActive: false,
+  // MEM-D24: two people from the Waqf's finance list, one prepares and another approves; never the
+  // owner or tech staff (tech staff are excluded by the finance checks; the generic approval workflow
+  // replaces these counts when it lands)
+  batchApprovers: 2,
+  adjustmentApprovers: 2,
   collectorFeePayer: null,
   amounts: null,
   minSupporterAge: null,

@@ -18,7 +18,7 @@ const VIEWER = 'usr_viewer';
 const CH = 'ch_support';
 const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000, 2500] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner' };
 
-async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknown> | false; payee?: 'active' | 'pending' | 'hold' | 'none'; enabled?: boolean; apps?: Record<string, unknown>; perks?: boolean } = {}) {
+async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknown> | false; payee?: 'active' | 'pending' | 'hold' | 'none'; enabled?: boolean; apps?: Record<string, unknown> } = {}) {
 	const db = new SqliteD1();
 	const channels = new MemoryBucket();
 	await channels.put(CH, JSON.stringify({ id: CH, userId: OWNER, members: [] }));
@@ -26,7 +26,6 @@ async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknow
 	if (opts.switchOn !== false) await writeFeatureSwitch(env, { key: 'creatorSupport', enabled: true, expectedVersion: 0, actorId: 'usr_super', currentStored: false });
 	if (opts.decided !== false) await writeSupportPolicy(db as never, { ...DECIDED, ...(opts.decided ?? {}) }, 'usr_fin', 0);
 	if (opts.apps) await writeSupportApps(db as never, opts.apps, 'usr_fin', opts.decided !== false ? 1 : 0);
-	if (opts.perks) await writeFeatureSwitch(env, { key: 'supportPerks', enabled: true, expectedVersion: 0, actorId: 'usr_super', currentStored: false });
 	if (opts.enabled !== false) await db.prepare("INSERT INTO support_settings (channel_id, enabled, updated_at, updated_by) VALUES (?, 1, 'now', ?)").bind(CH, OWNER).run();
 	const payee = opts.payee ?? 'active';
 	if (payee !== 'none') {
@@ -83,7 +82,7 @@ describe('/api/me/features support keys', () => {
 		assert.equal((await us.keys(VIEWER, { client: 'aun-tv/1.0 (tvOS 19)', storefront: 'US' })).support, false, 'not an app platform');
 	});
 
-	it('MEM-D15 interlocks: P2P needs the whole gift to reach the creator (or the stores’ written OK) and no perks', async () => {
+	it('MEM-D15 interlocks: P2P needs the whole gift to reach the creator (or the stores’ written OK)', async () => {
 		const IOS = 'aun-ios/1.0 (iOS 19)';
 		const rules = [{ platform: 'ios', region: 'ROW', mode: 'external_browser_p2p', cadence: 'one_time_only' }];
 		// The decided policy lets the creator bear fees, so P2P stays hidden without the stores' confirmation
@@ -92,8 +91,6 @@ describe('/api/me/features support keys', () => {
 		assert.equal((await ok.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, true);
 		const whole = await setup({ decided: { collectorFeePayer: 'supporterAlways', payoutFeeBearer: 'organization' }, apps: { platforms: { ios: true }, rules } });
 		assert.equal((await whole.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, true);
-		const perks = await setup({ perks: true, apps: { platforms: { ios: true }, rules, storeConfirmedProcessorFeeDeduction: true } });
-		assert.equal((await perks.keys(VIEWER, { client: IOS, storefront: 'GB' })).support, false, 'a perk switch on hides P2P');
 		const eu = await setup({ apps: { platforms: { ios: true }, rules: [{ platform: 'ios', region: 'EU_EEA', mode: 'external_browser_eu_entitled', cadence: 'one_time_only' }] } });
 		assert.equal((await eu.keys(VIEWER, { client: IOS, storefront: 'FR' })).support, false, 'EU mode needs the attestation');
 	});

@@ -87,9 +87,7 @@ test('defaults keep today’s behaviour (the live app features, caption download
     'liveEvents',
     'viewerCaptionDownload',
     'creatorSupport',
-    'supportExternalLinks',
     'charityDonations',
-    'supportPerks',
     'prayerTimes',
     'qibla',
     'hijriCalendar',
@@ -110,7 +108,7 @@ test('defaults keep today’s behaviour (the live app features, caption download
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools', 'ageRules'],
+    ['upload', 'createChannel', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'recitationTools', 'ageRules'],
   );
 });
 
@@ -133,9 +131,12 @@ test('a required feature that is off turns its dependants off without changing t
   assert.deepEqual(r.blockedBy('youtubeImport', r.DEFAULT_FEATURE_SWITCHES), []);
   assert.deepEqual(r.dependantsOf('upload'), ['youtubeImport', 'audioTracks']);
   assert.deepEqual(r.dependantsOf('live'), []);
-  assert.deepEqual(r.dependantsOf('creatorSupport'), ['supportExternalLinks', 'charityDonations', 'supportPerks']);
-  const support = r.effectiveSwitches(r.withDefaults({ supportPerks: true, charityDonations: true }));
-  assert.equal(support.supportPerks, false, 'perks stay off while creator support is off');
+  assert.deepEqual(r.dependantsOf('creatorSupport'), ['charityDonations']);
+  const support = r.effectiveSwitches(r.withDefaults({ charityDonations: true }));
+  assert.equal(support.charityDonations, false, 'stays off while creator support is off');
+  // Owner 2026-11-23: no perks ever (MEM-D13) and no external support links (MEM-D2): no switches for them
+  assert.ok(!(r.FEATURE_KEYS as readonly string[]).includes('supportPerks'));
+  assert.ok(!(r.FEATURE_KEYS as readonly string[]).includes('supportExternalLinks'));
 });
 
 test('applySwitchesToUserFeatures turns covered keys off and leaves the rest', () => {
