@@ -54,11 +54,12 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // runs again (api-videos lib/audio-tracks/service.ts, wiki AUN-MULTI-AUDIO). A payments job that
   // gave up runs again (api-videos lib/billing/service.ts; Retry also needs the job's own billing
   // permission, endpoints/errors/ErrorsAdmin.ts). A discovery ranking run that gave up runs now
-  // (api-videos lib/ranking/job.ts, wiki E07 Discovery ranking).
+  // (api-videos lib/ranking/job.ts, wiki E07 Discovery ranking). A creator-support job that gave up runs again
+  // (api-videos lib/support/jobs.ts, wiki AUN-MEMBERS; Retry needs support:manage).
   // An Admin Tools import's sidecars (captions, chapters, thumbnail) that could not be attached are
   // tried again (api-videos lib/admin/importAttach.ts, wiki TOOLS-ADMIN TA-6).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry', '/internal/support/jobs/retry', '/internal/discovery/rank', '/internal/admin/import/attach/retry'] },
 };
 
 /**
@@ -69,6 +70,9 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
  */
 const ALL_BILLING: AdminContentPermission[] = ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers'];
 export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPermission[] {
+  // Creator support jobs (api-videos lib/support/jobs.ts, wiki AUN-MEMBERS §9.6): support:manage. They book money
+  // that already moved; jobs that move money (payouts, refunds) also need the finance list, checked by api-videos.
+  if (spec?.kind === 'service' && spec.service === 'api-videos' && spec.path === '/internal/support/jobs/retry') return ['support:manage'];
   if (!spec || spec.kind !== 'service' || spec.service !== 'api-videos' || spec.path !== '/internal/billing/jobs/retry') return [];
   const kind = (spec.body as { kind?: unknown } | undefined)?.kind;
   const known = typeof kind === 'string' && kind.startsWith('billing.') ? (ADMIN_JOB_PERMISSIONS as Readonly<Record<string, readonly AdminContentPermission[]>>)[kind] : undefined;

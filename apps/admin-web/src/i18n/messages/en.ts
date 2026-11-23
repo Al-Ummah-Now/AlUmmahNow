@@ -968,6 +968,12 @@ const en = {
       discoveryRank: 'Rank videos for discovery',
       searchRepairObjects: 'Repair index entries',
       searchReconcile: 'Check the search index',
+      supportWebhook: 'Support payment event',
+      supportRelease: 'Release held gifts',
+      supportReconcile: 'Check support money against bank and payout service',
+      supportPayeeSync: 'Refresh a creator’s payout account',
+      supportDisputeDeadline: 'Flag disputes that are due',
+      supportDormant: 'List unclaimed creator balances',
     },
     statuses: {
       queued: 'Queued',

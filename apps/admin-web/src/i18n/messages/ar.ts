@@ -967,6 +967,12 @@ const ar: Messages = {
       discoveryRank: 'ترتيب المرئيات للاستكشاف',
       searchRepairObjects: 'إصلاح عناصر الفهرس',
       searchReconcile: 'فحص فهرس البحث',
+      supportWebhook: 'حدث دفع للدعم',
+      supportRelease: 'إتاحة الهدايا المحجوزة',
+      supportReconcile: 'مطابقة أموال الدعم مع البنك وخدمة الدفع',
+      supportPayeeSync: 'تحديث حساب استلام الدفعات لصانع المحتوى',
+      supportDisputeDeadline: 'التنبيه على النزاعات المستحقة',
+      supportDormant: 'حصر أرصدة صنّاع المحتوى غير المطالب بها',
     },
     statuses: {
       queued: 'في الانتظار',

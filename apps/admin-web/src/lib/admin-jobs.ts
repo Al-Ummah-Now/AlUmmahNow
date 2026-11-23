@@ -28,6 +28,12 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'discovery.rank': 'adminJobs.kinds.discoveryRank',
   'search.repair-objects': 'adminJobs.kinds.searchRepairObjects',
   'search.reconcile': 'adminJobs.kinds.searchReconcile',
+  'support.webhook': 'adminJobs.kinds.supportWebhook',
+  'support.release': 'adminJobs.kinds.supportRelease',
+  'support.reconcile': 'adminJobs.kinds.supportReconcile',
+  'support.payee-sync': 'adminJobs.kinds.supportPayeeSync',
+  'support.dispute-deadline': 'adminJobs.kinds.supportDisputeDeadline',
+  'support.dormant': 'adminJobs.kinds.supportDormant',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

@@ -68,6 +68,9 @@ import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/crea
 import { handleCreateTierRequest, handleMyTier, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
 import { handleAbandonCheckout, handlePaymentReceipt, handleBillingPlans, handleFakeCancel, handleMyCheckout, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
 import billingInternalRouter from "./routers/billing.router";
+import supportInternalRouter from "./routers/support.router";
+import { handleSupportWebhook } from "./endpoints/support/supportWebhooks";
+import { onSupportJobFailed, queueSupportCron } from "./lib/support/jobs";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
 import { DISCOVERY_RANK_JOB, flagDiscoveryRankFailed, startDiscoveryRank } from "./lib/ranking/job";
 import { createDiscoveryInternalRouter } from "./endpoints/discovery/discoveryInternal";
@@ -320,6 +323,8 @@ app.get('/webhooks/billing/fake/checkout/:id', handleFakeCheckoutPage);
 app.post('/webhooks/billing/fake/checkout/:id/pay', handleFakePay);
 app.post('/webhooks/billing/fake/checkout/:id/cancel', handleFakeCancel);
 app.post('/webhooks/billing/:provider', handleWebhook);
+// Creator support (wiki AUN-MEMBERS): collector and payout-rail webhooks; 404 for any vendor not available here
+app.post('/webhooks/support/:side/:vendor', handleSupportWebhook);
 app.get('/api/me/tier-requests', authMiddleware, handleMyTierRequests);
 app.post('/api/me/tier-requests', authMiddleware, handleCreateTierRequest);
 app.post('/api/me/tier-requests/:id/withdraw', authMiddleware, handleWithdrawTierRequest);
@@ -404,6 +409,8 @@ app.get('/api/youtube-import/oauth/callback', async (c) => {
 });
 // Payments admin (lib/billing/*): providers, prices, tax, subscriptions; admin-api audits and stores credentials
 app.route('/internal/billing', billingInternalRouter as never);
+// Creator support admin (lib/support/*): job retries; admin-api checks support:manage
+app.route('/internal/support', supportInternalRouter as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -722,6 +729,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 					reportJobFailure(rawEnv, ctx, 'privacy-footprints', error);
 				}),
 		);
+		// Hourly: creator support (lib/support/jobs.ts): release held gifts; at 01 UTC reconcile, disputes, payees.
+		// Nothing is queued until support has data (one keyed read).
+		ctx.waitUntil(
+			queueSupportCron(rawEnv as never)
+				.then((kinds) => (kinds.length ? logger.info('[Support] Cron jobs queued', { kinds }) : undefined))
+				.catch((error) => {
+					logger.error('[Support] Cron queueing failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'support-cron', error);
+				}),
+		);
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
 		ctx.waitUntil(
 			// Hourly: subscriptions whose renewal never arrived are checked with their provider (lib/billing/service.ts)
@@ -935,7 +952,9 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, jobEnv, ADMIN_JOB_HANDLERS, (job, error) =>
 				job.kind.startsWith('billing.')
 					? onBillingJobFailed(jobEnv, job, error)
-					: job.kind === DISCOVERY_RANK_JOB
+					: job.kind.startsWith('support.')
+						? onSupportJobFailed(jobEnv, job, error)
+						: job.kind === DISCOVERY_RANK_JOB
 						? Promise.resolve(flagDiscoveryRankFailed(jobEnv, job, error))
 						: job.kind === 'import.attach'
 							? onImportAttachFailed(jobEnv, job, error)

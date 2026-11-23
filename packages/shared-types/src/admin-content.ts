@@ -46,6 +46,13 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'billing:refund',
   /** Payment providers: credentials, test/live mode and the enable switch (super admin only). */
   'billing:providers',
+  /**
+   * Creator support (wiki AUN-MEMBERS §9.6): see the Support pages, and retry or cancel support jobs.
+   * Super admins only. Money actions (refunds, payouts, ledger, providers, disputes) are NOT admin
+   * roles: they need a place on the organisation's finance list (support:* in support.ts).
+   */
+  'support:read',
+  'support:manage',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
@@ -623,13 +630,23 @@ export const ADMIN_JOB_KINDS = [
    * Target 'search-index:<entity>'.
    */
   'search.reconcile',
+  /**
+   * Creator support (wiki AUN-MEMBERS §9.4; api-videos lib/support/jobs.ts). Target kind 'support':
+   * a vendor event id, a payee id or the day. Every job is idempotent; the ledger posts once per key.
+   */
+  'support.webhook',
+  'support.release',
+  'support.reconcile',
+  'support.payee-sync',
+  'support.dispute-deadline',
+  'support.dormant',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
 /** `cancelled`: an admin stopped it (Jobs page Cancel); it runs again only through Retry. */
 export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed', 'cancelled'] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
-export type AdminJobTarget = 'channel' | 'video' | 'user' | 'billing';
+export type AdminJobTarget = 'channel' | 'video' | 'user' | 'billing' | 'support';
 
 export interface AdminJob {
   id: string;
@@ -712,6 +729,13 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'discovery.rank': ['videos:manage'],
   'search.repair-objects': ['videos:manage'],
   'search.reconcile': ['videos:manage'],
+  // Support jobs book money that has already moved; retrying them moves none (wiki AUN-MEMBERS §9.6 Jobs)
+  'support.webhook': ['support:manage'],
+  'support.release': ['support:manage'],
+  'support.reconcile': ['support:manage'],
+  'support.payee-sync': ['support:manage'],
+  'support.dispute-deadline': ['support:manage'],
+  'support.dormant': ['support:manage'],
 };
 
 // ---------------------------------------------------------------------------
