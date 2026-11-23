@@ -666,6 +666,85 @@ async function moveHandleEntry(env: AdminServiceEnv, channelId: string, handle: 
 	});
 }
 
+/**
+ * Subscriptions the channel made to other channels (NOTIFICATIONS_DB channel_subscriptions, the
+ * channel as subscriber) follow it to the new owner, and so does the notification bell for each
+ * channel it subscribes to. The previous owner keeps their bell only where another of their
+ * identities still subscribes. Read through the user index, never by subscriber_channel_id alone.
+ */
+async function moveChannelSubscriptions(env: AdminServiceEnv, channelId: string, from: string | null, to: string, at = Date.now()): Promise<number> {
+	const db = env.NOTIFICATIONS_DB as D1Database | undefined;
+	if (!db || !from) return 0;
+	const { results } = await db
+		.prepare('SELECT channel_id FROM channel_subscriptions WHERE user_id = ? AND subscriber_channel_id = ?')
+		.bind(from, channelId)
+		.all<{ channel_id: string }>();
+	const targets = (results ?? []).map((r) => r.channel_id);
+	if (!targets.length) return 0;
+	await db
+		.prepare('UPDATE channel_subscriptions SET user_id = ? WHERE user_id = ? AND subscriber_channel_id = ?')
+		.bind(to, from, channelId)
+		.run();
+	const steps: D1PreparedStatement[] = [];
+	for (const target of targets) {
+		steps.push(
+			db
+				.prepare(
+					`INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at)
+					 SELECT channel_id, ?, bell, ?, ? FROM channel_subscribers WHERE channel_id = ? AND user_id = ?`,
+				)
+				.bind(to, at, at, target, from),
+			db
+				.prepare(
+					`DELETE FROM channel_subscribers WHERE channel_id = ? AND user_id = ?
+					 AND NOT EXISTS (SELECT 1 FROM channel_subscriptions WHERE user_id = ? AND channel_id = ?)`,
+				)
+				.bind(target, from, from, target),
+		);
+	}
+	await db.batch(steps);
+	return targets.length;
+}
+
+/** Invitations to the channel addressed to the new owner close: an owner holds no member role. */
+async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, to: string, email: unknown): Promise<number> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return 0;
+	const at = new Date().toISOString();
+	const res = await db
+		.prepare(
+			`UPDATE channel_invites SET status = 'cancelled', responded_at = ?, invitee_email = NULL
+			 WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`,
+		)
+		.bind(at, channelId, to, typeof email === 'string' ? email.trim().toLowerCase() : '')
+		.run();
+	return Number(res.meta?.changes ?? 0);
+}
+
+/**
+ * Reads the moved records back from R2 and lists what still names the previous owner. A non-empty
+ * list fails the job, so its retry runs every (idempotent) step again.
+ */
+async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: string | null, to: string, videoIds: string[]): Promise<string[]> {
+	const problems: string[] = [];
+	const channel = await repo(env.channels).getObject(channelId);
+	if (channel && !channel.isDeleted && channel.userId !== to) problems.push('channel');
+	if (channel && env.channel_tabs && typeof channel.handle === 'string' && channel.handle) {
+		const entry = await repo(env.channel_tabs).getObject(handleKey(channel.handle));
+		if (entry && entry.channelId === channelId && entry.userId !== to) problems.push('handle');
+	}
+	const newProfile = await repo(env.profiles).getObject(to);
+	if (!Array.isArray(newProfile?.channels) || !newProfile.channels.includes(channelId)) problems.push('new_owner_profile');
+	if (from) {
+		const oldProfile = await repo(env.profiles).getObject(from);
+		if (Array.isArray(oldProfile?.channels) && oldProfile.channels.includes(channelId)) problems.push('previous_owner_profile');
+		const videos = await readMany(env.videos, videoIds);
+		const left = [...videos.values()].filter((v) => v.channelId === channelId && v.userId === from).length;
+		if (left) problems.push(`videos:${left}`);
+	}
+	return problems;
+}
+
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
@@ -731,15 +810,17 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		return true;
 	});
 	const posts = await movePosts(env, id, previousOwnerId, newOwnerId);
+	const subscriptions = await moveChannelSubscriptions(env, id, previousOwnerId, newOwnerId);
+	const invitesCancelled = await cancelInvitesToNewOwner(env, id, newOwnerId, newOwner?.email);
 	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
+	const result = { videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, subscriptions, invitesCancelled, anomalies, previousOwnerId };
 	if (failed === 0) {
+		const problems = await verifyTransfer(env, id, previousOwnerId, newOwnerId, videoIds);
+		if (problems.length) throw new Error(`Channel move verify found records on the previous owner (${problems.join(', ')}); retrying`);
 		await releaseTransferLock(env, id, job.id);
 		await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
 	}
-	return finish(
-		{ videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, anomalies, previousOwnerId },
-		failed,
-	);
+	return finish(result, failed);
 }
 
 /**

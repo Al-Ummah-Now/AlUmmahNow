@@ -40,6 +40,7 @@ import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion } from '../src/lib/a
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
+import { createSqliteD1 } from './sqlite-d1';
 
 const OWNER = 'usr_owner';
 
@@ -467,6 +468,52 @@ describe('channel actions', () => {
 		const session = db.db.prepare(`SELECT status, end_reason FROM live_sessions WHERE id = 'sess1'`).get() as { status: string; end_reason: string };
 		assert.deepEqual([session.status, session.end_reason], ['ended', 'channel_transferred'], 'the ingest key the previous owner knows stops working');
 		assert.equal(job.result.liveSessionsEnded, 1);
+	});
+
+	it("a move takes the channel's own subscriptions and bells, and closes invitations to the new owner (CC-1b)", async () => {
+		const { env, call, jobOf, db } = await setup();
+		const notifications = createSqliteD1();
+		(env as Record<string, unknown>).NOTIFICATIONS_DB = notifications;
+		const n = notifications.raw;
+		// ch1 (owned by OWNER) subscribes to chX; OWNER also subscribes to chY as themselves
+		n.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES ('chX', 'ch1', ?, 's1', 1), ('chY', 'user:${OWNER}', ?, 's2', 1)`).run(OWNER, OWNER);
+		n.prepare(`INSERT INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at) VALUES ('chX', ?, 'all', 1, 1), ('chY', ?, 'highlights', 1, 1)`).run(OWNER, OWNER);
+		const when = new Date(Date.now() + 86_400_000).toISOString();
+		db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES
+			('i1', 'ch1', 'editor', ?, NULL, 0, ?, 'pending', '2026-01-01', ?),
+			('i2', 'ch1', 'admin', NULL, ?, 1, ?, 'pending', '2026-01-01', ?),
+			('i3', 'ch1', 'editor', 'usr_someone', NULL, 0, ?, 'pending', '2026-01-01', ?)`).run(OTHER, OWNER, when, `${OTHER}@example.com`, OWNER, when, OWNER, when);
+
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(job.result.subscriptions, 1);
+		assert.equal((n.prepare(`SELECT user_id FROM channel_subscriptions WHERE subscriber_channel_id = 'ch1'`).get() as { user_id: string }).user_id, OTHER);
+		assert.equal((n.prepare(`SELECT user_id FROM channel_subscriptions WHERE channel_id = 'chY'`).get() as { user_id: string }).user_id, OWNER, "the previous owner's own subscriptions stay theirs");
+		const bells = n.prepare(`SELECT channel_id, user_id, bell FROM channel_subscribers ORDER BY channel_id, user_id`).all();
+		assert.deepEqual(bells.map((b: any) => `${b.channel_id}:${b.user_id}:${b.bell}`), [`chX:${OTHER}:all`, `chY:${OWNER}:highlights`]);
+		const invites = db.db.prepare(`SELECT id, status FROM channel_invites ORDER BY id`).all();
+		assert.deepEqual(invites.map((i: any) => `${i.id}:${i.status}`), ['i1:cancelled', 'i2:cancelled', 'i3:pending']);
+		assert.equal(job.result.invitesCancelled, 2);
+	});
+
+	it('verify fails the move (so it retries) while a record still names the previous owner', async () => {
+		const { raw, call, jobOf } = await setup();
+		// An old-owner write that lands after the video step: the video comes back on OWNER once
+		let raced = false;
+		const get = raw.videos.get.bind(raw.videos);
+		raw.videos.get = (async (key: string) => {
+			if (!raced && key === 'v1' && JSON.parse(raw.videos.store.get('v1')!).userId === OTHER) {
+				raced = true;
+				raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+			}
+			return get(key);
+		}) as typeof raw.videos.get;
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		const job = await jobOf(res);
+		assert.ok(raced, 'the race ran');
+		assert.equal(job.status, 'succeeded', 'the retry moved it again');
+		assert.ok(job.attempts >= 2, `retried (attempts ${job.attempts})`);
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
 	});
 
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
