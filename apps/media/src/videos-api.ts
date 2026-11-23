@@ -10,7 +10,7 @@
  *   POST /internal/audio-tracks/:videoId/package             the demuxed multi-audio package
  *   POST /internal/audio-tracks/:videoId/detected            the source file's audio streams
  */
-import type { AudioPackageReport, AudioProbeReport, AudioTrackReport, CaptionAudioReport, LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
+import type { AudioExtractJobEvent, AudioPackageReport, AudioProbeReport, AudioTrackReport, CaptionAudioReport, LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const ORIGIN = 'https://videos.internal';
@@ -57,6 +57,16 @@ export async function reportMp4Event(env: Env, event: Mp4JobEvent): Promise<void
 		body: JSON.stringify(event),
 	});
 	if (!res.ok) throw new Error(`api-videos mp4 event ${event.type} for ${event.videoId}: HTTP ${res.status}`);
+}
+
+/** Report an audio-extract remux job's end (E14-S2); throws when api-videos did not take it. */
+export async function reportAudioExtractEvent(env: Env, event: AudioExtractJobEvent): Promise<void> {
+	const res = await call(env, '/internal/media/audio-extract', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(event),
+	});
+	if (!res.ok) throw new Error(`api-videos audio-extract event ${event.type} for ${event.videoId}: HTTP ${res.status}`);
 }
 
 /** A live recording's review media are ready (or extraction failed): api-videos queues the scan. */

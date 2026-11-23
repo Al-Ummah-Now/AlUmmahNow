@@ -21,18 +21,22 @@ import {
 	mediaFrameUrl,
 	mediaPlayUrl,
 	newMediaRev,
+	publicAudioPath,
 	publicMp4Path,
 	publishAdminLive,
 	type AdminLiveEvent,
 	reportNeedsAction,
 	resolveNeedsAction,
 	compactRungs,
+	sanitizeAudio,
 	sanitizeFailure,
 	sanitizeRungs,
 	scrubMediaText,
 	MEDIA_MASTER,
 	MEDIA_THUMBNAIL,
 	audioPackageMaster,
+	type AudioExtractJobEvent,
+	type AudioExtractJobMessage,
 	type DeliverySettings,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
@@ -690,6 +694,78 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
 export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pick<MediaVideo, 'id' | 'r2'> & { isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean }): string | null {
 	const path = env.MEDIA_PUBLIC_HOST ? publicMp4Path(video) : null;
 	return path ? `https://${env.MEDIA_PUBLIC_HOST}/${path}` : null;
+}
+
+/**
+ * The stable public audio-only M4A of a public video (E14-S2). Only for ready public R2
+ * renditions that have an extracted audio.m4a.
+ */
+export function publicAudioUrl(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pick<MediaVideo, 'id' | 'r2'> & { isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean }): string | null {
+	const path = env.MEDIA_PUBLIC_HOST ? publicAudioPath(video) : null;
+	return path ? `https://${env.MEDIA_PUBLIC_HOST}/${path}` : null;
+}
+
+/**
+ * Queue an on-demand audio.m4a extraction for a ready R2 rendition that does not yet have one
+ * (older videos transcoded before E14-S2). Stream copy only, no re-encode.
+ */
+export async function enqueueAudioExtract(
+	env: Pick<MediaEnv, 'TRANSCODE_QUEUE'>,
+	video: Pick<MediaVideo, 'id' | 'r2'>,
+	opts: { now?: Date; runId?: string } = {},
+): Promise<{ queued: boolean; why?: string; jobId?: string }> {
+	if (!env.TRANSCODE_QUEUE) return { queued: false, why: 'transcode queue not bound' };
+	const r2 = video.r2;
+	if (!r2 || r2.status !== 'ready' || !r2.result) return { queued: false, why: 'not ready' };
+	if (r2.result.audio) return { queued: false, why: 'already has audio' };
+	if (r2.result.source && r2.result.source.hasAudio === false) return { queued: false, why: 'no audio stream' };
+	if (!r2.result.rungs.length) return { queued: false, why: 'no rungs' };
+	const job: AudioExtractJobMessage = {
+		kind: 'audio_extract',
+		videoId: video.id,
+		jobId: crypto.randomUUID(),
+		rev: r2.rev,
+		access: r2.access,
+		rungs: r2.result.rungs.map((r) => ({ name: r.name, width: r.width, height: r.height })),
+		queuedAt: (opts.now ?? new Date()).toISOString(),
+		...(opts.runId ? { runId: opts.runId } : {}),
+	};
+	await env.TRANSCODE_QUEUE.send(job);
+	return { queued: true, jobId: job.jobId };
+}
+
+/**
+ * An audio-extract remux job's end (apps/media, E14-S2). Records `r2.result.audio` only on the
+ * matching ready rev and access, and never overwrites an existing audio file.
+ */
+export async function applyAudioExtractEvent(env: Pick<MediaEnv, 'videos'>, ev: AudioExtractJobEvent): Promise<{ applied: boolean; why?: string }> {
+	if (ev.type === 'failed') {
+		logger.warn('[Media] Audio extract failed', { videoId: ev.videoId, jobId: ev.jobId, rev: ev.rev, error: scrubMediaText(ev.error ?? 'failed', 300) });
+		return { applied: false, why: 'failed' };
+	}
+	const audio = sanitizeAudio(ev.audio);
+	if (!audio) return { applied: false, why: 'bad result' };
+	let why: string | undefined;
+	const saved = await repo(env as MediaEnv).updateObject(ev.videoId, (video) => {
+		why = undefined;
+		const r2 = video.r2;
+		if (!r2 || r2.status !== 'ready' || !r2.result) {
+			why = 'not ready';
+			return false;
+		}
+		if (r2.rev !== ev.rev || r2.access !== ev.access) {
+			why = 'stale rendition';
+			return false;
+		}
+		if (r2.result.audio) {
+			why = 'already has audio';
+			return false;
+		}
+		r2.result.audio = audio;
+		return true;
+	});
+	if (!saved) return { applied: false, why: 'video not found' };
+	return why ? { applied: false, why } : { applied: true };
 }
 
 /**

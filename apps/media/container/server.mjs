@@ -22,7 +22,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
+import { AUDIO_FILE, audioRemuxArgs, audioRung, bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
@@ -472,6 +472,40 @@ async function runRemux(job) {
 	return { file: MP4_FILE, rung: rung.name, width: rung.width, height: rung.height, bytes };
 }
 
+/**
+ * Remux-only audio extraction (E14-S2): stream-copies the already-encoded AAC audio track of a
+ * ready rendition into a single progressive audio.m4a beside its segments. Zero re-encoding.
+ */
+async function runAudioExtract(job) {
+	const out = join(WORK, 'audio-extract');
+	await rm(WORK, { recursive: true, force: true });
+	const rung = audioRung(job.rungs);
+	if (!rung) throw Object.assign(new Error('no_rung'), { fatal: true });
+	const dir = join(out, rung.name);
+	await mkdir(dir, { recursive: true });
+	await fetchRendition(`${rung.name}/index.m3u8`, join(dir, 'index.m3u8'));
+	const files = playlistFiles(await readFile(join(dir, 'index.m3u8'), 'utf8'));
+	if (!files) throw Object.assign(new Error('bad_playlist'), { fatal: true });
+	for (let i = 0; i < files.length; i += UPLOAD_CONCURRENCY) {
+		await Promise.all(files.slice(i, i + UPLOAD_CONCURRENCY).map((f) => fetchRendition(`${rung.name}/${f}`, join(dir, f))));
+	}
+	const input = join(dir, 'index.m3u8');
+	if (!(await hasAudioStream(input))) throw Object.assign(new Error('no_audio'), { fatal: true });
+	await run('ffmpeg', audioRemuxArgs({ out, rung: rung.name }));
+	const outFile = join(out, AUDIO_FILE);
+	let durationSeconds = 0;
+	try {
+		const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', outFile]));
+		durationSeconds = Number(meta.format?.duration) || 0;
+	} catch {
+		durationSeconds = 0;
+	}
+	const bytes = await put(`${job.prefix}/${AUDIO_FILE}`, outFile, 'audiofile.internal');
+	await rm(WORK, { recursive: true, force: true });
+	const bitrate = bandwidthOf(bytes, durationSeconds);
+	return { file: AUDIO_FILE, rung: rung.name, bytes, ...(bitrate > 0 ? { bitrate } : {}) };
+}
+
 async function runJob(job) {
 	const t0 = Date.now();
 	const src = join(WORK, 'source');
@@ -543,6 +577,21 @@ async function runJob(job) {
 			await rm(join(out, MP4_FILE), { force: true });
 		}
 	}
+	// Audio-only progressive M4A (E14-S2): stream-copied from a rung's AAC track, zero re-encoding.
+	// Optional: a failure leaves the video without it and never fails the transcode.
+	let audio;
+	const audioFrom = info.hasAudio ? audioRung(rungs) : null;
+	if (audioFrom) {
+		try {
+			await run('ffmpeg', audioRemuxArgs({ out, rung: audioFrom.name }));
+			const audioBytes = (await stat(join(out, AUDIO_FILE))).size;
+			const bitrate = bandwidthOf(audioBytes, info.durationSeconds) || audioFrom.audio;
+			audio = { file: AUDIO_FILE, rung: audioFrom.name, bytes: audioBytes, ...(bitrate > 0 ? { bitrate } : {}) };
+		} catch (error) {
+			log('audio.m4a skipped', { error: String(error.message) });
+			await rm(join(out, AUDIO_FILE), { force: true });
+		}
+	}
 	// Review media from the published content (the source, or the creator's top rung), before the
 	// source is deleted (only when the job asks for it)
 	const review = job.review && job.reviewPrefix ? await extractReview(job, published, info) : undefined;
@@ -583,6 +632,7 @@ async function runJob(job) {
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),
 		...(mp4 ? { mp4 } : {}),
+		...(audio ? { audio } : {}),
 		...(review ? { review } : {}),
 		...(prebuilt ? { prebuilt: { used: prebuilt.used, ...(prebuilt.reason ? { reason: prebuilt.reason } : {}), ...(prebuilt.rung ? { rung: prebuilt.rung } : {}) } } : {}),
 	};
@@ -804,6 +854,25 @@ const server = createServer(async (req, res) => {
 			log('remux failed', { jobId: job.jobId, error: String(error?.message || error) });
 			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
 			return send(500, { error: errorReason(error), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
+		}
+	}
+	// Audio-only remux (E14-S2): stream-copy existing rung AAC into audio.m4a beside its segments
+	if (req.url === '/audio-extract' && req.method === 'POST') {
+		const job = await readJson(req);
+		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '') || !Array.isArray(job.rungs)) return send(400, { error: 'bad job' });
+		if (busy()) return send(409, { error: 'busy' });
+		reviewing = true;
+		const t0 = Date.now();
+		try {
+			const audio = await runAudioExtract(job);
+			log('audio extracted', { jobId: job.jobId, rung: audio.rung, bytes: audio.bytes, ms: Date.now() - t0 });
+			return send(200, { audio });
+		} catch (error) {
+			log('audio extract failed', { jobId: job.jobId, error: String(error?.message || error) });
+			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
+			return send(500, { error: errorReason(error), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
+		} finally {
+			reviewing = false;
 		}
 	}
 	// Live recording review (VR9): frames and audio from an HLS VOD read through vod.internal

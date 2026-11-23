@@ -6,11 +6,11 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { audioTrackFileKey, failRungs, MEDIA_AUDIO, MEDIA_MP4, mediaPrefix, sanitizeAudio, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, type AudioExtractJobMessage, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { startupTimes, cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
+import { reportAudioExtractEvent, reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
 import { packageKeyAllowed, serveAudioUpload } from './audio';
@@ -134,6 +134,14 @@ export class Transcoder extends Container<Env> {
 			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
 			if (req.method !== 'PUT') return new Response('method', { status: 405 });
 			if (key !== `${ctx.params.prefix}/${MEDIA_MP4}`) return new Response('key outside the job', { status: 403 });
+			await storeUpload(bucketFor(env, key), key, req);
+			return new Response(null, { status: 201 });
+		},
+		/** PUT http://audiofile.internal/<prefix>/audio.m4a → R2: the one object an audio-extract job may write */
+		async audiofile(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
+			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (req.method !== 'PUT') return new Response('method', { status: 405 });
+			if (key !== `${ctx.params.prefix}/${MEDIA_AUDIO}`) return new Response('key outside the job', { status: 403 });
 			await storeUpload(bucketFor(env, key), key, req);
 			return new Response(null, { status: 201 });
 		},
@@ -477,6 +485,42 @@ export class Transcoder extends Container<Env> {
 			const mp4 = sanitizeMp4(body.mp4);
 			if (!res.ok || !mp4) throw Object.assign(new Error(body.error || `remux HTTP ${res.status}`), { fatal: !!body.fatal });
 			await reportMp4Event(this.env, { ...base, type: 'ready', at: new Date().toISOString(), mp4, containerSeconds: Math.round((Date.now() - startedAt) / 1000) });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
+	}
+
+	/**
+	 * Remux-only audio extraction (E14-S2): stream-copy the AAC track of a ready rendition into
+	 * audio.m4a beside its segments. Waits ('busy') while a transcode of this video runs.
+	 */
+	async extractAudio(msg: AudioExtractJobMessage): Promise<Mp4Outcome> {
+		const current = await this.job();
+		if (current && (current.status === 'running' || current.status === 'stopping' || current.status === 'waiting_retry')) return { outcome: 'busy' };
+		const prefix = mediaPrefix(msg.access, msg.videoId, msg.rev);
+		const startedAt = Date.now();
+		const base = { videoId: msg.videoId, jobId: msg.jobId, rev: msg.rev, access: msg.access };
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({
+				'rendition.internal': { method: 'rendition', params: { prefix } },
+				'audiofile.internal': { method: 'audiofile', params: { prefix } },
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/audio-extract', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ jobId: msg.jobId, prefix, rungs: msg.rungs }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { audio?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			const audio = sanitizeAudio(body.audio);
+			if (!res.ok || !audio) throw Object.assign(new Error(body.error || `audio-extract HTTP ${res.status}`), { fatal: !!body.fatal });
+			await reportAudioExtractEvent(this.env, { ...base, type: 'ready', at: new Date().toISOString(), audio, containerSeconds: Math.round((Date.now() - startedAt) / 1000) });
 			result = { outcome: 'ready' };
 		} catch (error) {
 			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };

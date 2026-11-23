@@ -9,10 +9,10 @@
  * - fetch  /internal/jobs/:videoId[/cancel|/retry-now] (X-API-Key): the job as the container sees it,
  *          and the admin's Cancel / Retry now (handleInternalJob)
  */
-import type { AudioPackageJobMessage, AudioProbeJobMessage, AudioTrackJobMessage, CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessage, isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
+import type { AudioExtractJobMessage, AudioPackageJobMessage, AudioProbeJobMessage, AudioTrackJobMessage, CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
+import { isAudioExtractJobMessage, isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessage, isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
-import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
+import { reportAudioExtractEvent, reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { audioQueueAction } from './audio';
 import { handlePrivate } from './edge';
 import { errorText, log, type Env } from './env';
@@ -85,6 +85,30 @@ async function handleMp4Job(msg: Message<Mp4JobMessage>, env: Env): Promise<void
 		log.error('[MediaQueue] MP4 remux gave up', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, error: result.error });
 		await reportMp4Event(env, { videoId: job.videoId, jobId: job.jobId, rev: job.rev, access: job.access, type: 'failed', at: new Date().toISOString(), error: result.error }).catch((error) =>
 			log.warn('[MediaQueue] Could not report the MP4 failure', { videoId: job.videoId, error: errorText(error) }),
+		);
+	}
+	msg.ack();
+}
+
+/** A remux-only audio extraction job: audio.m4a of a ready rendition (Transcoder.extractAudio). */
+async function handleAudioExtractJob(msg: Message<AudioExtractJobMessage>, env: Env): Promise<void> {
+	const job = msg.body;
+	let result: Mp4Outcome;
+	try {
+		result = await env.TRANSCODER.get(env.TRANSCODER.idFromName(job.videoId)).extractAudio(job);
+	} catch (error) {
+		result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: false };
+	}
+	const action = mp4QueueAction(result, msg.attempts);
+	if (!action.ack) {
+		if (result.outcome === 'failed') log.warn('[MediaQueue] Audio extract failed; retrying', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, error: result.error });
+		msg.retry({ delaySeconds: action.delaySeconds });
+		return;
+	}
+	if (action.giveUp && result.outcome === 'failed') {
+		log.error('[MediaQueue] Audio extract gave up', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, error: result.error });
+		await reportAudioExtractEvent(env, { videoId: job.videoId, jobId: job.jobId, rev: job.rev, access: job.access, type: 'failed', at: new Date().toISOString(), error: result.error }).catch((error) =>
+			log.warn('[MediaQueue] Could not report the audio extract failure', { videoId: job.videoId, error: errorText(error) }),
 		);
 	}
 	msg.ack();
@@ -270,6 +294,10 @@ export default {
 			}
 			if (isMp4JobMessage(msg.body)) {
 				await handleMp4Job(msg as Message<Mp4JobMessage>, env);
+				continue;
+			}
+			if (isAudioExtractJobMessage(msg.body)) {
+				await handleAudioExtractJob(msg as Message<AudioExtractJobMessage>, env);
 				continue;
 			}
 			if (!isJob(msg.body)) {

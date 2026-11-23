@@ -30,7 +30,7 @@
  *                                          400 { problem } when it would leave the video unplayable
  */
 import { Hono } from 'hono';
-import { isMediaRev, isMediaVideoId, settingsProblems, type DeliverySettings, type ErrorReporterEnv, type ExecutionContextLike, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
+import { isMediaRev, isMediaVideoId, settingsProblems, type AudioExtractJobEvent, type DeliverySettings, type ErrorReporterEnv, type ExecutionContextLike, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
@@ -44,7 +44,7 @@ import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
-import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { applyAudioExtractEvent, applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
 
@@ -116,6 +116,14 @@ function isMp4Event(body: unknown): body is Mp4JobEvent {
 	);
 }
 
+function isAudioExtractEvent(body: unknown): body is AudioExtractJobEvent {
+	const b = body as Partial<AudioExtractJobEvent> | null;
+	return (
+		!!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && typeof b.rev === 'string' && isMediaRev(b.rev) &&
+		(b.access === 'pub' || b.access === 'priv') && (b.type === 'ready' || b.type === 'failed')
+	);
+}
+
 export function createMediaInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
 
@@ -147,6 +155,12 @@ export function createMediaInternalRouter() {
 		if (!isMp4Event(body)) return c.json({ success: false, error: 'bad event' }, 400);
 		// Stale or duplicate: not an error for the sender
 		return c.json({ success: true, result: await applyMp4Event(c.env, body) });
+	});
+
+	app.post('/audio-extract', async (c) => {
+		const body = await c.req.json().catch(() => null);
+		if (!isAudioExtractEvent(body)) return c.json({ success: false, error: 'bad event' }, 400);
+		return c.json({ success: true, result: await applyAudioExtractEvent(c.env, body) });
 	});
 
 	app.post('/retry', async (c) => {

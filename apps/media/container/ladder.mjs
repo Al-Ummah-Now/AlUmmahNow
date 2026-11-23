@@ -116,6 +116,50 @@ export function mp4Args(o) {
 	return ['-hide_banner', '-nostdin', '-y', '-allowed_extensions', 'ALL', '-i', `${o.out}/${o.rung}/index.m3u8`, '-map', '0', '-c', 'copy', '-movflags', '+faststart', `${o.out}/${MP4_FILE}`];
 }
 
+/** The audio-only M4A file name (E14: Listen mode & audio downloads). */
+export const AUDIO_FILE = 'audio.m4a';
+
+/**
+ * The rung to stream-copy audio.m4a from: prefers 480p (128 kbps AAC and smaller to fetch for backfill),
+ * then 720p/1080p (also 128 kbps), then 360p (96 kbps), else the first available rung.
+ * @param {{ name: string, width: number, height: number }[]} rungs
+ */
+export function audioRung(rungs) {
+	const order = ['480p', '720p', '1080p', '360p'];
+	for (const name of order) {
+		const r = rungs.find((x) => x.name === name);
+		if (r) return r;
+	}
+	return rungs[0] ?? null;
+}
+
+/**
+ * FFmpeg arguments that stream-copy the already-encoded AAC track from a rung's fMP4 HLS into
+ * one progressive M4A with moov atom first (+faststart). Zero re-encoding.
+ * @param {{ out: string, rung: string }} o
+ */
+export function audioRemuxArgs(o) {
+	return [
+		'-hide_banner',
+		'-nostdin',
+		'-y',
+		'-allowed_extensions',
+		'ALL',
+		'-i',
+		`${o.out}/${o.rung}/index.m3u8`,
+		'-vn',
+		'-sn',
+		'-dn',
+		'-map',
+		'0:a:0',
+		'-c:a',
+		'copy',
+		'-movflags',
+		'+faststart',
+		`${o.out}/${AUDIO_FILE}`,
+	];
+}
+
 /**
  * Files a rung's media playlist needs beside it (the EXT-X-MAP init, then every segment), or null
  * when the playlist is not one of ours: any name outside [A-Za-z0-9._-] (a path, a URL) is refused.

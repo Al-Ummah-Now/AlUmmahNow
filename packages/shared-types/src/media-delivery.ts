@@ -100,6 +100,8 @@ export interface TranscodeResult {
 	preview?: string;
 	/** One progressive MP4 remuxed from a rung (D-SEO-11: public videos' contentUrl) */
 	mp4?: { file: string; rung: string; width: number; height: number; bytes: number };
+	/** Audio-only progressive M4A stream-copied from a rung's AAC track (E14: Listen mode & audio downloads) */
+	audio?: { file: string; rung: string; bytes: number; bitrate?: number };
 	/** Pre-publication review media (video-review.ts ReviewMediaManifest), when the job asked for it */
 	review?: { manifestKey?: string; failed?: boolean };
 	/**
@@ -356,6 +358,63 @@ export function sanitizeMp4(input: unknown): TranscodeResult['mp4'] | undefined 
 	return { file: m.file, rung: m.rung, width, height, bytes };
 }
 
+/**
+ * Remux-only job on the transcode queue (E14-S2): extracts a single progressive audio.m4a from a
+ * ready rendition's existing AAC audio track. Stream copy only (no re-encode, no new rev).
+ */
+export interface AudioExtractJobMessage {
+	kind: 'audio_extract';
+	videoId: string;
+	jobId: string;
+	rev: string;
+	access: MediaAccess;
+	rungs: { name: string; width: number; height: number }[];
+	queuedAt: string;
+	runId?: string;
+}
+
+export function isAudioExtractJobMessage(body: unknown): body is AudioExtractJobMessage {
+	const b = body as Partial<AudioExtractJobMessage> | null;
+	return (
+		!!b &&
+		b.kind === 'audio_extract' &&
+		typeof b.videoId === 'string' &&
+		SAFE_ID.test(b.videoId) &&
+		typeof b.rev === 'string' &&
+		SAFE_REV.test(b.rev) &&
+		typeof b.jobId === 'string' &&
+		(b.access === 'pub' || b.access === 'priv') &&
+		Array.isArray(b.rungs) &&
+		b.rungs.length > 0 &&
+		b.rungs.length <= MAX_RUNGS &&
+		b.rungs.every((r) => !!r && SAFE_FILE.test(String(r.name)) && Number.isFinite(r.width) && Number.isFinite(r.height))
+	);
+}
+
+/** What apps/media reports when an audio-extract job ends (POST /internal/media/audio-extract). */
+export interface AudioExtractJobEvent {
+	videoId: string;
+	jobId: string;
+	rev: string;
+	access: MediaAccess;
+	type: 'ready' | 'failed';
+	at: string;
+	audio?: TranscodeResult['audio'];
+	error?: string;
+	containerSeconds?: number;
+}
+
+/** The audio-only M4A part of a result, or undefined when malformed. */
+export function sanitizeAudio(input: unknown): TranscodeResult['audio'] | undefined {
+	const a = input as Partial<NonNullable<TranscodeResult['audio']>> | null;
+	if (!a || typeof a.file !== 'string' || !SAFE_FILE.test(a.file) || !a.file.endsWith('.m4a')) return undefined;
+	if (typeof a.rung !== 'string' || !SAFE_FILE.test(a.rung)) return undefined;
+	const bytes = typeof a.bytes === 'number' && Number.isFinite(a.bytes) && a.bytes > 0 ? Math.round(a.bytes) : null;
+	if (bytes === null) return undefined;
+	const bitrate = typeof a.bitrate === 'number' && Number.isFinite(a.bitrate) && a.bitrate > 0 ? Math.round(a.bitrate) : undefined;
+	return { file: a.file, rung: a.rung, bytes, ...(bitrate !== undefined ? { bitrate } : {}) };
+}
+
 export const MEDIA_ACCESS_FOR =(visibility: { isPublic?: boolean; visibility?: string } | null | undefined): MediaAccess => {
 	if (!visibility) return 'priv';
 	if (visibility.visibility) return visibility.visibility === 'public' ? 'pub' : 'priv';
@@ -448,7 +507,23 @@ export const MEDIA_MASTER = 'master.m3u8';
 export const MEDIA_THUMBNAIL = 'thumb.jpg';
 export const MEDIA_PREVIEW = 'preview.webp';
 export const MEDIA_MP4 = 'video.mp4';
+export const MEDIA_AUDIO = 'audio.m4a';
 export const MEDIA_MANIFEST = 'manifest.json';
+
+/**
+ * R2 key of a public video's audio-only M4A (E14-S2), `pub/<id>/<rev>/<file>`, or null.
+ * Only for ready public renditions that have an extracted audio.m4a; never private/unlisted/hidden/deleted.
+ */
+export function publicAudioPath(video: { id?: unknown; r2?: unknown; isPublic?: unknown; isDeleted?: unknown; isHidden?: unknown }): string | null {
+	const r2 = video.r2 as Partial<VideoR2State> | null | undefined;
+	if (!r2 || typeof r2 !== 'object' || r2.status !== 'ready' || r2.access !== 'pub') return null;
+	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
+	const file = r2.result?.audio?.file;
+	const id = video.id;
+	if (typeof id !== 'string' || typeof r2.rev !== 'string' || typeof file !== 'string') return null;
+	if (!MEDIA_PATH_PART.test(id) || !MEDIA_PATH_PART.test(r2.rev) || !SAFE_FILE.test(file) || !file.endsWith('.m4a')) return null;
+	return `pub/${id}/${r2.rev}/${file}`;
+}
 
 /**
  * R2 key of a public video's stable MP4 (D-SEO-11), `pub/<id>/<rev>/<file>`, or null. The one rule
