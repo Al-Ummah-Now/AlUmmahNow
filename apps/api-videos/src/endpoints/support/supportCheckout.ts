@@ -43,7 +43,7 @@ function failure(c: Context, error: unknown) {
 }
 
 /** Where this request comes from: country, and for the native apps their client and storefront (MEM-D15). */
-const where = (c: Context, perksOn: boolean): Omit<SupportRequest, 'userId'> => ({ country: country(c), client: c.req.header(CLIENT_HEADER) ?? null, storefront: c.req.header(STOREFRONT_HEADER) ?? null, perksOn });
+const where = (c: Context): Omit<SupportRequest, 'userId'> => ({ country: country(c), client: c.req.header(CLIENT_HEADER) ?? null, storefront: c.req.header(STOREFRONT_HEADER) ?? null });
 
 /**
  * MEM-D15 in a native app: whether monthly may be offered, and the hint that the checkout opens in
@@ -80,7 +80,7 @@ export async function handleSupportSheet(c: Context) {
 	const rule = isSupportCurrency(currency) ? config.policy.amounts?.[currency] : undefined;
 	if (!rule) return featureOff(c, 'creatorSupport');
 	// MEM-D15: an app whose platform and storefront have no mode sees nothing; its cadence limits monthly
-	const app = appDecisionFor(config, { userId: null, ...where(c, sw.perksOn) });
+	const app = appDecisionFor(config, { userId: null, ...where(c) });
 	if (app?.mode === 'hidden') return featureOff(c, 'creatorSupport');
 	let presets: number[] = [];
 	try {
@@ -133,7 +133,7 @@ export async function handleSupportCheckout(c: Context) {
 	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
 	const channel = await receivingChannel(c, env);
 	if (!channel) return featureOff(c, 'creatorSupport');
-	const request: SupportRequest = { userId, ...where(c, sw.perksOn) };
+	const request: SupportRequest = { userId, ...where(c) };
 	const supporter = await supporterEligibility(env, request);
 	// Not eligible here, or their own channel (self-support is refused, §2.3). The role comes from the
 	// channel record already read, so a storage error can't let a team member through.

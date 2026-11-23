@@ -91,8 +91,10 @@ test('MEM-D3 is a setting: open = no checkout', () => {
 
 test('open owner decisions start unset; the decided ones start at the owner’s admin-editable defaults', () => {
   const open = s.undecidedSupportDecisions(s.UNDECIDED_SUPPORT_POLICY);
-  for (const id of ['MEM-D17', 'MEM-D22', 'MEM-D23', 'MEM-D24']) assert.ok(open.includes(id as s.SupportDecisionId), id);
-  for (const id of ['MEM-D18', 'MEM-D19', 'MEM-D20', 'MEM-D21']) assert.ok(!open.includes(id as s.SupportDecisionId), id);
+  for (const id of ['MEM-D17', 'MEM-D22']) assert.ok(open.includes(id as s.SupportDecisionId), id);
+  for (const id of ['MEM-D18', 'MEM-D19', 'MEM-D20', 'MEM-D21', 'MEM-D23', 'MEM-D24']) assert.ok(!open.includes(id as s.SupportDecisionId), id);
+  assert.equal(s.UNDECIDED_SUPPORT_POLICY.collectBeforePayeeActive, false, 'MEM-D23: no gifts before payout setup');
+  assert.equal(s.UNDECIDED_SUPPORT_POLICY.batchApprovers, 2, 'MEM-D24: preparer + a different approver');
   // Owner 2026-11-23: a 120-day hold; $25 on the 15th, creators may raise theirs; the creator bears payout fees; losses netted against future gifts
   const p = s.UNDECIDED_SUPPORT_POLICY;
   assert.equal(p.holdDays, 120);
