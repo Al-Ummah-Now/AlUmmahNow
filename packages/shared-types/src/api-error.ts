@@ -98,28 +98,42 @@ function catalogueFor(code: string, status: number): CatalogueEntry {
   return API_ERROR_CATALOGUE[code] ?? API_ERROR_CATALOGUE[codeForStatus(status)];
 }
 
+function langOf(value?: string | null): ApiErrorLang | null {
+  const v = (value ?? '').trim().toLowerCase();
+  if (v === 'ar' || v.startsWith('ar-') || v.startsWith('ar_')) return 'ar';
+  if (v === 'en' || v.startsWith('en-') || v.startsWith('en_')) return 'en';
+  return null;
+}
+
 /**
- * The language of an error message: the first `ar…` or `en…` tag of Accept-Language by quality,
- * else the app's language header (X-App-Locale), else English.
+ * The language of an error message: the language the user chose in the app, never the browser's.
+ * The app's language header (X-App-Locale), else the request's own `?lang=` or `/ar/`·`/en/` path
+ * prefix, else English. Accept-Language is never read: a user on the English interface with an
+ * Arabic browser gets English (standing rule, as on short-links).
  */
-export function negotiateErrorLang(acceptLanguage?: string | null, appLocale?: string | null): ApiErrorLang {
-  const tags = (acceptLanguage ?? '')
-    .split(',')
-    .map((part, index) => {
-      const [tag, ...params] = part.trim().toLowerCase().split(';');
-      const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
-      const quality = q ? Number(q.slice(2)) : 1;
-      return { tag, quality: Number.isFinite(quality) ? quality : 0, index };
-    })
-    .filter((t) => t.tag && t.quality > 0)
-    .sort((a, b) => b.quality - a.quality || a.index - b.index);
-  for (const { tag } of tags) {
-    if (tag === 'ar' || tag.startsWith('ar-')) return 'ar';
-    if (tag === 'en' || tag.startsWith('en-')) return 'en';
+export function negotiateErrorLang(appLocale?: string | null, url?: string | URL | null): ApiErrorLang {
+  const chosen = langOf(appLocale);
+  if (chosen) return chosen;
+  if (url) {
+    let parsed: URL | null = null;
+    try {
+      parsed = typeof url === 'string' ? new URL(url, 'https://local.invalid') : url;
+    } catch {
+      parsed = null;
+    }
+    if (parsed) {
+      const fromQuery = langOf(parsed.searchParams.get('lang') ?? parsed.searchParams.get('locale'));
+      if (fromQuery) return fromQuery;
+      const first = parsed.pathname.split('/')[1] ?? '';
+      if (first === 'ar' || first === 'en') return first;
+    }
   }
-  const app = (appLocale ?? '').trim().toLowerCase();
-  if (app === 'ar' || app.startsWith('ar-') || app.startsWith('ar_')) return 'ar';
   return 'en';
+}
+
+/** The error language of a request (X-App-Locale, else its URL, else English). */
+export function errorLangOf(req: Request): ApiErrorLang {
+  return negotiateErrorLang(req.headers.get('x-app-locale'), req.url);
 }
 
 /** The message for a code in a language (`feature` names the switched-off feature). */
@@ -236,7 +250,7 @@ export function parseApiError(status: number, body: unknown): ParsedApiError {
 }
 
 /** The headers an error answer varies on (its message language). */
-export const API_ERROR_VARY = 'Accept-Language, X-App-Locale';
+export const API_ERROR_VARY = 'X-App-Locale';
 
 const MAX_ENVELOPE_BODY = 64 * 1024;
 
@@ -264,7 +278,7 @@ export async function envelopeResponse(res: Response, req: Request): Promise<Res
     return res;
   }
   if (!isErrorBody(res.status, body)) return res;
-  const lang = negotiateErrorLang(req.headers.get('accept-language'), req.headers.get('x-app-locale'));
+  const lang = errorLangOf(req);
   const envelope = buildErrorEnvelope(body, {
     status: res.status,
     lang,

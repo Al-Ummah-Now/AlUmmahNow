@@ -244,9 +244,11 @@ Every 4xx/5xx JSON answer from api-videos and admin-api leaves in one shape
   feature's own message from the registry. An uncatalogued `code` keeps the endpoint's English
   `message` for English callers only; everyone else gets the status fallback. A 5xx never carries
   exception text (the legacy `error` is "Internal server error" outside development).
-- Language: the first `ar`/`en` tag of `Accept-Language` by quality, else `X-App-Locale`, else
-  English. Answers send `Vary: Accept-Language, X-App-Locale` and `Content-Language`. Clients send
-  their interface language in `Accept-Language`.
+- Language: the language the user chose in the app, never the browser's. `X-App-Locale` (`en` or
+  `ar`), else the request's `?lang=` or `/ar/`·`/en/` path prefix, else English. `Accept-Language`
+  is never read, so a user on the English interface with an Arabic browser gets English. Answers
+  send `Vary: X-App-Locale` and `Content-Language`. Every client (web, admin-web, Android, iOS,
+  Tools) sends its interface language in `X-App-Locale` on every API call.
 - `action`: `retry`, `sign_in`, `update_app`, `contact_support` or `none`. `retryAfter` mirrors
   `Retry-After`; `reference` mirrors `X-Error-Ref`.
 - Clients read it with `parseApiError(status, body)`: branch on `code`, and for a code they don't

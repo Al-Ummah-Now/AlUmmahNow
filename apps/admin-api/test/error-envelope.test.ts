@@ -1,6 +1,6 @@
 /**
  * admin-api answers errors in the shared envelope (wiki AUN-FEATURES §5.2, decision O40): the
- * whole app, including the onError answer, localized by Accept-Language, with the reference.
+ * whole app, including the onError answer, localized by X-App-Locale, with the reference.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +19,7 @@ describe('admin-api error envelope', () => {
   app.get('/ok', (c) => c.json({ success: true, items: [] }));
 
   it('localizes a coded answer and keeps the legacy error text', async () => {
-    const res = await app.request('/forbidden', { headers: { 'Accept-Language': 'ar,en;q=0.5' } });
+    const res = await app.request('/forbidden', { headers: { 'X-App-Locale': 'ar', 'Accept-Language': 'en' } });
     assert.equal(res.status, 403);
     const body = await res.json();
     assert.equal(body.code, 'forbidden');

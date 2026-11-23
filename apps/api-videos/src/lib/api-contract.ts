@@ -45,7 +45,7 @@ const ACCOUNT_STATE_ERROR = {
 /**
  * The body of every error answer (middleware/error-envelope.ts; wiki AUN-FEATURES §5.2, decision
  * O40). Clients branch on `code`; for a code they don't know they show `message` as sent, with the
- * control `action` names. The message's language follows Accept-Language, else X-App-Locale.
+ * control `action` names. The message's language follows X-App-Locale, else the URL's ?lang or /ar/ prefix, else English (never Accept-Language).
  */
 const API_ERROR = {
 	type: 'object',
