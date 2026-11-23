@@ -485,6 +485,34 @@ describe('channel actions', () => {
 		assert.equal(live.body.code, 'channel_is_live');
 	});
 
+	it('a broadcast that starts after the request holds the move until it ends; a supported channel is not moved (review fixes)', async () => {
+		const { raw, env, jobs, call, jobOf, db } = await setup();
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		assert.equal(res.status, 200);
+		await raw.videos.put('livestream:late', JSON.stringify({ id: 'late', title: 'Started late', userId: OWNER, channelId: 'ch1', status: 'live' }));
+		await jobs.drain(env);
+		let job = await jobOf(res);
+		assert.notEqual(job.status, 'succeeded');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER, 'not flipped during the broadcast');
+		raw.videos.store.set('livestream:late', JSON.stringify({ id: 'late', title: 'Started late', userId: OWNER, channelId: 'ch1', status: 'ended' }));
+		jobs.pending.forEach((p: any) => { delete p.delaySeconds; });
+		await call('GET', `/jobs/${res.body.result.job.id}`);
+		await jobs.drain(env);
+		job = await jobOf(res);
+		if (job.status !== 'succeeded') {
+			// The retry is queued with a delay; run it now
+			await call('POST', `/jobs/${job.id}/retry`, {});
+			job = await jobOf(res);
+		}
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+
+		db.db.prepare(`INSERT INTO support_pledges (id, supporter_user_id, channel_id, collector, mode, amount, currency, status, started_at, created_at, updated_at) VALUES ('pl1', 'usr_fan', 'ch1', 'paygood', 'test', 500, 'USD', 'active', '2026', '2026', '2026')`).run();
+		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OWNER });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'channel_has_support');
+	});
+
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
 		const { call, raw } = await setup({
 			profiles: {

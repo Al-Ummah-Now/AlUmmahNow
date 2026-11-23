@@ -21313,6 +21313,31 @@
               }
             }
           },
+          "409": {
+            "description": "The channel is being moved to another account (transfer_in_progress)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "503": {
             "description": "No provider available",
             "content": {

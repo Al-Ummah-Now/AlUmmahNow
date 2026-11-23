@@ -434,6 +434,8 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	if (await openTransferJob(env, id)) throw new AdminError(409, 'transfer_in_progress');
 	// A broadcast on air keeps its ingest; the move would end it mid-stream
 	if (await channelIsLive(env, id)) throw new AdminError(409, 'channel_is_live');
+	// Creator support stays with the person supporters chose: until CC-D10 is decided a supported channel is not moved (#1812)
+	if (await channelHasSupport(env, id)) throw new AdminError(409, 'channel_has_support');
 	logger.info('[Admin] Channel transfer queued', { channelId: id, newOwnerId, previousOwnerId: channel.userId ?? null, actorId });
 	// Decided now, so a retried job does not re-decide from a half-moved state
 	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
@@ -449,13 +451,33 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 }
 
 /** The channel's move job that hasn't finished, if any (indexed: admin_jobs by target). */
-async function openTransferJob(env: AdminServiceEnv, channelId: string): Promise<string | null> {
+export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<string | null> {
 	if (!env.SEARCH_DB) return null;
 	const row = await (env.SEARCH_DB as D1Database)
 		.prepare(`SELECT id FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer' AND status IN ('queued', 'running', 'retrying') LIMIT 1`)
 		.bind(channelId)
 		.first<{ id: string }>();
 	return row?.id ?? null;
+}
+
+/** An active support payee or a live pledge on the channel (support tables, indexed by channel). */
+async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promise<boolean> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return false;
+	try {
+		const row = await db
+			.prepare(
+				`SELECT 1 AS found FROM support_payees WHERE channel_id = ? AND status IN ('pending', 'action_needed', 'active', 'restricted')
+				 UNION ALL SELECT 1 FROM support_pledges WHERE channel_id = ? AND status IN ('active', 'past_due') LIMIT 1`,
+			)
+			.bind(channelId, channelId)
+			.first<{ found: number }>();
+		return !!row;
+	} catch (error) {
+		// Fail closed: a move must not carry support it could not check
+		logger.warn('[Admin] Support check failed before a channel move', { channelId, error: error instanceof Error ? error.message : String(error) });
+		return true;
+	}
 }
 
 async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<boolean> {
@@ -538,6 +560,12 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	const id = job.targetId;
 	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean };
 	const newOwner = await repo(env.profiles).getObject(newOwnerId);
+	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
+	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
+	const before = await repo(env.channels).getObject(id);
+	if (before && !before.isDeleted && before.userId !== newOwnerId && (await channelIsLive(env, id))) {
+		throw new Error('channel_is_live: the move waits for the broadcast to end');
+	}
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		if (fresh.isDeleted) return false;
 		if (fresh.userId === newOwnerId) return false;

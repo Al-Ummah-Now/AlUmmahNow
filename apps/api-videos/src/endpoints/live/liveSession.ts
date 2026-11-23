@@ -29,6 +29,7 @@ import { isLiveVodWithheld } from '@al-ummah/shared-types';
 import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/live/tier-gate';
 import type { SessionTier } from '../../lib/live/service';
 import { featureOff } from '../../lib/features/off';
+import { openTransferJob } from '../../lib/admin/service';
 import { LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-types';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
@@ -213,13 +214,15 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		summary: 'Go live (owner)',
 		description: '🔒 Opens ingest for the stream. The stream shows as live when the encoder\'s first video arrives.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.string(), z.any()), 'Started'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier\'s streams-at-once limit (live_concurrent_limit)'), '404': Err('Not found'), '503': Err('No provider available') },
+		responses: { '200': Ok(z.record(z.string(), z.any()), 'Started'), '409': Err('The channel is being moved to another account (transfer_in_progress)'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier\'s streams-at-once limit (live_concurrent_limit)'), '404': Err('Not found'), '503': Err('No provider available') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		if (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) return fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos');
+		// A channel being moved to another owner can't go live until the move finishes (wiki AUN-CHANNEL-CLAIM §3.3)
+		if (stream.channelId && (await openTransferJob(c.env as never, stream.channelId))) return fail(c, 409, 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.');
 		const tier = await liveTierGate(c, stream, 'start', this.getUserId(c));
 		if (tier instanceof Response) return tier;
 		try {
