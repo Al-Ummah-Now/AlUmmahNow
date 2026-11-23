@@ -1,6 +1,6 @@
 /**
  * Approval workflows (wiki AUN-WORKFLOWS §3–§8): the registry, rule validation and floors, who may
- * approve, the state machine, effective dates and the bilingual messages.
+ * approve, the state machine, expiry and the bilingual messages.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,7 +30,7 @@ test('money defaults: finance-list approvers, tech staff and owner excluded, ste
   assert.deepEqual(fees.defaultRule.approvers, [{ kind: 'finance', permission: 'support:providers' }]);
   assert.ok(fees.defaultRule.exclusions.techStaff && fees.defaultRule.exclusions.owner);
   assert.equal(fees.defaultRule.stepUp, 'propose_and_approve');
-  assert.ok(fees.defaultRule.effectiveDate.allowed);
+  assert.ok(!('effectiveDate' in fees.defaultRule), 'WF-D6: no effective dates');
   assert.equal(w.WORKFLOW_ACTIONS['support.payoutBatch.approve'].defaultRule.expiryHours, 5 * 24);
 });
 
@@ -95,7 +95,6 @@ test('shape and limits are checked', () => {
   check((x) => (x.approvers = [{ kind: 'finance', permission: 'billing:refund' }]), 'approvers_invalid');
   check((x) => (x.expiryHours = 0), 'expiry_out_of_range');
   check((x) => (x.expiryHours = 30 * 24 + 1), 'expiry_out_of_range');
-  check((x) => (x.effectiveDate = { allowed: true, maxDaysAhead: 91 }), 'effective_out_of_range');
   check((x) => (x.stepUp = 'always'), 'invalid_shape');
   check((x) => (x.notify = { email: 'yes', extra: [] }), 'invalid_shape');
 });
@@ -149,24 +148,16 @@ test('state machine: closed states are final and the open set holds the lock', (
   assert.ok(w.canWorkflowTransition('pending', 'applying'), 'the last approval applies at once');
   assert.ok(w.canWorkflowTransition('failed', 'applying'), 'Retry');
   assert.ok(!w.canWorkflowTransition('applying', 'withdrawn'));
-  assert.ok(!w.canWorkflowTransition('scheduled', 'expired'), 'a scheduled request does not expire');
+  assert.ok(!(w.WORKFLOW_STATUSES as readonly string[]).includes('scheduled'), 'WF-D6: nothing is scheduled');
   assert.equal(new Set([...w.WORKFLOW_OPEN_STATUSES, ...w.WORKFLOW_CLOSED_STATUSES]).size, w.WORKFLOW_STATUSES.length);
   assert.equal(w.workflowOpenKey('support.fees.set', 'fee', 'paygood:USD:card'), 'support.fees.set:fee:paygood:USD:card');
 });
 
-test('expiry, effective dates and apply time', () => {
+test('expiry (WF-D10 defaults)', () => {
   const now = new Date('2026-11-23T12:00:00Z');
-  const fees = w.WORKFLOW_ACTIONS['support.fees.set'].defaultRule;
-  assert.equal(w.workflowExpiresAt(now, fees).toISOString(), '2026-11-30T12:00:00.000Z');
-  assert.equal(w.workflowEffectiveDateProblem(fees, null, now), null);
-  assert.equal(w.workflowEffectiveDateProblem(fees, new Date('2026-12-01T00:00:00Z'), now), null);
-  assert.equal(w.workflowEffectiveDateProblem(fees, new Date('2027-03-01T00:00:00Z'), now), 'effective_date_not_allowed');
-  assert.equal(w.workflowEffectiveDateProblem(fees, new Date('nope'), now), 'effective_date_not_allowed');
-  assert.equal(w.workflowEffectiveDateProblem(w.WORKFLOW_ACTIONS['tiers.change'].defaultRule, new Date('2026-12-01T00:00:00Z'), now), 'effective_date_not_allowed');
-  const later = new Date('2026-12-01T00:00:00Z');
-  assert.equal(w.workflowApplyAt(later, now), later);
-  assert.equal(w.workflowApplyAt(new Date('2026-11-20T00:00:00Z'), now), now, 'WF-D6: never backwards');
-  assert.equal(w.workflowApplyAt(null, now), now);
+  assert.equal(w.workflowExpiresAt(now, w.WORKFLOW_ACTIONS['support.fees.set'].defaultRule).toISOString(), '2026-11-30T12:00:00.000Z');
+  assert.equal(w.WORKFLOW_ACTIONS['support.payoutBatch.approve'].defaultRule.expiryHours, 5 * 24);
+  assert.equal(w.WORKFLOW_ACTIONS['support.emergencyStop.lift'].defaultRule.expiryHours, 24);
 });
 
 test('diff fields: secrets never carry a value; unchanged fields are detected', () => {
