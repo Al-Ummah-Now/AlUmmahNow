@@ -503,7 +503,7 @@ export function Autocomplete(props: AutocompleteProps) {
               >
                 <Thumbnail option={option} />
                 <span className="min-w-0 flex-1">
-                  <span dir="auto" className="block truncate text-[var(--fanous-color-text-primary)] text-left [html[dir=rtl]_&]:text-right">
+                  <span dir="auto" className="block line-clamp-2 text-[var(--fanous-color-text-primary)] text-left [html[dir=rtl]_&]:text-right [text-wrap:pretty]">
                     <Highlight text={option.label} query={query} />
                   </span>
                   {option.subtitle && (

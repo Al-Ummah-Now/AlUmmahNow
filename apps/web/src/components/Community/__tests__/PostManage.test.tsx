@@ -8,7 +8,9 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CommunityPost } from '@al-ummah/shared-types';
 import PostCard from '../PostCard';
-import { PostSchedulePicker, joinLocal, scheduleProblem, scheduledIso, scheduleStateFrom, toLocalInput } from '../management/PostSchedulePicker';
+import { PostSchedulePicker, formatSlot, joinLocal, scheduleProblem, scheduledIso, scheduleStateFrom, timeSlots, toLocalInput } from '../management/PostSchedulePicker';
+import { formatPickedDate } from '@/components/ui/LocalizedDatePicker';
+import { offsetLabel, wallTimeToDate, zoneLabel } from '@/lib/time/zones';
 import { editPostHref } from '../PostManageMenu';
 import UndoToastHost from '@/components/common/UndoToastHost';
 
@@ -110,38 +112,99 @@ describe('post card owner menu', () => {
 });
 
 describe('schedule window', () => {
-  const now = new Date('2026-11-14T10:00:00').getTime();
-  it('takes 5 minutes to a year ahead', () => {
-    expect(scheduleProblem('', now)).toBe('required');
-    expect(scheduleProblem('2026-11-14T10:04', now)).toBe('too_soon');
-    expect(scheduleProblem('2026-11-14T10:06', now)).toBeNull();
-    expect(scheduleProblem('2027-11-15T10:00', now)).toBe('too_far');
+  const now = new Date('2026-11-14T15:00:00Z').getTime();
+  const NY = 'America/New_York';
+  it('takes 5 minutes to a year ahead, on the chosen zone\'s clock', () => {
+    expect(scheduleProblem('', now, NY)).toBe('required');
+    expect(scheduleProblem('2026-11-14T10:04', now, NY)).toBe('too_soon');
+    expect(scheduleProblem('2026-11-14T10:06', now, NY)).toBeNull();
+    // The same wall time in London is 5 hours earlier: already past
+    expect(scheduleProblem('2026-11-14T10:06', now, 'Europe/London')).toBe('too_soon');
+    expect(scheduleProblem('2027-11-15T10:00', now, NY)).toBe('too_far');
   });
 
-  it('round-trips a stored time and sends nothing for "now"', () => {
-    const iso = new Date('2026-12-01T18:30:00').toISOString();
-    const state = scheduleStateFrom(iso);
-    expect(state).toEqual({ later: true, local: toLocalInput(new Date(iso)) });
+  it('round-trips a stored time in a zone and sends nothing for "now"', () => {
+    const iso = '2026-12-01T23:30:00.000Z';
+    const state = scheduleStateFrom(iso, NY);
+    expect(state).toEqual({ later: true, local: '2026-12-01T18:30', zone: NY });
     expect(scheduledIso(state)).toBe(iso);
-    expect(scheduledIso({ later: false, local: state.local })).toBeNull();
-    expect(scheduleStateFrom(null)).toEqual({ later: false, local: '' });
+    expect(scheduledIso({ ...state, zone: 'Asia/Riyadh' })).toBe('2026-12-01T15:30:00.000Z');
+    expect(scheduledIso({ ...state, later: false })).toBeNull();
+    expect(scheduleStateFrom(null, NY)).toEqual({ later: false, local: '', zone: NY });
+    expect(toLocalInput(new Date(iso), NY)).toBe('2026-12-01T18:30');
   });
 
-  it('builds the time from separate date and time fields; half of it is not a time', () => {
+  it('crosses a daylight-saving change on the right side', () => {
+    expect(wallTimeToDate('2026-03-08T03:30', NY).toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    expect(wallTimeToDate('2026-11-01T12:00', NY).toISOString()).toBe('2026-11-01T17:00:00.000Z');
+  });
+
+  it('builds the time from separate date and time parts; half of it is not a time', () => {
     expect(joinLocal('2026-11-14', '10:06')).toBe('2026-11-14T10:06');
     expect(joinLocal('', '')).toBe('');
-    expect(scheduleProblem(joinLocal('2026-11-14', ''), now)).toBe('required');
-    expect(scheduleProblem(joinLocal('', '10:06'), now)).toBe('required');
+    expect(scheduleProblem(joinLocal('2026-11-14', ''), now, NY)).toBe('required');
+    expect(scheduleProblem(joinLocal('', '10:06'), now, NY)).toBe('required');
+  });
+});
+
+describe('localized date, time and zone', () => {
+  it('reads dates and times in Arabic digits and English digits', () => {
+    expect(formatPickedDate('2026-11-16', 'ar')).toMatch(/١٦/);
+    expect(formatPickedDate('2026-11-16', 'ar')).not.toMatch(/[0-9]/);
+    expect(formatPickedDate('2026-11-16', 'en')).toMatch(/Nov 16, 2026/);
+    expect(formatSlot('19:30', 'ar')).toMatch(/^٧:٣٠/);
+    expect(formatSlot('19:30', 'en')).toBe('7:30 PM');
   });
 
-  it('the picker edits the date and the time each on its own field', () => {
+  it('lists the day in 15-minute steps and keeps an off-step time', () => {
+    expect(timeSlots('')).toHaveLength(96);
+    expect(timeSlots('')[1]).toBe('00:15');
+    expect(timeSlots('09:07')).toContain('09:07');
+  });
+
+  it('names a zone in the page language with its offset, never the raw id', () => {
+    const winter = new Date('2026-11-16T12:00:00Z');
+    expect(zoneLabel('America/New_York', 'en', winter)).toBe('Eastern Time\u00a0(GMT−5)');
+    const ar = zoneLabel('America/New_York', 'ar', winter);
+    // The offset is a left-to-right isolate, so it never reads «(٥−GMT)»
+    expect(ar).toContain('(\u2066GMT−٥\u2069)');
+    expect(ar).not.toContain('America/New_York');
+    expect(offsetLabel('Asia/Kolkata', 'ar', winter)).toBe('GMT+٥:٣٠');
+    expect(offsetLabel('UTC', 'en', winter)).toBe('GMT');
+  });
+
+  // The calendar's bounds come from now: pin it so the days used here stay in range
+  beforeEach(() => jest.useFakeTimers({ now: new Date('2026-11-14T15:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] }));
+  afterEach(() => jest.useRealTimers());
+
+  it('the picker shows the date on a button and the zone by name, and edits each part on its own', () => {
     const onChange = jest.fn();
-    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15' }} onChange={onChange} timeOnly />);
-    expect(screen.getByTestId('post-schedule-date')).toHaveValue('2026-11-20');
-    expect(screen.getByTestId('post-schedule-time')).toHaveValue('09:15');
-    fireEvent.change(screen.getByTestId('post-schedule-time'), { target: { value: '18:45' } });
-    expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-20T18:45' });
-    fireEvent.change(screen.getByTestId('post-schedule-date'), { target: { value: '2026-11-21' } });
-    expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-21T09:15' });
+    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15', zone: 'America/New_York' }} onChange={onChange} timeOnly />);
+    expect(screen.getByTestId('post-schedule-date-button')).toHaveTextContent('Nov 20, 2026');
+    expect(screen.queryByDisplayValue('2026-11-20')).toBeNull();
+    expect(screen.getByTestId('post-schedule-timezone')).toHaveTextContent(/^Eastern Time \(GMT−5\)$/);
+    expect(screen.getByTestId('post-schedule-time')).toHaveTextContent('9:15 AM');
+    fireEvent.click(screen.getByTestId('post-schedule-date-button'));
+    const calendar = screen.getByTestId('post-schedule-date-calendar');
+    expect(calendar).toHaveAttribute('role', 'dialog');
+    fireEvent.click(screen.getByRole('button', { name: /November 21, 2026/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-21T09:15', zone: 'America/New_York' });
+  });
+
+  it('the calendar moves by keyboard and never picks a day out of range', () => {
+    const onChange = jest.fn();
+    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15', zone: 'America/New_York' }} onChange={onChange} timeOnly />);
+    fireEvent.click(screen.getByTestId('post-schedule-date-button'));
+    const grid = screen.getByRole('grid');
+    fireEvent.keyDown(grid, { key: 'ArrowRight' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(document.activeElement).toHaveAccessibleName(/November 28, 2026/);
+    fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ local: '2026-11-28T09:15' }));
+    // Before today (14 Nov) is out of range: shown, but not pickable
+    fireEvent.click(screen.getByTestId('post-schedule-date-button'));
+    const past = screen.getByRole('button', { name: /November 13, 2026/ });
+    expect(past).toBeDisabled();
+    expect(screen.getByRole('button', { name: /November 14, 2026/ })).toBeEnabled();
   });
 });

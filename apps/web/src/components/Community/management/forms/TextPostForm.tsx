@@ -33,14 +33,15 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
           ? 'شارك أفكارك مع مجتمعك...'
           : 'Share your thoughts with your community...'
         }
-        dir={isRTL ? 'rtl' : 'ltr'}
-        className={`
-          min-h-[150px]    /* Mobile: shorter */
-          md:min-h-[200px] /* Desktop: taller */
-          resize-y
-          text-sm md:text-base
-          ${error ? 'border-destructive' : ''}
-        `}
+        // The post's own direction, whatever the page's: an Arabic post edited on the English page reads RTL.
+        // Until it has a letter, the page's: an empty textarea with dir=auto is left to right in Chrome, so
+        // the Arabic placeholder and the caret would start on the wrong side
+        dir={/\p{L}/u.test(content) ? 'auto' : isRTL ? 'rtl' : 'ltr'}
+        // A full editor area (owner review), sized for the rich text editor that replaces it.
+        // Inline: theme/system.css sets textarea { min-height: 44px } unlayered, above any utility.
+        style={{ minHeight: 'clamp(16rem, 45vh, 28rem)', resize: 'none', fieldSizing: 'content' } as React.CSSProperties}
+        className={`text-sm leading-relaxed md:text-base ${error ? 'border-destructive' : ''}`}
+        data-testid="post-content-editor"
         maxLength={MAX_CHARS}
       />
 
@@ -60,10 +61,10 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
         `}>
           {remaining >= 0
             ? (isRTL
-              ? `${formatNumber('ar', remaining)} حرف متبقي`
+              ? `${formatNumber('ar', remaining, { useGrouping: false })} حرف متبقي`
               : `${formatNumber('en', remaining)} characters remaining`)
             : (isRTL
-              ? `${formatNumber('ar', Math.abs(remaining))} حرف زائد`
+              ? `${formatNumber('ar', Math.abs(remaining), { useGrouping: false })} حرف زائد`
               : `${formatNumber('en', Math.abs(remaining))} characters over limit`)
           }
         </span>

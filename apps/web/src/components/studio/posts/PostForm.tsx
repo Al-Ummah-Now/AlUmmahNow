@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostStatus, PostType, PostVisibility, CreateCommunityPostRequest, type CommunityPost, type UpdateCommunityPostRequest } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
-import { Card } from '@/components/ui/card';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { Switch } from '@/components/common/Switch';
 import { Label } from '@/components/ui/label';
@@ -26,7 +25,7 @@ import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community
 import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
 import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
 import { tooLargeMessage } from '@/lib/community/upload-limits';
-import { PostSchedulePicker, scheduleProblem, scheduleStateFrom, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
+import { PostSchedulePicker, preferredZone, scheduleProblem, scheduleStateFrom, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { createCommunityPost, updateCommunityPost } from '@/lib/api/community-posts';
 import { Loader2 } from 'lucide-react';
 
@@ -42,6 +41,13 @@ interface PostFormProps {
  * text, articles, cards, links, visibility and comments, not media, polls or quizzes.
  */
 const CONTENT_LOCKED = new Set<PostType>([PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.GIF]);
+
+/**
+ * The composer's panels: the shared frosted card (`pb-glass`, packages/shared-types
+ * page-blocks.css) over the theme's card surface. page-blocks.css is unlayered, so once it
+ * is loaded its glass wins over these utilities; until then the panel is the plain card.
+ */
+const PANEL = 'pb-glass rounded-xl border border-[var(--fanous-color-divider)] bg-card p-4 md:p-6';
 
 /** An existing cards post's title and cards, as the cards form edits them */
 function cardsFrom(post: CommunityPost): CardsFormData {
@@ -80,7 +86,11 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
   const [commentsEnabled, setCommentsEnabled] = useState(post?.commentsEnabled ?? true);
   // Publish now, or at a set time (Story 29.4); a scheduled post's time can change, or it can go out now
   const isScheduled = post?.status === PostStatus.SCHEDULED;
-  const [schedule, setSchedule] = useState<ScheduleState>(() => scheduleStateFrom(isScheduled ? post?.scheduledAt : null));
+  // The wall-clock time depends on the viewer's zone, so it is set on the client (no hydration mismatch)
+  const [schedule, setSchedule] = useState<ScheduleState>({ later: isScheduled, local: '' });
+  useEffect(() => {
+    if (isScheduled) setSchedule(scheduleStateFrom(post?.scheduledAt, preferredZone()));
+  }, [isScheduled, post?.scheduledAt]);
   const [scheduleError, setScheduleError] = useState<ScheduleProblem | null>(null);
 
   const [textContent, setTextContent] = useState(post?.type === PostType.TEXT ? post.content ?? '' : '');
@@ -189,7 +199,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
       const iso = scheduledIso({ ...schedule, later: true });
       const before = post.scheduledAt ? new Date(post.scheduledAt).toISOString() : null;
       if (iso !== before) {
-        const timing = scheduleProblem(schedule.local);
+        const timing = scheduleProblem(schedule.local, Date.now(), schedule.zone);
         setScheduleError(timing);
         if (timing) return;
         scheduledAt = iso ?? undefined;
@@ -246,7 +256,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
       setError(validationError);
       return;
     }
-    const timing = schedule.later ? scheduleProblem(schedule.local) : null;
+    const timing = schedule.later ? scheduleProblem(schedule.local, Date.now(), schedule.zone) : null;
     setScheduleError(timing);
     if (timing) return;
 
@@ -393,7 +403,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
               {t.community.publishNow}
             </Button>
           )}
-          <Button onClick={editing ? () => void handleSave() : handlePublish} disabled={loading || !selectedType} className="min-h-11" data-testid={editing ? 'post-save' : 'post-publish'}>
+          <Button onClick={editing ? () => void handleSave() : handlePublish} disabled={loading} className="min-h-11" data-testid={editing ? 'post-save' : 'post-publish'}>
             {loading && <Loader2 aria-hidden="true" className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
             {editing ? t.studio.posts.save : schedule.later ? t.community.schedule : t.studio.postForm.publish}
           </Button>
@@ -407,20 +417,24 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
         <div className="grid grid-cols-1 gap-6 md:gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             {!editing && (
-              <Card className="p-4 md:p-6">
+              <section className={PANEL}>
                 <h3 className="text-base md:text-lg font-semibold mb-4">
                   {t.studio.postForm.typeHeading}
                 </h3>
                 <PostTypeSelector
                   selected={selectedType}
-                  onSelect={setSelectedType}
+                  onSelect={(type) => { setSelectedType(type); setError(''); }}
                   locale={locale}
                 />
-              </Card>
+                {/* Publish is never a dead disabled pill: without a type it says what is missing */}
+                {!selectedType && error && (
+                  <p role="alert" className="mt-3 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-type-error">{error}</p>
+                )}
+              </section>
             )}
 
             {contentLocked && (
-              <Card className="p-4 md:p-6" data-testid="post-edit-locked">
+              <section className={PANEL} data-testid="post-edit-locked">
                 {cmsArticle ? (
                   <p className="text-sm text-muted-foreground">{t.community.articleManagedInCms}</p>
                 ) : (
@@ -438,11 +452,11 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                     />
                   </>
                 )}
-              </Card>
+              </section>
             )}
 
             {selectedType && !contentLocked && (
-              <Card className="p-4 md:p-6">
+              <section className={PANEL}>
                 <h3 className="text-base md:text-lg font-semibold mb-4">
                   {t.studio.postForm.contentHeading}
                 </h3>
@@ -518,12 +532,12 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                 {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
                   <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-error">{error}</p>
                 )}
-              </Card>
+              </section>
             )}
           </div>
 
           <div className="space-y-6">
-            <Card className="p-4 md:p-6">
+            <section className={PANEL}>
               <h3 className="text-base md:text-lg font-semibold mb-4">
                 {t.studio.postForm.settings}
               </h3>
@@ -586,7 +600,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                   />
                 </div>
               </div>
-            </Card>
+            </section>
           </div>
         </div>
       </div>
