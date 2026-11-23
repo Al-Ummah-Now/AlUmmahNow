@@ -19203,6 +19203,34 @@
         }
       }
     },
+    "/api/v1/islamic/season": {
+      "get": {
+        "tags": [
+          "Prayer"
+        ],
+        "summary": "The published Islamic season covering a date",
+        "description": "Admin-curated (Ramadan, the first ten days of Dhul-Hijjah, others) with a bilingual source label and ordered item ids. Dates are an admin override, never a claim of a moon sighting.",
+        "operationId": "get_IslamicSeasonGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "The viewer's local date"
+            },
+            "required": true,
+            "description": "The viewer's local date",
+            "name": "date",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ season } or { season: null }"
+          }
+        }
+      }
+    },
     "/api/v1/library/liked": {
       "get": {
         "tags": [

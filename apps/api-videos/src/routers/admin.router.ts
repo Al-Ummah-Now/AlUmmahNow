@@ -37,6 +37,8 @@ import { listProfileEmailJobs, profileEmailsReport, startProfileEmails } from '.
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
+import { apiError } from '../lib/api-error';
+import { createSeason, deleteSeason, listSeasons, purgeSeasons, readSeason, restoreSeason, SEASON_ITEMS_MAX, SEASON_ITEM_TYPES, SEASON_KINDS, SeasonError, updateSeason } from '../lib/islamic-seasons';
 import R2Repository from '../lib/r2Repo';
 import type { LiveEnv } from '../lib/live/providers';
 import { providerUsage } from '../lib/live/service';
@@ -208,12 +210,44 @@ app.onError((error, c) => {
 	if (error instanceof admin.AdminError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
+	if (error instanceof SeasonError) return apiError(c, error.status, error.code, { error: error.message });
 	if (error instanceof LegacyRestoreError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
 	logger.error('[AdminInternal] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
 });
+
+// Islamic seasons (wiki Epic 21 §4 21.2): admin-api checks the admin's permission and audits each change
+const SeasonText = z.object({ en: z.string().max(200), ar: z.string().max(200) }).strict();
+const SeasonBody = z
+	.object({
+		kind: z.enum(SEASON_KINDS),
+		title: SeasonText,
+		description: z.object({ en: z.string().max(2000), ar: z.string().max(2000) }).strict().optional(),
+		source: SeasonText,
+		startsOn: z.string(),
+		endsOn: z.string(),
+		items: z.array(z.object({ type: z.enum(SEASON_ITEM_TYPES), id: z.string().min(1).max(128) }).strict()).max(SEASON_ITEMS_MAX),
+		state: z.enum(['draft', 'published']).optional(),
+		version: z.number().int().min(1).optional(),
+	})
+	.strict();
+app.get('/islamic-seasons', async (c) => ok(c, await listSeasons(searchDb(c), { deleted: c.req.query('deleted') === 'true', cursor: c.req.query('cursor'), limit: Number(c.req.query('limit') ?? 25) })));
+app.get('/islamic-seasons/:id', async (c) => {
+	const season = await readSeason(searchDb(c), c.req.param('id'));
+	if (!season) throw new SeasonError(404, 'not_found');
+	return ok(c, season);
+});
+app.post('/islamic-seasons', async (c) => ok(c, await createSeason(searchDb(c), parse(SeasonBody, await body(c)), actor(c))));
+app.put('/islamic-seasons/:id', async (c) => {
+	const input = parse(SeasonBody, await body(c));
+	if (!input.version) throw new SeasonError(400, 'invalid_request');
+	return ok(c, await updateSeason(searchDb(c), c.req.param('id'), input.version, input, actor(c)));
+});
+app.delete('/islamic-seasons/:id', async (c) => ok(c, await deleteSeason(searchDb(c), c.req.param('id'), actor(c))));
+app.post('/islamic-seasons/:id/restore', async (c) => ok(c, await restoreSeason(searchDb(c), c.req.param('id'), actor(c))));
+app.post('/islamic-seasons/purge', async (c) => ok(c, { purged: await purgeSeasons(searchDb(c)) }));
 
 // Batch lookup for the admin reports queue: titles, channels, owners and user names of a page in one call
 app.post('/lookup', async (c) => ok(c, await lookup(c.env, cleanLookup(await body(c)))));

@@ -5,9 +5,11 @@
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { HijriMonthGet, PrayerTimesGet } from '../endpoints/prayer/prayerTimes';
+import { IslamicSeasonGet } from '../endpoints/prayer/season';
 
 export const prayerRouter = fromHono(new Hono());
 prayerRouter.get('/prayer-times', PrayerTimesGet);
 prayerRouter.get('/hijri', HijriMonthGet);
+prayerRouter.get('/islamic/season', IslamicSeasonGet);
 
 export default prayerRouter;
