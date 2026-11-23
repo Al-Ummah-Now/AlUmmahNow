@@ -3,7 +3,7 @@
  * the calling app build, and its remote config. Public and cacheable; no user data.
  */
 import { z } from 'zod';
-import { APP_RELEASE_REPOS, APP_UPDATE_ARCHES, APP_UPDATE_CHANNELS, APP_UPDATE_SOURCES, reportNeedsAction } from '@al-ummah/shared-types';
+import { APP_RELEASE_REPOS, APP_RELEASE_TAG, APP_UPDATE_ARCHES, APP_UPDATE_CHANNELS, APP_UPDATE_SOURCES, reportNeedsAction } from '@al-ummah/shared-types';
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
 import { APPS, PLATFORMS, SEMVER, buildAppConfig, loadVersionsDocument } from '../../lib/app-config';
@@ -137,7 +137,7 @@ export class AppUpdateFailurePost extends PublicRoute {
 							platform: z.enum(PLATFORMS),
 							version: z.string().regex(SEMVER),
 							repo: z.enum(APP_RELEASE_REPOS),
-							tag: z.string().regex(/^v[0-9A-Za-z.+-]{1,64}$/),
+							tag: z.string().regex(APP_RELEASE_TAG),
 							reason: z.enum(FAILURE_REASONS),
 						}),
 					},

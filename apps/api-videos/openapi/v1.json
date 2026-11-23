@@ -1898,8 +1898,8 @@
         "tags": [
           "App config"
         ],
-        "summary": "App configuration and minimum supported version",
-        "description": "🌐 Public. Called by native apps at start-up. Returns the supported API versions and whether this build must (`required`) or should (`recommended`) be updated.",
+        "summary": "App configuration, update notice and minimum supported version",
+        "description": "🌐 Public. Called by native and desktop apps at start-up and every `checkHours`. Returns the supported API versions, whether this build must (`required`) or should (`recommended`) be updated and how (wiki AUN-APP-UPDATES), and its remote config.",
         "operationId": "get_AppConfigGet",
         "parameters": [
           {
@@ -1943,11 +1943,58 @@
             "schema": {
               "type": "string",
               "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:\\.(\\d{1,6}))?(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z.-]+)?$",
-              "description": "Version of the running build (semver, e.g. 1.4.2)"
+              "description": "Version of the running build (1.4.2, 2026.11.22.2; Apple: X.Y.Z.N with the rebuild number)"
             },
             "required": true,
-            "description": "Version of the running build (semver, e.g. 1.4.2)",
+            "description": "Version of the running build (1.4.2, 2026.11.22.2; Apple: X.Y.Z.N with the rebuild number)",
             "name": "version",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stable",
+                "beta"
+              ],
+              "description": "beta for TestFlight, Play testing and preview builds"
+            },
+            "required": false,
+            "description": "beta for TestFlight, Play testing and preview builds",
+            "name": "channel",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "appstore",
+                "testflight",
+                "play",
+                "amazon",
+                "msstore",
+                "direct",
+                "managed",
+                "samsung"
+              ],
+              "description": "Where this build was installed from"
+            },
+            "required": false,
+            "description": "Where this build was installed from",
+            "name": "source",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "x64",
+                "arm64",
+                "universal"
+              ]
+            },
+            "required": false,
+            "name": "arch",
             "in": "query"
           },
           {
@@ -2004,6 +2051,10 @@
                     "update": {
                       "type": "object",
                       "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "The appUpdates switch; false: show nothing and require nothing"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -2011,7 +2062,7 @@
                             "recommended",
                             "required"
                           ],
-                          "description": "required: block with an update screen; recommended: suggest updating"
+                          "description": "required: below the minimum version; recommended: a newer version this build can get"
                         },
                         "minimumVersion": {
                           "type": "string"
@@ -2020,20 +2071,157 @@
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "The newest version this build’s install source can get"
                         },
                         "storeUrl": {
                           "type": [
                             "string",
                             "null"
                           ]
+                        },
+                        "channel": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "stable",
+                            "beta",
+                            null
+                          ]
+                        },
+                        "publishedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "notes": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "ar": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en",
+                            "ar"
+                          ],
+                          "description": "Release notes in English and Arabic; the app shows its own UI language"
+                        },
+                        "message": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "en": {
+                              "type": "string"
+                            },
+                            "ar": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en",
+                            "ar"
+                          ],
+                          "description": "Admin text for the forced screen (only when required)"
+                        },
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "store",
+                            "install",
+                            "download",
+                            "none"
+                          ],
+                          "description": "store: open the store; install: self-update from manifestUrl; download: open url"
+                        },
+                        "url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "manifestUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Signed app-release.json; verify it with the key list before installing"
+                        },
+                        "tag": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "The release tag the signed manifest must name"
+                        },
+                        "signed": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "available": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ],
+                          "description": "null: ask the device store (Play, Microsoft Store)"
+                        },
+                        "checkHours": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "keys": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "list": {
+                              "type": "string"
+                            },
+                            "sig": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "list",
+                            "sig"
+                          ],
+                          "description": "The repo’s root-signed key list (update-keys.json and its .sig), verbatim"
                         }
                       },
                       "required": [
+                        "enabled",
                         "status",
                         "minimumVersion",
                         "latestVersion",
-                        "storeUrl"
+                        "storeUrl",
+                        "channel",
+                        "publishedAt",
+                        "notes",
+                        "message",
+                        "action",
+                        "url",
+                        "manifestUrl",
+                        "tag",
+                        "signed",
+                        "available",
+                        "checkHours",
+                        "keys"
                       ]
                     },
                     "flags": {
@@ -2059,6 +2247,110 @@
           },
           "400": {
             "description": "Invalid platform, app or version"
+          }
+        }
+      }
+    },
+    "/api/v1/app-config/update-failure": {
+      "post": {
+        "tags": [
+          "App config"
+        ],
+        "summary": "Report an update that failed verification",
+        "description": "🌐 Public, rate-limited, no user data. The app installed nothing; this tells the admins why.",
+        "operationId": "post_AppUpdateFailurePost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "app": {
+                    "type": "string",
+                    "enum": [
+                      "viewer",
+                      "studio",
+                      "kids",
+                      "tools",
+                      "admin"
+                    ]
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "ipados",
+                      "tvos",
+                      "macos",
+                      "android",
+                      "androidtv",
+                      "firetv",
+                      "windows",
+                      "linux",
+                      "tizen",
+                      "webos",
+                      "web"
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "pattern": "^(\\d{1,6})\\.(\\d{1,6})\\.(\\d{1,6})(?:\\.(\\d{1,6}))?(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z.-]+)?$"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "enum": [
+                      "AlUmmahNowDesktop",
+                      "AlUmmahNowTools",
+                      "AlUmmahNowApple",
+                      "AlUmmahNowAndroid"
+                    ]
+                  },
+                  "tag": {
+                    "type": "string",
+                    "pattern": "^(?:admin-windows-v|admin-v|v)[0-9A-Za-z.+-]{1,64}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "bad_signature_file",
+                      "unknown_key",
+                      "bad_signature",
+                      "bad_json",
+                      "bad_manifest",
+                      "wrong_repo",
+                      "wrong_tag",
+                      "wrong_channel",
+                      "not_newer",
+                      "below_floor",
+                      "yanked",
+                      "key_list",
+                      "host",
+                      "hash",
+                      "code_signature"
+                    ]
+                  }
+                },
+                "required": [
+                  "app",
+                  "platform",
+                  "version",
+                  "repo",
+                  "tag",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Noted"
+          },
+          "400": {
+            "description": "Invalid body"
+          },
+          "429": {
+            "description": "Too many reports"
           }
         }
       }

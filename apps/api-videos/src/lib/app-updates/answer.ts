@@ -79,7 +79,8 @@ const DEVICE_CHECKED: readonly AppUpdateSource[] = ['play', 'msstore'];
 const MARKED: readonly AppUpdateSource[] = ['testflight', 'amazon'];
 const STORES: readonly AppUpdateSource[] = ['appstore', 'testflight', 'play', 'amazon', 'msstore'];
 
-const newer = (a: string | null | undefined, b: string | null | undefined) => (!a ? b ?? null : !b ? a : compareAppVersions(a, b) >= 0 ? a : b);
+/** The same version, by precedence (2026.11.22 = 2026.11.22.0; never by string). */
+export const sameVersion = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && compareAppVersions(a, b) === 0;
 
 /** The release this build's channel follows: a beta build takes the newer of beta and stable. */
 export function releaseFor(doc: ReleasesDocument, app: string, platform: string, channel: AppUpdateChannel): ReleaseEntry | null {
@@ -102,22 +103,22 @@ function offer(input: UpdateInput, ctx: UpdateContext): { version: string | null
 		const bundle = appStoreBundleFor(input.app, input.platform);
 		const live = bundle ? ctx.releases.appStore[bundle] : undefined;
 		if (!live) return { version: null, entry: null, available: false, storeUrl: policyStore };
-		return { version: live.version, entry: entry && entry.version === live.version ? entry : null, available: true, storeUrl: live.url };
+		return { version: live.version, entry: entry && sameVersion(entry.version, live.version) ? entry : null, available: true, storeUrl: live.url };
 	}
 	if (source && MARKED.includes(source)) {
 		const marked = ctx.availability[`${input.app}/${input.platform}/${source}`];
 		if (!marked) return { version: null, entry: null, available: false, storeUrl: policyStore };
-		return { version: marked, entry: entry && entry.version === marked ? entry : null, available: true, storeUrl: policyStore };
+		return { version: marked, entry: entry && sameVersion(entry.version, marked) ? entry : null, available: true, storeUrl: policyStore };
 	}
 	if (source && DEVICE_CHECKED.includes(source)) {
-		const version = newer(entry?.version, ctx.policy.latestVersion);
-		return { version, entry: entry && entry.version === version ? entry : null, available: null, storeUrl: policyStore };
+		// Only what the release index knows: never an admin- or caller-supplied latest version
+		return { version: entry?.version ?? null, entry, available: null, storeUrl: policyStore };
 	}
 	if (source === 'direct' || source === 'managed') {
 		return { version: verified?.version ?? null, entry: verified, available: verified ? true : false, storeUrl: null };
 	}
-	// samsung, or an old build that sends no source: the policy's manual latest version only
-	return { version: ctx.policy.latestVersion ?? null, entry: null, available: null, storeUrl: policyStore };
+	// samsung, or an old build that sends no source: nothing to offer (the minimum still applies)
+	return { version: null, entry: null, available: null, storeUrl: policyStore };
 }
 
 function actionFor(input: UpdateInput, entry: ReleaseEntry | null, version: string | null): { action: UpdateAction; url: string | null } {
@@ -126,7 +127,8 @@ function actionFor(input: UpdateInput, entry: ReleaseEntry | null, version: stri
 	if (STORES.includes(source)) return { action: 'store', url: null };
 	if (!entry) return { action: 'none', url: null };
 	if (source === 'direct') {
-		const installable = entry.artifacts.some((a) => (a.kind === 'velopack-full' || a.kind === 'sparkle-zip') && (!input.arch || !a.arch || a.arch === input.arch || a.arch === 'universal'));
+		// install needs a signed manifest the app can fetch and check; never install without one
+		const installable = !!entry.manifestUrl && entry.artifacts.some((a) => (a.kind === 'velopack-full' || a.kind === 'sparkle-zip') && (!input.arch || !a.arch || a.arch === input.arch || a.arch === 'universal'));
 		return installable ? { action: 'install', url: entry.url } : { action: 'download', url: entry.url };
 	}
 	return { action: 'download', url: entry.url };
@@ -164,8 +166,9 @@ export function updateAnswer(input: UpdateInput, ctx: UpdateContext): UpdateAnsw
 	const behind = o.version !== null && compareAppVersions(input.version, o.version) < 0;
 	const status: UpdateStatus = below ? 'required' : behind && action !== 'none' ? 'recommended' : 'ok';
 	const latest = o.version;
-	const override = latest ? ctx.policy.notesOverrides?.[latest] : undefined;
-	const notes = isAdmin ? null : override ?? (o.entry && o.entry.version === latest ? o.entry.notes : null);
+	const overrideKey = latest ? Object.keys(ctx.policy.notesOverrides ?? {}).find((v) => sameVersion(v, latest)) : undefined;
+	const override = overrideKey ? ctx.policy.notesOverrides?.[overrideKey] : undefined;
+	const notes = isAdmin ? null : override ?? (o.entry && sameVersion(o.entry.version, latest) ? o.entry.notes : null);
 	const repoKeys = o.entry ? ctx.releases.keys[o.entry.repo] : undefined;
 	return {
 		enabled: true,
@@ -179,7 +182,7 @@ export function updateAnswer(input: UpdateInput, ctx: UpdateContext): UpdateAnsw
 		message: below ? ctx.policy.message ?? null : null,
 		action,
 		url: action === 'download' || action === 'install' ? url : null,
-		manifestUrl: action === 'install' ? o.entry?.manifestUrl ?? null : null,
+		manifestUrl: action === 'install' ? (o.entry?.manifestUrl ?? null) : null,
 		tag: o.entry?.tag ?? null,
 		signed: o.entry ? o.entry.signed && Boolean(repoKeys) : null,
 		available: o.available,
