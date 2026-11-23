@@ -16,6 +16,7 @@ import { readSessionValue } from "./auth/session-cookie"
 import {
   SessionInfrastructureError,
   isNextControlFlowError,
+  isOutsideRequestScopeError,
   reportWebServerError,
   safeErrorMeta,
 } from "@/lib/errors/server-report"
@@ -58,7 +59,16 @@ export async function authenticated(): Promise<AuthSubject | false> {
   }
 
   // Only fall back to legacy cookies when there is no al_ummah_session cookie
-  const cookies = await getCookies();
+  let cookies;
+  try {
+    cookies = await getCookies();
+  } catch (cookieError) {
+    if (isNextControlFlowError(cookieError)) throw cookieError;
+    if (isOutsideRequestScopeError(cookieError)) return false;
+    logger.error('[authenticated] Failed to read cookies for legacy fallback', safeErrorMeta(cookieError));
+    await reportWebServerError(cookieError, { route: 'auth:authenticated', extra: { stage: 'legacy_cookies' } });
+    throw new SessionInfrastructureError('Failed to read cookies', cookieError);
+  }
   if (readSessionValue(cookies)) {
     return false;
   }
@@ -76,9 +86,11 @@ export async function authenticated(): Promise<AuthSubject | false> {
     verified = await client.verify(subjects, accessToken.value, { refresh: refreshToken?.value });
   } catch (verifyError) {
     if (isNextControlFlowError(verifyError)) throw verifyError;
-    logger.error('[authenticated] Legacy token verification failed unexpectedly', safeErrorMeta(verifyError));
+    // A forged/tampered legacy JWT can throw during signature verification: log
+    // and report, then refuse the token rather than returning any identity.
+    logger.warn('[authenticated] Legacy token verification threw', safeErrorMeta(verifyError));
     await reportWebServerError(verifyError, { route: 'auth:authenticated', extra: { stage: 'legacy_verify' } });
-    throw new SessionInfrastructureError('Failed to verify legacy auth session', verifyError);
+    return false;
   }
 
   // Any error is a failed verification. (openauth's errors are Error subclasses with no

@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger-server';
 import {
   SessionInfrastructureError,
   isNextControlFlowError,
+  isOutsideRequestScopeError,
   reportWebServerError,
   safeErrorMeta,
 } from '@/lib/errors/server-report';
@@ -159,6 +160,7 @@ export class SessionManager {
       sessionValue = readSessionValue(cookieStore);
     } catch (error) {
       if (isNextControlFlowError(error)) throw error;
+      if (isOutsideRequestScopeError(error)) return null;
       logger.error('[SessionManager] Failed to read session cookies', safeErrorMeta(error));
       await reportWebServerError(error, { route: 'auth:session-manager', extra: { stage: 'read_cookies' } });
       throw new SessionInfrastructureError('Failed to read session cookies', error);
