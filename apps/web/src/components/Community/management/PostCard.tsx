@@ -1,7 +1,8 @@
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { CommunityPost, PostType, PostStatus, formatCompact, formatCountNoun, formatTimeAgo } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,19 @@ const STATUS_LABELS = {
 
 export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardProps) {
   const isRTL = locale === 'ar';
+  // Whether the text is cut at two lines (measured, and again when the card's width changes)
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [post.content]);
   const { t } = useLanguage();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -118,9 +132,11 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 )}
               </div>
 
-              {/* Its own direction for the words, the page's edge for the line (like Studio comments), and two
-                  lines that end in an ellipsis: the fading clamp left a short second line looking cut off */}
-              <p className="text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] mb-2 text-left [html[dir=rtl]_&]:text-right" dir="auto" data-testid="post-card-text">
+              {/* Its own direction for the words and two lines that end in an ellipsis (the fading clamp left a
+                  short second line looking cut off). An uncut text lines up with the page's edge, like Studio
+                  comments; a cut one takes its own start: pinned to the page's edge, an Arabic text's ellipsis in
+                  the English Studio fell outside the card. Two cut lines fill the width, so they still line up */}
+              <p ref={textRef} className={cn('text-sm md:text-base line-clamp-2 [overflow-wrap:break-word] mb-2', clamped ? 'text-start' : 'text-left [html[dir=rtl]_&]:text-right')} dir="auto" data-testid="post-card-text" data-clamped={clamped || undefined}>
                 {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 
