@@ -13,9 +13,11 @@ const jwt = (ttl: number) => {
   return `${b64url({ alg: 'ES256' })}.${b64url({ mode: 'access', iat: now, exp: now + ttl })}.sig`;
 };
 const NEW = jwt(900);
+const TICKET = 'wst_opaque';
+const REALTIME = 'https://realtime.test';
 const refreshedAs = (role: PanelRole): VerifiedRefresh => ({ kind: 'refreshed', tokens: { accessToken: NEW, refreshToken: 'r1' }, role });
 
-async function run(opts: { ttl: number; valid?: boolean; role?: string; result?: VerifiedRefresh; site?: string; issuer?: string; cookies?: Record<string, string> }) {
+async function run(opts: { ttl: number; valid?: boolean; role?: string; result?: VerifiedRefresh; site?: string; issuer?: string; mintFails?: boolean; cookies?: Record<string, string> }) {
   const accessToken = jwt(opts.ttl);
   const valid = opts.valid ?? opts.ttl > 0;
   const cookies = opts.cookies ?? { [SESSION_COOKIE_NAME]: JSON.stringify({ accessToken, refreshToken: 'r0' }) };
@@ -23,8 +25,13 @@ async function run(opts: { ttl: number; valid?: boolean; role?: string; result?:
     headers: { 'sec-fetch-site': opts.site ?? 'same-origin', cookie: Object.entries(cookies).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('; ') },
   });
   const spent: string[] = [];
+  const mintedWith: string[] = [];
   const res = await handleRealtimeToken(request, {
     state: async () => (valid ? { session: { user: { role: opts.role ?? 'admin' }, accessToken }, expired: false } : { session: null, expired: Object.keys(cookies).length > 0 }),
+    mint: async (jwt) => {
+      mintedWith.push(jwt);
+      return opts.mintFails ? null : { url: REALTIME, token: TICKET, expiresAt: 1_800_000_900, ticketExpiresAt: 1_800_000_060 };
+    },
     issuer: 'issuer' in opts ? opts.issuer : 'https://auth.test',
     refresh: async (_issuer, token) => {
       spent.push(token);
@@ -33,21 +40,30 @@ async function run(opts: { ttl: number; valid?: boolean; role?: string; result?:
   });
   const set = res.cookies.get(SESSION_COOKIE_NAME)?.value;
   assert.equal(res.headers.get('cache-control'), 'no-store');
-  return { status: res.status, token: ((await res.json()) as { token?: string }).token, old: accessToken, spent, stored: set ? parseSessionCookie(set) : null, cleared: set === '', all: res.headers.getSetCookie() };
+  const body = (await res.json()) as { token?: string };
+  return { status: res.status, token: body.token, body, old: accessToken, spent, mintedWith, stored: set ? parseSessionCookie(set) : null, cleared: set === '', all: res.headers.getSetCookie() };
 }
 
 describe('GET /api/realtime/token', () => {
-  it('a token with minutes left is handed out as it is', async () => {
+  it('a valid session mints a ticket without disclosing the access token', async () => {
     const r = await run({ ttl: 600 });
-    assert.deepEqual([r.status, r.token, r.spent, r.all], [200, r.old, [], []]);
+    assert.deepEqual([r.status, r.spent, r.mintedWith, r.all], [200, [], [r.old], []]);
+    assert.deepEqual(r.body, { url: REALTIME, token: TICKET, expiresAt: 1_800_000_900, ticketExpiresAt: 1_800_000_060 });
   });
 
   it('a token in its last two minutes, or past them, is refreshed and the new pair stored', async () => {
     for (const ttl of [60, -60]) {
       const r = await run({ ttl });
-      assert.deepEqual([r.status, r.token, r.spent], [200, NEW, ['r0']], String(ttl));
+      assert.deepEqual([r.status, r.token, r.spent, r.mintedWith], [200, TICKET, ['r0'], [NEW]], String(ttl));
       assert.deepEqual(r.stored, { accessToken: NEW, refreshToken: 'r1' });
     }
+  });
+
+  it('keeps the rotated session when minting fails and returns no token', async () => {
+    const r = await run({ ttl: -60, mintFails: true });
+    assert.equal(r.status, 503);
+    assert.deepEqual(r.body, { error: 'realtime unavailable' });
+    assert.deepEqual(r.stored, { accessToken: NEW, refreshToken: 'r1' });
   });
 
   it('a refused refresh is 401 and ends the session, also while the old token is valid', async () => {
@@ -58,9 +74,9 @@ describe('GET /api/realtime/token', () => {
     }
   });
 
-  it('only a refresh that failed for now falls back to the valid token, and keeps the session', async () => {
+  it('a transient refresh failure uses a still-valid token to mint and keeps the session', async () => {
     const valid = await run({ ttl: 60, result: { kind: 'transient', reason: 'HTTP 503' } });
-    assert.deepEqual([valid.status, valid.token, valid.all], [200, valid.old, []]);
+    assert.deepEqual([valid.status, valid.token, valid.mintedWith, valid.all], [200, TICKET, [valid.old], []]);
     const expired = await run({ ttl: -60, result: { kind: 'transient', reason: 'HTTP 503' } });
     assert.deepEqual([expired.status, expired.token, expired.all], [401, undefined, []]);
   });

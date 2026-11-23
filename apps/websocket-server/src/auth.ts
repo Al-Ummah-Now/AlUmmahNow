@@ -27,6 +27,9 @@ export interface AuthPayload {
   iss?: string;
   /** Site roles named in the token (`properties.roles`), as the auth server wrote them. */
   roles?: string[];
+  /** Sign-in session id and time (used to re-check revocations on ticket redemption). */
+  sid?: string;
+  authTime?: number;
 }
 
 /** The subset of Env that authentication reads. */
@@ -181,6 +184,8 @@ async function verifySignedToken(
       aud: Array.isArray(payload.aud) ? payload.aud[0] : payload.aud,
       iss: payload.iss,
       roles: rolesOf(payload.properties?.roles),
+      ...(sid ? { sid } : {}),
+      ...(authTime !== undefined ? { authTime } : {}),
     };
   } catch (error) {
     const e = error as { code?: string; message?: string };

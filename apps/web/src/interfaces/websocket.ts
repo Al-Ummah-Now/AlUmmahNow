@@ -169,6 +169,6 @@ export interface WebSocketConfig {
   heartbeatInterval: number;
   userId?: string;
   authToken?: string;
-  /** Called on every (re)connect to get a fresh access token; takes precedence over authToken. */
+  /** Fetches a fresh credential for each (re)authentication. Takes precedence over authToken. */
   getAuthToken?: () => Promise<string | null | undefined>;
 }

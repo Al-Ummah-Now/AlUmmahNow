@@ -18,7 +18,7 @@ import {
   type RealtimeTicket,
   type SocketLike,
 } from '../src/lib/live/admin-live-client';
-import { realtimeUrlFor, tokenExpiry } from '../src/lib/live/realtime-ticket';
+import { mintAdminRealtimeTicket, realtimeUrlFor, tokenExpiry } from '../src/lib/live/realtime-ticket';
 
 class FakeSocket implements SocketLike {
   readyState = 0;
@@ -341,6 +341,42 @@ describe('realtime ticket', () => {
     const payload = Buffer.from(JSON.stringify({ exp: 1234 })).toString('base64url');
     assert.equal(tokenExpiry(`h.${payload}.s`), 1234);
     assert.equal(tokenExpiry('garbage'), undefined);
+  });
+
+  it('mints a short-lived wst_ ticket from /internal/ws-ticket and never returns the access token (#230)', async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const jwt = `h.${Buffer.from(JSON.stringify({ exp: 1_800_000_900 })).toString('base64url')}.s`;
+    const minted = await mintAdminRealtimeTicket(jwt, {
+      realtimeUrl: 'https://realtime.qa.alummahnow.net/',
+      internalApiKey: 'k-secret',
+      fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
+        calls.push({ url: String(url), headers: init?.headers as Record<string, string> });
+        return new Response(JSON.stringify({ ticket: 'wst_admin123', expiresAt: 1_800_000_060, authExpiresAt: 1_800_000_900 }), { status: 200 });
+      }) as typeof fetch,
+    });
+    assert.deepEqual(minted, {
+      url: 'https://realtime.qa.alummahnow.net',
+      token: 'wst_admin123',
+      expiresAt: 1_800_000_900,
+      ticketExpiresAt: 1_800_000_060,
+    });
+    assert.equal(calls[0].url, 'https://realtime.qa.alummahnow.net/internal/ws-ticket');
+    assert.equal(calls[0].headers['X-API-Key'], 'k-secret');
+    assert.equal(calls[0].headers.Authorization, `Bearer ${jwt}`);
+
+    // Never falls back to the access token on server error or invalid response
+    const failed = await mintAdminRealtimeTicket(jwt, {
+      realtimeUrl: 'https://realtime.qa.alummahnow.net',
+      internalApiKey: 'k-secret',
+      fetchImpl: (async () => new Response('err', { status: 500 })) as typeof fetch,
+    });
+    assert.equal(failed, null);
+    const badToken = await mintAdminRealtimeTicket(jwt, {
+      realtimeUrl: 'https://realtime.qa.alummahnow.net',
+      internalApiKey: 'k-secret',
+      fetchImpl: (async () => new Response(JSON.stringify({ ticket: jwt }), { status: 200 })) as typeof fetch,
+    });
+    assert.equal(badToken, null);
   });
 });
 

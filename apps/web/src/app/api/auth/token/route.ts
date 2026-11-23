@@ -5,7 +5,7 @@ import { accessTokenExpiresAt } from "@/lib/auth/token-refresh";
 /**
  * Same-origin endpoint that hands the active account's access token to
  * client-side code that must call other origins directly (api-videos for TUS
- * uploads / interactive actions, realtime websocket auth). The session cookie
+ * uploads / interactive actions). The session cookie
  * itself stays httpOnly.
  */
 export const dynamic = "force-dynamic";

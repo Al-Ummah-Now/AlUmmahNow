@@ -30,7 +30,6 @@ import { fetchRealtimeToken } from '@/lib/auth/client-token';
 export interface VideoWebSocketOptions {
   videoId: string;
   userId?: string;
-  authToken?: string;
   autoConnect?: boolean;
   isPlaying?: boolean;
   onError?: (error: Error) => void;
@@ -60,7 +59,6 @@ export interface VideoWebSocketReturn {
 export function useVideoWebSocket({
   videoId,
   userId,
-  authToken,
   autoConnect = true,
   isPlaying = false,
   onError
@@ -189,13 +187,9 @@ export function useVideoWebSocket({
       return undefined;
     }
 
-    // The access token is in httpOnly cookies, so signed-in users fetch it from
-    // /api/auth/token on each (re)connect. Anonymous viewers connect without one.
-    const getAuthToken = authToken
-      ? async () => authToken
-      : userId
-        ? fetchRealtimeToken
-        : undefined;
+    // Signed-in viewers mint a fresh ticket for each authentication. Anonymous viewers
+    // connect directly to public feeds.
+    const getAuthToken = userId ? fetchRealtimeToken : undefined;
 
     if (process.env.NODE_ENV !== 'production') {
       logger.debug('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
@@ -284,7 +278,7 @@ export function useVideoWebSocket({
       return undefined;
     }
     // handleVideoUpdate is stable (empty deps), but included for completeness
-  }, [videoId, userId, authToken, autoConnect, handleVideoUpdate]);
+  }, [videoId, userId, autoConnect, handleVideoUpdate]);
 
   // Manage heartbeat interval - only run when playing and connected
   useEffect(() => {

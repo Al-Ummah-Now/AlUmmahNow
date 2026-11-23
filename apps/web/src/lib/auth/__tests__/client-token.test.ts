@@ -33,17 +33,23 @@ describe('client-token', () => {
     expect(getClientAuthToken()).toBe('tok');
   });
 
-  it('gives the realtime server a fresh token from the route handler, and null when the read fails', async () => {
+  it('fetches a separate realtime ticket for concurrent socket authentications', async () => {
     const f = jest.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'one', channelId: null }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'two', channelId: null }) })
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ticket: 'wst_one' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ticket: 'wst_two' }) });
     global.fetch = f as unknown as typeof fetch;
 
-    expect(await fetchRealtimeToken()).toBe('one');
-    expect(await fetchRealtimeToken()).toBe('two');
+    expect(await Promise.all([fetchRealtimeToken(), fetchRealtimeToken()])).toEqual(['wst_one', 'wst_two']);
+    expect(f.mock.calls).toEqual(Array(2).fill(['/api/realtime/token', { credentials: 'same-origin', cache: 'no-store' }]));
+  });
+
+  it('refuses a raw access token and returns null on network failure', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ticket: 'header.payload.signature' }) })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
     expect(await fetchRealtimeToken()).toBeNull();
-    expect(f.mock.calls.every(([url]) => url === '/api/auth/token')).toBe(true);
+    expect(await fetchRealtimeToken()).toBeNull();
   });
 
   it('does not reuse a cached token that is about to expire', async () => {

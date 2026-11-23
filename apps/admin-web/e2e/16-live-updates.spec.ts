@@ -98,6 +98,34 @@ test.describe('live admin pages (admin)', () => {
     expect(ticket.cache).toContain('no-store');
     expect(ticket.body.url).toBeTruthy();
     expect(typeof ticket.body.token).toBe('string');
+    // #230: short-lived single-use opaque ticket, never the OpenAuth JWT
+    expect(ticket.body.token.startsWith('wst_')).toBe(true);
+    expect(ticket.body.token.includes('.')).toBe(false);
+
+    // Single-use: a second socket replaying the same ticket is rejected
+    const replay = await page.evaluate(
+      ({ url, token }) =>
+        new Promise<{ first: string; second: string }>((resolve) => {
+          const wsUrl = `${url.replace(/^http/, 'ws')}/ws`;
+          const s1 = new WebSocket(wsUrl);
+          s1.onopen = () => s1.send(JSON.stringify({ type: 'authenticate', token }));
+          s1.onmessage = (e1) => {
+            const m1 = JSON.parse(String(e1.data));
+            if (m1.type !== 'authenticated' && m1.type !== 'error') return;
+            s1.close();
+            const s2 = new WebSocket(wsUrl);
+            s2.onopen = () => s2.send(JSON.stringify({ type: 'authenticate', token }));
+            s2.onmessage = (e2) => {
+              const m2 = JSON.parse(String(e2.data));
+              if (m2.type !== 'authenticated' && m2.type !== 'error') return;
+              s2.close();
+              resolve({ first: m1.type, second: m2.code ?? m2.type });
+            };
+          };
+        }),
+      { url: ticket.body.url as string, token: ticket.body.token as string },
+    );
+    expect(replay).toEqual({ first: 'authenticated', second: 'AUTH_FAILED' });
   });
 });
 

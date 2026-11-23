@@ -1,7 +1,11 @@
 /**
- * Server side of /api/realtime/token: where the realtime worker is and when the
- * handed-out token expires. Pure, so it is unit tested.
+ * Server side of /api/realtime/token: resolves the realtime worker URL and
+ * exchanges an admin's OpenAuth access token for a short-lived (~60 s),
+ * single-use, user-bound WebSocket ticket (#230) so browser JS never receives
+ * the OpenAuth access token.
  */
+
+const TICKET_TIMEOUT_MS = 5_000;
 
 /**
  * The realtime worker of this environment: REALTIME_URL when set (local
@@ -28,5 +32,47 @@ export function tokenExpiry(token: string): number | undefined {
     return typeof json.exp === 'number' ? json.exp : undefined;
   } catch {
     return undefined;
+  }
+}
+
+export interface MintedAdminTicket {
+  url: string;
+  token: string;
+  /** Unix seconds when the authenticated socket session must re-authenticate. */
+  expiresAt: number | null;
+  /** Unix seconds when the single-use ticket itself stops being redeemable. */
+  ticketExpiresAt: number;
+}
+
+/**
+ * Mints a short-lived single-use WebSocket ticket from the realtime worker.
+ * Never returns the raw OpenAuth access token.
+ */
+export async function mintAdminRealtimeTicket(
+  accessToken: string,
+  deps: { realtimeUrl: string; internalApiKey: string; fetchImpl?: typeof fetch },
+): Promise<MintedAdminTicket | null> {
+  if (!accessToken || !deps.realtimeUrl || !deps.internalApiKey) return null;
+  const doFetch = deps.fetchImpl ?? fetch;
+  try {
+    const base = deps.realtimeUrl.replace(/\/+$/, '');
+    const res = await doFetch(`${base}/internal/ws-ticket`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': deps.internalApiKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(TICKET_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { ticket?: unknown; expiresAt?: unknown; authExpiresAt?: unknown };
+    if (typeof body.ticket !== 'string' || !body.ticket.startsWith('wst_')) return null;
+    const ticketExpiresAt = typeof body.expiresAt === 'number' ? body.expiresAt : Math.floor(Date.now() / 1000) + 60;
+    const authExpiresAt = typeof body.authExpiresAt === 'number' ? body.authExpiresAt : (tokenExpiry(accessToken) ?? null);
+    return { url: base, token: body.ticket, expiresAt: authExpiresAt, ticketExpiresAt };
+  } catch {
+    return null;
   }
 }

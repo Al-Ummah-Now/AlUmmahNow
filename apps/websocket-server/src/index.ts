@@ -6,6 +6,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
+import { authenticateToken } from './auth';
+import { WS_TICKET_DO_NAME } from './tickets';
 import { SHARD_HEADER, readAllShards, routeBroadcast, shardsInRandomOrder, topicRoutingReady, type BroadcastItem } from './shards';
 import { logger } from './lib/logger';
 import { coalescerName } from './admin-coalescer';
@@ -253,6 +255,49 @@ app.get('/stats', async (c) => {
       error: 'Failed to get stats',
     }, 500);
   }
+});
+
+/**
+ * Internal WebSocket ticket minting (#230).
+ *
+ * Server-side callers (apps/web, apps/admin-web) present both the shared
+ * INTERNAL_API_KEY and the user's verified OpenAuth access token. We verify
+ * the access token (signature, issuer, audience, non-legacy, revocation list)
+ * and mint a 60-second single-use opaque ticket bound to that user and their
+ * roles, so browser JS never receives the OpenAuth access token.
+ */
+app.post('/internal/ws-ticket', async (c) => {
+  if (!(await hasInternalKey(c))) {
+    return c.json({ error: 'Unauthorized - Invalid or missing API key' }, 401);
+  }
+  const authHeader = c.req.header('Authorization') ?? '';
+  const accessToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!accessToken) {
+    return c.json({ error: 'Unauthorized - Missing bearer token' }, 401);
+  }
+  const payload = await authenticateToken(accessToken, c.env);
+  if (!payload) {
+    return c.json({ error: 'Unauthorized - Invalid or expired token' }, 401);
+  }
+  const stub = c.env.WEBSOCKET_DO.get(c.env.WEBSOCKET_DO.idFromName(WS_TICKET_DO_NAME));
+  const res = await stub.fetch(new Request('http://internal/tickets/mint', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sub: payload.sub,
+      email: payload.email,
+      roles: payload.roles,
+      authExpiresAt: payload.exp,
+      sid: payload.sid,
+      authTime: payload.authTime,
+      iat: payload.iat,
+    }),
+  }));
+  if (!res.ok) {
+    return c.json({ error: 'Failed to mint WebSocket ticket' }, res.status === 400 ? 401 : 500);
+  }
+  const minted = await res.json();
+  return c.json(minted, 200, { 'Cache-Control': 'no-store' });
 });
 
 /**
