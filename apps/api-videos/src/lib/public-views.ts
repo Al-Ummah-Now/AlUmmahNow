@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { Channel as BusinessChannel, Profile as BusinessProfile } from './types';
 import { PublicChannelView, PublicProfileView } from './model/view';
 import { safeChannelLinks } from './channelAbout';
+import { countSubscribers } from './subscriptions';
 import { subscriberCounts } from './subscription-store';
 import { channelVideoCountsFromIndex, OwnershipEnv } from './search/ownership';
 import { logger } from './logger';
@@ -34,6 +35,7 @@ function publicVerification(channel: StoredChannel): { kind: 'scholar' | 'instit
 }
 
 export function toPublicChannel(channel: StoredChannel, subscribers?: number): z.infer<typeof PublicChannelView> {
+	const subs = subscribers ?? countSubscribers(channel.subscriptions);
 	return {
 		id: channel.id,
 		userId: channel.userId,
@@ -54,8 +56,8 @@ export function toPublicChannel(channel: StoredChannel, subscribers?: number): z
 		dateModified: channel.dateModified,
 		playlistsCount: channel.playlists?.length || 0,
 		videosCount: channel.videos?.length || 0,
-		subscribersCount: channel.subscribers?.length || 0,
-		subscriptionsCount: subscribers ?? (channel.subscriptions?.length || 0),
+		subscribersCount: subs,
+		subscriptionsCount: subs,
 		likesCount: channel.likes?.length || 0,
 		// Only the owner ever gets a suspended channel (my channels); the web app shows the notice
 		...(channel.isSuspended === true ? { isSuspended: true, suspension: { at: channel.suspension?.at ?? '', ...(channel.suspension?.reason ? { reason: channel.suspension.reason } : {}) } } : {}),

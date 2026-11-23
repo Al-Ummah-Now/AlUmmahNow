@@ -319,7 +319,9 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
   const description = str(obj.description);
   const tags = stringTags(obj.tags);
   const category = str(obj.category);
-  const subscribersCount = countOf(obj.subscribers, obj.subscribersCount);
+  const subscribersCount = Array.isArray(obj.subscriptions) && obj.subscriptions.length > 0
+    ? new Set(obj.subscriptions.map((s) => (s && typeof s === 'object' ? (s as Record<string, unknown>).channelId : s)).filter(Boolean)).size
+    : countOf(obj.subscribers, obj.subscribersCount);
   const videosCount = Math.max(num(obj.videosCount), 0);
   const visible = !isRemoved(obj) && obj.isPrivate !== true;
 

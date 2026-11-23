@@ -229,7 +229,7 @@ export async function syncSearchDocument(
   options: SearchSyncOptions = {},
 ): Promise<SearchSyncResult> {
   const source = type === 'channel' && options.subscribers !== undefined && object && typeof object === 'object'
-    ? { ...(object as Record<string, unknown>), subscribers: undefined, subscribersCount: options.subscribers }
+    ? { ...(object as Record<string, unknown>), subscribers: undefined, subscriptions: undefined, subscribersCount: options.subscribers }
     : object;
   const row = source == null ? null : projectSearchDocument(type, source);
   if (!row) {

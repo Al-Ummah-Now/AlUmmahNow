@@ -311,7 +311,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       email: text(obj.email),
       isVerified: Boolean(obj.isVerified),
       isSuspended: Boolean(obj.isSuspended),
-      subscribers: count(obj.subscriberCount ?? obj.subscribers),
+      subscribers: count(obj.subscriberCount ?? (Array.isArray(obj.subscriptions) && obj.subscriptions.length > 0 ? obj.subscriptions : obj.subscribers)),
     };
   }
   return {
