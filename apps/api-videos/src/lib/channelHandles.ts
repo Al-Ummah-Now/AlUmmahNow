@@ -1,4 +1,4 @@
-import { isSuperAdmin } from '@al-ummah/shared-types';
+import { isSuperAdmin, OFFICIAL_CHANNEL_HANDLES } from '@al-ummah/shared-types';
 /**
  * Channel @handles (Story 29.1)
  *
@@ -52,9 +52,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
  * claim them for the official Al Ummah Now channels. Route and system words in
  * RESERVED_HANDLES stay blocked for everyone.
  */
-export const OFFICIAL_HANDLES: ReadonlySet<string> = new Set([
-	'alummah', 'alummahnow', 'al-ummah', 'al-ummah-now', 'ummah', 'ummahnow', 'official', 'lamahat',
-]);
+export const OFFICIAL_HANDLES: ReadonlySet<string> = new Set(OFFICIAL_CHANNEL_HANDLES);
 
 /** Roles (as issued by auth) that may claim OFFICIAL_HANDLES. */
 /** Super admins only (the shared role check, packages/shared-types roles.ts). */

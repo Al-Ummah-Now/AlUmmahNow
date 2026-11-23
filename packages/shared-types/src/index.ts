@@ -14,6 +14,7 @@ export * from './audio-tracks';
 export * from './caption-translation';
 export * from './inline-translation';
 export * from './channel-name';
+export * from './channel-handles';
 export * from './video-format';
 export * from './video-format-ops';
 export * from './channel';
