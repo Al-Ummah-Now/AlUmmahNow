@@ -27,7 +27,8 @@ export interface PagePreview {
 
 export class PreviewError extends Error {
   /** `status`: the HTTP status of an `unreachable` answer (none when nothing answered or it timed out) */
-  constructor(public code: 'bad_url' | 'blocked' | 'unreachable' | 'not_html' | 'too_large' | 'too_many_redirects', public status?: number) {
+  /** `retryAfter`: seconds a 429 asked to wait (its Retry-After, in seconds or as a date) */
+  constructor(public code: 'bad_url' | 'blocked' | 'unreachable' | 'not_html' | 'too_large' | 'too_many_redirects', public status?: number, public retryAfter?: number) {
     super(code);
   }
 }
@@ -71,6 +72,15 @@ export function checkUrl(raw: string): URL {
   return u;
 }
 
+/** A Retry-After header in seconds (a number of seconds, or an HTTP date); undefined when absent or unreadable. */
+export function retryAfterSeconds(value: string | null, now = Date.now()): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const at = Date.parse(trimmed);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - now) / 1000)) : undefined;
+}
+
 /** fetch with manual redirects, each hop checked, and a time limit. */
 export async function safeFetch(raw: string, accept: string, fetchImpl: typeof fetch = fetch): Promise<Response> {
   let url = checkUrl(raw);
@@ -93,7 +103,7 @@ export async function safeFetch(raw: string, accept: string, fetchImpl: typeof f
       }
       if (!res.ok) {
         await res.body?.cancel().catch(() => undefined);
-        throw new PreviewError('unreachable', res.status);
+        throw new PreviewError('unreachable', res.status, res.status === 429 ? retryAfterSeconds(res.headers.get('retry-after')) : undefined);
       }
       return res;
     }

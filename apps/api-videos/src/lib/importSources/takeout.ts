@@ -307,6 +307,9 @@ async function waitingByTitle(env: SourceDbEnv, sourceId: string): Promise<Map<s
 
 const toRecord = (row: ItemRow): MatchRecord => ({ itemId: row.item_id, ...itemTitle(row), state: row.note === 'takeout_file' || row.state !== 'awaiting_file' ? row.state : 'skipped' });
 
+/** A write refused by a unique index (D1 and SQLite word it the same). */
+const isUniqueViolation = (error: unknown) => /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error));
+
 async function setFile(env: SourceDbEnv, id: string, fields: Partial<Pick<TakeoutRow, 'state' | 'matched_by' | 'note' | 'item_id' | 'candidates' | 'video_id'>>, now = Date.now()): Promise<void> {
 	const entries = Object.entries(fields);
 	await db(env)
@@ -319,8 +322,12 @@ async function setFile(env: SourceDbEnv, id: string, fields: Partial<Pick<Takeou
 
 /** Queues the source's match job, or returns the one already waiting or running (one per source at a time). */
 export async function startTakeoutJob(env: SourceSyncEnv, source: Pick<SourceRow, 'id' | 'channel_id' | 'takeout_job_id'>, actorId: string): Promise<AdminJob> {
-	if (source.takeout_job_id) {
-		const running = await getJob(env, source.takeout_job_id);
+	// Read now, not from the caller's row: a job about to finish releases it (runTakeoutSteps), so new
+	// files listed or uploaded after that get a job of their own instead of the finishing one
+	const current = await db(env).prepare('SELECT takeout_job_id FROM import_sources WHERE id = ?').bind(source.id).first<{ takeout_job_id: string | null }>();
+	const jobId = current ? current.takeout_job_id : source.takeout_job_id;
+	if (jobId) {
+		const running = await getJob(env, jobId);
 		if (running && ['queued', 'running', 'retrying'].includes(running.status)) return running;
 	}
 	const params: TakeoutParams = { sourceId: source.id, matched: 0, unmatched: 0, ambiguous: 0, attached: 0, failed: 0 };
@@ -344,8 +351,15 @@ async function matchStep(env: SourceDbEnv, source: SourceRow, params: TakeoutPar
 		const result = matchTakeoutFile({ name: row.name, youtubeId: row.youtube_id, title: row.title, durationMs: row.duration_ms }, records, byTitle, taken);
 		if (result.state === 'matched') {
 			taken.add(result.itemId);
-			params.matched++;
-			await setFile(env, row.id, { state: 'matched', matched_by: result.matchedBy, item_id: result.itemId, note: null, candidates: null });
+			try {
+				await setFile(env, row.id, { state: 'matched', matched_by: result.matchedBy, item_id: result.itemId, note: null, candidates: null });
+				params.matched++;
+			} catch (error) {
+				// An admin's pick (or another step) claimed the record since this step read the taken ones
+				if (!isUniqueViolation(error)) throw error;
+				params.unmatched++;
+				await setFile(env, row.id, { state: 'unmatched', note: 'file_taken', item_id: null, candidates: null });
+			}
 		} else if (result.state === 'ambiguous') {
 			params.ambiguous++;
 			await setFile(env, row.id, { state: 'ambiguous', note: result.note, candidates: JSON.stringify(result.candidates), item_id: null });
@@ -442,12 +456,20 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 	} finally {
 		await settle();
 	}
-	// More to do: files listed or uploaded while this step ran
-	const left = await db(env)
-		.prepare("SELECT COUNT(*) AS n FROM import_takeout_files WHERE source_id = ? AND state IN ('new', 'uploaded')")
-		.bind(source.id)
-		.first<{ n: number }>();
-	if (Number(left?.n ?? 0) > 0) return again();
+	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
+	// Finishing: release the source's job id first, then look for files listed or uploaded meanwhile. A
+	// start after the release queues a new job; files from before it are counted here and this job
+	// continues (taking the id back unless a new job already holds it)
+	const left = async () =>
+		Number(
+			(await db(env).prepare("SELECT COUNT(*) AS n FROM import_takeout_files WHERE source_id = ? AND state IN ('new', 'uploaded')").bind(source.id).first<{ n: number }>())?.n ?? 0,
+		);
+	if ((await left()) > 0) return again();
+	await db(env).prepare('UPDATE import_sources SET takeout_job_id = NULL WHERE id = ? AND takeout_job_id = ?').bind(source.id, job.id).run();
+	if ((await left()) > 0) {
+		const took = await db(env).prepare('UPDATE import_sources SET takeout_job_id = ? WHERE id = ? AND takeout_job_id IS NULL').bind(job.id, source.id).run();
+		if (changes(took)) return again();
+	}
 	resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, takeoutNeedsActionKey(source.id));
 	logger.info('[Takeout] Done', { jobId: job.id, ...result() });
 	return { done: true, result: result() };
@@ -479,7 +501,13 @@ export async function confirmTakeoutFile(env: SourceDbEnv, source: SourceRow, fi
 	if (file.state !== 'ambiguous') throw new SourceError(409, 'not_ambiguous', 'Only an ambiguous file needs a choice');
 	if (!parseIds(file.candidates).includes(itemId)) throw new SourceError(400, 'not_a_candidate', 'That record is not one this file could be');
 	if ((await takenItems(env, source.id)).has(itemId)) throw new SourceError(409, 'file_taken', 'Another file already matched that record');
-	await setFile(env, file.id, { state: 'matched', matched_by: 'admin', item_id: itemId, note: null, candidates: null });
+	try {
+		await setFile(env, file.id, { state: 'matched', matched_by: 'admin', item_id: itemId, note: null, candidates: null });
+	} catch (error) {
+		// Claimed at the same moment by the match job or another admin (idx_import_takeout_files_holding)
+		if (isUniqueViolation(error)) throw new SourceError(409, 'file_taken', 'Another file already matched that record');
+		throw error;
+	}
 	logger.info('[Takeout] Ambiguous file confirmed', { sourceId: source.id, fileId, itemId });
 	return viewTakeoutFile(env, (await readTakeoutFile(env, source.id, fileId))!);
 }

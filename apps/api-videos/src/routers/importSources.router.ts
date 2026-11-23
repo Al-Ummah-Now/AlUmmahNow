@@ -160,7 +160,7 @@ const TakeoutFiles = z.object({
 	files: z
 		.array(
 			z.object({
-				name: z.string().trim().min(1).max(300).refine((n) => !/[\\/]/.test(n), 'a file name, without folders'),
+				name: z.string().trim().min(1).max(300).refine((n) => !/[\\/\u0000-\u001f\u007f]/.test(n) && n !== '.' && n !== '..', 'a file name, without folders or control characters'),
 				size: z.number().int().positive().max(1024 ** 4),
 				videoId: z.string().max(20).nullable().optional(),
 				title: z.string().max(500).nullable().optional(),

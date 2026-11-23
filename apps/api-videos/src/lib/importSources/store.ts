@@ -24,6 +24,8 @@ export class SourceError extends Error {
 		readonly status: 400 | 403 | 404 | 409 | 422 | 502 | 503,
 		readonly code: string,
 		message?: string,
+		/** Seconds the source asked us to wait (a 429's Retry-After) */
+		readonly retryAfter?: number,
 	) {
 		super(message ?? code);
 	}
