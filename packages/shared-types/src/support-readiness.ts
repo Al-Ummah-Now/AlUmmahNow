@@ -37,6 +37,22 @@ const ALL_BLOCKERS: SupportTurnOnBlocker[] = ['organization_not_formed', 'no_fin
 /** Collectors whose adapter returns a live fee quote (O43: the live quote wins; no setting needed). */
 export const LIVE_FEE_COLLECTORS: readonly SupportCollectorId[] = Object.freeze(['test']);
 
+/**
+ * Whether the admin entered the collector's fee for every currency, for any method (method IS NULL):
+ * a card-only rate leaves the other methods unpriced. Unreadable reads as not known.
+ */
+export async function collectorFeesKnown(db: SearchDb, collector: string, currencies: readonly string[], now = new Date()): Promise<boolean> {
+  try {
+    for (const currency of currencies) {
+      const fee = await db.prepare("SELECT 1 AS x FROM support_fee_schedules WHERE kind = 'collector' AND provider = ? AND currency = ? AND method IS NULL AND effective_from <= ? LIMIT 1").bind(collector, currency, now.toISOString()).first<{ x: number }>();
+      if (!fee) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadiness> {
   const db = env.SEARCH_DB;
   if (!db) return { ready: false, blockers: [...ALL_BLOCKERS], openDecisions: [] };
@@ -64,18 +80,7 @@ export async function supportCanTurnOn(env: SupportEnv): Promise<SupportReadines
   }
   const policy = parseSupportPolicy(raw).policy;
   const collector = row?.collector ?? 'test';
-  let feesKnown = true;
-  if (!LIVE_FEE_COLLECTORS.includes(collector) && policy.amounts) {
-    try {
-      const now = new Date().toISOString();
-      for (const currency of Object.keys(policy.amounts)) {
-        const fee = await db.prepare("SELECT 1 AS x FROM support_fee_schedules WHERE kind = 'collector' AND provider = ? AND currency = ? AND effective_from <= ? LIMIT 1").bind(collector, currency, now).first<{ x: number }>();
-        if (!fee) feesKnown = false;
-      }
-    } catch {
-      feesKnown = false;
-    }
-  }
+  const feesKnown = LIVE_FEE_COLLECTORS.includes(collector) || !policy.amounts ? true : await collectorFeesKnown(db, collector, Object.keys(policy.amounts));
   return supportReadiness({
     feesKnown,
     organizationFormed: row?.organisation_formed === 1,

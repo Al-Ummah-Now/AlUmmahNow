@@ -202,6 +202,20 @@ describe('supportCanTurnOn (the Features page precondition)', () => {
 	});
 });
 
+describe('readiness needs a fee for every method (cross-provider review of #1810)', () => {
+	it('a method-only fee schedule leaves the currency unpriced; a method-wide one prices it', async () => {
+		const { collectorFeesKnown } = await import('@al-ummah/shared-types');
+		const { addFeeSchedule } = await import('../src/lib/support/fees');
+		const d = db();
+		const past = '2026-01-01T00:00:00.000Z';
+		await addFeeSchedule(d, { kind: 'collector', provider: 'paygood', currency: 'USD', method: 'card', basisPoints: 290, fixedMinor: 30, effectiveFrom: past }, 'usr_fin');
+		assert.equal(await collectorFeesKnown(d, 'paygood', ['USD']), false, 'card only');
+		await addFeeSchedule(d, { kind: 'collector', provider: 'paygood', currency: 'USD', method: null, basisPoints: 290, fixedMinor: 30, effectiveFrom: past }, 'usr_fin');
+		assert.equal(await collectorFeesKnown(d, 'paygood', ['USD']), true);
+		assert.equal(await collectorFeesKnown(d, 'paygood', ['USD', 'EUR']), false, 'every currency');
+	});
+});
+
 describe('the FEAT-4 hook shape', () => {
 	it('answers ok=false with the first reason, in en and ar', async () => {
 		const { supportCanTurnOnHook, SUPPORT_TURN_ON_REASONS } = await import('../src/lib/support/readiness');

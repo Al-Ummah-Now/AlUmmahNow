@@ -30,6 +30,8 @@ export class CheckoutError extends Error {
 }
 
 export const SUPPORT_MESSAGE_MAX = 500;
+/** The largest amount a gift or a preset may be, in minor units (the same bound as the admin's presets) */
+const MAX_AMOUNT_MINOR = 1_000_000_000;
 /** Checkouts one account may start per hour (card testing, §2.3); the admin-set daily limits are MEM-D4's sibling settings */
 export const SUPPORT_CHECKOUTS_PER_HOUR = 10;
 
@@ -69,7 +71,7 @@ export interface Quote extends GiftBreakdown {
 export async function quote(env: SupportAdapterEnv & { SEARCH_DB?: SearchDb }, config: SupportConfig, input: QuoteInput, locale: 'en' | 'ar', ctx: CollectorContext, now: Date): Promise<Quote> {
 	if (!isSupportCurrency(input.currency)) throw new CheckoutError(400, 'support_currency_unavailable', 'Unknown currency');
 	const currency = input.currency;
-	if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 1_000_000_000) throw new CheckoutError(400, 'invalid_request', 'Amount must be a whole number of minor units');
+	if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > MAX_AMOUNT_MINOR) throw new CheckoutError(400, 'invalid_request', 'Amount must be a whole number of minor units');
 	const p = config.policy;
 	const rule = p.amounts?.[currency];
 	if (!rule || p.collectorFeePayer === null) throw new CheckoutError(409, 'support_currency_unavailable', 'Support amounts are not set for this currency');
@@ -110,6 +112,8 @@ export interface CheckoutInput {
 	consent: boolean;
 	locale: 'en' | 'ar';
 	returnUrl: string;
+	/** The payment method the sheet showed the fee for ('card', …); null = any. The checkout charges what that quote said. */
+	method?: string | null;
 }
 
 export async function startSupportCheckout(
@@ -121,7 +125,7 @@ export async function startSupportCheckout(
 ): Promise<{ checkoutId: string; url: string; quote: Quote }> {
 	const db = env.SEARCH_DB!;
 	const config = await readSupportConfig(db);
-	const q = await quote(env, config, { amount: input.amount, currency: input.currency, supporterTicked: input.coverFees }, input.locale, ctx, now);
+	const q = await quote(env, config, { amount: input.amount, currency: input.currency, supporterTicked: input.coverFees, method: input.method ?? null }, input.locale, ctx, now);
 	if (!input.ageConfirmed) throw new CheckoutError(400, 'support_age_required', `Supporters confirm they are ${config.policy.minSupporterAge ?? 18} or over`);
 	if (input.kind === 'monthly' && !input.consent) throw new CheckoutError(400, 'support_consent_required', 'Monthly support needs the supporter’s consent');
 	const message = input.message?.trim() || null;
@@ -182,11 +186,15 @@ export async function stopMyPledge(env: SupportAdapterEnv & { SEARCH_DB?: Search
 }
 
 /** Studio › Support: the channel's own settings (owner). Presets are minor units in USD, at or above the minimum. */
-export async function saveChannelSupportSettings(db: SearchDb, channelId: string, ownerId: string, input: { enabled?: unknown; oneTime?: unknown; monthly?: unknown; presets?: unknown; thankYouNote?: unknown }, now: Date): Promise<Record<string, unknown>> {
+export async function saveChannelSupportSettings(db: SearchDb, channelId: string, ownerId: string, input: { enabled?: unknown; oneTime?: unknown; monthly?: unknown; presets?: unknown; currency?: unknown; thankYouNote?: unknown }, now: Date): Promise<Record<string, unknown>> {
 	const config = await readSupportConfig(db);
-	const min = config.policy.amounts?.USD?.minimum ?? 1;
 	const presets = input.presets === undefined ? undefined : input.presets;
-	if (presets !== undefined && (!Array.isArray(presets) || presets.length > 6 || presets.some((x) => !Number.isSafeInteger(x) || (x as number) < min || (x as number) > 1_000_000))) {
+	// MEM-D4: presets are in one of the currencies the admin set amounts for, at or above its minimum
+	const existing = await db.prepare('SELECT currency FROM support_settings WHERE channel_id = ?').bind(channelId).first<{ currency: string }>();
+	const currency = typeof input.currency === 'string' ? input.currency.toUpperCase() : (existing?.currency ?? 'USD');
+	const rule = isSupportCurrency(currency) ? config.policy.amounts?.[currency] : undefined;
+	if ((presets !== undefined || input.currency !== undefined) && !rule) throw new CheckoutError(400, 'invalid_request', 'Support amounts are not set for this currency');
+	if (presets !== undefined && (!Array.isArray(presets) || presets.length > 6 || presets.some((x) => !Number.isSafeInteger(x) || (x as number) < rule!.minimum || (x as number) > MAX_AMOUNT_MINOR))) {
 		throw new CheckoutError(400, 'invalid_request', 'Presets must be up to 6 whole amounts at or above the minimum');
 	}
 	const note = input.thankYouNote === undefined ? undefined : input.thankYouNote === null ? null : String(input.thankYouNote).trim().slice(0, 1000);
@@ -195,12 +203,12 @@ export async function saveChannelSupportSettings(db: SearchDb, channelId: string
 	await db
 		.prepare(
 			`INSERT INTO support_settings (channel_id, enabled, one_time_enabled, monthly_enabled, presets, currency, thank_you_note, updated_at, updated_by)
-			 VALUES (?, COALESCE(?, 0), COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, '[]'), 'USD', ?, ?, ?)
+			 VALUES (?, COALESCE(?, 0), COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, '[]'), ?, ?, ?, ?)
 			 ON CONFLICT(channel_id) DO UPDATE SET enabled = COALESCE(?, enabled), one_time_enabled = COALESCE(?, one_time_enabled), monthly_enabled = COALESCE(?, monthly_enabled),
-			   presets = COALESCE(?, presets), thank_you_note = CASE WHEN ? = 1 THEN ? ELSE thank_you_note END, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+			   presets = COALESCE(?, presets), currency = excluded.currency, thank_you_note = CASE WHEN ? = 1 THEN ? ELSE thank_you_note END, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
 		.bind(
-			channelId, bool(input.enabled) ?? null, bool(input.oneTime) ?? null, bool(input.monthly) ?? null, presets === undefined ? null : JSON.stringify(presets), note ?? null, at, ownerId,
+			channelId, bool(input.enabled) ?? null, bool(input.oneTime) ?? null, bool(input.monthly) ?? null, presets === undefined ? null : JSON.stringify(presets), currency, note ?? null, at, ownerId,
 			bool(input.enabled) ?? null, bool(input.oneTime) ?? null, bool(input.monthly) ?? null, presets === undefined ? null : JSON.stringify(presets), note === undefined ? 0 : 1, note ?? null,
 		)
 		.run();
