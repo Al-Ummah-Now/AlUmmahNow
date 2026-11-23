@@ -54,6 +54,7 @@ type EditFormData = {
   isUnlisted: boolean;
   thumbnailUrl: string;
   commentSettings: CommentSettings;
+  allowDownloads: boolean;
   format: VideoFormatChoiceValue;
 };
 
@@ -99,6 +100,7 @@ export default function VideoEdit({
     isUnlisted: video.isPublic === false && video.isUnlisted === true,
     thumbnailUrl: video.thumbnailUrl,
     commentSettings: initialCommentSettings(video as { commentSettings?: unknown }),
+    allowDownloads: video.allowDownloads !== false,
     format: formatChoiceOf(video),
   });
 
@@ -129,8 +131,11 @@ export default function VideoEdit({
   }));
   const [categoryDraftKey] = useState(() => newDraftKey('edit'));
   const [storedSuggestion, setStoredSuggestion] = useState<CategorySuggestionView | null>(null);
-  // Hidden when off: no AI category hint unless features.aiCategorySuggest is on
-  const aiCategoryOn = useFeatures(video.channelId || channelId || null).features.aiCategorySuggest;
+  // Hidden when off: no AI category hint unless features.aiCategorySuggest is on;
+  // offline downloads toggle hidden unless features.offlineDownloads is on (E14-S5)
+  const channelFeatures = useFeatures(video.channelId || channelId || null).features;
+  const aiCategoryOn = channelFeatures.aiCategorySuggest;
+  const offlineDownloadsOn = channelFeatures.offlineDownloads;
   useEffect(() => {
     if (!aiCategoryOn) return;
     let cancelled = false;
@@ -177,6 +182,7 @@ export default function VideoEdit({
       formData.isPublic !== (video.isPublic !== false) ||
       formData.isUnlisted !== (video.isPublic === false && video.isUnlisted === true) ||
       formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
+      formData.allowDownloads !== (video.allowDownloads !== false) ||
       formData.category !== original.category ||
       formData.format !== formatChoiceOf(video) ||
       confirmsAiCategory ||
@@ -255,6 +261,7 @@ export default function VideoEdit({
         // null clears a previously set category
         category: formData.category || null,
         commentSettings: formData.commentSettings,
+        ...(offlineDownloadsOn ? { allowDownloads: formData.allowDownloads } : {}),
         // Uploader's Short / video choice; 'auto' clears it
         format: formData.format,
       };
@@ -509,6 +516,26 @@ export default function VideoEdit({
             ))}
           </div>
         </fieldset>
+
+        {/* Per-video offline downloads toggle (E14-S5; hidden when offlineDownloads switch is off) */}
+        {offlineDownloadsOn && (
+          <fieldset data-testid="video-edit-downloads">
+            <legend className="block text-sm font-medium mb-1 dark:text-white">{t.video.allowDownloadsLabel}</legend>
+            <label className="flex items-start gap-3 p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+              <input
+                type="checkbox"
+                checked={formData.allowDownloads}
+                onChange={(e) => handleInputChange('allowDownloads', e.target.checked)}
+                className="w-4 h-4 mt-0.5"
+                data-testid="video-edit-allow-downloads"
+              />
+              <div>
+                <div className="text-sm font-medium dark:text-white">{t.video.allowDownloadsToggle}</div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{t.video.allowDownloadsHelp}</p>
+              </div>
+            </label>
+          </fieldset>
+        )}
 
         {/* Upload as Short / as video (wins over detection) */}
         <VideoFormatChoice

@@ -44,6 +44,8 @@ export interface VideoObject {
     isPublic?: boolean; // Added from API spec
   /** Not public but open to anyone with the link (D-SEO-5) */
   isUnlisted?: boolean;
+    /** Per-video offline downloads toggle (E14-S5); absent inherits channel default */
+    allowDownloads?: boolean;
     isLive?: boolean;   // Added from API spec
     tags?: string[];
     category?: VideoCategory;
