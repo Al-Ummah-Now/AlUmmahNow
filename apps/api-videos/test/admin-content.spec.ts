@@ -626,6 +626,36 @@ describe('channel actions', () => {
 		assert.deepEqual(JSON.parse(second.raw.channels.store.get('ch1')!).members ?? [], [], 'by default the previous owner loses access');
 	});
 
+	it('takes an official handle back from the channel holding it and releases handles to a default (CC-4)', async () => {
+		const { raw, call } = await setup({
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, handle: 'lamahat', name: 'Early bird', isMain: true }) },
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { channels: ['ch2'] }) },
+		});
+		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
+		await raw.channel_tabs.put('channel-handles/lamahat', JSON.stringify({ handle: 'lamahat', channelId: 'ch2', userId: OTHER }));
+
+		assert.equal((await call('POST', '/channels/ch1/handle/take', { handle: 'notofficial' })).body.code, 'not_official_handle');
+		const took = await call('POST', '/channels/ch1/handle/take', { handle: 'Lamahat' });
+		assert.equal(took.status, 200, JSON.stringify(took.body));
+		assert.deepEqual(took.body.result, { handle: 'lamahat', tookFrom: 'ch2' });
+		const read = (key: string) => JSON.parse(raw.channel_tabs.store.get(key)!);
+		assert.equal(read('channel-handles/lamahat').channelId, 'ch1');
+		const holder = JSON.parse(raw.channels.store.get('ch2')!);
+		assert.notEqual(holder.handle, 'lamahat');
+		assert.equal(read(`channel-handles/${holder.handle.toLowerCase()}`).channelId, 'ch2', 'the holder got a working default handle');
+		assert.ok(!raw.channel_tabs.store.has('channel-handle-history/lamahat'), 'the old name does not redirect to the holder');
+		const notice = raw.queue.messages.map((m: any) => m.payload).find((p: any) => p?.notificationKey === 'channelHandleChangedByTeam');
+		assert.deepEqual([notice?.recipientUserId, notice?.params?.handle], [OTHER, holder.handle], "the holder's owner is told");
+
+		const released = await call('POST', '/channels/ch1/handle/release', {});
+		assert.equal(released.status, 200);
+		assert.equal(released.body.result.previousHandle, 'lamahat');
+		const now = JSON.parse(raw.channels.store.get('ch1')!).handle;
+		assert.equal(released.body.result.handle, now);
+		assert.equal(read(`channel-handles/${now.toLowerCase()}`).channelId, 'ch1');
+		assert.ok(!raw.channel_tabs.store.has('channel-handles/lamahat'), 'the official handle is free again');
+	});
+
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
 		const { raw, env, jobs, call } = await setup({
 			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },

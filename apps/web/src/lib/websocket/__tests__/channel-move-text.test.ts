@@ -17,6 +17,11 @@ describe('channel move notifications', () => {
     expect(changesChannelAccess('newVideo')).toBe(false);
   });
 
+  it('a handle the team changed reads with the new @handle', () => {
+    expect(resolveNotificationText(event('channelHandleChangedByTeam', { channel: 'Corner', handle: 'corner2' }), EN_TRANSLATIONS).message).toBe('The Al Ummah Now team changed the handle of Corner to @corner2.');
+    expect(isCenterKey('channelHandleChangedByTeam')).toBe(true);
+  });
+
   it('reads in English', () => {
     expect(resolveNotificationText(event('channelMovedIn', { channel: 'Corner' }), EN_TRANSLATIONS).message).toBe('You are now the owner of Corner.');
     expect(resolveNotificationText(event('channelMovedOutByTeam', { channel: 'Corner' }), EN_TRANSLATIONS).message).toBe('The Al Ummah Now team moved your channel Corner to another account.');

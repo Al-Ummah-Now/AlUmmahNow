@@ -1682,6 +1682,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
       channelMovedOutByTeamTitle: 'نُقلت قناتك',
       channelMovedOutByTeamMessage: 'نقل فريق الأمة الآن قناتك {channel} إلى حساب آخر.',
       channelMovedOutByTeamWithReasonMessage: 'نقل فريق الأمة الآن قناتك {channel} إلى حساب آخر. السبب: {reason}',
+      channelHandleChangedByTeamTitle: 'تغيّر معرّف قناتك',
+      channelHandleChangedByTeamMessage: 'غيّر فريق الأمة الآن معرّف القناة {channel} إلى @{handle}.',
       uploadReadyMessage: 'اكتملت معالجة مرئيك "{videoTitle}"',
       uploadFailedTitle: 'فشل الرفع',
       uploadFailedMessage: 'تعذرت معالجة مرئيك "{videoTitle}"',

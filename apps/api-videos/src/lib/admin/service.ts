@@ -41,7 +41,7 @@ import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
 import { postLocationKey } from '../community-posts';
 import { isOwnershipComplete } from '../search/ownership';
-import { claimHandle, dropHandleHistory, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
+import { claimDefaultHandle, claimHandle, dropHandleHistory, handleHistoryKey, handleKey, normalizeHandleInput, OFFICIAL_HANDLES, readHandleEntry, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
 import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
@@ -330,6 +330,78 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	if (edit.name !== undefined && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId });
 	return saved;
+}
+
+/**
+ * Gives a channel a default handle in place of its current one (admin handle tools, wiki
+ * AUN-CHANNEL-CLAIM §4). The old handle keeps its redirect and hold like any handle change.
+ * Returns the new handle.
+ */
+async function replaceWithDefaultHandle(env: AdminServiceEnv, channelId: string): Promise<{ channel: Row; from: string | null; to: string }> {
+	if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
+	const channel = await repo(env.channels).getObject(channelId);
+	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
+	const claimed = await claimDefaultHandle(env.channel_tabs, channel as never);
+	if (!claimed) throw new AdminError(409, 'handle_unavailable', 'no_default_handle');
+	let previous: string | null = null;
+	const saved = await repo(env.channels).updateObject(channelId, (fresh) => {
+		previous = typeof fresh.handle === 'string' ? fresh.handle : null;
+		fresh.handle = claimed;
+		fresh.dateModified = now();
+	});
+	if (!saved) throw new AdminError(404, 'channel_not_found');
+	if (previous && handleKey(previous) !== handleKey(claimed)) await releaseReplacedHandle(env.channel_tabs, env.channels, previous, channelId);
+	await send(env, MessageType.ChannelUpdate, { channelId, userId: saved.userId });
+	return { channel: saved, from: previous, to: claimed };
+}
+
+/** Release: the channel gets a default handle at once, so its page keeps a working @handle. */
+export async function releaseChannelHandle(env: AdminServiceEnv, channelId: string, actorId: string): Promise<{ handle: string; previousHandle: string | null }> {
+	if (await openTransferJob(env, channelId)) throw new AdminError(409, 'transfer_in_progress');
+	const { channel, from, to } = await replaceWithDefaultHandle(env, channelId);
+	await notifyHandleChange(env, channel, to, actorId);
+	return { handle: to, previousHandle: from };
+}
+
+/**
+ * Takes an official handle back from the channel that holds it (it claimed the name before the name
+ * was reserved) and gives it to `channelId`. Only names on the official list; the holder gets a
+ * default handle and a notice (CC-D9). A handle no channel holds is simply set.
+ */
+export async function takeOfficialHandle(env: AdminServiceEnv, channelId: string, handle: string, actorId: string): Promise<{ handle: string; tookFrom: string | null }> {
+	if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
+	const wanted = normalizeHandleInput(handle).toLowerCase();
+	if (!OFFICIAL_HANDLES.has(wanted)) throw new AdminError(400, 'not_official_handle');
+	const target = await repo(env.channels).getObject(channelId);
+	if (!target || target.isDeleted) throw new AdminError(404, 'channel_not_found');
+	const holder = await readHandleEntry(env.channel_tabs, wanted);
+	const tookFrom = holder && holder.channelId !== channelId ? holder.channelId : null;
+	for (const id of [channelId, ...(tookFrom ? [tookFrom] : [])]) {
+		if (await openTransferJob(env, id)) throw new AdminError(409, 'transfer_in_progress');
+	}
+	if (tookFrom) {
+		const replaced = await replaceWithDefaultHandle(env, tookFrom);
+		await notifyHandleChange(env, replaced.channel, replaced.to, actorId);
+		// The holder's old name must not keep redirecting to it: it now names the other channel
+		await env.channel_tabs.delete(handleHistoryKey(wanted)).catch(() => undefined);
+	}
+	const saved = await updateChannel(env, channelId, { handle: wanted });
+	logger.info('[Admin] Official handle taken back', { channelId, handle: wanted, tookFrom, actorId });
+	return { handle: saved.handle as string, tookFrom };
+}
+
+async function notifyHandleChange(env: AdminServiceEnv, channel: Row, handle: string, actorId: string): Promise<void> {
+	try {
+		await notifyTeam(env as never, channel.userId as string, actorId, {
+			notificationKey: 'channelHandleChangedByTeam',
+			params: { ...channelParams('channel', channel as never), handle },
+			actionUrl: `/channels/${channel.id}`,
+			entityId: channel.id as string,
+			dedupeKey: `handle:${channel.id}:${handle}`,
+		});
+	} catch (error) {
+		logger.warn('[Admin] Handle change notice failed', { channelId: channel.id, error: error instanceof Error ? error.message : String(error) });
+	}
 }
 
 /**

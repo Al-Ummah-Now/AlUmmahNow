@@ -30,6 +30,7 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   channelMovedIn: { title: 'channelMovedInTitle', message: 'channelMovedInMessage' },
   channelMovedOutByTeam: { title: 'channelMovedOutByTeamTitle', message: 'channelMovedOutByTeamMessage' },
   channelMovedOutByTeamWithReason: { title: 'channelMovedOutByTeamTitle', message: 'channelMovedOutByTeamWithReasonMessage' },
+  channelHandleChangedByTeam: { title: 'channelHandleChangedByTeamTitle', message: 'channelHandleChangedByTeamMessage' },
   youtubeImportFinished: { title: 'youtubeImportFinishedTitle', message: 'youtubeImportFinishedMessage' },
 };
 
