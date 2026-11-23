@@ -171,7 +171,7 @@ guessing.
 | MEM-D19 threshold and schedule (decided: default $25 or the rail's minimum if higher, on the 15th, creators may raise theirs) | `payoutThresholdUsdMinor`, `payoutDayOfMonth`, `creatorMayRaiseThreshold` | `payouts.ts` `planBatch` (with `PayoutRail.minimumPayout`); `jobs.ts` `queueSupportCron` (payout day); `support_settings.payout_threshold` |
 | MEM-D20 payout and FX fees (decided: the creator bears them, shown in Studio before payout day) | `payoutFeeBearer` | `ledger.ts` `payoutPaidLines`; `events.ts` `applyRailEvents` (paid, returned) |
 | MEM-D21 chargebacks after payout (decided: 120-day hold; a later loss is netted against future gifts; the Waqf writes off only what can never be recovered) | `negativeBalancePolicy`, `reserveBasisPoints`, `reserveDays` | `ledger.ts` `debitCreator` (refunds, disputes) |
-| MEM-D22 dormant balances | `dormantPolicy`, `dormantReminderMonths` | `jobs.ts` `runSupportDormantJob` (lists only while open) |
+| MEM-D22 dormant balances (decided 2026-11-23: to the Waqf after 12 months; reminders at 3, 6, 12) | `dormantPolicy`, `dormantReminderMonths`, `dormantTransferMonths` (+ switch `supportDormantTransfer`, off until counsel confirms unclaimed-property law) | `dormant.ts` `runDormant` (reminders in `support_dormant_notices`; transfer as ledger kind `dormant_transfer` to `org:waqf_dormant`, recorded in `support_dormant_transfers`) |
 | MEM-D23 gifts before payee active (decided: no; Support shows only after payout setup) | `collectBeforePayeeActive` | `eligibility.ts` `receiverEligibility` |
 | MEM-D24 approvals (decided: two finance-list people, preparer + a different approver, never the owner or tech staff; moves to the generic approval workflow) | `batchApprovers`, `adjustmentApprovers` | `supportReadiness` (finance list size); `payouts.ts` `approveBatch`; ledger adjustments (MEM-8) |
 | MEM-D3 card fee payer (decided 2026-11-23, O43: always shown, cover optional and unticked) | `collectorFeePayer` | `effectiveCoverFees` (shared-types); the sheet's `coverFeesDefault: false` |
@@ -192,6 +192,7 @@ guessing.
   append-only triggers, idempotency, balances, MEM-D20/D21 as parameters, settings writes.
 - `apps/api-videos/test/support-jobs.spec.ts`: signed webhooks through the queue to the ledger, redelivery, refunds and disputes, release, rail payout events, reconciliation, crons.
 - `apps/api-videos/test/support-payouts.spec.ts`: plan, approve, fund, send, the lost-answer retry, stop, changed balances, failed payouts.
+- `apps/api-videos/test/support-dormant.spec.ts`: MEM-D22 reminders, the transfer switch, delivery and grace, held gifts and active payees never moved, migration 0083.
 - `apps/api-videos/test/support-payees.spec.ts`: onboarding refusals, idempotency, the test onboarding page through the webhook, the sanctions hold, feature_off.
 - `packages/shared-types/test/support-apps.test.ts`: MEM-D15 modes, storefront rules, interlocks, cadence, parsing (no IAP mode).
 - `apps/api-videos/test/support-eligibility.spec.ts`: the `support` and `supportReceive` keys under the switch, the decisions, countries, apps (platform, storefront, interlocks), payee state and pauses.
