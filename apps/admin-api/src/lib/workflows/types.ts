@@ -53,6 +53,8 @@ export interface WorkflowStoredRequest {
   scope: string;
   payload: unknown;
   proposedBy: string;
+  /** Everyone who approved it, in order (empty for a direct rule). */
+  approvedBy: string[];
   status: WorkflowStatus;
   version: number;
 }
@@ -68,6 +70,8 @@ export interface WorkflowExecutor<P = unknown, R = unknown> {
   validate(ctx: WorkflowCtx, input: unknown): Promise<P>;
   describe(ctx: WorkflowCtx, payload: P): Promise<WorkflowDescription>;
   currentVersion(ctx: WorkflowCtx, payload: P): Promise<string>;
+  /** Extra reasons this person may not approve, beyond the rule (for example: whoever marked someone as tech staff never approves removing the mark). */
+  approverBlocks?(ctx: WorkflowCtx, payload: P, actorId: string): Promise<string[]>;
   /** A floor above the action's own (payout batches: MEM-D24). */
   minApprovals?(ctx: WorkflowCtx): Promise<number>;
   /** Search-D1 changes: statements the engine runs in one batch with the request's applied status. */

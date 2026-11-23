@@ -49,6 +49,7 @@ import {
 } from '../lib/workflows/engine';
 import { createWorkflowDirectory, ownerIdsFrom } from '../lib/workflows/directory';
 import { registerRuleChangeExecutor } from '../lib/workflows/rule-change';
+import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
 import type { WorkflowCtx, WorkflowEvent } from '../lib/workflows/types';
 import type { D1Database } from '../lib/types';
 
@@ -56,6 +57,7 @@ type Env = { Bindings: AdminBindings & { PLATFORM_OWNER_USER_IDS?: string }; Var
 type C = Context<Env>;
 
 registerRuleChangeExecutor();
+registerSupportFinanceExecutors();
 
 const app = new Hono<Env>();
 const ok = (c: C, result: unknown, status: 200 | 202 = 200) => c.json({ success: true, result }, status);

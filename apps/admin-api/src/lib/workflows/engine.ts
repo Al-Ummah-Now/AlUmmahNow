@@ -186,7 +186,16 @@ async function loadSteps(ctx: WorkflowCtx, id: string): Promise<StepRow[]> {
   return results ?? [];
 }
 
-const stored = (r: RequestRow): WorkflowStoredRequest => ({ id: r.id, actionType: r.action_type, scope: r.scope, payload: JSON.parse(r.payload), proposedBy: r.proposed_by, status: r.status, version: r.version });
+const stored = (r: RequestRow, steps: StepRow[]): WorkflowStoredRequest => ({
+  id: r.id,
+  actionType: r.action_type,
+  scope: r.scope,
+  payload: JSON.parse(r.payload),
+  proposedBy: r.proposed_by,
+  approvedBy: steps.filter((s) => s.kind === 'approve').map((s) => s.actor),
+  status: r.status,
+  version: r.version,
+});
 
 /**
  * A step row, inserted only while the request still has `version` (so a lost race writes nothing).
@@ -351,9 +360,11 @@ function facts(row: RequestRow, steps: StepRow[]) {
   };
 }
 
-async function blocksFor(ctx: WorkflowCtx, row: RequestRow, steps: StepRow[], actor: WorkflowActor): Promise<WorkflowApprovalBlock[]> {
+async function blocksFor(ctx: WorkflowCtx, row: RequestRow, steps: StepRow[], actor: WorkflowActor): Promise<(WorkflowApprovalBlock | string)[]> {
   const rule = JSON.parse(row.rule) as WorkflowRuleConfig;
-  return workflowApprovalBlocks(rule, floorFor(row.action_type, row.scope), facts(row, steps), actor);
+  const blocks: (WorkflowApprovalBlock | string)[] = workflowApprovalBlocks(rule, floorFor(row.action_type, row.scope), facts(row, steps), actor);
+  const extra = (await executors.get(row.action_type)?.approverBlocks?.(ctx, JSON.parse(row.payload), actor.userId)) ?? [];
+  return [...blocks, ...extra.filter((b) => !blocks.includes(b))];
 }
 
 /** Marks a request stale (the target changed): nobody can approve it, the proposer proposes again. */
@@ -492,7 +503,7 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
         .bind(at, JSON.stringify(result ?? null), at, current.id, current.version);
     let result: unknown;
     if (executor.applyStatements) {
-      const out = await executor.applyStatements(ctx, JSON.parse(current.payload), stored(current));
+      const out = await executor.applyStatements(ctx, JSON.parse(current.payload), stored(current, await loadSteps(ctx, current.id)));
       result = out.result;
       // Exactly once: `finish` moves applying → applied (version + 1). If it changed nothing (someone else
       // finished first), the guard matches the row and breaks the approvals_needed >= 0 CHECK, which
@@ -510,7 +521,7 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
         throw e;
       }
     } else {
-      result = await executor.applyJob!(ctx, JSON.parse(current.payload), stored(current));
+      result = await executor.applyJob!(ctx, JSON.parse(current.payload), stored(current, await loadSteps(ctx, current.id)));
       const results = await ctx.db.batch([finish(result), stepStatement(ctx, current.id, null, 'system', 'apply', null, at)]);
       if (!changes(results[0])) return { status: 'skipped' };
     }
@@ -593,7 +604,7 @@ export async function getRequestView(ctx: WorkflowCtx, id: string, viewer?: Work
       approve: open && !blocks.length,
       reject: open && !blocks.filter((b) => b !== 'already_approved' && b !== 'one_step_per_person').length,
       withdraw: viewer.userId === row.proposed_by && ['pending', 'failed'].includes(row.status),
-      blocks,
+      blocks: blocks as WorkflowApprovalBlock[],
     };
   }
   return view;
