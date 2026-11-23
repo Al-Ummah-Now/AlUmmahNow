@@ -17,7 +17,9 @@ import { revokeSource, stillAuthorized } from './authorize';
 import { codedError } from './errors';
 import { fetchSource, itemKind } from './fetchers';
 import { postItem, skipItem, type PostItemEnv } from './post';
+import { takeoutNeedsActionKey } from './takeout';
 import {
+	changes,
 	dueSources,
 	insertItems,
 	markSyncCancelled,
@@ -50,7 +52,13 @@ interface SyncParams {
 	skipped: number;
 	/** Seconds to wait before the first step (the cron spreads a tick's syncs over the hour) */
 	waitSeconds?: number;
+	/** Times the fetch waited out a 429's Retry-After */
+	rateLimited?: number;
 }
+
+/** A 429's Retry-After is honored this many times per sync, each wait capped (then the queue's backoff and the DLQ). */
+const RATE_LIMIT_WAITS = 3;
+const MAX_RATE_LIMIT_WAIT_SECONDS = 3600;
 
 export const sourceSyncNeedsActionKey = (sourceId: string) => `import-source:${sourceId}`;
 
@@ -65,13 +73,18 @@ export async function startSourceSync(
 	phase: 'fetch' | 'post' = 'fetch',
 	waitSeconds = 0,
 ): Promise<AdminJob> {
-	if (source.last_job_id) {
-		const running = await getJob(env, source.last_job_id);
+	// Read now, not from the caller's row: a sync about to finish releases it (finishSync), so items
+	// recorded after that get a sync of their own instead of the finishing one
+	const current = await sourceDb(env).prepare('SELECT sync_job_id FROM import_sources WHERE id = ?').bind(source.id).first<{ sync_job_id: string | null }>();
+	const jobId = current ? current.sync_job_id : source.last_job_id;
+	if (jobId) {
+		const running = await getJob(env, jobId);
 		if (running && ['queued', 'running', 'retrying'].includes(running.status)) return running;
 	}
 	const params: SyncParams = { sourceId: source.id, phase, fetched: 0, posted: 0, skipped: 0, ...(waitSeconds > 0 ? { waitSeconds } : {}) };
 	const job = await createJob(env, { kind: SOURCE_SYNC_JOB_KIND, targetKind: 'channel', targetId: source.channel_id, params: params as unknown as Record<string, unknown>, actorId });
 	await markSyncStarted(env, source.id, job.id);
+	await sourceDb(env).prepare('UPDATE import_sources SET sync_job_id = ? WHERE id = ?').bind(job.id, source.id).run();
 	return job;
 }
 
@@ -131,9 +144,24 @@ async function runSourceSyncSteps(env: SourceSyncEnv, job: AdminJob, f: typeof f
 		return { done: true, result: { ...result(), skipped: 'not_connected' } };
 	}
 
+	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
 	if (params.phase === 'fetch') {
-		await fetchPhase(env, source, params, f);
+		try {
+			await fetchPhase(env, source, params, f);
+		} catch (error) {
+			// The network asked us to slow down (429 with Retry-After): wait as long as it says, a few times,
+			// instead of the queue's fixed backoff
+			const wait = error instanceof SourceError ? error.retryAfter : undefined;
+			if (wait !== undefined && (params.rateLimited ?? 0) < RATE_LIMIT_WAITS) {
+				params.rateLimited = (params.rateLimited ?? 0) + 1;
+				logger.info('[ImportSources] Rate limited: waiting', { sourceId: source.id, network: source.network, seconds: wait });
+				return { done: false, params: params as unknown as Record<string, unknown>, result: result(), delaySeconds: Math.min(Math.max(wait, 1), MAX_RATE_LIMIT_WAIT_SECONDS) };
+			}
+			throw error;
+		}
 		params.phase = 'post';
+		// Cancelled while the source was read: nothing is posted, and the source is not marked synced
+		if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
 	}
 
 	const { ctx, settle } = stepContext();
@@ -174,6 +202,16 @@ async function runSourceSyncSteps(env: SourceSyncEnv, job: AdminJob, f: typeof f
 		await settle();
 	}
 
+	// Cancelled while the last item posted: the source is not marked synced
+	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
+	// Finishing: release the source's sync first, then look for items recorded meanwhile (a Telegram post).
+	// A start after the release queues a new sync; items from before it are found here and this sync
+	// continues (taking the source back unless a new sync already holds it)
+	await sourceDb(env).prepare('UPDATE import_sources SET sync_job_id = NULL WHERE id = ? AND sync_job_id = ?').bind(source.id, job.id).run();
+	if ((await pendingItems(env, source.id, 1)).length) {
+		const took = await sourceDb(env).prepare('UPDATE import_sources SET sync_job_id = ? WHERE id = ? AND sync_job_id IS NULL').bind(job.id, source.id).run();
+		if (changes(took)) return { done: false, params: params as unknown as Record<string, unknown>, result: result(), delaySeconds: 0 };
+	}
 	await markSyncFinished(env, source, null);
 	resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, sourceSyncNeedsActionKey(source.id));
 	logger.info('[ImportSources] Sync finished', { jobId: job.id, ...result() });
@@ -257,7 +295,7 @@ export async function cancelSourceJob(env: SourceSyncEnv, source: Pick<SourceRow
 		if (job.kind === SOURCE_SYNC_JOB_KIND) {
 			await markSyncCancelled(env, source);
 			resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, sourceSyncNeedsActionKey(source.id));
-		}
+		} else resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, takeoutNeedsActionKey(source.id));
 		logger.info('[ImportSources] Job cancelled', { jobId: job.id, kind: job.kind, sourceId: source.id, was: job.status, by: by.id });
 	}
 	return (await getJobWithLog(env, job.id)) ?? after ?? job;

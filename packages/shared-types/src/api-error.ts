@@ -125,6 +125,16 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   source_unreachable: { action: 'retry', en: 'The source didn’t answer. Please try again later.', ar: 'لم يستجب المصدر. يُرجى المحاولة لاحقًا.' },
   source_bad_response: { action: 'retry', en: 'The source sent an answer we can’t use.', ar: 'أرسل المصدر ردًّا لا يمكننا استخدامه.' },
   source_not_a_feed: { action: 'none', en: 'This address isn’t an RSS or Atom feed.', ar: 'هذا العنوان ليس موجزًا يمكن الاستيراد منه.' },
+  source_forbidden: { action: 'none', en: 'The source refused access to this address.', ar: 'رفض المصدر الوصول إلى هذا العنوان.' },
+  // YouTube Takeout files for a social import source (wiki TOOLS-ADMIN TA-9/TA-13)
+  not_youtube: { action: 'none', en: 'Takeout files are only for YouTube sources.', ar: 'ملفات النسخة المصدَّرة لمصادر يوتيوب فقط.' },
+  file_not_found: { action: 'none', en: 'We couldn’t find this file.', ar: 'لم نعثر على هذا الملف.' },
+  not_a_candidate: { action: 'none', en: 'This file can’t belong to that record. Choose one of the suggested records.', ar: 'لا يمكن أن يعود هذا الملف إلى ذلك السجل. اختر أحد السجلات المقترحة.' },
+  not_ambiguous: { action: 'none', en: 'This file doesn’t need a choice.', ar: 'لا يحتاج هذا الملف إلى اختيار.' },
+  file_taken: { action: 'none', en: 'Another file already matched that record.', ar: 'طابق ملف آخر ذلك السجل بالفعل.' },
+  not_matched: { action: 'none', en: 'Only a matched file can be uploaded.', ar: 'لا يُرفع إلا ملف تمت مطابقته.' },
+  has_file: { action: 'none', en: 'That record already has its video.', ar: 'لذلك السجل مرئي بالفعل.' },
+  not_uploading: { action: 'none', en: 'This file isn’t being uploaded.', ar: 'هذا الملف لا يُرفع الآن.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },

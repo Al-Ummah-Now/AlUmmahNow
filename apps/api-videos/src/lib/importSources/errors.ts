@@ -23,7 +23,7 @@ export function sourceErrorFromPreview(error: PreviewError): SourceError {
 	if (status === 404 || status === 410) return new SourceError(502, 'source_not_found', `The source was not found (${http})`);
 	if (status === 401 || status === 403) return new SourceError(502, 'source_forbidden', `The source refused access (${http})`);
 	if (error.code === 'unreachable' && (!status || status >= 500 || status === 429)) {
-		return new SourceError(502, 'source_unreachable', `The source could not be read (${http ?? 'no_answer'})`);
+		return new SourceError(502, 'source_unreachable', `The source could not be read (${http ?? 'no_answer'})`, error.retryAfter);
 	}
 	if (error.code === 'too_many_redirects') return new SourceError(502, 'source_unreachable', 'The source could not be read (too_many_redirects)');
 	if (error.code === 'blocked' || error.code === 'bad_url') return new SourceError(502, 'source_unreachable', `The source could not be read (${error.code === 'blocked' ? 'private_address' : 'bad_url'})`);

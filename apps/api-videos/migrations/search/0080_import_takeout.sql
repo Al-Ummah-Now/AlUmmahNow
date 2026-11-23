@@ -9,7 +9,7 @@
 -- import_sources.takeout_job_id: the source's latest 'import.takeout-match' job (one at a time per source).
 -- admin_job_log.actor_id / actor_name: the admin who cancelled a job ("cancelled by …").
 --
--- Expand-only: a new table, its indexes, three nullable columns.
+-- Expand-only: a new table, its indexes, four nullable columns.
 CREATE TABLE IF NOT EXISTS import_takeout_files (
   id TEXT PRIMARY KEY,
   source_id TEXT NOT NULL,
@@ -32,7 +32,12 @@ CREATE TABLE IF NOT EXISTS import_takeout_files (
 );
 CREATE INDEX IF NOT EXISTS idx_import_takeout_files_state ON import_takeout_files (source_id, state);
 CREATE INDEX IF NOT EXISTS idx_import_takeout_files_item ON import_takeout_files (source_id, item_id);
+-- One file holds a record at a time: a match, an admin's pick and a concurrent step can't both claim it
+CREATE UNIQUE INDEX IF NOT EXISTS idx_import_takeout_files_holding ON import_takeout_files (source_id, item_id)
+  WHERE item_id IS NOT NULL AND state IN ('matched', 'uploading', 'uploaded', 'attached');
 
 ALTER TABLE admin_job_log ADD COLUMN actor_id TEXT;
 ALTER TABLE admin_job_log ADD COLUMN actor_name TEXT;
 ALTER TABLE import_sources ADD COLUMN takeout_job_id TEXT;
+-- the source's sync job while it runs (released as it finishes, so a start then queues a new one); last_job_id stays for the page
+ALTER TABLE import_sources ADD COLUMN sync_job_id TEXT;

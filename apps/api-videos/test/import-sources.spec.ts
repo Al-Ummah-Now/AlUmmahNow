@@ -18,9 +18,9 @@ import { insertSource, listItems, readSource, SourceError } from '../src/lib/imp
 import { resolveSourceUrl } from '../src/lib/importSources/media';
 import { onSourceSyncFailed, queueDueSources, runSourceSync, startSourceSync } from '../src/lib/importSources/job';
 import { codedReason, sourceErrorFromPreview } from '../src/lib/importSources/errors';
-import { PreviewError } from '../src/lib/link-preview';
+import { PreviewError, retryAfterSeconds } from '../src/lib/link-preview';
 import { matchTakeoutFile, normalizeTitle, type MatchRecord } from '../src/lib/importSources/takeout';
-import { getJobWithLog } from '../src/lib/admin/jobs';
+import { cancelJob, getJobWithLog } from '../src/lib/admin/jobs';
 import { planEvent } from '../src/lib/social/deliver';
 import importSourcesRouter from '../src/routers/importSources.router';
 
@@ -583,11 +583,64 @@ describe('cancelling a sync', () => {
 		assert.deepEqual([out.done, (out as { result: { cancelled?: boolean } }).result.cancelled], [true, true]);
 		assert.equal(posts().length, 0);
 
+		// Cancelled while the source was being read: nothing posted, and the source is not marked synced
+		const second = await insertSource(env, { channelId: 'ch1', network: 'rss', address: 'https://feeds.example.org/second.xml', label: 'S', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const reading = await startSourceSync(env as never, second, ADMIN);
+		stubNetwork((url) => {
+			if (url !== 'https://feeds.example.org/second.xml') return null;
+			// The admin's Cancel lands while the feed is read
+			return (async () => {
+				await cancelJob(env as never, reading.id, { id: ADMIN, name: null });
+				return new Response(RSS, { headers: { 'content-type': 'application/rss+xml' } });
+			})() as never;
+		});
+		const mid = await runSourceSync(env as never, { ...job({ sourceId: second.id, phase: 'fetch' }), id: reading.id });
+		assert.deepEqual([mid.done, (mid as { result: { cancelled?: boolean } }).result.cancelled], [true, true]);
+		assert.equal(posts().length, 0);
+		assert.equal((await readSource(env, second.id))!.last_sync_at, null, 'not marked synced');
+		stubNetwork();
+
 		const retried = await call('/s/retry', { method: 'POST', body: JSON.stringify({ jobId: started.id }) });
 		assert.equal(retried.status, 200);
 		assert.notEqual(retried.body.result.jobId, started.id, 'a new run');
 		await drainJobs(env as never);
 		assert.equal(posts().length, 4);
+	});
+});
+
+describe('a sync and its start', () => {
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	it('waits out a 429’s Retry-After a few times, then fails as the queue would', async () => {
+		stubNetwork((url) => (url === FEED ? new Response('slow down', { status: 429, headers: { 'retry-after': '120' } }) : null));
+		const { env, job } = harness();
+		const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		let params: Record<string, unknown> = { sourceId: source.id, phase: 'fetch' };
+		for (const n of [1, 2, 3]) {
+			const out = await runSourceSync(env as never, job(params));
+			assert.deepEqual([out.done, (out as { delaySeconds?: number }).delaySeconds], [false, 120], `wait ${n}`);
+			params = (out as { params: Record<string, unknown> }).params;
+			assert.equal(params.rateLimited, n);
+		}
+		await assert.rejects(runSourceSync(env as never, job(params)), /source_unreachable: .*http_429/);
+		assert.equal(retryAfterSeconds('30'), 30);
+		assert.equal(retryAfterSeconds(new Date(Date.parse('2026-11-23T10:01:00Z')).toUTCString(), Date.parse('2026-11-23T10:00:00Z')), 60);
+		assert.equal(retryAfterSeconds('soon'), undefined);
+	});
+
+	it('a finishing sync releases its source: a start then queues a new sync, not the finishing one', async () => {
+		stubNetwork();
+		const { env, job } = harness();
+		const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const started = await startSourceSync(env as never, source, ADMIN);
+		assert.equal((await startSourceSync(env as never, source, ADMIN)).id, started.id, 'one at a time while it runs');
+		// Its last step: the job's own status is still running until the queue records the outcome
+		const out = await runSourceSync(env as never, { ...job({ sourceId: source.id, phase: 'fetch' }), id: started.id });
+		assert.equal(out.done, true);
+		const next = await startSourceSync(env as never, (await readSource(env, source.id))!, ADMIN, 'post');
+		assert.notEqual(next.id, started.id, 'a Telegram post recorded now gets its own sync');
 	});
 });
 
@@ -698,6 +751,19 @@ describe('YouTube Takeout files', () => {
 		const item = (await listItems(env, source.id)).find((i) => i.itemId === 'AAAAAAAAAAA');
 		assert.deepEqual([item!.state, item!.videoId, item!.postId], ['posted', videoId, post!.id]);
 		assert.equal((await getJobWithLog(env as never, said.body.result.jobId))!.status, 'succeeded');
+	});
+});
+
+describe('Takeout files hold a record once', () => {
+	it('refuses a second file holding the same record, in any holding state', async () => {
+		const { env } = harness();
+		const add = (id: string, state: string, itemId: string | null) =>
+			env.SEARCH_DB.prepare(`INSERT INTO import_takeout_files (id, source_id, name, size, state, item_id, created_by, created_at, updated_at) VALUES (?, 'isrc_x', ?, 1, ?, ?, 'a', 1, 1)`).bind(id, `${id}.mp4`, state, itemId).run();
+		await add('f1', 'matched', 'AAAAAAAAAAA');
+		await assert.rejects(add('f2', 'uploading', 'AAAAAAAAAAA'), /UNIQUE constraint failed/);
+		await add('f3', 'failed', 'AAAAAAAAAAA');
+		await add('f4', 'unmatched', null);
+		await add('f5', 'unmatched', null);
 	});
 });
 
