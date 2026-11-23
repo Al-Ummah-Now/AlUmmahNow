@@ -19,6 +19,7 @@ import {
 	AppReleaseManifestSchema,
 	appReleaseTrustFrom,
 	compareAppVersions,
+	parseAppReleaseTag,
 	verifyAppReleaseManifest,
 	verifyAppUpdateKeyList,
 	type AppConfigApp,
@@ -176,7 +177,7 @@ export function tagsFromAtom(xml: string, repo: AppReleaseRepo): string[] {
 	const re = new RegExp(`https://github\\.com/Al-Ummah-Now/${repo}/releases/tag/([^"<>\\s]+)`, 'g');
 	for (const m of xml.matchAll(re)) {
 		const tag = decodeURIComponent(m[1]);
-		if (/^v[0-9A-Za-z.+-]{1,64}$/.test(tag) && !out.includes(tag)) out.push(tag);
+		if (parseAppReleaseTag(tag) && !out.includes(tag)) out.push(tag);
 		if (out.length >= FEED_ENTRIES) break;
 	}
 	return out;
@@ -243,7 +244,7 @@ function bucketSource(bucket: R2Bucket, repo: AppReleaseRepo): Source {
 			const raw = await get(`app-releases/${repo}/index.json`, 64 * 1024);
 			if (!raw || raw === 'too_large') return [];
 			const parsed = JSON.parse(new TextDecoder().decode(raw)) as { tags?: unknown };
-			return Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === 'string' && /^v[0-9A-Za-z.+-]{1,64}$/.test(t)).slice(0, FEED_ENTRIES) : [];
+			return Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === 'string' && parseAppReleaseTag(t) !== null).slice(0, FEED_ENTRIES) : [];
 		},
 		file: (tag, name, max) => get(`app-releases/${repo}/${tag}/${name}`, max),
 		keyFile: (name, max) => get(`app-releases/${repo}/${name}`, max),
@@ -434,6 +435,13 @@ export async function indexReleases(env: ReleasesEnv, opts: IndexOptions = {}): 
 				}
 			} catch (error) {
 				logger.warn('[AppUpdates] Key list unreadable; retried next run', { source: source.id, error: error instanceof Error ? error.message : String(error) });
+			}
+			// Fail closed: once a root key is configured for a repo, nothing of it is indexed (and no tag is marked
+			// seen) until a key list signed by that root key has been accepted. Unsigned indexing is only for repos
+			// with no root key at all.
+			if ((roots[repo] ?? []).length && !doc.keys[repo]) {
+				problem({ source: source.id, repo, tag: 'update-keys', reason: 'key_list_not_accepted' });
+				continue;
 			}
 			let tags: string[];
 			try {
