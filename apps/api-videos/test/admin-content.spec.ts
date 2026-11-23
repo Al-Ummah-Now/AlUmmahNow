@@ -35,7 +35,7 @@ import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, purgeDeletion } from '../src/lib/admin/service';
+import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -555,8 +555,14 @@ describe('channel actions', () => {
 			},
 		});
 		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, provider_ref, status, reason, created_at) VALUES ('s-bunny', 'a', 'ch1', 'bunny', 'ref1', 'provisioned', 'test', 1)`).run();
-		// A session that went on air in the moment between the job's live check and the flip
-		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-air', 'a', 'ch1', 'selfhosted', 'live', 'test', 2)`).run();
+		// A session that goes on air in the moment between the job's live check and the flip
+		const putChannel = raw.channels.put.bind(raw.channels);
+		raw.channels.put = (async (key: string, value: unknown, opts?: unknown) => {
+			if (key === 'ch1' && typeof value === 'string' && JSON.parse(value).userId === OTHER) {
+				db.db.prepare(`INSERT OR IGNORE INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-air', 'a', 'ch1', 'selfhosted', 'live', 'test', 2)`).run();
+			}
+			return putChannel(key, value as never, opts as never);
+		}) as typeof raw.channels.put;
 		const realFetch = globalThis.fetch;
 		let bunnyUp = false;
 		let stops = 0;
@@ -583,6 +589,41 @@ describe('channel actions', () => {
 		} finally {
 			globalThis.fetch = realFetch;
 		}
+	});
+
+	it('live checks see sessions on air and indexed streams; a move started a moment ago still blocks Go live; support set up later holds the job (Gemini review)', async () => {
+		const { raw, env, jobs, call, jobOf, db } = await setup({
+			videos: {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				'livestream:idx': { id: 'idx', title: 'Indexed', userId: OWNER, channelId: 'ch1', status: 'scheduled' },
+			},
+		});
+		// The stream index is complete: the move takes the channel's streams from it
+		await runOwnershipPass(raw as never, 'stream', { maxPages: 10 });
+		// A session receiving video, while the stream record still says scheduled
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-on', 'idx', 'ch1', 'selfhosted', 'live', 'test', 1)`).run();
+		const live = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal(live.body.code, 'channel_is_live');
+		db.db.prepare(`UPDATE live_sessions SET status = 'ended' WHERE id = 's-on'`).run();
+
+		// Between taking the lock and creating the job, the channel already counts as being moved
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		assert.equal(await openTransferJob(env as never, 'ch1'), 'starting');
+		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
+		assert.equal(await openTransferJob(env as never, 'ch1'), null);
+
+		// Support set up after the request: the job does not flip the owner
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		assert.equal(res.status, 200);
+		db.db.prepare(`INSERT INTO support_pledges (id, supporter_user_id, channel_id, collector, mode, amount, currency, status, started_at, created_at, updated_at) VALUES ('pl2', 'usr_fan', 'ch1', 'paygood', 'test', 500, 'USD', 'active', '2026', '2026', '2026')`).run();
+		await jobs.drain(env);
+		assert.notEqual((await jobOf(res)).status, 'succeeded');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+		// Once support is gone the move finishes, and the indexed stream moved with it
+		db.db.prepare(`DELETE FROM support_pledges WHERE id = 'pl2'`).run();
+		await call('POST', `/jobs/${res.body.result.job.id}/retry`, {});
+		assert.equal((await jobOf(res)).status, 'succeeded');
+		assert.equal(JSON.parse(raw.videos.store.get('livestream:idx')!).userId, OTHER);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {

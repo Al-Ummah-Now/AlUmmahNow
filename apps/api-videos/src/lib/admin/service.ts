@@ -39,6 +39,7 @@ import { logger } from '../logger';
 import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
 import { postLocationKey } from '../community-posts';
+import { isOwnershipComplete } from '../search/ownership';
 import { claimHandle, dropHandleHistory, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
@@ -462,9 +463,14 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 }
 
 /** The channel's move job that hasn't finished, if any (indexed: admin_jobs by target). */
+/**
+ * The channel's open move, if any: its job id, or 'starting' in the moment between taking the lock
+ * and creating the job (never an empty string, which callers would read as "no move").
+ */
 export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<string | null> {
 	const lock = await readTransferLock(env, channelId);
-	return lock && lock.status !== 'succeeded' ? lock.jobId : null;
+	if (!lock || lock.status === 'succeeded' || lock.status === 'missing') return null;
+	return lock.jobId || 'starting';
 }
 
 /**
@@ -531,10 +537,36 @@ async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promi
 	}
 }
 
+/**
+ * Whether the channel is on air: a stream marked live, or a session receiving video. Exhaustive and
+ * index-backed (content_ownership kind 'stream' by channel, live_sessions by channel); an incomplete
+ * stream index falls back to the full R2 scan, which fails loudly rather than missing a stream.
+ */
 async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<boolean> {
-	const { keys } = await liveStreamKeysOf(env, { channelId });
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (db) {
+		const session = await db.prepare(`SELECT 1 AS live FROM live_sessions WHERE channel_id = ? AND status = 'live' LIMIT 1`).bind(channelId).first<{ live: number }>();
+		if (session) return true;
+	}
+	const keys = await channelStreamKeys(env, channelId);
 	const streams = await readMany(env.videos, keys);
 	return [...streams.values()].some((s) => s.status === 'live');
+}
+
+/**
+ * Every live stream record of the channel (`livestream:<id>`), deleted ones included: from the
+ * ownership index (kind 'stream', idx_content_ownership_channel_live) once it is complete, else a
+ * full scan of the stream records that throws if it can't finish (the job then retries).
+ */
+async function channelStreamKeys(env: AdminServiceEnv, channelId: string): Promise<string[]> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (db && (await isOwnershipComplete(db as never, 'stream'))) {
+		const { results } = await db.prepare(`SELECT id FROM content_ownership WHERE kind = 'stream' AND channel_id = ?`).bind(channelId).all<{ id: string }>();
+		return (results ?? []).map((r) => `livestream:${r.id}`);
+	}
+	const { keys, truncated } = await liveStreamKeysOf(env, { channelId }, MOVE_STREAM_SCAN_LIMIT);
+	if (truncated) throw new Error('live stream scan incomplete; the move retries');
+	return keys;
 }
 
 /**
@@ -543,9 +575,9 @@ async function channelIsLive(env: AdminServiceEnv, channelId: string): Promise<b
  * owner, so the next Go live provisions fresh ones.
  */
 async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; rotated: number; failed: number }> {
-	// Every stream record: stream.userId alone grants access (canManageLiveStream), so the scan has no
-	// small cap here; plus the streams the channel's sessions name (indexed), in case a record moved
-	const { keys: scanned, truncated } = await liveStreamKeysOf(env, { channelId }, MOVE_STREAM_SCAN_LIMIT);
+	// Every stream record: stream.userId alone grants access (canManageLiveStream); from the index,
+	// plus the streams the channel's sessions name, in case a record's index row lags
+	const scanned = await channelStreamKeys(env, channelId);
 	const db = env.SEARCH_DB as D1Database | undefined;
 	const sessions = db
 		? ((await db
@@ -563,7 +595,7 @@ async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: st
 	// channel isn't live, so one on air started in the last moments), and the provider must confirm:
 	// the previous owner knows its ingest key. A provider that refuses fails the step, so the job retries.
 	let rotated = 0;
-	let failed = moved.failed + (truncated ? 1 : 0);
+	let failed = moved.failed;
 	for (const session of sessions) {
 		try {
 			const ended = session.status === 'ended' ? session : await endSession(env as never, session, 'channel_transferred');
@@ -631,8 +663,10 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
 	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
 	const before = await repo(env.channels).getObject(id);
-	if (before && !before.isDeleted && before.userId !== newOwnerId && (await channelIsLive(env, id))) {
-		throw new Error('channel_is_live: the move waits for the broadcast to end');
+	if (before && !before.isDeleted && before.userId !== newOwnerId) {
+		if (await channelIsLive(env, id)) throw new Error('channel_is_live: the move waits for the broadcast to end');
+		// Support set up after the request: support never moves with a channel unless an admin decides (CC-D10)
+		if (await channelHasSupport(env, id)) throw new Error('channel_has_support: support was set up after the move was requested');
 	}
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		if (fresh.isDeleted) return false;
