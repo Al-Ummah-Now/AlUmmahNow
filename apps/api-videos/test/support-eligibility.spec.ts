@@ -16,7 +16,7 @@ import { receiverEligibility, supporterEligibility, supportFeatureKeys } from '.
 const OWNER = 'usr_owner';
 const VIEWER = 'usr_viewer';
 const CH = 'ch_support';
-const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000, 2500], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
+const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000, 2500] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
 
 async function setup(opts: { switchOn?: boolean; decided?: Record<string, unknown> | false; payee?: 'active' | 'pending' | 'hold' | 'none'; enabled?: boolean } = {}) {
 	const db = new SqliteD1();

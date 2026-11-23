@@ -67,6 +67,7 @@
 --   apps/api-videos/migrations/search/0104_drop_download_licenses.sql
 --   apps/api-videos/migrations/search/0114_support_indexes.sql
 --   apps/api-videos/migrations/search/0115_creator_tier_support_receive.sql
+--   apps/api-videos/migrations/search/0116_support_fee_schedules.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -198,6 +199,7 @@ CREATE TABLE support_config (id TEXT PRIMARY KEY, policy TEXT NOT NULL DEFAULT '
 CREATE TABLE support_country_rules (country TEXT PRIMARY KEY, supporters TEXT NOT NULL DEFAULT 'allowed' CHECK (supporters IN ('allowed', 'blocked')), creators TEXT NOT NULL DEFAULT 'allowed' CHECK (creators IN ('allowed', 'blocked', 'waitlist', 'external_link_only')), reason TEXT NOT NULL CHECK (reason IN ('sanctions', 'rail_unsupported', 'legal_review', 'admin')), changed_by TEXT NOT NULL, changed_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE support_disputes (id TEXT PRIMARY KEY, payment_id TEXT NOT NULL, collector_dispute_ref TEXT NOT NULL, reason TEXT, amount INTEGER NOT NULL, fee INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('open', 'evidence_sent', 'won', 'lost')), evidence_due_at TEXT, evidence_sent_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE support_events (id TEXT PRIMARY KEY, vendor TEXT NOT NULL, mode TEXT NOT NULL, event_id TEXT NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processed', 'ignored', 'failed')), error TEXT, user_id TEXT, job_id TEXT, received_at TEXT NOT NULL, processed_at TEXT) WITHOUT ROWID;
+CREATE TABLE support_fee_schedules (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('collector', 'rail')), provider TEXT NOT NULL, currency TEXT NOT NULL, method TEXT, basis_points INTEGER NOT NULL CHECK (basis_points >= 0 AND basis_points <= 2000), fixed_minor INTEGER NOT NULL CHECK (fixed_minor >= 0), effective_from TEXT NOT NULL, preset_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE support_finance_members (user_id TEXT PRIMARY KEY, roles TEXT NOT NULL DEFAULT '[]', added_by TEXT NOT NULL, approved_by TEXT, added_at TEXT NOT NULL, removed_at TEXT, removed_by TEXT) WITHOUT ROWID;
 CREATE TABLE support_ledger (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, entry_id TEXT NOT NULL, entry_key TEXT NOT NULL, account TEXT NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('gift', 'collector_fee', 'settlement', 'release', 'refund', 'dispute', 'dispute_fee', 'dispute_reversal', 'payout', 'payout_paid', 'payout_fee', 'payout_return', 'rail_funding', 'fx', 'adjustment', 'write_off')), ref_table TEXT, ref_id TEXT, channel_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE support_ledger_entries (entry_key TEXT PRIMARY KEY, entry_id TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, channel_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
@@ -389,6 +391,7 @@ CREATE UNIQUE INDEX idx_support_disputes_ref ON support_disputes (collector_disp
 CREATE UNIQUE INDEX idx_support_events_key ON support_events (vendor, mode, event_id);
 CREATE INDEX idx_support_events_status ON support_events (status, received_at);
 CREATE INDEX idx_support_events_user ON support_events (user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_support_fee_schedules_current ON support_fee_schedules (kind, provider, currency, effective_from);
 CREATE INDEX idx_support_finance_active ON support_finance_members (user_id) WHERE removed_at IS NULL AND approved_by IS NOT NULL;
 CREATE INDEX idx_support_ledger_account ON support_ledger (account, currency);
 CREATE INDEX idx_support_ledger_channel ON support_ledger (channel_id, seq) WHERE channel_id IS NOT NULL;
@@ -454,6 +457,8 @@ CREATE INDEX idx_yt_oauth_states_expires ON yt_oauth_states (expires_at);
 CREATE TRIGGER indexnow_video_added AFTER INSERT ON search_videos WHEN NEW.visible = 1 BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (NEW.id, NEW.is_short, julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
 CREATE TRIGGER indexnow_video_changed AFTER UPDATE OF content_hash, visible, is_short ON search_videos WHEN OLD.content_hash IS NOT NEW.content_hash OR OLD.visible IS NOT NEW.visible OR OLD.is_short IS NOT NEW.is_short BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (NEW.id, max(OLD.is_short, NEW.is_short), julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
 CREATE TRIGGER indexnow_video_removed AFTER DELETE ON search_videos WHEN OLD.visible = 1 BEGIN INSERT INTO indexnow_pending (video_id, is_short, queued_at) VALUES (OLD.id, OLD.is_short, julianday('now')) ON CONFLICT(video_id) DO UPDATE SET is_short = max(indexnow_pending.is_short, excluded.is_short), queued_at = excluded.queued_at; END;
+CREATE TRIGGER support_fee_schedules_no_delete BEFORE DELETE ON support_fee_schedules BEGIN SELECT RAISE(ABORT, 'support_fee_schedules is append-only'); END;
+CREATE TRIGGER support_fee_schedules_no_update BEFORE UPDATE ON support_fee_schedules BEGIN SELECT RAISE(ABORT, 'support_fee_schedules is append-only'); END;
 CREATE TRIGGER support_ledger_no_delete BEFORE DELETE ON support_ledger BEGIN SELECT RAISE(ABORT, 'support_ledger is append-only'); END;
 CREATE TRIGGER support_ledger_no_update BEFORE UPDATE ON support_ledger BEGIN SELECT RAISE(ABORT, 'support_ledger is append-only'); END;
 CREATE TRIGGER support_ledger_entries_no_delete BEFORE DELETE ON support_ledger_entries BEGIN SELECT RAISE(ABORT, 'support_ledger_entries is append-only'); END;

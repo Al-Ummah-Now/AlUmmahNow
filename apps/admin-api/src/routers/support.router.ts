@@ -244,6 +244,32 @@ app.put('/settings/fields', async (c) => {
   );
 });
 
+/**
+ * Fee settings (O43, owner 2026-11-23: "we need to be able to change the fee if there are changes in
+ * terms"): the collector's and the rails' fees per currency and method, with an effective date. Only
+ * the finance list (support:providers) adds one; every change is audited with the date it applies from
+ * and the setting it replaces.
+ */
+app.get('/fees', async (c) => {
+  await needRead(c);
+  return ok(c, await videos(c, '/fees'));
+});
+
+app.post('/fees', async (c) => {
+  await needFinance(c, 'support:providers');
+  const input = await body(c);
+  const id = `${String(input.kind ?? '-')}:${String(input.provider ?? '-')}:${String(input.currency ?? '-')}:${String(input.method ?? 'any')}`;
+  return ok(
+    c,
+    await audited(
+      c,
+      { kind: 'support-fees', id, action: 'set', details: { basisPoints: input.basisPoints, fixedMinor: input.fixedMinor, effectiveFrom: input.effectiveFrom, presetId: input.presetId ?? null } },
+      () => videos<{ previous: Record<string, unknown> | null }>(c, '/fees', { method: 'POST', json: { ...input, actorId: actorOf(c) } }),
+      (r) => r.previous ?? undefined,
+    ),
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Payout batches (finance list: support:payouts)
 // ---------------------------------------------------------------------------

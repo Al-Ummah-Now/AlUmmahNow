@@ -66,7 +66,7 @@ describe('the switch seam', () => {
 		assert.ok(r.openDecisions.includes('MEM-D24'));
 	});
 	it('two-person approval (MEM-D24) needs two finance people', () => {
-		const policy = parseSupportPolicy({ primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 1, payoutDayOfMonth: 1, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorAlways', minimumUsdMinor: 100, presetsUsdMinor: [100], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }).policy;
+		const policy = parseSupportPolicy({ primaryRail: 'test', fallbackRail: 'none', holdDays: 1, payoutThresholdUsdMinor: 1, payoutDayOfMonth: 1, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorAlways', amounts: { USD: { minimum: 100, presets: [100] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false }).policy;
 		assert.deepEqual(supportReadiness({ organizationFormed: true, financeApprovers: 1, policy, collectorAvailable: true, railAvailable: true }).blockers, ['no_finance_approver']);
 		assert.equal(supportReadiness({ organizationFormed: true, financeApprovers: 2, policy, collectorAvailable: true, railAvailable: true }).ready, true);
 	});

@@ -9,14 +9,14 @@
  *             a checkout row → the collector's hosted page. Card data never reaches us.
  *   stop      a monthly pledge stops at once at the collector; no further charges
  *
- * Amounts are integer minor units. The checkout currency is USD while the decisions (MEM-D4
- * minimum and presets) are set in USD; other currencies are refused until a rule exists for them.
+ * Amounts are integer minor units. A currency can be given in once it has its MEM-D4 amounts and the
+ * collector's fee is known (a live quote, or the admin's fee setting; O43).
  */
-import { effectiveCoverFees, formatSupportMoney, money, MoneyError, quoteGift, type CollectorFeeSchedule, type GiftBreakdown, type Money, type SearchDb, type SupportCurrency } from '@al-ummah/shared-types';
+import { effectiveCoverFees, formatSupportMoney, isSupportCurrency, money, MoneyError, quoteGift, type CollectorFeeSchedule, type GiftBreakdown, type Money, type SearchDb, type SupportCurrency } from '@al-ummah/shared-types';
 import { collectorFor, type SupportAdapterEnv } from './adapters';
 import type { CancelReason, CollectorContext } from './collector';
 import { readSupportConfig, type SupportConfig } from './config';
-import { testCollectorFee } from './test-collector';
+import { feeSetting } from './fees';
 
 export class CheckoutError extends Error {
 	constructor(
@@ -33,17 +33,25 @@ export const SUPPORT_MESSAGE_MAX = 500;
 /** Checkouts one account may start per hour (card testing, §2.3); the admin-set daily limits are MEM-D4's sibling settings */
 export const SUPPORT_CHECKOUTS_PER_HOUR = 10;
 
-/** The collector's fee schedule for a currency: the admin-set one, or the test collector's fixed one. */
-export function feeScheduleFor(env: SupportAdapterEnv, config: SupportConfig, currency: SupportCurrency): CollectorFeeSchedule | null {
-	const set = config.collectorFees[currency];
-	if (set) return set;
-	return config.collector === 'test' && collectorFor(env, 'test') ? testCollectorFee(currency) : null;
+/**
+ * The collector's fee for a currency and method (O43): the vendor's live quote when it gives one, else
+ * the newest fee setting in force, else null (nobody can pay in that currency).
+ */
+export async function collectorFeeFor(env: SupportAdapterEnv & { SEARCH_DB?: SearchDb }, config: SupportConfig, currency: SupportCurrency, method: string | null, ctx: CollectorContext, now: Date): Promise<CollectorFeeSchedule | null> {
+	const collector = collectorFor(env, config.collector);
+	if (collector?.liveFee) {
+		const live = await collector.liveFee(ctx, currency, method).catch(() => null);
+		if (live) return live;
+	}
+	return feeSetting(env.SEARCH_DB!, 'collector', config.collector, currency, method, now);
 }
 
 export interface QuoteInput {
 	amount: number;
 	currency: string;
 	supporterTicked: boolean;
+	/** The payment method, when the sheet knows it ('card', …); null = any */
+	method?: string | null;
 }
 
 export interface Quote extends GiftBreakdown {
@@ -53,19 +61,25 @@ export interface Quote extends GiftBreakdown {
 	text: Record<'charged' | 'gift' | 'coverFees' | 'collectorFee' | 'tax' | 'platformFee' | 'creatorReceives', string>;
 }
 
-/** The breakdown, or a CheckoutError for an amount the rules refuse. */
-export function quote(env: SupportAdapterEnv, config: SupportConfig, input: QuoteInput, locale: 'en' | 'ar'): Quote {
-	if (input.currency !== 'USD') throw new CheckoutError(400, 'support_currency_unavailable', 'Support is in US dollars for now');
-	if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 1_000_000) throw new CheckoutError(400, 'invalid_request', 'Amount must be a whole number of cents');
+/**
+ * The breakdown, or a CheckoutError for an amount the rules refuse. The currency needs its MEM-D4
+ * amounts and a collector fee (live or set, O43); the fee is always shown, and covering it is the
+ * supporter's choice, off unless they tick it (MEM-D3).
+ */
+export async function quote(env: SupportAdapterEnv & { SEARCH_DB?: SearchDb }, config: SupportConfig, input: QuoteInput, locale: 'en' | 'ar', ctx: CollectorContext, now: Date): Promise<Quote> {
+	if (!isSupportCurrency(input.currency)) throw new CheckoutError(400, 'support_currency_unavailable', 'Unknown currency');
+	const currency = input.currency;
+	if (!Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 1_000_000_000) throw new CheckoutError(400, 'invalid_request', 'Amount must be a whole number of minor units');
 	const p = config.policy;
-	if (p.minimumUsdMinor === null || p.collectorFeePayer === null) throw new CheckoutError(409, 'support_currency_unavailable', 'Support amounts are not set yet');
-	if (input.amount < p.minimumUsdMinor) throw new CheckoutError(400, 'support_amount_too_small', 'Below the minimum');
-	const fee = feeScheduleFor(env, config, 'USD');
-	if (!fee) throw new CheckoutError(409, 'support_currency_unavailable', 'No fee schedule for this currency');
+	const rule = p.amounts?.[currency];
+	if (!rule || p.collectorFeePayer === null) throw new CheckoutError(409, 'support_currency_unavailable', 'Support amounts are not set for this currency');
+	if (input.amount < rule.minimum) throw new CheckoutError(400, 'support_amount_too_small', 'Below the minimum');
+	const fee = await collectorFeeFor(env, config, currency, input.method ?? null, ctx, now);
+	if (!fee) throw new CheckoutError(409, 'support_currency_unavailable', 'No fee is known for this currency');
 	const covers = effectiveCoverFees(p.collectorFeePayer, input.supporterTicked) as boolean;
 	let b: GiftBreakdown;
 	try {
-		b = quoteGift({ gift: money(input.amount, 'USD'), fee, supporterCovers: covers });
+		b = quoteGift({ gift: money(input.amount, currency), fee, supporterCovers: covers });
 	} catch (error) {
 		// The card fee would take the whole gift
 		if (error instanceof MoneyError) throw new CheckoutError(400, 'support_amount_too_small', error.message);
@@ -107,7 +121,7 @@ export async function startSupportCheckout(
 ): Promise<{ checkoutId: string; url: string; quote: Quote }> {
 	const db = env.SEARCH_DB!;
 	const config = await readSupportConfig(db);
-	const q = quote(env, config, { amount: input.amount, currency: input.currency, supporterTicked: input.coverFees }, input.locale);
+	const q = await quote(env, config, { amount: input.amount, currency: input.currency, supporterTicked: input.coverFees }, input.locale, ctx, now);
 	if (!input.ageConfirmed) throw new CheckoutError(400, 'support_age_required', `Supporters confirm they are ${config.policy.minSupporterAge ?? 18} or over`);
 	if (input.kind === 'monthly' && !input.consent) throw new CheckoutError(400, 'support_consent_required', 'Monthly support needs the supporter’s consent');
 	const message = input.message?.trim() || null;
@@ -118,13 +132,14 @@ export async function startSupportCheckout(
 	const collector = collectorFor(env, config.collector);
 	if (!collector) throw new CheckoutError(409, 'support_currency_unavailable', 'No collector here');
 	const checkoutId = `sco_${crypto.randomUUID().replace(/-/g, '')}`;
+	const currency = q.gift.currency;
 	const consentText = input.kind === 'monthly' ? monthlyConsentText(q.charged, input.locale) : null;
 	await db
 		.prepare(
 			`INSERT INTO support_checkouts (id, supporter_user_id, channel_id, kind, collector, mode, gift, charged, currency, supporter_covers_fees, anonymous, message, consent_text, consent_at, status, created_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
 		)
-		.bind(checkoutId, who.userId, who.channelId, input.kind, config.collector, config.mode, q.gift.amount, q.charged.amount, 'USD', q.coverFees.amount > 0 ? 1 : 0, input.anonymous ? 1 : 0, message, consentText, consentText ? now.toISOString() : null, now.toISOString())
+		.bind(checkoutId, who.userId, who.channelId, input.kind, config.collector, config.mode, q.gift.amount, q.charged.amount, currency, q.coverFees.amount > 0 ? 1 : 0, input.anonymous ? 1 : 0, message, consentText, consentText ? now.toISOString() : null, now.toISOString())
 		.run();
 	// A return URL ending in '=' gets this checkout's id, so the page coming back can poll it
 	const returnUrl = input.returnUrl.endsWith('=') ? `${input.returnUrl}${checkoutId}` : input.returnUrl;
@@ -169,7 +184,7 @@ export async function stopMyPledge(env: SupportAdapterEnv & { SEARCH_DB?: Search
 /** Studio › Support: the channel's own settings (owner). Presets are minor units in USD, at or above the minimum. */
 export async function saveChannelSupportSettings(db: SearchDb, channelId: string, ownerId: string, input: { enabled?: unknown; oneTime?: unknown; monthly?: unknown; presets?: unknown; thankYouNote?: unknown }, now: Date): Promise<Record<string, unknown>> {
 	const config = await readSupportConfig(db);
-	const min = config.policy.minimumUsdMinor ?? 1;
+	const min = config.policy.amounts?.USD?.minimum ?? 1;
 	const presets = input.presets === undefined ? undefined : input.presets;
 	if (presets !== undefined && (!Array.isArray(presets) || presets.length > 6 || presets.some((x) => !Number.isSafeInteger(x) || (x as number) < min || (x as number) > 1_000_000))) {
 		throw new CheckoutError(400, 'invalid_request', 'Presets must be up to 6 whole amounts at or above the minimum');

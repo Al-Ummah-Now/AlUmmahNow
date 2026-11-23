@@ -22,7 +22,7 @@ import { handleTestCheckoutPage, handleTestCheckoutSubmit } from '../src/endpoin
 const OWNER = 'usr_owner';
 const FAN = 'usr_fan';
 const CH = 'ch_amina';
-const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', minimumUsdMinor: 300, presetsUsdMinor: [500, 1000, 2500], minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
+const DECIDED = { primaryRail: 'test', fallbackRail: 'none', holdDays: 30, payoutThresholdUsdMinor: 2500, payoutDayOfMonth: 15, creatorMayRaiseThreshold: true, payoutFeeBearer: 'creatorFromPayout', negativeBalancePolicy: 'netAgainstFutureGifts', dormantPolicy: 'unclaimedPropertyRule', dormantReminderMonths: [3, 6, 12], collectBeforePayeeActive: false, batchApprovers: 2, adjustmentApprovers: 2, collectorFeePayer: 'creatorSupporterMayCover', amounts: { USD: { minimum: 300, presets: [500, 1000, 2500] } }, minSupporterAge: 18, minCreatorAge: 18, receiversRule: 'everyAdultOwner', appsEnabled: false };
 
 class JobsQueue {
 	pending: unknown[] = [];
@@ -227,7 +227,7 @@ describe('review fixes (cross-provider review of #1774, #1764)', () => {
 
 	it('a gift the card fee would swallow is refused', async () => {
 		const t = await setup();
-		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.minimumUsdMinor', 1)").run();
+		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.amounts.USD.minimum', 1)").run();
 		const q = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=30`);
 		assert.equal(q.body.code, 'support_amount_too_small');
 	});
@@ -282,5 +282,40 @@ describe('review fixes (cross-provider review of #1774, #1764)', () => {
 		assert.equal((await t.as(FAN)('GET', `/api/channels/${CH}/support`)).status, 200, 'the active payee on the primary rail counts');
 		await t.db.prepare("UPDATE support_config SET policy = json_set(policy, '$.primaryRail', 'wise', '$.fallbackRail', 'test')").run();
 		assert.equal((await t.as(FAN)('GET', `/api/channels/${CH}/support`)).body.code, 'feature_off', 'now the pending Wise payee is the one that counts');
+	});
+});
+
+describe('owner decisions O43 (MEM-D3, D4, fee settings)', () => {
+	it('the sheet always shows the fee and starts with "cover the fees" unticked', async () => {
+		const t = await setup();
+		const sheet = await t.as(null)('GET', `/api/channels/${CH}/support`);
+		assert.equal(sheet.body.result.coverFeesChoice, true);
+		assert.equal(sheet.body.result.coverFeesDefault, false);
+	});
+
+	it('amounts are per currency: a currency without its minimum and presets can’t be given in', async () => {
+		const t = await setup();
+		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&currency=EUR`)).body.code, 'support_currency_unavailable');
+		await t.db.prepare(`UPDATE support_config SET policy = json_set(policy, '$.amounts.EUR', json('{"minimum":400,"presets":[500]}'))`).run();
+		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=300&currency=EUR`)).body.code, 'support_amount_too_small');
+		const q = await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&currency=EUR`);
+		assert.equal(q.body.result.gift.currency, 'EUR');
+	});
+
+	it('without a live quote the fee setting in force is used; with neither, nobody can pay', async () => {
+		const t = await setup();
+		const { readSupportConfig } = await import('../src/lib/support/config');
+		const { quote } = await import('../src/lib/support/checkout');
+		const { addFeeSchedule } = await import('../src/lib/support/fees');
+		// A collector with no live quote here (PayGood's adapter is not built): only the setting can give the fee
+		await t.db.prepare("UPDATE support_config SET collector = 'paygood' WHERE id = 'default'").run();
+		const config = await readSupportConfig(t.db as never);
+		const ctx = vendorContext(t.env, 'test');
+		await assert.rejects(quote(t.env, config, { amount: 1000, currency: 'USD', supporterTicked: false }, 'en', ctx, new Date()), (e: { code: string }) => e.code === 'support_currency_unavailable');
+		await addFeeSchedule(t.db as never, { kind: 'collector', provider: 'paygood', currency: 'USD', basisPoints: 290, fixedMinor: 30, effectiveFrom: '2026-01-01T00:00:00Z', presetId: 'paygood-standard-usd' }, 'usr_fin');
+		await addFeeSchedule(t.db as never, { kind: 'collector', provider: 'paygood', currency: 'USD', basisPoints: 190, fixedMinor: 30, effectiveFrom: '2999-01-01T00:00:00Z' }, 'usr_fin');
+		const q = await quote(t.env, config, { amount: 1000, currency: 'USD', supporterTicked: false }, 'en', ctx, new Date());
+		assert.equal(q.collectorFee.amount, 29 + 30, 'the rate in force today, not the future one');
+		await assert.rejects(t.db.prepare('DELETE FROM support_fee_schedules').run(), /append-only/);
 	});
 });

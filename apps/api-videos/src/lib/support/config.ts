@@ -7,13 +7,12 @@
  * saw (two admins at once: the second write is refused, not merged) and return the old and new
  * values for the audit log.
  */
-import { isSupportCurrency, parseSupportPolicy, type CollectorFeeSchedule, type PolicyProblem, type SearchDb, type SupportCollectorId, type SupportCurrency, type SupportMode, type SupportPolicy } from '@al-ummah/shared-types';
+import { parseSupportPolicy, type PolicyProblem, type SearchDb, type SupportCollectorId, type SupportMode, type SupportPolicy } from '@al-ummah/shared-types';
 
 export interface SupportConfig {
 	policy: SupportPolicy;
 	collector: SupportCollectorId;
 	mode: SupportMode;
-	collectorFees: Partial<Record<SupportCurrency, CollectorFeeSchedule>>;
 	organizationFormed: boolean;
 	organizationName: string | null;
 	emergencyStop: boolean;
@@ -47,28 +46,12 @@ function json(text: string | null | undefined): unknown {
 	}
 }
 
-/** Collector fee schedules per currency; anything malformed is dropped (that currency has no quote). */
-export function parseCollectorFees(input: unknown): Partial<Record<SupportCurrency, CollectorFeeSchedule>> {
-	const out: Partial<Record<SupportCurrency, CollectorFeeSchedule>> = {};
-	if (!input || typeof input !== 'object') return out;
-	for (const [currency, v] of Object.entries(input as Record<string, unknown>)) {
-		const f = v as { basisPoints?: unknown; fixed?: unknown };
-		if (!isSupportCurrency(currency) || !Number.isSafeInteger(f?.basisPoints) || !Number.isSafeInteger(f?.fixed)) continue;
-		const bp = f.basisPoints as number;
-		const fixed = f.fixed as number;
-		if (bp < 0 || bp > 2_000 || fixed < 0 || fixed > 10_000) continue;
-		out[currency] = { basisPoints: bp, fixed: { amount: fixed, currency } };
-	}
-	return out;
-}
-
 export async function readSupportConfig(db: SearchDb): Promise<SupportConfig> {
 	const row = await db.prepare('SELECT policy, collector, mode, collector_fees, organisation_formed, organisation_name, emergency_stop, hold_all_payouts, version, updated_at, updated_by FROM support_config WHERE id = ?').bind(ID).first<ConfigRow>();
 	return {
 		policy: parseSupportPolicy(json(row?.policy)).policy,
 		collector: row?.collector ?? 'test',
 		mode: row?.mode ?? 'test',
-		collectorFees: parseCollectorFees(json(row?.collector_fees)),
 		organizationFormed: row?.organisation_formed === 1,
 		organizationName: row?.organisation_name ?? null,
 		emergencyStop: row?.emergency_stop === 1,

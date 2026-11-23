@@ -82,6 +82,11 @@ export const testCollector: SupportCollector = {
 		return { url: `${ctx.origin}/webhooks/support/test/checkout/${encodeURIComponent(input.checkoutId)}`, checkoutRef };
 	},
 
+	// The test vendor quotes its fixed fee live (so tests and QA need no fee setting)
+	async liveFee(_ctx, currency) {
+		return testCollectorFee(currency);
+	},
+
 	async cancelPledge(ctx, pledgeRef, reason) {
 		const s = state(ctx);
 		const p = await s.get<TestPledge>(`collector:pledge:${pledgeRef}`);

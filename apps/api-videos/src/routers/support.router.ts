@@ -13,6 +13,8 @@
  *   PUT  /settings/policy { patch, expectedVersion, actorId }       records owner decisions
  *   PUT  /settings/fields { fields, expectedVersion, actorId }      organization formed, emergency stop, hold all payouts
  *   GET  /batches                                    the newest payout batches
+ *   GET  /fees                                       fee settings (collector and rails) with their history, and presets
+ *   POST /fees { kind, provider, currency, method, basisPoints, fixedMinor, effectiveFrom, presetId, actorId }  a new fee setting (O43)
  *   GET  /countries                                  the Countries page
  *   PUT  /countries/:country { supporters, creators, reason, actorId }
  *
@@ -29,6 +31,8 @@ import { readSupportConfig, SupportConfigError, writeSupportConfigFields, writeS
 import { undecidedSupportDecisions } from '@al-ummah/shared-types';
 import { supportCanTurnOn } from '../lib/support/readiness';
 import { accountTotal } from '../lib/support/ledger';
+import { addFeeSchedule, FeeScheduleError, listFeeSchedules } from '../lib/support/fees';
+import { FEE_PRESETS } from '@al-ummah/shared-types';
 
 const app = new Hono<{ Bindings: SupportJobEnv }>();
 
@@ -205,6 +209,22 @@ app.put('/countries/:country', async (c) => {
 		.bind(country, supporters, creators, reason, actorId, new Date().toISOString())
 		.run();
 	return c.json({ success: true, result: { country, before: before ?? null, after: { supporters, creators, reason } } });
+});
+
+app.get('/fees', async (c) => {
+	return c.json({ success: true, result: { schedules: await listFeeSchedules(db(c)), presets: FEE_PRESETS } });
+});
+
+app.post('/fees', async (c) => {
+	const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+	const actor = Actor.safeParse(body.actorId);
+	if (!actor.success) return apiError(c, 400, 'invalid_request');
+	try {
+		return c.json({ success: true, result: await addFeeSchedule(db(c), body, actor.data) });
+	} catch (error) {
+		if (error instanceof FeeScheduleError) return apiError(c, 400, 'invalid_request', { fields: error.fields } as never);
+		throw error;
+	}
 });
 
 export default app;
