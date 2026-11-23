@@ -57441,17 +57441,17 @@
                         "properties": {
                           "en": {
                             "type": "string",
-                            "maxLength": 400
+                            "maxLength": 200
                           },
                           "ar": {
                             "type": "string",
-                            "maxLength": 400
+                            "maxLength": 200
                           }
                         }
                       },
                       "riwayah": {
                         "type": "string",
-                        "maxLength": 160
+                        "maxLength": 80
                       }
                     }
                   }
