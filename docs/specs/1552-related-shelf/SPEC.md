@@ -78,6 +78,9 @@ No numbers in this copy.
   in unit tests). `30-watch-page.spec.ts` WATCH-002 matched the RTL component's hard-coded heading
   (/ذات الصلة/); it now asserts the i18n heading «مرئيات ذات صلة» as an `h2`. The release specs
   (`related.spec.ts`, `theatre`, `watch-layout`) seed related videos and use `related-videos-list`.
+- E2E (local stack, `30-watch-page.spec.ts`): WATCH-015 answers the three related sources empty in the
+  browser and checks the shelf and side column are gone with no error or retry; WATCH-016 aborts them,
+  checks the failure message, restores the API and checks Try again loads the shelf.
 
 ## Risks
 - **Layout shift when empty:** on wide screens the side column shows a skeleton, then disappears when
@@ -86,6 +89,8 @@ No numbers in this copy.
 - **Fewer retries surfaced:** a partial outage where the feed answers but recommendations fail now
   shows the feed's videos or hides the shelf, never an error. Intended: the viewer can't fix it.
 - **Renamed i18n keys:** an admin translation override saved under `video.relatedEmpty` would no
-  longer apply. None exists in the repo; the old copy is kept word for word under the new key.
+  longer apply. Checked 2026-11-23: the stored translation files on QA, stage and production (en, ar)
+  have empty `overrides` lists, so no override uses the old keys; their leftover stored values are
+  never served (only listed overrides replace repo text). The copy is kept word for word.
 - Failures are now reported to the admin Errors page (`reportError`, `shown: true`); a real API
   outage adds one report per watch-page view that fails.
