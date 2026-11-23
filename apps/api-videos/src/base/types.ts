@@ -73,6 +73,8 @@ export interface AppBindings {
   UPDATE_ROOT_KEYS?: string;
   /** The private admin release bucket, read-only (wiki AUN-APP-UPDATES §3.6). Unbound: admin releases aren't indexed. */
   ADMIN_RELEASES?: R2Bucket;
+  /** The videos admin's staff-only Apps page, where admin builds are downloaded (AUN-APP-UPDATES §3.6). Unset: admin builds get no Download. */
+  ADMIN_APPS_URL?: string;
 
   // Queues
   queue: Queue;

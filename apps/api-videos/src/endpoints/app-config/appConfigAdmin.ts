@@ -15,6 +15,7 @@
  * like the other internal routes; `value` and `issues` stay for older callers.
  */
 import { z } from 'zod';
+import { APP_UPDATE_ARCHES, APP_UPDATE_CHANNELS, APP_UPDATE_SOURCES } from '@al-ummah/shared-types';
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
 import { APPS, PLATFORMS, SEMVER, VersionsDocumentSchema, buildAppConfig } from '../../lib/app-config';
@@ -24,6 +25,9 @@ import type { AppConfigKey } from '../../lib/app-config-store';
 import { ConfigRulesDocumentSchema, RulesDocumentSchema, evaluateConfig, evaluateFlags } from '../../lib/feature-flags';
 import type { FlagContext, FlagRule } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
+import { AVAILABILITY_KEY, type AvailabilityDocument } from '../../lib/app-updates/answer';
+import { minimumProblems } from '../../lib/app-updates/minimum';
+import { readReleases } from '../../lib/app-updates/releases';
 
 export const APP_CONFIG_SCHEMAS: Record<AppConfigKey, z.ZodTypeAny> = {
 	flags: RulesDocumentSchema,
@@ -78,6 +82,12 @@ export class AppConfigDocumentPut extends PublicRoute {
 		if (!parsed.success) {
 			return c.json({ success: false, error: 'invalid_document', issues: parsed.error.issues, problems: parsed.error.issues }, 400);
 		}
+		if (params.key === 'versions') {
+			// A minimum no install source can give users yet would strand them (AUN-APP-UPDATES §3.4)
+			const [releases, availability] = await Promise.all([readReleases(kv), kv.get(AVAILABILITY_KEY, { type: 'json' })]);
+			const problems = minimumProblems(parsed.data as VersionsDocument, releases, (availability ?? {}) as AvailabilityDocument).map((p) => ({ path: [p.key, p.field], message: p.message }));
+			if (problems.length) return c.json({ success: false, error: 'invalid_document', issues: problems, problems }, 400);
+		}
 		await kv.put(params.key, JSON.stringify(parsed.data));
 		forgetAppConfigDocument(kv, params.key);
 		logger.debug('[AppConfig] Document replaced', { key: params.key });
@@ -92,6 +102,9 @@ const EvaluateBody = z.object({
 		version: z.string().regex(SEMVER),
 		locale: z.string().max(16).optional(),
 		installId: z.string().max(64).optional(),
+		channel: z.enum(APP_UPDATE_CHANNELS).optional(),
+		source: z.enum(APP_UPDATE_SOURCES).optional(),
+		arch: z.enum(APP_UPDATE_ARCHES).optional(),
 	}),
 	/** Drafts to try; a key left out is read from KV */
 	documents: z.object({ flags: z.unknown().optional(), config: z.unknown().optional(), versions: z.unknown().optional() }).partial().default({}),
@@ -126,9 +139,17 @@ export class AppConfigEvaluate extends PublicRoute {
 		}
 		// Validated by EvaluateBody (chanfana's inferred type marks every field optional)
 		const ctx = body.context as FlagContext;
+		const update = body.context as { channel?: 'stable' | 'beta'; source?: (typeof APP_UPDATE_SOURCES)[number]; arch?: string };
+		// The dry run answers as if the appUpdates switch were on, so admins can check before turning it on
+		const [releases, availability] = await Promise.all([readReleases(kv), kv.get(AVAILABILITY_KEY, { type: 'json' })]);
 		return c.json({
 			success: true,
-			result: buildAppConfig(ctx, docs.versions, { flags: evaluateFlags(docs.flags ?? [], ctx), config: evaluateConfig(docs.config ?? [], ctx) }),
+			result: buildAppConfig(
+				{ ...ctx, channel: update.channel, source: update.source, arch: update.arch },
+				docs.versions,
+				{ flags: evaluateFlags(docs.flags ?? [], ctx), config: evaluateConfig(docs.config ?? [], ctx) },
+				{ enabled: true, releases, availability: (availability ?? {}) as AvailabilityDocument, adminAppsUrl: c.env.ADMIN_APPS_URL },
+			),
 		});
 	}
 }

@@ -3,13 +3,24 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from './helpers';
 import { AppConfigGet } from '../src/endpoints/app-config/appConfigGet';
+import { writeFeatureSwitch } from '@al-ummah/shared-types';
 import { compareVersions, loadVersionsDocument, policyFor, updateStatus } from '../src/lib/app-config';
+import { forgetFeatureSwitches } from '../src/lib/features/switches';
+import { SqliteD1 } from './search-sqlite-d1';
 
 class MemoryKV {
 	constructor(private values: Record<string, unknown>) {}
 	async get(key: string) {
 		return this.values[key] ?? null;
 	}
+}
+
+/** A search D1 with the appUpdates switch on (AUN-APP-UPDATES; it defaults off) */
+async function switchedOn(): Promise<D1Database> {
+	const d1 = new SqliteD1() as unknown as D1Database;
+	await writeFeatureSwitch({ SEARCH_DB: d1 } as never, { key: 'appUpdates', enabled: true, expectedVersion: 0, actorId: 'usr_admin1', currentStored: false });
+	forgetFeatureSwitches();
+	return d1;
 }
 
 function app() {
@@ -44,20 +55,46 @@ describe('compareVersions / updateStatus', () => {
 });
 
 describe('GET /api/app-config', () => {
-	it('never blocks without configuration', async () => {
+	it('never blocks without configuration, and shows nothing while the switch is off', async () => {
 		const res = await call('platform=android&app=viewer&version=0.1.0');
 		assert.equal(res.status, 200);
 		const body: any = await res.json();
 		assert.deepEqual(body.api, { current: '1', supported: ['1'] });
-		assert.deepEqual(body.update, { status: 'ok', minimumVersion: '0.0.0', latestVersion: null, storeUrl: null });
+		assert.equal(body.update.enabled, false);
+		assert.equal(body.update.status, 'ok');
+		assert.equal(body.update.minimumVersion, '0.0.0');
+		assert.equal(body.update.action, 'none');
 		assert.equal(res.headers.get('Cache-Control'), 'public, max-age=300');
 	});
 
-	it('requires an update below the configured minimum', async () => {
-		const kv = new MemoryKV({ versions: { 'viewer/ios': { minimumVersion: '1.3.0', latestVersion: '1.4.0', storeUrl: 'https://apps.apple.com/app/id1' } } });
+	it('switch off: a build below the minimum is not held (AUN-APP-UPDATES)', async () => {
+		forgetFeatureSwitches();
+		const kv = new MemoryKV({ versions: { 'viewer/ios': { minimumVersion: '1.3.0', latestVersion: '1.4.0' } } });
 		const body: any = await (await call('platform=ios&app=viewer&version=1.2.9', { APP_CONFIG: kv })).json();
+		assert.equal(body.update.status, 'ok');
+		assert.equal(body.update.enabled, false);
+	});
+
+	it('switch on: requires an update below the configured minimum', async () => {
+		const kv = new MemoryKV({ versions: { 'viewer/ios': { minimumVersion: '1.3.0', latestVersion: '1.4.0', storeUrl: 'https://apps.apple.com/app/id1', message: { en: 'Sign-in changed.', ar: 'تغيّر تسجيل الدخول.' } } } });
+		const body: any = await (await call('platform=ios&app=viewer&version=1.2.9', { APP_CONFIG: kv, SEARCH_DB: await switchedOn() })).json();
+		assert.equal(body.update.enabled, true);
 		assert.equal(body.update.status, 'required');
 		assert.equal(body.update.storeUrl, 'https://apps.apple.com/app/id1');
+		assert.deepEqual(body.update.message, { en: 'Sign-in changed.', ar: 'تغيّر تسجيل الدخول.' });
+		forgetFeatureSwitches();
+	});
+
+	it('a beta policy overrides the platform policy for beta builds', () => {
+		const doc = { 'viewer/ios': { minimumVersion: '1.0.0' }, 'viewer/ios#beta': { minimumVersion: '1.5.0' } };
+		assert.equal(policyFor(doc, 'viewer', 'ios', 'beta').minimumVersion, '1.5.0');
+		assert.equal(policyFor(doc, 'viewer', 'ios', 'stable').minimumVersion, '1.0.0');
+	});
+
+	it('accepts 4-part versions, channel, source and arch; refuses unknown ones', async () => {
+		assert.equal((await call('platform=windows&app=tools&version=2026.11.22.2&channel=stable&source=direct&arch=x64')).status, 200);
+		assert.equal((await call('platform=ios&app=viewer&version=1.2.3.2&source=testflight&channel=beta')).status, 200);
+		assert.equal((await call('platform=ios&app=viewer&version=1.2.3&source=sideload')).status, 400);
 	});
 
 	it('ignores an invalid versions document', async () => {

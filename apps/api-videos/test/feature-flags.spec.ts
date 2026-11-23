@@ -181,7 +181,7 @@ describe('/internal/app-config/:key', () => {
 		assert.equal(put.status, 200);
 		const got: any = await (await app.request('/internal/app-config/flags', {}, { APP_CONFIG: kv })).json();
 		assert.deepEqual(got.value, [{ key: 'downloads', enabled: true }]);
-		const versions = await app.request('/internal/app-config/versions', { method: 'PUT', headers: json, body: JSON.stringify({ 'viewer/ios': { minimumVersion: '1.0.0' } }) }, { APP_CONFIG: kv });
+		const versions = await app.request('/internal/app-config/versions', { method: 'PUT', headers: json, body: JSON.stringify({ 'viewer/ios': { minimumVersion: '1.0.0', latestVersion: '1.2.0' } }) }, { APP_CONFIG: kv });
 		assert.equal(versions.status, 200);
 	});
 
