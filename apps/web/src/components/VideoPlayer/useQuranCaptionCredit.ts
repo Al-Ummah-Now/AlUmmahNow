@@ -64,8 +64,10 @@ export function placeCredit(playerEl: HTMLElement, dir: 'ltr' | 'rtl'): void {
   const size = Math.max(11, Math.round(parseFloat(css.fontSize || '16') * 0.7));
   playerEl.style.setProperty('--fanous-credit-end', `${Math.max(6, Math.round(end))}px`);
   playerEl.style.setProperty('--fanous-credit-size', `${size}px`);
-  // The row the captions move up by: the credit's line box (1.5) and padding, plus a 2px gap
-  playerEl.style.setProperty('--fanous-link-row', `${Math.ceil(size * 1.5) + 4}px`);
+  // The row the captions move up by: the credit's line box (1.5) and padding plus a 2px gap, less the
+  // margin Video.js already leaves under the cues (1.5% of the caption box)
+  const inset = parseFloat(box.parentElement?.parentElement ? getComputedStyle(box.parentElement.parentElement).marginBottom : '0') || 0;
+  playerEl.style.setProperty('--fanous-link-row', `${Math.max(0, Math.ceil(size * 1.5) + 4 - Math.round(inset))}px`);
   if (css.color) playerEl.style.setProperty('--fanous-credit-color', css.color);
   if (css.backgroundColor) playerEl.style.setProperty('--fanous-credit-bg', css.backgroundColor);
 }
@@ -79,6 +81,7 @@ export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefine
     if (!list) return;
     const bound = new Set<TrackLike>();
     let frame = 0;
+    let shown = false;
 
     const measure = (dir: 'ltr' | 'rtl') => {
       cancelAnimationFrame(frame);
@@ -95,16 +98,18 @@ export function useQuranCaptionCredit(player: CreditPlayerLike | null | undefine
         const t = list[i];
         if (t && liftQuranCredits(t) && t.mode === 'showing') redraw = true;
       }
-      // Video.js drew the cue before its credit came off: draw it again without
-      if (redraw) (player.getChild?.('textTrackDisplay') ?? player.getChild?.('TextTrackDisplay'))?.updateDisplay?.();
       const track = showingCaptionTrack(list);
       const on = activeCueCredited(track);
       const language = track?.language || 'en';
       const dir = captionDir(language);
-      if (on) {
-        player.addClass?.(CAPTION_CREDIT_CLASS);
-        measure(dir);
-      } else player.removeClass?.(CAPTION_CREDIT_CLASS);
+      if (on) player.addClass?.(CAPTION_CREDIT_CLASS);
+      else player.removeClass?.(CAPTION_CREDIT_CLASS);
+      // Draw the cues again when one lost its credit line after Video.js drew it, and whenever the
+      // credit shows: the caption box just moved up a row (Video.js lays cues out only when it draws
+      // them), and a cue reached by seeking while paused is otherwise left as it was
+      if (redraw || on || on !== shown) (player.getChild?.('textTrackDisplay') ?? player.getChild?.('TextTrackDisplay'))?.updateDisplay?.();
+      shown = on;
+      if (on) measure(dir);
       setCredit((prev) => (prev.showing === on && prev.language === language && prev.dir === dir ? prev : { showing: on, language, dir }));
     };
     const bind: Listener = () => {

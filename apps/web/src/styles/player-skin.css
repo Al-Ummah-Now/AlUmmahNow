@@ -886,6 +886,13 @@
   bottom: calc(16px + var(--fanous-link-row, 24px));
 }
 
+/* The cue boxes grow up from the bottom of the (raised) caption box, whatever size Video.js laid them
+   out at, so the cue never hangs over the credit row (as the small-player rule above does) */
+.video-js.vjs-fanous.vjs-fanous-caption-credit .vjs-text-track-cue {
+  top: auto !important;
+  height: auto !important;
+}
+
 .video-js.vjs-fanous .vjs-fanous-links[data-placement="caption-end"] {
   position: absolute;
   z-index: 3;

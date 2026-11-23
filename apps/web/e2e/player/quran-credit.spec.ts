@@ -81,11 +81,12 @@ for (const lang of ['en', 'ar'] as const) {
       await animationsDone(player);
       const cue = await layoutBox(cueBox(player));
       const box = await layoutBox(link);
-      const bar = await layoutBox(player.locator('.vjs-control-bar'));
+      const bar = await layoutBox(player.locator('.vjs-progress-holder'));
       expect(box.y).toBeGreaterThanOrEqual(cue.bottom - 1);
       expect(box.y - cue.bottom).toBeLessThan(12);
       if (track === 'ar') expect(Math.abs(box.x - cue.x)).toBeLessThanOrEqual(2);
       else expect(Math.abs(box.right - cue.right)).toBeLessThanOrEqual(2);
+      // Above the progress bar (the control bar's box starts higher, under its gradient)
       expect(box.bottom).toBeLessThanOrEqual(bar.y);
 
       await pauseAt(page, player, 45);
@@ -102,7 +103,7 @@ for (const lang of ['en', 'ar'] as const) {
     await pauseAt(page, player, 20);
     const before = await mediaState(page);
     const [popup] = await Promise.all([page.waitForEvent('popup'), credit(page).click()]);
-    expect(popup.url()).toBe('https://quran.foundation/');
+    await expect(popup).toHaveURL('https://quran.foundation/');
     await popup.close();
     const after = await mediaState(page);
     // Never paused, played or sought by the click
@@ -146,7 +147,7 @@ test('a 320px-wide player: the credit stays clear of the control bar and inside 
   await expect(credit(page)).toBeVisible();
   await animationsDone(player);
   const box = await layoutBox(credit(page));
-  const bar = await layoutBox(player.locator('.vjs-control-bar'));
+  const bar = await layoutBox(player.locator('.vjs-progress-holder'));
   const frame = await layoutBox(player);
   expect(box.bottom).toBeLessThanOrEqual(bar.y);
   expect(box.x).toBeGreaterThanOrEqual(frame.x);
