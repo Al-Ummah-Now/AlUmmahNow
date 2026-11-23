@@ -391,7 +391,8 @@ export type WorkflowApprovalBlock =
 
 export function inApproverSet(sets: readonly WorkflowApproverSet[], actor: WorkflowActor): boolean {
   return sets.some((s) => {
-    if (s.kind === 'role') return actor.roles.includes(s.role);
+    // 'admin' means admins and super admins; 'super_admin' means super admins only
+    if (s.kind === 'role') return actor.roles.includes(s.role) || (s.role === 'admin' && actor.roles.includes('super_admin'));
     if (s.kind === 'finance') return actor.financePermissions.length > 0 && (!s.permission || actor.financePermissions.includes(s.permission));
     return s.userIds.includes(actor.userId);
   });
