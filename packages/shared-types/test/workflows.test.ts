@@ -131,6 +131,9 @@ test('one step per person, and roles and named people as approver sets', () => {
   assert.deepEqual(w.workflowApprovalBlocks(off, floor, facts({ decidedBy: ['u-proposer', 'u-approver'] }), sa), []);
   const named = { ...rule, approvers: [{ kind: 'people' as const, userIds: ['u-approver'] }] };
   assert.deepEqual(w.workflowApprovalBlocks(named, floor, facts(), actor()), []);
+  const admins = { ...rule, approvers: [{ kind: 'role' as const, role: 'admin' as const }] };
+  assert.deepEqual(w.workflowApprovalBlocks(admins, floor, facts(), sa), [], 'super admins count as admins');
+  assert.deepEqual(w.workflowApprovalBlocks(rule, floor, facts(), actor({ roles: ['admin'] })), ['not_in_approver_set'], 'admins are not super admins');
   assert.deepEqual(w.workflowApprovalBlocks(named, floor, facts(), actor({ userId: 'other', roles: ['super_admin'] })), ['not_in_approver_set']);
 });
 
