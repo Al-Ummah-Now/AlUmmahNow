@@ -2286,7 +2286,7 @@ const en = {
       queued: 'Transfer to {name} queued…',
       running: 'Moving the channel to {name}…',
       retrying: 'Moving the channel to {name}: retrying after an error ({error})…',
-      succeeded: 'Done. {name} now owns this channel ({videos} videos and {playlists} playlists moved).',
+      succeeded: '{name} now owns this channel ({videos} videos and {playlists} playlists moved).',
       failed: 'The transfer to {name} failed: {error}. Retry it from the jobs panel.',
       unknown: 'Transfer to {name} queued. Its status could not be read; see the jobs panel.',
     },

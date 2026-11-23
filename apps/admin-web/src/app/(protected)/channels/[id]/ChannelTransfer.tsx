@@ -121,7 +121,7 @@ export function ChannelTransfer({ channel }: Props) {
     ...(options.keepContactEmail ? [] : [t('channels.transferClearsContact')]),
     ...(channel.isVerified && !options.keepBadge ? [t('channels.transferDropsBadge')] : []),
     t('channels.transferLiveKeys'),
-  ].join(' ');
+  ];
   const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
 
   const name = target ? userName(target) : '';
@@ -181,7 +181,8 @@ export function ChannelTransfer({ channel }: Props) {
               name: iso(name),
               videos: formatNumber(channel.videos, locale),
               playlists: formatNumber(channel.playlists, locale),
-            }) + ' ' + consequences}
+            })}
+            bullets={consequences}
             withReason
             reasonHint={t('channels.transferReasonHint')}
             reasonMinLength={10}
