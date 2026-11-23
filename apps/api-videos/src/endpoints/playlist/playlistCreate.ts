@@ -4,6 +4,7 @@ import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistInput } from "../../lib/model/input";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView, createEntityDefaults } from "../../lib/transformations";
+import { resolveViewableVideoIds } from "../../lib/playlistCovers";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -154,8 +155,10 @@ export class PlaylistCreate extends AuthenticatedRoute {
             logger.info('[PlaylistCreate] Playlist created with videos', { playlistId: businessPlaylist.id, requested: videoIds.length, ...add });
         }
 
-        // Transform to view model for response
-        const playlistView = transformPlaylistToView(stored);
+        // Transform to view model for response (count only videos viewable by the caller, #941)
+        const viewable = (stored.videos || []).length > 0 ? await resolveViewableVideoIds(c.env, stored.videos || [], userId) : null;
+        const visibleVideos = viewable ? (stored.videos || []).filter((vid) => viewable.has(vid)) : undefined;
+        const playlistView = transformPlaylistToView(stored, null, visibleVideos);
 
         // Return the new playlist
         return {

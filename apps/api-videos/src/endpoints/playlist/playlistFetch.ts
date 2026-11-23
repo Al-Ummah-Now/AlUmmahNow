@@ -6,7 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { transformVideoToView } from "../../lib/transformations";
 import { toPlaylistResponse, canOpenPlaylist, PlaylistType, VideoType } from "../../lib/playlists";
-import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
+import { resolvePlaylistCovers, resolveViewableVideoIds, type PlaylistCover, type VideoReadCache } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { canManagePlaylist } from "../../lib/playlistBulk";
 import { videoViewer, visibleVideos } from "../../lib/videoViewer";
@@ -140,7 +140,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // EXPANDED_PLAYLIST_TTL_SECONDS old (the video list cache's window).
         // Its items' playUrls are signed for this request
         if (includeVideos) privateAnswer(c);
-        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded/${encodeURIComponent(id)}`) : null;
+        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded-v2/${encodeURIComponent(id)}`) : null;
         const version = String(playlist.dateModified ?? playlist.dateCreated ?? '');
         if (cacheUrl) {
             const hit = await readEdgeCache<ExpandedEntry>(cacheUrl);
@@ -172,17 +172,25 @@ export class PlaylistFetch extends OptionalAuthRoute {
         if (includeVideos) {
             const videoRepo = new R2Repository<VideoType>(c.env.videos);
             const ids = ordered.ids.slice(0, MAX_EXPANDED_VIDEOS);
-            const [videos, channel] = await Promise.all([
+            const tailIds = ordered.ids.slice(MAX_EXPANDED_VIDEOS);
+            const [videos, channel, viewableTail] = await Promise.all([
                 Promise.all(ids.map((videoId) => ordered.videos.get(videoId) ?? videoRepo.getObject(videoId))),
                 channelRead,
+                tailIds.length > 0 ? resolveViewableVideoIds(c.env, tailIds, userId) : Promise.resolve(new Set<string>()),
             ]);
             // Every language's name (lib/channelName.ts)
             if (channel) Object.assign(response, channelNameFields(channel));
+            const sees = videoViewer({ channels: c.env.channels }, userId);
+            const visibleItems = (await visibleVideos(videos, (video) => video as never, sees))
+                .map((video) => ({ view: transformVideoToView(video), video: playbackFields(video) }));
+            const tailVisible = viewableTail ? tailIds.filter((vid) => viewableTail.has(vid)) : tailIds;
+            const visibleIds = [...visibleItems.map(({ view }) => view.id), ...tailVisible];
+            response.videos = visibleIds;
+            response.videosCount = visibleIds.length;
             const entry: ExpandedEntry = {
                 version,
                 body: response,
-                items: (await visibleVideos(videos, (video) => video as never, videoViewer({ channels: c.env.channels }, userId)))
-                    .map((video) => ({ view: transformVideoToView(video), video: playbackFields(video) })),
+                items: visibleItems,
                 // The expanded list is already filtered for this viewer
                 hasOwnThumbnail: !!playlist.thumbnailUrl,
             };
@@ -192,8 +200,17 @@ export class PlaylistFetch extends OptionalAuthRoute {
             return finishExpanded(c.env as never, entry);
         }
 
-        const [channel, covers] = await Promise.all([channelRead, resolvePlaylistCovers(c.env, [{ ...playlist, videos: ordered.ids }], userId)]);
+        const videoCache: VideoReadCache = new Map([...ordered.videos].map(([vid, video]) => [vid, Promise.resolve(video)]));
+        const [channel, covers, viewable] = await Promise.all([
+            channelRead,
+            resolvePlaylistCovers(c.env, [{ ...playlist, videos: ordered.ids }], userId, videoCache),
+            resolveViewableVideoIds(c.env, ordered.ids, userId, videoCache),
+        ]);
         if (channel) Object.assign(response, channelNameFields(channel));
+        if (viewable !== null) {
+            response.videos = ordered.ids.filter((vid) => viewable.has(vid));
+            response.videosCount = response.videos.length;
+        }
         const cover = covers.get(id);
         if (cover) response.cover = cover;
 

@@ -4,6 +4,7 @@ import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import { PlaylistUpdateInput } from "../../lib/model/input";
 import { PlaylistView } from "../../lib/model/view";
 import { transformPlaylistToView } from "../../lib/transformations";
+import { resolveViewableVideoIds } from "../../lib/playlistCovers";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -193,8 +194,10 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             timestamp: new Date().toISOString(),
         });
 
-        // Transform to view model for response
-        const playlistView = transformPlaylistToView(updatedPlaylist);
+        // Transform to view model for response (count only videos viewable by the caller, #941)
+        const viewable = await resolveViewableVideoIds(c.env, updatedPlaylist.videos || [], userId);
+        const visibleVideos = viewable ? (updatedPlaylist.videos || []).filter((vid) => viewable.has(vid)) : undefined;
+        const playlistView = transformPlaylistToView(updatedPlaylist, null, visibleVideos);
 
         return {
             success: true,
