@@ -41,7 +41,7 @@ function itemHref(d: AdminDeletion): string | null {
 export default async function DeletedPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = pickParams(await searchParams, { kind: 'text', cursor: 'text' });
   const kind = (ADMIN_DELETION_KINDS as readonly string[]).includes(params.kind ?? '') ? (params.kind as AdminDeletionKind) : undefined;
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
 
   let data: AdminDeletionPage | null = null;
   let permissions: AdminContentPermission[] = [];
@@ -58,7 +58,7 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <PageHeader title={t('deleted.title')} subtitle={t('deleted.subtitle')} t={t} />
+      <PageHeader locale={locale} title={t('deleted.title')} subtitle={t('deleted.subtitle')} t={t} />
       <nav aria-label={t('deleted.kindsLabel')} className="flex flex-wrap gap-2 mb-4" data-testid="deleted-kinds">
         {[undefined, ...ADMIN_DELETION_KINDS].map((k) => {
           const active = k === kind;

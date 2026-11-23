@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 /** Invite creator: the account is made at once, with a plan and channels, before the person first signs in. */
 export default async function NewInvitePage() {
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   let permissions: AdminContentPermission[] | null = null;
   let tiers: Array<{ id: string; name: string; nameAr: string | null; hidden?: boolean }> = [];
   let defaultTierId = 'member';
@@ -36,7 +36,7 @@ export default async function NewInvitePage() {
   return (
     <div>
       <BackLink href="/users/invites" label={t('content.back', { section: t('invites.title') })} />
-      <PageHeader title={t('invites.newTitle')} subtitle={t('invites.newSubtitle')} t={t} />
+      <PageHeader locale={locale} title={t('invites.newTitle')} subtitle={t('invites.newSubtitle')} t={t} />
       {!permissions && <ErrorAlert testId="invite-form-error">{t('content.loadFailed')}</ErrorAlert>}
       {permissions && !permissions.includes('users:manage') && <Notice tone="warn">{t('content.errors.forbidden')}</Notice>}
       {permissions?.includes('users:manage') && (

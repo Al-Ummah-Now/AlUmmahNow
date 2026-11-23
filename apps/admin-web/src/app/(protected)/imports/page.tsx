@@ -58,7 +58,7 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div>
-      <PageHeader title={t('imports.title')} subtitle={t('imports.subtitle')} t={t} />
+      <PageHeader locale={locale} title={t('imports.title')} subtitle={t('imports.subtitle')} t={t} />
       {notImported && (
         <ErrorAlert testId="imports-video-not-imported">{t('imports.videoNotImported')}</ErrorAlert>
       )}

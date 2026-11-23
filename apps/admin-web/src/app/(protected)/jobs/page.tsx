@@ -49,7 +49,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   return (
     <div>
       <LiveRefresh topics={['jobs']} />
-      <PageHeader title={t('jobs.title')} subtitle={t('jobs.subtitle')} t={t} />
+      <PageHeader locale={locale} title={t('jobs.title')} subtitle={t('jobs.subtitle')} t={t} />
       <nav aria-label={t('jobs.statusFilter')} className="mb-6 flex flex-wrap gap-2" data-testid="jobs-filters">
         {FILTERS.map((f) => {
           const active = f.status === status;

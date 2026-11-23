@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function CommentsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = pickParams(await searchParams, { q: 'text', videoId: 'text', userId: 'text', page: 'page' });
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const page = Number(params.page ?? 1);
 
   let data: AdminPage<AdminCommentRow> | null = null;
@@ -34,7 +34,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader deletedKind="comment" title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} t={t} />
+      <PageHeader locale={locale} deletedKind="comment" title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} t={t} />
       <FilterForm
         action="/comments"
         label={t('comments.title')}
@@ -72,7 +72,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                         {c.isHidden && <Chip tone="bad">{t('comments.hidden')}</Chip>}
                       </div>
                       {/* Phone: the video, the author and the date (their columns are hidden) */}
-                      <MetaLine
+                      <MetaLine locale={locale}
                         className="block md:hidden text-xs text-fg-muted mt-2"
                         testId="comment-meta"
                         parts={[

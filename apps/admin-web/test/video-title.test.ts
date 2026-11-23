@@ -65,12 +65,20 @@ describe('DataTable column widths', () => {
 
 describe('phone card meta lines and numbers', () => {
   it('isolates every part so an Arabic name never reorders a number or a date, and skips empty parts', () => {
-    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['قناة الدروس', null, '١٢٨٤٠ مشاهدة', '', false] } as never));
-    const parts = html.match(/<span class="relative min-w-0 ps-\[1em\]"><span aria-hidden="true" class="absolute start-0 w-\[1em\] text-center">•<\/span><bdi>([^<]*)<\/bdi><\/span>/g) ?? [];
+    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { locale: 'ar', parts: ['قناة الدروس', null, '١٢٨٤٠ مشاهدة', '', false] } as never));
+    const parts = html.match(/<span class="relative min-w-0 ps-\[1em\]"><span aria-hidden="true" data-meta-sep="ar" class="absolute start-0 w-\[1em\] text-start">،<\/span><bdi>([^<]*)<\/bdi><\/span>/g) ?? [];
     assert.deepEqual(parts.map((p) => p.replace(/.*<bdi>|<\/bdi>.*/g, '')), ['قناة الدروس', '١٢٨٤٠ مشاهدة']);
   });
+  it('Arabic takes the Arabic comma, never a dot that reads as zero next to Arabic digits; English keeps «•»', () => {
+    const ar = renderToStaticMarkup(React.createElement(MetaLine as never, { locale: 'ar', parts: ['١٢ ألف مشاهدة', '٣ تعليقات'] } as never));
+    assert.doesNotMatch(ar, /[•·]/);
+    assert.equal((ar.match(/>،</g) ?? []).length, 2);
+    const en = renderToStaticMarkup(React.createElement(MetaLine as never, { locale: 'en', parts: ['12K views', '3 comments'] } as never));
+    assert.equal((en.match(/data-meta-sep="en" class="absolute start-0 w-\[1em\] text-center">•</g) ?? []).length, 2);
+    assert.doesNotMatch(en, /،/);
+  });
   it('a wrapped line never leaves a separator dangling: each separator sits in a gutter the clipped line cuts off at a line edge', () => {
-    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['a', 'b'] } as never));
+    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { locale: 'en', parts: ['a', 'b'] } as never));
     assert.match(html, /^<span class="overflow-hidden [^"]*"><span class="flex flex-wrap -ms-\[1em\]">/);
     assert.doesNotMatch(html, / • /);
   });

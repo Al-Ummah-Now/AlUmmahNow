@@ -32,7 +32,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader deletedKind="post" title={t('community.title')} subtitle={t('community.subtitle')} t={t} />
+      <PageHeader locale={locale} deletedKind="post" title={t('community.title')} subtitle={t('community.subtitle')} t={t} />
       <FilterForm
         action="/community"
         label={t('community.title')}
@@ -62,7 +62,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               {data.items.map((p) => {
                 const channelName = names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel');
                 const channelHref = `/channels/${encodeURIComponent(p.channelId)}`;
-                const engagement = <MetaLine className="block" parts={[formatCount(p.likes, 'like', locale), formatCount(p.comments, 'comment', locale)]} />;
+                const engagement = <MetaLine locale={locale} className="block" parts={[formatCount(p.likes, 'like', locale), formatCount(p.comments, 'comment', locale)]} />;
                 return (
                   <tr role="row" key={`${p.channelId}:${p.id}`} className={cardTable.row} data-testid="post-row" data-post-id={p.id}>
                     <td role="cell" className={cardTable.cell}>
@@ -71,7 +71,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                         {p.type && <Chip tone="neutral">{translateDynamic(t, 'community.postTypes', p.type)}</Chip>}
                       </div>
                       {/* Phone: the channel, likes, comments and date (their columns are hidden) */}
-                      <MetaLine
+                      <MetaLine locale={locale}
                         className="block md:hidden text-xs text-fg-muted mt-2"
                         testId="post-meta"
                         parts={[

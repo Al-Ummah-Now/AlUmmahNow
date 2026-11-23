@@ -51,7 +51,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader deletedKind="channel" title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} t={t} />
+      <PageHeader locale={locale} deletedKind="channel" title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} t={t} />
       <FilterForm
         action="/channels"
         label={t('channels.title')}
@@ -120,7 +120,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                             </span>
                           )}
                           {/* Phone: the owner, subscribers and views (their columns are hidden) */}
-                          <MetaLine
+                          <MetaLine locale={locale}
                             className="block md:hidden text-xs text-fg-muted mt-1"
                             testId="channel-meta"
                             parts={[

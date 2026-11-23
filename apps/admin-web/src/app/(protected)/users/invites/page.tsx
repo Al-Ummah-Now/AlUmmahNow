@@ -46,7 +46,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <BackLink href="/users" label={t('content.back', { section: t('users.title') })} />
-      <PageHeader title={t('invites.title')} subtitle={t('invites.subtitle')} t={t}>
+      <PageHeader locale={locale} title={t('invites.title')} subtitle={t('invites.subtitle')} t={t}>
         {canManage && (
           <Link href="/users/invites/new" className={primaryButtonClass} data-testid="invite-new">
             {t('invites.inviteButton')}
