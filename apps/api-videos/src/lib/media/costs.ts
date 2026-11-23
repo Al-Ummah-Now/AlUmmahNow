@@ -2,7 +2,7 @@
  * Daily cost inputs per delivery source (epic #687, Phase 3) → delivery_cost_daily
  * (migrations/search/0020): one row per (day, provider, metric). The admin
  * Delivery comparison page divides them into cost per video-minute and per
- * viewer-hour and projects them against the $500/month cap.
+ * viewer-hour and projects them at scale.
  *
  * Sources:
  *   our own records  container seconds, bytes written, objects (Class A), video

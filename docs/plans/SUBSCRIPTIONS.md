@@ -2,7 +2,7 @@
 
 **Status:** proposal for the owner to review (2026-11-11). Nothing here is implemented.
 **Why:** each feature has been inventing its own tiers: creator tiers, the Epic 27 seed plans, caption minutes, social limits and AI moderation. The owner, on caption-minute tiers: *"what free tier? this needs planning with all subs on the site"*.
-**Constraints (owner, standing):** never Stripe (T2, O4). Every feature is tiered and admin-managed through plans and entitlements (T1, O3). Whole-platform infra stays under **$500/month** at "millions of viewers / thousands of videos" (O1). No monetisation at launch (D4). Uploads and channel creation are invite-only (O25).
+**Constraints (owner, standing):** never Stripe (T2, O4). Every feature is tiered and admin-managed through plans and entitlements (T1, O3). Cost-conscious design: prefer low per-video and per-view unit costs at "millions of viewers / thousands of videos" (O1). No monetisation at launch (D4). Uploads and channel creation are invite-only (O25).
 **Wiki:** [AUN-SUBS](https://github.com/Al-Ummah-Now/AlUmmahNowWiki/blob/main/epics/AUN-SUBS-subscriptions-plan.md) (short summary and decision list).
 
 ---
@@ -11,7 +11,7 @@
 
 1. **There are two tier systems today, and they disagree.** *Creator tiers* (None / Creator / Unlimited, shipped 2026-11-10) decide who may upload. The *Epic 27 plans* (Free / Plus / Pro / Institution, schema merged, resolver and enforcement PRs #390, #391, #427, #428 and #429 open since 2026-11-08) seed a public, default "Free" plan that includes uploads. This proposal merges them into **one plans system**. The creator tier becomes a plan, and the default plan grants no uploads.
 2. **The lowest tier.** Watching is free for everyone and needs no plan. For creators, the options are in §3.2. The recommendation is **no public free creator tier at launch**: creator plans are granted (sponsored) by admins, then sold once a payment provider is chosen.
-3. **Cost.** With every feature on at its spec defaults, the target scale (S3: 2M monthly viewers, 5,000 library hours) costs about **$1,200–1,400/month**, 2.4–2.9× the cap. The levers in §5.3 bring it to about $660. Getting to **$500** also needs budget stops and one owner decision: does usage paid for by subscribers count against the cap (§5.4)?
+3. **Cost.** With every feature on at its spec defaults, the target scale (S3: 2M monthly viewers, 5,000 library hours) costs about **$1,200–1,400/month**. The levers in §5.3 bring it to about $660/month, and per-feature budget stops (§5.5) reduce platform-funded spend further. One owner decision remains: how subscriber-paid usage is accounted for alongside platform-funded usage (§5.4).
 4. **What costs money is not delivery.** On R2 + Cloudflare CDN egress is $0. What costs money is **video storage, transcoding, AI moderation, social posting to X, live transcoding and Workers requests**. The plan limits those.
 5. **Decisions for the owner** are in §8, one per line, each with a recommendation.
 
@@ -53,7 +53,7 @@ Values are the seeds as Free / Plus / Pro / Institution. "unl." means unlimited.
 | AI moderation | `moderation.ai.creatorFlags`, `.autoHold`, `.customRules`, `.widgetGuestPosts`, `.reports` (`docs/specs/AI-MODERATION.md` §10) | Spec matrix | **D: $170–290 per 1M comments a month** (Workers AI list prices), plus ≈ $0.0005 per uploaded minute for the video scan |
 | Sharing and embeds | `share.shortLinks`, `embed.*` (Epic 25) | Seeded. EMB-D12: v1 consults no entitlement | Delivery, as for VOD |
 | Ummah Comments widget | `sites.max`, `discussions.*` (Epic 26) | Seeded. Feature not built | Moderation per comment |
-| Social media management | `social.enabled`, `.accounts.max` 10, `.monthlyPosts` 300, `.scheduledPosts.max` 200, `.automation`, `.inbox`, `.analytics.retentionDays` (`docs/specs/social-media-management.md` §11.2) | Spec defaults. Not built | **D (X pricing page): $0.015 per native X post, $0.20 per post with a URL, $0.005 per metrics read.** Other networks' APIs are free. Containers and Media Transformations ≈ $0.15–0.25 per active channel a month (D, §18). **The spec's platform X cap defaults to $500, the whole platform cap** |
+| Social media management | `social.enabled`, `.accounts.max` 10, `.monthlyPosts` 300, `.scheduledPosts.max` 200, `.automation`, `.inbox`, `.analytics.retentionDays` (`docs/specs/social-media-management.md` §11.2) | Spec defaults. Not built | **D (X pricing page): $0.015 per native X post, $0.20 per post with a URL, $0.005 per metrics read.** Other networks' APIs are free. Containers and Media Transformations ≈ $0.15–0.25 per active channel a month (D, §18). **The social spec's X cap default is high relative to other social lines and needs to be lowered** |
 | Cost display | `studio.costs.dollars` (cost-monitoring Q6) | Flag | $0 |
 | Offline downloads, viewer premium | `premium.offline`, `kids.curation` (EMBEDS-COMMENTS-TIERS §27.4); Epics 14 and 24 | Not built; E24 deferred (D4) | Delivery, as for VOD |
 
@@ -62,7 +62,7 @@ Values are the seeds as Free / Plus / Pro / Institution. "unl." means unlimited.
 | Item | Where | Current | Cost per unit |
 |---|---|---|---|
 | Roles: admin, editor, **writer** (scholars) | `docs/SPEC.md` §3, `docs/SCHOLARS.md` §2. Auth role `role_scholar` (AlUmmahNowAuth migration 0029) maps to CMS `writer`: own posts only | Granted by an admin or the videos invite form. **Not a plan** | $0 |
-| AI writing assistant | `docs/AI_ASSIST_SPEC.md` §4–5, `docs/AI_PROVIDERS.md`, migration `0011_ai_providers.sql` | Per-user rate limit hard-coded at **10 jobs per 10 min and 60 a day** (translations weigh 3). Environment `monthlyBudgetUsd`: default $50, max $500 | **M: SEO $0.0003, short translation $0.0006, pre-publish check $0.006–0.007, longest translation $0.046.** Expected ≈ $11/month. Theoretical ceiling ≈ $277/month at 10 editors |
+| AI writing assistant | `docs/AI_ASSIST_SPEC.md` §4–5, `docs/AI_PROVIDERS.md`, migration `0011_ai_providers.sql` | Per-user rate limit hard-coded at **10 jobs per 10 min and 60 a day** (translations weigh 3). Environment `monthlyBudgetUsd`: default $50, admin-configurable | **M: SEO $0.0003, short translation $0.0006, pre-publish check $0.006–0.007, longest translation $0.046.** Expected ≈ $11/month. Theoretical ceiling ≈ $277/month at 10 editors |
 | Media library | CMS media (R2) | No quota | R2 $0.015/GB-month (L) |
 
 ### 1.4 www (AlUmmahNowUI) and Auth (AlUmmahNowAuth)
@@ -111,7 +111,7 @@ Values are the seeds as Free / Plus / Pro / Institution. "unl." means unlimited.
 2. **The plan belongs to the account owner (user)**, and covers every channel they own. Per-channel counters (captions, social) count against the owner's allowance. Organisations hold plans once they exist.
 3. **Watching is never gated.** Plans gate making, storing, processing and AI, which are the things that cost money.
 4. **Two kinds of key.** *Allowances* cost money (storage, upload hours, caption minutes, live minutes, social posts, AI), and their sum is our exposure. *Features* cost nothing (colours, handle, bulk tools, analytics charts). Features can be generous. Allowances are sized against §5.
-5. **Every allowance also has a global budget stop**, so the cap holds even when grants pile up. Captions ($100), inline translation ($20) and CMS assist ($50) already have one. Live, moderation, transcoding and X don't yet (§5.3).
+5. **Every allowance also has a global budget stop**, so spend stays bounded even when grants pile up. Captions ($100), inline translation ($20) and CMS assist ($50) already have one. Live, moderation, transcoding and X don't yet (§5.3).
 6. **Grandfathering** (Epic 27 invariant 1): lowering a plan never deletes or hides content; it only blocks new growth.
 
 ### 3.2 The lowest tier: the options
@@ -265,7 +265,7 @@ Grants are bounded by this table: 100 sponsored Creators cost at most $240 a mon
 
 ---
 
-## 5. Cost at scale against the $500 cap
+## 5. Cost at scale
 
 ### 5.1 Everything on, at spec defaults (monthly $)
 
@@ -289,52 +289,51 @@ Grants are bounded by this table: 100 sponsored Creators cost at most $240 a mon
 | **Total** | **≈ $109** | **≈ $460** | **≈ $1,425** | |
 | **Total without X** | ≈ $101 | ≈ $382 | ≈ $1,191 | |
 
-S1 is far inside the cap. S2 is near it. **S3 is two to three times over.**
+S1 totals about $109/month, S2 about $460/month, and S3 about $1,425/month without cost levers.
 
 ### 5.2 Where the money goes at S3
 
 AI moderation, X and Workers Logs together are ~$600, and each has a cheap fix. Storage ($180) is the largest line that can't be switched off: video that is stored must stay stored. Delivery is only $47 because egress is free (D2).
 
-### 5.3 Levers that bring S3 under $500
+### 5.3 Levers that reduce S3 cost
 
 | Lever | Saves at S3 | Cost to the product |
 |---|---|---|
 | **Sample Workers Logs** (head sampling ~10% in prod; errors always logged) | ~$127 | Less raw logging. Errors still reach admin (O26) |
 | **AI moderation fast path:** skip short comments by trusted users, cache identical texts, run the extension classifier only when uncertain (AI-MODERATION §9 already lists these) | ~$150 | Slightly slower first moderation of trusted users |
-| **X only on Pro and up, and the platform X cap at $50, not $500** | ~$200 | X posting is a paid feature |
+| **X only on Pro and up, and a lower platform X cap ($50)** | ~$200 | X posting is a paid feature |
 | **Social as a paid feature** (Plus and up) and **its other costs inside a $20 budget** | ~$100 | — |
 | **Storage:** 1080p only on paid tiers; delete originals after 30 days; for videos unwatched for 180 days, keep only 480p and the audio track | ~$60 | Old videos stream at 480p until rewatched (re-encode on demand) |
 | **Transcode:** prefer desktop pre-encode (D11), keep Bunny encoding during the side-by-side trial (O32), queue at the budget | ~$25 | Slower processing at budget |
 | **Workers:** cache public pages and API reads at the edge, send analytics beacons to Analytics Engine in batches | ~$30 | — |
 | **Captions:** budget $30 at S3 for platform-funded minutes; paid packs beyond that | ~$70 | Free allowance minutes wait at the budget ("starts within 24 h") |
 
-### 5.4 Two ways to hold the cap
+### 5.4 Two ways to account for paid usage
 
-Applying every lever in §5.3 brings S3 to about **$660**. Getting the rest of the way to $500 takes budget stops on live, CMS assist and translation (§5.5), and one owner decision (§8, S3):
+Applying every lever in §5.3 brings S3 to about **$660/month**. Per-feature budget stops on live, CMS assist and translation (§5.5) reduce platform-funded spend further, with one owner decision (§8, S3):
 
-- **(i) Gross cap:** every dollar counts, whoever pays for it. S3 fits only with every lever and tight budget stops, X stays off, and paid features can't grow past the envelope however many people pay.
-- **(ii) Platform-funded cap** *(recommended)*: the $500 covers what **we** fund: Member usage, sponsored grants and platform features. Usage paid for by a subscriber or add-on at ≥ 3× cost is tracked by AUN-COST but counted outside the cap. Paid growth then never forces a free cut.
+- **(i) Gross accounting:** every dollar counts together, whoever pays for it. Paid features then compete with free features even when subscribers cover their own cost.
+- **(ii) Platform-funded accounting** *(recommended)*: cost controls target what **we** fund: Member usage, sponsored grants and platform features. Usage paid for by a subscriber or add-on at ≥ 3× cost is tracked by AUN-COST separately. Paid growth then never forces a free cut.
 
-### 5.5 Recommended S3 envelope (platform-funded, monthly)
+### 5.5 Recommended S3 cost controls (platform-funded)
 
-| Cost centre | How it is stopped | Envelope |
-|---|---|---|
-| Fixed | — | $30 |
-| Workers + Logs | Engineering levers (§5.3) | $65 |
-| D1, KV, Queues, DO | — | $40 |
-| Video storage | Plan `storage.gb` caps and the rendition policy | $120 |
-| Delivery | Can't stop serving; free egress | $45 |
-| Transcode | Queue at the budget (new) | $35 |
-| AI moderation | Budget stop + fast path (new) | $60 |
-| CMS AI assist | Existing budget (set $15 at S3) | $15 |
-| Captions (allowances + grants) | Existing budget (spec $100; set $30 at S3) | $30 |
-| Inline translation | Existing budget ($20; set $5) | $5 |
-| Live | Plan minutes + budget (new) | $20 |
-| Social incl. X | Platform cap (spec $500 → $10 platform-funded) | $10 |
-| Email | Rate limits | $25 |
-| **Total** | | **$500** |
+| Cost centre | How spend is bounded |
+|---|---|
+| Fixed | Workers Paid + Pro zone ($30/month) |
+| Workers + Logs | Engineering levers (§5.3) |
+| D1, KV, Queues, DO | Indexed reads and batched writes |
+| Video storage | Plan `storage.gb` limits and the rendition policy |
+| Delivery | Can't stop serving; free egress |
+| Transcode | Queue at the configured budget (new) |
+| AI moderation | Budget stop + fast path (new) |
+| CMS AI assist | Existing per-env budget (default $50, admin-adjustable) |
+| Captions (allowances + grants) | Existing per-env budget (default $100, admin-adjustable) |
+| Inline translation | Existing per-env budget (default $20, admin-adjustable) |
+| Live | Plan minutes + budget stop (new) |
+| Social incl. X | Platform X cap (admin-adjustable; recommended $50) |
+| Email | Rate limits |
 
-At S1 and S2 the current budget defaults are fine. The envelope should shrink only as viewers grow, and AUN-COST (#268–#272) should alert at 80% of each line.
+At S1 and S2 the current budget defaults are fine. Admins can tighten per-feature budgets as viewers grow, and AUN-COST (#268–#272) alerts at 80% of each configured line.
 
 ---
 
@@ -372,7 +371,7 @@ One per line, with a recommendation.
 |---|---|---|
 | S1 | One plans system for every feature: creator tiers fold into Epic 27 plans | **Yes**; migrate tier assignments to plan subscriptions (§7) |
 | S2 | The lowest creator tier: A (free allowances), B (invite / admin grant only) or C (paid only) | **B at launch**, add C when a provider exists; no public free creator tier |
-| S3 | Does the $500 cap count subscriber-paid usage (gross) or only platform-funded usage? | **Platform-funded** (§5.4 ii); paid usage priced at ≥ 3× cost sits outside it but is tracked |
+| S3 | Should platform cost controls count subscriber-paid usage (gross) or only platform-funded usage? | **Platform-funded** (§5.4 ii); paid usage priced at ≥ 3× cost is tracked separately |
 | S4 | Rename the default plan "Free" to "Member", with no creator allowances | **Yes** (display name only; no data migration) |
 | S5 | Tier names and ladder: Member, Creator, Creator Plus, Creator Pro, Institution, Staff | **Accept as seeds**; admins rename freely |
 | S6 | Who holds the plan: the user (owner of the channels) or each channel | **The user**; channel counters roll up to the owner |
@@ -380,9 +379,9 @@ One per line, with a recommendation.
 | S8 | The §3.4 matrix as the seed values | **Accept as seeds**; admins edit without a deploy |
 | S9 | Viewers: free, no viewer plan until Epic 24 | **Yes**; Supporter/Premium stays deferred (D4) |
 | S10 | Organisations: build the organisation entity now, or let a user hold the Institution plan until the first institution asks | **Defer the entity**; a user holds Institution |
-| S11 | X posting only on Pro and up, and the platform X cap lowered from $500 to $50 | **Yes**; the $500 default alone equals the whole-platform cap |
+| S11 | X posting only on Pro and up, and the platform X cap lowered to $50 | **Yes**; keeps X API spend proportional to paid usage |
 | S12 | Storage rendition policy: 1080p on paid tiers only, delete originals after 30 days, keep 480p + audio for videos unwatched for 180 days | **Yes** to all three; re-encode on demand |
-| S13 | Global budget stops for transcode, moderation and live, plus a Budgets screen | **Yes**; the S3 envelope in §5.5 |
+| S13 | Global budget stops for transcode, moderation and live, plus a Budgets screen | **Yes**; per §5.5 |
 | S14 | Workers Logs sampling in production | **Yes**, ~10% head sampling, errors always kept |
 | S15 | Add-ons as additive grants (`entitlement_grants`) | **Yes**, from the captions spec |
 | S16 | Payment provider candidates (superseded: P1 decided 2026-11-19, PayGood only, off until the owner enables it): drop Lemon Squeezy, Gumroad and Polar (Stripe-based); shortlist Paddle or FastSpring + PayPal + one GCC gateway (Tap or Moyasar) | **Approve the shortlist**; decide P1 when C is wanted |
@@ -397,7 +396,7 @@ One per line, with a recommendation.
 |---|---|
 | The creator tiers and the Epic 27 seeds conflict; fold tiers into plans (S1, S4) | #827 |
 | The Epic 27 stack (#390, #391, #427, #428, #429) has been held and unrebased since 2026-11-08 | #828 |
-| The social spec's platform X cap defaults to $500, the whole-platform cap (S11) | #829 |
+| The social spec's platform X cap default is high relative to other social lines (S11) | #829 |
 | EMBEDS-COMMENTS-TIERS §27.7 lists Lemon Squeezy, which Stripe owns (S16) | #830 |
 | `docs/INFRASTRUCTURE_COST_ANALYSIS.md` is stale (pre-D2) and miscomputes Workers CPU | #831 |
 | `captions.ai.drafts` duplicates `captions.monthlyMinutes` | #832 |

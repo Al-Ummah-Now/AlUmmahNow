@@ -5,7 +5,7 @@ domain on our zone through the CDN. Owner decisions (2026-11-10):
 
 - Transcoding runs on **Cloudflare Containers** (FFmpeg).
 - **Bunny and R2 run side by side.** Every new upload goes to both until measured speed and cost decide.
-- The whole platform stays **at or under $500/month**.
+- **Cost-conscious design:** prefer low per-video and per-view unit costs.
 
 Not in this epic: migrating the existing catalogue (planned below, not run) and switching Bunny off
 (the owner decides on the numbers).
@@ -222,11 +222,11 @@ Unit assumptions (list prices, 2026-11):
 | **Bunny total** | **~$21–30** | **~$340–565** | **~$2,800–5,100** |
 | Both during the trial | ~$40 | ~$490–710 | not viable |
 
-What this means for the $500 cap:
+What this means at each scale:
 
-- **Small:** both fit.
-- **Medium:** both together exceed the cap. Shorten the dual-write trial, or dual-write a sample.
-- **Large:** only R2 fits delivery. The large case is dominated by storage and transcode. The levers
+- **Small:** both paths cost under $40/month combined.
+- **Medium:** running both in parallel adds ~$340–565/month for Bunny alone, so keep the dual-write trial short or dual-write a sample.
+- **Large:** R2 eliminates delivery egress ($2,250–4,500/month on Bunny). At this scale R2 cost is dominated by storage and transcode. The levers
   are lifecycle rules on old renditions, dropping 1080p for audio-led lectures, and the desktop
   pre-encode (D11). The admin page shows these projections with measured unit costs.
 

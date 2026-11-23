@@ -310,7 +310,7 @@ Semantic theme tokens only, no hex values; logical properties so Arabic mirrors;
 
 ## 16. Cost
 
-No new resources. Owners pay nothing extra (the role comes from the record already read). Invitations, the log and the access index are a few SEARCH_DB rows and reads per team action. The daily cron runs two indexed deletes and updates. Well inside the $500 per month cap.
+No new resources. Owners pay nothing extra (the role comes from the record already read). Invitations, the log and the access index are a few SEARCH_DB rows and reads per team action. The daily cron runs two indexed deletes and updates, adding negligible cost.
 
 ## 17. Decisions
 

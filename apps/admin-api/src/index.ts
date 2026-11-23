@@ -349,7 +349,7 @@ app.get('/health', (c) => {
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
  *     delete of contact messages, themes and creator tiers (lib/trash.ts); on QA/stage also the
- *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports); spend alerts: the $500 budget
+ *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports); spend alerts: the configured monthly budget
  *     at 50/80/100% and a projected overrun (production), daily spend jumps per env and driver (lib/opsCost.ts)
  */
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {

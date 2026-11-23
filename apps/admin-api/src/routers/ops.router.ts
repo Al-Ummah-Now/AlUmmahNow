@@ -5,10 +5,10 @@
  * (src/index.ts); reads need `ops:read` (admins), threshold changes `ops:manage`
  * (super admins, audited in site_settings_log).
  *
- *   GET /overview?env=            tiles: 24h vs previous 24h, worst latency/backlog, MTD cost vs the cap, data age, open alerts
+ *   GET /overview?env=            tiles: 24h vs previous 24h, worst latency/backlog, MTD cost vs budget, data age, open alerts
  *   GET /series?env&kind&metric&resource&range=24h|7d|30d|13m   points for the shared chart (hourly ≤ 7d, daily beyond)
  *   GET /resources?env&kind       one row per resource: today's numbers, a 7-day sparkline, month-to-date cost
- *   GET /costs?env=all|<env>      spend: $500 budget meter (all sources), projected idle cost, daily trend per env, top drivers
+ *   GET /costs?env=all|<env>      spend: monthly budget meter (all sources), projected idle cost, daily trend per env, top drivers
  *   GET /thresholds               rules and open alerts
  *   PUT /thresholds/:id           { value?, enabled?, windowHours? }
  */

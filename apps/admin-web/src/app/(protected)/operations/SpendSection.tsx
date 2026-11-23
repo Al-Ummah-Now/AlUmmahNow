@@ -174,7 +174,7 @@ function DriversTable({ c, t, f }: { c: OpsCosts; t: Translator; f: OpsFormats }
 }
 
 /**
- * Spend (owner, 2026-11-14): everything against the one $500/month budget, warnings at 50% and
+ * Spend (owner, 2026-11-14): everything against the configured monthly budget, warnings at 50% and
  * 80%, the projected month end, the projected idle cost against its $50 target, the daily spend
  * per env and source, and the drivers. Data: admin-api GET /api/ops/costs.
  */
