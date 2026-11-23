@@ -7,6 +7,7 @@ import { isUserScopedRoute } from '../lib/reactions';
 import { channelRoleOf } from '@al-ummah/shared-types';
 import { memberMayActAs } from '../lib/channelAccess';
 import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
+import { apiError } from '../lib/api-error';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -36,30 +37,21 @@ export async function authMiddleware(c: Context, next: Next) {
     const authHeader = c.req.header('Authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return c.json({
-        success: false,
-        error: 'Missing or invalid Authorization header. Expected: Bearer <token>'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Missing or invalid Authorization header. Expected: Bearer <token>' });
     }
 
     // Extract the token
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
     if (!token) {
-      return c.json({
-        success: false,
-        error: 'Missing authentication token'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Missing authentication token' });
     }
 
     // Validate the JWT token with signature verification
     const payload = await validateJWTWithSignature(token, c.env, `${c.req.method} ${c.req.path}`);
     
     if (!payload) {
-      return c.json({
-        success: false,
-        error: 'Invalid or expired authentication token'
-      }, 401);
+      return apiError(c, 401, 'unauthorized', { error: 'Invalid or expired authentication token' });
     }
 
     // Add auth context to the request
@@ -75,10 +67,7 @@ export async function authMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     logger.error('Auth middleware error:', error);
-    return c.json({
-      success: false,
-      error: 'Authentication failed'
-    }, 401);
+    return apiError(c, 401, 'unauthorized', { error: 'Authentication failed' });
   }
 }
 
@@ -250,10 +239,7 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     // Get auth context - must have been set by authMiddleware
     const auth = getAuthContext(c);
     if (!auth) {
-      return c.json({
-        success: false,
-        error: 'Authentication required'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Authentication required' });
     }
 
     // Likes and dislikes belong to the member: one without a channel reacts
@@ -267,19 +253,13 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     const channelsBucket = c.env.channels;
     if (!channelsBucket) {
       logger.error('Channels bucket not available');
-      return c.json({
-        success: false,
-        error: 'Internal server error'
-      }, 500);
+      return apiError(c, 500, 'server_error', { error: 'Internal server error' });
     }
 
     const channelObject = await channelsBucket.get(channelId);
     if (!channelObject) {
       logger.debug(`Channel not found: ${channelId}`);
-      return c.json({
-        success: false,
-        error: 'Channel not found'
-      }, 404);
+      return apiError(c, 404, 'channel_not_found', { error: 'Channel not found' });
     }
 
     // Parse channel data
@@ -291,20 +271,13 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     const role = channelRoleOf(channelData, auth.userId);
     if (!memberMayActAs(role, c.req.method, c.req.path)) {
       logger.warn(`User ${auth.userId} attempted to use channel ${channelId} owned by ${channelData.userId}`, { role, method: c.req.method, path: c.req.path });
-      return c.json({
-        success: false,
-        error: 'You do not have permission to perform actions on behalf of this channel'
-      }, 403);
+      return apiError(c, 403, 'forbidden', { error: 'You do not have permission to perform actions on behalf of this channel' });
     }
 
     // A channel an admin suspended (or deleted) publishes nothing new
     if ((channelData.isSuspended || channelData.isDeleted) && channelRefusesWrite(c.req.method, c.req.path)) {
       logger.warn(`User ${auth.userId} attempted a write as suspended channel ${channelId}`);
-      return c.json({
-        success: false,
-        code: CHANNEL_SUSPENDED_CODE,
-        error: 'This channel is suspended on Al Ummah Now videos'
-      }, 403);
+      return apiError(c, 403, CHANNEL_SUSPENDED_CODE, { error: 'This channel is suspended on Al Ummah Now videos' });
     }
 
     // Set channelId in context for use by endpoints, with the caller's role
@@ -317,9 +290,6 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     logger.error('Channel ID middleware error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to validate channel'
-    }, 500);
+    return apiError(c, 500, 'server_error', { error: 'Failed to validate channel' });
   }
 }

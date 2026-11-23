@@ -12,6 +12,7 @@ import type { Context, Next } from 'hono';
 import { VIDEOS_BANNED_CODE, type SearchDb } from '@al-ummah/shared-types';
 import { cachedBan } from '../lib/admin/bans';
 import { logger } from '../lib/logger';
+import { apiError } from '../lib/api-error';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const ALWAYS_ALLOWED = [/^\/api\/privacy(\/|$)/];
@@ -38,14 +39,5 @@ export async function videosBanMiddleware(c: Context, next: Next) {
 	}
 	if (!ban) return next();
 	logger.debug('[VideosBan] Request refused for a banned user', { userId: auth.userId, method: c.req.method, path: c.req.path });
-	return c.json(
-		{
-			success: false,
-			code: VIDEOS_BANNED_CODE,
-			error: 'This account is banned on Al Ummah Now videos.',
-			ban: { reason: ban.reason, bannedAt: ban.bannedAt },
-		},
-		403,
-		{ 'Cache-Control': 'private, no-store' },
-	);
+	return apiError(c, 403, VIDEOS_BANNED_CODE, { error: 'This account is banned on Al Ummah Now videos.', ban: { reason: ban.reason, bannedAt: ban.bannedAt } }, { 'Cache-Control': 'private, no-store' });
 }

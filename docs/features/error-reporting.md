@@ -251,6 +251,13 @@ Every 4xx/5xx JSON answer from api-videos and admin-api leaves in one shape
   Tools) sends its interface language in `X-App-Locale` on every API call.
 - `action`: `retry`, `sign_in`, `update_app`, `contact_support` or `none`. `retryAfter` mirrors
   `Retry-After`; `reference` mirrors `X-Error-Ref`.
+- Endpoints answer errors with `apiError(c, status, code, extra?, headers?)` from the worker's
+  `lib/api-error.ts` (the body comes from `apiErrorBody` in shared-types), never a hand-written
+  `{ success: false, ... }`. `pnpm check:error-bodies` (CI `test` job) fails on a new one;
+  files written before it are listed in `scripts/ci/error-bodies-baseline.txt` with their count,
+  which may only shrink, so a file moves to `apiError` when it is next changed (`--write` updates
+  the baseline). A `success: false` that isn't an HTTP error body says so with
+  `// error-body: not-http`.
 - Clients read it with `parseApiError(status, body)`: branch on `code`, and for a code they don't
   know show `message` as sent. Add a code to the catalogue rather than writing text in an endpoint;
   codes are never renamed. The OpenAPI contract documents the shape as `ApiError`.

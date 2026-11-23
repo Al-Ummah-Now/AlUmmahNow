@@ -37,6 +37,26 @@ export interface ApiErrorBody {
   [extra: string]: unknown;
 }
 
+/** What an endpoint may add to an error besides its code; the envelope fills in the rest. */
+export interface ApiErrorExtra {
+  feature?: FeatureKey;
+  retryAfter?: number;
+  helpUrl?: string;
+  /** The old `error` value, for clients written before the envelope that read it */
+  error?: string;
+  [extra: string]: unknown;
+}
+
+/**
+ * The body an endpoint answers with on an error (wiki AUN-FEATURES §5.2): `success: false`, a
+ * catalogue code and anything extra. The error envelope middleware adds `message`, `lang` and
+ * `action`. Workers answer through their `apiError(c, status, code, extra)` helper, never a
+ * hand-written `{ success: false, ... }` (scripts/ci/check-error-bodies.ts).
+ */
+export function apiErrorBody(code: string, extra: ApiErrorExtra = {}): { success: false; code: string } & ApiErrorExtra {
+  return { ...extra, success: false, code };
+}
+
 interface CatalogueEntry {
   action: ApiErrorAction;
   en: string;

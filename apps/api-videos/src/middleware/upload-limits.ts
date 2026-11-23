@@ -54,6 +54,7 @@ import {
   type RateLimitConfig,
   type RateLimitResult,
 } from './rate-limit';
+import { apiError } from '../lib/api-error';
 
 /** Operation name for upload sessions */
 export const UPLOAD_SESSION_OPERATION = 'video_upload_session';
@@ -187,25 +188,22 @@ export async function creatorOf(c: Context): Promise<ResolvedCreator> {
 }
 
 export function invitationOnly(c: Context) {
-  return c.json({ success: false, code: CREATOR_ERROR_CODES.uploadsByInvitation, error: UPLOADS_BY_INVITATION_MESSAGE }, 403);
+  return apiError(c, 403, CREATOR_ERROR_CODES.uploadsByInvitation, { error: UPLOADS_BY_INVITATION_MESSAGE });
 }
 
 function unavailable(c: Context, retryAfter = RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS) {
-  return c.json(
-    { success: false, code: 'upload_limits_unavailable', error: 'Uploads are briefly unavailable; try again shortly', retryAfter },
-    503,
-    { 'Retry-After': String(retryAfter) },
-  );
+  return apiError(c, 503, 'upload_limits_unavailable', { error: 'Uploads are briefly unavailable; try again shortly', retryAfter }, { 'Retry-After': String(retryAfter) });
 }
 
 function limitHit(c: Context, result: RateLimitResult, limits: RateLimitConfig) {
   const period = result.limitExceeded ?? 'hour';
   const retryAfter = result.retryAfter || 60;
   const limit = period === 'concurrent' ? limits.maxConcurrent : period === 'day' ? limits.perDay : limits.perHour;
-  return c.json(
+  return apiError(
+    c,
+    429,
+    CREATOR_ERROR_CODES.uploadLimit,
     {
-      success: false,
-      code: CREATOR_ERROR_CODES.uploadLimit,
       error: "You've reached the upload limit; try again later",
       limitExceeded: period,
       limit,
@@ -214,7 +212,6 @@ function limitHit(c: Context, result: RateLimitResult, limits: RateLimitConfig) 
       remaining: result.remaining,
       resetAt: result.resetAt,
     },
-    429,
     { 'Retry-After': String(retryAfter), 'X-RateLimit-Limit': String(limit) },
   );
 }

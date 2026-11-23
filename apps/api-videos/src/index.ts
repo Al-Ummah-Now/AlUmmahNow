@@ -123,6 +123,7 @@ import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
 import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 import { errorEnvelope } from './middleware/error-envelope';
 import { applyFeatureGates } from './middleware/require-feature';
+import { apiError } from './lib/api-error';
 
 // ==========================================
 // APP SETUP
@@ -163,7 +164,7 @@ for (const p of INTERNAL_PATHS) {
 		const expected = typeof binding === 'string' ? binding : await binding?.get();
 		const provided = c.req.header('X-API-Key');
 		if (!constantTimeEqual(provided, expected)) {
-			return c.json({ success: false, error: 'Unauthorized' }, 401);
+			return apiError(c, 401, 'unauthorized', { error: 'Unauthorized' });
 		}
 		return next();
 	});

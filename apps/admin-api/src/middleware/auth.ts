@@ -10,6 +10,7 @@ import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
 import { isReviewer } from '@al-ummah/shared-types';
 import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
 import { decodeJwtPayload, passkeyClaimsFromPayload } from '@al-ummah/shared-types';
+import { apiError } from '../lib/api-error';
 
 interface AuthPayload {
   sub: string;
@@ -68,19 +69,13 @@ export async function authMiddleware(c: Context, next: Next) {
     const authHeader = c.req.header('Authorization');
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return c.json({
-        success: false,
-        error: 'Missing or invalid Authorization header. Expected: Bearer <token>'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Missing or invalid Authorization header. Expected: Bearer <token>' });
     }
 
     const token = authHeader.substring(7);
 
     if (!token) {
-      return c.json({
-        success: false,
-        error: 'Missing authentication token'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Missing authentication token' });
     }
 
     // Always the issuer's signature, iss, exp, token type and revocation: there is no unverified
@@ -88,10 +83,7 @@ export async function authMiddleware(c: Context, next: Next) {
     const payload = await validateJWTWithSignature(token, c.env, `${c.req.method} ${c.req.path}`);
 
     if (!payload) {
-      return c.json({
-        success: false,
-        error: 'Invalid or expired authentication token'
-      }, 401);
+      return apiError(c, 401, 'unauthorized', { error: 'Invalid or expired authentication token' });
     }
 
     // Log non-sensitive token data only
@@ -118,10 +110,7 @@ export async function authMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     logger.error('Auth middleware error:', error);
-    return c.json({
-      success: false,
-      error: 'Authentication failed'
-    }, 401);
+    return apiError(c, 401, 'unauthorized', { error: 'Authentication failed' });
   }
 }
 
@@ -135,10 +124,7 @@ export async function adminMiddleware(c: Context, next: Next) {
     const auth = c.get('auth') as AuthContext | undefined;
 
     if (!auth) {
-      return c.json({
-        success: false,
-        error: 'Authentication required'
-      }, 401);
+      return apiError(c, 401, 'authentication_required', { error: 'Authentication required' });
     }
 
     // Get roles from auth context (populated from token)
@@ -167,10 +153,7 @@ export async function adminMiddleware(c: Context, next: Next) {
         email: maskEmail(auth.email),
         payloadRoles: auth.payload?.roles
       });
-      return c.json({
-        success: false,
-        error: 'Admin or moderator role required'
-      }, 403);
+      return apiError(c, 403, 'forbidden', { error: 'Admin or moderator role required' });
     }
 
     logger.debug(`Admin access granted for user ${auth.userId}`, { roles, isAdmin, isModerator });
@@ -178,10 +161,7 @@ export async function adminMiddleware(c: Context, next: Next) {
     return await next();
   } catch (error) {
     logger.error('Admin middleware error:', error);
-    return c.json({
-      success: false,
-      error: 'Failed to verify admin permissions'
-    }, 500);
+    return apiError(c, 500, 'server_error', { error: 'Failed to verify admin permissions' });
   }
 }
 

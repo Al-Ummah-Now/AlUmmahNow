@@ -22,6 +22,7 @@ import type { Context, Next } from 'hono';
 import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE, type SearchDb } from '@al-ummah/shared-types';
 import { cachedPendingUserDeletion } from '../lib/admin/pendingUserDeletion';
 import { logger } from '../lib/logger';
+import { apiError } from '../lib/api-error';
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const ALWAYS_ALLOWED = [/^\/api\/privacy(\/|$)/];
@@ -56,14 +57,5 @@ export async function videosPendingDeletionMiddleware(c: Context, next: Next) {
 	}
 	if (!deletion) return next();
 	logger.debug('[PendingDeletion] Request refused: the user\'s videos data is scheduled for deletion', { userId: auth.userId, method: c.req.method, path: c.req.path });
-	return c.json(
-		{
-			success: false,
-			code: VIDEOS_ACCOUNT_PENDING_DELETION_CODE,
-			error: VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE,
-			deletion,
-		},
-		403,
-		{ 'Cache-Control': 'private, no-store' },
-	);
+	return apiError(c, 403, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, { error: VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE, deletion }, { 'Cache-Control': 'private, no-store' });
 }

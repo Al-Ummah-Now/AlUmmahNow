@@ -17,6 +17,7 @@
 
 import { Context } from 'hono';
 import { logger } from '../lib/logger';
+import { apiError } from '../lib/api-error';
 
 /**
  * Rate limit tiers with different quotas
@@ -369,10 +370,12 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
     const result = await checkRateLimit(db, userId, operation, limits, weight);
 
     if (result.unavailable) {
-      return c.json(
-        { success: false, code: 'upload_limits_unavailable', error: 'Uploads are briefly unavailable; try again shortly', retryAfter: result.retryAfter },
+      return apiError(
+        c,
         503,
-        { 'Retry-After': String(result.retryAfter) }
+        'upload_limits_unavailable',
+        { error: 'Uploads are briefly unavailable; try again shortly', retryAfter: result.retryAfter },
+        { 'Retry-After': String(result.retryAfter) },
       );
     }
 
@@ -384,18 +387,18 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
         retryAfter: result.retryAfter,
       });
 
-      return c.json(
+      return apiError(
+        c,
+        429,
+        // Friendly (shown to users); the period is in limitExceeded
+        'upload_limit',
         {
-          success: false,
-          // Friendly (shown to users); the period is in limitExceeded
-          code: 'upload_limit',
           error: "You've reached the upload limit; try again later",
           limitExceeded: result.limitExceeded,
           retryAfter: result.retryAfter,
           remaining: result.remaining,
           resetAt: result.resetAt,
         },
-        429,
         {
           'Retry-After': String(result.retryAfter || 60),
           'X-RateLimit-Limit': String(

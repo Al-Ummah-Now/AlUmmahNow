@@ -34,6 +34,7 @@ import {
 } from '../lib/bot-guard';
 import { NATIVE_PROOF_HEADER } from '@al-ummah/shared-types';
 import { acceptProof, loadMobileAppsSettings, type AttestationEnv } from '../lib/attestation/service';
+import { apiError } from '../lib/api-error';
 
 export const RATE_LIMIT_RETRY_SECONDS = 60;
 export const HUMAN_VERIFIED_TTL_SECONDS = 180 * 24 * 60 * 60;
@@ -145,11 +146,7 @@ export function edgeRateLimit(binding: LimiterName, endpoint: string, methods: s
 		if (allowed) return next();
 		recordAbuse(env, endpoint, 'rate_limited');
 		logger.warn('[SECURITY] Edge rate limit exceeded', { binding, endpoint, signedIn: key.startsWith('u:') });
-		return c.json(
-			{ success: false, code: 'rate_limited', error: 'Too many requests. Please wait a minute and try again.', retryAfter: RATE_LIMIT_RETRY_SECONDS },
-			429,
-			{ 'Retry-After': String(RATE_LIMIT_RETRY_SECONDS) }
-		);
+		return apiError(c, 429, 'rate_limited', { error: 'Too many requests. Please wait a minute and try again.', retryAfter: RATE_LIMIT_RETRY_SECONDS }, { 'Retry-After': String(RATE_LIMIT_RETRY_SECONDS) });
 	};
 }
 
@@ -161,7 +158,7 @@ export function scriptedClientBlock() {
 		if (env.ENVIRONMENT !== 'production' || turnstileMode(env) !== 'enforce') return next();
 		if (!isBadUserAgent(c.req.header('User-Agent') ?? null)) return next();
 		recordAbuse(env, `videos.${c.req.method.toLowerCase()}`, 'bad_user_agent');
-		return c.json({ success: false, code: 'forbidden_client', error: 'This client is not allowed to make changes. Use the website or the app.' }, 403);
+		return apiError(c, 403, 'forbidden_client', { error: 'This client is not allowed to make changes. Use the website or the app.' });
 	};
 }
 
@@ -177,7 +174,7 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 			if ((await nativeProofDecision(c, env)) === 'refuse') {
 				recordAbuse(env, endpoint, 'native_proof_missing');
 				// aun-core keeps only the message of a 403, so the message is the code the apps match on
-				return c.json({ success: false, code: 'native_proof_required', error: 'native_proof_required' }, 403);
+				return apiError(c, 403, 'native_proof_required', { error: 'native_proof_required' });
 			}
 			return next();
 		}
@@ -193,15 +190,7 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 			app: 'videos',
 		});
 		if (!check.allowed) {
-			return c.json(
-				{
-					success: false,
-					code: 'human_check_required',
-					error: 'Please confirm that you are not a robot, then try again.',
-					siteKey: env.TURNSTILE_SITE_KEY,
-				},
-				403
-			);
+			return apiError(c, 403, 'human_check_required', { error: 'Please confirm that you are not a robot, then try again.', siteKey: env.TURNSTILE_SITE_KEY });
 		}
 		await next();
 		if (policy === 'first' && user && env.HUMAN_VERIFIED && (check.outcome === 'pass' || check.outcome === 'bypass') && c.res.status < 300) {
