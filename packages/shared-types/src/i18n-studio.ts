@@ -549,7 +549,7 @@ export const STUDIO_EN = {
       premiereWaiting: 'Premieres {date}',
       premiereLive: 'The premiere is on.',
       premiereOver: 'The premiere has ended. The video is public.',
-      premiereCancelled: 'The premiere was cancelled. The video is as it was before.',
+      premiereCancelled: 'The premiere was canceled. The video is as it was before.',
       reminded: '{count, plural, one {# person asked to be reminded} other {# people asked to be reminded}}',
       startNow: 'Start now',
       startNowTitle: 'Start the premiere now?',
