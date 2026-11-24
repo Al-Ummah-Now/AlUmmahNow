@@ -140,9 +140,9 @@ describe('money rules', () => {
 
   it('belong to the finance list: super admins and the owner can neither propose nor approve them', async () => {
     const t = await setup();
-    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'r' })).body.code, 'propose_not_allowed');
-    assert.equal((await t.as('owner', ['super_admin'])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'r' })).body.code, 'propose_not_allowed');
-    const proposed = await t.as('fin1', [])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'Two people for fees' });
+    assert.equal((await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'creatorSupport', config: feeRule(2), reason: 'r' })).body.code, 'propose_not_allowed');
+    assert.equal((await t.as('owner', ['super_admin'])('POST', '/rules/features.set', { scope: 'creatorSupport', config: feeRule(2), reason: 'r' })).body.code, 'propose_not_allowed');
+    const proposed = await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: feeRule(2), reason: 'Two people for fees' });
     assert.equal(proposed.status, 202, JSON.stringify(proposed.body));
     const id = proposed.body.result.request.id as string;
     assert.equal((await t.as('owner', ['super_admin'])('POST', `/requests/${id}/approve`, {})).body.code, 'approval_not_allowed', 'the owner never approves money');
@@ -151,9 +151,19 @@ describe('money rules', () => {
     assert.equal((await t.as('fin2', [])('POST', `/requests/${id}/approve`, {})).body.result.status, 'applied');
   });
 
+  it('a rule whose action is not connected yet cannot be changed', async () => {
+    const t = await setup();
+    const res = await t.as('fin1', [])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'r' });
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.body.problems, ['not_connected']);
+    const actions = (await t.as('fin1', [])('GET', '/actions')).body.result.actions as { type: string; connected: boolean }[];
+    assert.equal(actions.find((a) => a.type === 'support.fees.set')!.connected, false);
+    assert.equal(actions.find((a) => a.type === 'features.set')!.connected, true);
+  });
+
   it('cannot go below the floor', async () => {
     const t = await setup();
-    const res = await t.as('fin1', [])('POST', '/rules/support.fees.set', { config: { ...feeRule(1), exclusions: { subject: true, techStaff: false, owner: true, oneStepPerPerson: true } }, reason: 'r' });
+    const res = await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: { ...feeRule(1), exclusions: { subject: true, techStaff: false, owner: true, oneStepPerPerson: true } }, reason: 'r' });
     assert.equal(res.status, 400);
     assert.equal(res.body.code, 'rule_below_floor');
     assert.deepEqual(res.body.problems, ['below_floor_money_exclusions']);
@@ -161,7 +171,7 @@ describe('money rules', () => {
 
   it('money requests are left out of lists for people who cannot see money', async () => {
     const t = await setup();
-    await t.as('fin1', [])('POST', '/rules/support.fees.set', { config: feeRule(2), reason: 'r' });
+    await t.as('fin1', [])('POST', '/rules/features.set', { scope: 'creatorSupport', config: feeRule(2), reason: 'r' });
     await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'x', config: featureRule(1), reason: 'r' });
     const admin = (await t.as('adm', ['admin'])('GET', '/requests?view=open')).body.result.items as { type: string }[];
     assert.deepEqual(admin.map((i) => i.type), ['workflows.rule.set']);
