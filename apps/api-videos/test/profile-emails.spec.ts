@@ -410,7 +410,42 @@ describe('profile emails: reports', () => {
 		assert.equal(t.raw.ADMIN_BACKUPS.store.has(SWEEP_CURSOR_KEY), true);
 		await stopAt('usr_a');
 		await erase();
+		assert.deepEqual(t.raw.ADMIN_BACKUPS.read(SWEEP_CURSOR_KEY), {});
+		// No cursor: none is made
+		await t.raw.ADMIN_BACKUPS.delete(SWEEP_CURSOR_KEY);
+		await erase();
 		assert.equal(t.raw.ADMIN_BACKUPS.store.has(SWEEP_CURSOR_KEY), false);
+	});
+
+	it('a cursor a sweep moves on to another user between the read and the clear stays', async () => {
+		const t = await setup({ profiles: {}, channels: {}, auth: {} });
+		const at = (id: string) => JSON.stringify({ after: `${REPORT_PREFIX}by-user/${id}/2020-01-01/old-job/000000` });
+		await t.raw.ADMIN_BACKUPS.put(SWEEP_CURSOR_KEY, at('usr_a'));
+		const get = t.raw.ADMIN_BACKUPS.get.bind(t.raw.ADMIN_BACKUPS);
+		let reads = 0;
+		t.raw.ADMIN_BACKUPS.get = (async (key: string) => {
+			const object = await get(key);
+			if (key === SWEEP_CURSOR_KEY && ++reads === 1) await t.raw.ADMIN_BACKUPS.put(SWEEP_CURSOR_KEY, at('usr_b'));
+			return object;
+		}) as never;
+		await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_a', new OperationBudget(20));
+		assert.equal(reads, 2, 'the lost write is tried again on the fresh cursor');
+		assert.equal(t.raw.ADMIN_BACKUPS.store.get(SWEEP_CURSOR_KEY), at('usr_b'));
+	});
+
+	it('a cleared cursor starts the sweep over, and the sweep deletes it at the end', async () => {
+		const t = await setup({ profiles: {}, channels: {}, auth: {} });
+		const pointer = (id: string) => `${REPORT_PREFIX}by-user/${id}/2020-01-01/old-job/000000`;
+		for (const id of ['usr_a', 'usr_b', 'usr_c', 'usr_d']) await t.raw.ADMIN_BACKUPS.put(pointer(id), '');
+		const sweep = (limit: number) => sweepProfileEmailPointers(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(limit));
+		// Cursor read, list, two checks, then the reserve: stopped at usr_b
+		assert.deepEqual(await sweep(6), { deleted: 2, paused: true });
+		assert.equal(t.raw.ADMIN_BACKUPS.read(SWEEP_CURSOR_KEY).after, pointer('usr_b'));
+		await t.raw.ADMIN_BACKUPS.put(pointer('usr_a'), '');
+		await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_b', new OperationBudget(20));
+		assert.deepEqual(t.raw.ADMIN_BACKUPS.read(SWEEP_CURSOR_KEY), {});
+		assert.deepEqual(await sweep(50), { deleted: 3, paused: false }, 'usr_a again, from the start');
+		assert.deepEqual([...t.raw.ADMIN_BACKUPS.store.keys()], [], 'the cursor goes at the end');
 	});
 
 	it('both erasures (the account and an E2E run account) include the reports', async () => {

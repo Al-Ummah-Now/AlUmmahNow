@@ -10,7 +10,7 @@
  * written only after its pointer exists, and a record of a profile erased meanwhile is removed again.
  */
 import type { AdminJob, ProfileEmailEntry } from '@al-ummah/shared-types';
-import { deleteKeys, listKeys, readJson, writeJson, type BucketLike, type OperationBudget } from '../privacy/scan';
+import { deleteKeys, listKeys, readJson, updateJson, writeJson, type BucketLike, type OperationBudget } from '../privacy/scan';
 import { CREATE_ONLY } from '../r2Repo';
 
 export const REPORT_PREFIX = 'profile-emails/';
@@ -83,7 +83,7 @@ export async function storeRecord(env: { profiles: R2Bucket; ADMIN_BACKUPS?: R2B
 	return current;
 }
 
-/** Where a paused pointer sweep goes on (a key, no email). */
+/** Where a paused pointer sweep goes on (a key, no email); `{}` starts over, and a sweep that reaches the end deletes it. */
 export const SWEEP_CURSOR_KEY = `${REPORT_PREFIX}pointer-sweep.json`;
 
 /** Account erasure: deletes every report record that names the user, then their pointers (a prefix of their own). */
@@ -94,8 +94,17 @@ export async function eraseProfileEmailReports(bucket: BucketLike, userId: strin
 	const deleted = await deleteKeys(bucket, steps.map((step) => recordKey(step, userId)), budget);
 	await deleteKeys(bucket, steps.map((step) => pointerKey(userId, step)), budget);
 	// A paused pointer sweep may have stopped at one of them: it starts over instead of naming the user
-	const cursor = await readJson<{ after?: unknown }>(bucket, SWEEP_CURSOR_KEY, budget);
-	if (typeof cursor?.after === 'string' && cursor.after.startsWith(prefix)) await deleteKeys(bucket, [SWEEP_CURSOR_KEY], budget);
+	// (a conditional write on the fresh cursor: one a sweep moved on meanwhile stays)
+	await updateJson<{ after?: unknown }>(
+		bucket,
+		SWEEP_CURSOR_KEY,
+		(cursor) => {
+			if (typeof cursor.after !== 'string' || !cursor.after.startsWith(prefix)) return false;
+			delete cursor.after;
+			return true;
+		},
+		budget,
+	);
 	return deleted;
 }
 
