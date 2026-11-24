@@ -37,14 +37,14 @@ export function HelpHome() {
         </div>
       </header>
       <HelpSearch />
-      <section className="hp-tour-card pb-glass" aria-labelledby="hp-tour-title">
-        <div>
-          <h2 id="hp-tour-title" className="hp-card-title">{h.takeTour}</h2>
-          <p className="hp-card-text">{h.takeTourHint}</p>
+      <section className="hp-tour-card pb-glass aun-card-pad" aria-labelledby="hp-tour-title">
+        <h2 id="hp-tour-title" className="hp-card-title">{h.takeTour}</h2>
+        <p className="hp-card-text">{h.takeTourHint}</p>
+        <div className="aun-actions">
+          <button type="button" className="b b-primary" data-testid="help-take-tour" onClick={() => requestIdentityTour()}>
+            {h.takeTour}
+          </button>
         </div>
-        <button type="button" className="b b-primary" data-testid="help-take-tour" onClick={() => requestIdentityTour()}>
-          {h.takeTour}
-        </button>
       </section>
       <section aria-labelledby="hp-topics">
         <h2 id="hp-topics" className="hp-h2">{h.topicsHeading}</h2>
@@ -54,7 +54,7 @@ export function HelpHome() {
             const topic = h.topics[id];
             return (
               <li key={id}>
-                <Link href={helpHref(lang, id)} className="hp-topic" data-testid={`help-topic-${id}`} data-featured={id === 'identity' || undefined}>
+                <Link href={helpHref(lang, id)} className="hp-topic pb-glass" data-testid={`help-topic-${id}`} data-featured={id === 'identity' || undefined}>
                   <span className="hp-topic-icon" aria-hidden="true"><Icon /></span>
                   <span className="hp-topic-text">
                     <span className="hp-topic-title">{topic.title}</span>

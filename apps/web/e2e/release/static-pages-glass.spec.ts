@@ -14,7 +14,7 @@ const THEMES = ['fawanees', 'nahas', 'lantern', 'zujaj'] as const;
 const PAGES = [
   { path: 'community-guidelines', boxes: 7 },
   { path: 'settings/privacy', boxes: 3 },
-  { path: 'help', boxes: 1 },
+  { path: 'help', boxes: 9 },
   { path: 'help/privacy', boxes: 2 },
   { path: 'contact', boxes: 2 },
 ] as const;

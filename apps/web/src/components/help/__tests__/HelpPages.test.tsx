@@ -34,15 +34,20 @@ function tourRequests() {
 describe('Help home', () => {
   beforeEach(() => { lang = 'en'; push.mockReset(); mockFeatures = {}; });
 
-  it('lists every topic and starts the tour', () => {
+  it('lists every topic as a frosted-glass card and puts the tour button in a card footer', () => {
     mockFeatures = { parentsGuide: true };
     render(<HelpHome />);
     expect(screen.getByRole('heading', { level: 1, name: HELP_EN.title })).toBeInTheDocument();
     for (const id of HELP_TOPIC_IDS) {
-      expect(screen.getByTestId(`help-topic-${id}`)).toHaveAttribute('href', `/en/help/${id}`);
+      const card = screen.getByTestId(`help-topic-${id}`);
+      expect(card).toHaveAttribute('href', `/en/help/${id}`);
+      expect(card).toHaveClass('pb-glass');
     }
+    const tourBtn = screen.getByTestId('help-take-tour');
+    expect(tourBtn.parentElement).toHaveClass('aun-actions');
+    expect(tourBtn.closest('section')).toHaveClass('pb-glass');
     const tour = tourRequests();
-    fireEvent.click(screen.getByTestId('help-take-tour'));
+    fireEvent.click(tourBtn);
     expect(tour.seen).toHaveLength(1);
     tour.stop();
   });
