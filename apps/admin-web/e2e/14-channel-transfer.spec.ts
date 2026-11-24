@@ -222,7 +222,7 @@ test.describe('channel transfer', () => {
     // In Arabic the name and id are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the
     // Latin text and its parentheses stay in place inside the right-to-left sentence
     const iso = (value: string) => `\u2068${value}\u2069`;
-    await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} (${iso(creator.id)})؟`);
+    await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} ${iso(`(${creator.id})`)}؟`);
     await expect(dialog).toContainText('يفقد المالك الحالي كل وصول إلى القناة.');
     await page.getByTestId('channel-transfer-submit-reason').fill('نقل بطلب صاحب القناة (اختبار)');
     await page.getByTestId('channel-transfer-submit-typed').fill(creator.id);

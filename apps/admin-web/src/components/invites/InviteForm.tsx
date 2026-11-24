@@ -175,7 +175,7 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
           {!blocked && lookup?.profile && (
             <div className="md:col-span-2">
               <Notice tone="warn" testId="invite-profile-email">
-                <p>{fillNodes(t('invites.profileHasEmail'), { name: <bdi>{lookup.profile.displayName || t('content.unnamedAccount')}</bdi>, id: <bdi dir="ltr" className="font-mono [overflow-wrap:anywhere]">{lookup.profile.id}</bdi> })}</p>
+                <p>{fillNodes(t('invites.profileHasEmail'), { name: <bdi>{lookup.profile.displayName || t('content.unnamedAccount')}</bdi>, id: <bdi dir="ltr" className="font-mono [overflow-wrap:anywhere]">({lookup.profile.id})</bdi> })}</p>
                 <Link href={`/users/${encodeURIComponent(lookup.profile.id)}`} className={linkClass} data-testid="invite-profile-email-link">
                   {t('invites.profileHasEmailAction')}
                 </Link>

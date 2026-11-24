@@ -2268,7 +2268,7 @@ const ar: Messages = {
       moderator: 'مشرف',
     },
     transfer: 'نقل',
-    transferConfirm: 'نقل هذه القناة إلى {name} ({id})؟',
+    transferConfirm: 'نقل هذه القناة إلى {name} {id}؟',
     transferBody: 'تنتقل «{channel}» إلى {name} مع مرئياتها ({videos}) وقوائم تشغيلها ({playlists}). يصبح {name} المالك ويفقد المالك الحالي الملكية. يحتفظ أعضاء القناة بأدوارهم. يمكن التراجع بنقل آخر.',
     transferTypeToConfirm: 'اكتب {handle} أو {id} للتأكيد',
     transferTypeToConfirmNoHandle: 'اكتب {id} للتأكيد',
@@ -2722,7 +2722,7 @@ const ar: Messages = {
     submit: 'إرسال الدعوة',
     exists: 'لهذا البريد حساب بالفعل: {name}.',
     existsAction: 'افتح صفحة المستخدم لمنحه فئة أو قناة',
-    profileHasEmail: 'لا حساب بهذا البريد، لكنه يظهر في الملف الشخصي لـ{name} ({id}) في المرئيات. يمكنك إرسال الدعوة.',
+    profileHasEmail: 'لا حساب بهذا البريد، لكنه يظهر في الملف الشخصي لـ{name} {id} في المرئيات. يمكنك إرسال الدعوة.',
     profileHasEmailAction: 'افتح صفحة ذلك المستخدم',
     alreadyInvited: 'لهذا البريد دعوة مفتوحة بالفعل.',
     openInvite: 'افتح قائمة الدعوات',
@@ -2777,6 +2777,8 @@ const ar: Messages = {
     manage: 'إدارة الدعوة',
   },
   users: {
+    // After «إلى» (content.back): the genitive, not the title's nominative
+    backName: 'المستخدمين',
     noAccount: 'لا حساب لتسجيل الدخول',
     emailUnavailable: 'تعذّرت قراءة بريد الحساب',
     profileEmail: 'البريد في الملف الشخصي: {email} (ليس بريد الحساب)',

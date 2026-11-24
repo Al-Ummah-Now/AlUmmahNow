@@ -28,7 +28,7 @@ export const dynamic = 'force-dynamic';
 export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t, locale } = await getI18n();
-  const back = <BackLink href="/users" label={t('content.back', { section: t('users.title') })} />;
+  const back = <BackLink href="/users" label={t('content.back', { section: t('users.backName') })} />;
 
   let user: UserDetailView | null = null;
   let permissions: AdminContentPermission[] = [];

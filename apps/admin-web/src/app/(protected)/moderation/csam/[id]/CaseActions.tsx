@@ -62,7 +62,7 @@ export function ReportChecklist({ caseId, rows, reported, canDownload, files }: 
             <dd className="sm:col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
               {r.value ? (
                 <>
-                  <span className="text-sm text-fg break-all">{r.ltr ? <bdi dir="ltr">{r.value}</bdi> : r.value}</span>
+                  <span className="text-sm text-fg [overflow-wrap:anywhere]">{r.ltr ? <bdi dir="ltr">{r.value}</bdi> : r.value}</span>
                   <CopyButton value={r.value} testId={`csam-fact-copy-${r.id}`} />
                 </>
               ) : (

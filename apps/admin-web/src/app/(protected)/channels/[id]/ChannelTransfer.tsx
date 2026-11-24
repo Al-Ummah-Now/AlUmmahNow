@@ -169,7 +169,7 @@ export function ChannelTransfer({ channel }: Props) {
         <div>
           <ConfirmButton
             label={t('channels.transfer')}
-            title={t('channels.transferConfirm', { name: iso(name), id: iso(target?.id ?? '') })}
+            title={t('channels.transferConfirm', { name: iso(name), id: iso(`(${target?.id ?? ''})`) })}
             body={t('channels.transferBody', {
               channel: iso(channel.name || channel.id),
               name: iso(name),
