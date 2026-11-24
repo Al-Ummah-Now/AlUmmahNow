@@ -27,7 +27,7 @@ import {
 } from '@al-ummah/shared-types';
 import csamRouter from '../src/routers/csam.router';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { purgeVideoForCsam, ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { purgeDeletion, purgeVideoForCsam, ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { CHUNK_BYTES, EvidenceKeyError, openChunk, parseEvidenceKeys, sealChunk } from '../src/lib/csam/crypto';
 import { resolveCsamUrl } from '../src/lib/csam/resolve';
@@ -37,6 +37,9 @@ import { startLiveVodReview } from '../src/lib/review/live';
 import { deleteSessionMedia } from '../src/lib/csam/recordings';
 import { STEP_READS, copyStep, type CopyState } from '../src/lib/csam/evidence';
 import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../src/lib/csam/imageOwners';
+import { endParts, holdTargets, takePart, writeTarget } from '../src/lib/privacy/erase-targets';
+import { createJob } from '../src/lib/admin/jobs';
+import { ERASE_MEDIA_JOB, eraseMediaHooks } from '../src/lib/privacy/erase-media';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 import { AuthDb } from './auth-db';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -598,6 +601,33 @@ describe('taking a comment down', () => {
 		});
 	}
 
+	it('holds its author\'s media from an erasure until it is done, and nothing of what it is on', async () => {
+		for (const on of ['video', 'post'] as const) {
+			const t = setup();
+			const url = on === 'video' ? 'https://videos.alummahnow.net/en/video/vid-synth-02#comment-cmt-synth-01' : 'https://videos.alummahnow.net/en/post/post-synth-01?comment=pcm-synth-01';
+			const { resolution } = (await t.json('POST', '/resolve', { url })).body.result;
+			const { job } = (await t.json('POST', '/contain', { caseId: CASE, matchedUrl: url, resolution })).body.result;
+			assert.deepEqual([job.targetKind, job.targetId], ['user', 'usr_commenter']);
+			const held = () => t.db.db.prepare('SELECT target_kind AS kind, target_id AS id, held_by AS by FROM media_erase_targets WHERE held_by IS NOT NULL').all().map((r) => ({ ...r }));
+			assert.deepEqual(held(), [{ kind: 'user', id: 'usr_commenter', by: job.id }]);
+			const take = async (target: { kind: 'user' | 'video' | 'channel'; id: string }) => {
+				const taken = await takePart(t.db as never, 'erase', 'd', [target]);
+				await endParts(t.db as never, 'erase', 'd', 'none');
+				return taken;
+			};
+			assert.equal(await take({ kind: 'user', id: 'usr_commenter' }), false);
+			for (const other of [{ kind: 'user', id: OWNER }, { kind: 'video', id: 'vid-synth-02' }, { kind: 'channel', id: 'chan-synth-01' }] as const) assert.equal(await take(other), true, `${on} ${other.id}`);
+			await t.drain();
+			assert.equal((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'succeeded');
+			assert.deepEqual(held(), []);
+			assert.equal(await take({ kind: 'user', id: 'usr_commenter' }), true);
+		}
+		// Its author is not known: there is no account to hold
+		const t = setup();
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: null } });
+		assert.equal(t.db.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets').get()!.n, 0);
+	});
+
 	it('a resolution can never carry a comment and what it is on', async () => {
 		const t = setup();
 		for (const resolution of [
@@ -657,6 +687,104 @@ describe('taking a live stream down', () => {
 		assert.doesNotMatch(stream.hiddenReason, /csam|abuse|child/i);
 		assert.ok(!t.env.videos.read('vid-synth-01').csamTakedown);
 		assert.deepEqual((await manifestOf(t)).files.map((f: { name: string }) => f.name).sort(), ['record-channel.json', 'record-live-sessions.json', 'record-live-stream.json', 'record-uploader-profile.json']);
+	});
+
+	/** The case's job one delivery at a time, until it is at `phase`. */
+	const stepTo = async (t: ReturnType<typeof setup>, phase: string) => {
+		for (let i = 0; i < 30; i++) {
+			const row = await jobOf(t);
+			if (row.params.phase === phase) return row;
+			const out = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, row)) as Record<string, any>;
+			t.db.db.prepare('UPDATE admin_jobs SET params = ? WHERE id = ?').run(JSON.stringify(out.params), row.id);
+		}
+		throw new Error(`never at ${phase}`);
+	};
+
+	it('is found, kept and removed when its account was erased; held from the erasure, also while a late recording is kept', async () => {
+		const t = setup();
+		const seg = (n: number) => t.env.LIVE_MEDIA.set(`live/sess-synth-01/720/seg_${n}.m4s`, `${PLACEHOLDER}-${n}|`);
+		seg(1);
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1, 1)").run();
+		await eraseMediaHooks(t.env).onVideoDeleted('live-synth-01', record(t), 'livestream:live-synth-01');
+		t.env.videos.store.delete('livestream:live-synth-01');
+		const url = 'https://videos.alummahnow.net/en/live/live-synth-01';
+		const { resolution } = (await t.json('POST', '/resolve', { url })).body.result;
+		assert.deepEqual(resolution, { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: null });
+		// It was no video, and a video is no stream
+		assert.equal((await t.json('POST', '/resolve', { url: 'https://videos.alummahnow.net/en/video/live-synth-01' })).body.result.ok, false);
+		await writeTarget(t.db as never, { kind: 'video', id: 'vid-gone-01' }, 'j', { id: 'vid-gone-01', channelId: null });
+		assert.equal((await t.json('POST', '/resolve', { url: 'https://videos.alummahnow.net/en/live/vid-gone-01' })).body.result.ok, false);
+
+		const { job } = (await t.json('POST', '/contain', { caseId: CASE, matchedUrl: url, resolution })).body.result;
+		assert.deepEqual([job.targetKind, job.targetId], ['channel', 'chan-synth-01']);
+		const held = () => t.db.db.prepare('SELECT target_kind AS kind, target_id AS id FROM media_erase_targets WHERE held_by IS NOT NULL').all().map((r) => ({ ...r }));
+		assert.deepEqual(held(), [{ kind: 'video', id: 'live-synth-01' }]);
+		const erase = t.db.db.prepare('SELECT id FROM admin_jobs WHERE kind = ?').get(ERASE_MEDIA_JOB) as { id: string };
+		const eraseRuns = async () => {
+			t.db.db.prepare(`UPDATE admin_jobs SET params = json_remove(params, '$.runAfter', '$.delay') WHERE id = ?`).run(erase.id);
+			const row = t.db.db.prepare('SELECT * FROM admin_jobs WHERE id = ?').get(erase.id) as Record<string, any>;
+			return (await ADMIN_JOB_HANDLERS[ERASE_MEDIA_JOB]!(t.env as never, { id: erase.id, params: JSON.parse(row.params) } as never)) as Record<string, any>;
+		};
+		assert.match((await eraseRuns()).note, /a takedown case is open/);
+		assert.equal(t.env.LIVE_MEDIA.store.size, 1, 'the erasure leaves it to the case');
+
+		await stepTo(t, 'ban');
+		assert.equal(t.env.LIVE_MEDIA.store.size, 0, 'kept, then removed');
+		// A segment that comes in now goes back to the copy, and is still held
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_2.m4s', `${PLACEHOLDER}-2, longer than what was kept|`);
+		const row = await jobOf(t);
+		const again = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, row)) as Record<string, any>;
+		assert.deepEqual([again.done, again.params.phase], [false, 'copy-public']);
+		assert.deepEqual(held(), [{ kind: 'video', id: 'live-synth-01' }]);
+		assert.match((await eraseRuns()).note, /a takedown case is open/);
+		assert.equal(t.env.LIVE_MEDIA.store.size, 1);
+		t.db.db.prepare('UPDATE admin_jobs SET params = ? WHERE id = ?').run(JSON.stringify(again.params), row.id);
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE id = ?").run(erase.id);
+		await t.drain();
+		const done = await jobOf(t);
+		assert.equal(done.status, 'succeeded', done.lastError);
+		assert.deepEqual([held(), t.env.LIVE_MEDIA.store.size, done.result.ban], [[], 0, 'no_uploader']);
+		const manifest = await manifestOf(t);
+		const names = manifest.files.map((f: { name: string }) => f.name);
+		for (const name of ['06-live-recording-1.mp4', '06-live-recording-2.mp4', 'erased-video.json', 'record-live-sessions.json']) assert.ok(names.includes(name), `${name}: ${names}`);
+		assert.match(manifest.missing.find((m: { name: string }) => m.name === 'record').reason, /the record was erased on .* its media was kept/);
+	});
+
+	it('waits for a part of it an erasure is deleting; a stream is hidden and ended once', async () => {
+		const t = setup();
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', PLACEHOLDER);
+		const erase = await createJob(t.env as never, { kind: ERASE_MEDIA_JOB, targetKind: 'user', targetId: 'deleted-user', actorId: 'system', params: { items: [] } });
+		await takePart(t.db as never, erase.id, 'd', [{ kind: 'video', id: 'live-synth-01' }]);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+		const told = t.env.queue.messages.length;
+		const marked = t.env.videos.store.get('livestream:live-synth-01');
+		await new Promise((done) => setTimeout(done, 5));
+		for (let i = 0; i < 2; i++) {
+			const out = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, await jobOf(t))) as Record<string, any>;
+			assert.deepEqual([out.done, out.delaySeconds], [false, 30]);
+		}
+		assert.equal((await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } })).body.result.existing, true);
+		assert.deepEqual([t.env.queue.messages.length, t.env.videos.store.get('livestream:live-synth-01'), t.env.LIVE_MEDIA.store.size], [told, marked, 1]);
+		// Shown again by something else: hidden again before anything is kept
+		t.env.videos.store.set('livestream:live-synth-01', JSON.stringify({ ...record(t), isHidden: false }));
+		await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, await jobOf(t));
+		assert.equal(record(t).isHidden, true);
+		// Written down, but its record is still there: nothing is said of it
+		await endParts(t.db as never, erase.id, 'd', 'none');
+		await writeTarget(t.db as never, { kind: 'video', id: 'live-synth-01' }, erase.id, { id: 'live-synth-01', stream: true });
+		const planned = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, await jobOf(t))) as Record<string, any>;
+		assert.deepEqual([planned.params.phase, planned.params.missing], ['copy-public', []]);
+	});
+
+	it('a Bunny recording is read by its own guid, whatever an erasure wrote down under that name', async () => {
+		const t = setup();
+		bunny({ exists: true, finished: true, file: PLACEHOLDER });
+		(t.env as Record<string, unknown>).bunny_hostname = 'vz-synth.b-cdn.net';
+		await writeTarget(t.db as never, { kind: 'video', id: GUID }, 'j', { id: GUID, media: { providers: { bunny: { ref: 'another' } } } });
+		const job = await start(t, [['sess-synth-02', 'bunny', GUID]]);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		assert.ok((await manifestOf(t)).files.some((f: { name: string }) => f.name === '06-live-recording-1.mp4'));
+		assert.ok(!calls.some((c) => c.includes('another')));
 	});
 
 	it('nothing is copied or removed while the stream is not hidden', async () => {
@@ -929,6 +1057,288 @@ describe('taking a video down', () => {
 		// Banned on videos
 		const ban = await t.db.prepare('SELECT user_id FROM videos_bans WHERE user_id = ?').bind(OWNER).first();
 		assert.ok(ban);
+	});
+
+	const URL_OF = 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg';
+	const RESOLUTION = { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER };
+
+	it('its row is there before the item is touched, and a hide that failed is made up for', async () => {
+		const t = setup();
+		seedOriginal(t.env);
+		const put = t.env.videos.put.bind(t.env.videos);
+		const seen: boolean[] = [];
+		(t.env.videos as any).put = async (...args: [string, string]) => {
+			seen.push(!!t.db.db.prepare("SELECT 1 FROM admin_jobs WHERE kind = 'csam.contain' AND target_kind = 'video' AND target_id = 'vid-synth-01'").get());
+			throw new Error('R2 down');
+		};
+		const input = { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION };
+		assert.equal((await t.json('POST', '/contain', input)).status, 500);
+		assert.ok(seen.length && seen.every(Boolean), 'the row first');
+		assert.equal(await takePart(t.db as never, 'erase', 'd', [{ kind: 'video', id: 'vid-synth-01' }]), false, 'from then on no erasure starts');
+		(t.env.videos as any).put = put;
+		// Asked again: hidden at once
+		assert.equal((await t.json('POST', '/contain', input)).body.result.existing, true);
+		assert.ok(t.env.videos.read('vid-synth-01').suspensionHolds.includes(CSAM_HOLD));
+		// Not asked again: the job hides it first
+		const u = setup();
+		seedOriginal(u.env);
+		(u.env.videos as any).put = async () => { throw new Error('R2 down'); };
+		const putU = MemoryBucket.prototype.put.bind(u.env.videos);
+		await u.json('POST', '/contain', input);
+		(u.env.videos as any).put = putU;
+		let hiddenFirst: boolean | null = null;
+		const evidencePut = u.env.CSAM_EVIDENCE.put.bind(u.env.CSAM_EVIDENCE);
+		(u.env.CSAM_EVIDENCE as any).put = async (...args: any[]) => {
+			hiddenFirst ??= !!u.env.videos.read('vid-synth-01').isHidden;
+			return (evidencePut as any)(...args);
+		};
+		await u.drain();
+		assert.equal(hiddenFirst, true);
+		assert.equal((await u.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'succeeded');
+	});
+
+	const V = { kind: 'video' as const, id: 'vid-synth-01' };
+	const eraseJob = async (t: ReturnType<typeof setup>) => (await createJob(t.env as never, { kind: ERASE_MEDIA_JOB, targetKind: 'user', targetId: 'deleted-user', actorId: 'system', params: { items: [] } })).id;
+
+	it('waits while an erasure is deleting a part of it, then says since when some of it was gone', async () => {
+		const t = setup();
+		seedOriginal(t.env);
+		const erase = await eraseJob(t);
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'running' WHERE id = ?").run(erase);
+		assert.equal(await takePart(t.db as never, erase, 'd', [V]), true);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION });
+		const before = t.env.MEDIA.store.size;
+		const { job: row } = (await t.json('GET', `/cases/${CASE}/job`)).body.result;
+		const out = (await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, row)) as Record<string, any>;
+		assert.deepEqual([out.done, out.delaySeconds], [false, 30]);
+		assert.match(out.note, /account erasure/);
+		assert.equal(t.env.MEDIA.store.size, before, 'nothing copied or deleted yet');
+		assert.equal(t.env.CSAM_EVIDENCE.store.size, 0);
+		assert.ok(t.env.videos.read('vid-synth-01').isHidden, 'hidden meanwhile');
+		assert.equal(await takePart(t.db as never, erase, 'd', [V]), false, 'and the erasure gets no further');
+		await endParts(t.db as never, erase, 'd', 'deleted');
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE id = ?").run(erase);
+		await t.drain();
+		const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+		const { first_deleted_at: first } = t.db.db.prepare('SELECT first_deleted_at FROM media_erase_targets WHERE first_deleted_at IS NOT NULL').get() as Record<string, string>;
+		assert.deepEqual(manifest.missing.filter((m: { source: string }) => m.source === 'video vid-synth-01').map((m: { name: string; reason: string }) => [m.name, m.reason.includes(`between ${first}`)]), [['media', true]]);
+		assert.ok(manifest.files.some((f: { name: string }) => f.name === '02-video-original'), 'what was left is kept');
+	});
+
+	it('an erasure that only looked, or whose job is not at work, is neither waited for nor reported', async () => {
+		const t = setup();
+		seedOriginal(t.env);
+		const erase = await eraseJob(t);
+		await takePart(t.db as never, erase, 'd', [V]);
+		await endParts(t.db as never, erase, 'd', 'none');
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION });
+		await t.drain();
+		const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+		assert.deepEqual(manifest.missing, []);
+		const u = setup();
+		seedOriginal(u.env);
+		const dead = await eraseJob(u);
+		await takePart(u.db as never, dead, 'd', [V]);
+		u.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE id = ?").run(dead);
+		await u.json('POST', '/contain', { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION });
+		await u.drain();
+		assert.match((await u.json('GET', `/cases/${CASE}/manifest`)).body.result.missing[0].reason, /may have removed part of its media/);
+	});
+
+	it('works from what an account erasure wrote down when the record is gone, and keeps it from the erasure', async () => {
+		const t = setup();
+		const size = seedOriginal(t.env);
+		await eraseMediaHooks(t.env).onVideoDeleted('vid-synth-01', t.env.videos.read('vid-synth-01'), 'vid-synth-01');
+		t.env.videos.store.delete('vid-synth-01');
+		const pageUrl = 'https://alummahnow.net/en/video/vid-synth-01';
+		const resolved = (await t.json('POST', '/resolve', { url: pageUrl })).body.result;
+		assert.deepEqual(resolved.resolution, { kind: 'video', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: null });
+		assert.deepEqual((await t.json('POST', '/resolve-by-hand', { kind: 'video', videoId: 'vid-synth-01' })).body.result, resolved.resolution);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: pageUrl, resolution: resolved.resolution });
+		const { job: row } = (await t.json('GET', `/cases/${CASE}/job`)).body.result;
+		// A request that stopped before the hold: the job holds it first
+		t.db.db.prepare('DELETE FROM media_erase_targets WHERE held_by IS NOT NULL').run();
+		await ADMIN_JOB_HANDLERS['csam.contain']!(t.env as never, row);
+		const held = t.db.db.prepare('SELECT job_id, erased_at FROM media_erase_targets WHERE erased_at IS NOT NULL').get() as Record<string, string>;
+		assert.deepEqual({ ...(t.db.db.prepare('SELECT target_id, held_by FROM media_erase_targets WHERE held_by IS NOT NULL').get() as object) }, { target_id: 'vid-synth-01', held_by: row.id });
+		assert.equal(await takePart(t.db as never, held.job_id, 'd', [V]), false);
+		// The erasure's own job comes round meanwhile: untouched
+		t.db.db.prepare(`UPDATE admin_jobs SET params = json_remove(params, '$.runAfter') WHERE id = ?`).run(held.job_id);
+		const erase = t.db.db.prepare('SELECT * FROM admin_jobs WHERE id = ?').get(held.job_id) as Record<string, any>;
+		await ADMIN_JOB_HANDLERS[ERASE_MEDIA_JOB]!(t.env as never, { id: erase.id, params: JSON.parse(erase.params) } as never);
+		assert.ok(t.env.MEDIA.store.has('pub/vid-synth-01/r1/thumb.jpg') && t.env.MEDIA_ORIGINALS.store.size > 0);
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE id = ?").run(held.job_id);
+		await t.drain();
+		const job = (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+		assert.equal(job.status, 'succeeded', job.lastError);
+		const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+		const names = manifest.files.map((f: { name: string }) => f.name).sort();
+		assert.deepEqual(names, ['02-video-original', '03-thumbnail.jpg', '04-custom-thumbnail.jpg', 'erased-video.json', 'record-channel.json']);
+		assert.equal(manifest.files.find((f: { name: string }) => f.name === '02-video-original').bytes, size);
+		assert.deepEqual(manifest.missing, [{ name: 'record', source: 'video vid-synth-01', reason: `the record was erased on ${held.erased_at} by account deletion; its media was kept` }]);
+		// Purged by the case, the custom thumbnail too
+		assert.equal(images.has('/thumbnails/vid-synth-01/custom.jpg'), false);
+		assert.equal(t.env.MEDIA.store.size, 0);
+		assert.ok(calls.some((c) => c.startsWith('DELETE https://video.bunnycdn.com/library/7/videos/vid-synth-01')));
+	});
+
+	it('copies and purges the Bunny video of an erased record by its own id there', async () => {
+		const t = setup();
+		(t.env as Record<string, unknown>).bunny_hostname = 'vz-x.b-cdn.net';
+		const record = { ...t.env.videos.read('vid-synth-01'), media: { providers: { bunny: { ref: 'guid-1' } } } };
+		await eraseMediaHooks(t.env).onVideoDeleted('vid-synth-01', record, 'vid-synth-01');
+		t.env.videos.store.delete('vid-synth-01');
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE kind = ?").run(ERASE_MEDIA_JOB);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: { kind: 'video', videoId: 'vid-synth-01', channelId: null, uploaderId: null } });
+		await t.drain();
+		assert.ok(calls.some((c) => c.startsWith('GET https://vz-x.b-cdn.net/guid-1/')), 'its source');
+		assert.ok(calls.some((c) => c.startsWith('DELETE https://video.bunnycdn.com/library/7/videos/guid-1')));
+		assert.ok(!calls.some((c) => /(b-cdn\.net|videos)\/vid-synth-01/.test(c)), 'never by another');
+	});
+
+	it('and for a post, a channel image and a profile image', async () => {
+		const t = setup();
+		const hooks = eraseMediaHooks(t.env);
+		await hooks.onPostDeleted('chan-synth-01', 'post-synth-01', t.env.community_posts.read('posts/chan-synth-01/post-synth-01.json'));
+		await hooks.onChannelDeleted('chan-synth-01', t.env.channels.read('chan-synth-01'));
+		await hooks.onProfileDeleted(OWNER, t.env.profiles.read(OWNER));
+		t.env.community_posts.store.clear();
+		t.env.channels.store.clear();
+		t.env.profiles.store.clear();
+		const byHand = async (input: unknown) => (await t.json('POST', '/resolve-by-hand', input)).body.result;
+		assert.deepEqual(await byHand({ kind: 'profile_image', id: OWNER, field: 'avatarUrl' }), { kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/avatar-placeholder_avatar.jpeg', channelId: null, uploaderId: null });
+		assert.deepEqual(await byHand({ kind: 'channel_image', id: 'chan-synth-01', field: 'coverUrl' }), { kind: 'channel_image', channelId: 'chan-synth-01', imageField: 'coverUrl', imagePath: '/cover-placeholder_cover.png', uploaderId: null });
+		assert.deepEqual(await byHand({ kind: 'post', channelId: 'chan-synth-01', postId: 'post-synth-01' }), { kind: 'post_image', channelId: 'chan-synth-01', postId: 'post-synth-01', uploaderId: null });
+		assert.equal((await t.json('POST', '/resolve', { url: 'https://images.alummahnow.net/community-posts/chan-synth-01/a.jpg' })).body.result.ok, true);
+		const resolved = (await t.json('POST', '/resolve', { url: 'https://www.alummahnow.net/channels/chan-synth-01?post=post-synth-01' })).body.result;
+		assert.equal(resolved.ok, true);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution: resolved.resolution });
+		const jobs = t.db.db.prepare('SELECT id FROM admin_jobs WHERE kind = ?').all(ERASE_MEDIA_JOB) as Array<{ id: string }>;
+		assert.equal(await takePart(t.db as never, jobs[0].id, 'd', [{ kind: 'channel', id: 'chan-synth-01' }]), false, 'the folder its images are in');
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE kind = ?").run(ERASE_MEDIA_JOB);
+		await t.drain();
+		const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+		assert.deepEqual(manifest.files.map((f: { name: string }) => f.name).sort(), ['05-post-image-1.jpg', '05-post-image-2.jpg', 'erased-post.json']);
+		assert.ok(manifest.missing.some((m: { source: string; reason: string }) => m.source === 'post chan-synth-01/post-synth-01' && /its media was kept/.test(m.reason)));
+		assert.equal(images.has('/community-posts/chan-synth-01/a.jpg'), false, 'then purged');
+	});
+
+	it('a case on an erased profile names no account, bans none, and holds the image all the same', async () => {
+		for (const how of ['url', 'hand', 'erased after it was mapped'] as const) {
+			const t = setup();
+			await recordImageOwner(t.db as never, 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg', { kind: 'profile_avatar', ownerId: OWNER });
+			const resolve = async () => (how === 'hand' ? (await t.json('POST', '/resolve-by-hand', { kind: 'profile_image', id: OWNER, field: 'avatarUrl' })).body.result : (await t.json('POST', '/resolve', { url: 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg' })).body.result.resolution);
+			const early = await resolve();
+			assert.equal(early.uploaderId, OWNER, 'while the profile is there');
+			await eraseMediaHooks(t.env).onProfileDeleted(OWNER, t.env.profiles.read(OWNER));
+			t.env.profiles.store.clear();
+			const resolution = how === 'erased after it was mapped' ? early : await resolve();
+			if (how !== 'erased after it was mapped') assert.deepEqual(resolution, { kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/avatar-placeholder_avatar.jpeg', channelId: null, uploaderId: null });
+			const started = await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg', resolution });
+			assert.equal(started.status, 200, JSON.stringify(started.body));
+			const erase = t.db.db.prepare('SELECT id FROM admin_jobs WHERE kind = ?').get(ERASE_MEDIA_JOB) as { id: string };
+			assert.equal(await takePart(t.db as never, erase.id, 'd', [{ kind: 'user', id: OWNER }]), false, 'held at once');
+			assert.equal(await takePart(t.db as never, erase.id, 'd', [{ kind: 'channel', id: 'x' }, { kind: 'user', id: OWNER }]), false);
+			t.db.db.prepare("UPDATE admin_jobs SET status = 'failed' WHERE kind = ?").run(ERASE_MEDIA_JOB);
+			await t.drain();
+			const job = (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+			assert.equal(job.status, 'succeeded', job.lastError);
+			assert.equal(job.result.ban, how === 'erased after it was mapped' ? 'account_erased' : 'no_uploader');
+			assert.equal(await t.db.prepare('SELECT user_id FROM videos_bans').first(), null);
+			assert.equal(t.db.db.prepare("SELECT COUNT(*) AS n FROM admin_jobs WHERE kind = 'user.sync-holds'").get()!.n, 0);
+			const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+			assert.ok(manifest.files.some((f: { name: string }) => f.name === '01-matched-image.jpeg'), 'the evidence');
+			assert.match(manifest.missing[0].reason, /the record was erased on .* its media was kept/);
+			if (how !== 'erased after it was mapped') assert.ok(!JSON.stringify([job, manifest]).includes(OWNER), 'nothing names it');
+			assert.equal(t.db.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets WHERE held_by IS NOT NULL').get()!.n, 0, 'the hold ends with the case');
+		}
+	});
+
+	it('the purges of deleted records wait for it, and it for them', async () => {
+		const t = setup();
+		seedOriginal(t.env);
+		const env = t.env as Record<string, any>;
+		env.channel_sections = new MemoryBucket();
+		env.channel_tabs = new MemoryBucket();
+		for (const kind of ['channel', 'video', 'playlist', 'stream'] as const) await runOwnershipPass(env as never, kind, { maxPages: 10 });
+		const set = (bucket: string, key: string, over: object) => env[bucket].store.set(key, JSON.stringify({ ...env[bucket].read(key), ...over }));
+		set('videos', 'vid-synth-01', { isDeleted: true });
+		set('channels', 'chan-synth-01', { isDeleted: true });
+		set('community_posts', 'posts/chan-synth-01/post-synth-01.json', { status: 'deleted' });
+		const run = (kind: 'video.purge' | 'channel.purge', targetId: string) => ADMIN_JOB_HANDLERS[kind]!(env as never, { id: `job-${kind}`, kind, targetKind: kind.split('.')[0], targetId, params: { userId: OWNER, channelId: 'chan-synth-01' } } as never) as Promise<Record<string, any>>;
+		const post = () => purgeDeletion(env as never, { kind: 'post', id: 'post-synth-01', parentId: 'chan-synth-01' } as never);
+		const V2 = await createJob(env as never, { kind: 'csam.contain', targetKind: 'video', targetId: 'vid-synth-01', actorId: 'system', params: {} });
+		const CH = await createJob(env as never, { kind: 'csam.contain', targetKind: 'channel', targetId: 'chan-synth-01', actorId: 'system', params: {} });
+		const kept = () => [env.MEDIA.store.has('pub/vid-synth-01/r1/thumb.jpg'), env.videos.store.has('vid-synth-01'), images.has('/community-posts/chan-synth-01/a.jpg'), env.community_posts.store.has('posts/chan-synth-01/post-synth-01.json'), env.channels.store.has('chan-synth-01')];
+		for (const outcome of [await run('video.purge', 'vid-synth-01'), await run('channel.purge', 'chan-synth-01')]) {
+			assert.deepEqual([outcome.done, outcome.delaySeconds, outcome.note], [false, 3600, 'a takedown case is open']);
+			assert.equal(outcome.params.channelId, 'chan-synth-01', 'as it was: it comes again');
+		}
+		await assert.rejects(post(), /a takedown case is open/);
+		assert.deepEqual(kept(), [true, true, true, true, true]);
+		// One of them still: the video alone, then the channel alone
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'succeeded' WHERE id = ?").run(CH.id);
+		const some = await run('channel.purge', 'chan-synth-01');
+		assert.deepEqual([some.done, some.delaySeconds, env.videos.store.has('vid-synth-01')], [false, 3600, true], 'the channel does not go before its video');
+		assert.ok(env.channels.store.has('chan-synth-01'));
+		// A hold counts as a case does
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'succeeded' WHERE id = ?").run(V2.id);
+		const other = await createJob(env as never, { kind: 'csam.contain', targetKind: 'channel', targetId: 'elsewhere', actorId: 'system', params: {} });
+		await holdTargets(t.db as never, [V], other);
+		assert.equal((await run('video.purge', 'vid-synth-01')).delaySeconds, 3600);
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'succeeded' WHERE id = ?").run(other.id);
+		// And the case waits for a purge that is deleting
+		const job = await createJob(env as never, { kind: 'video.purge', targetKind: 'video', targetId: 'vid-synth-01', actorId: 'system', params: {} });
+		await takePart(t.db as never, job.id, 'd', [V]);
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: URL_OF, resolution: RESOLUTION });
+		const { job: row } = (await t.json('GET', `/cases/${CASE}/job`)).body.result;
+		assert.equal(((await ADMIN_JOB_HANDLERS['csam.contain']!(env as never, row)) as Record<string, any>).delaySeconds, 30);
+		await endParts(t.db as never, job.id, 'd', 'none');
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'succeeded'").run();
+		assert.deepEqual(await run('video.purge', 'vid-synth-01'), { done: true });
+		assert.equal(env.MEDIA.store.has('pub/vid-synth-01/r1/thumb.jpg'), false);
+		assert.ok(t.db.db.prepare("SELECT first_deleted_at AS at FROM media_erase_targets WHERE job_id = 'job-video.purge'").get()!.at, 'since when, for a later case');
+	});
+
+	it('a channel under a case keeps its files and its record, at every stage of its purge', async () => {
+		const t = setup();
+		const env = t.env as Record<string, any>;
+		env.channel_sections = new MemoryBucket();
+		env.channel_tabs = new MemoryBucket();
+		for (const kind of ['channel', 'video', 'playlist', 'stream'] as const) await runOwnershipPass(env as never, kind, { maxPages: 10 });
+		env.channels.store.set('chan-synth-01', JSON.stringify({ ...env.channels.read('chan-synth-01'), isDeleted: true }));
+		const open = await createJob(env as never, { kind: 'csam.contain', targetKind: 'channel', targetId: 'chan-synth-01', actorId: 'system', params: {} });
+		const run = (params: object) => ADMIN_JOB_HANDLERS['channel.purge']!(env as never, { id: 'p1', kind: 'channel.purge', targetKind: 'channel', targetId: 'chan-synth-01', params: { userId: OWNER, ...params } } as never) as Promise<Record<string, any>>;
+		const first = await run({});
+		assert.deepEqual([first.delaySeconds, first.params.stage], [3600, undefined]);
+		assert.ok(env.community_posts.store.has('posts/chan-synth-01/post-synth-01.json'));
+		assert.equal((await run({ stage: 'playlists' })).delaySeconds, 3600);
+		assert.ok(env.channels.store.has('chan-synth-01'));
+		t.db.db.prepare("UPDATE admin_jobs SET status = 'succeeded' WHERE id = ?").run(open.id);
+		assert.equal((await run({})).params.stage, 'playlists');
+		assert.equal((await run({ stage: 'playlists' })).done, true);
+		assert.deepEqual([env.community_posts.store.has('posts/chan-synth-01/post-synth-01.json'), env.channels.store.has('chan-synth-01')], [false, false]);
+	});
+
+	it('a deleted post is purged once no case holds it, and leaves no row', async () => {
+		const t = setup();
+		const env = t.env as Record<string, any>;
+		const key = 'posts/chan-synth-01/post-synth-01.json';
+		env.community_posts.store.set(key, JSON.stringify({ ...env.community_posts.read(key), status: 'deleted' }));
+		assert.deepEqual(await purgeDeletion(env as never, { kind: 'post', id: 'post-synth-01', parentId: 'chan-synth-01' } as never), { state: 'purged' });
+		assert.deepEqual([env.community_posts.store.has(key), images.has('/community-posts/chan-synth-01/a.jpg')], [false, false]);
+		assert.equal(t.db.db.prepare('SELECT COUNT(*) AS n FROM media_erase_targets').get()!.n, 0);
+	});
+
+	it('finds a case\'s job by its index', async () => {
+		const t = setup();
+		t.db.trace = [];
+		await t.json('GET', `/cases/${CASE}/job`);
+		const query = t.db.trace.find((q) => /caseId/.test(q.sql))!;
+		const plan = t.db.plan(query).join(' | ');
+		t.db.trace = null;
+		assert.match(plan, /SEARCH admin_jobs USING INDEX idx_admin_jobs_csam_case/, plan);
+		assert.doesNotMatch(plan, /SCAN|TEMP B-TREE/, plan);
 	});
 
 	it('leaves nothing listing the video, also while the playlist index is rebuilt, and never waits for it', async () => {

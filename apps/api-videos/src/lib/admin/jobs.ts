@@ -39,8 +39,10 @@ export function jobQueueFor(env: JobEnv, kind: string): JobQueue | undefined {
 }
 
 /** What a job handler returns: done, or another step to queue (resumable work); `delaySeconds` waits before
- *  that step runs (e.g. until a video finished processing). */
-export type JobOutcome = { done: true; result?: Record<string, unknown> } | { done: false; params: Record<string, unknown>; result?: Record<string, unknown>; delaySeconds?: number };
+ *  that step runs (e.g. until a video finished processing); `note` is why it waits (shown as the job's reason; null clears it).
+ *  `later`: not this delivery's to do (another one may be at work): the same delivery again after so many seconds, unless the
+ *  job has moved on by then. Nothing of the job's row is written. */
+export type JobOutcome = { later: number } | { done: true; result?: Record<string, unknown> } | { done: false; params: Record<string, unknown>; result?: Record<string, unknown>; delaySeconds?: number; note?: string | null };
 export type JobHandler = (env: unknown, job: AdminJob) => Promise<JobOutcome>;
 
 interface JobRow {
@@ -218,7 +220,7 @@ async function setStatus(env: JobEnv, job: JobRef, fields: StatusFields, opts: {
 }
 
 /** A delivery of the job's run `runId` (messages from before a Cancel carry an older one). */
-const message = (jobId: string, runId: string | null) => ({ id: crypto.randomUUID(), type: MessageType.AdminJob, payload: { jobId, ...(runId ? { runId } : {}) }, timestamp: Date.now() });
+const message = (jobId: string, runId: string | null, ifUnmovedSince?: string) => ({ id: crypto.randomUUID(), type: MessageType.AdminJob, payload: { jobId, ...(runId ? { runId } : {}), ...(ifUnmovedSince ? { ifUnmovedSince } : {}) }, timestamp: Date.now() });
 
 /** Queues the job's next run; when the queue refuses, the job is marked failed so the admin sees it and can retry. */
 async function enqueue(env: JobEnv, job: AdminJob, runId: string, delaySeconds?: number): Promise<AdminJob> {
@@ -236,7 +238,7 @@ async function enqueue(env: JobEnv, job: AdminJob, runId: string, delaySeconds?:
 	}
 }
 
-export async function createJob(env: JobEnv, input: { kind: AdminJobKind; targetKind: AdminJobTarget; targetId: string; params?: Record<string, unknown>; actorId: string }): Promise<AdminJob> {
+export async function createJob(env: JobEnv, input: { kind: AdminJobKind; targetKind: AdminJobTarget; targetId: string; params?: Record<string, unknown>; actorId: string; delaySeconds?: number }): Promise<AdminJob> {
 	const at = now();
 	const job: AdminJob = {
 		id: crypto.randomUUID(),
@@ -266,7 +268,7 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 	if (links.length) await store.batch(links);
 	await log(env, job.id, { event: 'queued' });
 	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'queued'));
-	return enqueue(env, job, runId);
+	return enqueue(env, job, runId, input.delaySeconds);
 }
 
 /**
@@ -360,7 +362,7 @@ export async function handleAdminJobBatch(
 	onFailed?: (job: AdminJob, error: string) => Promise<void>,
 ): Promise<void> {
 	for (const msg of batch.messages) {
-		const payload = (msg.body as { payload?: { jobId?: unknown; runId?: unknown } } | null)?.payload;
+		const payload = (msg.body as { payload?: { jobId?: unknown; runId?: unknown; ifUnmovedSince?: unknown } } | null)?.payload;
 		const jobId = payload?.jobId;
 		if (typeof jobId !== 'string') {
 			logger.error('[AdminJobs] Message without a job id', { body: msg.body });
@@ -388,6 +390,11 @@ export async function handleAdminJobBatch(
 			msg.ack();
 			continue;
 		}
+		// Put off while another delivery was at work, and that one has moved the job on: its own messages carry it
+		if (payload?.ifUnmovedSince !== undefined && payload.ifUnmovedSince !== job.updatedAt) {
+			msg.ack();
+			continue;
+		}
 		const handler = handlers[job.kind];
 		if (!handler) {
 			const reason = `No handler for ${job.kind}`;
@@ -404,7 +411,10 @@ export async function handleAdminJobBatch(
 		await log(env, job.id, { event: 'started', attempt: msg.attempts });
 		try {
 			const outcome = await handler(env, { ...job, attempts: msg.attempts });
-			if (!('params' in outcome)) {
+			if ('later' in outcome) {
+				const moved = (await getJob(env, job.id))?.updatedAt;
+				await jobQueueFor(env, job.kind)!.send(message(job.id, runId, moved), { delaySeconds: outcome.later });
+			} else if (!('params' in outcome)) {
 				const finished = await setStatus(
 					env,
 					job,
@@ -438,7 +448,7 @@ export async function handleAdminJobBatch(
 				const next = await setStatus(
 					env,
 					job,
-					{ status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null, next_run_at: delay ? later(delay) : null },
+					{ status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null, next_run_at: delay ? later(delay) : null, ...(outcome.note !== undefined ? { last_error: outcome.note } : {}) },
 					{ unlessCancelled: true },
 				);
 				if (next) {

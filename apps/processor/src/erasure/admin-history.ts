@@ -93,6 +93,7 @@ export async function purgeExpiredAdminHistory(search: D1Database, now = Date.no
     await search.batch([
       search.prepare(`DELETE FROM admin_job_users WHERE job_id IN (${list})`).bind(...ids),
       search.prepare(`DELETE FROM admin_job_log WHERE job_id IN (${list})`).bind(...ids),
+      search.prepare(`DELETE FROM media_erase_targets WHERE job_id IN (${list})`).bind(...ids),
       search.prepare(`DELETE FROM admin_jobs WHERE id IN (${list})`).bind(...ids),
     ]);
   }

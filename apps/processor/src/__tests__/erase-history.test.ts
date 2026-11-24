@@ -287,11 +287,13 @@ describe('admin history (#1253)', () => {
   it('purges history older than 2 years, never pending deletions or running jobs', async () => {
     const search = seed();
     const now = Date.parse('2028-11-03T00:00:00.000Z');
+    for (const id of ['j1', 'j2']) search.raw.prepare("INSERT INTO media_erase_targets (target_kind, target_id, job_id) VALUES ('video', 'vid_1', ?)").run(id);
     expect(await purgeExpiredAdminHistory(search, now)).toEqual({ deletions: 1, jobs: 3 });
     expect(search.raw.prepare('SELECT target_id FROM admin_deletions ORDER BY target_id').all()).toEqual([{ target_id: 'ch_1' }, { target_id: CREATOR }, { target_id: 'vid_2' }]);
     expect(search.raw.prepare('SELECT id FROM admin_jobs').all()).toEqual([{ id: 'j2' }]);
     expect(search.raw.prepare('SELECT DISTINCT job_id FROM admin_job_users').all()).toEqual([{ job_id: 'j2' }]);
     expect(search.raw.prepare('SELECT COUNT(*) AS n FROM admin_job_log').get()).toEqual({ n: 0 });
+    expect(search.raw.prepare('SELECT job_id FROM media_erase_targets').all()).toEqual([{ job_id: 'j2' }]);
     expect(await purgeExpiredAdminHistory(search, Date.parse('2027-01-01T00:00:00.000Z'))).toEqual({ deletions: 0, jobs: 0 });
   });
 });

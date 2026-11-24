@@ -124,15 +124,20 @@ export async function completeOriginal(env: OriginalsEnv, videoId: string, size:
 }
 
 /** Every original object of a video (purge, erase, retention). Idempotent. */
+/** The kept original's row: deleted. */
+export async function closeOriginal(env: Pick<OriginalsEnv, 'SEARCH_DB'>, videoId: string): Promise<void> {
+	await env.SEARCH_DB?.prepare('UPDATE media_originals SET deleted_at = ?2 WHERE video_id = ?1 AND deleted_at IS NULL')
+		.bind(videoId, new Date().toISOString())
+		.run()
+		.catch(() => undefined);
+}
+
 export async function deleteOriginal(env: OriginalsEnv, videoId: string): Promise<number> {
 	const bucket = env.MEDIA_ORIGINALS;
 	if (!bucket) return 0;
 	const keys = (await listAll(bucket, originalPrefix(videoId))).map((o) => o.key);
 	for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
-	await env.SEARCH_DB?.prepare('UPDATE media_originals SET deleted_at = ?2 WHERE video_id = ?1 AND deleted_at IS NULL')
-		.bind(videoId, new Date().toISOString())
-		.run()
-		.catch(() => undefined);
+	await closeOriginal(env, videoId);
 	return keys.length;
 }
 

@@ -4,7 +4,8 @@
  * parseCsamUrl (shared-types) reads what the URL itself says; this module looks the rest up: the
  * video record for media and thumbnails, the post for a post image, and the image_owners index for
  * avatars and covers (whose paths carry only a random id). Anything not found is `unmapped`: the
- * case still opens and a super admin maps it by hand.
+ * case still opens and a super admin maps it by hand. A record an account erasure deleted is found by what
+ * the erasure wrote down, while its media is still there (lib/privacy/erase-targets.ts): without an uploader.
  */
 import { parseCsamUrl, type CsamResolution, type CsamUrlTarget } from '@al-ummah/shared-types';
 import { resolveHandle, resolveHandleHistory } from '../channelHandles';
@@ -14,6 +15,7 @@ import { findStoredComment, type StoredComment } from '../comments';
 import { readHost } from '../sites/store';
 import { streamKey } from '../live/streams';
 import { lookupImageOwner } from './imageOwners';
+import { erasedRecord } from '../privacy/erase-targets';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
 
 export interface ResolveEnv {
@@ -40,10 +42,22 @@ async function json<T>(bucket: R2Bucket | undefined, key: string): Promise<T | n
 
 type VideoRow = { userId?: string; channelId?: string | null };
 
+/** An erased video; not an erased stream, which is written down the same way. */
+async function erasedVideo(env: ResolveEnv, videoId: string): Promise<VideoRow | null> {
+	const erased = isInternalVideoKey(videoId) ? null : await erasedRecord(env.SEARCH_DB, { kind: 'video', id: videoId });
+	return erased && !erased.stream ? (erased as VideoRow) : null;
+}
+
 async function videoResolution(env: ResolveEnv, videoId: string, kind: 'video' | 'video_thumbnail', target: CsamUrlTarget): Promise<ResolveOutcome> {
 	const video = isInternalVideoKey(videoId) ? null : await json<VideoRow>(env.videos, videoId);
-	if (!video) return { ok: false, reason: 'not_found', target };
-	return { ok: true, resolution: { kind, videoId, channelId: video.channelId ?? null, uploaderId: video.userId ?? null } };
+	const found = video ?? (await erasedVideo(env, videoId));
+	if (!found) return { ok: false, reason: 'not_found', target };
+	return { ok: true, resolution: { kind, videoId, channelId: found.channelId ?? null, uploaderId: found.userId ?? null } };
+}
+
+/** A profile's account, unless the profile was erased: such a case names no account and freezes none. */
+async function existingProfile(env: ResolveEnv, userId: string | null): Promise<string | null> {
+	return userId && (!env.profiles || (await env.profiles.head(userId))) ? userId : null;
 }
 
 /** The post of a channel that shows this image (a channel's posts, newest pages first). */
@@ -71,7 +85,8 @@ async function postShowing(env: ResolveEnv, channelId: string, path: string): Pr
  */
 async function postResolution(env: ResolveEnv, postId: string, expectChannel: string | null, target: CsamUrlTarget): Promise<ResolveOutcome> {
 	const channelId = expectChannel ?? (env.community_posts ? await postChannelId({ community_posts: env.community_posts, SEARCH_DB: env.SEARCH_DB }, postId) : null);
-	const post = channelId ? await json<{ userId?: string }>(env.community_posts, `posts/${channelId}/${postId}.json`) : null;
+	const stored = channelId ? await json<{ userId?: string }>(env.community_posts, `posts/${channelId}/${postId}.json`) : null;
+	const post = stored ?? (channelId ? ((await erasedRecord(env.SEARCH_DB, { kind: 'post', id: `${channelId}/${postId}` })) as { userId?: string } | null) : null);
 	if (!post) return { ok: false, reason: 'not_found', target };
 	return { ok: true, resolution: { kind: 'post_image', channelId, postId, uploaderId: post.userId ?? null } };
 }
@@ -91,7 +106,9 @@ async function commentResolution(env: ResolveEnv, target: Extract<CsamUrlTarget,
 }
 
 async function streamResolution(env: ResolveEnv, streamId: string, target: CsamUrlTarget): Promise<ResolveOutcome> {
-	const stream = await json<{ userId?: string; channelId?: string | null }>(env.videos, streamKey(streamId));
+	const stored = await json<{ userId?: string; channelId?: string | null }>(env.videos, streamKey(streamId));
+	const erased = stored ? null : await erasedRecord(env.SEARCH_DB, { kind: 'video', id: streamId });
+	const stream = stored ?? (erased?.stream ? (erased as { userId?: string; channelId?: string | null }) : null);
 	if (!stream) return { ok: false, reason: 'not_found', target };
 	return { ok: true, resolution: { kind: 'live_stream', streamId, channelId: stream.channelId ?? null, uploaderId: stream.userId ?? null } };
 }
@@ -140,14 +157,15 @@ export async function resolveCsamUrl(env: ResolveEnv, input: string): Promise<Re
 			const indexed = await lookupImageOwner(env.SEARCH_DB, target.path);
 			const post = await postShowing(env, target.channelId, target.path);
 			const uploaderId = post?.userId ?? indexed?.ownerId ?? null;
-			if (!post && !indexed) return { ok: false, reason: 'not_found', target };
+			// A file of an erased channel's own folder
+			if (!post && !indexed && !(await erasedRecord(env.SEARCH_DB, { kind: 'channel', id: target.channelId }))) return { ok: false, reason: 'not_found', target };
 			return { ok: true, resolution: { kind: 'post_image', channelId: target.channelId, imagePath: target.path, ...(post ? { postId: post.postId } : {}), uploaderId } };
 		}
 		case 'image': {
 			const owner = await lookupImageOwner(env.SEARCH_DB, target.path);
 			if (!owner) return { ok: false, reason: 'not_found', target };
 			if (owner.kind === 'profile_avatar' || owner.kind === 'profile_cover') {
-				return { ok: true, resolution: { kind: 'profile_image', imagePath: target.path, imageField: owner.kind === 'profile_avatar' ? 'avatarUrl' : 'coverUrl', channelId: null, uploaderId: owner.ownerId } };
+				return { ok: true, resolution: { kind: 'profile_image', imagePath: target.path, imageField: owner.kind === 'profile_avatar' ? 'avatarUrl' : 'coverUrl', channelId: null, uploaderId: await existingProfile(env, owner.ownerId) } };
 			}
 			if (owner.kind === 'channel_avatar' || owner.kind === 'channel_cover') {
 				return {
@@ -179,22 +197,25 @@ export async function resolveByHand(
 	input: { kind: 'video'; videoId: string } | { kind: 'post'; channelId: string; postId: string } | { kind: 'profile_image' | 'channel_image'; id: string; field: 'avatarUrl' | 'coverUrl' },
 ): Promise<CsamResolution | null> {
 	if (input.kind === 'video') {
-		const v = isInternalVideoKey(input.videoId) ? null : await json<VideoRow>(env.videos, input.videoId);
+		const v = isInternalVideoKey(input.videoId) ? null : ((await json<VideoRow>(env.videos, input.videoId)) ?? (await erasedVideo(env, input.videoId)));
 		return v ? { kind: 'video', videoId: input.videoId, channelId: v.channelId ?? null, uploaderId: v.userId ?? null } : null;
 	}
 	if (input.kind === 'post') {
-		const p = await json<{ userId?: string }>(env.community_posts, `posts/${input.channelId}/${input.postId}.json`);
+		const p = (await json<{ userId?: string }>(env.community_posts, `posts/${input.channelId}/${input.postId}.json`)) ?? ((await erasedRecord(env.SEARCH_DB, { kind: 'post', id: `${input.channelId}/${input.postId}` })) as { userId?: string } | null);
 		return p ? { kind: 'post_image', channelId: input.channelId, postId: input.postId, uploaderId: p.userId ?? null } : null;
 	}
 	if (input.kind === 'channel_image') {
-		const ch = await json<Record<string, any>>(env.channels, input.id);
+		const ch = (await json<Record<string, any>>(env.channels, input.id)) ?? (await erasedRecord(env.SEARCH_DB, { kind: 'channel', id: input.id }));
 		const url = ch?.[input.field] ?? ch?.pendingImages?.[input.field]?.url;
 		const path = typeof url === 'string' ? new URL(url).pathname : undefined;
 		return ch ? { kind: 'channel_image', channelId: input.id, imageField: input.field, ...(path ? { imagePath: path } : {}), uploaderId: ch.userId ?? null } : null;
 	}
-	const profile = await json<Record<string, any>>(env.profiles, input.id);
+	const stored = await json<Record<string, any>>(env.profiles, input.id);
+	const profile = stored ?? (await erasedRecord(env.SEARCH_DB, { kind: 'user', id: input.id }));
 	if (!profile) return null;
 	const url = profile[input.field] ?? profile.pendingImages?.[input.field]?.url;
 	const path = typeof url === 'string' ? new URL(url).pathname : undefined;
-	return { kind: 'profile_image', imageField: input.field, ...(path ? { imagePath: path } : {}), channelId: null, uploaderId: input.id };
+	// An erased profile's is found by the image alone
+	if (!stored && !path) return null;
+	return { kind: 'profile_image', imageField: input.field, ...(path ? { imagePath: path } : {}), channelId: null, uploaderId: stored ? input.id : null };
 }

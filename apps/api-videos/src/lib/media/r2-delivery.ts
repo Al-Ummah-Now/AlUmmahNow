@@ -53,7 +53,7 @@ import { getSecret } from '../env-helpers';
 import { markPublished } from '../published';
 import { bunnyRef } from './providers';
 import { fetchBunnyVideo } from '../processing/loop';
-import { deleteOriginal } from './originals';
+import { closeOriginal, deleteOriginal } from './originals';
 import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
@@ -805,6 +805,20 @@ async function deleteRendition(env: MediaEnv, videoId: string, access: MediaAcce
 	return keys.length;
 }
 
+/** A video's copies on the CDN (every rendition). `strict`: throws when the purge failed. */
+export async function purgeVideoCdn(env: MediaEnv, videoId: string, opts: { strict?: boolean } = {}): Promise<void> {
+	const purged = await purgeCdnPrefix(env, `${videoId}/`);
+	if (opts.strict && purged === 'failed') throw new Error(`CDN purge failed for ${videoId}`);
+}
+
+/** What D1 holds of a video's R2 media: its original's row is closed, its backfill rows go (docs/media-delivery/BACKFILL.md). */
+export async function forgetVideoMedia(env: MediaEnv, videoId: string): Promise<void> {
+	await closeOriginal(env as never, videoId);
+	const db = (env as { SEARCH_DB?: D1Database }).SEARCH_DB;
+	if (!db) return;
+	await db.batch(['media_r2_verified', 'media_bunny_removals', 'media_backfill_items'].map((table) => db.prepare(`DELETE FROM ${table} WHERE video_id = ?1`).bind(videoId)));
+}
+
 /** Every rendition of a video, both buckets, purged from the CDN; the original stays. Idempotent. */
 export async function purgeVideoRenditions(env: MediaEnv, videoId: string, opts: { strict?: boolean } = {}): Promise<number> {
 	let n = 0;
@@ -816,10 +830,7 @@ export async function purgeVideoRenditions(env: MediaEnv, videoId: string, opts:
 		n += keys.length;
 	}
 	// The CSAM takedown purges even when nothing is left in R2: the CDN may still hold copies
-	if (n || opts.strict) {
-		const purged = await purgeCdnPrefix(env, `${videoId}/`);
-		if (opts.strict && purged === 'failed') throw new Error(`CDN purge failed for ${videoId}`);
-	}
+	if (n || opts.strict) await purgeVideoCdn(env, videoId, opts);
 	return n;
 }
 
@@ -837,11 +848,7 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 	// Audio track files (wiki AUN-MULTI-AUDIO)
 	const { purgeVideoAudio } = await import('../audio-tracks/service');
 	n += await purgeVideoAudio(env as never, videoId);
-	// Its R2 backfill rows: verification, scheduled Bunny removal, run items (docs/media-delivery/BACKFILL.md)
-	const db = (env as { SEARCH_DB?: D1Database }).SEARCH_DB;
-	if (db) {
-		await db.batch(['media_r2_verified', 'media_bunny_removals', 'media_backfill_items'].map((table) => db.prepare(`DELETE FROM ${table} WHERE video_id = ?1`).bind(videoId)));
-	}
+	await forgetVideoMedia(env, videoId);
 	return n;
 }
 

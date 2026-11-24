@@ -74,6 +74,7 @@
 --   apps/api-videos/migrations/search/0120_islamic_seasons.sql
 --   apps/api-videos/migrations/search/0121_channel_move_offers.sql
 --   apps/api-videos/migrations/search/0122_live_chat_ai_hold.sql
+--   apps/api-videos/migrations/search/0123_image_owners_channel.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -142,6 +143,7 @@ CREATE TABLE live_stream_metadata (stream_id TEXT PRIMARY KEY, channel_id TEXT, 
 CREATE TABLE media_backfill_items (run_id TEXT NOT NULL, video_id TEXT NOT NULL, state TEXT NOT NULL, skip_reason TEXT, title TEXT, channel_id TEXT, library_id INTEGER, duration_seconds REAL, source_bytes INTEGER, source_file TEXT, has_original INTEGER NOT NULL DEFAULT 0, needs_transcode INTEGER NOT NULL DEFAULT 1, est_usd REAL NOT NULL DEFAULT 0, upload_id TEXT, copied_bytes INTEGER NOT NULL DEFAULT 0, parts TEXT, job_id TEXT, egress_bytes INTEGER NOT NULL DEFAULT 0, container_seconds INTEGER NOT NULL DEFAULT 0, stored_bytes INTEGER NOT NULL DEFAULT 0, class_a_ops INTEGER NOT NULL DEFAULT 0, spent_usd REAL NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, error_step TEXT, checks TEXT, started_at TEXT, verified_at TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, video_id)) WITHOUT ROWID;
 CREATE TABLE media_backfill_runs (id TEXT PRIMARY KEY, status TEXT NOT NULL, scope TEXT NOT NULL, settings TEXT NOT NULL, estimate TEXT, cursor TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, stop_reason TEXT, tick_at TEXT, last_start_at TEXT) WITHOUT ROWID;
 CREATE TABLE media_bunny_removals (video_id TEXT PRIMARY KEY, library_id INTEGER NOT NULL, guid TEXT, status TEXT NOT NULL, scheduled_by TEXT NOT NULL, scheduled_at TEXT NOT NULL, delete_after TEXT NOT NULL, removed_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE media_erase_targets (target_kind TEXT NOT NULL, target_id TEXT NOT NULL, job_id TEXT NOT NULL, erased_at TEXT, media TEXT, held_by TEXT, claimed_at TEXT, claim_token TEXT, first_deleted_at TEXT, last_deleted_at TEXT, stopped_at TEXT, PRIMARY KEY (target_kind, target_id, job_id)) WITHOUT ROWID;
 CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL, start_cold INTEGER, start_dispatch_ms INTEGER, start_ready_ms INTEGER, start_accept_ms INTEGER, start_ffmpeg_ms INTEGER);
 CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT, keep TEXT);
 CREATE TABLE media_provider_health (provider TEXT NOT NULL, minute TEXT NOT NULL, reporter TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (provider, minute, reporter));
@@ -254,6 +256,7 @@ CREATE INDEX idx_admin_deletions_purge_by ON admin_deletions (purge_requested_by
 CREATE INDEX idx_admin_deletions_requested ON admin_deletions (purged_at, purge_requested_at);
 CREATE INDEX idx_admin_job_log_job ON admin_job_log (job_id, id);
 CREATE INDEX idx_admin_job_users_job ON admin_job_users (job_id);
+CREATE INDEX idx_admin_jobs_csam_case ON admin_jobs (json_extract(params, '$.caseId'), created_at) WHERE kind = 'csam.contain';
 CREATE INDEX idx_admin_jobs_finished ON admin_jobs (finished_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
@@ -330,6 +333,7 @@ CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, cre
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
 CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
+CREATE INDEX idx_image_owners_channel ON image_owners (channel_id);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_import_source_items_post ON import_source_items (post_id);
 CREATE INDEX idx_import_source_items_state ON import_source_items (source_id, state, original_at);
@@ -369,6 +373,7 @@ CREATE INDEX idx_media_backfill_items_state ON media_backfill_items (run_id, sta
 CREATE INDEX idx_media_backfill_runs_status ON media_backfill_runs (status, created_at);
 CREATE INDEX idx_media_bunny_removals_due ON media_bunny_removals (status, delete_after);
 CREATE INDEX idx_media_bunny_removals_library ON media_bunny_removals (library_id, status);
+CREATE INDEX idx_media_erase_targets_job ON media_erase_targets (job_id);
 CREATE INDEX idx_media_jobs_queued ON media_jobs (queued_at);
 CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);

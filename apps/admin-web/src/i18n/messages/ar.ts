@@ -969,6 +969,7 @@ const ar: Messages = {
       videoPurge: 'حذف مرئي',
       userSyncHolds: 'تطبيق حظر المستخدم',
       userDeleteData: 'حذف بيانات مستخدم',
+      userEraseMedia: 'وسائط حساب محذوف',
       userEraseRun: 'حذف حساب اختبار',
       profilesRestoreLegacy: 'استعادة حقول الملفات الشخصية القديمة',
       profilesRepairEmails: 'بريد الملفات الشخصية',

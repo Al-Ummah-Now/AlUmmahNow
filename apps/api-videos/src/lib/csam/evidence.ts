@@ -27,6 +27,7 @@ import { readBunnyRecording } from '../live/providers';
 import { readParts, readsOf, recordingFiles, recordingParts, storedRecordings, type RecordingEnv } from './recordings';
 import { sourceCandidates, type MediaEnv } from '../media/r2-delivery';
 import { imagePathOf } from './imageOwners';
+import { erasedRecord, erasedTargets, type EraseTarget } from '../privacy/erase-targets';
 import { CHUNK_BYTES, SEALED_CHUNK_BYTES, evidenceKeys, openChunk, openJson, sealChunk, sealJson, sha256Hex, type EvidenceKeys } from './crypto';
 
 export interface EvidenceEnv {
@@ -134,14 +135,23 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		snapshots.push({ name, source, contentType: 'application/json', bytes: plain.byteLength, chunkSha256: [await sha256Hex(plain)], chunkBytes: CHUNK_BYTES, keyVersion: keys.current.version, copiedAt: new Date().toISOString() });
 	};
 
+	// A record an account erasure deleted: what it wrote down of the media (ids and paths) stands in for it
+	const erased = async (target: EraseTarget): Promise<Record<string, any> | null> => {
+		const rows = (await erasedTargets(env.SEARCH_DB, target)).filter((row) => row.media);
+		if (!rows.length) return null;
+		await snapshot(`erased-${target.kind}.json`, `account erasure ${rows[0]!.jobId}`, rows[0]);
+		return rows[0]!.media;
+	};
+
 	// The matched file itself first
 	const media = mediaKeyOf(matchedUrl);
 	if (media) files.push({ name: `01-matched.${extOf(media.key, 'bin')}`, source: { type: 'r2', ...media }, contentType: typeOf(extOf(media.key, 'bin')) });
 	if (r.imagePath) files.push({ name: `01-matched-image.${extOf(r.imagePath, 'jpg')}`, source: { type: 'image', path: r.imagePath }, contentType: typeOf(extOf(r.imagePath, 'jpg')) });
 
 	if (r.videoId) {
-		const video = await json<Record<string, any>>(env.videos, r.videoId);
-		await snapshot('record-video.json', `videos/${r.videoId}`, video);
+		const stored = await json<Record<string, any>>(env.videos, r.videoId);
+		await snapshot('record-video.json', `videos/${r.videoId}`, stored);
+		const video = stored ?? (await erased({ kind: 'video', id: r.videoId }));
 		// The video's best source: the kept original, else Bunny's best file
 		const manifest = await json<OriginalManifest>(env.MEDIA_ORIGINALS, originalManifestKey(r.videoId));
 		if (manifest) files.push({ name: '02-video-original', source: { type: 'original', videoId: r.videoId, uploadId: manifest.uploadId, size: manifest.size }, contentType: 'application/octet-stream' });
@@ -154,8 +164,9 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		if (custom?.startsWith(`/thumbnails/${r.videoId}/`)) files.push({ name: `04-custom-thumbnail.${extOf(custom, 'jpg')}`, source: { type: 'image', path: custom }, contentType: typeOf(extOf(custom, 'jpg')) });
 	}
 	if (r.postId && r.channelId) {
-		const post = await json<{ images?: Array<{ url?: string }> }>(env.community_posts, `posts/${r.channelId}/${r.postId}.json`);
-		await snapshot('record-post.json', `community_posts/posts/${r.channelId}/${r.postId}`, post);
+		const stored = await json<{ images?: Array<{ url?: string }> }>(env.community_posts, `posts/${r.channelId}/${r.postId}.json`);
+		await snapshot('record-post.json', `community_posts/posts/${r.channelId}/${r.postId}`, stored);
+		const post = stored ?? ((await erased({ kind: 'post', id: `${r.channelId}/${r.postId}` })) as typeof stored);
 		(post?.images ?? []).forEach((image, i) => {
 			const path = imagePathOf(image.url);
 			if (path && path !== r.imagePath && path.startsWith(`/community-posts/${r.channelId}/`)) files.push({ name: `05-post-image-${i + 1}.${extOf(path, 'jpg')}`, source: { type: 'image', path }, contentType: typeOf(extOf(path, 'jpg')) });
@@ -176,7 +187,9 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		}
 	}
 	if (r.kind === 'live_stream' && r.streamId) {
-		await snapshot('record-live-stream.json', `videos/${streamKey(r.streamId)}`, await json(env.videos, streamKey(r.streamId)));
+		const stream = await json(env.videos, streamKey(r.streamId));
+		await snapshot('record-live-stream.json', `videos/${streamKey(r.streamId)}`, stream);
+		if (!stream) await erased({ kind: 'video', id: r.streamId });
 		const sessions = await env.SEARCH_DB?.prepare('SELECT * FROM live_sessions WHERE stream_id = ? ORDER BY created_at LIMIT 100').bind(r.streamId).all();
 		if (sessions?.results?.length) await snapshot('record-live-sessions.json', `live_sessions/${r.streamId}`, sessions.results);
 		files.push(...recordingFiles(await storedRecordings(env as RecordingEnv, r.streamId)));
@@ -275,7 +288,7 @@ async function openSource(env: EvidenceEnv, source: EvidenceSource, state: CopyS
 	// A file Bunny is still writing is not the recording
 	if (source.type === 'bunny_live' && !(await readBunnyRecording(env as RecordingEnv, source.guid)).finished) return null;
 	// Bunny Stream: the first candidate that answers (the original when Bunny serves it, else the best MP4)
-	const record = source.type === 'bunny' ? await json<Record<string, any>>(env.videos, source.videoId) : null;
+	const record = source.type === 'bunny' ? ((await json<Record<string, any>>(env.videos, source.videoId)) ?? (await erasedRecord(env.SEARCH_DB, { kind: 'video', id: source.videoId }))) : null;
 	const candidates = await sourceCandidates(env as unknown as MediaEnv, source.type === 'bunny' ? source.videoId : source.guid, record as never);
 	const ordered = state.bunnyFile ? candidates.filter((u) => u.includes(`/${state.bunnyFile}`)) : candidates;
 	for (const url of ordered) {

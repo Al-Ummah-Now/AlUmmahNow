@@ -49,6 +49,8 @@ import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObj
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
 import { eraseUserSubscriptions, subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
+import { CLEANUP, endParts, erasedRecord, takePart, unlessUnderCase, type EraseTarget } from '../privacy/erase-targets';
+import { RUN_ACCOUNT_DELAY, eraseMediaHooks, runEraseMedia } from '../privacy/erase-media';
 import { flagResumeUnavailable, flagUnreadableChannel } from '../privacy/notices';
 import { OperationBudget } from '../privacy/scan';
 import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
@@ -1329,7 +1331,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	const state: MoveState = { changedHands: job.result?.changedHands === true ? true : null };
 	try {
 		const outcome = await transferSteps(env, job, state);
-		return 'params' in outcome ? outcome : { ...outcome, result: { ...outcome.result, changedHands: state.changedHands } };
+		return !('done' in outcome) || !outcome.done ? outcome : { ...outcome, result: { ...outcome.result, changedHands: state.changedHands } };
 	} catch (error) {
 		// Best effort: a job without the field counts as one that may have moved
 		if (state.changedHands !== null)
@@ -1563,7 +1565,9 @@ async function purgeVideo(
 /** The CSAM takedown's final purge (lib/csam/contain.ts): strict, after the evidence copy. */
 export async function purgeVideoForCsam(env: AdminServiceEnv, videoId: string, channelId: string | null): Promise<void> {
 	const stored = (await repo(env.videos).getObject(videoId).catch(() => null)) as Row | null;
-	await purgeVideo(env, videoId, stored ?? { channelId }, undefined, { strict: true, keepReferences: true });
+	// Deleted with its account meanwhile: what that erasure wrote down (lib/privacy/erase-targets.ts)
+	const erased = stored ? null : await erasedRecord(env.SEARCH_DB as never, { kind: 'video', id: videoId });
+	await purgeVideo(env, videoId, stored ?? { ...(erased ?? {}), channelId }, undefined, { strict: true, keepReferences: true });
 	// The id in its channel's sections and playlists. Not now (a rebuilding index): its own purge job does
 	// it, so the takedown and its ban never wait. On a retry the record is gone and the case says whose it was
 	const channel = (stored?.channelId as string | undefined) ?? channelId;
@@ -1701,10 +1705,12 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 		}
 		const videoIds = await idsOf(env, 'video', { channelId: id });
 		let failed = 0;
+		let held = 0;
 		await eachLimited(videoIds, 6, async (videoId) => {
 			try {
-				// Each video is deleted from its own Bunny library
-				await purgeVideo(env, videoId, { userId, channelId: id }, undefined, { strict: true, keepReferences: true });
+				// Each video is deleted from its own Bunny library; one under a takedown case waits for it
+				const purged = await unlessUnderCase(env.SEARCH_DB as never, job.id, [{ kind: 'video', id: videoId }], () => purgeVideo(env, videoId, { userId, channelId: id }, undefined, { strict: true, keepReferences: true }));
+				if (!purged) held++;
 			} catch (error) {
 				failed++;
 				logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
@@ -1712,8 +1718,14 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 		});
 		if (failed > 0) return finish({ videos: videoIds.length - failed }, failed);
 		// Post images first (Bunny Storage, the channel's upload folder; #699): a failure retries this step
-		const postImages = await eraseChannelPostImages(env as never, id);
-		const { posts, sections } = await removeChannelPostsAndSections(env, id);
+		let postImages = 0;
+		let removed = { posts: 0, sections: 0 };
+		const purged = await unlessUnderCase(env.SEARCH_DB as never, job.id, [{ kind: 'channel', id }], async () => {
+			postImages = await eraseChannelPostImages(env as never, id);
+			removed = await removeChannelPostsAndSections(env, id);
+		});
+		if (!purged || held) return underCase(job);
+		const { posts, sections } = removed;
 		const result = { videos: videoIds.length, posts, sections, postImages };
 		return { done: false, params: { ...p, stage: 'playlists', ...result, playlists: 0, scanned: 0 }, result };
 	}
@@ -1728,7 +1740,7 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 	// Its social auto-post connections and webhooks (wiki AUN-SOCIAL); a failure retries this step
 	await disconnectChannel(env as never, id, 'system');
 	// Last: the record itself (the deletion row and the admin audit log keep the history)
-	await env.channels.delete(id);
+	if (!(await unlessUnderCase(env.SEARCH_DB as never, job.id, [{ kind: 'channel', id }], () => env.channels.delete(id)))) return underCase(job);
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
 	return { done: true, result };
 }
@@ -1977,6 +1989,10 @@ export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Ro
 	return saved;
 }
 
+/** A purge waits while a takedown case of its target is open: the case keeps its evidence, then deletes the media itself. */
+const CASE_WAIT_SECONDS = 3600;
+const underCase = (job: AdminJob): JobOutcome => ({ done: false, params: job.params, delaySeconds: CASE_WAIT_SECONDS, note: 'a takedown case is open' });
+
 /** Job video.purge (started only by the cleanup). Idempotent: an erased video is simply gone; a restored one is skipped. */
 async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const video = await repo(env.videos).getObject(job.targetId);
@@ -1986,8 +2002,8 @@ async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 		await dropVideoReferences(env as never, job.targetId, (job.params.channelId as string | null) ?? null);
 		return { done: true };
 	}
-	await purgeVideo(env, job.targetId, { userId: job.params.userId, channelId: job.params.channelId }, undefined, { strict: true });
-	return { done: true };
+	const purged = await unlessUnderCase(env.SEARCH_DB as never, job.id, [{ kind: 'video', id: job.targetId }], () => purgeVideo(env, job.targetId, { userId: job.params.userId, channelId: job.params.channelId }, undefined, { strict: true }));
+	return purged ? { done: true } : underCase(job);
 }
 
 // ---------------------------------------------------------------------------
@@ -2521,30 +2537,23 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
 	const previousErrors = Array.isArray(job.result?.errors) ? (job.result.errors as string[]) : [];
+	// Media goes through a job written down before each record is deleted (lib/privacy/erase-media.ts)
+	const budget = new OperationBudget(900);
+	const media = eraseMediaHooks(env, budget, { delaySeconds: RUN_ACCOUNT_DELAY });
 	const step = await eraseRunUserData(
 		env as never,
 		job.targetId,
-		new OperationBudget(900),
+		budget,
 		{
-			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
-				// Bunny's id of the video; none when Bunny holds no copy
-				const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
-				if (!bunnyId) return;
-				// The video's own library (lib/bunny/libraries.ts)
-				const b = await bunny(env, video);
-				if (!b) return;
-				try {
-					await b.client.deleteVideo(b.libraryId, bunnyId);
-				} catch (error) {
-					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
-				}
-			},
+			...media,
 			// The user's Bunny collections go with the profile (lib/channelCollection.ts)
 			onProfileDeleted: async (id: string, profile: unknown) => {
+				await media.onProfileDeleted(id, profile);
 				await removeCollectionsFor(env as never, id, profile as never);
 			},
 			// Each owned channel's collections go with its record (never throws)
 			onChannelDeleted: async (id: string, channel: unknown) => {
+				await media.onChannelDeleted(id, channel);
 				await removeCollectionsFor(env as never, id, channel as never);
 				await eraseChannelSocial(env, id);
 			},
@@ -2568,30 +2577,21 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 
 async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
 	const budget = new OperationBudget(900);
+	const media = eraseMediaHooks(env, budget);
 	const summary = await eraseUserData(
 		env as never,
 		userId,
 		budget,
 		{
-			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
-				// Bunny's id of the video; none when Bunny holds no copy
-				const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
-				if (!bunnyId) return;
-				// The video's own library (lib/bunny/libraries.ts)
-				const b = await bunny(env, video);
-				if (!b) return;
-				try {
-					await b.client.deleteVideo(b.libraryId, bunnyId);
-				} catch (error) {
-					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
-				}
-			},
+			...media,
 			// The user's Bunny collections go with the profile (lib/channelCollection.ts)
 			onProfileDeleted: async (id: string, profile: unknown) => {
+				await media.onProfileDeleted(id, profile);
 				await removeCollectionsFor(env as never, id, profile as never);
 			},
 			// Each owned channel's collections go with its record (never throws)
 			onChannelDeleted: async (id: string, channel: unknown) => {
+				await media.onChannelDeleted(id, channel);
 				await removeCollectionsFor(env as never, id, channel as never);
 				await eraseChannelSocial(env, id);
 			},
@@ -2715,10 +2715,19 @@ export async function purgeDeletion(env: AdminServiceEnv, d: AdminDeletion): Pro
 			const post = await repo(env.community_posts).getObject(key);
 			if (!post) return { state: 'skipped', reason: 'post_gone' };
 			if (post.status !== 'deleted') return { state: 'skipped', reason: 'post_not_deleted' };
-			// Its images go first (#699): a failure leaves the post, so the next cleanup retries
-			await erasePostImages(env as never, post, d.parentId!);
-			await env.community_posts.delete(key);
-			await env.community_posts.delete(postLocationKey(d.id));
+			const targets: EraseTarget[] = [{ kind: 'channel', id: d.parentId! }, { kind: 'post', id: `${d.parentId}/${d.id}` }];
+			const part = `${CLEANUP}${crypto.randomUUID()}`;
+			// A takedown case of it comes first: the next run tries again
+			if (!(await takePart(env.SEARCH_DB as never, part, part, targets))) throw new Error('a takedown case is open');
+			try {
+				// Its images go first (#699): a failure leaves the post, so the next cleanup retries
+				await erasePostImages(env as never, post, d.parentId!);
+				await env.community_posts.delete(key);
+				await env.community_posts.delete(postLocationKey(d.id));
+			} finally {
+				await endParts(env.SEARCH_DB as never, part, part, 'none');
+				await env.SEARCH_DB!.prepare('DELETE FROM media_erase_targets WHERE job_id = ?').bind(part).run();
+			}
 			return { state: 'purged' };
 		}
 	}
@@ -2744,6 +2753,7 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'channel.purge': (env, job) => purgeChannel(env as AdminServiceEnv, job),
 	'channel.transfer': (env, job) => runTransfer(env as AdminServiceEnv, job),
 	'video.move': (env, job) => runMove(env as AdminServiceEnv, job),
+	'user.erase-media': (env, job) => runEraseMedia(env, job),
 	'video.purge': (env, job) => runVideoPurge(env as AdminServiceEnv, job),
 	'user.sync-holds': (env, job) => syncUserHolds(env as AdminServiceEnv, job),
 	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),

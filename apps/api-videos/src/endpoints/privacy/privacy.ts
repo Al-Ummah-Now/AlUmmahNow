@@ -1,10 +1,9 @@
-import { bunnyRef } from '../../lib/media/providers';
+import { EraseMediaUnavailable, eraseMediaHooks } from '../../lib/privacy/erase-media';
 import { stopSupportBeforeErasure } from '../../lib/support/erasure';
 import { vendorContext } from '../../lib/support/jobs';
 import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
 import { removeCollectionsFor } from '../../lib/channelCollection';
 import { eraseChannelSocial } from '../../lib/social/connect';
-import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 /**
  * GDPR data subject rights endpoints (Story 1.3, AC 2, 3).
  *
@@ -22,9 +21,7 @@ import { DEFAULT_CAS_ATTEMPTS } from '../../lib/r2Repo';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
-import { requireSecret } from '../../lib/env-helpers';
 import Queue, { MessageType } from '../../lib/queue';
-import { BunnyStreamClient } from '../../lib/bunny/stream';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget, asBucket, readJson, updateJson } from '../../lib/privacy/scan';
 import { collectUserData, eraseUserData, type PrivacyBuckets } from '../../lib/privacy/user-data';
 import { RESUME_TOKEN_MAX, ResumeUnavailableError } from '../../lib/privacy/resume-state';
@@ -126,7 +123,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 				'200': { description: 'Erasure summary' },
 				'400': { description: 'Missing confirmation (code: confirmation_required)' },
 				'401': { description: 'Authentication required' },
-				'503': { description: 'Another pass is needed and cannot be made right now: retry later (code: resume_unavailable)' },
+				'503': { description: 'Another pass is needed and cannot be made right now: retry later (code: resume_unavailable or service_unavailable)' },
 			},
 		},
 		'required',
@@ -145,40 +142,32 @@ export class PrivacyErase extends AuthenticatedRoute {
 		}
 
 		const env = c.env;
-		const onVideoDeleted = async (videoId: string, video?: LibraryHints) => {
-			// Bunny's id of the video; none when Bunny holds no copy (R2 copies go with the media purge)
-			const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
-			if (!bunnyId) return;
-			try {
-				// The video's own library (lib/bunny/libraries.ts)
-				const bunny = await bunnyClientForVideo(env as never, video);
-				await bunny.client.deleteVideo(bunny.libraryId, bunnyId);
-			} catch (error) {
-				// Media removal is best-effort: the R2 record is already gone, so the
-				// stream is unreachable from the app. Logged for manual follow-up.
-				logger.warn('[Privacy] Failed to delete Bunny Stream media', {
-					videoId,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		};
-
+		// Media goes through a job written down before each record is deleted (lib/privacy/erase-media.ts)
 		const budget = budgetFor(c);
+		const media = eraseMediaHooks(env, budget);
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
-		// The profile's and each owned channel's Bunny collections (lib/channelCollection.ts); never throws
-		const onProfileDeleted = (id: string, profile: unknown) => removeCollectionsFor(env as never, id, profile as never).then(() => undefined);
+		// The Bunny collections (lib/channelCollection.ts) never throw
+		const onProfileDeleted = async (id: string, profile: unknown) => {
+			await media.onProfileDeleted(id, profile);
+			await removeCollectionsFor(env as never, id, profile as never);
+		};
 		const onChannelDeleted = async (id: string, channel: unknown) => {
+			await media.onChannelDeleted(id, channel);
 			await removeCollectionsFor(env as never, id, channel as never);
 			await eraseChannelSocial(env, id, userId);
 		};
 		let pass: Awaited<ReturnType<typeof eraseUserData>>;
 		try {
-			pass = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted, onChannelDeleted }, {
+			pass = await eraseUserData(buckets(c), userId, budget, { ...media, onProfileDeleted, onChannelDeleted }, {
 				resumeToken,
 				onChannelUnreadable: (channelId) => flagUnreadableChannel(c.env, executionContext(c), 'erase', channelId),
 			});
 		} catch (error) {
 			if (error instanceof ResumeUnavailableError) return cannotContinue(c, 'erase', error);
+			if (error instanceof EraseMediaUnavailable) {
+				logger.error('[Privacy] Erase stopped: its media could not be written down', { userId, error: error.message });
+				return apiError(c, 503, 'service_unavailable', { error: 'This cannot be finished right now. Please try again later.' }, { 'Retry-After': '60', 'Cache-Control': 'no-store' });
+			}
 			throw error;
 		}
 		const { unavailable, ...summary } = pass;

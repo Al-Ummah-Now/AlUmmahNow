@@ -72,6 +72,7 @@ function env() {
 		subtitles: new MemoryBucket(),
 		global_settings: new MemoryBucket(),
 		queue: new MemoryQueue(),
+		ADMIN_JOBS_QUEUE: new MemoryQueue(),
 		INTERNAL_API_KEY: 'k'.repeat(40),
 		'bunny-stream-key': 'test-key',
 		bunny_stream_library_id: LIB,

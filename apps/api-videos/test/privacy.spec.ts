@@ -5,6 +5,7 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
 import { PrivacyConsentGet, PrivacyConsentPut, PrivacyErase, PrivacyExport, appendConsentRecord, CONSENT_HISTORY_LIMIT } from '../src/endpoints/privacy/privacy';
 import { collectUserData, eraseUserData, DELETED_USER_ID, EXPORT_LIST_FIELDS } from '../src/lib/privacy/user-data';
 import { backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
@@ -91,6 +92,7 @@ function seed() {
 			[backupPointerKey(OTHER, 'job-1', 'v1')]: '',
 		}),
 		queue: new MemoryQueue(),
+		ADMIN_JOBS_QUEUE: new MemoryQueue(),
 		INTERNAL_API_KEY: 'k'.repeat(40),
 	};
 }
@@ -218,7 +220,7 @@ describe('eraseUserData (erasure)', () => {
 		assert.equal(env.channel_sections.read('ch-me/sec1'), null);
 		assert.equal(env.channel_tabs.read('channel-tabs/ch-me'), null);
 		assert.equal(env.videos.read('v-mine'), null);
-		assert.equal(env.subtitles.read('v-mine/original/en.vtt'), null);
+		assert.ok(env.subtitles.read('v-mine/original/en.vtt'), 'with the rest of its media, the hook\'s');
 		assert.deepEqual(deletedMedia, ['v-mine']);
 		assert.equal(env.watch_history.read(`${ME}:v-other`), null);
 		assert.equal(env.playlists.read('pl-mine'), null);
@@ -345,7 +347,7 @@ describe('privacy endpoints', () => {
 
 	it('DELETE /api/privacy/data erases and queues follow-up messages', async () => {
 		const app = buildApp(privacyRoutes, { userId: ME });
-		const env = seed();
+		const env = { ...seed(), SEARCH_DB: new SqliteD1() };
 		const res = await app.request(
 			'/api/privacy/data',
 			{ method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }), headers: { 'content-type': 'application/json' } },

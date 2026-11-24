@@ -168,7 +168,7 @@ describe('video purge erases every copy (#700, #814)', () => {
 
 	it('erases thumbnails, subtitles, caption jobs and work files, and the id in its channel sections and playlists', async () => {
 		const env = await purgedVideoEnv();
-		const outcome = await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
+		const outcome = await ADMIN_JOB_HANDLERS['video.purge'](env, { id: 'j1', targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
 		assert.equal((outcome as { done: boolean }).done, true);
 		assert.equal(env.videos.store.has('v1'), false);
 		// Bunny Storage: every file in its folder (uploads and the admin upload); files it only names stay
@@ -191,12 +191,12 @@ describe('video purge erases every copy (#700, #814)', () => {
 	it('is idempotent, and a storage failure fails the job so it retries', async () => {
 		const env = await purgedVideoEnv();
 		storage.failDeletes = true;
-		await assert.rejects(() => ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never), /answered 500/);
+		await assert.rejects(() => ADMIN_JOB_HANDLERS['video.purge'](env, { id: 'j1', targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never), /answered 500/);
 		storage.failDeletes = false;
 		// The retry finds the record gone and still erases what was left
-		await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
+		await ADMIN_JOB_HANDLERS['video.purge'](env, { id: 'j1', targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
 		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']);
-		await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
+		await ADMIN_JOB_HANDLERS['video.purge'](env, { id: 'j1', targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
 		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']);
 	});
 
@@ -211,7 +211,7 @@ describe('video purge erases every copy (#700, #814)', () => {
 	it('a rebuilding playlist index fails the job after everything else is gone, and the retry finishes', async () => {
 		const env = await purgedVideoEnv();
 		env.SEARCH_DB.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
-		const run = () => ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
+		const run = () => ADMIN_JOB_HANDLERS['video.purge'](env, { id: 'j1', targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
 		await assert.rejects(run, /index is being rebuilt/);
 		assert.equal(env.videos.store.has('v1'), false);
 		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg'], 'the files went first');
@@ -241,7 +241,7 @@ describe('post images (#699)', () => {
 	it('the channel purge empties the channel\'s post image folder', async () => {
 		const env = baseEnv({ channels: { ch1: { id: 'ch1', userId: 'owner', handle: 'ch1', isDeleted: true, playlists: [] } }, posts: { 'posts/ch1/p1.json': post('p1') } });
 		for (const f of ['/community-posts/ch1/a.webp', '/community-posts/ch1/b.gif', '/community-posts/ch2/c.webp']) storage.files.add(f);
-		const first = await ADMIN_JOB_HANDLERS['channel.purge'](env, { targetId: 'ch1', params: { userId: 'owner' } } as never);
+		const first = await ADMIN_JOB_HANDLERS['channel.purge'](env, { id: 'j1', targetId: 'ch1', params: { userId: 'owner' } } as never);
 		assert.equal((first as any).result.postImages, 2);
 		assert.deepEqual([...storage.files], ['/community-posts/ch2/c.webp']);
 		assert.equal(env.community_posts.store.has('posts/ch1/p1.json'), false);
