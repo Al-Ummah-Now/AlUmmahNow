@@ -105,7 +105,7 @@ export type ScheduledPublishStatus =
   | 'publishing'     // Currently being published
   | 'published'      // Successfully published
   | 'failed'         // Failed to publish
-  | 'cancelled';     // User cancelled the schedule
+  | 'cancelled';     // User canceled the schedule
 
 export interface VideoScheduleRequest {
   videoId: string;
@@ -219,7 +219,7 @@ Response:
   "result": {
     "videoId": "abc123",
     "status": "cancelled",
-    "message": "Scheduled publication cancelled"
+    "message": "Scheduled publication canceled"
   }
 }
 
@@ -353,7 +353,7 @@ interface ScheduleConfig {
 // - "Video will be published in 5 minutes"
 // - "Video published successfully via schedule"
 // - "Scheduled publication failed - action required"
-// - "Schedule cancelled"
+// - "Schedule canceled"
 ```
 
 ## Scheduler Worker Architecture
