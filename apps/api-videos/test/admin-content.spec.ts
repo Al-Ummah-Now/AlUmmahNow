@@ -60,6 +60,7 @@ const realFetch = globalThis.fetch;
 before(() => {
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input instanceof Request ? input.url : input);
+		if (url.startsWith('https://admin.test/internal/channel-reports/')) return Response.json({ success: true, result: { underReview: false } });
 		if (!url.startsWith('https://video.bunnycdn.com/')) return realFetch(input, init);
 		bunny.calls.push(`${init?.method ?? 'GET'} ${new URL(url).pathname}`);
 		return new Response(bunny.status < 300 ? '{}' : 'error', { status: bunny.status });
@@ -141,6 +142,9 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 		ADMIN_JOBS_QUEUE: new JobsQueue(),
 		'bunny-stream-key': 'test-key',
 		bunny_stream_library_id: '7',
+		// Owner moves ask admin-api about reports (lib/channelReportStatus.ts); the fetch stub above answers
+		ADMIN_API_URL: 'https://admin.test',
+		INTERNAL_API_KEY: 'k',
 	};
 	for (const kind of ['video', 'channel', 'profile', 'playlist'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
 	// Every seeded account may own channels (a move refuses a receiver with no room, CC-D12)
@@ -1570,6 +1574,17 @@ describe('channel actions', () => {
 			assert.deepEqual(asked, [['https://admin.test/internal/channel-reports/ch1', 'k']]);
 			answer = () => new Response('down', { status: 502 });
 			await refused(make(), 'move_check_unavailable', 503);
+			answer = () => { throw new Error('unreachable'); };
+			await refused(make(), 'move_check_unavailable', 503);
+			answer = () => Response.json({ success: true, result: {} });
+			await refused(make(), 'move_check_unavailable', 503);
+			// Not configured: refused too, never skipped
+			answer = () => Response.json({ success: true, result: { underReview: false } });
+			Object.assign(env as Record<string, unknown>, { ADMIN_API_URL: '' });
+			await refused(make(), 'move_check_unavailable', 503);
+			Object.assign(env as Record<string, unknown>, { ADMIN_API_URL: undefined });
+			await refused(make(), 'move_check_unavailable', 503);
+			Object.assign(env as Record<string, unknown>, { ADMIN_API_URL: 'https://admin.test' });
 			answer = () => Response.json({ success: true, result: { underReview: false } });
 			const offer = await make();
 			answer = () => Response.json({ success: true, result: { underReview: true } });
@@ -1614,7 +1629,7 @@ describe('channel actions', () => {
 			const { pathname } = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 			if (pathname === '/.well-known/oauth-authorization-server') return Response.json({ issuer: ISSUER, jwks_uri: `${ISSUER}/.well-known/jwks.json` });
 			if (pathname === '/.well-known/jwks.json') return Response.json({ keys: [jwk] });
-			return new Response('not found', { status: 404 });
+			return realFetch(input);
 		}) as typeof fetch;
 		__resetClientForTests();
 		clearRevocationCache();
@@ -1705,6 +1720,11 @@ describe('channel actions', () => {
 		await move('move_in_progress', { en: 'This channel is already being moved. Try again once that finishes.', ar: 'يجري نقل هذه القناة بالفعل. حاول مرة أخرى بعد انتهائه.' });
 		await other('go live', (lang) => as(OWNER)('/api/live-streams/go/start', lang), 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.', CONFLICT);
 		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
+
+		// The report check can't be made: refused in words the owner can act on
+		Object.assign(env as Record<string, unknown>, { ADMIN_API_URL: '' });
+		await move('move_check_unavailable', { en: 'We couldn’t check this channel just now, so it wasn’t moved. Please try again shortly.', ar: 'تعذّر فحص هذه القناة الآن، فلم تُنقل. يُرجى المحاولة بعد قليل.' });
+		Object.assign(env as Record<string, unknown>, { ADMIN_API_URL: 'https://admin.test' });
 
 		// Scholar posts keep not_owner
 		await other('scholar post', (lang) => as(OWNER)(`/internal/scholars/${OTHER}/articles/cms-1`, lang, { channelId: 'ch1', title: 'T', url: 'https://www.test/en/articles/t/', locale: 'en' }, {}, 'PUT'), 'not_owner', 'not_owner', FORBIDDEN);
