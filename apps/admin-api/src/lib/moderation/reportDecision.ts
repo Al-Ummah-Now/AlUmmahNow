@@ -3,7 +3,8 @@
  * per-report action (POST /api/moderation/reports/:id/action) and the item
  * action of the reports queue (POST /api/moderation/queue/items/:type/:id/action).
  *
- *   warning / removed / deleted  flags on the content document (lib/contentModeration.ts)
+ *   warning / removed / deleted  flags on the content document (lib/contentModeration.ts); a live stream
+ *                                or a chat message is changed by api-videos (POST /internal/admin/live-moderation)
  *   banned                       bans the item's owner through the user ban path
  *                                (lib/content/userBan.ts: users:manage, audited) and
  *                                hides the item
@@ -17,7 +18,7 @@ import { hasContentPermission, REPORT_OUTCOME_PERMISSION, type ModerationAction,
 import { applyContentModeration } from '../contentModeration';
 import type { CasBucket } from '../r2Cas';
 import { banVideosUser } from '../content/userBan';
-import type { VideosClientEnv } from '../content/videosClient';
+import { callVideos, type VideosClientEnv } from '../content/videosClient';
 import { lookupMany } from './reportMeta';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
@@ -137,7 +138,9 @@ async function giveBack(env: DecisionEnv, reports: DecisionInput['reports'], cla
   }
 }
 
-const BUCKET: Record<string, keyof AdminBindings> = { video: 'videos', livestream: 'videos', channel: 'channels', playlist: 'playlists' };
+const BUCKET: Record<string, keyof AdminBindings> = { video: 'videos', channel: 'channels', playlist: 'playlists' };
+/** Changed by api-videos, which owns their records and indexes (lib/admin/liveModeration.ts there). */
+const LIVE = new Set(['livestream', 'live_chat']);
 
 /** Applies the outcome. Throws when the change failed (the caller reopens the reports). */
 async function perform(
@@ -169,7 +172,17 @@ async function perform(
   const bucketName = BUCKET[p.entityType];
   const bucket = bucketName ? (env[bucketName] as unknown as CasBucket | undefined) : undefined;
   let changed = false;
-  if (!bucket) {
+  if (LIVE.has(p.entityType)) {
+    try {
+      const result = await callVideos<{ found: boolean; changed: boolean }>(env, '/live-moderation', { method: 'POST', json: { entityType: p.entityType, entityId: p.entityId, action: p.action, notes: p.notes }, actorId: p.actorId });
+      changed = result.changed;
+      notes.push(!result.found ? `${p.entityType} not found: ${p.entityId}` : changed ? describe(p.action, p.notes) : 'Nothing to change');
+    } catch (error) {
+      if (!bannedUserId) throw error;
+      logger.warn('[Moderation] Owner banned but the item could not be hidden', { entityType: p.entityType, entityId: p.entityId, error: error instanceof Error ? error.message : String(error) });
+      notes.push('The item could not be hidden; the ban hides the owner\'s videos and channels');
+    }
+  } else if (!bucket) {
     notes.push(`Entity type ${p.entityType} not supported for content actions`);
   } else {
     try {

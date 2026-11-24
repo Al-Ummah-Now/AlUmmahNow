@@ -334,7 +334,7 @@ export const LiveStreamView = z.object({
 // Phase 2: Content Moderation view models
 export const ReportView = z.object({
     id: Str(),
-    entityType: z.enum(['video', 'comment', 'channel', 'livestream']),
+    entityType: z.enum(['video', 'comment', 'channel', 'livestream', 'live_chat']),
     entityId: Str(),
     reporterId: Str(),
     reporterChannelId: Str(),

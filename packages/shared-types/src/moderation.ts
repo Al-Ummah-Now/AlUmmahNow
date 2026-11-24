@@ -1,7 +1,18 @@
 // Content Moderation Types - Shared across services
 
 // Entity types that can be reported
-export const REPORTABLE_ENTITY_TYPES = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post'] as const;
+/**
+ * What a report keeps of the reported item when it is filed (queue payload `subject` of ReportCreate), for
+ * items that can be deleted before anyone looks. The archive drops `text` and pseudonymises `ownerId`.
+ */
+export interface ReportSubject {
+  text: string;
+  parentId: string | null;
+  channelId: string | null;
+  ownerId: string | null;
+}
+
+export const REPORTABLE_ENTITY_TYPES = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat'] as const;
 export type ReportableEntityType = (typeof REPORTABLE_ENTITY_TYPES)[number];
 
 // Reasons for reporting content

@@ -346,8 +346,10 @@ export interface StoredMessage {
 	message: LiveChatMessage;
 }
 
-export async function readMessage(db: D1Database, streamId: string, messageId: string): Promise<StoredMessage | null> {
-	const row = await db.prepare(`SELECT ${COLUMNS} FROM live_chat_messages WHERE id = ? AND stream_id = ?`).bind(messageId, streamId).first<MessageRow>();
+/** A message by its id; of this stream only, when one is given. */
+export async function readMessage(db: D1Database, streamId: string | null, messageId: string): Promise<StoredMessage | null> {
+	const found = await db.prepare(`SELECT ${COLUMNS} FROM live_chat_messages WHERE id = ?`).bind(messageId).first<MessageRow>();
+	const row = found && (streamId === null || found.stream_id === streamId) ? found : null;
 	return row ? { id: row.id, streamId: row.stream_id, userId: row.user_id, status: row.status as StoredMessage['status'], message: toMessage(row) } : null;
 }
 
@@ -392,6 +394,24 @@ export async function removeAllBy(db: D1Database, streamId: string, userId: stri
 				"UPDATE live_chat_messages SET status = 'removed', removed_by = 'moderator', is_pinned = 0, updated_at = ? WHERE id IN (SELECT id FROM live_chat_messages WHERE stream_id = ? AND user_id = ? AND status = 'published' LIMIT 500)",
 			)
 			.bind(now, streamId, userId)
+			.run();
+		const n = Number(r.meta?.changes) || 0;
+		total += n;
+		if (n < 500) break;
+	}
+	return total;
+}
+
+/** Removed and held messages are kept this long, then gone (decision E17-D1). */
+export const REMOVED_CHAT_DAYS = 30;
+
+/** Daily: messages removed or held for 30 days, in bounded batches; the rest is the next day's. */
+export async function purgeRemovedChat(db: D1Database, now = Date.now()): Promise<number> {
+	let total = 0;
+	for (let i = 0; i < 20; i++) {
+		const r = await db
+			.prepare("DELETE FROM live_chat_messages WHERE id IN (SELECT id FROM live_chat_messages WHERE status IN ('held', 'removed') AND updated_at < ? LIMIT 500)")
+			.bind(now - REMOVED_CHAT_DAYS * 86_400_000)
 			.run();
 		const n = Number(r.meta?.changes) || 0;
 		total += n;

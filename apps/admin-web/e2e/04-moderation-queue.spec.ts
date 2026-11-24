@@ -131,7 +131,7 @@ test.describe('moderation queue', () => {
   test('MOD-09 type filter offers every reportable entity type', async ({ page }) => {
     await page.goto('/moderation');
     const options = await optionTexts(page.getByRole('combobox', { name: 'Content type', exact: true }));
-    expect(options).toEqual(['All types', 'Video', 'Comment', 'Channel', 'Live stream', 'Playlist', 'Post']);
+    expect(options).toEqual(['All types', 'Video', 'Comment', 'Channel', 'Live stream', 'Playlist', 'Post', 'Live chat message']);
     const statuses = await optionTexts(page.getByRole('combobox', { name: 'Status', exact: true }));
     expect(statuses).toEqual(['All statuses', 'Pending', 'Reviewing', 'Resolved', 'Dismissed']);
   });

@@ -192,7 +192,9 @@ export interface SubjectContent {
 
 export async function getSubjectContent(
   buckets: { videos: R2Like; community_posts?: R2Like | undefined },
-  signal: Pick<ModerationSignal, 'subject_type' | 'subject_id' | 'parent_id' | 'channel_id'>
+  signal: Pick<ModerationSignal, 'subject_type' | 'subject_id' | 'parent_id' | 'channel_id'>,
+  /** Live chat messages live in api-videos' D1 (reportMeta.ts lookupMany) */
+  chat?: (id: string) => Promise<{ title: string | null; isHidden: boolean | null } | null>,
 ): Promise<SubjectContent> {
   const none: SubjectContent = { available: false, text: null, hidden: false, hiddenByModeration: false, canHide: false };
   if (signal.subject_type === 'comment' && signal.parent_id) {
@@ -200,6 +202,11 @@ export async function getSubjectContent(
     const comment = video ? findComment(video.comments ?? [], signal.subject_id) : null;
     if (!comment) return { ...none, canHide: true };
     return { available: true, text: comment.text ?? null, hidden: comment.status === 'held', hiddenByModeration: comment.heldBy === 'moderation', canHide: true };
+  }
+  if (signal.subject_type === 'live_chat') {
+    const message = chat ? await chat(signal.subject_id) : null;
+    if (!message) return { ...none, canHide: true };
+    return { available: true, text: message.title, hidden: message.isHidden === true, hiddenByModeration: message.isHidden === true, canHide: true };
   }
   if (signal.subject_type === 'video') {
     const video = await readJson<{ title?: string; description?: string; tags?: string[] }>(buckets.videos, signal.subject_id);
@@ -229,36 +236,45 @@ export async function setCommentHidden(
   hidden: boolean,
   reviewer: Reviewer,
   reason?: string,
-  now = new Date()
+  now = new Date(),
+  /** Hides or restores a live chat message through api-videos */
+  chat?: (id: string, action: 'removed' | 'restored') => Promise<{ found: boolean; changed: boolean }>,
 ): Promise<{ ok: true; changed: boolean } | { ok: false; error: 'not_found' | 'unsupported' | 'subject_missing' }> {
   const row = await db
     .prepare('SELECT id, subject_type, subject_id, parent_id FROM moderation_signals WHERE id = ?')
     .bind(signalId)
     .first<{ id: string; subject_type: string; subject_id: string; parent_id: string | null }>();
   if (!row) return { ok: false, error: 'not_found' };
-  if (row.subject_type !== 'comment' || !row.parent_id) return { ok: false, error: 'unsupported' };
+  const isChat = row.subject_type === 'live_chat' && !!chat;
+  if (!isChat && (row.subject_type !== 'comment' || !row.parent_id)) return { ok: false, error: 'unsupported' };
 
   // Conditional write on the current video (SCALABILITY-AUDIT AA-2): a comment
   // posted or an edit made meanwhile is kept, and cannot undo the hide.
   let missing = false;
   let changed = false;
-  const result = await updateJson<{ comments?: StoredComment[] } & Record<string, unknown>>(videos, row.parent_id, (video) => {
-    changed = false;
-    const comment = video ? findComment(video.comments ?? [], row.subject_id) : null;
-    missing = !video || !comment;
-    if (!video || !comment) return undefined;
-    if (hidden && comment.status !== 'held') {
-      comment.status = 'held';
-      comment.heldBy = 'moderation';
-      changed = true;
-    } else if (!hidden && comment.status === 'held' && comment.heldBy === 'moderation') {
-      delete comment.status;
-      delete comment.heldBy;
-      changed = true;
-    }
-    return changed ? video : undefined;
-  });
-  if (missing || !result) return { ok: false, error: 'subject_missing' };
+  if (isChat) {
+    const done = await chat!(row.subject_id, hidden ? 'removed' : 'restored');
+    if (!done.found) return { ok: false, error: 'subject_missing' };
+    changed = done.changed;
+  } else {
+    const result = await updateJson<{ comments?: StoredComment[] } & Record<string, unknown>>(videos, row.parent_id!, (video) => {
+      changed = false;
+      const comment = video ? findComment(video.comments ?? [], row.subject_id) : null;
+      missing = !video || !comment;
+      if (!video || !comment) return undefined;
+      if (hidden && comment.status !== 'held') {
+        comment.status = 'held';
+        comment.heldBy = 'moderation';
+        changed = true;
+      } else if (!hidden && comment.status === 'held' && comment.heldBy === 'moderation') {
+        delete comment.status;
+        delete comment.heldBy;
+        changed = true;
+      }
+      return changed ? video : undefined;
+    });
+    if (missing || !result) return { ok: false, error: 'subject_missing' };
+  }
 
   const iso = now.toISOString();
   await db.batch([

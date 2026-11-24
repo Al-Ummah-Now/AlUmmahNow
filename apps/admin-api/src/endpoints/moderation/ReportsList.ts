@@ -13,7 +13,7 @@ export class ReportsList extends AdminRoute {
     request: {
       query: z.object({
         status: z.enum(['pending', 'reviewing', 'resolved', 'dismissed']).optional(),
-        entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post']).optional(),
+        entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat']).optional(),
         entity_id: z.string().trim().min(1).max(200).optional().describe("Only reports about this item (the admin picks it by name)"),
         reporter_id: z.string().trim().min(1).max(200).optional().describe("Only reports filed by this user"),
         limit: Num({ description: "Number of reports to return (max 100)" }).optional().default(50),

@@ -654,6 +654,7 @@ const en = {
     livestream: 'Live stream',
     playlist: 'Playlist',
     post: 'Post',
+    live_chat: 'Live chat message',
   },
   reason: {
     inappropriate: 'Inappropriate',

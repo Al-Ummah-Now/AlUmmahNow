@@ -14,6 +14,8 @@ import suggestRouter from '../src/routers/suggest.router';
 import moderationRouter from '../src/routers/moderation.router';
 import { buildHistorySql, buildQueueSql, endOf, likeTerm, parseHistoryQuery, parseQueueQuery, QueueQueryError, sharedWhere } from '../src/lib/moderation/reportQueue';
 import { syncReportMeta } from '../src/lib/moderation/reportMeta';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { sqliteD1 } from './d1-sqlite';
 import { MemoryR2 } from './r2-fake';
 
@@ -21,6 +23,7 @@ interface VideosCall { method: string; path: string; body: any; actor: string | 
 
 const ITEMS: Record<string, any> = {
   'video:v_1': { found: true, title: 'Bad video', parentId: null, channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
+  'live_chat:m_1': { found: true, title: 'rude message', parentId: 's_1', channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
   'comment:c_1': { found: true, title: 'rude words', parentId: 'v_9', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
 };
 const USERS: Record<string, any> = {
@@ -32,7 +35,9 @@ const USERS: Record<string, any> = {
   usr_mod: { displayName: 'Maryam Moderator', isBanned: false },
 };
 
-function fakeVideos(opts: { banStatus?: number } = {}) {
+interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean } }
+
+function fakeVideos(opts: FakeOptions = {}) {
   const calls: VideosCall[] = [];
   const fetcher = {
     async fetch(input: string, init: RequestInit = {}) {
@@ -55,6 +60,10 @@ function fakeVideos(opts: { banStatus?: number } = {}) {
         if (opts.banStatus) return json(opts.banStatus, { success: false, code: 'boom', error: 'refused' });
         return json(200, { success: true, result: { ban: { userId: call.path.split('/')[2] }, job: { id: 'job_1' } } });
       }
+      if (call.path === '/live-moderation') {
+        const { status, found = true, changed = true } = opts.live ?? {};
+        return status ? json(status, { success: false, code: 'boom', error: 'refused' }) : json(200, { success: true, result: { found, changed } });
+      }
       return json(404, { success: false, code: 'not_found', error: 'no route' });
     },
   };
@@ -63,7 +72,7 @@ function fakeVideos(opts: { banStatus?: number } = {}) {
 
 type Seed = { id: string; type?: string; entity: string; reporter: string; reason?: string; description?: string; status?: string; created: string; action?: string; moderator?: string; resolved?: string };
 
-function setup(reports: Seed[], opts: { banStatus?: number } = {}) {
+function setup(reports: Seed[], opts: FakeOptions = {}) {
   const db = sqliteD1();
   for (const r of reports) {
     db.prepare(
@@ -362,5 +371,61 @@ describe('report copies fill', () => {
   it('does nothing without api-videos', async () => {
     const t = setup(BASE);
     assert.equal(await syncReportMeta({ REPORTS_DB: t.db } as never), 0);
+  });
+});
+
+describe('live streams and live chat (wiki E17 §5.2)', () => {
+  const LIVE: Seed[] = [
+    { id: 'm1', type: 'live_chat', entity: 'm_1', reporter: 'usr_r1', created: '2026-11-20T10:00:00Z' },
+    { id: 'm2', type: 'live_chat', entity: 'm_1', reporter: 'usr_r2', created: '2026-11-20T10:01:00Z' },
+    { id: 's1', type: 'livestream', entity: 's_1', reporter: 'usr_r1', created: '2026-11-20T10:02:00Z' },
+  ];
+  const act = (t: ReturnType<typeof setup>, item: string, action: string) => t.call(`/api/moderation/queue/items/${item}/action`, { method: 'POST', json: { action, notes: 'reason' } });
+  const sentOf = (t: ReturnType<typeof setup>) => t.calls.filter((c) => c.path === '/live-moderation').map((c) => [c.body.entityType, c.body.entityId, c.body.action, c.body.notes, c.actor]);
+
+  it('a decision is sent to api-videos, which owns the record, and closes every report of the item', async () => {
+    const t = setup(LIVE);
+    const done = await act(t, 'live_chat/m_1', 'removed');
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+    assert.deepEqual(sentOf(t), [['live_chat', 'm_1', 'removed', 'reason', 'usr_mod']]);
+    assert.deepEqual((await t.rows("SELECT id, status FROM reports WHERE entity_type = 'live_chat' ORDER BY id")).map((r: any) => [r.id, r.status]), [['m1', 'resolved'], ['m2', 'resolved']]);
+    assert.equal((await act(t, 'livestream/s_1', 'removed')).status, 200);
+    assert.deepEqual(sentOf(t)[1], ['livestream', 's_1', 'removed', 'reason', 'usr_mod']);
+  });
+
+  it('a decision api-videos refuses opens the reports again', async () => {
+    const t = setup(LIVE, { live: { status: 500 } });
+    assert.equal((await act(t, 'live_chat/m_1', 'removed')).status, 503);
+    assert.deepEqual((await t.rows("SELECT status FROM reports WHERE entity_type = 'live_chat'")).map((r: any) => r.status), ['pending', 'pending']);
+  });
+
+  it('a dismissal changes nothing, and a message that is gone still closes its reports', async () => {
+    const t = setup(LIVE, { live: { found: false, changed: false } });
+    assert.equal((await act(t, 'livestream/s_1', 'dismissed')).status, 200);
+    assert.deepEqual(sentOf(t), []);
+    const gone = await act(t, 'live_chat/m_1', 'removed');
+    assert.equal(gone.status, 200, JSON.stringify(gone.body));
+    assert.equal((await t.rows("SELECT status FROM reports WHERE id = 'm1'"))[0].status, 'resolved');
+  });
+
+  it('`banned` bans the author of the message and removes it', async () => {
+    const t = setup(LIVE);
+    const r = await act(t, 'live_chat/m_1', 'banned');
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.ok(t.calls.some((c) => c.path === '/users/usr_commenter/ban'));
+    assert.deepEqual(sentOf(t).map((c) => c[2]), ['banned']);
+  });
+
+  it('migration 0051 keeps every report, takes live_chat, refuses unknown types and keeps the indexes', async () => {
+    const files = readdirSync(join(process.cwd(), 'migrations')).filter((f) => f.endsWith('.sql')).sort();
+    const indexesOf = async (db: D1Database) => ((await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'reports' AND name LIKE 'idx%' ORDER BY name").all()).results as any[]).map((r) => r.name);
+    const before = files.slice(0, files.findIndex((f) => f.startsWith('0051_reports_live_chat')));
+    const put = "INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, created_at, moderator_notes) VALUES ('old', 'comment', 'c', 'u', 'spam', '2026-11-01', 'kept')";
+    const db = sqliteD1(files, (file, sql) => { if (file.startsWith('0051_reports_live_chat')) sql(put); });
+    const kept = (await db.prepare("SELECT entity_type, reporter_id, moderator_notes FROM reports WHERE id = 'old'").first()) as any;
+    assert.deepEqual({ ...kept }, { entity_type: 'comment', reporter_id: 'u', moderator_notes: 'kept' });
+    assert.deepEqual(await indexesOf(db), await indexesOf(sqliteD1(before)));
+    await db.prepare("INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason) VALUES ('new', 'live_chat', 'm', 'u', 'spam')").run();
+    await assert.rejects(async () => db.prepare("INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason) VALUES ('bad', 'tweet', 'm', 'u', 'spam')").run());
   });
 });

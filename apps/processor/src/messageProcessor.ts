@@ -27,9 +27,10 @@ import { eraseUserContactData } from './contact/erase';
 import { eraseUserTraces } from './erasure/user-traces';
 import { eraseArchiveSubject } from './erasure/archive-subjects';
 import { recordEraseTombstone } from './erasure/tombstones';
+import { eraseReportedOwner, reportSubjectFor } from './erasure/reports';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
-import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, SocialEventPayload } from '@al-ummah/shared-types';
+import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, ReportSubject, SocialEventPayload } from '@al-ummah/shared-types';
 import { PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
 import { socialEventMessage } from './social/consumer';
 import { publishAdminLive } from '@al-ummah/shared-types';
@@ -996,6 +997,9 @@ export class MessageProcessor {
     await this.queueArchiveTitlesErase(message, userId, env);
     // Erase tombstone (#1255): error reports arriving later (pages still open) are anonymised
     await recordEraseTombstone(env.REPORTS_DB, userId);
+    // Reports about what the person made: who they were, and their words (a comment, a chat message), go.
+    // After the tombstone: a report still in the queue is stored without them
+    await eraseReportedOwner(env.REPORTS_DB, userId, DELETED_USER_ID);
     // The archive's pseudonym secret (#1177): the user's archived events no longer lead to them
     const archiveSubject = await eraseArchiveSubject(env.NOTIFICATIONS_DB, userId);
     this.logger.debug('Erased the archive pseudonym secret', { userId, changed: archiveSubject });
@@ -1084,13 +1088,15 @@ export class MessageProcessor {
 
     switch (message.type) {
       case MessageType.ReportCreate:
-        const { description } = message.payload as { description?: string };
+        const { description, subject } = message.payload as { description?: string; subject?: ReportSubject };
         const createdAt = timestamp || new Date().toISOString();
+        // What api-videos kept of the item when it was reported (a chat message goes with its stream)
+        const kept = subject ? await reportSubjectFor(env.REPORTS_DB, subject, DELETED_USER_ID) : null;
 
         await env.REPORTS_DB.prepare(`
-          INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-        `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
+          INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at, entity_title, entity_parent_id, channel_id, owner_id)
+          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt, kept?.text || null, kept?.parentId ?? null, kept?.channelId ?? null, kept?.ownerId ?? null).run();
 
         this.logger.debug(`Report ${reportId} saved for ${entityType} ${entityId}`, {
           reason,

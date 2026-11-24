@@ -23336,7 +23336,8 @@
                       "video",
                       "comment",
                       "channel",
-                      "livestream"
+                      "livestream",
+                      "live_chat"
                     ]
                   },
                   "entityId": {
@@ -23394,7 +23395,8 @@
                                 "video",
                                 "comment",
                                 "channel",
-                                "livestream"
+                                "livestream",
+                                "live_chat"
                               ]
                             },
                             "entityId": {
@@ -23517,6 +23519,31 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "A live chat message that is not there for this person, or live chat is off (feature_off)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
                 }
               }
             }

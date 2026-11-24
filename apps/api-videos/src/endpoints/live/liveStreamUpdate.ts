@@ -15,6 +15,7 @@ import { CHANNEL_SUSPENDED_CODE } from "../../middleware/auth";
 import { hasSuspensionHolds, liveStreamIsFrozen } from "../../lib/admin/frozen";
 import { apiError } from '../../lib/api-error';
 import { cancelPremiere, isPremiere, premiereTimeProblem } from '../../lib/live/premieres';
+import { streamIsRemoved } from '../../lib/live/streams';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamUpdate extends AuthenticatedRoute {
@@ -159,9 +160,11 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			// Update the stream on the fresh copy with a conditional write
 			// (SCALABILITY-AUDIT AV-3)
 			let previousStatus = existingStream.status;
-			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true | 'premiere_started'>(`livestream:${id}`, (fresh) => {
+			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true | 'premiere_started' | 'removed'>(`livestream:${id}`, (fresh) => {
 				// The stream's owner and channel never change under an update
 				if (fresh.userId !== existingStream.userId || fresh.channelId !== existingStream.channelId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
+				// Not put on air (and announced) while a moderator has it hidden
+				if (updateData.status === 'live' && streamIsRemoved(fresh)) return { reject: 'removed' };
 				// Moved only while it waits
 				if (isPremiere(fresh) && updateData.scheduledStartTime !== undefined && fresh.status !== 'scheduled') return { reject: 'premiere_started' };
 				previousStatus = fresh.status;
@@ -180,6 +183,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				return c.json({ success: false, error: "Live stream not found" }, 404);
 			}
 			if (rejected === 'premiere_started') return apiError(c, 409, 'premiere_started');
+			if (rejected === 'removed') return apiError(c, 403, 'live_stream_removed');
 			if (rejected) {
 				return c.json({ success: false, error: "Insufficient permissions to modify this stream" }, 403);
 			}

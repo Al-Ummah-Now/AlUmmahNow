@@ -8,6 +8,8 @@ import { HTTPException } from 'hono/http-exception';
 import { AdminRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
+import { callVideos } from '../../lib/content/videosClient';
+import { itemKey, lookupMany } from '../../lib/moderation/reportMeta';
 import {
   getSignal,
   getSubjectContent,
@@ -95,7 +97,11 @@ export class AiSignalGet extends AdminRoute {
     try {
       content = await getSubjectContent(
         { videos: c.env.videos as unknown as R2Like, community_posts: c.env.community_posts as unknown as R2Like | undefined },
-        found.signal
+        found.signal,
+        async (id) => {
+          const item = (await lookupMany(c.env as never, [{ type: 'live_chat', id }], []))?.items.get(itemKey('live_chat', id));
+          return item?.found ? item : null;
+        }
       );
     } catch (error) {
       logger.warn('[AiModeration] Subject content unavailable', { id: params.id, error });
@@ -127,7 +133,7 @@ export class AiSignalReview extends AdminRoute {
 export class AiSignalVisibility extends AdminRoute {
   schema = addAuthToSchema({
     tags: ['AI Moderation'],
-    summary: 'Hide or restore the subject (video comments; reversible)',
+    summary: 'Hide or restore the subject (video comments and live chat messages; reversible)',
     request: {
       params: z.object({ id: Str() }),
       body: { content: { 'application/json': { schema: z.object({ hidden: z.boolean(), reason: z.string().max(500).optional() }) } } },
@@ -137,7 +143,9 @@ export class AiSignalVisibility extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
-    const result = await setCommentHidden(db(c), c.env.videos as unknown as R2Like, params.id, body.hidden, reviewerOf(this.getAuth(c)), body.reason);
+    const result = await setCommentHidden(db(c), c.env.videos as unknown as R2Like, params.id, body.hidden, reviewerOf(this.getAuth(c)), body.reason, undefined, (id, action) =>
+      callVideos(c.env as never, '/live-moderation', { method: 'POST', json: { entityType: 'live_chat', entityId: id, action }, actorId: this.getUserId(c) })
+    );
     if ('error' in result) {
       const status = result.error === 'not_found' || result.error === 'subject_missing' ? 404 : 400;
       return c.json({ success: false, error: result.error }, status);

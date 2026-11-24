@@ -25,7 +25,7 @@
 import type { ModerationAction, ReportableEntityType, ReportReason, ReportStatus } from './moderation';
 import type { ModerationDecision, ModerationReviewStatus } from './ai-moderation';
 
-export const REPORT_ENTITY_TYPES: readonly ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post'];
+export const REPORT_ENTITY_TYPES: readonly ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat'];
 
 /**
  * Report outcomes. The first four are the values the report page has always
@@ -104,7 +104,7 @@ export interface ReportedItemSummary {
   id: string;
   /** Title, or a text excerpt for comments and posts; null when unknown. */
   title: string | null;
-  /** Video id of a reported comment (for its link). */
+  /** Video id of a reported comment, stream id of a reported chat message (for its link). */
   parentId: string | null;
   channel: { id: string; name: string | null } | null;
   owner: (ReportPerson & { isBanned: boolean | null }) | null;

@@ -11,6 +11,7 @@ import { readTierChange, recordTierChange, recordTierChangeEmail } from '../lib/
 import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upgradeMode';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
+import { moderateLive } from '../lib/admin/liveModeration';
 import {
 	ADMIN_CHANNEL_SORTS,
 	ADMIN_USER_SORTS,
@@ -822,6 +823,12 @@ app.put('/live/overrides/:channelId', async (c) => {
 app.delete('/live/overrides/:channelId', async (c) => {
 	const channelId = c.req.param('channelId');
 	return ok(c, { channelId, ...(await removeChannelOverride(searchDb(c), channelId)) });
+});
+/** A moderator's decision about a live stream or a chat message (lib/admin/liveModeration.ts). */
+const LiveModeration = z.object({ entityType: z.enum(['livestream', 'live_chat']), entityId: z.string().min(1).max(200), action: z.enum(['removed', 'warning', 'banned', 'deleted', 'restored']), notes: z.string().max(2000).nullish() });
+app.post('/live-moderation', async (c) => {
+	const input = parse(LiveModeration, await body(c));
+	return ok(c, await moderateLive(liveEnv(c), { ...input, actorId: actor(c) }));
 });
 /** The stream's next session goes to `provider` (null cancels). A live session is never moved. */
 app.post('/live/streams/:id/move', async (c) => {

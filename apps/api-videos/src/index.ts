@@ -63,6 +63,7 @@ import { runPremieres } from './lib/live/premieres';
 import { runHeadsUps } from './lib/live/reminders';
 import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
 import { pruneLiveData } from "./lib/live/qoe";
+import { purgeRemovedChat } from './lib/live/chat';
 import { loggingMiddleware } from "./middleware/logging";
 import { videoListInvalidation } from './lib/videoListCache';
 import { withLogging } from "@al-ummah/logger";
@@ -960,6 +961,19 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[ChannelTeam] Daily sweep failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'channel-team', error);
+			}
+		})(),
+	);
+	ctx.waitUntil(
+		(async () => {
+			// Live chat removed or held 30 days ago (wiki E17-D1)
+			if (!rawEnv.SEARCH_DB) return;
+			try {
+				const purged = await purgeRemovedChat(rawEnv.SEARCH_DB);
+				if (purged) logger.info('[LiveChat] Retention purge', { purged });
+			} catch (error) {
+				logger.error('[LiveChat] Retention purge failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'live-chat-retention', error);
 			}
 		})(),
 	);

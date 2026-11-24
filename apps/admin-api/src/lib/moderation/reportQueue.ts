@@ -342,7 +342,7 @@ export function historyRow(row: ReportRow, lookup: Lookup | null): ReportHistory
   };
 }
 
-const AI_SUBJECT: Partial<Record<ReportableEntityType, string>> = { video: 'video', livestream: 'video', comment: 'comment', post: 'post' };
+const AI_SUBJECT: Partial<Record<ReportableEntityType, string>> = { video: 'video', livestream: 'video', comment: 'comment', post: 'post', live_chat: 'live_chat' };
 
 interface GroupRow extends ItemCopy {
   report_count: number;
