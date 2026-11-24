@@ -6,7 +6,8 @@
 import { z } from 'zod';
 import { AppContext, AuthenticatedRoute } from '../../base';
 import { ResponseError } from '../../lib/types';
-import { NO_STORE, fail } from './channelMembers';
+import { NO_STORE } from './channelMembers';
+import { apiError } from '../../lib/api-error';
 import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, type MoveOfferRow } from '../../lib/channelMoves';
 
 const ChannelParams = z.object({ id: z.string().min(1).max(200).describe('Channel id') });
@@ -16,7 +17,7 @@ const errors = {
 	'403': { description: 'not_owner or reauth_required', content: { 'application/json': { schema: ResponseError } } },
 	'404': { description: 'channel_not_found or offer_not_found', content: { 'application/json': { schema: ResponseError } } },
 	'409': {
-		description: 'receiver_not_channel_admin, official_handle, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open',
+		description: 'receiver_not_channel_admin, official_handle, channel_suspended, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open',
 		content: { 'application/json': { schema: ResponseError } },
 	},
 };
@@ -24,7 +25,10 @@ const errors = {
 const view = (o: MoveOfferRow) => ({ id: o.id, channelId: o.channel_id, fromUserId: o.from_user_id, toUserId: o.to_user_id, status: o.status, createdAt: o.created_at, expiresAt: o.expires_at });
 
 function refused(c: AppContext, error: unknown) {
-	if (error instanceof MoveError) return fail(c, error.status as 400 | 403 | 404 | 409 | 503, error.code, error.message);
+	if (error instanceof MoveError) {
+		const code = error.code === 'unavailable' ? 'service_unavailable' : error.code;
+		return apiError(c, error.status, code, { error: error.message }, NO_STORE);
+	}
 	throw error;
 }
 

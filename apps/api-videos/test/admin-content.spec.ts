@@ -29,6 +29,7 @@ import { ProfileCreate } from '../src/endpoints/profile/profileCreate';
 import { ProfileCurrentFetch } from '../src/endpoints/profile/profileCurrentFetch';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { errorHandler } from '../src/middleware/error-handler';
+import { ChannelMoveOfferCreate, ChannelMoveReceivers, MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MyMoveOffers } from '../src/endpoints/channel/channelMoveOffers';
 import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
@@ -1331,6 +1332,118 @@ describe('channel actions', () => {
 		db.db.prepare(`INSERT INTO support_pledges (id, supporter_user_id, channel_id, collector, mode, amount, currency, status, started_at, created_at, updated_at) VALUES ('pl1', 'usr_fan', 'ch1', 'paygood', 'test', 500, 'USD', 'active', '2026', '2026', '2026')`).run();
 		await assert.rejects(make(), (e: unknown) => e instanceof MoveError && e.code === 'channel_has_support');
 		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+	});
+
+	it('an accept claims the offer first: a cancel, decline or stop after the claim finds nothing open and tells nobody (CC-6 review)', async () => {
+		const { raw, env, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const fresh = Math.floor(Date.now() / 1000);
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh });
+		const notices = () => raw.queue.messages.map((m: any) => m.payload?.notificationKey).filter((k: string) => k && k !== 'channelMoveOffered');
+		// The accept's claim landed; the move has not started yet
+		db.db.prepare(`UPDATE channel_move_offers SET status = 'accepting' WHERE id = ?`).run(offer.id);
+		for (const lose of [() => cancelMoveOffer(env as never, offer.id, OWNER), () => declineMoveOffer(env as never, offer.id, OTHER), () => stopMoveOffer(env as never, offer.id)]) {
+			await assert.rejects(lose(), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found');
+		}
+		assert.deepEqual(notices(), [], 'nobody is told about a cancel that lost');
+		// A cancel that won first: the accept finds nothing to claim and moves nothing
+		db.db.prepare(`UPDATE channel_move_offers SET status = 'offered' WHERE id = ?`).run(offer.id);
+		await cancelMoveOffer(env as never, offer.id, OWNER);
+		await assert.rejects(acceptMoveOffer(env as never, offer.id, OTHER), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+		assert.equal((db.db.prepare(`SELECT COUNT(*) AS n FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { n: number }).n, 0, 'no move job');
+	});
+
+	it('expired offers can not be withdrawn or stopped and tell nobody; suspended channels, changed owners and demoted admins are refused (CC-6 review)', async () => {
+		const { raw, env, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const fresh = Math.floor(Date.now() / 1000);
+		const make = () => createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh });
+		const status = (id: string) => (db.db.prepare('SELECT status FROM channel_move_offers WHERE id = ?').get(id) as { status: string }).status;
+		const notices = () => raw.queue.messages.map((m: any) => m.payload?.notificationKey).filter((k: string) => k && k !== 'channelMoveOffered');
+		const editChannel = (change: Record<string, unknown>) => raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), ...change }));
+		const refused = (p: Promise<unknown>, code: string) => assert.rejects(p, (e: unknown) => e instanceof MoveError && e.code === code, code);
+
+		const old = await make();
+		db.db.prepare(`UPDATE channel_move_offers SET expires_at = '2020-01-01T00:00:00.000Z' WHERE id = ?`).run(old.id);
+		await refused(cancelMoveOffer(env as never, old.id, OWNER), 'offer_not_found');
+		await refused(stopMoveOffer(env as never, old.id), 'offer_not_found');
+		assert.equal(status(old.id), 'expired');
+		assert.deepEqual(notices(), []);
+
+		// Suspended: no offer, and an open offer can't be accepted (it stays open for after the suspension)
+		const open = await make();
+		editChannel({ isSuspended: true });
+		await refused(acceptMoveOffer(env as never, open.id, OTHER), 'channel_suspended');
+		assert.equal(status(open.id), 'offered', 'a passing refusal puts the offer back');
+		editChannel({ isSuspended: false });
+
+		// The receiver was demoted since the offer: refused for good
+		editChannel({ members: [{ userId: OTHER, role: 'editor', addedBy: OWNER, addedAt: '2026' }] });
+		await refused(acceptMoveOffer(env as never, open.id, OTHER), 'receiver_not_channel_admin');
+		assert.equal(status(open.id), 'refused');
+
+		// The owner changed since the offer: refused for good
+		editChannel({ members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] });
+		const third = await make();
+		editChannel({ userId: 'usr_someone' });
+		await refused(acceptMoveOffer(env as never, third.id, OTHER), 'owner_changed');
+		assert.equal(status(third.id), 'refused');
+		editChannel({ userId: OWNER, isSuspended: true });
+		await refused(make(), 'channel_suspended');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER, 'nothing moved');
+	});
+
+	it('the offer routes answer through the error catalogue and run the whole flow (CC-6 review)', async () => {
+		const { raw, env, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { displayName: 'Amina' }) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const as = (userId: string, authTime = Math.floor(Date.now() / 1000)) => {
+			const app = new Hono();
+			app.onError(errorHandler);
+			app.use('*', async (c, next) => {
+				c.set('auth' as never, { userId, email: null, payload: { authTime } } as never);
+				c.set('userId' as never, userId as never);
+				await next();
+			});
+			const router = fromHono(app);
+			router.get('/api/channels/:id/move-receivers', ChannelMoveReceivers);
+			router.post('/api/channels/:id/move-offers', ChannelMoveOfferCreate);
+			router.get('/api/move-offers', MyMoveOffers);
+			router.post('/api/move-offers/:id/accept', MoveOfferAccept);
+			router.post('/api/move-offers/:id/decline', MoveOfferDecline);
+			router.delete('/api/move-offers/:id', MoveOfferCancel);
+			return async (method: string, path: string, body?: unknown) => {
+				const res = await app.request(path, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
+				return { status: res.status, body: (await res.json()) as any };
+			};
+		};
+		const owner = as(OWNER);
+		const admin = as(OTHER);
+		assert.deepEqual((await owner('GET', '/api/channels/ch1/move-receivers?q=ami')).body.data.items.map((i: any) => i.userId), [OTHER]);
+		const stale = await as(OWNER, 1)('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
+		assert.deepEqual([stale.status, stale.body.code], [403, 'reauth_required']);
+		const notOwner = await admin('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
+		assert.deepEqual([notOwner.status, notOwner.body.code], [403, 'not_owner']);
+		const made = await owner('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
+		assert.equal(made.status, 200, JSON.stringify(made.body));
+		const again = await owner('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
+		assert.deepEqual([again.status, again.body.code], [409, 'offer_open']);
+		assert.equal((await admin('GET', '/api/move-offers')).body.data.received[0].id, made.body.data.id);
+		const wrong = await owner('POST', `/api/move-offers/${made.body.data.id}/accept`);
+		assert.deepEqual([wrong.status, wrong.body.code], [404, 'offer_not_found']);
+		const accepted = await admin('POST', `/api/move-offers/${made.body.data.id}/accept`);
+		assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+		await jobs.drain(env);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		const gone = await owner('DELETE', `/api/move-offers/${made.body.data.id}`);
+		assert.deepEqual([gone.status, gone.body.code], [404, 'offer_not_found']);
+		assert.equal((await admin('POST', `/api/move-offers/${made.body.data.id}/decline`)).status, 404);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
