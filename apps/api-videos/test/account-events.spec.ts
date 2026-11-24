@@ -176,6 +176,7 @@ describe('what is refused', () => {
 		['an access token', () => sign({ iss: ISSUER, aud: CLIENT, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 900, sub: 'user:1', mode: 'access', type: 'user', properties: { id: 'usr_1' } }, { typ: 'JWT' }), 'invalid_request'],
 		['an access token with our typ', () => sign({ iss: ISSUER, aud: CLIENT, iat: Math.floor(Date.now() / 1000), jti: crypto.randomUUID(), sub: 'user:1', mode: 'access' }), 'invalid_request'],
 		['an old token', () => sign(set({ iat: Math.floor(Date.now() / 1000) - 2 * 3600 })), 'invalid_request'],
+		['a token from the future', () => sign(set({ iat: Math.floor(Date.now() / 1000) + 600 })), 'invalid_request'],
 		['no jti', () => sign(set({ jti: undefined })), 'invalid_request'],
 		['a strange jti', () => sign(set({ jti: "x' OR 1" })), 'invalid_request'],
 		['no seq', () => sign(set({ seq: undefined })), 'invalid_request'],
@@ -208,7 +209,8 @@ describe('what is refused', () => {
 	});
 	it('keys that cannot be read, and a key that is new here: try again', async () => {
 		keyServer = () => new Response('down', { status: 500 });
-		assert.equal((await post(await sign(set()))).status, 503);
+		const down = await post(await sign(set()));
+		assert.deepEqual([down.status, down.body.code], [503, 'service_unavailable']);
 		forgetKeys();
 		keyServer = () => Response.json({ keys: [] });
 		assert.equal((await post(await sign(set()))).status, 503);
@@ -274,6 +276,14 @@ describe('the order of events on an account', () => {
 		assert.equal((await readReceived(db as never, purge))!.progress, 'after null');
 		assert.equal(await runAccountEvent(env, purge, slow), 'applied');
 		assert.deepEqual(applied, []);
+	});
+	it('a purge that is done never runs again, also after its row was cleaned up', async () => {
+		const purge = await receive(set({ seq: 7 }, `${RISC}account-purged`, {}));
+		assert.equal(await runAccountEvent(env, purge, actions), 'applied');
+		assert.equal((await sweepAccountEvents(env, Date.now() + KEEP_MS + 60_000)).removed, 1);
+		await receive(set({ seq: 7, jti: purge }, `${RISC}account-purged`, {}));
+		assert.equal(await runAccountEvent(env, purge, actions), 'ignored');
+		assert.deepEqual(applied, ['erase usr_1 7']);
 	});
 	it('one event works on an account at a time; another account does not wait', async () => {
 		const hide = await receive(set({ seq: 5 }));
@@ -377,7 +387,9 @@ describe('the sweep', () => {
 		assert.deepEqual(queue.messages, [{ kind: 'account-event', jti: lost }]);
 		await runAccountEvent(env, lost, { ...actions, 'account-disabled': async () => ({ complete: true }) });
 		assert.deepEqual(await sweepAccountEvents(env, now + KEEP_MS + 60_000), { queued: 0, removed: 2 });
-		// the account's newest seq stays: a late repeat is still ignored
+		// the account keeps its newest event: that one sent again (the same jti), or another as old, is ignored
+		await receive(set({ seq: 1, jti: lost }));
+		assert.equal(await runAccountEvent(env, lost, actions), 'ignored');
 		const late = await receive(set({ seq: 1 }));
 		assert.equal(await runAccountEvent(env, late, actions), 'ignored');
 	});

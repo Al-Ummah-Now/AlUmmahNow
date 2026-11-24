@@ -88,7 +88,7 @@
 --   apps/api-videos/migrations/search/0134_account_events.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
-CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE account_events_received (jti TEXT PRIMARY KEY, seq INTEGER NOT NULL, type TEXT NOT NULL, user_id TEXT NOT NULL DEFAULT '', reason TEXT, status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'applied', 'ignored', 'failed')), progress TEXT, error TEXT, received_at INTEGER NOT NULL, queued_at INTEGER, settled_at INTEGER) WITHOUT ROWID;
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;

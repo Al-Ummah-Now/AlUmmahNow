@@ -10,6 +10,7 @@
  */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { apiError } from '../../lib/api-error';
 import { logger } from '../../lib/logger';
 import { ACCOUNT_ACTIONS, dbOf, enqueue, retryAccountEvent, type AccountActions, type AccountEventsEnv } from '../../lib/account-events/jobs';
 import { readSet, SetError } from '../../lib/account-events/set';
@@ -41,7 +42,7 @@ export const accountEventsHandler = (actions: AccountActions = ACCOUNT_ACTIONS) 
 			return refused(c, error.code, error.message);
 		}
 		logger.error('[AccountEvents] Could not take the event', { error: error instanceof Error ? error.message : String(error) });
-		return c.json({ error: 'unavailable' }, 503, { 'Cache-Control': 'no-store', 'Retry-After': '60' });
+		return apiError(c, 503, 'service_unavailable', undefined, { 'Cache-Control': 'no-store', 'Retry-After': '60' });
 	}
 };
 
@@ -56,7 +57,7 @@ export function createAccountEventsInternalRouter() {
 			// tests, outside a request
 		}
 		// Nothing left to retry: the Errors page dismisses the item on 404
-		return (await retryAccountEvent(c.env, body?.jti, ctx)) ? c.json({ success: true, queued: true }, 202) : c.json({ success: false, error: 'not_found' }, 404);
+		return (await retryAccountEvent(c.env, body?.jti, ctx)) ? c.json({ success: true, queued: true }, 202) : apiError(c, 404, 'not_found');
 	});
 	return app;
 }
