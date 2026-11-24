@@ -8,6 +8,8 @@
 @import '../../../../packages/fanous-tokens/nav/aun-nav.css';
 /* Cards, panels, menus and buttons: frosted glass with the golden edge, flat Material everything else */
 @import '../../../../packages/fanous-tokens/surfaces/aun-surfaces.css';
+/* The "?" help button and its popover on every setting (wiki AUN-ADMIN-HELP) */
+@import '../../../../packages/fanous-tokens/help/aun-help.css';
 @import '../../../../packages/fanous-tokens/street/fanous-street.css';
 
 

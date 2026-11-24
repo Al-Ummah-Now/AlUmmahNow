@@ -143,6 +143,9 @@ export function hrefFor(s: Pick<AdminSuggestion, 'kind' | 'id' | 'parentId'>): s
       return `/community?q=${id}`;
     case 'comment':
       return s.parentId ? `/comments?videoId=${encodeURIComponent(s.parentId)}` : `/comments`;
+    // The guide's own search (wiki AUN-ADMIN-HELP): the id is the guide link, /help/<area>#<anchor>
+    case 'help':
+      return s.id;
     case 'report': {
       // The id is the reported item's group key `${type}:${id}`: the queue filtered to that item
       const at = s.id.indexOf(':');

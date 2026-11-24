@@ -837,7 +837,12 @@ export const ADMIN_JOB_MAX_RETRIES = 5;
  * know or paste a raw id.
  */
 export const ADMIN_SUGGEST_KINDS = ['channel', 'user', 'video', 'playlist', 'post', 'comment', 'contact', 'error', 'invite', 'report'] as const;
-export type AdminSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number];
+/**
+ * Kinds a box searches itself with its own `source` (the admin guide's settings, wiki
+ * AUN-ADMIN-HELP); the suggest API never serves them and rejects them.
+ */
+export const ADMIN_LOCAL_SUGGEST_KINDS = ['help'] as const;
+export type AdminSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number] | (typeof ADMIN_LOCAL_SUGGEST_KINDS)[number];
 
 export interface AdminSuggestion {
   kind: AdminSuggestKind;

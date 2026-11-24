@@ -33,6 +33,7 @@ import { FeatureStatusLine } from '@/components/features/FeatureStatusLine';
 import type { FeatureItem } from '@/lib/api/features';
 
 import { LocalTime } from '@/components/LocalTime';
+import { HelpTip, SettingLabel } from '@/components/help/HelpTip';
 const BADGE: Record<YoutubeImportReadiness, { tone: ChipTone; label: MessageKey }> = {
   ready: { tone: 'good', label: 'youtubeImport.badgeReady' },
   off: { tone: 'neutral', label: 'youtubeImport.badgeOff' },
@@ -194,9 +195,13 @@ export function YoutubeImportSetting({
         <fieldset disabled={!canEdit || busy} className="space-y-5">
           <FeatureStatusLine featureKey="youtubeImport" item={feature} className="rounded border border-border p-3" />
 
-          <label className="flex flex-col gap-1 max-w-2xl">
-            <span className={term}>{t('youtubeImport.clientId')}</span>
+          <div className="flex flex-col gap-1 max-w-2xl">
+            <SettingLabel htmlFor={`${ids}-client-id`} helpId="platform.youtubeImport.clientId" className={term}>
+              {t('youtubeImport.clientId')}
+            </SettingLabel>
             <input
+              id={`${ids}-client-id`}
+              data-help="platform.youtubeImport.clientId"
               value={form.clientId}
               onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
               onBlur={() => setTouched(true)}
@@ -213,7 +218,7 @@ export function YoutubeImportSetting({
             {shownError && (
               <span id={`${ids}-client-error`} className="text-xs text-danger-fg" data-testid="youtube-import-client-id-error">{t(shownError)}</span>
             )}
-          </label>
+          </div>
         </fieldset>
 
         <dl className="grid gap-4 md:grid-cols-2">
@@ -224,7 +229,10 @@ export function YoutubeImportSetting({
             data-source={view.secretSource ?? 'none'}
           >
             <dt className={`${term} flex flex-wrap items-center gap-2`}>
-              {t('youtubeImport.secret')}
+              <span className="inline-flex items-center">
+                {t('youtubeImport.secret')}
+                <HelpTip id="platform.youtubeImport.clientSecret" />
+              </span>
               <Chip tone={view.secretPresent ? 'good' : 'warn'} testId="youtube-import-secret-state">
                 {view.secretPresent ? t('youtubeImport.secretPresent') : t('youtubeImport.secretMissing')}
               </Chip>
@@ -272,6 +280,7 @@ export function YoutubeImportSetting({
                   <span className={term}>{t('youtubeImport.secretNew')}</span>
                   <input
                     type="password"
+                    data-help="platform.youtubeImport.clientSecret"
                     // Uncontrolled: React would mirror a controlled value into the value attribute (page markup)
                     defaultValue=""
                     onChange={(e) => setSecretValue(e.target.value)}

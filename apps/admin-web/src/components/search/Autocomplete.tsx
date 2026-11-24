@@ -129,6 +129,7 @@ const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
   error: 'autocomplete.kinds.error',
   invite: 'autocomplete.kinds.invite',
   report: 'autocomplete.kinds.report',
+  help: 'autocomplete.kinds.help',
 };
 
 type Envelope<T> = { success?: boolean; result?: T };

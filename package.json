@@ -70,6 +70,8 @@
     "test:themes": "node --experimental-strip-types --no-warnings --test packages/theme-packages/test/*.test.ts",
     "check:theme-colors": "node --experimental-strip-types --no-warnings packages/fanous-tokens/src/color-lint-cli.ts",
     "test:tokens": "node --experimental-strip-types --no-warnings --test packages/fanous-tokens/test/*.test.ts",
+    "check:admin-help": "node --experimental-strip-types --no-warnings packages/admin-help/src/cli.ts",
+    "test:admin-help": "node --experimental-strip-types --no-warnings --test packages/admin-help/test/*.test.ts",
     "check:locale-format": "node --experimental-strip-types --no-warnings scripts/ci/check-locale-format.ts",
     "check:error-bodies": "node --experimental-strip-types --no-warnings scripts/ci/check-error-bodies.ts",
     "check:config": "node --experimental-strip-types --no-warnings scripts/release/check-wrangler-config.ts",

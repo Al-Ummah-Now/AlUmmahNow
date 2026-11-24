@@ -17,6 +17,8 @@ import { NotificationMenuSetting } from './NotificationMenuSetting';
 import { DownloadRateLimitSetting } from './DownloadRateLimitSetting';
 import { YoutubeImportSetting } from './YoutubeImportSetting';
 import { featureStates, type FeatureStates } from '@/lib/features/states';
+import { HelpTips } from '@/components/help/HelpTips';
+import { tipsFor } from '@/lib/help/content';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +27,7 @@ export const dynamic = 'force-dynamic';
  * changing needs settings:manage (admins and super admins), audited in admin-api.
  */
 export default async function PlatformSettingsPage() {
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const session = await getAdminSession();
   // YouTube import (wiki AUN-YT-IMPORT): admin-api needs media:manage even to read it, so only those roles load it
   const showYoutube = canManageMedia(session?.user.role);
@@ -59,6 +61,7 @@ export default async function PlatformSettingsPage() {
     downloadRateLimitHistoryResult.status === 'fulfilled' ? downloadRateLimitHistoryResult.value.entries : [];
 
   return (
+    <HelpTips tips={tipsFor(locale, 'platform-settings')}>
     <div>
       <div className="mb-6 max-w-3xl">
         <h1 className="text-3xl font-bold text-fg">{t('platformSettings.title')}</h1>
@@ -86,5 +89,6 @@ export default async function PlatformSettingsPage() {
           <ErrorAlert testId="youtube-import-load-error">{t('youtubeImport.loadFailed')}</ErrorAlert>
         ))}
     </div>
+    </HelpTips>
   );
 }

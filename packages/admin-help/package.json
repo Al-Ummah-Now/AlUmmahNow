@@ -1,0 +1,11 @@
+{
+  "name": "@al-ummah/admin-help",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Admin setting help (wiki AUN-ADMIN-HELP): one bilingual entry per admin setting, read by the \"?\" popover, the admin help guide and the native admin apps",
+  "type": "module",
+  "scripts": {
+    "check": "node --experimental-strip-types --no-warnings src/cli.ts",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+  }
+}
