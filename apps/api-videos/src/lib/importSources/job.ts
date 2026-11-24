@@ -137,6 +137,24 @@ async function runSourceSyncSteps(env: SourceSyncEnv, job: AdminJob, f: typeof f
 		delete params.waitSeconds;
 		return { done: false, params: params as unknown as Record<string, unknown>, result: result(), delaySeconds };
 	}
+	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
+	// Uploads may have been switched off while the sync waited its turn (or between steps): skip quietly
+	// without fetching or posting, release the active job, and keep a scheduled source due for when uploads return
+	if (!(await uploadsOn(env))) {
+		const now = Date.now();
+		await sourceDb(env)
+			.prepare(
+				`UPDATE import_sources
+				 SET sync_job_id = CASE WHEN sync_job_id = ? THEN NULL ELSE sync_job_id END,
+				     next_sync_at = CASE WHEN enabled = 1 AND schedule != 'manual' THEN COALESCE(next_sync_at, ?) ELSE next_sync_at END,
+				     updated_at = ?
+				 WHERE id = ?`,
+			)
+			.bind(job.id, now, now, source.id)
+			.run();
+		logger.info('[ImportSources] Uploads are off: skipping sync', { jobId: job.id, sourceId: source.id, ...result() });
+		return { done: true, result: { ...result(), skipped: 'uploads_off' } };
+	}
 	// A connected source stops when the owner's connection is gone (the source shows why; nothing is posted)
 	if (!(await stillAuthorized(env, source))) {
 		await revokeSource(env, source.id);
@@ -144,7 +162,6 @@ async function runSourceSyncSteps(env: SourceSyncEnv, job: AdminJob, f: typeof f
 		return { done: true, result: { ...result(), skipped: 'not_connected' } };
 	}
 
-	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
 	if (params.phase === 'fetch') {
 		try {
 			await fetchPhase(env, source, params, f);

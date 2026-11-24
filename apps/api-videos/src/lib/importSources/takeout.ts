@@ -437,7 +437,17 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 	const source = await readSource(env, params.sourceId);
 	if (!source) return { done: true, result: { ...result(), skipped: 'source_deleted' } };
 
-	if ((await matchStep(env, source, params)) === TAKEOUT_MATCH_PER_STEP) return again();
+	// An admin's Cancel stops the job before its first matching step
+	if (await isCancelled(env, job.id)) {
+		logger.info('[Takeout] Cancelled', { jobId: job.id, sourceId: source.id });
+		return { done: true, result: { ...result(), cancelled: true } };
+	}
+	const matched = await matchStep(env, source, params);
+	if (await isCancelled(env, job.id)) {
+		logger.info('[Takeout] Cancelled', { jobId: job.id, sourceId: source.id });
+		return { done: true, result: { ...result(), cancelled: true } };
+	}
+	if (matched === TAKEOUT_MATCH_PER_STEP) return again();
 
 	const { results } = await db(env)
 		.prepare("SELECT * FROM import_takeout_files WHERE source_id = ? AND state = 'uploaded' ORDER BY updated_at, name LIMIT ?")

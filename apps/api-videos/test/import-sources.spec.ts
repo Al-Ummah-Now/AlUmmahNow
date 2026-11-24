@@ -19,7 +19,7 @@ import { resolveSourceUrl } from '../src/lib/importSources/media';
 import { onSourceSyncFailed, queueDueSources, runSourceSync, startSourceSync } from '../src/lib/importSources/job';
 import { codedReason, sourceErrorFromPreview } from '../src/lib/importSources/errors';
 import { PreviewError, retryAfterSeconds } from '../src/lib/link-preview';
-import { matchTakeoutFile, normalizeTitle, type MatchRecord } from '../src/lib/importSources/takeout';
+import { matchTakeoutFile, normalizeTitle, runTakeoutJob, type MatchRecord } from '../src/lib/importSources/takeout';
 import { cancelJob, getJobWithLog } from '../src/lib/admin/jobs';
 import { planEvent } from '../src/lib/social/deliver';
 import importSourcesRouter from '../src/routers/importSources.router';
@@ -362,6 +362,41 @@ describe('syncing a source', () => {
 		assert.equal(env.ADMIN_JOBS_QUEUE.sent.length, 0);
 		assert.ok((await readSource(env, due.id))!.next_sync_at, 'still due');
 		assert.equal(await queueDueSources(env as never), 1, 'queued once uploads are back on');
+	});
+
+	it('a scheduled sync already in its spread wait skips quietly if uploads are switched off before it runs', async () => {
+		const { env, posts, job } = harness();
+		const first = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'F1', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'hourly', createdBy: ADMIN }, Date.now() - 2 * 3600_000);
+		const second = await insertSource(env, { channelId: 'ch1', network: 'rss', address: 'https://feeds.example.org/2.xml', label: 'F2', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'hourly', createdBy: ADMIN }, Date.now() - 2 * 3600_000);
+		assert.equal(await queueDueSources(env as never), 2);
+		const waitingRow = await env.SEARCH_DB.prepare("SELECT id, params FROM admin_jobs WHERE kind = 'import.source-sync'").all<{ id: string; params: string }>();
+		const waiting = waitingRow.results.find((r) => ((JSON.parse(r.params) as { waitSeconds?: number }).waitSeconds ?? 0) > 0)!;
+		const waitingParams = JSON.parse(waiting.params) as { sourceId: string; waitSeconds: number };
+		assert.equal((await readSource(env, waitingParams.sourceId))!.next_sync_at, null, 'cron cleared next_sync_at while queued');
+
+		// Step 1: waits its place in the 45-minute spread
+		const step1 = await runSourceSync(env as never, { ...job(waitingParams), id: waiting.id });
+		assert.equal(step1.done, false);
+		assert.equal((step1 as { delaySeconds?: number }).delaySeconds, waitingParams.waitSeconds);
+		assert.equal((step1 as { params: { waitSeconds?: number } }).params.waitSeconds, undefined);
+
+		// Uploads are switched off before the wait finishes: step 2 must not fetch or post, and keeps the source due
+		stubNetwork(() => {
+			throw new Error('must not fetch while uploads are off');
+		});
+		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
+		const step2 = await runSourceSync(off as never, { ...job((step1 as { params: Record<string, unknown> }).params), id: waiting.id });
+		assert.deepEqual([step2.done, (step2 as { result: { skipped?: string } }).result.skipped], [true, 'uploads_off']);
+		assert.equal(posts().length, 0);
+		const after = (await readSource(env, waitingParams.sourceId))!;
+		assert.equal(after.last_sync_at, null, 'not marked synced');
+		assert.equal(after.last_error, null, 'no error recorded');
+		assert.equal(after.sync_job_id, null, 'active job released');
+		assert.ok(after.next_sync_at !== null && after.next_sync_at <= Date.now(), 'source stays due for when uploads return');
+		// Once uploads are back on, the skipped source is queued again (the other source is still holding its job)
+		const otherId = waitingParams.sourceId === first.id ? second.id : first.id;
+		assert.equal((await readSource(env, otherId))!.next_sync_at, null);
+		assert.equal(await queueDueSources(env as never), 1, 're-queued when uploads are back on');
 	});
 
 	it('the sync’s lookups on shared tables use indexes, never a scan', async () => {
@@ -751,6 +786,37 @@ describe('YouTube Takeout files', () => {
 		const item = (await listItems(env, source.id)).find((i) => i.itemId === 'AAAAAAAAAAA');
 		assert.deepEqual([item!.state, item!.videoId, item!.postId], ['posted', videoId, post!.id]);
 		assert.equal((await getJobWithLog(env as never, said.body.result.jobId))!.status, 'succeeded');
+	});
+
+	it('a cancelled Takeout job stops before its first matching step and leaves files untouched', async () => {
+		const { env, job } = harness();
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const call = async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const source = await insertSource(env, { channelId: 'ch1', network: 'youtube', address: 'UCbbbbbbbbbbbbbbbbbbbbbb', label: 'YT', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		await env.SEARCH_DB.prepare(`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at) VALUES (?, ?, NULL, 'awaiting_file', ?, ?, ?, 'takeout_file', 1, 1)`)
+			.bind(source.id, 'AAAAAAAAAAA', JSON.stringify({ itemId: 'AAAAAAAAAAA', url: 'https://www.youtube.com/watch?v=AAAAAAAAAAA', postedAt: Date.parse('2026-11-01T10:00:00Z'), title: 'Friday talk', text: 'desc', images: [], link: null, video: null, awaiting: 'takeout_file' }), 'https://www.youtube.com/watch?v=AAAAAAAAAAA', Date.parse('2026-11-01T10:00:00Z'))
+			.run();
+		const listed = await call(`/s/${source.id}/takeout/files`, {
+			method: 'POST',
+			body: JSON.stringify({ files: [{ name: 'Friday talk.mp4', size: 3000, videoId: 'AAAAAAAAAAA', title: 'Friday talk', durationMs: 60_000 }] }),
+		});
+		assert.equal(listed.status, 202);
+		const jobId = listed.body.result.jobId as string;
+
+		const cancelled = await call(`/s/${source.id}/cancel`, { method: 'POST', body: JSON.stringify({ jobId, byName: 'Amina Staff' }) });
+		assert.deepEqual([cancelled.status, cancelled.body.result.job.status], [200, 'cancelled']);
+
+		// A delivery that reaches runTakeoutJob after cancel must stop before matchStep
+		const out = await runTakeoutJob(env as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		assert.deepEqual([out.done, (out as { result: { cancelled?: boolean; matched?: number } }).result.cancelled, (out as { result: { matched?: number } }).result.matched], [true, true, 0]);
+		const report = (await call(`/s/${source.id}/takeout`)).body.result;
+		assert.deepEqual(report.counts, { new: 1 });
+		assert.equal(report.files[0].state, 'new');
+		assert.equal(report.files[0].itemId, null);
 	});
 });
 
