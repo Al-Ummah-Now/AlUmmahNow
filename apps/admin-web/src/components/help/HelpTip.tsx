@@ -29,6 +29,26 @@ const PREVIEW_LEAVE_MS = 150;
 
 type Mode = 'closed' | 'preview' | 'open';
 
+/**
+ * Where the popover goes sideways, decided BEFORE it is shown: hanging from the "?" toward the
+ * reading direction, then clamped so both edges keep the 8px gutter. A popover that stuck out past
+ * the page's start edge even for a moment made an Arabic (RTL) phone scroll the whole page sideways.
+ * Returns the left offset from the wrapper and the width, in px.
+ */
+export function placement(wrap: HTMLElement | null): { left: number; width: number } | null {
+  if (!wrap || typeof window === 'undefined') return null;
+  const vw = document.documentElement.clientWidth;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const width = Math.min(20 * rem, vw - 2 * GUTTER);
+  const r = wrap.getBoundingClientRect();
+  const rtl = getComputedStyle(wrap).direction === 'rtl';
+  const wanted = rtl ? r.right + HANG - width : r.left - HANG;
+  const left = Math.max(GUTTER, Math.min(wanted, vw - GUTTER - width));
+  return { left: Math.round(left - r.left), width: Math.floor(width) };
+}
+const GUTTER = 8;
+const HANG = 12;
+
 export function HelpTip({ id, className = '' }: { id: string; className?: string }) {
   const tip = useHelpTip(id);
   const { t } = useLanguage();
@@ -39,7 +59,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
   const popRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusOnOpen = useRef(false);
-  const scrollAtOpen = useRef<[number, number] | null>(null);
+  const [place, setPlace] = useState<{ left: number; width: number } | null>(null);
 
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -56,7 +76,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
     (next: Exclude<Mode, 'closed'>) => {
       clearTimer();
       if (next === 'open') focusOnOpen.current = true;
-      scrollAtOpen.current = [window.scrollX, window.scrollY];
+      setPlace(placement(wrapRef.current));
       setMode(next);
       document.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: uid }));
     },
@@ -71,14 +91,6 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
       return;
     }
     fitToViewport(pop);
-    // Before it is fitted the popover can stick out past the page's start edge for a moment; on an
-    // Arabic (RTL) phone the browser then scrolls the page sideways to show it. Put the page back
-    // and fit again, so the page never moves when help opens.
-    const at = scrollAtOpen.current;
-    if (at && (window.scrollX !== at[0] || window.scrollY !== at[1])) {
-      window.scrollTo({ left: at[0], top: at[1], behavior: 'instant' });
-      fitToViewport(pop);
-    }
     if (focusOnOpen.current) {
       focusOnOpen.current = false;
       pop?.focus({ preventScroll: true });
@@ -174,6 +186,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
         tabIndex={-1}
         hidden={mode === 'closed'}
         className="aun-help-pop aun-glass-panel"
+        style={place ? { left: place.left, right: 'auto', insetInlineStart: 'auto', inlineSize: place.width } : undefined}
         data-testid="help-tip-popover"
       >
         <p className="aun-help-title" id={titleId}>
