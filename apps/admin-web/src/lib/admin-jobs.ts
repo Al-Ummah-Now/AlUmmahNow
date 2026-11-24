@@ -21,6 +21,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'import.source-sync': 'adminJobs.kinds.importSourceSync',
   'import.takeout-match': 'adminJobs.kinds.importTakeoutMatch',
   'csam.contain': 'adminJobs.kinds.csamContain',
+  'downloads.revoke': 'adminJobs.kinds.downloadsRevoke',
   'images.index-owners': 'adminJobs.kinds.imagesIndexOwners',
   'media.transcode-retry': 'adminJobs.kinds.mediaTranscodeRetry',
   'media.transcode-cancel': 'adminJobs.kinds.mediaTranscodeCancel',

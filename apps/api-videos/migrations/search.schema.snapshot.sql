@@ -351,7 +351,6 @@ CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
-CREATE INDEX idx_download_revocations_video_id ON download_revocations (video_id);
 CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
 CREATE INDEX idx_image_owners_channel ON image_owners (channel_id);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);

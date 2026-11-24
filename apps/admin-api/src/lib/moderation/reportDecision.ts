@@ -192,6 +192,18 @@ const BUCKET: Record<string, keyof AdminBindings> = { video: 'videos', channel: 
 /** Changed by api-videos, which owns their records and indexes (lib/admin/liveModeration.ts there). */
 const LIVE = new Set(['livestream', 'live_chat']);
 
+/**
+ * Derives a deterministic actionId from the video id and sorted claimed report ids so retrying a
+ * failed decision on the same reopened reports reuses the exact same `event_id` (E14-D8 §5.3),
+ * while a later takedown from new reports gets a distinct `event_id` and higher `seq`.
+ */
+async function deterministicRevocationActionId(entityId: string, reportIds: readonly string[]): Promise<string> {
+  const key = `video:${entityId}:${[...reportIds].sort().join(',')}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  return `report-${hex}`;
+}
+
 /** Applies the outcome. Throws when the change failed (the caller reopens the reports). */
 async function perform(
   env: DecisionEnv,
@@ -292,7 +304,7 @@ async function changeItem(
   const updated = await applyContentModeration(bucket, p.entityId, p.action, { moderatorId: p.actorId, notes: p.notes ?? undefined });
   // A permanent video takedown purges the renditions and records the revocation after blocking metadata.
   if (updated && p.entityType === 'video' && p.action === 'deleted' && (env.VIDEOS || env.VIDEOS_API_URL)) {
-    const actionId = crypto.randomUUID();
+    const actionId = await deterministicRevocationActionId(p.entityId, p.reportIds);
     await callVideos(env, `/videos/${encodeURIComponent(p.entityId)}/revoke-downloads`, {
       method: 'POST',
       actorId: p.actorId,

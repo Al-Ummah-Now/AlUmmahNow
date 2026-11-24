@@ -126,15 +126,17 @@ export async function listDownloadRevocations(
 
 /**
  * Step 1 helper: ensures the video record in R2 is already blocked from public reads and downloads.
- * If the caller hasn't marked it deleted/hidden yet, hides it immediately before purging renditions.
+ * Fails loudly when `env.videos` is unbound or the R2 write fails so the caller queues a retry /
+ * raises an admin alert rather than purging without confirming the metadata block.
  */
 async function ensureVideoMetadataBlocked(
 	env: DownloadRevokeEnv,
 	videoId: string,
 	eventId: string,
-	reason?: string,
 ): Promise<boolean> {
-	if (!env.videos) return false;
+	if (!env.videos) {
+		throw new Error('videos R2 bucket is not bound');
+	}
 	const repo = new R2Repository<Record<string, unknown>>(env.videos);
 	const saved = await repo.updateObject(videoId, (video) => {
 		const alreadyBlocked = video.isDeleted === true || video.isHidden === true || video.isPublic === false;
@@ -145,7 +147,6 @@ async function ensureVideoMetadataBlocked(
 		video.downloadRevocation = {
 			eventId,
 			at: now,
-			...(reason ? { reason } : {}),
 		};
 		video.dateModified = now;
 		return true;
@@ -157,7 +158,7 @@ async function executePurgeAndAppend(
 	env: DownloadRevokeEnv,
 	params: DownloadRevokeParams,
 ): Promise<{ renditionsDeleted: number; seq: number; inserted: boolean }> {
-	await ensureVideoMetadataBlocked(env, params.videoId, params.eventId, params.reason);
+	await ensureVideoMetadataBlocked(env, params.videoId, params.eventId);
 	const renditionsDeleted = await purgeVideoRenditions(env as unknown as MediaEnv, params.videoId, { strict: true });
 	if (!env.SEARCH_DB) {
 		throw new Error('SEARCH_DB is not bound');
@@ -198,8 +199,6 @@ export async function revokeVideoDownloads(
 		eventId,
 		...(input.reason ? { reason: input.reason } : {}),
 	};
-
-	await ensureVideoMetadataBlocked(env, videoId, eventId, input.reason);
 
 	try {
 		const res = await executePurgeAndAppend(env, params);

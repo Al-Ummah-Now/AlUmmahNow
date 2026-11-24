@@ -7,6 +7,3 @@ CREATE TABLE IF NOT EXISTS download_revocations (
   video_id TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_download_revocations_video_id
-  ON download_revocations (video_id);

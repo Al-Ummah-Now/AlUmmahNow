@@ -1025,6 +1025,7 @@ const en = {
       playlistAddVideos: 'Add videos to a playlist',
       importAttach: 'Add an imported file’s captions, chapters and thumbnail',
       csamContain: 'CSAM takedown',
+      downloadsRevoke: 'Revoke offline downloads',
       imagesIndexOwners: 'Index image uploaders',
       mediaTranscodeRetry: 'Retry an R2 transcode now',
       mediaTranscodeCancel: 'Cancel an R2 transcode',
