@@ -72,6 +72,7 @@
 --   apps/api-videos/migrations/search/0118_support_dormant_trolley.sql
 --   apps/api-videos/migrations/search/0119_prayer_provider_gate.sql
 --   apps/api-videos/migrations/search/0120_islamic_seasons.sql
+--   apps/api-videos/migrations/search/0121_channel_move_offers.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -102,6 +103,7 @@ CREATE TABLE channel_comment_sigs (target_kind TEXT NOT NULL, target_id TEXT NOT
 CREATE TABLE channel_comments (comment_id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, target_kind TEXT NOT NULL CHECK (target_kind IN ('video', 'post')), target_id TEXT NOT NULL, parent_id TEXT, author_user_id TEXT NOT NULL, author_channel_id TEXT, status TEXT NOT NULL CHECK (status IN ('published', 'held', 'removed')), held_by TEXT CHECK (held_by IS NULL OR held_by IN ('moderation', 'channel_block')), removed_by_user_id TEXT, removed_at TEXT, has_link INTEGER NOT NULL DEFAULT 0, has_channel_reply INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_comments_index_state (channel_id TEXT PRIMARY KEY, indexed_at TEXT, status TEXT NOT NULL CHECK (status IN ('building', 'ready', 'stale', 'failed')), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_invites (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'moderator')), invitee_user_id TEXT, invitee_email TEXT, by_email INTEGER NOT NULL DEFAULT 0, invited_by TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'accepted', 'declined', 'cancelled', 'expired')), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, responded_at TEXT);
+CREATE TABLE channel_move_offers (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, from_user_id TEXT NOT NULL, to_user_id TEXT NOT NULL, options_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, job_id TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, responded_at TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE channel_quran_translations (channel_id TEXT NOT NULL, lang TEXT NOT NULL, qf_translation_id INTEGER NOT NULL, name TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (channel_id, lang)) WITHOUT ROWID;
 CREATE TABLE channel_transfer_locks (channel_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_translation_settings (channel_id TEXT PRIMARY KEY, viewer_titles INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
@@ -300,6 +302,10 @@ CREATE INDEX idx_channel_invites_invitee_email ON channel_invites (invitee_email
 CREATE INDEX idx_channel_invites_invitee_user ON channel_invites (invitee_user_id, status);
 CREATE INDEX idx_channel_invites_inviter ON channel_invites (invited_by, created_at);
 CREATE UNIQUE INDEX idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
+CREATE INDEX idx_channel_move_offers_channel ON channel_move_offers (channel_id, status, responded_at);
+CREATE INDEX idx_channel_move_offers_from ON channel_move_offers (from_user_id, status);
+CREATE UNIQUE INDEX idx_channel_move_offers_open ON channel_move_offers (channel_id) WHERE status = 'offered';
+CREATE INDEX idx_channel_move_offers_to ON channel_move_offers (to_user_id, status);
 CREATE INDEX idx_channel_quran_translations_edition ON channel_quran_translations (lang, qf_translation_id, name);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
