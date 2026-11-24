@@ -472,7 +472,7 @@ describe('tiers.change: a bulk change', () => {
     const res = await t.call('POST', '/creators/tier', { userIds: ['u1', 'u2', 'u3', 'u-super'], tierId: 'creator' });
     const fields = res.body.result.request.fields as { key: string; kind: string; label: { en: string; ar: string }; after: unknown }[];
     assert.deepEqual(fields.filter((f) => f.kind === 'person').map((f) => [f.key, f.after]), [['users:', ['u1']], ['users:member', ['u2']]]);
-    assert.deepEqual(fields.find((f) => f.key === 'users:member')!.label, { en: 'Creators now on Member', ar: 'صنّاع المحتوى في فئة عضو' });
+    assert.deepEqual(fields.find((f) => f.key === 'users:member')!.label, { en: 'Creators now on Member', ar: 'صنّاع المحتوى في فئة «عضو»' });
     assert.equal(fields.find((f) => f.key === 'count')!.after, 2);
   });
 
@@ -520,11 +520,11 @@ describe('tiers.change: the diff', () => {
     const t = setup();
     await t.needApprover('tiers');
     const view = (await t.call('PUT', '/creator-tiers/creator', { perHour: 8 })).body.result.request;
-    assert.deepEqual(view.title, { en: 'Edit the Creator tier', ar: 'تعديل فئة صانع' });
+    assert.deepEqual(view.title, { en: 'Edit the Creator tier', ar: 'تعديل فئة «صانع»' });
     assert.deepEqual(view.fields, [{ key: 'perHour', label: { en: 'Uploads per hour', ar: 'عمليات الرفع في الساعة' }, kind: 'count', before: 5, after: 8 }]);
     await t.needApprover('default');
     const def = (await t.call('PUT', '/creator-tiers/default', { tierId: 'creator' })).body.result.request;
-    assert.deepEqual(def.title, { en: 'Make Creator the default tier', ar: 'جعل صانع الفئة الافتراضية' });
+    assert.deepEqual(def.title, { en: 'Make Creator the default tier', ar: 'جعل «صانع» الفئة الأساسية' });
     assert.deepEqual([def.fields[0].before, def.fields[0].after, def.fields[0].enumLabels.creator], ['member', 'creator', { en: 'Creator', ar: 'صانع' }]);
   });
 });

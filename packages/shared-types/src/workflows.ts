@@ -209,7 +209,7 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
   'tiers.change': def({
     type: 'tiers.change',
     domain: 'platform',
-    label: { en: 'Change a creator tier', ar: 'تغيير فئة صانع محتوى' },
+    label: { en: 'Change tiers', ar: 'تغيير الفئات' },
     scoped: true,
     floor: OPEN_FLOOR,
     defaultRule: rule({ approvalsNeeded: 0, approvers: SUPER_ADMINS, stepUp: 'none' }),
@@ -272,7 +272,7 @@ export const WORKFLOW_LISTED_SCOPES: Readonly<Partial<Record<WorkflowActionType,
 const SCOPE_LABELS: Readonly<Partial<Record<WorkflowActionType, Readonly<Record<string, WorkflowLocalized>>>>> = Object.freeze({
   'tiers.change': {
     assign: { en: 'A creator’s tier', ar: 'فئة صانع محتوى' },
-    default: { en: 'The default tier', ar: 'الفئة الافتراضية' },
+    default: { en: 'The default tier', ar: 'الفئة الأساسية' },
     tiers: { en: 'Tiers and their limits', ar: 'الفئات وحدودها' },
   },
   'workflows.rule.set': { [WORKFLOW_RULE_CHANGE_MONEY_SCOPE]: { en: 'Money rules', ar: 'قواعد المال' } },
