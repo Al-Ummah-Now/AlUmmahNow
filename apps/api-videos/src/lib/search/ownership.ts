@@ -46,6 +46,9 @@ import {
   indexRepairStatement,
   pendingRepairCount,
   liveMetadataStatements,
+  LIVE_METADATA_TABLE,
+  type LiveEventType,
+  type LiveStreamKind,
   OWNERSHIP_SOURCES,
   ALL_OWNERSHIP_KINDS,
 } from '@al-ummah/shared-types';
@@ -577,6 +580,10 @@ export function playlistListIds(env: OwnershipEnv, query: PlaylistListQuery): Pr
 export interface StreamListQuery {
   channelId: string | null;
   status?: string;
+  /** Live streams or premieres only (the upcoming model, wiki E17 §5.1) */
+  kind?: LiveStreamKind;
+  /** Streams with this event tag only */
+  eventType?: LiveEventType;
   limit: number;
   after?: KeysetPosition | null;
   /** Legacy offset cursor (first read only) */
@@ -600,6 +607,14 @@ export function streamListIds(env: OwnershipEnv, query: StreamListQuery): Promis
       where.push('status = ?');
       params.push(query.status);
     }
+    // Tagged streams and premieres are the few: their ids come from the model's own index.
+    // Live streams are nearly all: each row of the page is checked by primary key.
+    if (query.eventType) {
+      where.push(`id IN (SELECT stream_id FROM ${LIVE_METADATA_TABLE} WHERE event_type = ?)`);
+      params.push(query.eventType);
+    }
+    if (query.kind === 'premiere') where.push(`id IN (SELECT stream_id FROM ${LIVE_METADATA_TABLE} WHERE premiere_video_id IS NOT NULL)`);
+    else if (query.kind === 'live') where.push(`NOT EXISTS (SELECT 1 FROM ${LIVE_METADATA_TABLE} m WHERE m.stream_id = ${OWNERSHIP_TABLE}.id AND m.kind = 'premiere')`);
     if (query.manageChannel && query.channelId) {
       // A channel manager (docs/specs/CHANNEL-ROLES.md) sees the channel's streams as the owner does
     } else if (query.viewerId) {

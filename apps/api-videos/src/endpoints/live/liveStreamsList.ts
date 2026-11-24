@@ -1,5 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { liveRecordingWithheld, recordingHidden, switchOn } from './liveSession';
+import { liveRecordingWithheld, recordingHidden } from './liveSession';
 import { isPremiere } from '../../lib/live/premieres';
 import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -11,8 +11,10 @@ import { scanFill } from '../../lib/listFill';
 import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/search/ownership';
 import { isIndexPageCursor, pageFromIndex } from '../../lib/search/indexPage';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
-import { can } from "@al-ummah/shared-types";
+import { LIVE_EVENT_TYPES, LIVE_STREAM_KINDS, can } from "@al-ummah/shared-types";
 import { roleOnChannel } from "../../lib/channelAccess";
+import { featureOff } from '../../lib/features/off';
+import { reminderCounts, shownEventType, switchOn } from '../../lib/live/events';
 
 export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
@@ -28,6 +30,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				limit: Num({ default: 9 }).openapi({ example: 9 }),
 				status: z.enum(['scheduled', 'live', 'ended', 'cancelled']).optional().describe("Filter by stream status"),
 				channelId: z.string().optional().describe("Filter by channel ID"),
+				kind: z.enum(LIVE_STREAM_KINDS).optional().describe("Live streams or premieres only"),
+				eventType: z.enum(LIVE_EVENT_TYPES).optional().describe("Streams with this event tag (404 feature_off while event tags are off)"),
 			}),
 		},
 		responses: {
@@ -65,7 +69,10 @@ export class LiveStreamsList extends OptionalAuthRoute {
 
 	async handle(c: AppContext) {
 		const request = await this.getValidatedData<typeof this.schema>();
-		const { cursor = "", limit = 9, status, channelId } = request.query;
+		const { cursor = "", limit = 9, status, channelId, kind, eventType } = request.query;
+
+		const eventsOn = await switchOn(c, 'liveEvents');
+		if (eventType && !eventsOn) return featureOff(c, 'liveEvents');
 
 		try {
 			const bucket = c.env.videos;
@@ -94,6 +101,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				if (!stream) return false;
 				if (status && stream.status !== status) return false;
 				if (channelId && stream.channelId !== channelId) return false;
+				if (kind && isPremiere(stream) !== (kind === 'premiere')) return false;
+				if (eventType && shownEventType(stream, true) !== eventType) return false;
 				const isOwner = managesStream(stream);
 				// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
 				if ((stream as { isHidden?: boolean }).isHidden && !isOwner) return false;
@@ -111,7 +120,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				sort: 'live-first',
 				limit,
 				fetch: (after, pageLimit, offset) => streamListIds(c.env as never, {
-					channelId: channelId || null, status, limit: pageLimit, after, offset,
+					channelId: channelId || null, status, kind, eventType, limit: pageLimit, after, offset,
 					viewerId: auth?.userId ?? null, manageChannel: channelManager,
 				}),
 				load: async id => {
@@ -153,9 +162,12 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				nextCursor = scan.cursor;
 			}
 
+			const reminders = await reminderCounts(c, streams.map((s) => s.id));
 			// Transform to view models
 			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
 				...stream,
+				eventType: shownEventType(stream, eventsOn),
+				reminderCount: reminders.get(stream.id) ?? 0,
 				// Which video a premiere shows is its team's unless it is on or over (wiki E17)
 				...(!managesStream(stream) && stream.status !== 'live' && stream.status !== 'ended' ? { premiereVideoId: undefined } : {}),
 				// Who created it (a channel member) is for those who manage the channel's live

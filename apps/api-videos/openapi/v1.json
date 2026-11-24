@@ -20814,6 +20814,36 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "premiere"
+              ],
+              "description": "Live streams or premieres only"
+            },
+            "required": false,
+            "description": "Live streams or premieres only",
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jumuah",
+                "taraweeh",
+                "conference",
+                "halqa"
+              ],
+              "description": "Streams with this event tag (404 feature_off while event tags are off)"
+            },
+            "required": false,
+            "description": "Streams with this event tag (404 feature_off while event tags are off)",
+            "name": "eventType",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": [
                 "string",
                 "null"
@@ -20939,6 +20969,32 @@
                               "duration": {
                                 "type": "number",
                                 "description": "Stream duration in seconds"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "live",
+                                  "premiere"
+                                ],
+                                "description": "A live stream unless it says premiere"
+                              },
+                              "eventType": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "jumuah",
+                                  "taraweeh",
+                                  "conference",
+                                  "halqa",
+                                  null
+                                ],
+                                "description": "Event tag; null while event tags are off"
+                              },
+                              "reminderCount": {
+                                "type": "integer",
+                                "description": "People who asked to be reminded; 0 while reminders are off"
                               },
                               "isDeleted": {
                                 "type": "boolean"
@@ -21113,6 +21169,19 @@
                   "madeForKids": {
                     "type": "boolean"
                   },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21234,6 +21303,32 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "live",
+                                "premiere"
+                              ],
+                              "description": "A live stream unless it says premiere"
+                            },
+                            "eventType": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "jumuah",
+                                "taraweeh",
+                                "conference",
+                                "halqa",
+                                null
+                              ],
+                              "description": "Event tag; null while event tags are off"
+                            },
+                            "reminderCount": {
+                              "type": "integer",
+                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -21687,6 +21782,19 @@
                   "madeForKids": {
                     "type": "boolean"
                   },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21815,6 +21923,32 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "live",
+                                "premiere"
+                              ],
+                              "description": "A live stream unless it says premiere"
+                            },
+                            "eventType": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "jumuah",
+                                "taraweeh",
+                                "conference",
+                                "halqa",
+                                null
+                              ],
+                              "description": "Event tag; null while event tags are off"
+                            },
+                            "reminderCount": {
+                              "type": "integer",
+                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -49339,6 +49473,19 @@
                   "description": {
                     "type": "string",
                     "maxLength": 5000
+                  },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
                   },
                   "allowChat": {
                     "type": "boolean"

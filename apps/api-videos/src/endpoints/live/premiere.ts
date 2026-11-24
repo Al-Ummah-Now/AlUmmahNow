@@ -20,6 +20,8 @@ import { createPremiere, heldForPremiere, isPremiere, premiereProblem, premiereT
 import { readStream } from '../../lib/live/streams';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
+import { eventTagRefused } from '../../lib/live/events';
+import { LiveEventTypeInput } from '../../lib/model/input';
 import { LiveChatSettingsInput } from './liveChat';
 import { publicStream } from './liveSession';
 
@@ -52,7 +54,7 @@ export class VideoPremiereCreate extends AuthenticatedRoute {
 		description: '🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; cancelling leaves it as it was.',
 		request: {
 			params: z.object({ id: Str({ description: 'Video id' }) }),
-			body: { content: { 'application/json': { schema: z.object({ scheduledStartTime: z.string(), title: z.string().min(1).max(200).optional(), description: z.string().max(5000).optional(), ...LiveChatSettingsInput }) } } },
+			body: { content: { 'application/json': { schema: z.object({ scheduledStartTime: z.string(), title: z.string().min(1).max(200).optional(), description: z.string().max(5000).optional(), eventType: LiveEventTypeInput, ...LiveChatSettingsInput }) } } },
 		},
 		responses,
 	});
@@ -66,6 +68,8 @@ export class VideoPremiereCreate extends AuthenticatedRoute {
 		if (video instanceof Response) return video;
 		const problem = premiereProblem(video);
 		if (problem) return refuse(c, problem);
+		const tagRefused = await eventTagRefused(c, video.userId, body.eventType);
+		if (tagRefused) return tagRefused;
 		const { scheduledStartTime, ...fields } = body;
 		const made = await createPremiere(envOf(c), { video, scheduledStartTime, actorId: userId, fields: Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) }, now);
 		if ('problem' in made) return refuse(c, made.problem);

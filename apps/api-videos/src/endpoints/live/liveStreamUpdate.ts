@@ -8,6 +8,7 @@ import { LiveStreamView } from "../../lib/model/view";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
+import { eventTagRefused, shownEventType, switchOn } from '../../lib/live/events';
 import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceLiveStarted } from "../../lib/notification-events";
@@ -145,6 +146,9 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
+			const tagRefused = await eventTagRefused(c, existingStream.userId, updateData.eventType);
+			if (tagRefused) return tagRefused;
+
 			// A premiere (wiki E17) starts and ends on its own routes, and its video's visibility is its own
 			if (isPremiere(existingStream)) {
 				if ((updateData.status !== undefined && updateData.status !== 'cancelled') || updateData.isPrivate === true || (updateData.status === 'cancelled' && updateData.scheduledStartTime !== undefined)) return apiError(c, 400, 'premiere_fixed');
@@ -204,6 +208,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			// Transform to view model for response
 			const streamView = {
 				...updatedStream,
+				eventType: shownEventType(updatedStream, await switchOn(c, 'liveEvents')),
 				likesCount: updatedStream.likes?.length || 0,
 				dislikes: [],
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
