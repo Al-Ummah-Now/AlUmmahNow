@@ -61,8 +61,11 @@ const texts = () => screen.queryAllByTestId('live-chat-text').map((el) => el.tex
 const onChanged = jest.fn();
 const show = async (props: Partial<React.ComponentProps<typeof LiveChatPanel>> = {}) => {
   const view = render(<LiveChatPanel streamId="s1" mode="live" chat={CHAT} canModerate={false} onChanged={onChanged} {...props} />);
-  await waitFor(() => expect(readChat).toHaveBeenCalled());
-  await act(async () => {});
+  // What the read brought is drawn, not only asked for
+  await waitFor(() => {
+    expect(readChat).toHaveBeenCalled();
+    expect(screen.queryByTestId('live-chat-loading')).toBeNull();
+  });
   return view;
 };
 const menu = async (id: string, action: string) => {
@@ -213,7 +216,7 @@ describe('the chat', () => {
     await show();
     expect(screen.getByTestId('live-chat-failed')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: LIVE_WATCH_EN.retry }));
-    expect(texts()).toEqual(['message 1', 'message 2']);
+    await waitFor(() => expect(texts()).toEqual(['message 1', 'message 2']));
   });
 
   it('reads earlier messages', async () => {
@@ -221,7 +224,7 @@ describe('the chat', () => {
     await show();
     await userEvent.click(screen.getByTestId('live-chat-older'));
     expect(readChat).toHaveBeenLastCalledWith('s1', { before: 'm5', limit: 50 });
-    expect(texts()).toEqual(['message 3', 'message 4', 'message 5']);
+    await waitFor(() => expect(texts()).toEqual(['message 3', 'message 4', 'message 5']));
     expect(screen.queryByTestId('live-chat-older')).toBeNull();
   });
 });
@@ -230,7 +233,8 @@ describe('writing', () => {
   const write = async (value: string) => {
     await userEvent.type(screen.getByTestId('live-chat-input'), value);
     await userEvent.click(screen.getByTestId('live-chat-send'));
-    await act(async () => {});
+    // The server's answer is drawn
+    await waitFor(() => expect(screen.queryByTestId('live-chat-send')?.getAttribute('aria-busy') ?? 'false').toBe('false'));
   };
 
   it('signed out: a way to sign in, no menus', async () => {
