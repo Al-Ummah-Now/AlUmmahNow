@@ -7,6 +7,7 @@
  */
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
+import { apiError } from '../../lib/api-error';
 import { readReleases } from '../../lib/app-updates/releases';
 import { runReleaseIndex } from '../../lib/app-updates/run';
 
@@ -36,9 +37,9 @@ export class AppReleasesRefresh extends PublicRoute {
 	};
 
 	async handle(c: AppContext) {
-		if (!c.env.APP_CONFIG) return c.json({ success: false, error: 'APP_CONFIG KV namespace is not bound' }, 503);
+		if (!c.env.APP_CONFIG) return apiError(c, 503, 'service_unavailable', { error: 'app_config_unbound' });
 		const run = await runReleaseIndex(c.env as never, c.executionCtx as ExecutionContext);
-		if (run.skipped === 'running') return c.json({ success: false, error: 'release_index_running' }, 429);
+		if (run.skipped === 'running') return apiError(c, 429, 'rate_limited', { error: 'release_index_running' });
 		const doc = await readReleases(c.env.APP_CONFIG);
 		return c.json({ success: true, result: { run, releases: doc } });
 	}
