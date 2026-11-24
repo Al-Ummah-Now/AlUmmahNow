@@ -25,21 +25,28 @@ interface VideosCall { method: string; path: string; body: unknown }
 
 function fakeVideos(contacts: Record<string, Partial<AccountEmailContact>>) {
   const calls: VideosCall[] = [];
+  /** accountsDown: the account's address cannot be read (503); everything else answers */
+  const control = { accountsDown: false };
   const fetcher = {
     async fetch(input: string, init: RequestInit = {}) {
       const url = new URL(input);
       const call = { method: init.method ?? 'GET', path: url.pathname.replace('/internal/admin', ''), body: typeof init.body === 'string' ? JSON.parse(init.body) : null };
       calls.push(call);
-      const match = call.path.match(/^\/users\/([^/]+)\/(account-email|account-notices)$/);
+      const match = call.path.match(/^\/users\/([^/]+)\/(account-email|email-settings|account-notices)$/);
       const contact = match ? contacts[decodeURIComponent(match[1])] : undefined;
       const answer = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
       if (match && !contact) return answer(404, { success: false, code: 'user_not_found', error: 'user_not_found' });
+      if (match?.[2] === 'account-email' && control.accountsDown) return answer(503, { success: false, code: 'auth_unavailable', error: 'down' });
+      if (match?.[2] === 'email-settings') {
+        const { email: _email, ...settings } = contact ?? {};
+        return answer(200, { success: true, result: { userId: match[1], displayName: '', accountEmail: true, locale: 'en', savedLocale: null, ...settings } });
+      }
       if (match?.[2] === 'account-email') return answer(200, { success: true, result: { userId: match[1], email: null, displayName: '', accountEmail: true, locale: 'en', savedLocale: null, ...contact } });
       if (match?.[2] === 'account-notices') return answer(200, { success: true, result: { queued: true } });
       return answer(200, { success: true, result: {} });
     },
   };
-  return { fetcher, calls };
+  return { fetcher, calls, control };
 }
 
 function setup(contacts: Record<string, Partial<AccountEmailContact>> = { usr_1: { email: 'amina@example.org', displayName: 'Amina' } }) {
@@ -288,6 +295,23 @@ describe('warn user: email', () => {
     assert.equal(await processWarningMailJob(none.env as never, msg(warningMailJob(none.warningId))), 'done');
     assert.equal((await getWarning(none.db, none.warningId))?.email_status, 'no_address');
     assert.equal(sent.length, 0);
+  });
+
+  it('while accounts cannot be read: the warning and its in-app notice go through, and only the email waits', async () => {
+    const t = setup();
+    t.videos.control.accountsDown = true;
+    const res = await t.call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'spam', locale: 'en' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.result.warning.inAppSent, true);
+    assert.equal(res.body.result.warning.emailStatus, 'queued');
+    const id = res.body.result.warning.id;
+    assert.deepEqual(t.mail, [{ v: 1, kind: 'warning', warningId: id }]);
+    assert.equal((await t.call('/api/content/users/usr_1/warnings', { roles: 'moderator' })).status, 200);
+    assert.equal(await processWarningMailJob(t.env as never, msg(warningMailJob(id), 1)), 'retry');
+    assert.equal(sent.length, 0);
+    t.videos.control.accountsDown = false;
+    assert.equal(await processWarningMailJob(t.env as never, msg(warningMailJob(id), 2)), 'done');
+    assert.deepEqual(sent[0].body.to, ['amina@example.org']);
   });
 
   it('retries a passing failure, then records the failure and flags it on the Errors page; Retry queues it again', async () => {

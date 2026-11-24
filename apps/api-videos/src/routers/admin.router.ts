@@ -27,7 +27,7 @@ import {
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos, type WaitUntil } from '../lib/admin/directory';
 import { searchUsers } from '../lib/admin/userSearch';
-import { AccountNoticeBody, accountEmailContact, accountNotice } from '../lib/admin/accountNotices';
+import { AccountNoticeBody, accountEmailContact, accountEmailSettings, accountNotice } from '../lib/admin/accountNotices';
 import { cleanLookup, lookup } from '../lib/admin/lookup';
 import { videoThumbnailFolder } from '../lib/admin/purgeCopies';
 import * as admin from '../lib/admin/service';
@@ -478,6 +478,8 @@ app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData
 app.post('/users/:id/erase-revoked-invite', async (c) => ok(c, await admin.eraseRevokedInviteUser(c.env, c.req.param('id'), actor(c))));
 // Account notices (warn-user): the in-app notice, and what an account email needs (admin-api sends it)
 app.post('/users/:id/account-notices', async (c) => ok(c, await accountNotice(c.env as never, c.req.param('id'), parse(AccountNoticeBody, await body(c)) as AccountNoticeRequest)));
+// The same without the address: no account lookup, so it answers while Auth cannot be read
+app.get('/users/:id/email-settings', async (c) => ok(c, await accountEmailSettings(c.env as never, c.req.param('id'))));
 app.get('/users/:id/account-email', async (c) => ok(c, await accountEmailContact(c.env as never, c.req.param('id'))));
 
 // Soft deletes (lib/admin/deletions.ts): "Recently deleted", restore, "Delete permanently now"
