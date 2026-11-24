@@ -222,6 +222,8 @@ export const NODES: NodeDef[] = [
       'scripts/data/**',
       'scripts/media-cdn/**',
       'scripts/ops/**',
+      // The release manifest tool the app repos copy (AUN-APP-UPDATES APPUPD-4)
+      'scripts/app-release/**',
       'scripts/check-committed-secrets.mjs',
     ],
   },
