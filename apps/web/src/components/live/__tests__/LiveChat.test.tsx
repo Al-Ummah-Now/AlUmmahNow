@@ -154,6 +154,36 @@ describe('the chat', () => {
     expect(texts()).toEqual(['message 1']);
   });
 
+  it('a pin or an unpin that arrives while the page is being read wins over the page', async () => {
+    const answers: Array<(p: unknown) => void> = [];
+    await show();
+    readChat.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    await frame({ type: 'realtime_joined' });
+    await frame({ type: 'live_chat_pinned', message: msg(2) });
+    await act(async () => { answers.shift()!(page([msg(1), msg(2)], { pinned: msg(1) })); });
+    expect(screen.getByTestId('live-chat-pinned')).toHaveTextContent('message 2');
+    await frame({ type: 'realtime_joined' });
+    await frame({ type: 'live_chat_removed', messageId: 'm2' });
+    await act(async () => { answers.shift()!(page([msg(1), msg(2)], { pinned: msg(2) })); });
+    expect(screen.queryByTestId('live-chat-pinned')).toBeNull();
+    // Otherwise the page's
+    await frame({ type: 'realtime_joined' });
+    await act(async () => { answers.shift()!(page([msg(1)], { pinned: msg(1) })); });
+    expect(screen.getByTestId('live-chat-pinned')).toHaveTextContent('message 1');
+  });
+
+  it('earlier messages the reader asked for stay when new ones come', async () => {
+    const many = Array.from({ length: 100 }, (_, i) => msg(1000 + i));
+    readChat.mockResolvedValueOnce(page(many, { hasMore: true }));
+    for (let n = 0; n < 9; n++) readChat.mockResolvedValueOnce(page(Array.from({ length: 50 }, (_, i) => msg(950 - n * 50 + i)), { hasMore: true }));
+    await show();
+    for (let n = 0; n < 9; n++) await act(async () => { fireEvent.click(screen.getByTestId('live-chat-older')); });
+    expect(texts()).toHaveLength(550);
+    await frame({ type: 'live_chat_message', message: msg(2000) });
+    expect(texts()).toHaveLength(551);
+    expect(texts()[0]).toBe('message 550');
+  });
+
   it('says that it is closed, and shows no way to write', async () => {
     readChat.mockRejectedValue(new LiveApiError(404, 'not_found'));
     await show();
@@ -220,6 +250,15 @@ describe('writing', () => {
     expect(screen.getByTestId('live-chat-input')).toHaveValue('مرحبا');
     expect(screen.getByTestId('live-chat-send')).toBeDisabled();
     expect(screen.getByTestId('live-chat-send')).toHaveTextContent('١٢');
+  });
+
+  it('a repeated message may be changed and sent at once', async () => {
+    postChat.mockRejectedValue(new LiveApiError(429, 'live_chat_duplicate', 30));
+    await show();
+    await write('again');
+    expect(screen.getByTestId('live-chat-problem')).toHaveTextContent('You just sent this message.');
+    expect(screen.getByTestId('live-chat-send')).toBeEnabled();
+    expect(screen.getByTestId('live-chat-send')).toHaveTextContent('Send');
   });
 
   it('slow mode waits after a message, not for moderators', async () => {
@@ -327,6 +366,17 @@ describe('the replay', () => {
     await player.at(1);
     await act(async () => {});
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('stops reading when the page is left', async () => {
+    const signals: AbortSignal[] = [];
+    readChat.mockImplementation((_s: string, _q: object, signal: AbortSignal) => { signals.push(signal); return new Promise(() => undefined); });
+    const player = fakePlayer();
+    const { unmount } = render(<LiveChatReplay streamId="s1" player={player as never} />);
+    await player.at(1);
+    expect(signals.length).toBeGreaterThan(0);
+    unmount();
+    expect(signals.every((s) => s.aborted)).toBe(true);
   });
 
   it('reads the rest of a window that was cut, without repeats', async () => {

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger-client';
 
 /** The count is shown only near the end. */
 const COUNT_FROM = 100;
+const WAIT_CODES = new Set(['live_chat_slow_mode', 'rate_limited']);
 const lengthOf = (value: string) => [...value].length;
 
 export interface LiveChatComposerProps {
@@ -92,7 +93,8 @@ export function LiveChatComposer({ streamId, chat, canModerate, onPosted, onClos
       }
       logger.warn('[LiveChat] Message not sent', { streamId, error: error instanceof Error ? error.message : String(error) });
       const api = error instanceof LiveApiError ? error : null;
-      if (api?.retryAfter && api.status === 429) setWaitUntil(Date.now() + api.retryAfter * 1000);
+      // Only what is about pace: a repeated message may be changed and sent at once
+      if (api?.retryAfter && WAIT_CODES.has(api.code ?? '')) setWaitUntil(Date.now() + api.retryAfter * 1000);
       setProblem(api?.code === 'human_check_required' ? human.failed : apiErrorMessage(api?.code ?? 'internal_error', api?.status ?? 500, lang === 'ar' ? 'ar' : 'en'));
     } finally {
       setNow(Date.now());

@@ -38,10 +38,14 @@ export function useChatReplay(streamId: string, player: Player | null): { messag
   const [windows, setWindows] = useState<ReadonlyMap<number, LiveChatMessage[]>>(new Map());
   const asked = useRef(new Set<number>());
 
+  const controller = useRef<AbortController | null>(null);
   useEffect(() => {
+    const own = new AbortController();
+    controller.current = own;
     asked.current = new Set();
     setWindows(new Map());
     setOff(false);
+    return () => own.abort();
   }, [streamId]);
 
   useEffect(() => {
@@ -65,9 +69,11 @@ export function useChatReplay(streamId: string, player: Player | null): { messag
     for (const n of [current, current + 1, current - 1]) {
       if (n < 0 || asked.current.has(n)) continue;
       asked.current.add(n);
-      readWindow(streamId, n * REPLAY_WINDOW_MS).then(
-        (list) => setWindows((w) => new Map(w).set(n, list)),
+      const signal = controller.current?.signal;
+      readWindow(streamId, n * REPLAY_WINDOW_MS, signal).then(
+        (list) => { if (!signal?.aborted) setWindows((w) => new Map(w).set(n, list)); },
         (error) => {
+          if (signal?.aborted) return;
           asked.current.delete(n);
           if (error instanceof LiveApiError && error.status === 404) setOff(true);
           else logger.debug('[LiveChat] Could not read the replay', { streamId, window: n, error });
