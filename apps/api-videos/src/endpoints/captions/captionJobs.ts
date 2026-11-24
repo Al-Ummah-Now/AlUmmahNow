@@ -91,7 +91,7 @@ export class CaptionJobCreate extends AuthenticatedRoute {
 			description:
 				'Starts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. ' +
 				'Asking again while a job of the same language runs returns that job (200). ' +
-				'Reserves `ceil(duration in minutes)` caption minutes; a failed or cancelled job gives them back. ' +
+				'Reserves `ceil(duration in minutes)` caption minutes; a failed or canceled job gives them back. ' +
 				'409 `draft_exists` unless `replace`; 402 `upgrade_required` when the balance is 0 or below. ' +
 				'The estimate is charged at the start and may take the balance below 0: a started job always runs to the end.',
 			request: {

@@ -80,7 +80,7 @@ export class BrandKitPut extends AuthenticatedRoute {
 		{
 			tags: ['Studio'],
 			summary: 'Save the account brand kit',
-			description: 'Colours are #rrggbb. `logo` must be an image and `intro`/`outro` videos from the asset library. Account owner only (403 when acting as someone else\'s channel).',
+			description: 'Colors are #rrggbb. `logo` must be an image and `intro`/`outro` videos from the asset library. Account owner only (403 when acting as someone else\'s channel).',
 			request: { body: { content: { 'application/json': { schema: Kit } } } },
 			responses: {
 				'200': { description: 'Saved', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ kit: Kit }) }) } } },

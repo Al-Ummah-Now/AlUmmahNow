@@ -220,7 +220,7 @@ test.describe('player controls', () => {
     await page.keyboard.press('Shift+Slash');
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(/theatre/i);
+    await expect(dialog).toContainText(/theater/i);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
   });

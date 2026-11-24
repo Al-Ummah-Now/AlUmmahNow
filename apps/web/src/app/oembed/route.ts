@@ -43,7 +43,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!ref) {
     // A channel page: a link card (scheduler tools and chat apps show its name and avatar)
     const channelRef = parseChannelUrl(url, new URL(origin).host);
-    if (!channelRef) return json({ error: 'URL not recognised' }, 404);
+    if (!channelRef) return json({ error: 'URL not recognized' }, 404);
     const channel = 'handle' in channelRef ? await loadChannelByHandle(channelRef.handle) : await loadChannelById(channelRef.id);
     if (!channel?.id || (channel as { isHidden?: boolean }).isHidden || (channel as { isPrivate?: boolean }).isPrivate) return json({ error: 'Not found' }, 404);
     return json(

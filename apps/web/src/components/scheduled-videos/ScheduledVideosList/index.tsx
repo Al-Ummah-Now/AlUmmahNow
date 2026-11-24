@@ -198,7 +198,7 @@ export function ScheduledVideosList({
           <option value="publishing">{t.schedule?.statusPublishing || 'Publishing'}</option>
           <option value="published">{t.schedule?.statusPublished || 'Published'}</option>
           <option value="failed">{t.schedule?.statusFailed || 'Failed'}</option>
-          <option value="cancelled">{t.schedule?.statusCancelled || 'Cancelled'}</option>
+          <option value="cancelled">{t.schedule?.statusCancelled || 'Canceled'}</option>
         </ThemedSelectField>
       </div>
 

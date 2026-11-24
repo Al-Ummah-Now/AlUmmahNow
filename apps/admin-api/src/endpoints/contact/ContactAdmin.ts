@@ -395,7 +395,7 @@ export class ContactRetryDelivery extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
     summary: 'Retry an email that failed to send',
-    description: 'kind: notify (support inbox), ack (acknowledgement) or reply (with noteId). Only a failed delivery can be retried; it is queued again. Needs contact:manage.',
+    description: 'kind: notify (support inbox), ack (acknowledgment) or reply (with noteId). Only a failed delivery can be retried; it is queued again. Needs contact:manage.',
     request: {
       params: IdParams,
       body: {

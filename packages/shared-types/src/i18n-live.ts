@@ -9,7 +9,7 @@ export const LIVE_WATCH_EN = {
   ended: 'This live stream has ended.',
   recording: 'Recording',
   recordingPreparing: 'The recording is being prepared. Check back soon.',
-  cancelled: 'This live stream was cancelled.',
+  cancelled: 'This live stream was canceled.',
   notFound: 'This live stream doesn’t exist or is private.',
   loadFailed: 'Could not load this live stream.',
   retry: 'Try again',

@@ -123,8 +123,8 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
 
   chrome: {
     next: 'Next video',
-    theatre: 'Theatre mode',
-    exitTheatre: 'Exit theatre mode',
+    theatre: 'Theater mode',
+    exitTheatre: 'Exit theater mode',
     off: 'Off',
     back: 'Back',
     audioTrack: 'Audio track',
@@ -278,7 +278,7 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
       },
       theatre: {
         keys: 'T',
-        description: 'Theatre mode',
+        description: 'Theater mode',
       },
       next: {
         keys: 'N',

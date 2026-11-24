@@ -33,7 +33,7 @@ const TranscriptMatchSchema = z.object({
 });
 
 export const SearchQuerySchema = z.object({
-  q: Str({ description: "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalised)" }).max(200).optional(),
+  q: Str({ description: "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalized)" }).max(200).optional(),
   type: z.enum(["video", "channel", "playlist", "post"]).optional().describe("Restrict to one result type (default: all types)"),
   duration: z.enum(["short", "medium", "long"]).optional().describe("Videos only: short < 4 min, medium 4-20 min, long > 20 min"),
   format: z.enum(["short", "video"]).optional().describe("Videos only: Shorts (≤ 3 min and vertical or square, or chosen by the uploader) or long-form videos"),

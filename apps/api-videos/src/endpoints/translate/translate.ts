@@ -143,7 +143,7 @@ export class VideoTranslatedMetadataGet extends PublicRoute {
 		tags: ['Translation'],
 		summary: "A public video's title and description translated for the viewer",
 		description:
-			'A machine translation of the title and description for a viewer of `lang`, shown labelled with "Show original". `translation` is null while an admin has paused it, when the channel opted out, when the creator wrote a title in that language, or when it is being made (`pending`). Never written into the creator\'s own text.',
+			'A machine translation of the title and description for a viewer of `lang`, shown labeled with "Show original". `translation` is null while an admin has paused it, when the channel opted out, when the creator wrote a title in that language, or when it is being made (`pending`). Never written into the creator\'s own text.',
 		request: { params: z.object({ videoId: Str({ description: 'Video ID' }) }), query: z.object({ lang: z.string() }) },
 		responses: {
 			'200': {

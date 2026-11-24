@@ -57,7 +57,7 @@ export const ENTITLEMENT_CATALOGUE: readonly EntitlementDefinition[] = [
   { key: 'share.shortLinks', type: 'boolean', fallback: true, epic: 25, description_en: 'Short share links', description_ar: 'روابط المشاركة القصيرة', at_limit: 'n/a' },
   { key: 'embed.enabled', type: 'boolean', fallback: true, epic: 25, description_en: 'Embed videos on other sites', description_ar: 'تضمين المرئيات في مواقع أخرى', at_limit: 'n/a' },
   { key: 'embed.domains.max', type: 'number', unit: 'domains', fallback: UNLIMITED, epic: 25, description_en: 'Domains per restricted video', description_ar: 'النطاقات لكل مرئي مقيّد', at_limit: 'Feature not built' },
-  { key: 'embed.customColor', type: 'boolean', fallback: false, epic: 25, description_en: 'Custom player colour', description_ar: 'لون مخصص للمشغّل', at_limit: 'Feature not built' },
+  { key: 'embed.customColor', type: 'boolean', fallback: false, epic: 25, description_en: 'Custom player color', description_ar: 'لون مخصص للمشغّل', at_limit: 'Feature not built' },
   { key: 'embed.hideBranding', type: 'boolean', fallback: false, epic: 25, description_en: 'Hide player branding', description_ar: 'إخفاء العلامة في المشغّل', at_limit: 'Feature not built' },
   { key: 'embed.privateVideos', type: 'boolean', fallback: false, epic: 25, description_en: 'Signed embeds of private videos', description_ar: 'تضمين موقّع للمرئيات الخاصة', at_limit: 'Feature not built' },
   { key: 'embed.analytics.retentionDays', type: 'number', unit: 'days', fallback: 28, epic: 25, description_en: 'Embed analytics history', description_ar: 'مدة إحصاءات التضمين', at_limit: 'Feature not built' },

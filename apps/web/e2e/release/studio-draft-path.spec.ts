@@ -88,7 +88,7 @@ test.describe('Release: Studio draft path', () => {
       await openStatus('scheduled');
 
       // Cancel: back to Drafts
-      await act('Cancel schedule', 'Schedule cancelled.');
+      await act('Cancel schedule', 'Schedule canceled.');
       await openStatus('drafts');
 
       // Publish

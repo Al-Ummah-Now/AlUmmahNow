@@ -148,7 +148,7 @@ export async function cancelRun(env: BackfillEnv, runId: string, now = new Date(
 export async function retryItem(env: BackfillEnv, ctx: Ctx, runId: string, videoId: string, now = new Date()): Promise<{ retried: boolean; why?: string }> {
 	const row = await getRunRow(db(env), runId);
 	if (!row) return { retried: false, why: 'no such run' };
-	if (row.status === 'cancelled') return { retried: false, why: 'the run was cancelled' };
+	if (row.status === 'cancelled') return { retried: false, why: 'the run was canceled' };
 	const moved = await transition(db(env), runId, videoId, ['failed'], 'pending', { error: null, error_step: null, attempts: 0 }, now);
 	if (!moved) return { retried: false, why: 'the item has not failed' };
 	resolveNeedsAction(env, ctx, needsKey(videoId));

@@ -141,7 +141,7 @@ export default function ScheduleSection({
       const result = await cancelSchedule(videoId, { channelId });
 
       if (result?.success) {
-        setSuccess(s.scheduleCancelled ?? 'Schedule cancelled');
+        setSuccess(s.scheduleCancelled ?? 'Schedule canceled');
         setIsScheduled(false);
         setScheduleDate('');
         setScheduleTime('');

@@ -87,7 +87,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 			tags: ['Privacy'],
 			summary: 'Erase the authenticated user\'s data (GDPR Art. 17)',
 			description:
-				'Deletes the profile, owned channels/videos/playlists/posts, watch history, subscriptions, likes, votes and templates; anonymises comments and reports filed. Requires `{ "confirm": "DELETE" }`. Idempotent and resumable: while `complete` is false, call again with the returned `resumeToken`.',
+				'Deletes the profile, owned channels/videos/playlists/posts, watch history, subscriptions, likes, votes and templates; anonymizes comments and reports filed. Requires `{ "confirm": "DELETE" }`. Idempotent and resumable: while `complete` is false, call again with the returned `resumeToken`.',
 			request: {
 				body: {
 					content: {

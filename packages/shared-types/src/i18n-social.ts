@@ -155,7 +155,7 @@ export const SOCIAL_STUDIO_EN = {
     invalid_instance: 'Enter a valid server name.',
     handle_not_found: 'No account was found for this handle.',
     instance_unreachable: 'This server couldn’t be reached.',
-    oauth_denied: 'Connecting was cancelled.',
+    oauth_denied: 'Connecting was canceled.',
     oauth_expired: 'Connecting took too long. Try again.',
     oauth_failed: 'The network didn’t confirm the connection. Try again.',
     already_connected_elsewhere: 'This account is already connected.',

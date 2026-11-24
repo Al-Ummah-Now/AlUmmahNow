@@ -31,7 +31,7 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
       },
       responses: {
         '200': {
-          description: 'Schedule cancelled successfully',
+          description: 'Schedule canceled successfully',
           content: {
             'application/json': {
               schema: z.object({
@@ -201,7 +201,7 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
         result: {
           videoId: video.id,
           status: 'cancelled',
-          message: 'Scheduled publication cancelled',
+          message: 'Scheduled publication canceled',
         },
       });
     } catch (error) {

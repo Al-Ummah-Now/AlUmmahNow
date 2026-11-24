@@ -128,7 +128,7 @@ export class QuranCreditsGet extends PublicRoute {
 		tags: ['Quran'],
 		summary: 'Quran credits',
 		description:
-			"🌐 Public. Quran Foundation's attribution and short credit, and every translation edition translated caption tracks can show (the shipped defaults, the platform's and the channels' picks), named as QF's catalogue gives them. 404 `feature_off` when no Quran text from QF is shown here.",
+			"🌐 Public. Quran Foundation's attribution and short credit, and every translation edition translated caption tracks can show (the shipped defaults, the platform's and the channels' picks), named as QF's catalog gives them. 404 `feature_off` when no Quran text from QF is shown here.",
 		responses: {
 			'200': { description: 'Credits', content: { 'application/json': { schema: QuranCreditsBody } } },
 			'404': { description: 'No Quran text from Quran Foundation on this site (feature_off)' },
