@@ -388,7 +388,7 @@ describe('profile emails: reports', () => {
 		const others = keysOf(t).records.filter((k) => !k.endsWith('/usr_differs.json'));
 		t.raw.ADMIN_BACKUPS.calls = 0;
 		assert.equal(await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_differs', new OperationBudget(10)), 2);
-		assert.equal(t.raw.ADMIN_BACKUPS.calls, 3, 'one list of their own prefix, two deletes');
+		assert.equal(t.raw.ADMIN_BACKUPS.calls, 4, 'one list of their own prefix, two deletes, the sweep cursor');
 		const left = keysOf(t);
 		assert.deepEqual(left.records.sort(), others.sort());
 		assert.equal(left.pointers.some((k) => k.includes('usr_differs')), false);
@@ -399,6 +399,18 @@ describe('profile emails: reports', () => {
 		}
 		// A user id that is the start of another one takes nothing of theirs
 		assert.equal(await eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_no', new OperationBudget(10)), 0);
+	});
+
+	it('the erasure clears a paused sweep that stopped at the user, and no other', async () => {
+		const t = await setup({ profiles: {}, channels: {}, auth: {} });
+		const stopAt = (id: string) => t.raw.ADMIN_BACKUPS.put(SWEEP_CURSOR_KEY, JSON.stringify({ after: `${REPORT_PREFIX}by-user/${id}/2020-01-01/old-job/000000` }));
+		const erase = () => eraseProfileEmailReports(t.raw.ADMIN_BACKUPS as never, 'usr_a', new OperationBudget(10));
+		await stopAt('usr_ab');
+		await erase();
+		assert.equal(t.raw.ADMIN_BACKUPS.store.has(SWEEP_CURSOR_KEY), true);
+		await stopAt('usr_a');
+		await erase();
+		assert.equal(t.raw.ADMIN_BACKUPS.store.has(SWEEP_CURSOR_KEY), false);
 	});
 
 	it('both erasures (the account and an E2E run account) include the reports', async () => {

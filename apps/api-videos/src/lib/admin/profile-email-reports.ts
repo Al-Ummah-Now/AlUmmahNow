@@ -83,6 +83,9 @@ export async function storeRecord(env: { profiles: R2Bucket; ADMIN_BACKUPS?: R2B
 	return current;
 }
 
+/** Where a paused pointer sweep goes on (a key, no email). */
+export const SWEEP_CURSOR_KEY = `${REPORT_PREFIX}pointer-sweep.json`;
+
 /** Account erasure: deletes every report record that names the user, then their pointers (a prefix of their own). */
 export async function eraseProfileEmailReports(bucket: BucketLike, userId: string, budget: OperationBudget): Promise<number> {
 	const prefix = `${POINTERS}${userId}/`;
@@ -90,6 +93,9 @@ export async function eraseProfileEmailReports(bucket: BucketLike, userId: strin
 	for await (const { key } of listKeys(bucket, budget, prefix)) steps.push(key.slice(prefix.length));
 	const deleted = await deleteKeys(bucket, steps.map((step) => recordKey(step, userId)), budget);
 	await deleteKeys(bucket, steps.map((step) => pointerKey(userId, step)), budget);
+	// A paused pointer sweep may have stopped at one of them: it starts over instead of naming the user
+	const cursor = await readJson<{ after?: unknown }>(bucket, SWEEP_CURSOR_KEY, budget);
+	if (typeof cursor?.after === 'string' && cursor.after.startsWith(prefix)) await deleteKeys(bucket, [SWEEP_CURSOR_KEY], budget);
 	return deleted;
 }
 
@@ -164,8 +170,6 @@ export async function sweepProfileEmailReports(bucket: SweepBucket, now: Date, b
 	}
 }
 
-/** Where a paused pointer sweep goes on (a key, no email). */
-export const SWEEP_CURSOR_KEY = `${REPORT_PREFIX}pointer-sweep.json`;
 const HEADS = 8;
 /** Kept back for the last delete and the cursor. */
 const RESERVE = 2;
