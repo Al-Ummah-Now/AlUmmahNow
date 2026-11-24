@@ -88,6 +88,11 @@ for (const lang of LANGS) {
     await mockApi(page);
     const fetched = new Set<string>();
     page.on('request', (req) => { const m = req.url().match(/street-tile(?:-dark)?-(\d)\.webp/); if (m) fetched.add(m[1]); });
+    const served = new Map<string, { status: number; type: string }>();
+    page.on('response', (res) => {
+      const { pathname } = new URL(res.url());
+      if (pathname.startsWith('/fanous/street/')) served.set(pathname, { status: res.status(), type: (res.headers()['content-type'] ?? '').split(';')[0] });
+    });
     await open(page, `/${lang}`);
     const problems: string[] = [];
     for (const mode of MODES) {
@@ -107,11 +112,9 @@ for (const lang of LANGS) {
       expect(l.position, `${mode}: scrolls with the page`).toBe('absolute');
       expect(l.covers, `${mode}: down the whole page`).toBe(true);
       expect(Number(l.opacity), `${mode}: faint where it lies behind text`).toBeCloseTo(Number(l.faint), 2);
-      // The tile files themselves are served
+      // The tile files themselves are served: the answers the page itself got
       for (const url of l.street.match(/\/fanous\/street\/[\w-]+\.webp/g) ?? []) {
-        const res = await page.request.get(url);
-        expect(res.status(), url).toBe(200);
-        expect(res.headers()['content-type'], url).toContain('image/webp');
+        await expect.poll(() => served.get(url), { message: url }).toEqual({ status: 200, type: 'image/webp' });
       }
       const maxY = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
       for (const depth of DEPTHS.filter((d) => d <= maxY)) {
