@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MultiAccountProvider, useMultiAccount } from '../useMultiAccount';
 import { getActiveSessionInfo, switchChannel } from '@/lib/actions/multi-account';
+import { fetchChannelAccess } from '@/lib/channels/access';
+import { CHANNEL_ACCESS_CHANGED_EVENT } from '@/lib/notifications/channel-access';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: jest.fn(), push: jest.fn() }),
@@ -24,6 +26,13 @@ jest.mock('@/lib/actions/multi-account', () => ({
   logoutCurrentAccount: jest.fn(),
   logoutAllAccounts: jest.fn(),
   getActiveSessionInfo: jest.fn(),
+}));
+jest.mock('@/lib/channels/access', () => ({
+  ...jest.requireActual('@/lib/channels/access'),
+  // As without a network: the live list fails and the session's cached list stays
+  fetchChannelAccess: jest.fn(async () => {
+    throw new Error('offline');
+  }),
 }));
 jest.mock('@/lib/auth/auth-accounts', () => ({
   ...jest.requireActual('@/lib/auth/auth-accounts'),
@@ -92,6 +101,16 @@ describe('MultiAccountProvider - session reloads', () => {
 
     expect(getActiveSessionInfo).toHaveBeenCalledTimes(2);
     expect(result.current.loading).toBe(false);
+  });
+
+  it('reloads the live channel list when a channel-access notice fires the access-changed event (AUN-CHANNEL-CLAIM CC-2)', async () => {
+    (getActiveSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
+    renderHook(() => useMultiAccount(), { wrapper });
+    await waitFor(() => expect(fetchChannelAccess).toHaveBeenCalledTimes(1));
+    act(() => {
+      window.dispatchEvent(new CustomEvent(CHANNEL_ACCESS_CHANGED_EVENT));
+    });
+    await waitFor(() => expect(fetchChannelAccess).toHaveBeenCalledTimes(2));
   });
 
   it('does not reload on Back/Forward inside the app, only on a back/forward cache restore', async () => {

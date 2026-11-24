@@ -826,20 +826,29 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 async function notifyMove(env: AdminServiceEnv, job: AdminJob, channel: Row, from: string | null, to: string): Promise<void> {
 	const params = channelParams('channel', channel as never);
 	const actionUrl = `/channels/${job.targetId}`;
-	try {
-		await notifyTeam(env as never, to, job.actorId, { notificationKey: 'channelMovedIn', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:in` });
-		// The admin's reason goes to the previous owner when there is one (CC-D11); invite hand-overs have none
-		const reason = typeof job.params.reason === 'string' && job.params.reason.trim() ? job.params.reason.trim() : null;
-		await notifyTeam(env as never, from, job.actorId, {
-			notificationKey: reason ? 'channelMovedOutByTeamWithReason' : 'channelMovedOutByTeam',
-			params: reason ? { ...params, reason } : params,
-			actionUrl,
-			entityId: job.targetId,
-			dedupeKey: `move:${job.id}:out`,
-		});
-	} catch (error) {
-		// The move is done; a lost notice is not worth undoing or repeating it
-		logger.warn('[Admin] Channel move notice failed', { channelId: job.targetId, jobId: job.id, error: error instanceof Error ? error.message : String(error) });
+	// The admin's reason goes to the previous owner when there is one (CC-D11); invite hand-overs have none
+	const reason = typeof job.params.reason === 'string' && job.params.reason.trim() ? job.params.reason.trim() : null;
+	const notices: Array<[string | null, Parameters<typeof notifyTeam>[3]]> = [
+		[to, { notificationKey: 'channelMovedIn', params, actionUrl, entityId: job.targetId, dedupeKey: `move:${job.id}:in` }],
+		[
+			from,
+			{
+				notificationKey: reason ? 'channelMovedOutByTeamWithReason' : 'channelMovedOutByTeam',
+				params: reason ? { ...params, reason } : params,
+				actionUrl,
+				entityId: job.targetId,
+				dedupeKey: `move:${job.id}:out`,
+			},
+		],
+	];
+	// Each notice on its own: one failing never keeps the other from going out
+	for (const [recipient, notice] of notices) {
+		try {
+			await notifyTeam(env as never, recipient, job.actorId, notice);
+		} catch (error) {
+			// The move is done; a lost notice is not worth undoing or repeating it
+			logger.warn('[Admin] Channel move notice failed', { channelId: job.targetId, jobId: job.id, key: notice.notificationKey, error: error instanceof Error ? error.message : String(error) });
+		}
 	}
 }
 
