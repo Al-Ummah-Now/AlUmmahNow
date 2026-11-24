@@ -16,8 +16,11 @@
 
 import type { UserFeatureKey } from './features';
 
-export const HELP_TOPIC_IDS = ['start', 'watching', 'identity', 'creating', 'social', 'community', 'privacy', 'appearance'] as const;
+export const HELP_TOPIC_IDS = ['start', 'watching', 'identity', 'creating', 'social', 'community', 'privacy', 'parents', 'appearance'] as const;
 export type HelpTopicId = (typeof HELP_TOPIC_IDS)[number];
+
+/** A whole topic that exists only while its feature is on: its page is a 404, and no list or search names it. */
+export const HELP_TOPIC_FEATURES: Readonly<Partial<Record<HelpTopicId, UserFeatureKey>>> = Object.freeze({ parents: 'parentsGuide' });
 
 /** Still pictures made by the capture script, one per language × desktop/phone × light/dark */
 export const HELP_PICTURE_IDS = [
@@ -473,6 +476,75 @@ export const HELP_EN: HelpTranslations = {
         },
       ],
     },
+    parents: {
+      title: 'A guide for parents',
+      summary: 'Who Al Ummah Now is for, and how to limit it with your device’s own controls.',
+      sections: [
+        {
+          id: 'who-it-is-for',
+          heading: 'Who it is for',
+          blocks: [
+            { type: 'p', text: 'Al Ummah Now is for people of **13 and over**. It is not made for children: creators publish the videos themselves, and talks and news can be about subjects for older people.' },
+            { type: 'p', text: 'The app stores show the app’s rating for your country. Your device’s parental controls use that rating to hide the app or to ask you first.' },
+            { type: 'tip', text: 'The controls below belong to the device, so they also work when your child is not signed in here. We can’t see or change them.' },
+          ],
+        },
+        {
+          id: 'apple',
+          heading: 'iPhone, iPad, Mac and Apple TV',
+          blocks: [
+            { type: 'list', items: [
+              '**Hide the app by rating:** open **Settings**, then **Family**, and choose your child. In **Content & Privacy Restrictions**, choose an age rating for apps below 13+.',
+              '**Limit the time:** on the same page for your child, set a time allowance for the app, or a schedule for when the device may be used.',
+              '**Block the app:** choose it under your child’s apps and websites, then **Block App**.',
+              '**On Mac:** open **System Settings**, then **Screen Time**.',
+              '**On Apple TV:** open **Settings**, then **General**, then **Restrictions**.',
+            ] },
+            { type: 'p', text: 'Names differ a little between versions. On older ones, everything is in **Settings**, under **Screen Time**.' },
+          ],
+        },
+        {
+          id: 'android',
+          heading: 'Android and Google TV',
+          blocks: [
+            { type: 'list', items: [
+              '**Hide the app by rating:** in **Family Link**, choose your child, then **Controls**, then **Google Play**, and set the rating for apps.',
+              '**Limit the time or block the app:** choose your child, then **Screen time**, then **App limits**.',
+              '**On Google TV:** open **All settings**, then **Accounts & Profiles**, and choose your child’s profile.',
+            ] },
+          ],
+        },
+        {
+          id: 'windows',
+          heading: 'Windows',
+          blocks: [
+            { type: 'list', items: [
+              '**By rating:** in **Microsoft Family Safety**, choose your child and set an age limit for apps. It covers apps from the Microsoft Store.',
+              '**Limit the time or block the app:** set an app limit there. It also covers apps downloaded from a website.',
+            ] },
+          ],
+        },
+        {
+          id: 'websites',
+          heading: 'In a browser',
+          blocks: [
+            { type: 'p', text: 'To limit the site itself, add these addresses to the website limits of your device or your home network:' },
+            { type: 'list', items: [
+              '**alummahnow.net** and every address that ends in it: all our sites.',
+              '**alummahnow.link:** our short links.',
+            ] },
+          ],
+        },
+        {
+          id: 'report-something',
+          heading: 'Report something',
+          blocks: [
+            { type: 'p', text: 'If you see something that shouldn’t be here, select **Report** on that video or comment. The [community guidelines](/community-guidelines) say what is allowed.' },
+            { type: 'p', text: 'You can also [write to us](/contact), without an account.' },
+          ],
+        },
+      ],
+    },
     appearance: {
       title: 'Language and appearance',
       summary: 'English or Arabic, light or dark.',
@@ -855,6 +927,75 @@ export const HELP_AR: HelpTranslations = {
               '**حذف بياناتك:** يحذف نهائيًا ملفك وقنواتك ومرئياتك وقوائم التشغيل والسجل والاشتراكات والإعجابات، وتبقى تعليقاتك ومنشوراتك بلا اسمك. وتكتب كلمة للتأكيد.',
             ] },
             { type: 'figure', picture: 'privacy-settings', alt: 'صفحة الخصوصية والبيانات', markers: ['تنزيل بياناتك', 'حذف بياناتك'] },
+          ],
+        },
+      ],
+    },
+    parents: {
+      title: 'دليل الوالدين',
+      summary: 'لمن هذا الموقع وتطبيقاته، وكيف تضع لها حدودًا بأدوات جهازك نفسه.',
+      sections: [
+        {
+          id: 'who-it-is-for',
+          heading: 'لمن هذا الموقع',
+          blocks: [
+            { type: 'p', text: 'الأمة الآن لمن بلغ **١٣ عامًا فأكثر**. والموقع وتطبيقاته ليست موجّهة للأطفال: ينشر صنّاع المحتوى مرئياتهم بأنفسهم، وقد تتناول الكلمات والأخبار مواضيع تناسب من هم أكبر سنًّا.' },
+            { type: 'p', text: 'تعرض متاجر التطبيقات تصنيف التطبيق العمري في بلدك. وبه تخفي أدوات الرقابة الأبوية في جهازك التطبيق أو تطلب موافقتك أولًا.' },
+            { type: 'tip', text: 'الأدوات التالية تابعة للجهاز، فهي تعمل أيضًا حين لا يكون طفلك مسجّل الدخول هنا. ولا يمكننا رؤيتها ولا تغييرها.' },
+          ],
+        },
+        {
+          id: 'apple',
+          heading: 'آيفون وآيباد وماك وApple TV',
+          blocks: [
+            { type: 'list', items: [
+              '**إخفاء التطبيق حسب التصنيف:** افتح **الإعدادات**، ثم **العائلة**، واختر طفلك. وفي **قيود المحتوى والخصوصية** اختر للتطبيقات تصنيفًا عمريًّا أقل من ١٣+.',
+              '**تحديد الوقت:** في صفحة طفلك نفسها، حدّد وقتًا مسموحًا للتطبيق، أو جدولًا لأوقات استخدام الجهاز.',
+              '**حظر التطبيق:** اختره من تطبيقات طفلك ومواقعه، ثم اختر **حظر التطبيق**.',
+              '**على ماك:** افتح **إعدادات النظام**، ثم **مدة استخدام الجهاز**.',
+              '**على Apple TV:** افتح **الإعدادات**، ثم **عام**، ثم **القيود**.',
+            ] },
+            { type: 'p', text: 'تختلف الأسماء قليلًا بين الإصدارات. وفي الأقدم منها تجد كل ذلك في **الإعدادات** تحت **مدة استخدام الجهاز**.' },
+          ],
+        },
+        {
+          id: 'android',
+          heading: 'أندرويد وGoogle TV',
+          blocks: [
+            { type: 'list', items: [
+              '**إخفاء التطبيق حسب التصنيف:** في **Family Link** اختر طفلك، ثم **عناصر التحكم**، ثم **Google Play**، وحدّد تصنيف التطبيقات.',
+              '**تحديد الوقت أو حظر التطبيق:** اختر طفلك، ثم **مدة استخدام الجهاز**، ثم **حدود التطبيقات**.',
+              '**على Google TV:** افتح **كل الإعدادات**، ثم **الحسابات والملفات الشخصية**، واختر ملف طفلك.',
+            ] },
+          ],
+        },
+        {
+          id: 'windows',
+          heading: 'ويندوز',
+          blocks: [
+            { type: 'list', items: [
+              '**حسب التصنيف:** في **Microsoft Family Safety** اختر طفلك وحدّد عمرًا للتطبيقات. ويشمل ذلك تطبيقات متجر مايكروسوفت.',
+              '**تحديد الوقت أو حظر التطبيق:** ضع هناك حدًّا للتطبيق. ويشمل ذلك أيضًا ما نُزّل من موقع.',
+            ] },
+          ],
+        },
+        {
+          id: 'websites',
+          heading: 'في المتصفح',
+          blocks: [
+            { type: 'p', text: 'لوضع حدود للموقع نفسه، أضف هذه العناوين إلى قيود المواقع في جهازك أو في شبكة منزلك:' },
+            { type: 'list', items: [
+              '**alummahnow.net** وكل عنوان ينتهي به: جميع مواقعنا.',
+              '**alummahnow.link:** روابطنا القصيرة.',
+            ] },
+          ],
+        },
+        {
+          id: 'report-something',
+          heading: 'أبلِغ عن شيء',
+          blocks: [
+            { type: 'p', text: 'إذا رأيت ما لا ينبغي أن يكون هنا، فاختر **إبلاغ** عند ذلك المرئي أو التعليق. وتوضّح [إرشادات المجتمع](/community-guidelines) ما هو مسموح به.' },
+            { type: 'p', text: 'ويمكنك أيضًا أن [تكتب إلينا](/contact)، من دون حساب.' },
           ],
         },
       ],

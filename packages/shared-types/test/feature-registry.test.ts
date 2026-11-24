@@ -103,6 +103,7 @@ test('defaults keep today’s behaviour (the live app features, caption download
     'offlineDownloads',
     'appUpdates',
     'ageRules',
+    'parentsGuide',
   ]);
 });
 

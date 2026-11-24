@@ -3,6 +3,7 @@
  * each picture lives. The text itself is t.help (packages/shared-types/src/i18n-help.ts).
  */
 import {
+  HELP_TOPIC_FEATURES,
   HELP_TOPIC_IDS,
   type HelpBlock,
   type HelpClipId,
@@ -45,6 +46,14 @@ export function plainText(text: string): string {
 
 export function isHelpTopic(value: string): value is HelpTopicId {
   return (HELP_TOPIC_IDS as readonly string[]).includes(value);
+}
+
+/** The topics this reader has: one whose feature is off is nowhere (fail closed). */
+export function visibleHelpTopics(features?: UserFeatures): HelpTopicId[] {
+  return HELP_TOPIC_IDS.filter((id) => {
+    const feature = HELP_TOPIC_FEATURES[id];
+    return !feature || features?.[feature] === true;
+  });
 }
 
 export function helpHref(lang: string, topic?: HelpTopicId, section?: string): string {
@@ -99,7 +108,7 @@ export interface HelpSearchEntry {
 /** One entry per topic and per section, matched on headings, text and the other language's headings */
 export function helpSearchEntries(help: HelpTranslations, other?: HelpTranslations, features?: UserFeatures): HelpSearchEntry[] {
   const entries: HelpSearchEntry[] = [];
-  for (const topic of HELP_TOPIC_IDS) {
+  for (const topic of visibleHelpTopics(features)) {
     const page = help.topics[topic];
     entries.push({ id: topic, topic, label: page.title, subtitle: page.summary, keywords: [page.summary, other?.topics[topic].title ?? ''] });
     for (const section of visibleHelpSections(page.sections, features)) {

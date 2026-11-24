@@ -3,10 +3,10 @@
 import '@/theme/help.css';
 import Link from '@/components/common/AppLink';
 import { ArrowLeft } from 'lucide-react';
-import { HELP_TOPIC_IDS, type HelpTopicId } from '@al-ummah/shared-types';
+import type { HelpTopicId } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
-import { helpHref, visibleHelpSections } from '@/lib/help/content';
+import { helpHref, visibleHelpSections, visibleHelpTopics } from '@/lib/help/content';
 import { useFeatures } from '@/hooks/useFeatures';
 import { requestIdentityTour } from '@/lib/help/tour-events';
 import { HelpBlocks } from './HelpBlocks';
@@ -22,7 +22,7 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
   const { features } = useFeatures();
   const sections = visibleHelpSections(page.sections, features);
   const Icon = HELP_TOPIC_ICONS[topic];
-  const related = HELP_TOPIC_IDS.filter((id) => id !== topic);
+  const related = visibleHelpTopics(features).filter((id) => id !== topic);
   return (
     <main id={MAIN_CONTENT_ID} className="hp" dir={isRTL ? 'rtl' : 'ltr'} data-testid={`help-page-${topic}`}>
       <nav aria-label={h.title} className="hp-crumb">

@@ -356,6 +356,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		quranEditions: quran,
 		quranText,
 		eventCalendar: true,
+		parentsGuide: true,
 		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)
 		intentionalViewing: true,
 		// Viewers follow the switch alone: no tier, and no provider (streams on air and recordings go on).

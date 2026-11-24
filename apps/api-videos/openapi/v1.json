@@ -64814,7 +64814,8 @@
               "listenMode",
               "offlineDownloads",
               "appUpdates",
-              "ageRules"
+              "ageRules",
+              "parentsGuide"
             ],
             "description": "With `feature_off`: the switched-off feature"
           },
