@@ -9,6 +9,7 @@ import {
   clientSecretError,
   formOf,
   readiness,
+  switchOf,
   saveErrorMessage,
   scopePurpose,
   secretChecksOnBlur,
@@ -81,7 +82,7 @@ export function YoutubeImportSetting({
   view: YoutubeImportSettingsView;
   canEdit: boolean;
   /** The "Move from YouTube" switch (Features page) */
-  feature?: Pick<FeatureItem, 'effective'> | null;
+  feature?: Pick<FeatureItem, 'effective' | 'enabled'> | null;
   save: SaveAction<YoutubeImportPatch>;
   saveSecret: SaveAction<string>;
 }) {
@@ -101,10 +102,11 @@ export function YoutubeImportSetting({
   const [secretBusy, setSecretBusy] = useState(false);
   const [secretError, setSecretError] = useState<string | null>(null);
   const secretFieldError = secretTouched ? clientSecretError(secretValue) : null;
-  const fieldError = clientIdError(form);
+  const on = switchOf(view, feature);
+  const fieldError = clientIdError({ ...form, enabled: on.stored });
   const shownError = touched ? fieldError : null;
   const patch = settingsPatch(view, form);
-  const state = readiness(view);
+  const state = readiness({ ...view, enabled: on.effective });
   const secretName = secretNameFor(view.redirectUri);
 
   async function save(event: React.FormEvent) {

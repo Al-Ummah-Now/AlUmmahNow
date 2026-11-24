@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YoutubeImportSettingsView } from '@al-ummah/shared-types';
-import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretChecksOnBlur, secretNameFor, urlSegments, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
+import { clientIdError, clientSecretError, formOf, readiness, switchOf, saveErrorMessage, scopePurpose, secretChecksOnBlur, secretNameFor, urlSegments, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { YoutubeImportSetting } from '../src/app/(protected)/platform-settings/YoutubeImportSetting';
 import en from '../src/i18n/messages/en';
@@ -62,6 +62,14 @@ describe('YouTube import settings: form rules', () => {
     assert.equal(readiness(view({ clientId: CLIENT })), 'needsSecret');
     assert.equal(readiness(view({ clientId: CLIENT, secretPresent: true })), 'off');
     assert.equal(readiness(view({ clientId: CLIENT, secretPresent: true, enabled: true, ready: true })), 'ready');
+  });
+
+  it('the Features switch, not the old setting, decides the badge and whether the client id may be cleared', () => {
+    assert.deepEqual(switchOf({ enabled: false }, { enabled: true, effective: false }), { stored: true, effective: false });
+    assert.deepEqual(switchOf({ enabled: true }, null), { stored: true, effective: true }, 'no Features answer: the old value');
+    const v = view({ clientId: CLIENT, secretPresent: true, enabled: true });
+    assert.equal(readiness({ ...v, enabled: switchOf(v, { enabled: true, effective: false }).effective }), 'off', 'Uploads off: creators cannot connect');
+    assert.equal(clientIdError({ enabled: switchOf(v, { enabled: true, effective: false }).stored, clientId: '' }), 'youtubeImport.errorClientIdNeeded');
   });
 
   it('names the Secrets Store secret of each environment', () => {

@@ -116,7 +116,7 @@ export function FeatureHistorySheet({ featureKey, load: fetchPage, onClose }: { 
                     {e.source === 'undo' && <span className="rounded border border-border px-2 py-0.5 text-xs text-fg-muted">{t('features.sheet.sourceUndo')}</span>}
                   </p>
                   <p className="mt-1.5 text-sm text-fg">
-                    <span dir="auto">{t('features.sheet.by', { name: e.actor.name })}</span>
+                    <span dir="auto">{t('features.sheet.by', { name: e.actor.name || t('features.someAdmin') })}</span>
                   </p>
                   <p className="text-sm text-fg-muted">
                     <LocalTime value={e.createdAt} />

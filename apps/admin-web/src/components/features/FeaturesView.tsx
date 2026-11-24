@@ -10,7 +10,8 @@
  * meanwhile, the switch snaps back to the server's value and says who.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { featureDefinition, formatCompact, formatList, type FeatureKey } from '@al-ummah/shared-types';
+import { useRouter } from 'next/navigation';
+import { featureDefinition, formatCompact, formatList, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
 import type { FeatureHistoryPage, FeatureItem, FeatureWrite, FeatureWriteResult } from '@/lib/api/features';
 import {
   applyConflict,
@@ -21,6 +22,7 @@ import {
   lockReason,
   needsConfirm,
   offCount,
+  preconditionText,
   switchWords,
   type ConfirmContent,
   type FeatureNote,
@@ -41,7 +43,7 @@ import { FeatureHistorySheet } from './FeatureHistorySheet';
 
 export const FEATURES_UNDO_MS = 10_000;
 
-type RowMessage = { kind: 'conflict'; by: string | null } | { kind: 'precondition'; message: string } | { kind: 'error'; message: string };
+type RowMessage = { kind: 'conflict' } | { kind: 'pending'; requestId: string; enabled: boolean } | { kind: 'precondition'; reason: FeatureText | null } | { kind: 'error'; message: string };
 
 class WriteRefused extends Error {}
 
@@ -53,7 +55,10 @@ export interface FeatureActions {
 export function FeaturesView({ initial, canManage, me, actions, now }: { initial: FeatureItem[]; canManage: boolean; me: { id: string; name: string }; actions: FeatureActions; now?: string }) {
   const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
+  const router = useRouter();
   const [items, setItems] = useState(initial);
+  // a refresh (after a conflict) brings the rows as admin-api has them now
+  useEffect(() => setItems(initial), [initial]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<FeatureKey | null>(null);
   const [messages, setMessages] = useState<Partial<Record<FeatureKey, RowMessage>>>({});
@@ -94,11 +99,15 @@ export function FeaturesView({ initial, canManage, me, actions, now }: { initial
         setItems((list) => applyWrite(list, key, result.data.enabled, result.data.version, me, now ?? new Date().toISOString()));
         return result.data;
       }
-      if (result.kind === 'changed') {
-        setItems((list) => applyConflict(list, result.feature).items);
-        setMessage(key, { kind: 'conflict', by: result.feature.updatedBy?.name ?? null });
+      if (result.kind === 'pending') {
+        setMessage(key, { kind: 'pending', requestId: result.requestId, enabled: result.enabled });
+      } else if (result.kind === 'changed') {
+        setItems((list) => applyConflict(list, key, result.current));
+        setMessage(key, { kind: 'conflict' });
+        // the answer has the value, not who changed it or when: reload the rows for that
+        router.refresh();
       } else if (result.kind === 'precondition') {
-        setMessage(key, { kind: 'precondition', message: result.message });
+        setMessage(key, { kind: 'precondition', reason: result.reason });
       } else {
         logger.warn('[features] Switch change refused', { key, status: result.status, code: result.code });
         setMessage(key, { kind: 'error', message: result.message || t('features.writeFailed') });
@@ -325,6 +334,7 @@ function FeatureRowView({
 
 function StatusLine({ item }: { item: FeatureItem }) {
   const { t } = useLanguage();
+  const who = item.updatedBy?.name || t('features.someAdmin');
   if (!item.updatedAt || !item.updatedBy) return <>{t('features.neverChanged')}</>;
   const marker = '\u0000';
   const [before, after = ''] = t('features.changedBy', { name: marker, time: '\u0001' }).split('\u0001');
@@ -332,7 +342,7 @@ function StatusLine({ item }: { item: FeatureItem }) {
   return (
     <>
       {lead}
-      <bdi>{item.updatedBy.name}</bdi>
+      <bdi>{who}</bdi>
       {tail}
       <LocalTime value={item.updatedAt} testId="feature-changed-at" />
       {after}
@@ -387,12 +397,25 @@ function NoteLine({ note, locale }: { note: FeatureNote; locale: Locale }) {
 }
 
 function RowMessageView({ message }: { message: RowMessage }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   if (message.kind === 'conflict') {
     return (
       <p role="status" className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-chip-reviewing-bg px-3 py-2 text-sm text-fg" data-testid="feature-conflict">
         <Icon name="people" className="mt-0.5 size-4 shrink-0" />
-        <span>{message.by ? t('features.conflict', { name: message.by }) : t('features.conflictNobody')}</span>
+        <span>{t('features.conflictNobody')}</span>
+      </p>
+    );
+  }
+  if (message.kind === 'pending') {
+    return (
+      <p role="status" className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-chip-pending-bg px-3 py-2 text-sm text-fg" data-testid="feature-sent-for-approval">
+        <Icon name="clock" className="mt-0.5 size-4 shrink-0" />
+        <span>
+          {t(message.enabled ? 'features.pending.sentOn' : 'features.pending.sentOff')}{' '}
+          <AppLink href={`/approvals/${encodeURIComponent(message.requestId)}`} className={`${linkClass} underline underline-offset-2`} data-testid="feature-sent-link">
+            {t('features.pending.view')}
+          </AppLink>
+        </span>
       </p>
     );
   }
@@ -400,7 +423,7 @@ function RowMessageView({ message }: { message: RowMessage }) {
     return (
       <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-warning-fg/60 bg-chip-pending-bg px-3 py-2 text-sm text-fg" data-testid="feature-precondition">
         <Icon name="alert" className="mt-0.5 size-4 shrink-0" />
-        <span>{message.message}</span>
+        <span>{preconditionText(message.reason, locale, t('features.preconditionFallback'))}</span>
       </p>
     );
   }

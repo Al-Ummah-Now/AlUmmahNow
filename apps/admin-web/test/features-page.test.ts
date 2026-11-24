@@ -12,6 +12,7 @@ import type { FeatureItem } from '../src/lib/api/features';
 import {
   applyConflict,
   applyWrite,
+  preconditionText,
   confirmContent,
   featureNotes,
   foldSearch,
@@ -126,14 +127,23 @@ describe('Features page model: acting', () => {
     assert.equal(lockReason(item('captionsTranslate', { canToggle: false }), false), 'readOnly');
   });
 
-  it('a conflict replaces the row with the server\'s and names who changed it', () => {
+  it('a conflict takes the stored value and version admin-api sends (409 current) and keeps the rest of the row', () => {
     const list = all();
-    const current = item('tierRequests', { enabled: false, effective: false, version: 4, updatedBy: { id: 'u-y', name: 'Yusuf Ali' }, updatedAt: '2026-11-22T15:39:40Z' });
-    const { items, note } = applyConflict(list, current);
-    assert.equal(items.find((i) => i.key === 'tierRequests')!.version, 4);
-    assert.equal(items.find((i) => i.key === 'tierRequests')!.enabled, false);
-    assert.deepEqual(note, { key: 'tierRequests', by: 'Yusuf Ali' });
-    assert.equal(items.filter((i) => i !== list[items.indexOf(i)]).length, 1);
+    const before = list.find((i) => i.key === 'upload')!;
+    const items = applyConflict(list, 'upload', { enabled: false, version: 4 });
+    const row = items.find((i) => i.key === 'upload')!;
+    assert.equal(row.version, 4);
+    assert.equal(row.enabled, false);
+    assert.equal(row.updatedAt, before.updatedAt, 'who and when come with the reload');
+    assert.equal(items.find((i) => i.key === 'youtubeImport')!.effective, false, 'what needs it follows at once');
+    assert.deepEqual(applyConflict(list, 'upload', null), list, 'no current: the reload does it all');
+  });
+
+  it('the precondition sentence is the reason in the page language, else the page\'s own fallback, never the bare server text', () => {
+    const reason = { en: 'Creator support can’t be switched on yet.', ar: 'لا يمكن تشغيل دعم صنّاع المحتوى بعد.' };
+    assert.equal(preconditionText(reason, 'ar', 'fallback'), reason.ar);
+    assert.equal(preconditionText(reason, 'en', 'fallback'), reason.en);
+    assert.equal(preconditionText(null, 'ar', ar.features.preconditionFallback), 'لا يمكن تشغيل هذه الميزة بعد. راجع إعدادها ثم حاول مرة أخرى.');
   });
 
   it('a write recomputes what waits for it: Uploads off pauses Move from YouTube and Extra audio tracks', () => {
@@ -188,6 +198,12 @@ describe('Features page render', () => {
     const ro = render(all((k) => ({ canToggle: false, ...(k === 'upload' ? {} : {}) })), 'en', false);
     assert.match(ro, /data-testid="features-read-only"/);
     assert.equal((ro.match(/role="switch"[^>]*disabled=""|disabled=""[^>]*role="switch"/g) ?? []).length, FEATURE_REGISTRY.length);
+  });
+
+  it('a change by an account with no name (admin-api sends name: null) says "an admin", never an empty name', () => {
+    const items = all((k) => (k === 'newsletter' ? { updatedBy: { id: 'u', name: null }, updatedAt: '2026-11-22T15:28:00Z' } : {}));
+    assert.match(render(items), /Changed by <bdi>an admin<\/bdi>, <time/);
+    assert.match(render(items, 'ar'), /<bdi>أحد المشرفين<\/bdi>، <time/);
   });
 
   it('Arabic: right words, «،» in the status line, never «·»', () => {
