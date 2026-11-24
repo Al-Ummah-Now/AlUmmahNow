@@ -91,8 +91,14 @@ export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: 
     return `${current.scope === p.scope ? current.version : 0}`;
   },
   async applyStatements(ctx, p, request) {
-    const current = await ruleInForce(ctx, p.type, p.scope);
-    const version = (current.scope === p.scope ? current.version : 0) + 1;
+    // The next version after every stored one for this action and scope, including versions the rule in
+    // force skips (approved under a money floor that is gone, WORKFLOW_FLOOR_SUPERSEDED): the version
+    // index is unique per action and scope
+    const top = await ctx.db
+      .prepare('SELECT MAX(version) AS version FROM workflow_rules WHERE action_type = ? AND scope = ?')
+      .bind(p.type, p.scope)
+      .first<{ version: number | null }>();
+    const version = (top?.version ?? 0) + 1;
     return { statements: [ruleVersionStatement(ctx, { type: p.type, scope: p.scope, version, config: p.config, requestId: request.id, by: request.proposedBy })], result: { version } };
   },
 };
