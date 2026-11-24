@@ -2342,6 +2342,7 @@ const en = {
       grow: 'Growth and sharing',
       people: 'People',
       site: 'Public site',
+      islamic: 'Islamic features',
     },
     state: {
       on: 'On',

@@ -151,7 +151,7 @@ export async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion
   }
   if (row.version !== expectedVersion) return { ok: false, kind: 'changed', feature: item, message: 'Someone else changed this feature.' };
   if (key === 'creatorSupport' && enabled) {
-    return { ok: false, kind: 'precondition', message: 'Creator support can’t be switched on yet: the organisation isn’t formed and there is no finance approver.' };
+    return { ok: false, kind: 'precondition', message: 'Creator support can’t be switched on yet: the organization isn’t formed and there is no finance approver.' };
   }
   const previous = row.enabled;
   row.enabled = enabled;
