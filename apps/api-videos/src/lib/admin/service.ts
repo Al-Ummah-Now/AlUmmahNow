@@ -578,6 +578,11 @@ export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, c
 	return lock.jobId || 'starting';
 }
 
+/** Lock holder of the daily re-verify's repair (reverifyRecentTransfers); it has no admin job. */
+const REPAIR_LOCK_PREFIX = 'reverify:';
+/** A repair's lock older than this is stale: its worker died (a scheduled run lasts 15 minutes at most). */
+const REPAIR_LOCK_MS = 20 * 60 * 1000;
+
 /**
  * The channel's move lock (channel_transfer_locks, wiki AUN-CHANNEL-CLAIM §3.3) with its job's
  * status. A lock whose job succeeded or no longer exists is stale.
@@ -586,10 +591,11 @@ async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channel
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return null;
 	const row = await db
-		.prepare(`SELECT l.job_id AS job_id, j.status AS status FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id WHERE l.channel_id = ?`)
+		.prepare(`SELECT l.job_id AS job_id, l.created_at AS created_at, j.status AS status FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id WHERE l.channel_id = ?`)
 		.bind(channelId)
-		.first<{ job_id: string; status: string | null }>();
+		.first<{ job_id: string; created_at: string; status: string | null }>();
 	if (!row) return null;
+	if (row.job_id.startsWith(REPAIR_LOCK_PREFIX)) return { jobId: row.job_id, status: Date.parse(row.created_at) > Date.now() - REPAIR_LOCK_MS ? 'repairing' : 'missing' };
 	return { jobId: row.job_id, status: row.status ?? (row.job_id ? 'missing' : 'starting') };
 }
 
@@ -598,7 +604,7 @@ async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channel
  * move. A failed move keeps its lock, so the channel can't go to a third account while records
  * still sit on the first one (finish it with Retry). Returns the refusal code, or null when taken.
  */
-async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: string): Promise<'transfer_in_progress' | 'transfer_unfinished' | null> {
+async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: string, holder = ''): Promise<'transfer_in_progress' | 'transfer_unfinished' | null> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return null;
 	const lock = await readTransferLock(env, channelId);
@@ -609,7 +615,7 @@ async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: str
 	}
 	const inserted = await db
 		.prepare('INSERT OR IGNORE INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES (?, ?, ?)')
-		.bind(channelId, '', at)
+		.bind(channelId, holder, at)
 		.run();
 	return Number(inserted.meta?.changes ?? 0) === 1 ? null : 'transfer_in_progress';
 }
@@ -947,6 +953,15 @@ const REVERIFY_WINDOW_MS = 48 * 60 * 60 * 1000;
 /** Rows read per page by the daily re-verify */
 const REVERIFY_PAGE = 100;
 
+/** One page of finished moves, newest first, after a cursor (since, updated_at x3, id, limit); through idx_admin_jobs_status. */
+export const REVERIFY_SQL = `SELECT id, target_id, params, updated_at FROM admin_jobs
+ WHERE status = 'succeeded' AND updated_at >= ? AND kind = 'channel.transfer'
+   AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
+ ORDER BY updated_at DESC, id DESC LIMIT ?`;
+
+/** Live sessions read per page by a repair */
+const REPAIR_SESSIONS_PAGE = 100;
+
 /**
  * Daily: moves finished in the last 48 hours are verified again, and a record that went back to the
  * previous owner (an edit that read before the flip, an upload that finished after it) is moved
@@ -970,10 +985,7 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 			((
 				await db
 					.prepare(
-						`SELECT id, target_id, params, updated_at FROM admin_jobs
-						 WHERE status = 'succeeded' AND updated_at >= ? AND kind = 'channel.transfer'
-						   AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
-						 ORDER BY updated_at DESC, id DESC LIMIT ?`,
+						REVERIFY_SQL,
 					)
 					.bind(since, cursor?.updatedAt ?? null, cursor?.updatedAt ?? null, cursor?.updatedAt ?? null, cursor?.id ?? null, REVERIFY_PAGE)
 					.all<{ id: string; target_id: string; params: string; updated_at: string }>()
@@ -993,8 +1005,7 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 				const problems = await verifyTransfer(env, row.target_id, params.previousOwnerId, params.newOwnerId, videoIds, reverifyOptions(channel, params.previousOwnerId));
 				if (!problems.length) continue;
 				logger.warn('[Admin] A moved channel had records back on the previous owner; moving them again', { channelId: row.target_id, jobId: row.id, problems });
-				await repairMovedChannel(env, channel, params.previousOwnerId, params.newOwnerId, videoIds);
-				repaired++;
+				if (await repairMovedChannel(env, row.target_id, params.previousOwnerId, params.newOwnerId)) repaired++;
 			} catch (error) {
 				failed++;
 				logger.error('[Admin] Channel move re-verify failed', { jobId: row.id, channelId: row.target_id, error: error instanceof Error ? error.message : String(error) });
@@ -1012,66 +1023,134 @@ function reverifyOptions(channel: Row, from: string): { subscriptions: boolean }
 	return { subscriptions: !(Array.isArray(channel.members) && channel.members.some((m: { userId?: string } | null) => m?.userId === from)) };
 }
 
+/** The channel moved on (or was deleted) while a repair ran: what is left is that move's business. */
+class RepairSuperseded extends Error {}
+
 /**
  * The re-verify's repair: moves the records still on `from` to `to`, and nothing else. Unlike the
  * move job it never flips the channel, ends the new owner's live sessions, picks a main channel for
- * either owner or sends notices. A stream record found back on `from` moves, and only that
- * stream's open sessions end (the previous owner knows its key).
+ * either owner or sends notices. A stream record found back on `from` moves, and only that stream's
+ * open sessions that aren't the new owner's end.
+ *
+ * It holds the channel's move lock, so no move can start while it writes, and it checks before every
+ * write that the channel is still on `to`. A channel that moved on, or is being moved, is left alone:
+ * false, with nothing reported. True when it repaired the channel.
  */
-async function repairMovedChannel(env: AdminServiceEnv, channel: Row, from: string, to: string, videoIds: string[]): Promise<void> {
-	const id = channel.id as string;
+async function repairMovedChannel(env: AdminServiceEnv, id: string, from: string, to: string): Promise<boolean> {
+	const holder = `${REPAIR_LOCK_PREFIX}${crypto.randomUUID()}`;
+	if (await takeTransferLock(env, id, now(), holder)) return false;
+	try {
+		await repairUnderLock(env, id, from, to);
+		return true;
+	} catch (error) {
+		if (error instanceof RepairSuperseded) {
+			logger.info('[Admin] A moved channel moved on during its repair; left to that move', { channelId: id });
+			return false;
+		}
+		throw error;
+	} finally {
+		// Only this repair's own lock, never one a later move took
+		await (env.SEARCH_DB as D1Database | undefined)
+			?.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id = ?')
+			.bind(id, holder)
+			.run()
+			.catch((error) => logger.error('[Admin] Could not release a repair lock; it expires by itself', { channelId: id, error: error instanceof Error ? error.message : String(error) }));
+	}
+}
+
+async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, to: string): Promise<void> {
+	/** The channel, still on the new owner; asked before every write. */
+	const current = async (): Promise<Row> => {
+		const channel = await repo(env.channels).getObject(id);
+		if (!channel || channel.isDeleted || channel.userId !== to) throw new RepairSuperseded();
+		return channel;
+	};
+	const channel = await current();
+	// Read under the lock, as it was when the checks ran may be old by now
+	const videoIds = await idsOf(env, 'video', { channelId: id }, { includeDeleted: true });
+	await current();
 	await repo(env.profiles).updateObject(to, (profile) => {
 		const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];
 		if (list.includes(id)) return false;
 		profile.channels = [...list, id];
 		return true;
 	});
+	await current();
 	await removeFromProfile(env, from, id);
-	await moveHandleEntry(env, id, channel.handle, to);
+	await moveHandleEntry(env, id, (await current()).handle, to);
+	await current();
 	const videos = await cascade(env.videos, videoIds, (v) => {
 		if (v.channelId !== id || v.userId !== from) return false;
 		v.userId = to;
 		return true;
 	});
+	await current();
 	const schedules = await moveScheduleEntries(env, videoIds, from, to);
-	const streamKeys = await channelStreamKeys(env, id);
-	const onFrom = [...(await readMany(env.videos, streamKeys)).entries()].filter(([, s]) => s.channelId === id && s.userId === from).map(([key]) => key);
+	const onFrom = [...(await readMany(env.videos, await channelStreamKeys(env, id))).entries()].filter(([, s]) => s.channelId === id && s.userId === from).map(([key]) => key);
+	await current();
 	const streams = await cascade(env.videos, onFrom, (s) => {
 		if (s.channelId !== id || s.userId !== from) return false;
 		s.userId = to;
 		return true;
 	});
-	let sessionsFailed = 0;
-	const db = env.SEARCH_DB as D1Database | undefined;
-	const movedStreamIds = onFrom.map((key) => key.replace(/^livestream:/, ''));
-	if (db && movedStreamIds.length) {
-		// The channel's open sessions are few; its streams may pass D1's bound-parameter limit
-		const moved = new Set(movedStreamIds);
-		const open = ((await db.prepare(`SELECT * FROM live_sessions WHERE channel_id = ? AND status IN ('provisioned', 'live')`).bind(id).all<LiveSessionRow>()).results ?? []).filter((s) => moved.has(s.stream_id));
-		for (const session of open) {
-			try {
-				await ensureProviderStopped(env as never, await endSession(env as never, session, 'channel_transferred'));
-			} catch (error) {
-				sessionsFailed++;
-				logger.warn('[Admin] Live session stop failed on a move repair', { channelId: id, sessionId: session.id, error: error instanceof Error ? error.message : String(error) });
-			}
-		}
-	}
+	const sessionsFailed = await endLeftSessions(env, id, to, new Set(onFrom.map((key) => key.replace(/^livestream:/, ''))), current);
 	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+	await current();
 	const playlists = await cascade(env.playlists, playlistIds, (p) => {
 		if (p.channelId !== id || p.userId !== from) return false;
 		p.userId = to;
 		return true;
 	});
+	await current();
 	const posts = await movePosts(env, id, from, to);
-	const options = reverifyOptions(channel, from);
+	const options = reverifyOptions(await current(), from);
 	if (options.subscriptions) await moveChannelSubscriptions(env, id, from, to);
 	// An invitation to the new owner written as the channel flipped: an owner holds no member role
-	await cancelInvitesToNewOwner(env, id, to, await authEmail(env, to));
+	const email = await authEmail(env, to);
+	await current();
+	await cancelInvitesToNewOwner(env, id, to, email);
 	const failed = videos.failed + schedules.failed + streams.failed + sessionsFailed + playlists.failed + posts.failed;
 	if (failed) throw new Error(`${failed} record(s) could not be moved back to the new owner`);
 	const problems = await verifyTransfer(env, id, from, to, videoIds, options);
-	if (problems.length) throw new Error(`Still on the previous owner after the repair: ${problems.join(', ')}`);
+	if (!problems.length) return;
+	// Not a failure when the channel moved on while it was read
+	await current();
+	throw new Error(`Still on the previous owner after the repair: ${problems.join(', ')}`);
+}
+
+/**
+ * Ends the open sessions of streams a repair moved, a page at a time, and returns how many could not
+ * be. Never a session of the new owner's (owner_id): they started it after the move, and the previous
+ * owner can't read its key without a role on the channel (liveTierGate).
+ */
+async function endLeftSessions(env: AdminServiceEnv, channelId: string, to: string, streamIds: Set<string>, current: () => Promise<Row>): Promise<number> {
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db || !streamIds.size) return 0;
+	let failed = 0;
+	let after = '';
+	for (;;) {
+		const page: LiveSessionRow[] =
+			(
+				await db
+					.prepare(
+						`SELECT * FROM live_sessions WHERE channel_id = ? AND status IN ('provisioned', 'live') AND (owner_id IS NULL OR owner_id <> ?) AND id > ? ORDER BY id LIMIT ?`,
+					)
+					.bind(channelId, to, after, REPAIR_SESSIONS_PAGE)
+					.all<LiveSessionRow>()
+			).results ?? [];
+		for (const session of page) {
+			if (!streamIds.has(session.stream_id)) continue;
+			await current();
+			try {
+				await ensureProviderStopped(env as never, await endSession(env as never, session, 'channel_transferred'));
+			} catch (error) {
+				failed++;
+				logger.warn('[Admin] Live session stop failed on a move repair', { channelId, sessionId: session.id, error: error instanceof Error ? error.message : String(error) });
+			}
+		}
+		if (page.length < REPAIR_SESSIONS_PAGE) return failed;
+		after = page[page.length - 1].id;
+	}
 }
 
 /** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */

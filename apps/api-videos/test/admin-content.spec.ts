@@ -36,12 +36,13 @@ import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, reverifyRecentTransfers } from '../src/lib/admin/service';
+import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 import { AuthDb } from './auth-db';
 import { createSqliteD1 } from './sqlite-d1';
+import { scheduleKey } from '../src/lib/videoSideRecords';
 
 const OWNER = 'usr_owner';
 
@@ -692,8 +693,11 @@ describe('channel actions', () => {
 		// Clean now: checked, nothing to repair; past 48 hours it is not checked at all
 		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
 		assert.deepEqual(await reverifyRecentTransfers(env as never, Date.now() + 49 * 3600 * 1000), { checked: 0, repaired: 0, failed: 0 });
-		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM admin_jobs WHERE status = 'succeeded' AND updated_at >= '2026' AND kind = 'channel.transfer' ORDER BY updated_at DESC, id DESC LIMIT 100`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
-		assert.match(plan, /idx_admin_jobs_status/, plan);
+		// The whole query, cursor included, stays on the status index
+		for (const cursor of [null, '2026-11-24T00:00:00.000Z']) {
+			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${REVERIFY_SQL}`).all('2026', cursor, cursor, cursor, cursor && 'job', 100) as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+			assert.match(plan, /SEARCH admin_jobs USING INDEX idx_admin_jobs_status \(status=\? AND updated_at>\?\)/, plan);
+		}
 	});
 
 	it("the re-verify repair moves only records back on the previous owner and leaves the new owner's changes alone (CC-1c)", async () => {
@@ -785,6 +789,157 @@ describe('channel actions', () => {
 		assert.ok(await openTransferJob(env as never, 'ch1'));
 		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 0, repaired: 0, failed: 0 });
 		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OWNER);
+	});
+
+	/** A moved channel (OWNER to OTHER) with every kind of record left behind; `onRead` runs at each read of the channel while a repair holds the lock. */
+	async function leftBehind() {
+		const t = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+			channels: { ch1: channel('ch1', { playlists: ['pl1'] }) },
+			playlists: { pl1: { id: 'pl1', title: 'P', userId: OWNER, channelId: 'ch1', videos: [] } },
+		});
+		const notifications = createSqliteD1();
+		(t.env as Record<string, unknown>).NOTIFICATIONS_DB = notifications;
+		await t.raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
+		assert.equal((await t.jobOf(await t.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		const edit = (bucket: any, key: string, change: Record<string, unknown>) => bucket.store.set(key, JSON.stringify({ ...JSON.parse(bucket.store.get(key)!), ...change }));
+		const read = (bucket: any, key: string) => JSON.parse(bucket.store.get(key)!);
+		const when = new Date('2030-01-01T00:00:00.000Z');
+		edit(t.raw.videos, 'v1', { userId: OWNER, scheduledPublishStatus: 'scheduled', scheduledPublishDate: when.toISOString() });
+		const schedules = new MemoryBucket({ [scheduleKey(when, 'v1')]: { id: 'v1', userId: OWNER } });
+		(t.env as Record<string, unknown>).SCHEDULED_VIDEOS = schedules;
+		await t.raw.community_posts.put('posts/ch1/p1.json', JSON.stringify({ id: 'p1', channelId: 'ch1', userId: OWNER }));
+		edit(t.raw.playlists, 'pl1', { userId: OWNER });
+		edit(t.raw.profiles, OTHER, { channels: [] });
+		edit(t.raw.profiles, OWNER, { channels: ['ch1'] });
+		edit(t.raw.channel_tabs, 'channel-handles/ch1', { userId: OWNER });
+		await t.raw.videos.put('livestream:old', JSON.stringify({ id: 'old', title: 'Old', userId: OWNER, channelId: 'ch1', status: 'offline' }));
+		t.db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at, owner_id) VALUES ('s-old', 'old', 'ch1', 'selfhosted', 'provisioned', 'test', 2, ?)`).run(OWNER);
+		notifications.raw.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES ('chX', 'ch1', ?, 's1', 1)`).run(OWNER);
+		t.db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES ('late', 'ch1', 'editor', ?, NULL, 0, ?, 'pending', '2026-01-01', '2030-01-01')`).run(OTHER, OWNER);
+		const locked = () => !!t.db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1' AND job_id LIKE 'reverify:%'`).get();
+		const get = t.raw.channels.get.bind(t.raw.channels);
+		/** Runs `hook` before the nth read of the channel under the repair's lock; how many reads there were. */
+		const reverify = async (hook: (n: number) => Promise<void> | void) => {
+			let n = 0;
+			let busy = false;
+			t.raw.channels.get = (async (...args: Parameters<typeof get>) => {
+				if (!busy && args[0] === 'ch1' && locked()) {
+					busy = true;
+					await hook(++n);
+					busy = false;
+				}
+				return get(...args);
+			}) as typeof t.raw.channels.get;
+			try {
+				return { result: await reverifyRecentTransfers(t.env as never), reads: n };
+			} finally {
+				t.raw.channels.get = get as typeof t.raw.channels.get;
+				await t.flush();
+			}
+		};
+		const invite = () => (t.db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'late'`).get() as { status: string }).status;
+		const session = () => (t.db.db.prepare(`SELECT status FROM live_sessions WHERE id = 's-old'`).get() as { status: string }).status;
+		const subscriber = () => (notifications.raw.prepare(`SELECT user_id FROM channel_subscriptions WHERE subscriber_channel_id = 'ch1'`).get() as { user_id: string }).user_id;
+		return { ...t, edit, read, locked, reverify, invite, session, subscriber, schedules, notifications };
+	}
+
+	it('no move can start while a repair writes, at any step, and one can right after (CC-1c review)', async () => {
+		const t = await leftBehind();
+		const refusals: string[] = [];
+		const { result, reads } = await t.reverify(async () => {
+			refusals.push((await t.call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }, { hold: true })).body.code);
+			assert.ok(await openTransferJob(t.env as never, 'ch1'), 'Go live and handle edits wait too');
+		});
+		assert.deepEqual(result, { checked: 1, repaired: 1, failed: 0 });
+		assert.ok(reads >= 12, `${reads} checks`);
+		assert.deepEqual([...new Set(refusals)], ['transfer_in_progress']);
+		assert.deepEqual([t.read(t.raw.videos, 'v1').userId, t.read(t.raw.playlists, 'pl1').userId, t.read(t.raw.videos, 'livestream:old').userId, t.read(t.raw.channel_tabs, 'channel-handles/ch1').userId, t.read(t.raw.community_posts, 'posts/ch1/p1.json').userId, t.subscriber()], [OTHER, OTHER, OTHER, OTHER, OTHER, OTHER]);
+		assert.ok([...t.schedules.store.values()].every((v) => JSON.parse(v as string).userId === OTHER));
+		assert.deepEqual([t.read(t.raw.profiles, OTHER).channels, t.read(t.raw.profiles, OWNER).channels, t.invite(), t.session()], [['ch1'], [], 'cancelled', 'ended']);
+		assert.equal(t.locked(), false, 'released');
+		assert.equal((await t.jobOf(await t.call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }))).status, 'succeeded');
+		assert.equal(t.read(t.raw.channels, 'ch1').userId, 'usr_third');
+	});
+
+	it('a repair whose channel moved on stops before its next write, quietly, after whichever write that is (CC-1c review)', async () => {
+		// Every write a repair makes, in order; the channel moves on right after each one lands
+		const schedule = `schedules:${scheduleKey(new Date('2030-01-01T00:00:00.000Z'), 'v1')}`;
+		const writes = ['start', 'profiles:usr_other', 'profiles:usr_owner', 'channel_tabs:channel-handles/ch1', 'videos:v1', schedule, 'videos:livestream:old', 'session', 'playlists:pl1', 'community_posts:posts/ch1/p1.json', 'subscription', 'invite'];
+		for (const last of writes) {
+			for (const change of [{ userId: 'usr_third' }, { isDeleted: true }]) {
+				const t = await leftBehind();
+				const seen: string[] = [];
+				let after: string | null = null;
+				const state = () => JSON.stringify([t.raw.profiles, t.raw.channel_tabs, t.raw.videos, t.raw.playlists, t.raw.community_posts, t.schedules].map((b) => [...b.store.entries()])) + [t.invite(), t.session(), t.subscriber()].join();
+				// What the other move writes: the channel, the profile and the handle entry are its own now
+				const moveOn = () => {
+					if (after !== null) return;
+					t.edit(t.raw.channels, 'ch1', change);
+					t.edit(t.raw.profiles, OTHER, { channels: [] });
+					t.edit(t.raw.channel_tabs, 'channel-handles/ch1', { userId: 'usr_third' });
+					after = state();
+				};
+				for (const [name, bucket] of Object.entries({ profiles: t.raw.profiles, channel_tabs: t.raw.channel_tabs, videos: t.raw.videos, playlists: t.raw.playlists, community_posts: t.raw.community_posts, schedules: t.schedules })) {
+					const put = bucket.put.bind(bucket);
+					bucket.put = (async (key: string, value: unknown, opts?: unknown) => {
+						const written = await put(key, value as never, opts as never);
+						seen.push(`${name}:${key}`);
+						if (seen[seen.length - 1] === last) moveOn();
+						return written;
+					}) as typeof put;
+				}
+				// D1 writes: a trigger fires as the row changes; the state is taken once the statement is done
+				const onRow = (db: { function: (name: string, fn: () => number) => void; exec: (sql: string) => void }, trigger: string) => {
+					db.function('move_on', () => {
+						queueMicrotask(moveOn);
+						return 1;
+					});
+					db.exec(`CREATE TEMP TRIGGER t_move_on ${trigger} BEGIN SELECT move_on(); END`);
+				};
+				if (last === 'session') onRow(t.db.db as never, `AFTER UPDATE ON live_sessions WHEN NEW.status = 'ended'`);
+				if (last === 'subscription') onRow(t.notifications.raw as never, 'AFTER UPDATE ON channel_subscriptions');
+				if (last === 'invite') onRow(t.db.db as never, 'AFTER UPDATE ON channel_invites');
+				const { result } = await t.reverify(() => {
+					if (last === 'start') moveOn();
+				});
+				assert.notEqual(after, null, `${last} was never written: ${seen.join(', ')}`);
+				assert.deepEqual(result, { checked: 1, repaired: 0, failed: 0 }, last);
+				assert.equal(state(), after, `nothing written after ${last}`);
+				assert.equal(t.locked(), false);
+			}
+		}
+	});
+
+	it('a repair whose worker died does not hold the channel: its lock goes stale, and it never releases another holder (CC-1c review)', async () => {
+		const t = await leftBehind();
+		const lock = (minutes: number) => t.db.db.prepare(`INSERT OR REPLACE INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', 'reverify:dead', ?)`).run(new Date(Date.now() - minutes * 60_000).toISOString());
+		lock(5);
+		assert.equal((await t.call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' })).body.code, 'transfer_in_progress');
+		assert.deepEqual(await reverifyRecentTransfers(t.env as never), { checked: 0, repaired: 0, failed: 0 });
+		lock(21);
+		assert.equal(await openTransferJob(t.env as never, 'ch1'), null);
+		assert.deepEqual(await reverifyRecentTransfers(t.env as never), { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(t.read(t.raw.videos, 'v1').userId, OTHER);
+		lock(21);
+		assert.equal((await t.jobOf(await t.call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }))).status, 'succeeded');
+	});
+
+	it("a repair of a channel with more than 100 live streams ends only the sessions left from before, never the new owner's (CC-1c review)", async () => {
+		const t = await leftBehind();
+		for (let i = 0; i < 130; i++) {
+			const id = `st${String(i).padStart(3, '0')}`;
+			await t.raw.videos.put(`livestream:${id}`, JSON.stringify({ id, title: id, userId: OWNER, channelId: 'ch1', status: 'offline' }));
+			t.db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at, owner_id) VALUES (?, ?, 'ch1', 'selfhosted', ?, 'test', 2, ?)`)
+				.run(`ses${id}`, id, i % 2 ? 'live' : 'provisioned', i % 10 === 0 ? OTHER : i % 10 === 1 ? null : OWNER);
+		}
+		assert.deepEqual((await t.reverify(() => {})).result, { checked: 1, repaired: 1, failed: 0 });
+		const sessions = t.db.db.prepare(`SELECT status, owner_id FROM live_sessions WHERE id LIKE 'sesst%'`).all() as Array<{ status: string; owner_id: string | null }>;
+		assert.equal(sessions.length, 130);
+		for (const s of sessions) assert.equal(s.status === 'ended', s.owner_id !== OTHER, JSON.stringify(s));
+		assert.ok([...t.raw.videos.store.entries()].filter(([k]) => k.startsWith('livestream:')).every(([, v]) => JSON.parse(v as string).userId === OTHER));
+		const plan = (t.db.db.prepare(`EXPLAIN QUERY PLAN SELECT * FROM live_sessions WHERE channel_id = 'ch1' AND status IN ('provisioned', 'live') AND (owner_id IS NULL OR owner_id <> 'x') AND id > '' ORDER BY id LIMIT 100`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.match(plan, /idx_live_sessions_channel/, plan);
 	});
 
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
