@@ -6,7 +6,7 @@
  * (Bunny Stream Live and self-hosted): Studio and the watch page never branch
  * on the provider except to read the ingest protocol's help text.
  */
-import { FEATURE_OFF_CODE, type LiveChatAction, type LiveChatMessage, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
+import { FEATURE_OFF_CODE, type LiveChatAction, type LiveChatMessage, type LiveEventType, type LiveStreamKind, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 
@@ -38,6 +38,21 @@ export interface LiveStateView extends LiveStreamState {
   /** Live chat for this caller (wiki E17 §5.1); absent on older servers, all off while the feature is off. */
   chat?: LiveChatView;
   canModerate?: boolean;
+  /** A live stream unless it says premiere (wiki E17 §5.4) */
+  kind?: LiveStreamKind;
+  /** The video a premiere shows, once it is on or over */
+  premiereVideoId?: string | null;
+  durationSeconds?: number | null;
+  /** Event tag; null while event tags are off */
+  eventType?: LiveEventType | null;
+  reminder?: LiveReminderView;
+}
+
+/** `enabled`: one can be set (a public stream of a channel that has not started). */
+export interface LiveReminderView {
+  enabled: boolean;
+  count: number;
+  set: boolean;
 }
 
 export interface LiveChatView {
@@ -146,6 +161,10 @@ export async function endStream(id: string): Promise<{ state: LiveStreamState }>
 
 export async function deleteStream(id: string): Promise<void> {
   await json<{ deleted: boolean }>(await request(streamPath(id), { auth: 'required', method: 'DELETE' }));
+}
+
+export async function setReminder(id: string, on: boolean): Promise<{ set: boolean; count: number }> {
+  return json<{ set: boolean; count: number }>(await request(`${streamPath(id)}/reminders`, { auth: 'required', method: on ? 'POST' : 'DELETE' }));
 }
 
 /** The refusal codes Studio explains in its own words; anything else is the generic message. */

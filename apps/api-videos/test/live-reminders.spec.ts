@@ -77,7 +77,7 @@ describe('setting', () => {
 });
 
 describe('heads-up', () => {
-	it('is sent once per start time, in the 15 minutes before it, and again when it moves', async () => {
+	it('is sent once per start time, in the 30 minutes before it, and again when it moves', async () => {
 		const t = await setup();
 		await t.call('ali', 'POST', 's1/reminders');
 		const at = Date.parse(new Date(t.now + 10 * 60_000).toISOString());

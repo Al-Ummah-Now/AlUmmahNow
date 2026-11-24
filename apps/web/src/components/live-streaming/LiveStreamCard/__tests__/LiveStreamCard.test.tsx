@@ -285,31 +285,28 @@ describe('LiveStreamCard Component', () => {
       expect(handlePlay).toHaveBeenCalledTimes(1);
     });
 
-    it('calls onPlay when play button overlay is clicked', async () => {
+    it('is one button: the play overlay is a picture on it', async () => {
       const handlePlay = jest.fn();
       const stream = createMockLiveStream();
       const { user } = renderWithProviders(
         <LiveStreamCard stream={stream} onPlay={handlePlay} />
       );
 
-      const playButton = screen.getByRole('button', { name: 'Play stream' });
-      await user.click(playButton);
+      await user.click(screen.getByRole('button'));
 
       expect(handlePlay).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Accessibility', () => {
-    // Quarantined: fails on main, tracked in #206.
-    it.skip('has role="button"', () => {
+    it('has role="button"', () => {
       const stream = createMockLiveStream();
       renderWithProviders(<LiveStreamCard stream={stream} />);
 
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
 
-    // Quarantined: fails on main, tracked in #206.
-    it.skip('has tabIndex={0} for keyboard navigation', () => {
+    it('has tabIndex={0} for keyboard navigation', () => {
       const stream = createMockLiveStream();
       renderWithProviders(<LiveStreamCard stream={stream} />);
 

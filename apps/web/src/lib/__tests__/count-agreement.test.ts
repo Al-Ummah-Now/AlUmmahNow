@@ -18,6 +18,9 @@ import { formatCountdown } from '@/components/scheduled-videos/CalendarEvent';
 import { formatScheduledTime } from '@/utils/dateFormatters';
 import { tierFeatures } from '@/lib/upgrade/tiers';
 
+// Only the page's count wording is under test; its filter reads the session (next/cache)
+jest.mock('@/components/live/LiveBrowse', () => ({}));
+
 const sp = (s: string) => s.replace(/[  ]/g, ' ').replace(/[‎‏؜]/g, '');
 const EXACT = [1, 2, 3, 10, 11, 100];
 

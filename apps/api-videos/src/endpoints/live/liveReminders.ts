@@ -15,7 +15,7 @@ const schemaFor = (summary: string) =>
 	addAuthToSchema({
 		tags: ['Live Streams'],
 		summary,
-		description: '🔒 A public stream or premiere that has not started. 15 minutes before and when it starts, within the person’s notification settings and quiet hours.',
+		description: '🔒 A public stream or premiere that has not started. 30 minutes before and when it starts, within the person’s notification settings and quiet hours.',
 		request: { params: z.object({ id: Str({ description: 'Live stream id' }) }) },
 		responses: {
 			'200': { description: 'Saved', content: { 'application/json': { schema: z.object({ success: z.boolean(), result: z.object({ set: z.boolean(), count: z.number().int() }) }) } } },

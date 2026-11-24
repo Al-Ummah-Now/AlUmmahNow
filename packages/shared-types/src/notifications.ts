@@ -44,7 +44,7 @@ export function isOptionalNotificationCategory(category: unknown): category is O
 export const NOTIFICATION_KEYS = [
   'newVideo',
   'liveStarted',
-  /** A stream or premiere the user asked to be reminded of starts within 15 minutes (wiki E17). params: channelName, streamTitle */
+  /** A stream or premiere the user asked to be reminded of starts within 30 minutes (wiki E17). params: channelName, streamTitle */
   'liveSoon',
   /** To its owner: their premiere could not be shown (wiki E17). params: streamTitle */
   'premiereCancelled',

@@ -26,6 +26,8 @@ jest.mock('../LiveChatPanel', () => ({
   LiveChatPanel: (p: { mode: string; canModerate: boolean; onChanged: () => void }) => <button type="button" data-testid="chat" data-mode={p.mode} data-moderate={String(p.canModerate)} onClick={() => p.onChanged()} />,
   LiveChatReplay: () => <div data-testid="chat-replay" />,
 }));
+jest.mock('../PremierePlayer', () => ({ PremierePlayer: (p: { videoId: string; clock: unknown; onGone: () => void }) => <button type="button" data-testid="premiere" data-video={p.videoId} data-clock={JSON.stringify(p.clock)} onClick={p.onGone} /> }));
+jest.mock('../ReminderButton', () => ({ ReminderButton: (p: { reminder: { count: number } }) => <div data-testid="reminder">{p.reminder.count}</div> }));
 jest.mock('../useLiveQoe', () => ({ useLiveQoe: jest.fn() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), debug: jest.fn() } }));
 
@@ -80,6 +82,47 @@ describe('LiveWatch', () => {
     getState.mockRejectedValue(new LiveApiError(404, 'not_found'));
     render(<LiveWatch streamId="s1" />);
     expect(await screen.findByTestId('live-watch-missing')).toHaveTextContent(mockText.notFound);
+  });
+
+  describe('a premiere (wiki E17 §5.4)', () => {
+    const premiere = (over: object) => {
+      const t = timed({ playbackUrl: null, sessionId: null, sessionStatus: null });
+      return { ...t, state: { ...t.state, kind: 'premiere' as const, premiereVideoId: null, durationSeconds: 600, scheduledStartTime: new Date(Date.now() + 3_600_000).toISOString(), eventType: 'halqa' as const, reminder: { enabled: true, count: 4, set: false }, ...over } as TimedState['state'] };
+    };
+
+    it('counts down before its start, with its tag and the reminder', async () => {
+      getState.mockResolvedValue(premiere({}));
+      render(<LiveWatch streamId="s1" />);
+      expect(await screen.findByTestId('premiere-countdown')).toBeInTheDocument();
+      expect(screen.getByTestId('live-event-badge')).toHaveAttribute('data-event', 'halqa');
+      expect(screen.getByTestId('reminder')).toHaveTextContent('4');
+      expect(screen.queryByText(mockText.startingSoonBody)).toBeNull();
+    });
+
+    it('plays its video at the moment while on, as any video after, and says when the video is gone', async () => {
+      const startedAt = new Date(Date.now() - 60_000).toISOString();
+      getState.mockResolvedValue(premiere({ status: 'live', premiereVideoId: 'v1', startedAt, serverNow: 5_000 }));
+      const { unmount } = render(<LiveWatch streamId="s1" />);
+      const player = await screen.findByTestId('premiere');
+      expect(JSON.parse(player.dataset.clock!)).toEqual({ startedAt: Date.parse(startedAt), offset: 5_000, duration: 600 });
+      expect(screen.getByTestId('live-watch-badge')).toBeInTheDocument();
+      expect(screen.queryByTestId('reminder')).toBeNull();
+      unmount();
+
+      getState.mockResolvedValue(premiere({ status: 'ended', premiereVideoId: 'v1', startedAt }));
+      render(<LiveWatch streamId="s1" />);
+      const after = await screen.findByTestId('premiere');
+      expect(after).toHaveAttribute('data-clock', 'null');
+      expect(screen.getByTestId('premiere-video-link')).toHaveAttribute('href', '/ar/video/v1');
+      fireEvent.click(after);
+      expect(await screen.findByTestId('live-watch-notice')).toHaveTextContent(mockText.premiereEnded);
+    });
+
+    it('is said to be cancelled', async () => {
+      getState.mockResolvedValue(premiere({ status: 'cancelled', reminder: { enabled: false, count: 0, set: false } }));
+      render(<LiveWatch streamId="s1" />);
+      expect(await screen.findByTestId('live-watch-notice')).toHaveTextContent(mockText.premiereCancelled);
+    });
   });
 
   describe('the chat (wiki E17)', () => {

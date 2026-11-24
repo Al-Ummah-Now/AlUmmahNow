@@ -21,6 +21,7 @@ import { useLiveStreams } from '@/hooks/useLiveStreams';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LiveStreamCardRTL } from '@/components/live-streaming/LiveStreamCard/rtl';
 import { LiveStreamCardSkeleton } from '@/components/live-streaming/LiveStreamCard/Skeleton';
+import { LiveEventFilter, UpcomingLive, useLiveEventFilter } from '@/components/live/LiveBrowse';
 import { AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
@@ -171,6 +172,8 @@ export function LivePageClientRTL() {
   const router = useRouter();
   const { t } = useLanguage();
 
+  const { enabled: eventsOn, eventType, choose } = useLiveEventFilter();
+
   // Fetch live streams with automatic refetching every 30 seconds
   const {
     streams,
@@ -181,6 +184,7 @@ export function LivePageClientRTL() {
     isFetching,
   } = useLiveStreams({
     status: 'live',
+    eventType,
     limit: 12,
     refetchInterval: 30000, // 30 seconds
   });
@@ -200,6 +204,7 @@ export function LivePageClientRTL() {
     <main className="flex-1 bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6 md:py-8 max-w-7xl">
         <PageHeader t={t} />
+        {eventsOn && <LiveEventFilter value={eventType} onChange={choose} />}
 
         {/* Loading State */}
         {isLoading && (
@@ -246,6 +251,8 @@ export function LivePageClientRTL() {
             </div>
           </>
         )}
+
+        <UpcomingLive eventType={eventType} card={LiveStreamCardRTL} grid={StreamGrid} onOpen={handleStreamClick} />
       </div>
     </main>
   );

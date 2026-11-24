@@ -11,7 +11,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
+import { formatDateTime } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
+import { LiveKindBadges } from '@/components/live/LiveKindBadges';
 import { StreamStatusBadge } from '../StreamStatusBadge';
 import { ViewerCount } from '../ViewerCount';
 import type { LiveStreamCardProps } from './types';
@@ -94,6 +96,8 @@ export const LiveStreamCard = React.memo<LiveStreamCardProps>(
         const scheduled = stream.scheduledStartTime;
         if (scheduled > now) {
           const diff = scheduled.getTime() - now.getTime();
+          // More than a day ahead, the day says more than a number of hours
+          if (diff > 24 * 60 * 60 * 1000) return formatDateTime('en', scheduled);
           const hours = Math.floor(diff / (1000 * 60 * 60));
           const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
           if (hours > 0) {
@@ -205,17 +209,13 @@ export const LiveStreamCard = React.memo<LiveStreamCardProps>(
           )}
 
           {/* Play Button Overlay (shown on hover) */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
-            <button
+          {/* A picture only: the whole card is the button, and a button inside a button is not reachable */}
+          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
+            <span
               className="rounded-full bg-white/90 p-3 md:p-4 hover:bg-white transform hover:scale-110 transition-transform duration-200"
-              aria-label="Play stream"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClick();
-              }}
             >
               <Play className="w-5 h-5 md:w-6 md:h-6 text-primary fill-primary" />
-            </button>
+            </span>
           </div>
         </div>
 
@@ -248,6 +248,8 @@ export const LiveStreamCard = React.memo<LiveStreamCardProps>(
               </span>
             </div>
           )}
+
+          <LiveKindBadges kind={stream.kind} eventType={stream.eventType} lang="en" />
 
           {/* Metadata */}
           <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-gray-500 dark:text-gray-500">
