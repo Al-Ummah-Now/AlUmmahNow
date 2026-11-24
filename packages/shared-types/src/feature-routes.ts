@@ -268,7 +268,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportPerks: 'MEMBERS adds its routes and maps them here',
   listenMode: 'E14-S3 adds the audio playback route and maps it here',
-  offlineDownloads: 'E14-S3 adds the download license routes and maps them here',
+  offlineDownloads: 'E14-S3 adds the offline download routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
   prayerTimes: 'E21.1 adds the preference routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',

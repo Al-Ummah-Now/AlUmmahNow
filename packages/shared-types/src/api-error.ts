@@ -83,6 +83,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   feature_changed: { action: 'none', en: 'Someone else changed this a moment ago.', ar: 'غيّر شخص آخر هذا قبل لحظات.' },
   payload_too_large: { action: 'none', en: 'This is too large to send.', ar: 'هذا أكبر من أن يُرسل.' },
   rate_limited: { action: 'retry', en: 'That was a lot of requests in a short time. Please wait a moment and try again.', ar: 'كانت هذه طلبات كثيرة في وقت قصير. يُرجى الانتظار قليلًا ثم المحاولة مرة أخرى.' },
+  download_rate_limited: { action: 'retry', en: 'You’ve reached the download rate limit. Please wait a while and try again.', ar: 'وصلت إلى الحد المسموح به لطلبات التنزيل. يُرجى الانتظار قليلًا ثم المحاولة مرة أخرى.' },
   human_check_failed: { action: 'retry', en: 'We couldn’t confirm you’re a person. Please try again.', ar: 'لم نتمكن من التأكد من أنك شخص. يُرجى المحاولة مرة أخرى.' },
   unsupported_api_version: { action: 'update_app', en: 'This version of the app is no longer supported. Please update it.', ar: 'لم يعد هذا الإصدار من التطبيق مدعومًا. يُرجى تحديثه.' },
   app_update_required: { action: 'update_app', en: 'Please update the app to continue.', ar: 'يُرجى تحديث التطبيق للمتابعة.' },

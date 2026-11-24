@@ -1,62 +1,54 @@
 /**
- * Offline downloads & Listen mode types, quality ordering, tier helpers and switch defaults (E14-S1).
+ * Offline downloads & Listen mode types, download rate-limit validation, and switch defaults (E14-S1 / E14-D2).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_CREATOR_TIER,
-  DEFAULT_MEMBER_TIER,
-  DEFAULT_UNLIMITED_TIER,
-  OFFLINE_DOWNLOAD_QUALITIES,
-  isOfflineDownloadQuality,
-  offlineQualityAllowed,
-  offlineQualityRank,
-  tierAllowsOfflineDownloads,
-  tierOfflineLimits,
-} from '../src/creator-tiers.ts';
+  DEFAULT_DOWNLOAD_RATE_LIMIT,
+  DOWNLOAD_RATE_LIMIT_BOUNDS,
+  normaliseDownloadRateLimit,
+  validateDownloadRateLimit,
+} from '../src/download-rate-limit.ts';
 import { DEFAULT_FEATURE_SWITCHES } from '../src/feature-registry.ts';
 
-describe('offline download qualities and tier helpers', () => {
-  it('orders qualities from audio up to 1080p', () => {
-    assert.deepEqual([...OFFLINE_DOWNLOAD_QUALITIES], ['audio', '360p', '480p', '720p', '1080p']);
-    assert.equal(isOfflineDownloadQuality('audio'), true);
-    assert.equal(isOfflineDownloadQuality('480p'), true);
-    assert.equal(isOfflineDownloadQuality('4k'), false);
-    assert.equal(offlineQualityRank('audio'), 0);
-    assert.equal(offlineQualityRank('1080p'), 4);
-    assert.equal(offlineQualityAllowed('audio', 'audio'), true);
-    assert.equal(offlineQualityAllowed('360p', 'audio'), false);
-    assert.equal(offlineQualityAllowed('480p', '480p'), true);
-    assert.equal(offlineQualityAllowed('720p', '480p'), false);
-    assert.equal(offlineQualityAllowed('1080p', '1080p'), true);
+describe('offline download rate-limit settings and switch defaults', () => {
+  it('validates download rate-limit bounds and burst <= perDay (E14-D2)', () => {
+    assert.deepEqual(validateDownloadRateLimit({ perDay: 100, burstPerMinute: 10 }), {
+      ok: true,
+      value: { perDay: 100, burstPerMinute: 10 },
+    });
+    assert.deepEqual(validateDownloadRateLimit({ perDay: '250', burstPerMinute: '25' }), {
+      ok: true,
+      value: { perDay: 250, burstPerMinute: 25 },
+    });
+
+    const tooLowDay = validateDownloadRateLimit({ perDay: 0, burstPerMinute: 1 });
+    assert.equal(tooLowDay.ok, false);
+    if (!tooLowDay.ok) assert.equal(tooLowDay.error.field, 'perDay');
+
+    const tooHighDay = validateDownloadRateLimit({ perDay: DOWNLOAD_RATE_LIMIT_BOUNDS.perDay.max + 1, burstPerMinute: 10 });
+    assert.equal(tooHighDay.ok, false);
+
+    const tooHighBurst = validateDownloadRateLimit({ perDay: 500, burstPerMinute: DOWNLOAD_RATE_LIMIT_BOUNDS.burstPerMinute.max + 1 });
+    assert.equal(tooHighBurst.ok, false);
+
+    const burstOverDay = validateDownloadRateLimit({ perDay: 5, burstPerMinute: 6 });
+    assert.equal(burstOverDay.ok, false);
+    if (!burstOverDay.ok) assert.equal(burstOverDay.error.reason, 'exceeds_per_day');
   });
 
-  it('provides expected shipped tier defaults and unlimited override', () => {
-    assert.equal(tierAllowsOfflineDownloads(DEFAULT_MEMBER_TIER), true);
-    assert.deepEqual(tierOfflineLimits(DEFAULT_MEMBER_TIER), {
-      allowed: true,
-      maxQuality: '480p',
-      maxVideos: 25,
-      licenseDays: 30,
+  it('normalises missing or corrupt stored settings back to defaults', () => {
+    assert.deepEqual(normaliseDownloadRateLimit(null), DEFAULT_DOWNLOAD_RATE_LIMIT);
+    assert.deepEqual(normaliseDownloadRateLimit({ perDay: -5, burstPerMinute: 999 }), {
+      ...DEFAULT_DOWNLOAD_RATE_LIMIT,
     });
-    assert.deepEqual(tierOfflineLimits(DEFAULT_CREATOR_TIER), {
-      allowed: true,
-      maxQuality: '1080p',
-      maxVideos: 100,
-      licenseDays: 30,
-    });
-    assert.deepEqual(tierOfflineLimits(DEFAULT_UNLIMITED_TIER), {
-      allowed: true,
-      maxQuality: '1080p',
-      maxVideos: null,
-      licenseDays: 30,
-    });
-    assert.equal(tierAllowsOfflineDownloads({ unlimited: false, offlineDownloads: false }), false);
-    assert.equal(tierAllowsOfflineDownloads({ unlimited: true, offlineDownloads: false }), true);
-    assert.equal(tierAllowsOfflineDownloads(null), false);
+    assert.deepEqual(
+      normaliseDownloadRateLimit({ perDay: 50, burstPerMinute: 5, updatedAt: '2026-11-23T12:00:00Z', updatedBy: 'admin-1' }),
+      { perDay: 50, burstPerMinute: 5, updatedAt: '2026-11-23T12:00:00Z', updatedBy: 'admin-1' },
+    );
   });
 
-  it('defaults listenMode and offlineDownloads switches OFF', () => {
+  it('keeps offline and listen switches OFF by default', () => {
     assert.equal(DEFAULT_FEATURE_SWITCHES.listenMode, false);
     assert.equal(DEFAULT_FEATURE_SWITCHES.offlineDownloads, false);
   });

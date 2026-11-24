@@ -64,6 +64,7 @@
 --   apps/api-videos/migrations/search/0092_live_in_apps.sql
 --   apps/api-videos/migrations/search/0094_recitation_metadata.sql
 --   apps/api-videos/migrations/search/0095_video_notes.sql
+--   apps/api-videos/migrations/search/0104_drop_download_licenses.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -108,7 +109,6 @@ CREATE TABLE discovery_home_rails (rail TEXT PRIMARY KEY, position INTEGER NOT N
 CREATE TABLE discovery_pins (id TEXT PRIMARY KEY, rail TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('video', 'channel')), target_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 1, starts_at INTEGER, ends_at INTEGER, note TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL, UNIQUE (rail, kind, target_id));
 CREATE TABLE discovery_rail_items (rail TEXT NOT NULL, scope TEXT NOT NULL, position INTEGER NOT NULL, video_id TEXT NOT NULL, score REAL NOT NULL DEFAULT 0, reason TEXT NOT NULL, PRIMARY KEY (rail, scope, position)) WITHOUT ROWID;
 CREATE TABLE discovery_rails (rail TEXT NOT NULL, scope TEXT NOT NULL, mode TEXT NOT NULL, label TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, signal_items INTEGER NOT NULL DEFAULT 0, hash TEXT NOT NULL, computed_at INTEGER NOT NULL, PRIMARY KEY (rail, scope)) WITHOUT ROWID;
-CREATE TABLE download_licenses (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, device_id TEXT NOT NULL, video_id TEXT NOT NULL, quality TEXT NOT NULL, audio_track_id TEXT, r2_rev TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', revoked_reason TEXT, issued_at TEXT NOT NULL, refreshed_at TEXT NOT NULL, expires_at TEXT NOT NULL, UNIQUE(user_id, device_id, video_id));
 CREATE TABLE feature_switch_changes (id TEXT PRIMARY KEY, key TEXT NOT NULL, version INTEGER NOT NULL, old_enabled INTEGER CHECK (old_enabled IS NULL OR old_enabled IN (0, 1)), new_enabled INTEGER NOT NULL CHECK (new_enabled IN (0, 1)), actor_id TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('features_page', 'undo', 'legacy_page', 'migration')), created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)), version INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
@@ -308,9 +308,6 @@ CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
-CREATE INDEX idx_download_licenses_user_device ON download_licenses (user_id, device_id, status);
-CREATE INDEX idx_download_licenses_user_status ON download_licenses (user_id, status, expires_at);
-CREATE INDEX idx_download_licenses_video_status ON download_licenses (video_id, status);
 CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_import_source_items_post ON import_source_items (post_id);

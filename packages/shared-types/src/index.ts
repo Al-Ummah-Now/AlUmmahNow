@@ -80,6 +80,7 @@ export * from './i18n';
 
 // Notification center & library (Epic 29)
 export * from './notifications';
+export * from './download-rate-limit';
 export * from './i18n-library';
 export * from './i18n-public-profile';
 export * from './i18n-bulk-edit';

@@ -25,6 +25,7 @@ import { oauthCallback, type YtEnv } from './lib/youtube-import/service';
 import { handleYtImportBatch } from './lib/youtube-import/jobs';
 import { sweepYoutubeImports } from './lib/youtube-import/sweep';
 import { createNotificationsInternalRouter } from './endpoints/notifications/notificationsInternal';
+import { createDownloadsInternalRouter } from './endpoints/downloads/downloadsInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { handleChannelCommentsBatch, isChannelCommentsMessage, startCommentPurge } from './lib/channelComments/jobs';
@@ -431,6 +432,7 @@ app.route('/internal/media', createMediaInternalRouter() as never);
 app.route('/internal/discovery', createDiscoveryInternalRouter() as never);
 // Platform notification settings (admin-api proxies with the admin role + audit)
 app.route('/internal/notifications', createNotificationsInternalRouter() as never);
+app.route('/internal/downloads', createDownloadsInternalRouter() as never);
 // Pre-publication review: the processor's outcomes and admin-api's decisions (docs/specs/VIDEO-REVIEW.md)
 app.route('/internal/review', createReviewInternalRouter() as never);
 // Move from YouTube (wiki AUN-YT-IMPORT): admin settings (admin-api proxies with media:manage + audit), Errors page retry
