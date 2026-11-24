@@ -12,6 +12,9 @@ import {
   NOTIFICATION_KEY_TYPE,
   NOTIFICATION_KEYS,
   NOTIFICATION_RETENTION_DAYS,
+  NOTIFICATION_READ_RETENTION_DAYS,
+  NOTIFICATION_READ_CAP,
+  NOTIFICATION_UNREAD_CAP,
   DEFAULT_CHANNEL_BELL,
   isAlwaysOnNotificationCategory,
   type NotificationCreatePayload,
@@ -19,7 +22,7 @@ import {
   type NotificationKey,
   type NotificationParams,
 } from '@al-ummah/shared-types';
-import type { D1Database } from '../types';
+import type { D1Database, D1PreparedStatement } from '../types';
 import { broadcastMany, RealtimeEnv } from './websocket-notify';
 import { logger } from './logger';
 
@@ -288,11 +291,126 @@ export async function reconcileChannelSubscriber(
   ]);
 }
 
-/** Delete notifications older than the retention window. Returns rows deleted. */
+/** Rows per purge or trim statement, and the most rounds one run takes (the next hourly run goes on). */
+export const PURGE_BATCH = 1000;
+export const PURGE_MAX_ROUNDS = 50;
+const changes = (r: unknown) => Number((r as { meta?: { changes?: number } })?.meta?.changes ?? 0);
+
+/**
+ * Delete notifications older than the retention window (90 days), PURGE_BATCH at a time on
+ * idx_notifications_created, at most PURGE_MAX_ROUNDS per run. Returns rows deleted.
+ */
 export async function purgeExpiredNotifications(db: D1Database, now = Date.now()): Promise<number> {
   const cutoff = now - NOTIFICATION_RETENTION_DAYS * DAY_MS;
-  const result = await db.prepare('DELETE FROM notifications WHERE created_at < ?').bind(cutoff).run();
-  return (result as { meta?: { changes?: number } })?.meta?.changes ?? 0;
+  let deleted = 0;
+  for (let round = 0; round < PURGE_MAX_ROUNDS; round++) {
+    const n = changes(
+      await db
+        .prepare('DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE created_at < ?1 ORDER BY created_at LIMIT ?2)')
+        .bind(cutoff, PURGE_BATCH)
+        .run(),
+    );
+    deleted += n;
+    if (n < PURGE_BATCH) break;
+  }
+  return deleted;
+}
+
+/** The three trim statements of one user (all on idx_notifications_user_unread_created). */
+function trimStatements(db: D1Database, userId: string, readCutoff: number): D1PreparedStatement[] {
+  return [
+    // Read rows past the read retention (30 days)
+    db
+      .prepare('DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 1 AND created_at < ?2 LIMIT ?3)')
+      .bind(userId, readCutoff, PURGE_BATCH),
+    // The newest NOTIFICATION_READ_CAP read rows are kept
+    db
+      .prepare(
+        `DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 1
+         ORDER BY created_at DESC LIMIT -1 OFFSET ?2)`,
+      )
+      .bind(userId, NOTIFICATION_READ_CAP),
+    // Unread rows are trimmed only past NOTIFICATION_UNREAD_CAP (the badge shows 99+ long before)
+    db
+      .prepare(
+        `DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 0
+         ORDER BY created_at DESC LIMIT -1 OFFSET ?2)`,
+      )
+      .bind(userId, NOTIFICATION_UNREAD_CAP),
+  ];
+}
+
+export const TRIM_JOB = 'inbox-trim';
+/** Notifications read per walk page, and pages per run (the cursor keeps the rest for the next run). */
+export const TRIM_PAGE = 2000;
+export const TRIM_MAX_PAGES = 25;
+/** Users trimmed per D1 batch (3 statements each). */
+const TRIM_USERS_PER_BATCH = 30;
+
+export interface TrimOutcome {
+  users: number;
+  deleted: number;
+  /** The walk reached the newest notification (nothing left for this run). */
+  caughtUp: boolean;
+}
+
+/**
+ * The inbox cap and read retention (wiki AUN-D1-SCALING D1-2), enforced after the fact, never on
+ * insert: fanoutNotificationPage stays one set-based INSERT … SELECT. Walks the notifications
+ * created since the last run on idx_notifications_created with a (created_at, rowid) cursor kept
+ * in notification_trim_state, and trims each recipient it meets once:
+ *   - read rows older than NOTIFICATION_READ_RETENTION_DAYS go;
+ *   - only the newest NOTIFICATION_READ_CAP read rows stay;
+ *   - only the newest NOTIFICATION_UNREAD_CAP unread rows stay.
+ * Users who got nothing new are not visited; every row still goes at NOTIFICATION_RETENTION_DAYS.
+ * The first run starts one read-retention window back.
+ */
+export async function trimNotificationInboxes(db: D1Database, now = Date.now()): Promise<TrimOutcome> {
+  const readCutoff = now - NOTIFICATION_READ_RETENTION_DAYS * DAY_MS;
+  const state = await db
+    .prepare('SELECT created_at, row_id FROM notification_trim_state WHERE job = ?')
+    .bind(TRIM_JOB)
+    .first<{ created_at: number; row_id: number }>();
+  let cursor = state ?? { created_at: readCutoff, row_id: 0 };
+  const done = new Set<string>();
+  let deleted = 0;
+  let caughtUp = false;
+  for (let page = 0; page < TRIM_MAX_PAGES; page++) {
+    const rows =
+      (
+        await db
+          .prepare(
+            `SELECT rowid AS row_id, created_at, user_id FROM notifications
+             WHERE created_at > ?1 OR (created_at = ?1 AND rowid > ?2)
+             ORDER BY created_at, rowid LIMIT ?3`,
+          )
+          .bind(cursor.created_at, cursor.row_id, TRIM_PAGE)
+          .all<{ row_id: number; created_at: number; user_id: string }>()
+      ).results ?? [];
+    const users = [...new Set(rows.map((r) => r.user_id))].filter((u) => !done.has(u));
+    for (let i = 0; i < users.length; i += TRIM_USERS_PER_BATCH) {
+      const slice = users.slice(i, i + TRIM_USERS_PER_BATCH);
+      const results = await db.batch(slice.flatMap((u) => trimStatements(db, u, readCutoff)));
+      for (const r of results) deleted += changes(r);
+      for (const u of slice) done.add(u);
+    }
+    const last = rows[rows.length - 1];
+    if (last) {
+      cursor = { created_at: last.created_at, row_id: last.row_id };
+      await db
+        .prepare(
+          `INSERT INTO notification_trim_state (job, created_at, row_id, updated_at) VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT (job) DO UPDATE SET created_at = excluded.created_at, row_id = excluded.row_id, updated_at = excluded.updated_at`,
+        )
+        .bind(TRIM_JOB, cursor.created_at, cursor.row_id, now)
+        .run();
+    }
+    if (rows.length < TRIM_PAGE) {
+      caughtUp = true;
+      break;
+    }
+  }
+  return { users: done.size, deleted, caughtUp };
 }
 
 /** GDPR erasure: a user's notifications, settings, menu-seen time, subscriber rows and push devices are personal data. */

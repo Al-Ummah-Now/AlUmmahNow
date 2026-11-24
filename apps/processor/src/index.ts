@@ -6,7 +6,7 @@ const ERASURE_TYPES: readonly number[] = [MessageType.UserDataErased, MessageTyp
 import { MessageProcessor } from './messageProcessor';
 import type { createLogger } from '@al-ummah/logger';
 import { loggerFor } from './lib/logger';
-import { purgeExpiredNotifications } from './lib/notifications-store';
+import { purgeExpiredNotifications, trimNotificationInboxes } from './lib/notifications-store';
 import { handleImageReviewScan, handleVideoReviewAppeal, handleVideoReviewScan, isImageReviewPayload, isReviewAppealPayload, isReviewScanPayload, type ReviewConsumerEnv } from './review/consumer';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
@@ -343,6 +343,13 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
     if (purged > 0) logger.info('[Retention] Expired review alert timings deleted', { purged });
   } catch (error) {
     logger.error('[Retention] Review alert retention failed', error);
+  }
+  // Inbox read retention and per-user caps (wiki AUN-D1-SCALING D1-2): recently notified users only
+  try {
+    const trim = await trimNotificationInboxes(env.NOTIFICATIONS_DB, now);
+    if (trim.deleted > 0 || !trim.caughtUp) logger.info('[Retention] Notification inboxes trimmed', { ...trim });
+  } catch (error) {
+    logger.error('[Retention] Notification inbox trim failed', error);
   }
   try {
     const deleted = await purgeExpiredNotifications(env.NOTIFICATIONS_DB, now);

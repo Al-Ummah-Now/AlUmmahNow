@@ -74,7 +74,7 @@ declared + seed data in Seed QA for the new feature.
   per-user index objects or D1 tables (the current scans of up to 1000 objects are a known limit).
 - **Counters.** Likes/views/subscribers via processor rollups (exists from #161) everywhere, not
   recomputed on read.
-- **Notifications store.** D1 table per user with retention (90 days), fed by the processor; realtime
+- **Notifications store.** D1 table per user with retention (read 30 days, unread 90 days; at most 500 read and 1,000 unread per user, wiki AUN-D1-SCALING D1-2), fed by the processor; realtime
   delivery via websocket; push later (native Epic 9.4).
 
 ---

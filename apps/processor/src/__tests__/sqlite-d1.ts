@@ -30,9 +30,14 @@ export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR): D1Databa
 
   const prepare = (sql: string): D1PreparedStatement => {
     let params: unknown[] = [];
-    const statement: D1PreparedStatement & { runSync(): Record<string, unknown>[] } = {
+    const statement: D1PreparedStatement & { runSync(): Record<string, unknown>[]; runBatch(): { rows: Record<string, unknown>[]; changes: number } } = {
       // Runs the statement and returns its rows (RETURNING rows for writes), like a D1 batch result
       runSync: () => raw.prepare(sql).all(...params).map((r) => ({ ...r })),
+      // Like runSync, plus the rows changed by a write without RETURNING (D1 batch results carry meta.changes)
+      runBatch: () => {
+        if (/^\s*(SELECT|WITH)\b/i.test(sql) || /\bRETURNING\b/i.test(sql)) return { rows: raw.prepare(sql).all(...params).map((r) => ({ ...r })), changes: 0 };
+        return { rows: [], changes: Number(raw.prepare(sql).run(...params).changes) };
+      },
       bind: (...values: unknown[]) => {
         params = values;
         return statement;
@@ -57,15 +62,15 @@ export function createSqliteD1(migrationsDir: string = MIGRATIONS_DIR): D1Databa
     // Like D1: a batch is one transaction (all or nothing) and batches never interleave
     batch: async <T>(statements: D1PreparedStatement[]) => {
       raw.exec('BEGIN');
-      const results: Record<string, unknown>[][] = [];
+      const results: { rows: Record<string, unknown>[]; changes: number }[] = [];
       try {
-        for (const s of statements) results.push((s as unknown as { runSync(): Record<string, unknown>[] }).runSync());
+        for (const s of statements) results.push((s as unknown as { runBatch(): { rows: Record<string, unknown>[]; changes: number } }).runBatch());
         raw.exec('COMMIT');
       } catch (error) {
         raw.exec('ROLLBACK');
         throw error;
       }
-      return results.map((rows) => ({ success: true, results: rows, meta: {} })) as never as import('../types').D1Result<T>[];
+      return results.map((r) => ({ success: true, results: r.rows, meta: { changes: r.changes } })) as never as import('../types').D1Result<T>[];
     },
     exec: async (sql: string) => {
       raw.exec(sql);
