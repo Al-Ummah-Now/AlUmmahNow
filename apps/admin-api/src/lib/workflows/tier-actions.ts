@@ -473,7 +473,7 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
         case 'assign': {
           const current = await readAssignment(env, 'workflow', op.userId);
           return {
-            title: { en: `Move a creator to the ${named(op.tierId).en} tier`, ar: `نقل صانع محتوى إلى فئة ${named(op.tierId).ar}` },
+            title: { en: `Move a creator to the ${named(op.tierId).en} tier`, ar: `نقل صانع محتوى إلى فئة «${named(op.tierId).ar}»` },
             fields: [person(op.userId), tierField(current?.tierId, op.tierId)],
             baseVersion: fingerprint(current),
             subjectUserId: op.userId,
@@ -482,7 +482,7 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
         case 'approveRequest': {
           const request = await readTierRequest(env, 'workflow', op.requestId);
           return {
-            title: { en: `Approve a request for the ${named(request.tierId).en} tier`, ar: `الموافقة على طلب فئة ${named(request.tierId).ar}` },
+            title: { en: `Approve a request for the ${named(request.tierId).en} tier`, ar: `الموافقة على طلب فئة «${named(request.tierId).ar}»` },
             fields: [person(request.userId), tierField(request.currentTierId, request.tierId)],
             baseVersion: fingerprint(request.status),
             subjectUserId: request.userId,
@@ -495,13 +495,13 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
           for (const ch of plan.changed) held.set(ch.previous?.tierId ?? null, [...(held.get(ch.previous?.tierId ?? null) ?? []), ch.userId]);
           const people = [...held].map(([from, ids]): WorkflowField => ({
             key: `users:${from ?? ''}`,
-            label: from ? { en: `Creators now on ${named(from).en}`, ar: `صنّاع المحتوى في فئة ${named(from).ar}` } : { en: 'Creators with no tier set', ar: 'صنّاع المحتوى بلا فئة محددة' },
+            label: from ? { en: `Creators now on ${named(from).en}`, ar: `صنّاع المحتوى في فئة «${named(from).ar}»` } : { en: 'Creators with no tier set', ar: 'صنّاع المحتوى بلا فئة محددة' },
             kind: 'person',
             before: null,
             after: ids,
           }));
           return {
-            title: { en: `Move several creators to the ${named(op.tierId).en} tier`, ar: `نقل عدة صنّاع محتوى إلى فئة ${named(op.tierId).ar}` },
+            title: { en: `Move several creators to the ${named(op.tierId).en} tier`, ar: `نقل عدة صنّاع محتوى إلى فئة «${named(op.tierId).ar}»` },
             fields: [{ key: 'count', label: { en: 'How many', ar: 'العدد' }, kind: 'count', before: null, after: plan.changed.length }, tierField(null, op.tierId), ...people],
             // Planned again when it runs (users already moved are left alone): never stale
             baseVersion: 'bulk',
@@ -510,8 +510,8 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
         }
         case 'setDefault':
           return {
-            title: { en: `Make ${named(op.tierId).en} the default tier`, ar: `جعل ${named(op.tierId).ar} الفئة الافتراضية` },
-            fields: [tierField(list.defaultTierId, op.tierId === 'none' ? null : op.tierId, 'default', { en: 'Default tier', ar: 'الفئة الافتراضية' })],
+            title: { en: `Make ${named(op.tierId).en} the default tier`, ar: `جعل «${named(op.tierId).ar}» الفئة الأساسية` },
+            fields: [tierField(list.defaultTierId, op.tierId === 'none' ? null : op.tierId, 'default', { en: 'Default tier', ar: 'الفئة الأساسية' })],
             baseVersion: tierVersion(list),
           };
         case 'reorder':
@@ -522,7 +522,7 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
           };
         case 'delete':
           return {
-            title: { en: `Delete the ${named(op.id).en} tier`, ar: `حذف فئة ${named(op.id).ar}` },
+            title: { en: `Delete the ${named(op.id).en} tier`, ar: `حذف فئة «${named(op.id).ar}»` },
             fields: [tierField(op.id, null)],
             baseVersion: tierVersion(list),
           };
@@ -531,8 +531,8 @@ export function tierChangeExecutor(): WorkflowExecutor<TierOp, unknown> {
           const added = str(op.input.name) || str(op.input.nameAr);
           return {
             title: op.op === 'edit'
-              ? { en: `Edit the ${named(op.id).en} tier`, ar: `تعديل فئة ${named(op.id).ar}` }
-              : { en: `Add the ${added} tier`, ar: `إضافة فئة ${str(op.input.nameAr) || added}` },
+              ? { en: `Edit the ${named(op.id).en} tier`, ar: `تعديل فئة «${named(op.id).ar}»` }
+              : { en: `Add the ${added} tier`, ar: `إضافة فئة «${str(op.input.nameAr) || added}»` },
             fields: Object.entries(op.input).map(([key, after]) => ({ key, label: FIELD_LABELS[key] ?? { en: key, ar: key }, kind: valueKind(after ?? current?.[key]), before: current?.[key] ?? null, after })),
             baseVersion: tierVersion(list),
           };
