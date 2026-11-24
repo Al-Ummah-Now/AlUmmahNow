@@ -637,7 +637,8 @@ describe('channel actions', () => {
 		assert.equal((await call('POST', '/channels/ch1/handle/take', { handle: 'notofficial' })).body.code, 'not_official_handle');
 		const took = await call('POST', '/channels/ch1/handle/take', { handle: 'Lamahat' });
 		assert.equal(took.status, 200, JSON.stringify(took.body));
-		assert.deepEqual(took.body.result, { handle: 'lamahat', tookFrom: 'ch2' });
+		const holderNow = JSON.parse(raw.channels.store.get('ch2')!).handle;
+		assert.deepEqual(took.body.result, { handle: 'lamahat', previousHandle: 'ch1', tookFrom: 'ch2', holderHandle: holderNow });
 		const read = (key: string) => JSON.parse(raw.channel_tabs.store.get(key)!);
 		assert.equal(read('channel-handles/lamahat').channelId, 'ch1');
 		const holder = JSON.parse(raw.channels.store.get('ch2')!);
@@ -654,6 +655,26 @@ describe('channel actions', () => {
 		assert.equal(released.body.result.handle, now);
 		assert.equal(read(`channel-handles/${now.toLowerCase()}`).channelId, 'ch1');
 		assert.ok(!raw.channel_tabs.store.has('channel-handles/lamahat'), 'the official handle is free again');
+	});
+
+	it('taking back an official handle overrides the 14-day hold of a channel that gave it up (CC-4)', async () => {
+		const { raw, call } = await setup();
+		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
+		await raw.channel_tabs.put('channel-handle-history/lamahat', JSON.stringify({ handle: 'lamahat', channelId: 'ch9', dateReleased: new Date().toISOString() }));
+		const took = await call('POST', '/channels/ch1/handle/take', { handle: 'lamahat' });
+		assert.equal(took.status, 200, JSON.stringify(took.body));
+		assert.equal(took.body.result.tookFrom, null);
+		assert.equal(JSON.parse(raw.channel_tabs.store.get('channel-handles/lamahat')!).channelId, 'ch1');
+		assert.ok(!raw.channel_tabs.store.has('channel-handle-history/lamahat'), 'the name no longer redirects to the channel that gave it up');
+	});
+
+	it('a plain channel edit refuses an official handle and points to the take-back tool (CC-4)', async () => {
+		const { raw, call } = await setup();
+		const refused = await call('PATCH', '/channels/ch1', { handle: 'Lamahat' });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'official_handle_take_back');
+		assert.ok(!raw.channel_tabs.store.has('channel-handles/lamahat'), 'nothing claimed');
+		assert.equal((await call('PATCH', '/channels/ch1', { handle: 'plainname' })).status, 200, 'other handles still change');
 	});
 
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {

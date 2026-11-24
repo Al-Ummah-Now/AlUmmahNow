@@ -20,6 +20,9 @@ function fakeDb(reports: ReportRow[] = []) {
       if (sql.startsWith('INSERT INTO site_settings_log')) {
         const [id, key, old_value, new_value, actor_id, created_at] = args as string[];
         log.push({ id, key, old_value, new_value, actor_id, created_at });
+      } else if (sql.startsWith('UPDATE site_settings_log SET old_value')) {
+        const row = log.find((r) => r.id === args[1]);
+        if (row) row.old_value = args[0] as string;
       } else if (sql.startsWith('UPDATE site_settings_log SET key')) {
         const row = log.find((r) => r.id === args[1]);
         if (row) row.key = args[0] as string;
@@ -221,6 +224,25 @@ describe('content endpoints: permissions', () => {
     assert.deepEqual(calls.at(-1)!.body, { handle: 'lamahat' });
     assert.equal((await call('/api/content/channels/ch_1/handle/release', { method: 'POST', roles: 'super_admin', json: { reason: 'Name is misleading' } })).status, 200);
     assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['handle-take', 'handle-release']);
+  });
+
+  it('handle rows keep the previous handle, and the channel a handle was taken from gets its own row (CC-4)', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({
+      'POST /channels/ch_1/handle/take': () => ({ body: { success: true, result: { handle: 'lamahat', previousHandle: 'ch1-old', tookFrom: 'ch_2', holderHandle: 'early-bird-1' } } }),
+      'POST /channels/ch_1/handle/release': () => ({ body: { success: true, result: { handle: 'ch1-default', previousHandle: 'lamahat' } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/channels/ch_1/handle/take', { method: 'POST', roles: 'super_admin', json: { handle: 'lamahat', reason: 'Official name back' } })).status, 200);
+    assert.equal((await call('/api/content/channels/ch_1/handle/release', { method: 'POST', roles: 'super_admin', json: { reason: 'Name is misleading' } })).status, 200);
+    const rows = log.map((r) => ({ key: r.key, action: JSON.parse(r.new_value).action, details: JSON.parse(r.new_value).details, old: r.old_value ? JSON.parse(r.old_value) : null }));
+    const take = rows.find((r) => r.action === 'handle-take')!;
+    assert.deepEqual(take.old, { handle: 'ch1-old' });
+    const away = rows.find((r) => r.action === 'handle-taken-away')!;
+    assert.match(away.key, /ch_2/);
+    assert.deepEqual(away.old, { handle: 'lamahat' });
+    assert.deepEqual(away.details, { handle: 'early-bird-1', takenFor: 'ch_1', reason: 'Official name back' });
+    assert.deepEqual(rows.find((r) => r.action === 'handle-release')!.old, { handle: 'lamahat' });
   });
 
   it('a transfer without a user id is refused before anything is audited', async () => {

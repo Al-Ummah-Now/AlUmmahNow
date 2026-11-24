@@ -69,6 +69,8 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   bad_request: { action: 'none', en: 'Something in this request isn’t right. Check it and try again.', ar: 'في هذا الطلب ما لا يصح. راجعه وحاول مرة أخرى.' },
   invalid_request: { action: 'none', en: 'Some details aren’t right. Check them and try again.', ar: 'بعض التفاصيل غير صحيحة. راجعها وحاول مرة أخرى.' },
   validation_error: { action: 'none', en: 'Some details aren’t right. Check them and try again.', ar: 'بعض التفاصيل غير صحيحة. راجعها وحاول مرة أخرى.' },
+  not_official_handle: { action: 'none', en: 'Only a handle on the official list can be taken back.', ar: 'لا يُستعاد إلا معرّف من القائمة الرسمية.' },
+  official_handle_take_back: { action: 'none', en: 'Official handles are given with Take back handle.', ar: 'تُمنح المعرّفات الرسمية عبر «استعادة المعرّف».' },
   transfer_reason_required: { action: 'none', en: 'Give a reason of 10 to 500 characters.', ar: 'اكتب سببًا من ١٠ إلى ٥٠٠ حرف.' },
   unauthorized: { action: 'sign_in', en: 'Please sign in again.', ar: 'يُرجى تسجيل الدخول مرة أخرى.' },
   authentication_required: { action: 'sign_in', en: 'Please sign in to continue.', ar: 'يُرجى تسجيل الدخول للمتابعة.' },
