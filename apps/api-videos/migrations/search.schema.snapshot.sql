@@ -60,7 +60,7 @@
 --   apps/api-videos/migrations/search/0081_import_sources.sql
 --   apps/api-videos/migrations/search/0082_import_takeout.sql
 --   apps/api-videos/migrations/search/0085_approval_workflows.sql
---   apps/api-videos/migrations/search/0086_channel_transfer_locks.sql
+--   apps/api-videos/migrations/search/0090_channel_transfer_locks.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
