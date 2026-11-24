@@ -37,6 +37,32 @@ async function objectsUnder(bucket: R2Bucket, prefix: string): Promise<Array<{ k
 	return out;
 }
 
+/** The rendition prefixes of a session, and whether anything at all is stored of it. One list call. */
+async function renditionsOf(bucket: R2Bucket, sessionId: string): Promise<{ stored: boolean; renditions: string[] }> {
+	const base = prefixOf(sessionId);
+	const page = await bucket.list({ prefix: base, delimiter: '/' });
+	const renditions = (page.delimitedPrefixes ?? []).map((p) => p.slice(base.length).replace(/\/$/, ''));
+	return { stored: page.objects.length > 0 || renditions.length > 0, renditions };
+}
+
+/** The rendition to keep: the one with the most bytes. Null when no rendition has a segment (nothing was streamed). */
+async function bestRendition(env: RecordingEnv, sessionId: string, renditions: string[]): Promise<string | null> {
+	const { results } = await env.SEARCH_DB!
+		.prepare('SELECT rendition, SUM(bytes) AS bytes FROM live_segments WHERE session_id = ? GROUP BY rendition')
+		.bind(sessionId)
+		.all<{ rendition: string; bytes: number }>();
+	const bytes = new Map<string, number>();
+	for (const r of results ?? []) if (renditions.includes(r.rendition) && r.bytes > 0) bytes.set(r.rendition, r.bytes);
+	// The index is dropped some time after the stream (lib/live/qoe.ts), and may miss a rendition: look at the objects
+	for (const rendition of renditions) {
+		if (bytes.has(rendition)) continue;
+		const page = await env.LIVE_MEDIA!.list({ prefix: `${prefixOf(sessionId)}${rendition}/` });
+		const segments = page.objects.filter((o) => SEGMENT.test(o.key.slice(o.key.lastIndexOf('/') + 1)));
+		if (segments.length || page.truncated) bytes.set(rendition, segments.reduce((n, o) => n + o.size, 0));
+	}
+	return [...bytes].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+}
+
 /** Everything of the stream that is still stored. */
 export async function storedRecordings(env: RecordingEnv, streamId: string): Promise<StoredRecording[]> {
 	const { results } = await env.SEARCH_DB!
@@ -52,23 +78,17 @@ export async function storedRecordings(env: RecordingEnv, streamId: string): Pro
 			continue;
 		}
 		// Where no bucket is bound no self-hosted stream ever ran
-		const objects = env.LIVE_MEDIA ? await objectsUnder(env.LIVE_MEDIA, prefixOf(s.id)) : [];
-		if (!objects.length) continue;
-		const bytes = new Map<string, number>();
-		for (const o of objects) {
-			const [rendition, file] = o.key.slice(prefixOf(s.id).length).split('/');
-			if (file && SEGMENT.test(file)) bytes.set(rendition!, (bytes.get(rendition!) ?? 0) + o.size);
-		}
-		const best = [...bytes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-		out.push({ sessionId: s.id, provider: 'selfhosted', guid: null, rendition: best, ready: true });
+		if (!env.LIVE_MEDIA) continue;
+		const { stored, renditions } = await renditionsOf(env.LIVE_MEDIA, s.id);
+		if (stored) out.push({ sessionId: s.id, provider: 'selfhosted', guid: null, rendition: await bestRendition(env, s.id, renditions), ready: true });
 	}
 	return out;
 }
 
 /** The evidence files of the recordings (evidence.ts copies them). */
-export const recordingFiles = (recordings: StoredRecording[]): PlannedFile[] =>
+export const recordingFiles = (recordings: StoredRecording[], after = 0): PlannedFile[] =>
 	recordings.flatMap((r, i): PlannedFile[] => {
-		const name = `06-live-recording-${i + 1}.mp4`;
+		const name = `06-live-recording-${after + i + 1}.mp4`;
 		if (r.provider === 'bunny') return [{ name, source: { type: 'bunny_live', guid: r.guid! }, contentType: 'video/mp4' }];
 		return r.rendition ? [{ name, source: { type: 'live', sessionId: r.sessionId, rendition: r.rendition }, contentType: 'video/mp4' }] : [];
 	});
@@ -111,6 +131,9 @@ export async function recordingParts(env: RecordingEnv, sessionId: string, rendi
 	});
 }
 
+/** How many objects a range is in (one read each). */
+export const readsOf = (parts: RecordingPart[], offset: number, length: number): number => parts.filter((p) => p.offset < offset + length && p.offset + p.size > offset).length;
+
 /** Reads a range across parts. */
 export async function readParts(bucket: R2Bucket, parts: RecordingPart[], offset: number, length: number): Promise<Uint8Array> {
 	const total = parts.reduce((n, p) => n + p.size, 0);
@@ -130,19 +153,26 @@ export async function readParts(bucket: R2Bucket, parts: RecordingPart[], offset
 	return out;
 }
 
-/** Deletes a self-hosted session's objects. Its copy is in the store by now. */
-export async function deleteSessionMedia(env: RecordingEnv, sessionId: string): Promise<number> {
-	if (!env.LIVE_MEDIA) return 0;
-	const keys = (await objectsUnder(env.LIVE_MEDIA, prefixOf(sessionId))).map((o) => o.key);
-	for (let i = 0; i < keys.length; i += 1000) await env.LIVE_MEDIA.delete(keys.slice(i, i + 1000));
-	return keys.length;
+/** Deletes up to `pages` × 1000 of a self-hosted session's objects. Its copy is in the store by now. */
+export async function deleteSessionMedia(env: RecordingEnv, sessionId: string, pages: number): Promise<{ pages: number; done: boolean }> {
+	if (!env.LIVE_MEDIA) return { pages: 0, done: true };
+	for (let used = 1; used <= pages; used++) {
+		// From the start each time: what was listed is gone
+		const page = await env.LIVE_MEDIA.list({ prefix: prefixOf(sessionId) });
+		if (page.objects.length) await env.LIVE_MEDIA.delete(page.objects.map((o) => o.key));
+		if (!page.truncated) return { pages: used, done: true };
+	}
+	return { pages, done: false };
 }
 
 export const deleteBunny = (env: RecordingEnv, guid: string) => deleteBunnyRecording(env, guid);
 
-/** Nothing points at a removed recording any more. */
-export async function forgetRecording(env: RecordingEnv, sessionId: string): Promise<void> {
-	await env.SEARCH_DB!.prepare('UPDATE live_sessions SET vod_url = NULL, vod_ready_at = NULL WHERE id = ?').bind(sessionId).run();
+/** Nothing points at a removed recording any more: every session of the stream that has nothing stored (also one an earlier run removed). */
+export async function forgetRemovedRecordings(env: RecordingEnv, streamId: string, stored: StoredRecording[]): Promise<void> {
+	await env.SEARCH_DB!
+		.prepare('UPDATE live_sessions SET vod_url = NULL, vod_ready_at = NULL WHERE stream_id = ? AND (vod_url IS NOT NULL OR vod_ready_at IS NOT NULL) AND id NOT IN (SELECT value FROM json_each(?))')
+		.bind(streamId, JSON.stringify(stored.map((r) => r.sessionId)))
+		.run();
 }
 
 /** What a person must do about a recording the takedown could not finish with. */

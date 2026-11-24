@@ -23,7 +23,8 @@ import { getSecret } from '../env-helpers';
 import { findStoredComment, type StoredComment } from '../comments';
 import { locatePostComment } from '../channelComments/moderation';
 import { streamKey } from '../live/streams';
-import { readParts, recordingFiles, recordingParts, storedRecordings, type RecordingEnv } from './recordings';
+import { readBunnyRecording } from '../live/providers';
+import { readParts, readsOf, recordingFiles, recordingParts, storedRecordings, type RecordingEnv } from './recordings';
 import { sourceCandidates, type MediaEnv } from '../media/r2-delivery';
 import { imagePathOf } from './imageOwners';
 import { CHUNK_BYTES, SEALED_CHUNK_BYTES, evidenceKeys, openChunk, openJson, sealChunk, sealJson, sha256Hex, type EvidenceKeys } from './crypto';
@@ -70,9 +71,13 @@ export interface CopyState {
 	bytes: number;
 	/** The Bunny file that answered, so later deliveries read the same one */
 	bunnyFile?: string;
+	/** The source's size when the copy began; another one starts it over */
+	size?: number;
 }
 
 export const STEP_CHUNKS = 12;
+/** Reads of one delivery at most (a Worker's subrequest limit is 1000; the rest of the step needs some too). */
+export const STEP_READS = 600;
 export const caseKey = (caseId: string, name: string) => `cases/${caseId}/${name}.bin`;
 export const manifestKey = (caseId: string) => `cases/${caseId}/manifest.bin`;
 
@@ -183,7 +188,12 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 
 // --- Reading a source by range ------------------------------------------------------------
 
-type Ranged = { size: number; read(offset: number, length: number): Promise<Uint8Array> } | null;
+type Ranged = {
+	size: number;
+	read(offset: number, length: number): Promise<Uint8Array>;
+	/** How many reads a range takes; one when it does not say */
+	reads?(offset: number, length: number): number;
+} | null;
 
 async function rangedHttp(url: string, headers: Record<string, string>): Promise<Ranged> {
 	const head = await fetch(url, { method: 'GET', headers: { ...headers, Range: 'bytes=0-0' } });
@@ -259,8 +269,11 @@ async function openSource(env: EvidenceEnv, source: EvidenceSource, state: CopyS
 		return {
 			size: parts.reduce((n, p) => n + p.size, 0),
 			read: (offset, length) => readParts((env as RecordingEnv).LIVE_MEDIA!, parts, offset, length),
+			reads: (offset, length) => readsOf(parts, offset, length),
 		};
 	}
+	// A file Bunny is still writing is not the recording
+	if (source.type === 'bunny_live' && !(await readBunnyRecording(env as RecordingEnv, source.guid)).finished) return null;
 	// Bunny Stream: the first candidate that answers (the original when Bunny serves it, else the best MP4)
 	const record = source.type === 'bunny' ? await json<Record<string, any>>(env.videos, source.videoId) : null;
 	const candidates = await sourceCandidates(env as unknown as MediaEnv, source.type === 'bunny' ? source.videoId : source.guid, record as never);
@@ -292,21 +305,39 @@ export async function copyStep(env: EvidenceEnv, keys: EvidenceKeys, caseId: str
 		return { status: 'file_done', file: null, missing: { name: planned.name, source: label(planned.source), reason: 'not found at the source' } };
 	}
 	const key = caseKey(caseId, planned.name);
-	const upload = state.uploadId ? bucket.resumeMultipartUpload(key, state.uploadId) : await bucket.createMultipartUpload(key, { customMetadata: { caseId, keyVersion: String(keys.current.version) } });
-	const next: CopyState = { ...state, uploadId: upload.uploadId, parts: [...state.parts], chunkSha256: [...state.chunkSha256] };
-	const total = Math.max(1, Math.ceil(source.size / CHUNK_BYTES));
-	for (let n = 0; n < STEP_CHUNKS && next.chunk < total; n++) {
-		const offset = next.chunk * CHUNK_BYTES;
-		const plain = source.size === 0 ? new Uint8Array(0) : await source.read(offset, Math.min(CHUNK_BYTES, source.size - offset));
-		const sealed = await sealChunk(keys.current.key, plain, { caseId, name: planned.name, index: next.chunk });
-		const part = await upload.uploadPart(next.chunk + 1, sealed);
-		next.parts.push({ partNumber: part.partNumber, etag: part.etag });
-		next.chunkSha256.push(await sha256Hex(plain));
-		next.bytes += plain.byteLength;
-		next.chunk++;
+	if (state.uploadId && state.size !== undefined && state.size !== source.size) {
+		// The source changed while it was copied (a stream's last segments): what was read so far may not line up
+		await bucket.resumeMultipartUpload(key, state.uploadId).abort().catch(() => undefined);
+		return { status: 'copying', state: { file: state.file, parts: [], chunk: 0, chunkSha256: [], bytes: 0 } };
 	}
-	if (next.chunk < total) return { status: 'copying', state: next };
-	await upload.complete(next.parts);
+	const upload = state.uploadId ? bucket.resumeMultipartUpload(key, state.uploadId) : await bucket.createMultipartUpload(key, { customMetadata: { caseId, keyVersion: String(keys.current.version) } });
+	const next: CopyState = { ...state, uploadId: upload.uploadId, size: source.size, parts: [...state.parts], chunkSha256: [...state.chunkSha256] };
+	const total = Math.max(1, Math.ceil(source.size / CHUNK_BYTES));
+	try {
+		let reads = 0;
+		for (let n = 0; n < STEP_CHUNKS && next.chunk < total; n++) {
+			const offset = next.chunk * CHUNK_BYTES;
+			const length = Math.min(CHUNK_BYTES, source.size - offset);
+			const needs = source.reads?.(offset, length) ?? 1;
+			// No step could ever read it: a person has to (the caller says what to do)
+			if (needs > STEP_READS) throw new Error(`${planned.name}: one part of it is in ${needs} objects, too many to read at once. Nobody can reach it; keep a copy by hand, delete it there, then retry`);
+			if (n > 0 && reads + needs > STEP_READS) break;
+			reads += needs;
+			const plain = source.size === 0 ? new Uint8Array(0) : await source.read(offset, length);
+			const sealed = await sealChunk(keys.current.key, plain, { caseId, name: planned.name, index: next.chunk });
+			const part = await upload.uploadPart(next.chunk + 1, sealed);
+			next.parts.push({ partNumber: part.partNumber, etag: part.etag });
+			next.chunkSha256.push(await sha256Hex(plain));
+			next.bytes += plain.byteLength;
+			next.chunk++;
+		}
+		if (next.chunk < total) return { status: 'copying', state: next };
+		await upload.complete(next.parts);
+	} catch (error) {
+		// An upload begun in this step is not in the job's state: its retry begins another one
+		if (!state.uploadId) await upload.abort().catch(() => undefined);
+		throw error;
+	}
 	return {
 		status: 'file_done',
 		file: { name: planned.name, source: label(planned.source), contentType: planned.contentType, bytes: next.bytes, chunkSha256: next.chunkSha256, chunkBytes: CHUNK_BYTES, keyVersion: keys.current.version, copiedAt: new Date().toISOString() },

@@ -73,6 +73,10 @@ export async function startLiveVodReview(env: LiveReviewEnv, streamId: string, s
 		let why: string | undefined;
 		const saved = await repo(env).updateObject(streamKey(streamId), (stream) => {
 			why = undefined;
+			if ((stream as { csamTakedown?: unknown }).csamTakedown) {
+				why = 'taken down';
+				return false;
+			}
 			if (stream.reviewSessionId === session.id) {
 				why = 'already started';
 				return false;

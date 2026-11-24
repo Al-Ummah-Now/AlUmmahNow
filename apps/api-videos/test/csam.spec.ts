@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import {
 	CSAM_HOLD,
+	VIDEO_REVIEW_SETTINGS_KEY,
+	clearVideoReviewSettingsCache,
 	CSAM_RETENTION_MIN_DAYS,
 	csamRetainUntil,
 	csamUrlKey,
@@ -30,6 +32,10 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { CHUNK_BYTES, EvidenceKeyError, openChunk, parseEvidenceKeys, sealChunk } from '../src/lib/csam/crypto';
 import { resolveCsamUrl } from '../src/lib/csam/resolve';
 import { finalizeSelfHosted } from '../src/lib/live/finalize';
+import { setOnVodReady } from '../src/lib/live/vod-ready';
+import { startLiveVodReview } from '../src/lib/review/live';
+import { deleteSessionMedia } from '../src/lib/csam/recordings';
+import { STEP_READS, copyStep, type CopyState } from '../src/lib/csam/evidence';
 import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../src/lib/csam/imageOwners';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 import { AuthDb } from './auth-db';
@@ -81,9 +87,13 @@ class BinaryBucket {
 	async delete(keys: string | string[]) {
 		for (const k of Array.isArray(keys) ? keys : [keys]) this.store.delete(k);
 	}
-	async list(o: { prefix?: string; cursor?: string; limit?: number } = {}) {
-		const objects = [...this.store.entries()].filter(([k]) => !o.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => ({ key, size: v.bytes.byteLength }));
-		return { objects, truncated: false };
+	async list(o: { prefix?: string; cursor?: string; limit?: number; delimiter?: string } = {}) {
+		const all = [...this.store.entries()].filter(([k]) => !o.prefix || k.startsWith(o.prefix)).sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => ({ key, size: v.bytes.byteLength }));
+		const rest = (key: string) => key.slice((o.prefix ?? '').length);
+		const inside = (key: string) => !!o.delimiter && rest(key).includes(o.delimiter);
+		const delimitedPrefixes = [...new Set(all.filter((x) => inside(x.key)).map((x) => `${o.prefix ?? ''}${rest(x.key).split(o.delimiter!)[0]}${o.delimiter}`))];
+		const objects = all.filter((x) => !inside(x.key));
+		return { objects: objects.slice(0, o.limit ?? 1000), delimitedPrefixes, truncated: objects.length > (o.limit ?? 1000) };
 	}
 	private upload(key: string, uploadId: string) {
 		return {
@@ -349,7 +359,9 @@ describe('CSAM URLs (shared-types)', () => {
 			assert.deepEqual(parseCsamUrl(site + path), { kind: 'comment', on: 'post', parentId: 'post-synth-01', commentId: 'cmt-synth-01' }, path);
 		}
 		// About comments, but not which: nothing to act on, and least of all the video
-		for (const path of ['/en/video/vid-synth-01#comments', '/en/video/vid-synth-01?comment=', '/en/video/vid-synth-01?comment=../x', '/en/post/post-synth-01#comment-x', '/channels/chan-synth-01?post=a', '/en/live/live-synth-01?comment=cmt-synth-01', '/en/live/live-synth-01?message=msg-synth-01', '/en/live/live-synth-01#chat-msg-synth-01', '/en/video/vid-synth-01?comment=cmt-synth-01&lc=cmt-synth-02', '/en/video/vid-synth-01?comment=cmt-synth-01#comment-cmt-synth-02', '/embed/comments/vid-synth-01', '/thumb/vid-synth-01.jpg?comment=cmt-synth-01']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
+		for (const path of ['/en/video/vid-synth-01#comments', '/en/video/vid-synth-01?comment=', '/en/video/vid-synth-01?comment=../x', '/en/post/post-synth-01#comment-x', '/channels/chan-synth-01?post=a', '/en/live/live-synth-01?comment=cmt-synth-01', '/en/live/live-synth-01?message=msg-synth-01', '/en/live/live-synth-01#chat-msg-synth-01', '/en/video/vid-synth-01?comment=cmt-synth-01&lc=cmt-synth-02', '/en/video/vid-synth-01?comment=cmt-synth-01#comment-cmt-synth-02', '/embed/comments/vid-synth-01', '/thumb/vid-synth-01.jpg?comment=cmt-synth-01', '/en/video/vid-synth-01#replies', '/en/video/vid-synth-01#replies-cmt-synth-01', '/en/video/vid-synth-01?reply_id=x', '/en/video/vid-synth-01?message_id=msg-synth-01', '/en/live/live-synth-01?chat_id=msg-synth-01',
+			// What a path says after the item is not the item
+			'/en/video/vid-synth-01/comments', '/en/video/vid-synth-01/comments/cmt-synth-01', '/en/post/post-synth-01/comments', '/en/shorts/vid-synth-01/comments', '/en/live/live-synth-01/chat', '/en/channels/chan-synth-01/comments', '/en/studio/video/vid-synth-01/comments', '/en/studio/chan-synth-01/content/videos/vid-synth-01/comments', '/en/studio/chan-synth-01/content/live/live-synth-01/chat', '/embed/v/vid-synth-01/comments', '/embed/comments/vid-synth-01/x#comment-cmt-synth-01', '/en/@synthetic/comments?post=post-synth-01']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
 		assert.deepEqual(parseCsamUrl(`${site}/en/video/vid-synth-01?comment=cmt-synth-01#comment-cmt-synth-01`), onVideo);
 		assert.deepEqual(parseCsamUrl(`${site}/EN/video/vid-synth-01?Comment=cmt-synth-01`), onVideo);
 	});
@@ -373,7 +385,15 @@ describe('CSAM URLs (shared-types)', () => {
 
 	it('a page that names two items maps to neither', () => {
 		const site = 'https://videos.alummahnow.net';
-		for (const path of ['/en/video/vid-synth-01?vid=vid-synth-02', '/en/video/vid-synth-01?post=post-synth-01', '/en/shorts/vid-synth-01?post=post-synth-01', '/en/post/post-synth-01?post=post-synth-02', '/embed/v/vid-synth-01?vid=vid-synth-02']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
+		for (const path of ['/en/video/vid-synth-01?vid=vid-synth-02', '/en/video/vid-synth-01?post=post-synth-01', '/en/shorts/vid-synth-01?post=post-synth-01', '/en/post/post-synth-01?post=post-synth-02', '/embed/v/vid-synth-01?vid=vid-synth-02', '/en/video?vid=vid-synth-01&vid=vid-synth-02', '/en/video?vid=vid-synth-01&VID=vid-synth-02', '/en/channels/chan-synth-01?post=post-synth-01&post=post-synth-02', '/en/live/live-synth-01?vid=vid-synth-02', '/en/live/live-synth-01?Post=post-synth-01', '/en/post/post-synth-01?vid=vid-synth-02', '/en/channels/chan-synth-01?vid=vid-synth-02', '/en/@synthetic?post=post-synth-01&vid=vid-synth-02', '/thumb/vid-synth-01.jpg?vid=vid-synth-02']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
+		assert.equal(parseCsamUrl('https://alummahnow.link/v/vid-synth-01?vid=vid-synth-02')?.kind, 'other');
+		assert.equal((parseCsamUrl('https://scholar.alummahnow.org/en/watch/vid-synth-01?vid=vid-synth-02') as any)?.item, null);
+		assert.equal(parseCsamUrl('https://scholar.example/en/watch/vid-synth-01?post=post-synth-02'), null);
+		// The fixed segments in any case; ids keep theirs
+		for (const path of ['/EN/Video/Vid-Synth-01', '/Video/Vid-Synth-01', '/en/Video?VID=Vid-Synth-01']) assert.deepEqual(parseCsamUrl(site + path), { kind: 'page', page: 'video', id: 'Vid-Synth-01' }, path);
+		assert.equal(parseCsamUrl('https://alummahnow.link/V/vid-synth-01')?.kind, 'page');
+		assert.equal((parseCsamUrl('https://scholar.example/EN/Watch/vid-synth-01') as any)?.item, 'video');
+		assert.equal(parseCsamUrl('https://media.alummahnow.net/PUB/vid-synth-01/r1/thumb.jpg')?.kind, 'video_thumbnail');
 		assert.equal(parseCsamUrl(`${site}/en/video/vid-synth-01?vid=vid-synth-01`)?.kind, 'page');
 	});
 
@@ -385,9 +405,15 @@ describe('CSAM URLs (shared-types)', () => {
 			['https://videos.alummahnow.net:8443/en/video/vid-synth-01', 'port'],
 			['http://', 'not_a_url'],
 			['https://videos.alummahnow.net/en/video/%zz', null],
+			['https://user@videos.alummahnow.net/en/video/vid-synth-01', 'not_a_url'],
+			['https://videos.alummahnow.net:pw@videos.alummahnow.net/en/video/vid-synth-01', 'not_a_url'],
+			['vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg', null],
 			['https://scholar.example/en/watch/vid-synth-01', null],
 		];
 		for (const [url, reason] of reasons) assert.equal(csamUrlRefusal(url), reason, url);
+		for (const [url] of reasons.filter(([, r]) => r === 'not_a_url')) assert.equal(parseCsamUrl(url), null, url);
+		assert.equal(parseCsamUrl('https://videos.alummahnow.net/_next/image?url=ftp%3A%2F%2Fimages.alummahnow.net%2Fthumbnails%2Fvid-synth-01%2Fx.jpg')?.kind, 'other');
+		assert.deepEqual(scanCsamUrls('vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg').urls, ['vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg']);
 		const scan = scanCsamUrls('See https://example.com/a.jpg and evil.com/alummahnow.net/video/vid-synth-01, videos.alummahnow.net/en/video/vid-synth-01. e.g. this, 10/24 and and/or');
 		assert.deepEqual(scan.urls, ['videos.alummahnow.net/en/video/vid-synth-01']);
 		assert.deepEqual(scan.others, ['https://example.com/a.jpg', 'evil.com/alummahnow.net/video/vid-synth-01']);
@@ -589,7 +615,7 @@ describe('taking a comment down', () => {
 describe('taking a live stream down', () => {
 	const GUID = 'bunny-guid-01';
 	/** Bunny: a live recording, encoded or not, with one file. */
-	function bunny(state: { exists: boolean; finished: boolean; file: string | null }) {
+	function bunny(state: { exists: boolean; finished: boolean; file: string | null; early?: boolean }) {
 		const base = globalThis.fetch;
 		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
@@ -601,8 +627,8 @@ describe('taking a live stream down', () => {
 				}
 				return state.exists ? Response.json({ guid: GUID, status: state.finished ? 4 : 2, hasOriginal: true, availableResolutions: '720p' }) : new Response(null, { status: 404 });
 			}
-			if (url.includes('.b-cdn.net/') && url.includes(GUID)) {
-				if (!state.file || !state.finished) return new Response(null, { status: 404 });
+			if (new URL(url).hostname === 'vz-synth.b-cdn.net' && url.includes(GUID)) {
+				if (!state.file || !(state.finished || state.early)) return new Response(null, { status: 404 });
 				const bytes = enc(state.file);
 				const range = /bytes=(\d+)-(\d+)/.exec(new Headers(init?.headers).get('Range') ?? '');
 				const [from, to] = range ? [Number(range[1]), Math.min(Number(range[2]), bytes.byteLength - 1)] : [0, bytes.byteLength - 1];
@@ -707,6 +733,134 @@ describe('taking a live stream down', () => {
 		t.env.videos.store.set('livestream:live-synth-01', JSON.stringify({ ...record(t), csamTakedown: { caseId: CASE } }));
 		await finalizeSelfHosted(t.env as never, { id: 'sess-synth-01', stream_id: 'live-synth-01' } as never, { recordVod: false });
 		assert.equal(t.env.LIVE_MEDIA.store.size, 1);
+	});
+
+	it('ending it publishes no recording and starts no review', async () => {
+		const t = setup();
+		(t.env as Record<string, unknown>).LIVE_PUBLIC_HOST = 'live.test';
+		t.env.videos.store.set('livestream:live-synth-01', JSON.stringify({ ...record(t), csamTakedown: { caseId: CASE } }));
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', PLACEHOLDER);
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1)").run();
+		await t.db.prepare("INSERT INTO live_segments (session_id, rendition, seq, uri, duration, bytes, received_at) VALUES ('sess-synth-01', '720', 1, 'seg_1.m4s', 2, 10, 1)").run();
+		const ready: string[] = [];
+		setOnVodReady(async (_env, s) => void ready.push(s.id));
+		await finalizeSelfHosted(t.env as never, { id: 'sess-synth-01', stream_id: 'live-synth-01' } as never, { recordVod: true });
+		setOnVodReady(null);
+		assert.deepEqual([...t.env.LIVE_MEDIA.store.keys()], ['live/sess-synth-01/720/seg_1.m4s']);
+		assert.equal(((await t.db.prepare("SELECT vod_url FROM live_sessions WHERE id = 'sess-synth-01'").bind().first()) as any).vod_url, null);
+		assert.deepEqual(ready, []);
+		const sent: unknown[] = [];
+		Object.assign(t.env, { TRANSCODE_QUEUE: { send: async (m: unknown) => void sent.push(m) }, VIDEO_REVIEW_ALLOWED: 'true' });
+		(t.env as any).global_settings = new MemoryBucket({ [VIDEO_REVIEW_SETTINGS_KEY]: { mode: 'shadow' } });
+		clearVideoReviewSettingsCache();
+		const out = await startLiveVodReview(t.env as never, 'live-synth-01', { id: 'sess-synth-01', vod_url: 'https://live.test/hls/sess-synth-01/vod.m3u8' });
+		clearVideoReviewSettingsCache();
+		assert.deepEqual(out, { started: false, why: 'taken down' });
+		assert.equal(sent.length, 0);
+	});
+
+	it('a recording of many small segments is copied within the reads of a step, and what began is never left behind', async () => {
+		const t = setup();
+		const keys = { current: { key: await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']), version: 1 } } as never;
+		const plan = { name: '06-live-recording-1.mp4', source: { type: 'live' as const, sessionId: 'sess-synth-01', rendition: '720' }, contentType: 'video/mp4' };
+		const segment = new Uint8Array(40_000).fill(7);
+		for (let n = 0; n < 900; n++) t.env.LIVE_MEDIA.store.set(`live/sess-synth-01/720/seg_${n}.m4s`, { bytes: segment, meta: undefined });
+		let reads = 0;
+		const get = t.env.LIVE_MEDIA.get.bind(t.env.LIVE_MEDIA);
+		(t.env.LIVE_MEDIA as any).get = async (key: string, opts: never) => ((reads += 1), get(key, opts));
+		let state: CopyState = { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 };
+		let steps = 0;
+		for (;;) {
+			reads = 0;
+			const step = await copyStep(t.env as never, keys, CASE, plan, state);
+			steps++;
+			assert.ok(reads <= STEP_READS + 5, `${reads} reads`);
+			if (step.status === 'file_done') {
+				assert.equal(step.file!.bytes, 900 * 40_000);
+				break;
+			}
+			state = step.state;
+		}
+		assert.ok(steps > 1);
+		// A failure in the step that began the upload aborts it
+		(t.env.LIVE_MEDIA as any).get = async () => { throw new Error('unavailable'); };
+		(t.env.LIVE_MEDIA as any).head = async () => null;
+		(t.env.LIVE_MEDIA as any).get = async (key: string) => (key.endsWith('.m3u8') ? null : Promise.reject(new Error('unavailable')));
+		await assert.rejects(copyStep(t.env as never, keys, CASE, plan, { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 }), /unavailable/);
+		assert.equal(t.env.CSAM_EVIDENCE.uploads.size, 0);
+		// Segments too small to read even one part of it: a person has to
+		t.env.LIVE_MEDIA.store.clear();
+		(t.env.LIVE_MEDIA as any).get = get;
+		for (let n = 0; n < 700; n++) t.env.LIVE_MEDIA.store.set(`live/sess-synth-01/720/seg_${n}.m4s`, { bytes: new Uint8Array(10), meta: undefined });
+		await assert.rejects(copyStep(t.env as never, keys, CASE, plan, { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 }), /too many to read/);
+		assert.equal(t.env.CSAM_EVIDENCE.uploads.size, 0);
+	});
+
+	it('a copy starts over when its source changed under it', async () => {
+		const t = setup();
+		const keys = { current: { key: await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']), version: 1 } } as never;
+		const plan = { name: '06-live-recording-1.mp4', source: { type: 'live' as const, sessionId: 'sess-synth-01', rendition: '720' }, contentType: 'video/mp4' };
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', 'one');
+		const upload = await t.env.CSAM_EVIDENCE.createMultipartUpload('cases/x');
+		const step = await copyStep(t.env as never, keys, CASE, plan, { file: 0, uploadId: upload.uploadId, size: 2, parts: [{ partNumber: 1, etag: 'e' }], chunk: 1, chunkSha256: ['x'], bytes: 2 });
+		assert.deepEqual(step, { status: 'copying', state: { file: 0, parts: [], chunk: 0, chunkSha256: [], bytes: 0 } });
+		assert.equal(t.env.CSAM_EVIDENCE.uploads.size, 0);
+	});
+
+	it('a file Bunny answers with while it is still encoding is not the recording', async () => {
+		const t = setup();
+		(t.env as Record<string, unknown>).bunny_hostname = 'vz-synth.b-cdn.net';
+		const state = bunny({ exists: true, finished: false, file: `${PLACEHOLDER}-part`, early: true });
+		assert.equal((await start(t, [['sess-synth-02', 'bunny', GUID]])).status, 'failed');
+		assert.equal(state.exists, true);
+		assert.ok(!((await manifestOf(t)).files as Array<{ name: string }>).some((f) => f.name.startsWith('06-')));
+	});
+
+	it('a recording that turns up after the plan, and segments that came in after the copy, are kept before they are removed', async () => {
+		const t = setup();
+		(t.env as Record<string, unknown>).bunny_hostname = 'vz-synth.b-cdn.net';
+		const state = bunny({ exists: false, finished: true, file: `${PLACEHOLDER}-bunny` });
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', 'one|');
+		// The rest arrives while the first copy is written to the store
+		const put = t.env.CSAM_EVIDENCE.createMultipartUpload.bind(t.env.CSAM_EVIDENCE);
+		let late = false;
+		(t.env.CSAM_EVIDENCE as any).createMultipartUpload = async (key: string, opts: never) => {
+			const upload = await put(key, opts);
+			if (late) return upload;
+			late = true;
+			const complete = upload.complete;
+			upload.complete = async (parts: never) => {
+				t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_2.m4s', 'two|');
+				state.exists = true;
+				return complete(parts);
+			};
+			return upload;
+		};
+		const job = await start(t, [['sess-synth-01', 'selfhosted', null], ['sess-synth-02', 'bunny', GUID]]);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		const files = ((await manifestOf(t)).files as Array<{ name: string }>).map((f) => f.name).filter((n) => n.startsWith('06-'));
+		assert.equal(files.length, 3);
+		const texts = await Promise.all(files.map(async (n) => (await t.call('GET', `/cases/${CASE}/files/${n}`)).text()));
+		assert.deepEqual(texts.sort(), [`${PLACEHOLDER}-bunny`, 'one|', 'one|two|'].sort());
+		assert.equal(t.env.LIVE_MEDIA.store.size, 0);
+		assert.equal(state.exists, false);
+	});
+
+	it('what an earlier run removed is forgotten by the next one', async () => {
+		const t = setup();
+		const job = await start(t, [['sess-synth-01', 'selfhosted', null]]);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		const session = (await t.db.prepare("SELECT vod_url, vod_ready_at FROM live_sessions WHERE id = 'sess-synth-01'").bind().first()) as any;
+		assert.deepEqual({ ...session }, { vod_url: null, vod_ready_at: null });
+	});
+
+	it('a long recording is removed in steps', async () => {
+		const t = setup();
+		for (let n = 0; n < 2500; n++) t.env.LIVE_MEDIA.set(`live/sess-synth-01/720/seg_${n}.m4s`, 'x'.repeat(1));
+		const first = await deleteSessionMedia(t.env as never, 'sess-synth-01', 2);
+		assert.deepEqual(first, { pages: 2, done: false });
+		assert.equal(t.env.LIVE_MEDIA.store.size, 500);
+		assert.deepEqual(await deleteSessionMedia(t.env as never, 'sess-synth-01', 2), { pages: 1, done: true });
 	});
 });
 

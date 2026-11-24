@@ -26,6 +26,7 @@ import { banVideosUser } from '../content/userBan';
 import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
 import { dropAudit, writeAudit } from '../content/audit';
 import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany } from './reportMeta';
+import { erasedUserIds } from '../errors-store';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import type { AdminBindings } from '../../base/types';
@@ -61,10 +62,15 @@ export function assertMayDecide(roles: readonly unknown[] | undefined, action: M
   }
 }
 
-/** Who made the item, as its reports keep it (the copy stays when the item goes, never when the person was erased). */
-export async function knownOwner(env: DecisionEnv, type: string, id: string): Promise<string | null> {
-  const row = await env.REPORTS_DB.prepare('SELECT owner_id FROM reports WHERE entity_type = ? AND entity_id = ? AND owner_id IS NOT NULL AND owner_id <> ? LIMIT 1').bind(type, id, DELETED_USER_ID).first<{ owner_id: string }>();
-  return row?.owner_id ?? null;
+/**
+ * Who made an item that is gone, as its reports keep it. Null when they do not all name the same person (an old copy,
+ * a channel that changed hands) or the person's account was erased: nobody can tell who to act on.
+ */
+export async function knownOwner(env: Pick<DecisionEnv, 'REPORTS_DB'>, type: string, id: string): Promise<string | null> {
+  const { results } = await env.REPORTS_DB.prepare('SELECT DISTINCT owner_id FROM reports WHERE entity_type = ? AND entity_id = ? AND owner_id IS NOT NULL LIMIT 2').bind(type, id).all<{ owner_id: string }>();
+  const ownerId = results?.length === 1 ? results[0].owner_id : null;
+  if (!ownerId || ownerId === DELETED_USER_ID) return null;
+  return (await erasedUserIds(env.REPORTS_DB as never, [{ userId: ownerId }])).has(ownerId) ? null : ownerId;
 }
 
 /** The item as api-videos has it now. Null when it could not be read. */
