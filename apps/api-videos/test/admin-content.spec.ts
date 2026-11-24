@@ -721,6 +721,41 @@ describe('channel actions', () => {
 		assert.equal((await call('PATCH', '/channels/ch1', { handle: 'plainname' })).status, 200, 'other handles still change');
 	});
 
+	it('a move takes the channel from its owner at the lock, not from the one read before it', async () => {
+		const { raw, call, jobOf, db } = await setup({ profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') } });
+		const get = raw.profiles.get.bind(raw.profiles);
+		// The request for `receiver` has read the channel; a whole OWNER to OTHER move runs before it goes on
+		const raced = async (receiver: string) => {
+			let done = false;
+			raw.profiles.get = (async (key: string) => {
+				if (!done && key === receiver) {
+					done = true;
+					assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+				}
+				return get(key);
+			}) as typeof raw.profiles.get;
+			const answer = await call('POST', '/channels/ch1/transfer', { newOwnerId: receiver });
+			raw.profiles.get = get as typeof raw.profiles.get;
+			return answer;
+		};
+		const job = await jobOf(await raced('usr_third'));
+		assert.deepEqual([job.status, job.params.previousOwnerId, job.result.anomalies], ['succeeded', OTHER, 0]);
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, 'usr_third');
+		assert.deepEqual([OWNER, OTHER, 'usr_third'].map((id) => JSON.parse(raw.profiles.store.get(id)!).channels), [[], [], ['ch1']]);
+		// Back to the first owner, who then receives nothing new: the race made them the owner already
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OWNER }))).status, 'succeeded');
+		const channels = raw.channels.get.bind(raw.channels);
+		let reads = 0;
+		raw.channels.get = (async (...args: Parameters<typeof channels>) => {
+			if (args[0] === 'ch1' && db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get() && reads++ === 0) raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), userId: OTHER }));
+			return channels(...args);
+		}) as typeof raw.channels.get;
+		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		raw.channels.get = channels as typeof raw.channels.get;
+		assert.deepEqual([refused.status, refused.body.code], [409, 'already_owner']);
+		assert.equal(db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get(), undefined, 'the lock is released');
+	});
+
 	it('the daily re-verify moves a record that went back to the previous owner, quietly, for 48 hours (CC-1c)', async () => {
 		const { raw, env, call, jobOf, db, flush } = await setup();
 		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
