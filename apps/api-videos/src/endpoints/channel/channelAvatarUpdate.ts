@@ -5,6 +5,7 @@ import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
+import { withoutMoveMark } from '../../lib/channelMoveData';
 import { Channel } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
@@ -101,7 +102,7 @@ const handleAvatarUpdate = async (c: AppContext) => {
         }
         Object.assign(channel, saved.video);
 
-        return c.json(channel, 200);
+        return c.json(withoutMoveMark(channel), 200);
     } catch (error) {
         rethrowBusy(error);
         return c.json(

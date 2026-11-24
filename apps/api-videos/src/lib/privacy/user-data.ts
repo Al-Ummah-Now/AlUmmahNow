@@ -67,7 +67,7 @@ import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin
 import { eraseChannelComments, eraseCommentsOfChannel } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
-import { exportMoveOffers, forgetMoveOffers, stopMoveOffers } from '../channelMoveData';
+import { eraseMoveOffers, exportMoveOffers, withoutMoveMark } from '../channelMoveData';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -606,7 +606,7 @@ export async function collectUserData(
 								full = true;
 								return;
 							}
-							const { subscriptions, ...rest } = channel;
+							const { subscriptions, ...rest } = withoutMoveMark(channel);
 							out.channels.push({ ...rest, subscribersCount: Array.isArray(subscriptions) ? subscriptions.length : 0 });
 							const sections = asBucket(env.channel_sections);
 							for (const sectionKey of await allKeys(sections, `${channelId}/`, ctx.budget)) {
@@ -1212,26 +1212,26 @@ export async function eraseUserData(
 		return footprintTargets(db!, userId, 'post');
 	};
 
-	// Channel move offers (search migration 0121): open ones close, a move that hasn't changed hands stops, and the
-	// id leaves the rest (lib/channelMoveData.ts). Before the channels, so none changes hands while the run erases
-	// them: what a move made the user's until then is theirs, so the run's beginning counts from here. And again
-	// before the profile, for an offer made or accepted meanwhile: a channel that came that way starts the run over.
-	// Phases of their own: the last one can't resume part way, so what is added there raises what one pass must fit.
+	// Channel move offers (search migration 0121, lib/channelMoveData.ts): open ones close, a move that hasn't changed
+	// hands stops, and the id leaves the rest. Before the channels, so none changes hands while the run erases them:
+	// what a move made the user's until then is theirs, so the run's beginning counts from here. And again after the
+	// profile, when no accept can pass the receiver check any more: a channel that came meanwhile starts the run over.
+	// Phases of their own: the profile's can't resume part way, so what is added there raises what one pass must fit.
 	const moveOffers = (first: boolean): Phase => async (ctx) => {
 		if (!db) return;
-		const offers = { SEARCH_DB: db as unknown as D1Database, channels: env.channels };
-		const { closed, received } = await stopMoveOffers(offers, userId, (n) => ctx.budget.spend(n));
+		const { closed, received, flippedAt } = await eraseMoveOffers({ SEARCH_DB: db as unknown as D1Database, channels: env.channels }, userId, DELETED_USER_ID, { afterProfile: !first, spend: (n) => ctx.budget.spend(n) });
 		if (closed > 0) bump(summary.deleted, 'channelMoveOffers', closed);
 		const cp = ctx.checkpoint;
-		if (!first && received) {
-			// Over from the top; the first phase forgets the offer then, so a pass that dies here finds it again
-			Object.assign(cp, { p: -1, o: [], more: undefined });
-			return;
+		// After the flip of any move found here, whichever worker's clock wrote it
+		if (first) cp.t = Math.max(Date.now(), flippedAt) + 1;
+		// Over from the top; the first phase forgets the offer then, so a pass that dies here finds it again
+		else if (received) Object.assign(cp, { p: -1, o: [], more: undefined });
+		else if (env.NOTIFICATIONS_DB) {
+			// A move that finished its records as the profile went may have brought the channel's subscriptions (runTransfer)
+			ctx.budget.spend();
+			const removed = await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId);
+			if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
 		}
-		ctx.budget.spend();
-		await forgetMoveOffers(offers.SEARCH_DB, userId, DELETED_USER_ID);
-		// The next moment: a flip in this one was an offer's, found above
-		if (first) cp.t = Date.now() + 1;
 	};
 
 	const phases: Phase[] = [
@@ -1466,8 +1466,7 @@ export async function eraseUserData(
 			}
 		},
 
-		moveOffers(false),
-		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile last
+		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile
 		async (ctx) => {
 			if (env.NOTIFICATIONS_DB) {
 				ctx.budget.spend();
@@ -1534,6 +1533,7 @@ export async function eraseUserData(
 				await eraseImageOwners(db as never, userId);
 			}
 		},
+		moveOffers(false),
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, env, { purpose: 'erase', userId, version: ERASE_STATE_VERSION });

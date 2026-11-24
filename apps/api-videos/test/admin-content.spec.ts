@@ -41,14 +41,19 @@ import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { LiveStreamStart } from '../src/endpoints/live/liveSession';
-import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers } from '../src/lib/admin/service';
+import { backoffSeconds, handleAdminJobBatch, retryJob, type JobMessage } from '../src/lib/admin/jobs';
+import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers, TRANSFER_LOCK_SQL } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 import { AuthDb } from './auth-db';
-import { exportMoveOffers, forgetMoveOffers, RUNNING_OFFERS_SQL, stopMoveOffers } from '../src/lib/channelMoveData';
-import { eraseUserData } from '../src/lib/privacy/user-data';
+import { eraseMoveOffers, exportMoveOffers, RUNNING_OFFERS_SQL } from '../src/lib/channelMoveData';
+import { collectUserData, eraseUserData } from '../src/lib/privacy/user-data';
+import { toPublicChannels } from '../src/lib/public-views';
+import { ChannelOwnerFetch } from '../src/endpoints/channel/channelOwnerFetch';
+import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
+import handleChannelAvatarUpdate from '../src/endpoints/channel/channelAvatarUpdate';
+import handleChannelCoverUpdate from '../src/endpoints/channel/channelCoverUpdate';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, stopMoveOffer } from '../src/lib/channelMoves';
 import { createSqliteD1 } from './sqlite-d1';
@@ -1611,12 +1616,10 @@ describe('channel actions', () => {
 		const sdb = (env as { SEARCH_DB: D1Database }).SEARCH_DB;
 		assert.deepEqual((await exportMoveOffers(sdb, OTHER)).map((o) => [o.direction, o.channelId, o.otherUserId, o.status]).sort(), [['received', 'ch1', OWNER, 'declined'], ['received', 'ch1', OWNER, 'offered']]);
 		assert.equal((await exportMoveOffers(sdb, OWNER))[0].direction, 'sent');
-		assert.deepEqual(await stopMoveOffers(env as never, OTHER), { closed: 1, received: false });
-		await forgetMoveOffers(sdb, OTHER, 'deleted');
+		assert.deepEqual(await eraseMoveOffers(env as never, OTHER, 'deleted'), { closed: 1, received: false, flippedAt: 0 });
 		const rows = (db.db.prepare('SELECT from_user_id, to_user_id, status FROM channel_move_offers ORDER BY status').all() as any[]).map((r) => ({ ...r }));
 		assert.deepEqual(rows, [{ from_user_id: OWNER, to_user_id: 'deleted', status: 'cancelled' }, { from_user_id: OWNER, to_user_id: 'deleted', status: 'declined' }]);
-		assert.deepEqual(await stopMoveOffers(env as never, OWNER), { closed: 0, received: false });
-		await forgetMoveOffers(sdb, OWNER, 'deleted');
+		assert.deepEqual(await eraseMoveOffers(env as never, OWNER, 'deleted', { afterProfile: true }), { closed: 0, received: false, flippedAt: 0 });
 		assert.equal((db.db.prepare('SELECT COUNT(*) AS n FROM channel_move_offers WHERE from_user_id = ?').get(OWNER) as { n: number }).n, 0);
 	});
 
@@ -1753,7 +1756,12 @@ describe('channel actions', () => {
 			['the job was made, the accept has not finished', { answers: false, flipped: false }],
 			['the accept finished, the job has not run', { answers: true, flipped: false }],
 			['the job runs, before the channel changes hands', { answers: true, flipped: false }],
+			['the job checked the channel, and has not changed its owner', { answers: true, flipped: false }],
+			['the channel changed hands, the accept has not finished', { answers: true, flipped: true }],
 			['the job failed before the channel changed hands', { answers: true, flipped: false }],
+			['the job failed before the channel changed hands, and an admin retries it', { answers: true, flipped: false }],
+			['the job was made but not queued, the accept has not finished', { answers: false, flipped: false }],
+			['the accept finished, then Auth is down', { answers: true, flipped: false }],
 			['the channel changed hands, the job is not done', { answers: true, flipped: true }],
 			['the move is done', { answers: true, flipped: true }],
 		];
@@ -1788,6 +1796,7 @@ describe('channel actions', () => {
 						if (point === 'the accept claimed the offer') await erase();
 						if (point === 'under the lock, before the offer is confirmed' && locked() && !draining) await erase();
 						if (point === 'the job runs, before the channel changes hands' && draining) await erase();
+						if (point === 'the job checked the channel, and has not changed its owner' && draining && ++jobReads === 2) await erase();
 					}
 					return channelsGet(...args);
 				}) as typeof raw.channels.get;
@@ -1796,6 +1805,7 @@ describe('channel actions', () => {
 					if (!busy && point === 'the channel changed hands, the job is not done' && args[0] === 'ch1' && JSON.parse(String(args[1])).userId === OTHER) await erase();
 					return written;
 				}) as typeof raw.channels.put;
+				let jobReads = 0;
 				let receiverReads = 0;
 				raw.profiles.get = (async (...args: Parameters<typeof profilesGet>) => {
 					if (!busy && point === 'before the move lock' && args[0] === OTHER && ++receiverReads === 1) await erase();
@@ -1809,12 +1819,22 @@ describe('channel actions', () => {
 					return { bind: (...args: unknown[]) => ({ first: async () => { const row = await (statement as any).bind(...args).first(); await erase(); return row; } }) };
 				}) as typeof db.prepare;
 				jobs.send = (async (...args: Parameters<typeof send>) => {
+					if (!busy && point === 'the job was made but not queued, the accept has not finished') {
+						await erase();
+						throw new Error('queue down');
+					}
 					await send(...args);
 					if (!busy && point === 'the job was made, the accept has not finished') await erase();
+					if (!busy && point === 'the channel changed hands, the accept has not finished') {
+						await jobs.drain(env);
+						await erase();
+					}
 				}) as typeof jobs.send;
 
 				const answer = await acceptMoveOffer(env as never, offer.id, OTHER).then(() => 'moved', (e: MoveError) => e.code);
-				if (point === 'the accept finished, the job has not run') await erase();
+				if (point === 'the accept finished, the job has not run' || point === 'the accept finished, then Auth is down') await erase();
+				// A stopped move never ends as a failed job: it stops before anything that can fail
+				if (point === 'the accept finished, then Auth is down') raw.AUTH_DB.fail = true;
 				if (point.startsWith('the job failed')) {
 					raw.AUTH_DB.fail = true;
 					for (let i = 0; i < 10 && jobs.pending.length; i++) {
@@ -1824,9 +1844,11 @@ describe('channel actions', () => {
 					assert.equal((db.db.prepare(`SELECT status FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { status: string }).status, 'failed');
 					raw.AUTH_DB.fail = false;
 					await erase();
-					const job = db.db.prepare(`SELECT id FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { id: string };
-					const { retryJob } = await import('../src/lib/admin/jobs');
-					await retryJob(env as never, job.id);
+					assert.equal(locked(), false, 'the lock goes with the move, not with an admin');
+					if (point.endsWith('an admin retries it')) {
+						const job = db.db.prepare(`SELECT id FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { id: string };
+						await retryJob(env as never, job.id);
+					}
 				}
 				draining = true;
 				for (let i = 0; i < 10 && jobs.pending.length; i++) {
@@ -1834,6 +1856,7 @@ describe('channel actions', () => {
 					await jobs.drain(env);
 				}
 				if (point === 'the move is done') await erase();
+				raw.AUTH_DB.fail = false;
 				await flush();
 				for (const [bucket, fns] of [[raw.channels, { get: channelsGet, put: channelsPut }], [raw.profiles, { get: profilesGet }], [db, { prepare }], [jobs, { send }]] as const) Object.assign(bucket, fns);
 
@@ -1851,7 +1874,11 @@ describe('channel actions', () => {
 				if (ch) assert.ok(!(ch.members ?? []).some((m: any) => m.userId === gone), 'no role left');
 				const row = db.db.prepare('SELECT status, from_user_id, to_user_id FROM channel_move_offers WHERE id = ?').get(offer.id) as any;
 				assert.deepEqual([row.status, row.from_user_id === gone || row.to_user_id === gone], [flipped ? 'moved' : 'cancelled', false]);
-				assert.equal(locked(), false, 'no lock is left');
+				// A lock may stay when the accept's worker never queued its job, and it holds nothing
+				assert.equal(await openTransferJob(env as never, 'ch1'), null, 'nothing holds the channel');
+				if (!point.includes('not queued')) assert.equal(locked(), false, 'no lock is left');
+				const job = db.db.prepare(`SELECT status FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { status: string } | undefined;
+				if (point.endsWith('Auth is down')) assert.equal(job!.status, 'succeeded');
 				// The cooldown counts only a move that happened
 				if (ch && !flipped) {
 					raw.channels.store.set('ch1', JSON.stringify({ ...ch, members: [{ userId: 'usr_new', role: 'admin', addedBy: OWNER, addedAt: '2026' }] }));
@@ -1866,6 +1893,292 @@ describe('channel actions', () => {
 			});
 		}
 	}
+
+	/**
+	 * An offer made and accepted while the erasure runs, in the moments between its own steps: at no
+	 * point does an erased account end up with a channel, whatever the accept and its job do when.
+	 */
+	const windows = {
+		receiver: ['before its first look forgets the offers', 'before its profile goes', 'before its last look forgets the offers'],
+		sender: ['before its first look forgets the offers'],
+	} as const;
+	const progress = ['claimed, and stalls before it is confirmed', 'confirmed, and stalls before its job is made', 'finished, and its job runs after the erasure', 'finished, and its job runs at once'] as const;
+	for (const erased of ['receiver', 'sender'] as const) {
+		for (const at of windows[erased]) {
+			for (const how of progress) {
+				it(`the ${erased}'s erasure, ${at}: an accept is ${how} (CC-6 review)`, async () => {
+					const { raw, env, db, jobs, flush } = await setup({
+						profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+						channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+					});
+					const gone = erased === 'receiver' ? OTHER : OWNER;
+					const batch = db.batch.bind(db);
+					const prepare = db.prepare.bind(db);
+					const remove = raw.profiles.delete.bind(raw.profiles);
+					let looks = 0;
+					let started = false;
+					let resume = () => {};
+					let accepting: Promise<string> | undefined;
+					const run = async () => {
+						if (started) return;
+						started = true;
+						const stored = JSON.parse(raw.channels.store.get('ch1')!);
+						raw.channels.store.set('ch1', JSON.stringify({ ...stored, members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }));
+						const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+						const stalls = how.includes('stalls');
+						let reached = () => {};
+						const stalled = new Promise<void>((resolve) => { reached = resolve; });
+						const go = new Promise<void>((resolve) => { resume = resolve; });
+						db.prepare = ((sql: string) => {
+							const statement = prepare(sql);
+							if (!stalls || sql !== 'SELECT * FROM channel_move_offers WHERE id = ?' || !db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get()) return statement;
+							db.prepare = prepare as typeof db.prepare;
+							return { bind: (...args: unknown[]) => ({ first: async () => {
+								const row = how.startsWith('confirmed') ? await (statement as any).bind(...args).first() : null;
+								reached();
+								await go;
+								return row ?? (await (statement as any).bind(...args).first());
+							} }) };
+						}) as typeof db.prepare;
+						accepting = acceptMoveOffer(env as never, offer.id, OTHER).then(() => 'moved', (e: MoveError) => e.code);
+						await (stalls ? Promise.race([stalled, accepting]) : accepting);
+						if (how.endsWith('at once')) await jobs.drain(env);
+					};
+					db.batch = (async (statements: any[]) => {
+						if (statements.some((s) => /UPDATE channel_move_offers SET to_user_id/.test(s.sql))) {
+							looks++;
+							const last = !raw.profiles.store.has(gone);
+							if ((at.startsWith('before its first') && looks === 1) || (at.startsWith('before its last') && last)) {
+								// An accept reads the receiver's profile first: one this late read it before it went
+								const put = last && !started ? JSON.stringify(profile(gone)) : null;
+								if (put) raw.profiles.store.set(gone, put);
+								await run();
+								if (put) raw.profiles.store.delete(gone);
+							}
+						}
+						return batch(statements);
+					}) as typeof db.batch;
+					raw.profiles.delete = (async (key: string) => {
+						if (at === 'before its profile goes' && [key].flat().includes(gone)) await run();
+						return remove(key);
+					}) as typeof remove;
+
+					const summary = await eraseUserData(env as never, gone, new OperationBudget(5000));
+					assert.equal(summary.complete, true);
+					assert.equal(started, true);
+					resume();
+					const answer = await accepting;
+					for (let i = 0; i < 10 && jobs.pending.length; i++) {
+						jobs.pending.forEach((p: any) => { delete p.delaySeconds; });
+						await jobs.drain(env);
+					}
+					await flush();
+					Object.assign(db, { batch, prepare });
+
+					const ch = raw.channels.store.has('ch1') ? JSON.parse(raw.channels.store.get('ch1')!) : null;
+					const flipped = how.endsWith('at once');
+					assert.equal(ch?.userId ?? null, erased === 'receiver' ? (flipped ? null : OWNER) : flipped ? OTHER : null, 'the channel');
+					if (how.includes('stalls')) assert.notEqual(answer, 'moved');
+					assert.equal(raw.profiles.store.has(gone), false);
+					const row = db.db.prepare('SELECT status, from_user_id, to_user_id FROM channel_move_offers').get() as any;
+					assert.deepEqual([row.status, row.from_user_id === gone || row.to_user_id === gone], [flipped ? 'moved' : row.status === 'refused' ? 'refused' : 'cancelled', false]);
+					assert.equal(await openTransferJob(env as never, 'ch1'), null);
+					assert.equal(db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get(), undefined, 'no lock is left');
+					assert.equal((db.db.prepare(`SELECT COUNT(*) AS n FROM admin_jobs WHERE status = 'failed'`).get() as { n: number }).n, 0);
+				});
+			}
+		}
+	}
+
+	it('an erasure leaves locks that are not the stopped move’s (CC-6 review)', async () => {
+		const { raw, env, db, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		// A later request is starting (its lock names no job yet)
+		const later = new Date(Date.now() + 60_000).toISOString();
+		db.db.prepare(`UPDATE channel_transfer_locks SET job_id = '', created_at = ? WHERE channel_id = 'ch1'`).run(later);
+		await eraseUserData(env as never, OTHER, new OperationBudget(5000));
+		for (let i = 0; i < 3; i++) await jobs.drain(env);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
+		assert.deepEqual({ ...(db.db.prepare('SELECT job_id, created_at FROM channel_transfer_locks').get() as object) }, { job_id: '', created_at: later });
+		db.db.prepare(`DELETE FROM channel_transfer_locks`).run();
+		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${TRANSFER_LOCK_SQL}`).all('x') as Array<{ detail: string }>).map((r) => r.detail);
+		assert.equal(plan.some((d) => /^SCAN/.test(d)), false, plan.join(' | '));
+	});
+
+	it('a lock update that fails once the move is queued does not answer as a refusal (CC-6 review)', async () => {
+		const { raw, env, db, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		const prepare = db.prepare.bind(db);
+		db.prepare = ((sql: string) => {
+			if (/^UPDATE channel_transfer_locks/.test(sql)) throw new Error('D1 down');
+			return prepare(sql);
+		}) as typeof db.prepare;
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		db.prepare = prepare as typeof db.prepare;
+		assert.equal((db.db.prepare('SELECT status FROM channel_move_offers').get() as { status: string }).status, 'moved');
+		await jobs.drain(env);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		assert.equal(db.db.prepare('SELECT 1 FROM channel_transfer_locks').get(), undefined);
+	});
+
+	it('a move names itself only on its own lock, and only while its offer is between the same two people (CC-6 review)', async () => {
+		const { raw, env, db, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const make = () => createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		const prepare = db.prepare.bind(db);
+		// The row no longer names the receiver, then the sender, by the time it is confirmed
+		for (const side of ['to_user_id', 'from_user_id']) {
+			const offer = await make();
+			let changed = false;
+			db.prepare = ((sql: string) => {
+				if (!changed && /^INSERT OR IGNORE INTO channel_transfer_locks/.test(sql)) {
+					changed = true;
+					db.db.prepare(`UPDATE channel_move_offers SET ${side} = 'deleted-user' WHERE id = ?`).run(offer.id);
+				}
+				return prepare(sql);
+			}) as typeof db.prepare;
+			await assert.rejects(acceptMoveOffer(env as never, offer.id, OTHER), (e: unknown) => e instanceof MoveError && e.code === 'offer_not_found');
+			db.prepare = prepare as typeof db.prepare;
+			assert.equal((db.db.prepare('SELECT COUNT(*) AS n FROM admin_jobs').get() as { n: number }).n, 0);
+			assert.equal(db.db.prepare('SELECT 1 FROM channel_transfer_locks').get(), undefined);
+			db.db.prepare(`UPDATE channel_move_offers SET status = 'refused' WHERE id = ?`).run(offer.id);
+		}
+		// The job ran and another request is starting before the first names its lock
+		const offer = await make();
+		const later = new Date(Date.now() + 60_000).toISOString();
+		const send = jobs.send.bind(jobs);
+		jobs.send = (async (...args: Parameters<typeof send>) => {
+			await send(...args);
+			await jobs.drain(env);
+			db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(later);
+		}) as typeof jobs.send;
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		assert.deepEqual({ ...(db.db.prepare('SELECT job_id, created_at FROM channel_transfer_locks').get() as object) }, { job_id: '', created_at: later });
+	});
+
+	for (const when of ['reads the subscriptions', 'moved them as the profile goes'] as const) {
+		it(`a receiver erased while the job ${when}: no subscription names them afterwards (CC-6 review)`, async () => {
+			const { raw, env, jobs, flush } = await setup({
+				profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+				channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+			});
+			const notifications = createSqliteD1();
+			(env as Record<string, unknown>).NOTIFICATIONS_DB = notifications;
+			const subscribe = (userId: string) => notifications.raw.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES ('chX', 'ch1', ?, 's1', 1)`).run(userId);
+			const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+			await acceptMoveOffer(env as never, offer.id, OTHER);
+			const erase = () => eraseUserData(env as never, OTHER, new OperationBudget(5000));
+			let ran = false;
+			if (when === 'reads the subscriptions') {
+				subscribe(OWNER);
+				const prepare = notifications.prepare.bind(notifications);
+				notifications.prepare = ((sql: string) => {
+					const statement = prepare(sql) as any;
+					if (ran || !/^SELECT channel_id FROM channel_subscriptions WHERE user_id = \? AND subscriber_channel_id/.test(sql)) return statement;
+					return { bind: (...args: unknown[]) => ({ all: async () => {
+						const found = await statement.bind(...args).all();
+						ran = true;
+						await erase();
+						// The channel's rows as the job read them, whatever the erasure did with them
+						notifications.raw.prepare(`DELETE FROM channel_subscriptions`).run();
+						subscribe(OWNER);
+						return found;
+					} }) };
+				}) as typeof prepare;
+				for (let i = 0; i < 5 && jobs.pending.length; i++) {
+					jobs.pending.forEach((p: any) => { delete p.delaySeconds; });
+					await jobs.drain(env);
+				}
+			} else {
+				await jobs.drain(env);
+				const remove = raw.profiles.delete.bind(raw.profiles);
+				raw.profiles.delete = (async (key: string) => {
+					if (!ran) subscribe(OTHER);
+					ran = true;
+					return remove(key);
+				}) as typeof remove;
+				await erase();
+			}
+			await flush();
+			assert.equal(ran, true);
+			assert.equal((notifications.raw.prepare('SELECT COUNT(*) AS n FROM channel_subscriptions WHERE user_id = ?').get(OTHER) as { n: number }).n, 0);
+			assert.equal(await openTransferJob(env as never, 'ch1'), null);
+		});
+	}
+
+	it('an owner’s move never takes a channel from anyone but that owner (CC-6 review)', async () => {
+		const { raw, env, db, jobs } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), userId: 'usr_third' }));
+		await jobs.drain(env);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, 'usr_third');
+		assert.equal(db.db.prepare('SELECT 1 FROM channel_transfer_locks').get(), undefined);
+	});
+
+	it('a stopped move does not hide the move before it from the daily re-verify (CC-6 review)', async () => {
+		const { raw, env, db, call, jobOf, jobs } = await setup({ profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') } });
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), members: [{ userId: 'usr_third', role: 'admin', addedBy: OTHER, addedAt: '2026' }] }));
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OTHER, toUserId: 'usr_third', typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		await acceptMoveOffer(env as never, offer.id, 'usr_third');
+		await eraseUserData(env as never, 'usr_third', new OperationBudget(5000));
+		db.db.prepare(`UPDATE admin_jobs SET updated_at = '2099-01-01T00:00:00.000Z' WHERE status = 'queued'`).run();
+		await jobs.drain(env);
+		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
+	});
+
+	it('the stop mark is in no view and no export (CC-6 review)', async () => {
+		const { raw, env } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }) },
+			channels: { ch1: channel('ch1', { moveStopped: 'offer-1' }) },
+		});
+		const stored = JSON.parse(raw.channels.store.get('ch1')!);
+		const [view] = await toPublicChannels(undefined as never, [stored], env as never);
+		const exported = await collectUserData(env as never, OWNER, new OperationBudget(5000));
+		assert.equal(exported.channels.length, 1);
+		const app = buildApp((router) => {
+			router.get('/channels/:id/owner', ChannelOwnerFetch);
+			router.put('/channels/:id', ChannelUpdate);
+		}, { userId: OWNER });
+		app.put('/channels/:id/avatar', handleChannelAvatarUpdate as never);
+		app.put('/channels/:id/cover', handleChannelCoverUpdate as never);
+		const answers: Record<string, string> = { public: JSON.stringify(view), export: JSON.stringify(exported) };
+		const image = () => {
+			const form = new FormData();
+			form.set('photo', new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }));
+			return { body: form };
+		};
+		const realFetch = globalThis.fetch;
+		globalThis.fetch = (async () => new Response('{}', { status: 201 })) as typeof fetch;
+		try {
+			const full = Object.assign(env as object, { image_storage_key: 'k', ZONE: 'zone' });
+			for (const [method, path, init] of [['GET', '/owner', {}], ['PUT', '', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'New name' }) }], ['PUT', '/avatar', image()], ['PUT', '/cover', image()]] as const) {
+				const res = await app.request(`/channels/ch1${path}`, { method, ...init }, full as never);
+				answers[`${method} ${path}`] = `${res.status} ${await res.text()}`;
+				assert.equal(res.status, 200, `${method} ${path}: ${answers[`${method} ${path}`]}`);
+			}
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+		for (const [what, text] of Object.entries(answers)) assert.equal(text.includes('moveStopped'), false, what);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).moveStopped, 'offer-1', 'the record keeps it');
+	});
 
 	it('a stopped move stays stopped when its job runs again after another move took the mark (CC-6 review)', async () => {
 		const { raw, env, db, jobs, flush } = await setup({

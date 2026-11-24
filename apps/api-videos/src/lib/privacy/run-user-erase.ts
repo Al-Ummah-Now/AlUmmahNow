@@ -41,7 +41,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, type BucketLike } from './scan';
 import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-data';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
-import { forgetMoveOffers, stopMoveOffers } from '../channelMoveData';
+import { eraseMoveOffers } from '../channelMoveData';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
 import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin/legacy-restore';
@@ -123,9 +123,11 @@ export async function eraseRunUserData(
 		if (by > 0) result.deleted[key] = (result.deleted[key] ?? 0) + by;
 	};
 	// Its moves stop before its channels are listed (lib/channelMoveData.ts)
-	await stopMoveOffers({ SEARCH_DB: db, channels: env.channels }, userId);
+	const moves = { SEARCH_DB: db, channels: env.channels };
+	await eraseMoveOffers(moves, userId, DELETED_USER_ID);
 	const { channels, videos } = await runUserOwnedIds(db, userId);
 	const community = asBucket(env.community_posts);
+	let again = false;
 
 	const steps: Array<() => Promise<void>> = [
 		async () => bump('watchHistory', await deleteKeys(asBucket(env.watch_history), await prefixKeys(asBucket(env.watch_history), `${userId}:`, budget), budget)),
@@ -237,9 +239,6 @@ export async function eraseRunUserData(
 			budget.spend(2);
 			await cancelInvitesOfUser(db, userId);
 			await anonymizeTeamActivity(db, userId, DELETED_USER_ID);
-			// Channel move offers (search migration 0121), as the full erasure does
-			budget.spend();
-			await forgetMoveOffers(db, userId, DELETED_USER_ID);
 			// Their live sessions' tier owner (search migration 0060), as the full erasure does
 			budget.spend();
 			await eraseLiveSessionOwner(db, userId);
@@ -271,11 +270,18 @@ export async function eraseRunUserData(
 			budget.spend();
 			await eraseImageOwners(db, userId);
 		},
+		// Again after the profile, as the full erasure does: a channel a move brought meanwhile starts the steps over
+		async () => {
+			const { received } = await eraseMoveOffers(moves, userId, DELETED_USER_ID, { afterProfile: true, spend: (n) => budget.spend(n) });
+			again = received;
+		},
 	];
 
 	try {
 		while (result.step < steps.length) {
 			await steps[result.step]();
+			// The next pass lists its channels again
+			if (again) return { ...result, step: 0 };
 			result.step++;
 		}
 		result.complete = true;
