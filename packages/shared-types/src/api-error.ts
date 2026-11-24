@@ -201,6 +201,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   content_flags_conflict: { action: 'none', en: 'A video can’t be both age-restricted and made for kids.', ar: 'لا يمكن أن يكون المرئي مقيّدًا بالعمر ومخصصًا للأطفال معًا.' },
   age_restricted_locked: { action: 'none', en: 'Our team set this age restriction, so it can’t be removed here.', ar: 'وضع فريقنا هذا التقييد العمري، لذلك لا يمكن إزالته من هنا.' },
   query_too_short: { action: 'none', en: 'Type at least two characters to search.', ar: 'اكتب حرفين على الأقل للبحث.' },
+  age_rules_changed: { action: 'none', en: 'Someone else changed the ages a moment ago. Reload to see them.', ar: 'غيّر شخص آخر الأعمار قبل لحظات. أعد التحميل لرؤيتها.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },

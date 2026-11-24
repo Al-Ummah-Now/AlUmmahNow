@@ -270,12 +270,12 @@ describe('creatorSupport precondition (wiki AUN-MEMBERS §9.7)', () => {
 });
 
 describe('ageRules precondition (wiki E20 §5.2)', () => {
-  it('is refused everywhere until the age checks exist (E20-B2)', async () => {
+  it('a fresh database is refused in every environment, with the first failing check', async () => {
     const { checkCanTurnOn } = await import('../src/lib/feature-preconditions');
-    const search = searchD1();
     for (const ENVIRONMENT of ['dev', 'qa', 'stage', 'production']) {
-      const r = await checkCanTurnOn({ SEARCH_DB: search, ENVIRONMENT } as never, 'ageRules');
-      assert.ok(!r.ok && r.reasonKey === 'age_rules_not_ready' && r.reason.en.length > 0 && r.reason.ar.length > 0);
+      // No Issuer: nothing is fetched
+      const r = await checkCanTurnOn({ SEARCH_DB: searchD1(), ENVIRONMENT } as never, 'ageRules');
+      assert.ok(!r.ok && r.reasonKey === 'age_rules_birth_date_off' && r.reason.en.length > 0 && r.reason.ar.length > 0);
     }
   });
 });

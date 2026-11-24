@@ -8,6 +8,7 @@
  */
 import { supportCanTurnOnHook, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
+import { ageRulesChecks } from './age-rules-checks';
 
 /** `reasonKey` is the check's stable reason code, passed to clients so they can branch on it. */
 export type PreconditionResult = { ok: true } | { ok: false; reason: FeatureText; reasonKey?: string };
@@ -25,12 +26,11 @@ const creatorSupport: FeaturePrecondition = async (env) => {
   return { ok: false, reason: refused.reason, reasonKey: refused.reasonKey };
 };
 
-/** Age rules (wiki E20 §5.2): refused until E20-B2 brings the real checks (Auth's date of birth, the numbers, account events). */
-const ageRules: FeaturePrecondition = async () => ({
-  ok: false,
-  reason: { en: 'The date of birth page and account events aren’t ready in this environment yet.', ar: 'صفحة تاريخ الميلاد وأحداث الحساب ليست جاهزة في هذه البيئة بعد.' },
-  reasonKey: 'age_rules_not_ready',
-});
+/** Age rules (wiki E20 §5.2): Auth's date of birth, the saved ages and working account events; the first that fails refuses. */
+const ageRules: FeaturePrecondition = async (env) => {
+  const failed = (await ageRulesChecks(env)).find((check) => !check.ok);
+  return failed ? { ok: false, reason: failed.reason, reasonKey: failed.reasonKey } : { ok: true };
+};
 
 /** Checks by switch. */
 export const FEATURE_PRECONDITIONS: Partial<Record<FeatureKey, FeaturePrecondition>> = { creatorSupport, ageRules };
