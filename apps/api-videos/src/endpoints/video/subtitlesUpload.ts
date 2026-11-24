@@ -13,6 +13,7 @@ import { storeSubtitleTrack, type StoreSubtitleResult } from '../../lib/subtitle
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 export class SubtitlesUpload extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -174,6 +175,14 @@ export class SubtitlesUpload extends AuthenticatedRoute {
           403
         );
       }
+
+      // S-N: revoke BEFORE storing subtitle track in R2 so D1 revocation fails closed
+      await revokeKidsVideoOnEdit(c.env, {
+        videoId,
+        actorId: userId,
+        reason: 'subtitle_upload',
+        force: true,
+      });
 
       // The WebVTT file, its original, the metadata and the video record (lib/subtitles/store.ts)
       const saved = await storeSubtitleTrack({ videos: c.env.videos, subtitles: subtitleBucket }, video, {

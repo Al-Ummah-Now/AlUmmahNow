@@ -19,11 +19,13 @@ function makeDb() {
     );
     CREATE TABLE kids_catalog_items (
       id TEXT PRIMARY KEY,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
       status TEXT NOT NULL
     );
-    CREATE TABLE kids_learning_paths (
+    CREATE TABLE search_videos (
       id TEXT PRIMARY KEY,
-      status TEXT NOT NULL
+      visible INTEGER NOT NULL DEFAULT 1
     );
   `);
   const exec = (sql: string, args: unknown[]) => {
@@ -42,7 +44,7 @@ function makeDb() {
   return { raw, prepare: (sql: string) => stmt(sql) };
 }
 
-test('kidsReadiness requires all decisions, legal approval, and at least one catalog or path item', () => {
+test('kidsReadiness requires all decisions, legal approval, and at least one catalog item', () => {
   const allDecided = Object.fromEntries(KIDS_DECISION_IDS.map((id) => [id, 'Option A']));
   assert.deepEqual(
     kidsReadiness({ decisions: null, legalApproved: false, hasCatalogContent: false }),
@@ -93,7 +95,15 @@ test('kidsCanTurnOn passes only when decisions, legal sign-off, and approved con
   assert.equal(noCatalog.ok, false);
   if (!noCatalog.ok) assert.equal(noCatalog.reasonKey, 'no_catalog_content');
 
-  db.raw.prepare('INSERT INTO kids_catalog_items (id, status) VALUES (?, ?)').run('item_1', 'approved');
+  // Channel or hidden video does not satisfy no_catalog_content
+  db.raw.prepare("INSERT INTO kids_catalog_items (id, target_type, target_id, status) VALUES ('ch_item', 'channel', 'ch_1', 'approved')").run();
+  db.raw.prepare("INSERT INTO search_videos (id, visible) VALUES ('vid_hidden', 0), ('vid_live', 1)").run();
+  db.raw.prepare("INSERT INTO kids_catalog_items (id, target_type, target_id, status) VALUES ('item_hidden', 'video', 'vid_hidden', 'approved')").run();
+  const stillNoCatalog = await kidsCanTurnOnHook({ SEARCH_DB: db as never });
+  assert.equal(stillNoCatalog.ok, false);
+  if (!stillNoCatalog.ok) assert.equal(stillNoCatalog.reasonKey, 'no_catalog_content');
+
+  db.raw.prepare("INSERT INTO kids_catalog_items (id, target_type, target_id, status) VALUES ('item_1', 'video', 'vid_live', 'approved')").run();
   const ready = await kidsCanTurnOnHook({ SEARCH_DB: db as never });
   assert.deepEqual(ready, { ok: true });
 });

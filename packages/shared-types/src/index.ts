@@ -184,3 +184,4 @@ export * from './feature-switch-store';
 export * from './feature-routes';
 export * from './workflows';
 export * from './kids-readiness';
+export * from './kids';

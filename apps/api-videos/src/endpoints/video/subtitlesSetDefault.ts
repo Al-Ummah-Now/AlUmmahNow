@@ -15,6 +15,7 @@ import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -74,6 +75,14 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
       if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
         return c.json({ success: false, error: 'You do not have permission to modify this video' }, 403);
       }
+
+      // S-N: revoke BEFORE mutating default subtitle track in R2
+      await revokeKidsVideoOnEdit(c.env, {
+        videoId,
+        actorId: userId,
+        reason: 'subtitle_set_default',
+        force: true,
+      });
 
       // Conditional writes (SCALABILITY-AUDIT AV-3)
       const metadataKey = `${videoId}/metadata.json`;

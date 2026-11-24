@@ -69,6 +69,8 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/support/batches/:id/approve', what: 'Approve a payout batch' },
   { method: 'POST', path: '/api/support/batches/:id/stop', what: 'Stop a payout batch' },
   { method: 'PUT', path: '/api/support/countries/:country', what: 'Change a creator-support country rule' },
+  // Ummah Kids (wiki E20): recording owner decisions and legal counsel sign-off
+  { method: 'PUT', path: '/api/kids/policy', what: 'Record Ummah Kids owner decisions and legal sign-off' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {

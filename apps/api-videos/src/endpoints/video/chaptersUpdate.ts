@@ -16,6 +16,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 export class VideoChaptersUpdate extends AuthenticatedRoute {
   schema = addAuthToSchema({
@@ -149,6 +150,14 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
           400
         );
       }
+
+      // S-N: revoke BEFORE updating chapters in R2 so D1 revocation fails closed
+      await revokeKidsVideoOnEdit(c.env, {
+        videoId,
+        actorId: userId,
+        reason: 'chapters_update',
+        force: true,
+      });
 
       // Update chapters
       const chapterData = {

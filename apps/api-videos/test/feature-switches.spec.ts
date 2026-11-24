@@ -225,6 +225,6 @@ describe('featureGate', () => {
 		const en = buildErrorEnvelope({ success: false, code: 'kids_mode_restricted' }, { status: 403, lang: 'en' });
 		const ar = buildErrorEnvelope({ success: false, code: 'kids_mode_restricted' }, { status: 403, lang: 'ar' });
 		assert.equal(en.message, 'This isn’t available in Ummah Kids.');
-		assert.equal(ar.message, 'هذا غير متاح في أمة الصغار.');
+		assert.equal(ar.message, 'هذا غير متاح في أطفال الأمة.');
 	});
 });

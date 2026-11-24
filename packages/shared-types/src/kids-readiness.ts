@@ -3,12 +3,13 @@
  * D1 (`admin-api` Features page write path and `api-videos`).
  *
  * Reads only keyed / indexed lookups (`kids_policy_settings`, `kids_catalog_items`,
- * `kids_learning_paths`). Fails closed: missing `SEARCH_DB`, missing tables (before E20-2
+ * `search_videos`). Fails closed: missing `SEARCH_DB`, missing tables (before E20-2
  * migration), or any unreadable query returns not ready.
  */
 import type { SearchDb } from './search/store';
 import type { FeatureText } from './feature-registry';
 
+/** Active owner decisions required before turning `ummahKids` on (`KIDS-D9` was dropped for E21 consistency). */
 export const KIDS_DECISION_IDS = [
   'KIDS-D1',
   'KIDS-D2',
@@ -18,7 +19,6 @@ export const KIDS_DECISION_IDS = [
   'KIDS-D6',
   'KIDS-D7',
   'KIDS-D8',
-  'KIDS-D9',
   'KIDS-D10',
   'KIDS-D11',
   'KIDS-D12',
@@ -49,8 +49,8 @@ export const KIDS_TURN_ON_REASONS: Readonly<Record<KidsTurnOnBlocker, FeatureTex
     ar: 'يجب تسجيل الموافقة القانونية قبل تشغيل أطفال الأمة.',
   },
   no_catalog_content: {
-    en: 'Approve at least one item or publish a learning path in the Kids catalog first.',
-    ar: 'اعتمد عنصرًا واحدًا أو انشر مسار تعلّم في دليل الأطفال أولًا.',
+    en: 'Approve at least one visible video in the Kids catalog first.',
+    ar: 'اعتمد مرئيًا ظاهرًا واحدًا في دليل الأطفال أولًا.',
   },
 });
 
@@ -80,13 +80,20 @@ export async function kidsCanTurnOn(env: KidsReadinessEnv): Promise<KidsReadines
   const db = env.SEARCH_DB;
   if (!db) return { ready: false, blockers: [...ALL_BLOCKERS], openDecisions: [...KIDS_DECISION_IDS] };
   try {
-    const [policyRow, catalogItem, learningPath] = await Promise.all([
+    const [policyRow, catalogItem] = await Promise.all([
       db.prepare("SELECT decisions_json, legal_approved FROM kids_policy_settings WHERE key = 'default'").first<{
         decisions_json: string | null;
         legal_approved: number | null;
       }>(),
-      db.prepare("SELECT 1 AS ok FROM kids_catalog_items WHERE status = 'approved' LIMIT 1").first<{ ok: number }>(),
-      db.prepare("SELECT 1 AS ok FROM kids_learning_paths WHERE status = 'published' LIMIT 1").first<{ ok: number }>(),
+      db
+        .prepare(
+          `SELECT 1 AS ok
+           FROM kids_catalog_items k
+           INNER JOIN search_videos v ON v.id = k.target_id
+           WHERE k.target_type = 'video' AND k.status = 'approved' AND v.visible = 1
+           LIMIT 1`,
+        )
+        .first<{ ok: number }>(),
     ]);
     let decisions: Record<string, unknown> | null = null;
     try {
@@ -98,7 +105,7 @@ export async function kidsCanTurnOn(env: KidsReadinessEnv): Promise<KidsReadines
     return kidsReadiness({
       decisions,
       legalApproved: Number(policyRow?.legal_approved ?? 0) === 1,
-      hasCatalogContent: !!catalogItem || !!learningPath,
+      hasCatalogContent: !!catalogItem,
     });
   } catch {
     return { ready: false, blockers: [...ALL_BLOCKERS], openDecisions: [...KIDS_DECISION_IDS] };

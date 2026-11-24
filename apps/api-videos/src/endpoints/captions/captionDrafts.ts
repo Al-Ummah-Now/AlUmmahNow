@@ -27,6 +27,7 @@ import { deleteDraft, fillServedTrack, listDrafts, publishDraft, readDraft, read
 import { subtitleDownload, type SubtitleDownloadFormat } from '../../lib/captions/download';
 import { editionFor } from '../../lib/quran/translations';
 import { listClaims, queueClaim, reviewTranscriptKey, transcriptAvailable } from '../../lib/captions/claim';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 const Segment = z.union([
 	z.object({ type: z.literal('speech'), text: z.string() }),
@@ -249,6 +250,12 @@ export class CaptionDraftPublish extends AuthenticatedRoute {
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		if (!validLanguage(params.language)) return c.json({ success: false, error: 'draft_not_found' }, 404);
+		await revokeKidsVideoOnEdit(c.env, {
+			videoId: params.videoId,
+			actorId: userId,
+			reason: 'caption_publish',
+			force: true,
+		});
 		const outcome = await publishDraft(c.env.subtitles, {
 			videoId: params.videoId,
 			language: params.language,

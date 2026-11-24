@@ -247,14 +247,14 @@ app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, 
 // Videos
 app.get('/videos', async (c) => ok(c, await listVideos(c.env, parse(VideoQuery, c.req.query()) as never, waitUntilOf(c))));
 app.get('/videos/:id', async (c) => ok(c, await admin.videoDetail(c.env, c.req.param('id'))));
-app.patch('/videos/:id', async (c) => ok(c, await admin.updateVideo(c.env, c.req.param('id'), parse(VideoEdit, await body(c)))));
+app.patch('/videos/:id', async (c) => ok(c, await admin.updateVideo(c.env, c.req.param('id'), parse(VideoEdit, await body(c)), actor(c))));
 app.post('/videos/:id/thumbnail', async (c) => {
 	const form = await c.req.parseBody();
 	const file = checkImage(form.photo);
 	await checkThumbnailShapeFor(c.env as never, c.req.param('id'), file);
 	// In the video's own folder, so its purge erases it (lib/admin/purgeCopies.ts)
 	const url = await storeImage(c.env, file, 'thumbnail', videoThumbnailFolder(c.req.param('id')).slice(0, -1));
-	return ok(c, await admin.updateVideo(c.env, c.req.param('id'), { thumbnailUrl: url }));
+	return ok(c, await admin.updateVideo(c.env, c.req.param('id'), { thumbnailUrl: url }, actor(c)));
 });
 app.post('/videos/:id/move', async (c) => {
 	const { channelId } = parse(z.object({ channelId: z.string().min(1).max(200) }), await body(c));

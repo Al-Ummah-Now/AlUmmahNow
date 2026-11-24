@@ -19,6 +19,7 @@ import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { queueReviewScan } from '../../lib/review/scan';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { markPublished } from "../../lib/published";
 import { applyVisibilityInput } from '../../lib/visibility';
@@ -200,6 +201,17 @@ export class VideoUpdate extends AuthenticatedRoute {
 			videoId: id,
 			userId: effectiveUserId,
 			fields: Object.keys(videoUpdateInput),
+		});
+
+		// S-N: revoke BEFORE mutating Bunny Stream or R2 so any D1 error fails closed
+		const previewNext = applyUpdate(existingVideo);
+		await revokeKidsVideoOnEdit(c.env, {
+			videoId: id,
+			actorId: effectiveUserId,
+			reason: thumbnailType !== undefined ? 'thumbnail_update' : 'video_update',
+			previous: existingVideo,
+			next: previewNext,
+			force: thumbnailType !== undefined,
 		});
 
 		// Update the video in Bunny Stream if title changed

@@ -26,8 +26,8 @@ const creatorSupport: FeaturePrecondition = async (env) => {
 };
 
 /**
- * Ummah Kids (wiki E20 §6, §11): on only once all owner decisions are resolved, legal counsel
- * sign-off is recorded, and at least one approved catalog item or published learning path exists.
+ * Ummah Kids (wiki E20 §6, §11): on only once active owner decisions are resolved, legal counsel
+ * sign-off is recorded, and at least one approved, visible video exists in the Kids catalog.
  */
 const ummahKids: FeaturePrecondition = async (env) => {
   const r = await kidsCanTurnOnHook({ SEARCH_DB: env.SEARCH_DB as never });

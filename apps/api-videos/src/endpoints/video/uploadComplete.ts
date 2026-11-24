@@ -10,6 +10,7 @@ import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { startProcessingLoop } from '../../lib/processing/loop';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 export class UploadCompleteEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -119,6 +120,14 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				}, 403);
 			}
 			authorizedOwner = video.userId;
+
+			// S-N: revoke BEFORE updating video media state so D1 failures fail closed
+			await revokeKidsVideoOnEdit(c.env, {
+				videoId,
+				actorId: userId,
+				reason: 'media_upload_complete',
+				force: true,
+			});
 
 			// Update video status to processing with a conditional write on the
 			// fresh video (SCALABILITY-AUDIT AV-3). A video that processing already

@@ -103,6 +103,7 @@ import { handleInvalidateCategories, handleListCategories, videoCategoriesMiddle
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
+import { handleStudioKidsReviewRequest, kidsRouter } from "./routers/kids.router";
 import { handleUserFeatures } from "./endpoints/creator/features";
 import { socialInternalRouter, socialRouter } from "./routers/social.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
@@ -302,6 +303,7 @@ for (const path of ['/api/search', '/api/videos/search']) {
 }
 // Viewer-side translated titles (public): direct callers share the search budget per IP or user
 app.use('/api/videos/:id/translated-metadata', edgeRateLimit('SEARCH_LIMITER', 'videos.translated_metadata', ['GET']));
+app.use('/api/kids/*', edgeRateLimit('SEARCH_LIMITER', 'videos.kids', ['GET', 'POST', 'PUT']));
 
 // Channel creation is by invitation too: a creator tier, within its channel limit
 app.use('/api/channels', channelCreateGate);
@@ -438,6 +440,9 @@ app.get('/api/youtube-import/oauth/callback', async (c) => {
 app.route('/internal/billing', billingInternalRouter as never);
 // Creator support admin (lib/support/*): job retries; admin-api checks support:manage
 app.route('/internal/support', supportInternalRouter as never);
+// Ummah Kids (wiki E20): curated allowlist catalog, curated Kids playlists, and Studio review submission
+app.route('/api/kids', kidsRouter as never);
+app.post('/api/studio/channels/:channelId/kids-review', authMiddleware, handleStudioKidsReviewRequest);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS

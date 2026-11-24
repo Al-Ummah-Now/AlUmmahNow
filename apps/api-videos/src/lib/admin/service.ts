@@ -84,6 +84,7 @@ import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { markPublished, type PublishableState } from '../published';
 import { runContainStep, type ContainEnv } from '../csam/contain';
 import { backfillImageOwnersStep } from '../csam/imageOwners';
+import { revokeKidsVideoOnEdit, type KidsRevokeEnv } from '../kids/revoke-on-edit';
 
 type Row = Record<string, any>;
 
@@ -810,8 +811,23 @@ export interface VideoEdit {
 	thumbnailUrl?: string;
 }
 
-export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoEdit): Promise<Row> {
-	const saved = await repo(env.videos).updateObject(id, (fresh) => {
+export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoEdit, actorId = 'admin'): Promise<Row> {
+	const r2 = repo(env.videos);
+	const current = await r2.getObject(id);
+	if (!current) throw new AdminError(404, 'video_not_found');
+	const hasSensitiveChange =
+		(edit.title !== undefined && edit.title !== current.title) ||
+		(edit.description !== undefined && edit.description !== current.description) ||
+		edit.thumbnailUrl !== undefined;
+	if (hasSensitiveChange) {
+		await revokeKidsVideoOnEdit(env as KidsRevokeEnv, {
+			videoId: id,
+			actorId,
+			reason: edit.thumbnailUrl !== undefined ? 'admin_thumbnail_upload' : 'admin_video_update',
+			force: true,
+		});
+	}
+	const saved = await r2.updateObject(id, (fresh) => {
 		if (edit.title !== undefined) {
 			fresh.title = edit.title;
 			if (fresh.titleLocalized && typeof fresh.titleLocalized === 'object') delete fresh.titleLocalized;

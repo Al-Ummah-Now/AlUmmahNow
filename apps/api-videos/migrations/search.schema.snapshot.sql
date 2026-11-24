@@ -59,6 +59,7 @@
 --   apps/api-videos/migrations/search/0080_channel_quran_translations_index.sql
 --   apps/api-videos/migrations/search/0081_import_sources.sql
 --   apps/api-videos/migrations/search/0082_import_takeout.sql
+--   apps/api-videos/migrations/search/0083_ummah_kids.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -112,6 +113,10 @@ CREATE TABLE import_takeout_files (id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
+CREATE TABLE kids_catalog_audit (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, action TEXT NOT NULL, actor_id TEXT NOT NULL, details_json TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE kids_catalog_items (id TEXT PRIMARY KEY, target_type TEXT NOT NULL CHECK (target_type IN ('video', 'channel', 'playlist')), target_id TEXT NOT NULL, age_band TEXT NOT NULL CHECK (age_band IN ('3-6', '7-12', 'all')), status TEXT NOT NULL CHECK (status IN ('approved', 'revoked', 'deleted')), pre_delete_status TEXT CHECK (pre_delete_status IN ('approved', 'revoked')), topics_json TEXT NOT NULL DEFAULT '[]', position INTEGER NOT NULL DEFAULT 0, approved_by TEXT NOT NULL, approved_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_after TEXT, updated_at TEXT NOT NULL, UNIQUE (target_type, target_id)) WITHOUT ROWID;
+CREATE TABLE kids_policy_settings (key TEXT PRIMARY KEY, decisions_json TEXT NOT NULL DEFAULT '{}', staff_channel_ids_json TEXT NOT NULL DEFAULT '[]', legal_approved INTEGER NOT NULL DEFAULT 0 CHECK (legal_approved IN (0, 1)), legal_approved_by TEXT, legal_approved_at TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE kids_review_requests (id TEXT PRIMARY KEY, target_type TEXT NOT NULL CHECK (target_type IN ('video', 'channel', 'playlist')), target_id TEXT NOT NULL, channel_id TEXT NOT NULL, requested_by TEXT NOT NULL, suggested_age_band TEXT NOT NULL CHECK (suggested_age_band IN ('3-6', '7-12', 'all')), notes TEXT, status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'declined')), decision_reason TEXT, decided_by TEXT, decided_at TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_channel_overrides (channel_id TEXT PRIMARY KEY, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), note TEXT, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE live_events (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, provider TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL, value REAL, detail TEXT) WITHOUT ROWID;
@@ -128,6 +133,7 @@ CREATE TABLE media_provider_health (provider TEXT NOT NULL, minute TEXT NOT NULL
 CREATE TABLE media_provider_refs (provider TEXT NOT NULL, ref TEXT NOT NULL, video_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, ref));
 CREATE TABLE media_r2_verified (video_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, rev TEXT NOT NULL, library_id INTEGER, channel_id TEXT, verified_at TEXT NOT NULL, checks TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE metadata_translations (video_id TEXT NOT NULL, lang TEXT NOT NULL, source_hash TEXT NOT NULL, title TEXT NOT NULL, description TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (video_id, lang)) WITHOUT ROWID;
+CREATE TABLE parental_controls (user_id TEXT PRIMARY KEY, pin_hash TEXT, pin_salt TEXT, pin_updated_at TEXT, pin_failed_attempts INTEGER NOT NULL DEFAULT 0, pin_locked_until TEXT, pin_hard_locked INTEGER NOT NULL DEFAULT 0 CHECK (pin_hard_locked IN (0, 1)), active_age_band TEXT NOT NULL DEFAULT '7-12' CHECK (active_age_band IN ('3-6', '7-12')), daily_limit_minutes INTEGER, bedtime_start TEXT, bedtime_end TEXT, bedtime_timezone TEXT, prayer_pause_enabled INTEGER NOT NULL DEFAULT 0 CHECK (prayer_pause_enabled IN (0, 1)), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE playback_fallback_daily (day TEXT NOT NULL, requested TEXT NOT NULL, actual TEXT NOT NULL, reason TEXT NOT NULL, server_fallbacks INTEGER NOT NULL DEFAULT 0, qoe_sessions INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, requested, actual, reason));
 CREATE TABLE playback_qoe_daily (day TEXT NOT NULL, provider TEXT NOT NULL, device TEXT NOT NULL, country TEXT NOT NULL, sessions INTEGER NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, startup_ms_sum INTEGER NOT NULL DEFAULT 0, rebuffers INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, kbps_watch_s REAL NOT NULL DEFAULT 0, peak_kbps_sum INTEGER NOT NULL DEFAULT 0, switches INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, fallbacks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, provider, device, country));
 CREATE TABLE privacy_footprint_sigs (kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
@@ -311,6 +317,16 @@ CREATE INDEX idx_import_takeout_files_item ON import_takeout_files (source_id, i
 CREATE INDEX idx_import_takeout_files_state ON import_takeout_files (source_id, state);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
+CREATE INDEX idx_kids_audit_actor_id ON kids_catalog_audit (actor_id);
+CREATE INDEX idx_kids_audit_entity ON kids_catalog_audit (entity_type, entity_id, created_at);
+CREATE INDEX idx_kids_catalog_admin ON kids_catalog_items (status, position, updated_at DESC, id);
+CREATE INDEX idx_kids_catalog_browse ON kids_catalog_items (status, target_type, age_band, position, approved_at DESC, id);
+CREATE INDEX idx_kids_catalog_deleted ON kids_catalog_items (status, purge_after);
+CREATE INDEX idx_kids_review_channel ON kids_review_requests (channel_id, created_at);
+CREATE INDEX idx_kids_review_decided_by ON kids_review_requests (decided_by);
+CREATE UNIQUE INDEX idx_kids_review_pending_target ON kids_review_requests (target_type, target_id) WHERE status = 'pending';
+CREATE INDEX idx_kids_review_requested_by ON kids_review_requests (requested_by);
+CREATE INDEX idx_kids_review_status ON kids_review_requests (status, created_at, id);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);
 CREATE INDEX idx_live_events_session ON live_events (session_id, at);
 CREATE INDEX idx_live_qoe_at ON live_qoe (at, provider);

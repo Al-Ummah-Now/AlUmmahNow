@@ -60,7 +60,11 @@ export type ContentKind =
   /** Admin Tools imports (wiki TOOLS-ADMIN): a channel made for an import (id = channel id), later batches and items. */
   | 'import'
   /** A social import source (id = source id; wiki TOOLS-ADMIN TA-9): added, changed, synced, removed. */
-  | 'import-source';
+  | 'import-source'
+  /** Ummah Kids (wiki E20): curated catalog allowlist, creator review decisions, and policy readiness. */
+  | 'kids-catalog'
+  | 'kids-review'
+  | 'kids-policy';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

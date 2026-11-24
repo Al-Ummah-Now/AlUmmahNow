@@ -13,6 +13,7 @@ import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { VideoObject, SubtitleMetadata } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 export class SubtitlesDelete extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -125,6 +126,14 @@ export class SubtitlesDelete extends AuthenticatedRoute {
           403
         );
       }
+
+      // S-N: revoke BEFORE deleting subtitle files/metadata in R2
+      await revokeKidsVideoOnEdit(c.env, {
+        videoId,
+        actorId: userId,
+        reason: 'subtitle_delete',
+        force: true,
+      });
 
       // Remove the track with a conditional write (SCALABILITY-AUDIT AV-3). An
       // emptied metadata file is kept (with no tracks), not deleted, so a

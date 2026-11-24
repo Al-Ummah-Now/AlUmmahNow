@@ -56,6 +56,7 @@ import trashRouter from './routers/trash.router';
 import csamRouter from './routers/csam.router';
 import billingRouter from './routers/billing.router';
 import supportRouter from './routers/support.router';
+import kidsRouter, { purgeExpiredKidsCatalogItems } from './routers/kids.router';
 import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from './lib/csam';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
@@ -331,6 +332,8 @@ app.route('/api/csam', csamRouter as never);
 app.route('/api/billing', billingRouter as never);
 // Creator support (wiki AUN-MEMBERS): finance list, decisions, payout batches, countries; money actions only for the finance list
 app.route('/api/support', supportRouter as never);
+// Ummah Kids (wiki E20): curated catalog allowlist, review queue, and policy readiness
+app.route('/api/kids', kidsRouter as never);
 
 // ==========================================
 // HEALTH CHECK
@@ -374,6 +377,11 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
   if (isHourlyTick(controller.scheduledTime)) {
     ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
+    ctx.waitUntil(
+      purgeExpiredKidsCatalogItems(env.SEARCH_DB as never, new Date(controller.scheduledTime))
+        .then(({ purged }) => { if (purged > 0) logger.info('[KidsAdmin] Purged expired Kids catalog rows', { purged }); })
+        .catch((error) => logger.error('[KidsAdmin] Kids catalog purge failed', { error: String(error) })),
+    );
     ctx.waitUntil(
       purgeE2eReports(env.REPORTS_DB as never, env.ENVIRONMENT)
         .then((purged) => { if (purged > 0) logger.info('[Reports] Purged E2E reports', { purged }); })

@@ -22,6 +22,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
 import { editableVideo } from '../captions/captionDrafts';
 import { AudioTrackError, addTrack, completeUpload, deleteTrack, requestProbe, retryTrack, studioTrack, studioView, updateTrack } from '../../lib/audio-tracks/service';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 const languages = AUDIO_TRACK_LANGUAGES.map((l) => l.code) as [string, ...string[]];
 const Track = z.object({
@@ -151,6 +152,7 @@ export class AudioTrackCreate extends AuthenticatedRoute {
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId: params.videoId, actorId: userId, reason: 'audio_track_create', force: true });
 			const { track } = await addTrack(c.env as never, ctxOf(c), { video: access.video as never, userId, roles: rolesOf(c), body: body as never });
 			const uploadUrl = track.source.type === 'upload' ? `/api/videos/${encodeURIComponent(params.videoId)}/audio-tracks/${track.id}/upload` : undefined;
 			return c.json({ success: true, data: { track: studioTrack(track, track.source.type === 'upload' ? 0 : undefined), ...(uploadUrl ? { uploadUrl } : {}) } }, 201);
@@ -182,9 +184,11 @@ export class AudioTrackComplete extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const access = await editableVideo(c, params.videoId, this.getUserId(c));
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId: params.videoId, actorId: userId, reason: 'audio_track_complete', force: true });
 			const track = await completeUpload(c.env as never, ctxOf(c), access.video as never, params.trackId);
 			return c.json({ success: true, data: { track: studioTrack(track) } }, 202);
 		} catch (error) {
@@ -211,9 +215,11 @@ export class AudioTrackRetry extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const access = await editableVideo(c, params.videoId, this.getUserId(c));
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId: params.videoId, actorId: userId, reason: 'audio_track_retry', force: true });
 			const track = await retryTrack(c.env as never, ctxOf(c), access.video as never, params.trackId);
 			return c.json({ success: true, data: { track: studioTrack(track) } }, 202);
 		} catch (error) {
@@ -245,9 +251,11 @@ export class AudioTrackUpdate extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
-		const access = await editableVideo(c, params.videoId, this.getUserId(c));
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId: params.videoId, actorId: userId, reason: 'audio_track_update', force: true });
 			const track: AudioTrack = await updateTrack(c.env as never, ctxOf(c), access.video as never, params.trackId, body);
 			return c.json({ success: true, data: { track: studioTrack(track) } });
 		} catch (error) {
@@ -274,9 +282,11 @@ export class AudioTrackDelete extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const access = await editableVideo(c, params.videoId, this.getUserId(c));
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId: params.videoId, actorId: userId, reason: 'audio_track_delete', force: true });
 			await deleteTrack(c.env as never, ctxOf(c), access.video as never, params.trackId);
 			return c.json({ success: true });
 		} catch (error) {

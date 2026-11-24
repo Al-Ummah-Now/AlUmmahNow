@@ -26,6 +26,7 @@ import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 
 const EXTENSIONS: Record<string, string> = {
@@ -125,6 +126,14 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				return c.json({ success: false, error: "Failed to store thumbnail" }, 500);
 			}
 			const { thumbnailUrl, thumbnailSizes } = stored;
+
+			// S-N: fail closed BEFORE mutating R2 thumbnail if D1 Kids revocation fails
+			await revokeKidsVideoOnEdit(c.env, {
+				videoId: id,
+				actorId: userId,
+				reason: 'thumbnail_upload',
+				force: true,
+			});
 
 			// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
 			const saved = await patchVideo(repository, id, (fresh) => {

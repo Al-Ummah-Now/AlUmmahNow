@@ -98,6 +98,11 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('admin-api', 'POST', '/internal/newsletter/subscribe', 'newsletter'),
   r('admin-api', 'POST', '/internal/newsletter/confirm', 'newsletter', 'handler'),
   r('admin-api', 'POST', '/api/newsletter/issues/:id/send', 'newsletter'),
+  // Ummah Kids (wiki E20): viewer, parent, and creator routes gated by switch; admin setup routes stay open (exempted below)
+  r('api-videos', 'GET', '/api/kids/catalog', 'ummahKids'),
+  r('api-videos', 'GET', '/api/kids/playlists', 'ummahKids'),
+  r('api-videos', 'GET', '/api/kids/playlists/:id', 'ummahKids'),
+  r('api-videos', 'POST', '/api/studio/channels/:channelId/kids-review', 'ummahKids'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -124,12 +129,16 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'api-videos', prefix: '/api/me/support', key: 'creatorSupport' },
   { app: 'admin-api', prefix: '/internal/newsletter', key: 'newsletter' },
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
+  { app: 'admin-api', prefix: '/api/kids', key: 'ummahKids' },
+  { app: 'api-videos', prefix: '/api/kids', key: 'ummahKids' },
+  { app: 'api-videos', prefix: '/api/studio/channels/:channelId/kids-review', key: 'ummahKids' },
 ]);
 
 const FINISH = 'finishes work already started';
 const REMOVE = 'removing or cleaning up always works';
 const READ = 'reads what already exists';
 const SOURCES = 'manages a social import source (super admins); only its sync makes new posts';
+const STAFF_SETUP = 'staff curation and policy readiness must stay reachable while ummahKids is off so preconditions can be satisfied';
 
 export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object.freeze([
   x('api-videos', 'POST', '/api/videos/upload/complete', FINISH),
@@ -229,6 +238,16 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
   x('admin-api', 'DELETE', '/api/newsletter/subscribers/:id', `${REMOVE} (erasing a subscriber)`),
   x('api-videos', 'GET', '/api/me/tier-requests', READ),
   x('api-videos', 'POST', '/api/me/tier-requests/:id/withdraw', REMOVE),
+  x('admin-api', 'GET', '/api/kids/catalog', STAFF_SETUP),
+  x('admin-api', 'POST', '/api/kids/catalog', STAFF_SETUP),
+  x('admin-api', 'PATCH', '/api/kids/catalog/:id', STAFF_SETUP),
+  x('admin-api', 'DELETE', '/api/kids/catalog/:id', STAFF_SETUP),
+  x('admin-api', 'POST', '/api/kids/catalog/:id/restore', STAFF_SETUP),
+  x('admin-api', 'GET', '/api/kids/review-requests', STAFF_SETUP),
+  x('admin-api', 'POST', '/api/kids/review-requests/:id/decide', STAFF_SETUP),
+  x('admin-api', 'GET', '/api/kids/policy', STAFF_SETUP),
+  x('admin-api', 'PUT', '/api/kids/policy', STAFF_SETUP),
+  x('admin-api', 'GET', '/api/kids/staff-playlists', STAFF_SETUP),
 ]);
 
 /**
@@ -242,7 +261,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   listenMode: 'E14-S3 adds the audio playback route and maps it here',
   offlineDownloads: 'E14-S3 adds the download license routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
-  ummahKids: 'E20-2 adds its routes and maps them here',
 });
 
 /** The routes a worker gates in its middleware. */

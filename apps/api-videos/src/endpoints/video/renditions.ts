@@ -16,6 +16,7 @@ import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { editableVideo } from '../captions/captionDrafts';
 import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltOutcome, type WithPrebuilt } from '../../lib/media/prebuiltUploads';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const State = z.object({
@@ -129,8 +130,15 @@ export class RenditionsComplete extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
-		const access = await editable(c, params.videoId, this.getUserId(c));
+		const userId = this.getUserId(c);
+		const access = await editable(c, params.videoId, userId);
 		if ('response' in access) return access.response;
+		await revokeKidsVideoOnEdit(c.env, {
+			videoId: params.videoId,
+			actorId: userId,
+			reason: 'renditions_complete',
+			force: true,
+		});
 		return renditionsReply(c, await completeRenditions(c.env, access.video, params.stagingId));
 	}
 }

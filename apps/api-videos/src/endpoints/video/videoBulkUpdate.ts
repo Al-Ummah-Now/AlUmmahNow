@@ -30,6 +30,7 @@ import {
 import { OPERATION_ID, readUndo, writeUndo, type BulkUndoRecord, type UndoKv } from "../../lib/bulkEditUndo";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { markPublished } from "../../lib/published";
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
 type VideoType = z.infer<typeof BusinessVideo>;
 type PlaylistType = z.infer<typeof BusinessPlaylist>;
@@ -223,6 +224,18 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 					if (playlists.get(id)?.channelId !== current.channelId) return void results.set(videoId, fail(videoId, 'playlist_other_channel'));
 				}
 
+				const preApplied = applyBulkChanges(current, changes, now, perVideo[videoId]);
+				if ('error' in preApplied) return void results.set(videoId, fail(videoId, preApplied.error));
+				if (preApplied.changed) {
+					await revokeKidsVideoOnEdit(env, {
+						videoId,
+						actorId: userId,
+						reason: 'bulk_update',
+						previous: current,
+						next: preApplied.video,
+					});
+				}
+
 				let error: BulkEditError | null = null;
 				let previous: VideoType | null = null;
 				let record: BulkUndoRecord | null = null;
@@ -393,6 +406,17 @@ export class VideoBulkUndo extends AuthenticatedRoute {
 				const current = await repository.getObject(videoId);
 				if (!current || current.isDeleted) return void results.set(videoId, fail(videoId, 'not_found'));
 				if (!(await mayEdit(current))) return void results.set(videoId, fail(videoId, 'forbidden'));
+
+				const preRevert = revertFields(current, record.before, record.after, now);
+				if (preRevert.restored.length > 0) {
+					await revokeKidsVideoOnEdit(env, {
+						videoId,
+						actorId: userId,
+						reason: 'bulk_undo',
+						previous: current,
+						next: preRevert.video,
+					});
+				}
 
 				let kept: string[] = [];
 				let restoredAny = false;

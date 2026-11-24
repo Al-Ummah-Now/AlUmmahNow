@@ -10,8 +10,9 @@ import R2Repository from '../../lib/r2Repo';
 import { canOnVideo } from '../../lib/channelAccess';
 import { logger } from '../../lib/logger';
 import { AudioTrackError, writeChunk } from '../../lib/audio-tracks/service';
+import { revokeKidsVideoOnEdit } from '../../lib/kids/revoke-on-edit';
 
-type Env = { Bindings: { videos: R2Bucket; MEDIA_ORIGINALS?: R2Bucket }; Variables: { auth?: { userId?: string } } };
+type Env = { Bindings: { videos: R2Bucket; MEDIA_ORIGINALS?: R2Bucket; SEARCH_DB?: unknown; APP_CONFIG?: KVNamespace; ENVIRONMENT?: string }; Variables: { auth?: { userId?: string } } };
 
 export function createAudioUploadRouter() {
 	const app = new Hono<Env>();
@@ -28,6 +29,7 @@ export function createAudioUploadRouter() {
 		if (!video) return c.json({ success: false, error: 'video_not_found' }, 404);
 		if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) return c.json({ success: false, error: 'forbidden' }, 403);
 		try {
+			await revokeKidsVideoOnEdit(c.env, { videoId, actorId: userId, reason: 'audio_track_upload', force: true });
 			const stored = await writeChunk(c.env as never, video as never, trackId, offset, length, body);
 			c.header('Upload-Offset', String(stored));
 			return c.json({ success: true, data: { offset: stored } });

@@ -135,8 +135,18 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   not_matched: { action: 'none', en: 'Only a matched file can be uploaded.', ar: 'لا يُرفع إلا ملف تمت مطابقته.' },
   has_file: { action: 'none', en: 'That record already has its video.', ar: 'لذلك السجل مرئي بالفعل.' },
   not_uploading: { action: 'none', en: 'This file isn’t being uploaded.', ar: 'هذا الملف لا يُرفع الآن.' },
-  // Kids isolation (Epic 20 / Epic 22)
-  kids_mode_restricted: { action: 'none', en: 'This isn’t available in Ummah Kids.', ar: 'هذا غير متاح في أمة الصغار.' },
+  // Ummah Kids (wiki E20): catalog, PIN lock, and Kids Mode restrictions (KIDS-D11)
+  kids_mode_restricted: { action: 'none', en: 'This isn’t available in Ummah Kids.', ar: 'هذا غير متاح في أطفال الأمة.' },
+  pin_invalid: { action: 'none', en: 'That PIN isn’t right.', ar: 'رمز القفل غير صحيح.' },
+  pin_locked: { action: 'retry', en: 'Too many wrong PIN attempts. Please wait a little while and try again.', ar: 'محاولات خاطئة كثيرة لرمز القفل. يُرجى الانتظار قليلًا ثم المحاولة مرة أخرى.' },
+  pin_required: { action: 'none', en: 'Enter your parental PIN to continue.', ar: 'أدخل رمز الرقابة الأبوية للمتابعة.' },
+  kids_catalog_not_found: { action: 'none', en: 'This item isn’t in the Kids catalog.', ar: 'هذا العنصر غير موجود في دليل الأطفال.' },
+  kids_catalog_deleted: { action: 'none', en: 'This catalog item is deleted.', ar: 'عنصر الدليل هذا محذوف.' },
+  kids_video_hidden: { action: 'none', en: 'Only visible videos or playlists can be approved for Kids.', ar: 'يمكن اعتماد المرئيات أو قوائم التشغيل المرئية فقط للأطفال.' },
+  kids_staff_playlist_required: { action: 'none', en: 'Playlists must belong to an approved staff editorial channel.', ar: 'يجب أن تنتمي قوائم التشغيل إلى قناة تحريرية معتمدة لفريق العمل.' },
+  kids_review_pending: { action: 'none', en: 'A Kids review request for this item is already pending.', ar: 'يوجد طلب مراجعة للأطفال قيد الانتظار لهذا العنصر بالفعل.' },
+  kids_review_already_decided: { action: 'none', en: 'This Kids review request has already been decided.', ar: 'تم البت في طلب مراجعة الأطفال هذا بالفعل.' },
+  kids_policy_stale: { action: 'retry', en: 'Policy settings were updated in another tab. Refresh and try again.', ar: 'تم تحديث إعدادات السياسة في تبويب آخر. حدّث الصفحة وحاول مرة أخرى.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
