@@ -232,8 +232,8 @@ export function SpendSection({ c, t, f, locale }: { c: OpsCosts; t: Translator; 
       <BudgetMeterBar c={c} t={t} f={f} />
 
       <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t('operations.spend.spent')} value={f.usd(c.budget.mtd)} sub={cap !== null && c.budget.share !== null ? t('operations.spend.share', { percent: f.percent(c.budget.share) }) : t('operations.spend.notSet')} tone={m.tone} testId="ops-spend-mtd" />
-        <Stat label={t('operations.spend.projected')} value={f.usd(c.budget.projected)} sub={cap !== null && c.budget.projectedShare !== null ? t('operations.spend.share', { percent: f.percent(c.budget.projectedShare) }) : t('operations.spend.notSet')} tone={m.projectedTone} testId="ops-spend-projected" />
+        <Stat label={t('operations.spend.spent')} value={f.usd(c.budget.mtd)} sub={cap !== null && c.budget.share !== null ? t('operations.spend.share', { percent: f.percent(c.budget.share) }) : t('operations.spend.spentSub')} tone={m.tone} testId="ops-spend-mtd" />
+        <Stat label={t('operations.spend.projected')} value={f.usd(c.budget.projected)} sub={cap !== null && c.budget.projectedShare !== null ? t('operations.spend.share', { percent: f.percent(c.budget.projectedShare) }) : undefined} tone={m.projectedTone} testId="ops-spend-projected" />
         <Stat
           label={t('operations.spend.idleTitle')}
           value={f.usd(c.idle.monthlyUsd)}
