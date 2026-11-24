@@ -470,10 +470,13 @@ describe('report copies fill', () => {
       await syncReportMeta(t.env as never);
       const guarded = seen.filter((sql) => /erased_users|owner_id = \?/.test(sql));
       assert.ok(guarded.length >= 3);
+      assert.equal(guarded.filter((sql) => /owner_id = \?$/.test(sql.trim())).length, 1, 'the mark is read once for the page');
       for (const sql of guarded) {
         const n = sql.includes('?1') ? 12 : (sql.match(/\?/g) ?? []).length;
         const plan = ((await prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...Array(n).fill('[]')).all()).results as any[]).map((r) => r.detail);
         assert.ok(plan.length > 0, sql);
+        assert.ok(!plan.some((d) => /idx_reports_owner/.test(d)), plan.join(' | '));
+        if (/owner_id = \?$/.test(sql.trim())) assert.ok(plan.some((d) => /^SEARCH r USING INDEX idx_reports_entity \(entity_type=\? AND entity_id=\?\)/.test(d)), plan.join(' | '));
         assert.ok(!plan.some((d) => /^SCAN (reports|erased_users)/.test(d)), plan.join(' | '));
       }
     });

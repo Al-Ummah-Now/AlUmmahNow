@@ -45,11 +45,15 @@ const AUTHORED: ReadonlySet<string> = new Set(['comment', 'live_chat']);
 export async function withoutErased(db: D1Database, lookup: Lookup): Promise<Lookup> {
   const ids = [...[...lookup.items.values()].map((i) => i.ownerId), ...[...lookup.users.values()].filter((u) => u.found).map((u) => u.id)];
   const erased = await erasedUserIds(db, ids.map((userId) => ({ userId: userId ?? undefined })));
-  const authored = [...lookup.items.values()].filter((i) => i.found && AUTHORED.has(i.type)).map((i) => i.id);
+  const authored = [...lookup.items.values()].filter((i) => i.found && AUTHORED.has(i.type)).map((i) => [i.type, i.id]);
   const marked = new Set<string>();
   if (authored.length) {
     const { results } = await db
-      .prepare("SELECT DISTINCT entity_type, entity_id FROM reports WHERE entity_id IN (SELECT value FROM json_each(?)) AND owner_id = ? AND entity_type IN ('comment', 'live_chat')")
+      // From the items to their reports. +owner_id: never from the owner index, whose tombstone part only grows
+      .prepare(
+        `SELECT DISTINCT r.entity_type, r.entity_id FROM json_each(?) j CROSS JOIN reports r INDEXED BY idx_reports_entity
+         ON r.entity_type = json_extract(j.value, '$[0]') AND r.entity_id = json_extract(j.value, '$[1]') WHERE +r.owner_id = ?`,
+      )
       .bind(JSON.stringify(authored), DELETED_USER_ID)
       .all<{ entity_type: string; entity_id: string }>();
     for (const r of results ?? []) marked.add(itemKey(r.entity_type, r.entity_id));
