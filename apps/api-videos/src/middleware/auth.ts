@@ -18,7 +18,7 @@ interface AuthPayload {
   aud?: string; // Audience
   iss?: string; // Issuer
   roles?: string[]; // RBAC role names from the auth server (e.g. "Super Admin")
-  /** When the person last signed in (the token's auth_time, else iat): sensitive actions want a recent one */
+  /** When the person last signed in (the token's auth_time, kept across refreshes; 0 without one): sensitive actions want a recent one */
   authTime?: number;
 }
 
@@ -125,7 +125,8 @@ async function validateJWTWithSignature(token: string, env?: any, route?: string
         aud: authConfig.JWT.AUDIENCE,  // ✅ Now using dynamic config
         iss: authConfig.JWT.ISSUER,    // ✅ Now using dynamic config
         roles: Array.isArray(openAuthPayload.roles) ? openAuthPayload.roles.map(String) : [],
-        authTime: claims.auth_time ?? claims.iat ?? 0,
+        // Never iat: a refresh renews it without a sign-in
+        authTime: claims.auth_time ?? 0,
       };
 
       // Additional validation with environment config

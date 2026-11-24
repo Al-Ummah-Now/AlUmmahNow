@@ -16,6 +16,7 @@ import { logger } from './logger';
 import { channelParams } from './channelName';
 import { enqueueNotification } from './notifications';
 import { readBan } from './admin/bans';
+import { channelReportUnderReview, type ReportStatusEnv } from './channelReportStatus';
 import { AdminError, channelHasSupport, channelIsLive, hasChannelRoom, openTransferJob, transferChannel, type AdminServiceEnv } from './admin/service';
 
 /** An offer stays open this long. */
@@ -50,7 +51,7 @@ export class MoveError extends Error {
 }
 
 type Row = Record<string, any>;
-type Env = AdminServiceEnv & { SEARCH_DB?: D1Database; profiles: R2Bucket; channels: R2Bucket };
+type Env = AdminServiceEnv & ReportStatusEnv & { SEARCH_DB?: D1Database; profiles: R2Bucket; channels: R2Bucket };
 
 const db = (env: Env): D1Database => {
 	if (!env.SEARCH_DB) throw new MoveError(503, 'unavailable', 'Channel moves are not available right now');
@@ -114,6 +115,10 @@ async function checkMovable(env: Env, channel: Row, toUserId: string): Promise<v
 	if (await channelHasSupport(env, channel.id)) throw new MoveError(409, 'channel_has_support', 'A channel that accepts payments needs the team’s approval to move');
 	if (await readBan(db(env) as never, toUserId)) throw new MoveError(409, 'new_owner_banned');
 	if (!(await hasChannelRoom(db(env), toUserId))) throw new MoveError(409, 'new_owner_channel_limit');
+	// Spec §5: not while the team is reviewing a report about the channel; unknown is refused too
+	const underReview = await channelReportUnderReview(env, channel.id);
+	if (underReview === null) throw new MoveError(503, 'unavailable', 'Channel moves are not available right now');
+	if (underReview) throw new MoveError(409, 'channel_under_review', 'A report about this channel is under review');
 }
 
 /**
@@ -132,6 +137,8 @@ export async function createMoveOffer(
 	const want = String(channel.handle ?? channel.id).toLowerCase();
 	if (input.typed.trim().replace(/^@/, '').toLowerCase() !== want) throw new MoveError(400, 'confirm_mismatch', 'Type the channel’s @handle to confirm');
 	await checkMovable(env, channel, input.toUserId);
+	// An accept that never finished no longer blocks a new offer; before the 30-day check, because one that did start its move counts
+	await settleStaleAccept(env, channel.id, now);
 	const since = iso(now - MOVE_COOLDOWN_DAYS * 86_400_000);
 	const recent = await db(env)
 		.prepare(`SELECT 1 AS moved FROM channel_move_offers WHERE channel_id = ? AND status = 'moved' AND responded_at > ? LIMIT 1`)
@@ -151,13 +158,8 @@ export async function createMoveOffer(
 		responded_at: null,
 		updated_at: iso(now),
 	};
-	// An open offer that has expired no longer blocks a new one, nor does an accept that never
-	// finished (its worker died between the claim and the move; the move job's lock still guards)
+	// An open offer that has expired no longer blocks a new one
 	await db(env).prepare(`UPDATE channel_move_offers SET status = 'expired', updated_at = ? WHERE channel_id = ? AND status = 'offered' AND expires_at <= ?`).bind(iso(now), channel.id, iso(now)).run();
-	await db(env)
-		.prepare(`UPDATE channel_move_offers SET status = 'refused', updated_at = ? WHERE channel_id = ? AND status = 'accepting' AND updated_at <= ?`)
-		.bind(iso(now), channel.id, iso(now - STALE_ACCEPT_MS))
-		.run();
 	const inserted = await db(env)
 		.prepare(
 			`INSERT OR IGNORE INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, options_json, status, job_id, created_at, expires_at, responded_at, updated_at)
@@ -170,6 +172,29 @@ export async function createMoveOffer(
 	await notify(env, input.toUserId, 'channelMoveOffered', { ...channelParams('channel', channel as never), owner: nameOf(owner, input.ownerId) }, channel.id, `move-offer:${offer.id}`);
 	logger.info('[ChannelMoves] Offer made', { channelId: channel.id, offerId: offer.id });
 	return offer;
+}
+
+/**
+ * An accept whose worker died after the claim: moved when its move job was created (so the 30-day
+ * limit still counts it), else refused.
+ */
+async function settleStaleAccept(env: Env, channelId: string, now: number): Promise<void> {
+	const stale = await db(env)
+		.prepare(`SELECT * FROM channel_move_offers WHERE channel_id = ? AND status = 'accepting' AND updated_at <= ?`)
+		.bind(channelId, iso(now - STALE_ACCEPT_MS))
+		.first<MoveOfferRow>();
+	if (!stale) return;
+	const job = await db(env)
+		.prepare(
+			`SELECT id FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND created_at >= ? AND kind = 'channel.transfer'
+			 AND json_extract(params, '$.newOwnerId') = ? AND json_extract(params, '$.previousOwnerId') = ? ORDER BY created_at LIMIT 1`,
+		)
+		.bind(channelId, stale.updated_at, stale.to_user_id, stale.from_user_id)
+		.first<{ id: string }>();
+	await db(env)
+		.prepare(`UPDATE channel_move_offers SET status = ?, job_id = COALESCE(?, job_id), responded_at = updated_at, updated_at = ? WHERE id = ? AND status = 'accepting'`)
+		.bind(job ? 'moved' : 'refused', job?.id ?? null, iso(now), stale.id)
+		.run();
 }
 
 async function readOffer(env: Env, id: string): Promise<MoveOfferRow | null> {
@@ -223,13 +248,12 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 	try {
 		channel = await loadChannel(env, offer.channel_id);
 		if (channel.userId !== offer.from_user_id) {
-			await settle('refused');
 			throw new MoveError(409, 'owner_changed', 'The channel’s owner changed since the offer');
 		}
 		await checkMovable(env, channel, userId);
 		const options = JSON.parse(offer.options_json || '{}') as { keepContactEmail?: boolean };
 		// The owner is the actor: the new owner gets "You are now the owner", the owner hears "accepted" below
-		const { job } = await transferChannel(env, offer.channel_id, userId, offer.from_user_id, { keepPreviousOwnerAsAdmin: false, keepContactEmail: options.keepContactEmail === true });
+		const { job } = await transferChannel(env, offer.channel_id, userId, offer.from_user_id, { keepPreviousOwnerAsAdmin: false, keepContactEmail: options.keepContactEmail === true, expectedOwnerId: offer.from_user_id });
 		jobId = job.id;
 	} catch (error) {
 		const refusal = error instanceof AdminError ? new MoveError(error.status === 422 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code) : error;
@@ -238,7 +262,8 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 		await settle(final ? 'refused' : 'offered').catch((e) => logger.error('[ChannelMoves] Could not settle a refused accept', { offerId: id, error: String(e) }));
 		throw refusal;
 	}
-	await settle('moved', jobId);
+	// The move is queued: a failed write here must not answer as if it weren't (settleStaleAccept closes it later)
+	await settle('moved', jobId).catch((e) => logger.error('[ChannelMoves] Could not close an accepted offer', { offerId: id, jobId, error: String(e) }));
 	const receiver = await profileOf(env, userId);
 	await notify(env, offer.from_user_id, 'channelMoveAccepted', { ...channelParams('channel', channel as never), member: nameOf(receiver, userId) }, channel.id, `move-offer:${id}:accepted`);
 	logger.info('[ChannelMoves] Offer accepted; move queued', { channelId: channel.id, offerId: id, jobId });

@@ -529,6 +529,8 @@ export interface TransferOptions {
 	keepContactEmail?: boolean;
 	/** The admin's reason, shown to the previous owner with the notice (CC-D11) */
 	reason?: string;
+	/** Move only from this owner (an accepted offer): refused with owner_changed when someone else owns it by then */
+	expectedOwnerId?: string;
 }
 
 export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string, options: TransferOptions = {}): Promise<{ job: AdminJob }> {
@@ -554,6 +556,11 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	if (refused) throw new AdminError(409, refused);
 	let job: AdminJob;
 	try {
+		// Read again under the lock: another move may have finished since the read above
+		if (options.expectedOwnerId) {
+			const fresh = await repo(env.channels).getObject(id);
+			if (!fresh || fresh.isDeleted || fresh.userId !== options.expectedOwnerId || channel.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
+		}
 		job = await createJob(env, {
 			kind: 'channel.transfer',
 			targetKind: 'channel',

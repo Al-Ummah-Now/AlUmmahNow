@@ -67,6 +67,7 @@ import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin
 import { eraseChannelComments, eraseCommentsOfChannel } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
+import { eraseMoveOffers, exportMoveOffers } from '../channelMoveData';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -426,6 +427,8 @@ export interface UserDataExport {
 	liveReminders: Json[];
 	/** Private time-stamped notes on videos (SEARCH_DB video_notes, wiki E21-D9); deleted notes are left out. */
 	videoNotes: Json[];
+	/** Channel move offers sent to or by the account (SEARCH_DB channel_move_offers, wiki AUN-CHANNEL-CLAIM). */
+	channelMoveOffers: Json[];
 }
 
 /** Array sections of the export; partial exports are merged by concatenating these. */
@@ -455,6 +458,7 @@ export const EXPORT_LIST_FIELDS = [
 	'liveChatMessages',
 	'liveReminders',
 	'videoNotes',
+	'channelMoveOffers',
 ] as const;
 
 const EXPORT_NOTES = [
@@ -740,6 +744,14 @@ export async function collectUserData(
 		// Live chat and reminders (wiki E17), a page at a time until done
 		(ctx) => exportPages(ctx, env.SEARCH_DB as D1Database | undefined, exportLiveChat, out.liveChatMessages),
 		(ctx) => exportPages(ctx, env.NOTIFICATIONS_DB, exportLiveReminders, out.liveReminders),
+		// Channel move offers to or from the account (idx_channel_move_offers_to / _from)
+		(ctx) =>
+			atomically(async () => {
+				const sdb = env.SEARCH_DB as D1Database | undefined;
+				if (!sdb) return;
+				ctx.budget.spend();
+				out.channelMoveOffers.push(...(await exportMoveOffers(sdb, userId)));
+			}),
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, env, { purpose: 'export', userId, version: EXPORT_STATE_VERSION });
@@ -1463,6 +1475,10 @@ export async function eraseUserData(
 				ctx.budget.spend();
 				const notes = await (db as unknown as D1Database).prepare('DELETE FROM video_notes WHERE user_id = ?').bind(userId).run();
 				bump(summary.deleted, 'videoNotes', Number(notes.meta?.changes ?? 0));
+				// Channel move offers (search migration 0121): open ones close, the id leaves the rest
+				ctx.budget.spend();
+				const offers = await eraseMoveOffers(db as unknown as D1Database, userId, DELETED_USER_ID);
+				if (offers > 0) bump(summary.deleted, 'channelMoveOffers', offers);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
