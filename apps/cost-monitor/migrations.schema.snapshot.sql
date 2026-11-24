@@ -4,6 +4,7 @@
 --   apps/cost-monitor/migrations/0002_ops_kv_do_discovery.sql
 --   apps/cost-monitor/migrations/0003_cost_credentials_products_alerts.sql
 --   apps/cost-monitor/migrations/0004_d1_capacity.sql
+--   apps/cost-monitor/migrations/0005_capacity_indexes.sql
 
 CREATE TABLE collector_runs (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('hourly', 'daily')), started_at TEXT NOT NULL, finished_at TEXT, status TEXT NOT NULL CHECK (status IN ('running', 'ok', 'partial', 'failed')), queries INTEGER NOT NULL DEFAULT 0, rows_written INTEGER NOT NULL DEFAULT 0, detail TEXT);
 CREATE TABLE cost_alert_deliveries (fingerprint TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('queued', 'sent', 'sunk', 'skipped', 'failed')), kind TEXT NOT NULL, payload TEXT NOT NULL, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (fingerprint, user_id));
@@ -20,7 +21,10 @@ CREATE TABLE "ops_hourly" (hour TEXT NOT NULL, resource_id TEXT NOT NULL, kind T
 CREATE TABLE ops_resources (id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('worker', 'd1', 'r2', 'queue', 'kv', 'do')), env TEXT NOT NULL CHECK (env IN ('production', 'stage', 'qa')), name TEXT NOT NULL, cf_id TEXT, seen_at TEXT NOT NULL);
 CREATE TABLE "ops_thresholds" (id TEXT PRIMARY KEY, kind TEXT NOT NULL, metric TEXT NOT NULL CHECK (metric IN ('error_rate', 'cpu_p99', 'latency_p99', 'backlog_max', 'dlq_backlog', 'storage_pct', 'storage_days_to_70', 'busy_pct', 'account_storage_pct')), op TEXT NOT NULL CHECK (op IN ('>', '<')), value REAL NOT NULL, window_hours INTEGER NOT NULL DEFAULT 1, enabled INTEGER NOT NULL DEFAULT 1, updated_by TEXT, updated_at TEXT NOT NULL);
 CREATE INDEX idx_collector_runs_started ON collector_runs (started_at);
+CREATE INDEX idx_cost_alert_subscriptions_kind ON cost_alert_subscriptions (kind);
 CREATE INDEX idx_cost_job_runs_started ON cost_job_runs (started_at);
 CREATE INDEX idx_cost_product_daily_product_day ON cost_product_daily (product, day);
+CREATE INDEX idx_ops_alerts_rule ON ops_alerts (rule_id);
 CREATE INDEX idx_ops_daily_env_kind_day ON ops_daily (env, kind, day);
 CREATE INDEX idx_ops_hourly_env_kind_hour ON ops_hourly (env, kind, hour);
+CREATE INDEX idx_ops_thresholds_metric ON ops_thresholds (metric);
