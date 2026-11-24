@@ -126,35 +126,40 @@ export class PrivacyErase extends AuthenticatedRoute {
 			if (!imageStorageConfigured(env as unknown as ImageFilesEnv)) return;
 			const r = record as Record<string, unknown>;
 			const paths = [r.avatarUrl, r.coverUrl].map((u) => imagePathOfUrl(u)).filter((p): p is string => Boolean(p));
-			if (paths.length) await deleteImageFiles(env as unknown as ImageFilesEnv, paths);
+			if (!paths.length) return;
+			try {
+				await deleteImageFiles(env as unknown as ImageFilesEnv, paths);
+			} catch (error) {
+				logger.warn('[Privacy] Failed to delete profile/channel image files', {
+					paths,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		};
 		const onVideoDeleted = async (videoId: string, video?: LibraryHints) => {
 			// Purge R2 renditions, R2 custom thumbnails, kept original, audio tracks, and CDN prefix (idempotent).
 			await purgeVideoMedia(env as unknown as MediaEnv, videoId);
-			// Purge Bunny Storage custom thumbnails for this video (no-op when image storage is unconfigured).
-			await eraseVideoImages(env as unknown as ImageFilesEnv, videoId, video as Record<string, unknown> | undefined);
-			// Bunny's id of the video; none when Bunny holds no copy.
-			const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
-			if (!bunnyId) return;
-			// When Bunny Stream credentials are configured, remove the Bunny copy too (404 = already gone).
-			let bunny: Awaited<ReturnType<typeof bunnyClientForVideo>>;
+			// Purge Bunny Storage custom thumbnails for this video (no-op when unconfigured; logged on Bunny error).
 			try {
-				bunny = await bunnyClientForVideo(env as never, video);
+				await eraseVideoImages(env as unknown as ImageFilesEnv, videoId, video as Record<string, unknown> | undefined);
 			} catch (error) {
-				// Local/unit environments without Bunny Stream keys skip Bunny deletion.
-				logger.warn('[Privacy] Bunny Stream not configured; skipping Bunny media delete', {
+				logger.warn('[Privacy] Failed to delete video image files', {
 					videoId,
 					error: error instanceof Error ? error.message : String(error),
 				});
-				return;
 			}
+			// Bunny's id of the video; none when Bunny holds no copy.
+			const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
+			if (!bunnyId) return;
+			// When Bunny Stream credentials are configured, remove the Bunny copy too.
+			// External Bunny failures are logged and never block GDPR Art. 17 erasure (the R2 record & media are already gone).
 			try {
+				const bunny = await bunnyClientForVideo(env as never, video);
 				await bunny.client.deleteVideo(bunny.libraryId, bunnyId);
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
 				if (/\b404\b|not found/i.test(msg)) return;
-				logger.error('[Privacy] Failed to delete Bunny Stream media', { videoId, error: msg });
-				throw error;
+				logger.warn('[Privacy] Failed to delete Bunny Stream media', { videoId, error: msg });
 			}
 		};
 
@@ -168,7 +173,14 @@ export class PrivacyErase extends AuthenticatedRoute {
 		const onChannelDeleted = async (id: string, channel: unknown) => {
 			await removeCollectionsFor(env as never, id, channel as never);
 			await eraseChannelSocial(env, id, userId);
-			await eraseChannelPostImages(env as unknown as ImageFilesEnv, id);
+			try {
+				await eraseChannelPostImages(env as unknown as ImageFilesEnv, id);
+			} catch (error) {
+				logger.warn('[Privacy] Failed to delete channel post image files', {
+					channelId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 			await eraseOwnedRecordImages(channel);
 		};
 		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted, onChannelDeleted }, { resumeToken });
