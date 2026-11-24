@@ -2519,5 +2519,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
     closeMiniPlayer: 'Close audio player',
     openWatchPage: 'Open video page',
     loadingAudio: 'Preparing audio…',
+    audioUnavailable: 'Audio-only playback is not available for this video right now.',
   },
 };

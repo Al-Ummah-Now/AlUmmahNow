@@ -2793,6 +2793,7 @@ export interface AppTranslations {
     closeMiniPlayer: string;
     openWatchPage: string;
     loadingAudio: string;
+    audioUnavailable: string;
   };
 }
 

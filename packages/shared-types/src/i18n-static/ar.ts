@@ -2512,5 +2512,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
     closeMiniPlayer: 'إغلاق مشغل الصوت',
     openWatchPage: 'فتح صفحة المرئي',
     loadingAudio: 'جارٍ تجهيز الصوت…',
+    audioUnavailable: 'التشغيل الصوتي فقط غير متاح لهذا المرئي حاليًا.',
   },
 };

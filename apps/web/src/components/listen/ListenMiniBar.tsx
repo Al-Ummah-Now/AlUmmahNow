@@ -35,6 +35,7 @@ export function ListenMiniBar() {
     queue,
     sleepTimer,
     sleepRemainingSec,
+    error,
     togglePlay,
     seek,
     skipBy,
@@ -42,7 +43,7 @@ export function ListenMiniBar() {
     setSleepTimer,
     removeFromQueue,
     clearQueue,
-    startListening,
+    playQueuedItem,
     stopListening,
   } = useListenAudio();
 
@@ -175,8 +176,7 @@ export function ListenMiniBar() {
                   <button
                     type="button"
                     onClick={() => {
-                      removeFromQueue(item.videoId);
-                      startListening(item, { startTime: 0, autoPlay: true });
+                      void playQueuedItem(item.videoId);
                     }}
                     className="min-w-0 flex-1 text-start"
                   >
@@ -196,6 +196,17 @@ export function ListenMiniBar() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Inline playback error banner when a queued track fails to resolve */}
+      {error && (
+        <div
+          role="alert"
+          data-testid="listen-mini-bar-error"
+          className="px-3 py-1.5 text-xs bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-b border-red-200 dark:border-red-800"
+        >
+          {error}
         </div>
       )}
 
