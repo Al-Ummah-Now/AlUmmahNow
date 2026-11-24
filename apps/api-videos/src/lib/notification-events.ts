@@ -52,7 +52,7 @@ export function isHighlightVideo(video: VideoFormatInput): boolean {
 }
 
 /** The channel's name as notification params, every language included (lib/channelName.ts). */
-async function channelNameParamsOf(env: EventsEnv, channelId: string): Promise<Record<string, string>> {
+export async function channelNameParamsOf(env: EventsEnv, channelId: string): Promise<Record<string, string>> {
 	try {
 		return channelNameParams(await new R2Repository<NamedChannel>(env.channels).getObject(channelId));
 	} catch (error) {

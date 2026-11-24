@@ -12,6 +12,8 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   uploadFailed: { title: 'uploadFailedTitle', message: 'uploadFailedMessage' },
   newVideo: { title: 'newVideoTitle', message: 'newVideoMessage' },
   liveStarted: { title: 'liveStartedTitle', message: 'liveStartedMessage' },
+  liveSoon: { title: 'liveSoonTitle', message: 'liveSoonMessage' },
+  premiereCancelled: { title: 'premiereCancelledTitle', message: 'premiereCancelledMessage' },
   commentReply: { title: 'commentReplyTitle', message: 'commentReplyMessage' },
   reviewApproved: { title: 'reviewApprovedTitle', message: 'reviewApprovedMessage' },
   reviewRejected: { title: 'reviewRejectedTitle', message: 'reviewRejectedMessage' },

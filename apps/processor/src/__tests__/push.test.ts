@@ -191,9 +191,10 @@ describe('push fan-out', () => {
         device(`i-${u}`, u);
       }
       await p.processMessage(message(MessageType.NotificationFanout, { kind: 'live_started', channelId: 'ch1', entityId: 'live1', isHighlight: true }), env(send));
-      // Push is queued once; the other message announces the live stream to social auto-post
+      // Push is queued once; the others announce the live stream to social auto-post and go on to those who asked to be reminded
       const sent = send.mock.calls.map((c) => c[0] as AlUmmahMessage);
-      expect(sent.map((m) => m.type).sort()).toEqual([MessageType.PushDispatch, MessageType.SocialEvent].sort());
+      expect(sent.map((m) => m.type).sort()).toEqual([MessageType.NotificationFanout, MessageType.PushDispatch, MessageType.SocialEvent].sort());
+      expect((sent.find((m) => m.type === MessageType.NotificationFanout)!.payload as { audience?: string }).audience).toBe('reminders');
       const queued = sent.find((m) => m.type === MessageType.PushDispatch)!;
       const result = await p.processMessage(queued, env(send));
       expect(result.success).toBe(true);

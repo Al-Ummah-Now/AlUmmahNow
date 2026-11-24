@@ -21,6 +21,8 @@ function Icon({ item }: { item: NotificationItem }) {
   const cls = `h-5 w-5 flex-shrink-0 ${SECONDARY}`;
   switch (item.notificationKey) {
     case 'liveStarted':
+    case 'liveSoon':
+    case 'premiereCancelled':
       return <Radio className={cls} aria-hidden="true" />;
     case 'newVideo':
     case 'uploadReady':

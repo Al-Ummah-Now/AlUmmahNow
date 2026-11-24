@@ -14,6 +14,7 @@ import { channelOwnerTier } from '../creatorTiers';
 import { hasSuspensionHolds } from '../admin/frozen';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
+import { enqueueNotification } from '../notifications';
 import { markPublished } from '../published';
 import R2Repository from '../r2Repo';
 import { scheduleDateProblem } from '../videoSchedule';
@@ -203,7 +204,22 @@ export async function cancelPremiere(env: PremiereEnv, streamId: string, reason:
 	if (rejected === 'started') return { outcome: 'started', stream: data };
 	// Also after an earlier cancel whose second step was lost
 	if (data.premiereVideoId) await releaseHold(env, data.premiereVideoId, streamId);
-	if (!rejected) logger.info('[Premiere] Cancelled', { streamId, reason });
+	if (!rejected) {
+		logger.info('[Premiere] Cancelled', { streamId, reason });
+		// Not by its owner: they are told
+		if (reason !== 'owner') {
+			await enqueueNotification(env as never, {
+				notificationId: crypto.randomUUID(),
+				recipientUserId: data.userId,
+				notificationKey: 'premiereCancelled',
+				params: { streamTitle: data.title || '' },
+				actionUrl: data.channelId ? `/studio/${data.channelId}/content/live` : `/live/${streamId}`,
+				entityId: streamId,
+				dedupeKey: `premiere-cancelled:${streamId}`,
+				createdAt: now,
+			});
+		}
+	}
 	return { outcome: rejected ?? 'cancelled', stream: data };
 }
 
@@ -213,6 +229,11 @@ export async function onHeldVideoRemoved(env: PremiereEnv, video: { id?: string;
 }
 
 export type StartOutcome = 'started' | 'waiting' | 'cancelled' | 'not_due' | 'lost';
+
+/** Whether a premiere's video can still be shown at all (the heads-up asks before it reminds anyone). */
+export async function premiereStillPossible(env: PremiereEnv, stream: PremiereStream): Promise<boolean> {
+	return (await readiness(env, stream)) !== 'never';
+}
 
 /** Whether a due premiere can start now: 'go', try again next minute, or never. */
 async function readiness(env: PremiereEnv, stream: PremiereStream): Promise<'go' | 'wait' | 'never'> {

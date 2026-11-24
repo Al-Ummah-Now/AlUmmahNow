@@ -203,6 +203,8 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST'], path: /^\/api\/live-streams\/?$/, capability: 'live.manage' },
 	{ methods: ['PATCH', 'DELETE'], path: /^\/api\/live-streams\/[^/]+\/?$/, capability: 'live.manage' },
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/(?:start|end)\/?$/, capability: 'live.manage' },
+	// The member's own reminder, whichever channel is active
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/live-streams\/[^/]+\/reminders\/?$/, capability: 'channel.speak' },
 	{ methods: ['PATCH'], path: /^\/api\/live-streams\/[^/]+\/premiere\/?$/, capability: 'live.manage' },
 	// Live chat (wiki E17): posting as the channel, moderating, its settings (the endpoints decide)
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/chat\/?$/, capability: 'channel.speak' },

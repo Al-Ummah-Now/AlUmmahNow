@@ -42,6 +42,10 @@ export function isOptionalNotificationCategory(category: unknown): category is O
 export const NOTIFICATION_KEYS = [
   'newVideo',
   'liveStarted',
+  /** A stream or premiere the user asked to be reminded of starts within 15 minutes (wiki E17). params: channelName, streamTitle */
+  'liveSoon',
+  /** To its owner: their premiere could not be shown (wiki E17). params: streamTitle */
+  'premiereCancelled',
   'commentReply',
   'newComment',
   'newSubscriber',
@@ -82,6 +86,8 @@ export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCategory> = {
   newVideo: 'new_videos',
   liveStarted: 'live',
+  liveSoon: 'live',
+  premiereCancelled: 'uploads',
   commentReply: 'replies',
   newComment: 'comments',
   newSubscriber: 'subscribers',
@@ -109,6 +115,8 @@ export type RealtimeNotificationType = 'like' | 'comment' | 'subscription' | 'up
 export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotificationType> = {
   newVideo: 'subscription',
   liveStarted: 'subscription',
+  liveSoon: 'subscription',
+  premiereCancelled: 'upload',
   commentReply: 'comment',
   newComment: 'comment',
   newSubscriber: 'subscription',
@@ -157,7 +165,7 @@ export interface NotificationCreatePayload {
   createdAt?: number;
 }
 
-export type NotificationFanoutKind = 'new_video' | 'live_started';
+export type NotificationFanoutKind = 'new_video' | 'live_started' | 'live_soon';
 
 /** Queue payload of MessageType.NotificationFanout. */
 export interface NotificationFanoutPayload {
@@ -169,6 +177,13 @@ export interface NotificationFanoutPayload {
   params?: NotificationParams;
   actionUrl?: string;
   actorUserId?: string;
+  /**
+   * Who it goes to: the channel's subscribers (default), or the people who asked to be reminded of this
+   * stream (wiki E17). A live start reaches both, one after the other: they share a dedupe key.
+   */
+  audience?: 'subscribers' | 'reminders';
+  /** live_soon: the start it announces (epoch ms); a moved stream is announced again */
+  startsAt?: number;
   /**
    * Paging (processor only): the fan-out covers subscribers with user_id
    * greater than this, one page per message; producers leave it unset.
