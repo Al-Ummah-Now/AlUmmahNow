@@ -219,13 +219,14 @@ describe('review fixes (#1832)', () => {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
     const names = new Map(ids.map((id) => [id, `Name ${id}`]));
     const people = { key: 'users', label: { en: 'Creators', ar: 'صنّاع المحتوى' }, kind: 'person' as const, before: null, after: ids };
-    assert.equal(fieldValue(people, ids.slice(0, 2), 'ar', names), 'Name a، Name b');
-    assert.equal(fieldValue(people, ids, 'en', names), 'Name a, Name b, Name c, Name d, Name e and 2 more');
+    const one = (n: string) => `\u2068${n}\u2069`;
+    assert.equal(fieldValue(people, ['a', 'z'], 'ar', new Map([['a', 'Yusuf Rahman'], ['z', 'عائشة']])), `${one('Yusuf Rahman')}، ${one('عائشة')}`, 'mixed directions: each name isolated');
+    assert.equal(fieldValue(people, ids, 'en', names), `${['a', 'b', 'c', 'd', 'e'].map((x) => one(`Name ${x}`)).join(', ')} and 2 more`);
     assert.match(fieldValue(people, ids, 'ar', names), /و٢ غيرهم$/);
     const about = { key: 'user', label: { en: 'Creator', ar: 'صانع المحتوى' }, kind: 'person' as const, before: 'a', after: 'a' };
     const e = renderWorkflowEmail({ to: 'a@example.org', locale: 'en', event: 'proposed', request: { ...request, fields: [about, people] }, actorName: 'Amina', names });
     assert.match(e.text, /Creator: *Name a\n/);
-    assert.match(e.text, /Creators: *Name a, Name b/);
+    assert.match(e.text, /Creators: *\u2068Name a\u2069, \u2068Name b\u2069/);
     assert.doesNotMatch(e.text, /→/, 'nothing to compare');
   });
   it('percent and bps show % and ٪', () => {

@@ -155,7 +155,8 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
   if (f.kind === 'bool') return v ? c.yes : c.no;
   if (f.kind === 'person') {
     if (!Array.isArray(v)) return names.get(String(v)) ?? c.someone;
-    const shown = v.slice(0, EMAIL_PEOPLE).map((id) => names.get(String(id)) ?? c.someone).join(locale === 'ar' ? '، ' : ', ');
+    // Each name isolated (FSI…PDI), as admin-web's workflowValue does: a Latin name must not reorder an Arabic list
+    const shown = v.slice(0, EMAIL_PEOPLE).map((id) => `\u2068${names.get(String(id)) ?? c.someone}\u2069`).join(locale === 'ar' ? '، ' : ', ');
     return v.length > EMAIL_PEOPLE ? c.andMore(shown, v.length - EMAIL_PEOPLE) : shown;
   }
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale] ?? String(x);
