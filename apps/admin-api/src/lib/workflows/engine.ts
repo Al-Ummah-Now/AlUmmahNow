@@ -751,17 +751,18 @@ export const MAX_OPEN_TARGETS = 100;
 
 /**
  * The open request of each target (`kind:id`), for a feature's own pages: they show "Waiting for approval"
- * in place of the control (§10). One read of idx_workflow_requests_open.
+ * in place of the control (§10). One read of idx_workflow_requests_open. `domain` is the one stored with the
+ * request, as in the lists: the caller decides by it who sees the row.
  */
-export async function openRequests(ctx: Pick<WorkflowCtx, 'db'>, type: WorkflowActionType, targets: readonly string[]): Promise<Record<string, string>> {
+export async function openRequests(ctx: Pick<WorkflowCtx, 'db'>, type: WorkflowActionType, targets: readonly string[]): Promise<{ target: string; id: string; domain: string }[]> {
   const prefix = `${type}:`;
   const keys = [...new Set(targets)].slice(0, MAX_OPEN_TARGETS).map((t) => prefix + t);
-  if (!keys.length) return {};
+  if (!keys.length) return [];
   const { results } = await ctx.db
-    .prepare(`SELECT id, open_key FROM workflow_requests WHERE open_key IN (${keys.map(() => '?').join(', ')})`)
+    .prepare(`SELECT id, open_key, domain FROM workflow_requests WHERE open_key IN (${keys.map(() => '?').join(', ')})`)
     .bind(...keys)
-    .all<{ id: string; open_key: string }>();
-  return Object.fromEntries((results ?? []).map((r) => [r.open_key.slice(prefix.length), r.id]));
+    .all<{ id: string; open_key: string; domain: string }>();
+  return (results ?? []).map((r) => ({ target: r.open_key.slice(prefix.length), id: r.id, domain: r.domain }));
 }
 
 export async function waitingCount(ctx: WorkflowCtx, userId: string): Promise<number> {

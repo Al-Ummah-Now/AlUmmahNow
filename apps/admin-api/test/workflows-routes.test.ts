@@ -10,7 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import { API_ERROR_CATALOGUE, WORKFLOW_ERROR_CODES, WORKFLOW_ERROR_MESSAGES } from '@al-ummah/shared-types';
+import { API_ERROR_CATALOGUE, WORKFLOW_ACTIONS, WORKFLOW_ACTION_TYPES, WORKFLOW_ERROR_CODES, WORKFLOW_ERROR_MESSAGES, WORKFLOW_LISTED_SCOPES, WORKFLOW_SEEDED_SCOPES, workflowFloorFor, type WorkflowActionType } from '@al-ummah/shared-types';
 import workflowsRouter from '../src/routers/workflows.router';
 import { registerWorkflowExecutor } from '../src/lib/workflows/engine';
 import { registerStepUpRoutes } from '../src/middleware/step-up-routes';
@@ -276,5 +276,62 @@ describe('what the viewer may do (canEdit, can.retry)', () => {
     t.search.raw.exec(`UPDATE workflow_requests SET status = 'failed' WHERE id = '${id}'`);
     assert.equal((await t.as('sa2', ['super_admin'])('GET', `/requests/${id}`)).body.result.can.retry, true);
     assert.equal((await t.as('adm', ['admin'])('GET', `/requests/${id}`)).body.result.can.retry, false);
+  });
+});
+
+describe('open requests by target (GET /pending)', () => {
+  /** An open request stored for a target, with the domain proposeChange stores: money by the floor of its scope, else the action's own. */
+  const open = (t: Awaited<ReturnType<typeof setup>>, id: string, type: WorkflowActionType, scope: string, target: string, domain?: string) => {
+    const [kind, ...rest] = target.split(':');
+    t.search.raw
+      .prepare(
+        `INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, open_key, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, updated_at)
+         VALUES (?, ?, ?, ?, '{}', ?, ?, ?, '{}', '{}', '1', 'r', 'x', ?, ?, 'pending', 1, ?)`,
+      )
+      .run(id, type, scope, domain ?? (workflowFloorFor(type, scope).money ? 'money' : WORKFLOW_ACTIONS[type].domain), kind, rest.join(':'), `${type}:${target}`, at, at, at);
+  };
+  const ask = async (t: Awaited<ReturnType<typeof setup>>, who: [string, string[]], type: string, targets: string[]) =>
+    (await t.as(...who)('GET', `/pending?type=${type}&${targets.map((x) => `target=${encodeURIComponent(x)}`).join('&')}`)).body.result.items as Record<string, string>;
+  const ADMIN: [string, string[]] = ['adm', ['admin']];
+  const SUPER: [string, string[]] = ['sa1', ['super_admin']];
+  const FINANCE: [string, string[]] = ['fin1', ['user']];
+
+  for (const type of WORKFLOW_ACTION_TYPES) {
+    // The default scope, every scope with its own floor or name, and one nobody named
+    const scopes = [...new Set(['', ...(WORKFLOW_SEEDED_SCOPES[type] ?? []), ...(WORKFLOW_LISTED_SCOPES[type] ?? []), ...(WORKFLOW_ACTIONS[type].scoped ? ['someScope'] : [])])];
+    it(`${type}: each row by its own domain, whatever the action's default scope`, async () => {
+      const t = await setup();
+      const expected: Record<string, string> = {};
+      const all: Record<string, string> = {};
+      scopes.forEach((scope, i) => {
+        const target = `kind:${i}`;
+        open(t, `wfr_${i}`, type, scope, target);
+        all[target] = `wfr_${i}`;
+        if (!workflowFloorFor(type, scope).money) expected[target] = `wfr_${i}`;
+      });
+      // Stored as money although the floor is not money any more (opened before a floor changed), and the other way round
+      open(t, 'wfr_stored_money', type, '', 'kind:stored', 'money');
+      open(t, 'wfr_stored_open', type, '', 'kind:open', 'platform');
+      Object.assign(all, { 'kind:stored': 'wfr_stored_money', 'kind:open': 'wfr_stored_open' });
+      expected['kind:open'] = 'wfr_stored_open';
+      const targets = [...Object.keys(all), 'kind:none'];
+      assert.deepEqual(await ask(t, ADMIN, type, targets), expected);
+      assert.deepEqual(await ask(t, SUPER, type, targets), all);
+      assert.deepEqual(await ask(t, FINANCE, type, targets), all);
+      assert.equal((await t.as('mod', ['moderator'])('GET', `/pending?type=${type}&target=kind:0`)).status, 403);
+    });
+  }
+
+  it('a change to a money rule, as it is really proposed, is for people who can see money; other rule changes are for every admin', async () => {
+    const t = await setup();
+    const money = await t.as('fin1', ['user'])('POST', '/rules/support.fees.set', { scope: '', config: { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['support.fees.set'].defaultRule)), expiryHours: 24 }, reason: 'r' });
+    assert.equal(money.status, 202, JSON.stringify(money.body));
+    const plain = await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config: featureRule(1), reason: 'r' });
+    assert.equal(plain.status, 202, JSON.stringify(plain.body));
+    const targets = ['workflow-rule:support.fees.set:', 'workflow-rule:features.set:live'];
+    const both = { [targets[0]]: money.body.result.request.id, [targets[1]]: plain.body.result.request.id };
+    assert.deepEqual(await ask(t, ADMIN, 'workflows.rule.set', targets), { [targets[1]]: both[targets[1]] });
+    assert.deepEqual(await ask(t, FINANCE, 'workflows.rule.set', targets), both);
+    assert.deepEqual(await ask(t, SUPER, 'workflows.rule.set', targets), both);
   });
 });
