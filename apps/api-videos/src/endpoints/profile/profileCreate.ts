@@ -11,6 +11,7 @@ import { AuthenticatedRoute, AppContext } from "../../base";
 import { writeSignupTier } from "../../lib/creatorTiers";
 import { logger } from "../../lib/logger";
 import { inBackground } from "../../lib/websocket-notify";
+import { withAccountEmail } from "../../lib/account-email";
 import { bearerOf, syncNamesToAuth } from "../../lib/auth-name-sync";
 
 export class ProfileCreate extends AuthenticatedRoute {
@@ -67,8 +68,8 @@ export class ProfileCreate extends AuthenticatedRoute {
 		// Get user ID from auth
 		const userId = this.getUserId(c);
 
-		// Retrieve the validated request body
-		const profileInput = request.body;
+		// The validated request body, with the signed-in account's email (a submitted one is ignored)
+		const profileInput = withAccountEmail(request.body, this.getAuth(c));
 
 		// Create business profile object
 		const entityDefaults = createEntityDefaults();

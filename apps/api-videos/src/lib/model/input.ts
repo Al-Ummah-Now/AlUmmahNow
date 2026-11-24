@@ -44,7 +44,7 @@ export const PlaylistInput = z.object({
 });
 
 export const ProfileInput = z.object({
-    email: Str({ description: "User email address" }).email(),
+    email: Str({ required: false, description: "Ignored: the profile's email is the signed-in account's" }),
     userName: Str({ required: false, description: "Display username" }),
     displayName: Str({ required: false, description: "Display name" }),
     displayNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language display names"),
@@ -107,7 +107,7 @@ export const PlaylistUpdateInput = z.object({
 });
 
 export const ProfileUpdateInput = z.object({
-    email: Str({ required: false, description: "User email address" }),
+    email: Str({ required: false, description: "Ignored: the profile's email is the signed-in account's" }),
     userName: Str({ required: false, description: "Display username" }),
     displayName: Str({ required: false, description: "Display name" }),
     displayNameLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language display names"),
