@@ -75,7 +75,8 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
                       <h3 className="font-medium text-fg">
                         {name}
                         {action.scoped && (
-                          <span className="ms-2 rounded border border-border px-1.5 py-0.5 text-xs text-fg-muted" dir={scopeName(action.type, rule.scope, locale)?.named === false ? 'ltr' : undefined} data-testid="approval-rule-scope">
+                          // inline-block: an Arabic name ending in a joining letter must not join the chip's first one
+                          <span className="ms-2 inline-block rounded border border-border px-1.5 py-0.5 text-xs text-fg-muted" dir={scopeName(action.type, rule.scope, locale)?.named === false ? 'ltr' : undefined} data-testid="approval-rule-scope">
                             {scopeName(action.type, rule.scope, locale)?.text ?? t('workflows.rules.scopeDefault')}
                           </span>
                         )}

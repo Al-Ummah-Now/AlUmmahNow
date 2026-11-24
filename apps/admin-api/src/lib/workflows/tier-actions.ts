@@ -220,7 +220,7 @@ export async function tierOpDone(env: TierEnv, actorId: string, op: TierOp, run:
   switch (op.op) {
     case 'assign': {
       const a = await readAssignment(env, actorId, op.userId);
-      return a?.tierId === op.tierId && a.source === op.source && a.assignedBy === actorId ? { result: { assignment: a } } : null;
+      return a?.tierId === op.tierId && a.source === op.source && a.assignedBy === actorId && str(a.assignedAt) >= run.proposedAt ? { result: { assignment: a } } : null;
     }
     case 'approveRequest': {
       const request = await readTierRequest(env, actorId, op.requestId);

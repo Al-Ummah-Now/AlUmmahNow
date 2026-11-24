@@ -164,6 +164,19 @@ function BackLink({ label }: { label: string }) {
 /** One diff value: dates as local time with the zone (UTC on hover, the shared LocalTime); the rest as text. */
 function DiffValue({ field, value, t, locale, names }: { field: WorkflowField; value: unknown; t: Parameters<typeof workflowValue>[3]; locale: Parameters<typeof workflowValue>[2]; names: Record<string, string> }) {
   if (field.kind === 'date' && (typeof value === 'string' || typeof value === 'number') && value !== '') return <LocalTime value={value} withTime />;
+  // Each name on its own, so Latin names in an Arabic list keep the list's right-to-left order
+  if (field.kind === 'person' && Array.isArray(value)) {
+    return (
+      <>
+        {value.map((id, i) => (
+          <span key={String(id)}>
+            {i > 0 && (locale === 'ar' ? '، ' : ', ')}
+            <bdi>{workflowValue(field, id, locale, t, names)}</bdi>
+          </span>
+        ))}
+      </>
+    );
+  }
   return <>{workflowValue(field, value, locale, t, names)}</>;
 }
 
