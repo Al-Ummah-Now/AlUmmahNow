@@ -128,7 +128,7 @@ describe('an unknown user in a history line', () => {
     assert.match(html, /data-testid="unknown-user-id"/);
     assert.match(html, /data-testid="unknown-user-id-value"[^>]*>usr_unknown_1</);
     assert.match(html, /aria-label="Copy the user id"/);
-    const visibleLine = html.replace(/<details[\s\S]*<\/details>/, '').replace(/\s(title|data-[a-z-]+)="[^"]*"/g, '');
+    const visibleLine = html.replace(/<span[^>]*\shidden=""[\s\S]*$/, '').replace(/\s(title|data-[a-z-]+)="[^"]*"/g, '');
     assert.doesNotMatch(visibleLine, /usr_/);
   });
 
