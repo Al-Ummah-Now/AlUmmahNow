@@ -64,6 +64,13 @@ interface Row {
 const COLUMNS = 'id, kind, title_en, title_ar, description_en, description_ar, source_en, source_ar, starts_on, ends_on, state, version, updated_at, updated_by, deleted_at';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** A real calendar date (2027-99-99 and 2027-02-30 are not) */
+export function validDate(value: string): boolean {
+	if (!DATE.test(value)) return false;
+	const t = Date.parse(`${value}T00:00:00Z`);
+	return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === value;
+}
+
 function toSeason(row: Row, items: SeasonItem[]): Season {
 	return {
 		id: row.id,
@@ -107,7 +114,7 @@ export function checkSeason(input: SeasonInput): void {
 	const both = (t: { en: string; ar: string } | undefined) => !!t && t.en.trim().length > 0 && t.ar.trim().length > 0;
 	if (!both(input.title) || !both(input.source)) throw new SeasonError(400, 'invalid_request');
 	if (input.description && (input.description.en.trim() === '') !== (input.description.ar.trim() === '')) throw new SeasonError(400, 'invalid_request');
-	if (!DATE.test(input.startsOn) || !DATE.test(input.endsOn) || input.endsOn < input.startsOn) throw new SeasonError(400, 'invalid_request');
+	if (!validDate(input.startsOn) || !validDate(input.endsOn) || input.endsOn < input.startsOn) throw new SeasonError(400, 'invalid_request');
 	const days = (Date.parse(`${input.endsOn}T00:00:00Z`) - Date.parse(`${input.startsOn}T00:00:00Z`)) / 86_400_000;
 	if (!Number.isFinite(days) || days > SEASON_DAYS_MAX) throw new SeasonError(400, 'invalid_request');
 	if (input.items.length > SEASON_ITEMS_MAX) throw new SeasonError(400, 'invalid_request');
@@ -187,8 +194,10 @@ export async function purgeSeasons(db: D1Database, now = new Date().toISOString(
 
 /** Admin list, newest start first, keyset by (starts_on, id); deleted ones only when asked. */
 export async function listSeasons(db: D1Database, opts: { deleted?: boolean; cursor?: string; limit?: number } = {}): Promise<{ items: Season[]; nextCursor: string | null }> {
-	const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
-	const [startsOn, id] = opts.cursor ? opts.cursor.split('|') : ['9999-12-31', '￿'];
+	const limit = Number.isInteger(opts.limit) ? Math.min(Math.max(opts.limit as number, 1), 100) : 25;
+	const parts = opts.cursor ? opts.cursor.split('|') : [];
+	if (opts.cursor && (parts.length !== 2 || !validDate(parts[0]) || !parts[1])) throw new SeasonError(400, 'invalid_request');
+	const [startsOn, id] = parts.length === 2 ? parts : ['9999-12-31', '\uffff'];
 	const { results } = await db
 		.prepare(
 			`SELECT ${COLUMNS} FROM islamic_seasons WHERE state IN ('draft', 'published') AND (starts_on < ? OR (starts_on = ? AND id < ?))
@@ -205,7 +214,7 @@ export async function listSeasons(db: D1Database, opts: { deleted?: boolean; cur
 
 /** The published season covering `date` (the latest-starting one when several do). */
 export async function activeSeason(db: D1Database, date: string): Promise<Season | null> {
-	if (!DATE.test(date)) return null;
+	if (!validDate(date)) throw new SeasonError(400, 'invalid_request');
 	const earliest = new Date(Date.parse(`${date}T00:00:00Z`) - SEASON_DAYS_MAX * 86_400_000).toISOString().slice(0, 10);
 	const row = await db
 		.prepare(

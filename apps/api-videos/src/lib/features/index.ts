@@ -372,6 +372,8 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		prayerTimes: true,
 		qibla: true,
 		hijriCalendar: true,
+		// Seasons are public; with no published season the season route answers season: null
+		ramadanMode: true,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;
@@ -492,6 +494,10 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 		viewerTitles: { ...raw.viewerTitles, enabled: true },
 	};
 	const db = env.SEARCH_DB;
+	// Ramadan mode is ready once a season is published (idx_islamic_seasons_state_start)
+	const ramadanReady = db
+		? await settled(db.prepare("SELECT 1 AS x FROM islamic_seasons WHERE state = 'published' AND deleted_at IS NULL LIMIT 1").first().then((r) => !!r), false)
+		: false;
 	const [yt, ytSecret, social, networks, categorize, requests, live, quran, quranText, saas] = await Promise.all([
 		settled(readYtSettings(env, { raw: true }), null),
 		settled(googleClientSecret(env).then((v) => !!v), false),
@@ -534,6 +540,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			prayerTimes: true,
 			qibla: true,
 			hijriCalendar: true,
+			ramadanMode: ramadanReady,
 			offlineDownloads: !!env.SEARCH_DB,
 			studyNotes: !!env.SEARCH_DB,
 			quietHours: !!env.NOTIFICATIONS_DB,

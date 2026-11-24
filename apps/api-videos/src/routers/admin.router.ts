@@ -233,7 +233,11 @@ const SeasonBody = z
 		version: z.number().int().min(1).optional(),
 	})
 	.strict();
-app.get('/islamic-seasons', async (c) => ok(c, await listSeasons(searchDb(c), { deleted: c.req.query('deleted') === 'true', cursor: c.req.query('cursor'), limit: Number(c.req.query('limit') ?? 25) })));
+const SeasonList = z.object({ deleted: z.enum(['true', 'false']).optional(), cursor: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(100).optional() });
+app.get('/islamic-seasons', async (c) => {
+	const q = parse(SeasonList, c.req.query());
+	return ok(c, await listSeasons(searchDb(c), { deleted: q.deleted === 'true', cursor: q.cursor, limit: q.limit }));
+});
 app.get('/islamic-seasons/:id', async (c) => {
 	const season = await readSeason(searchDb(c), c.req.param('id'));
 	if (!season) throw new SeasonError(404, 'not_found');
