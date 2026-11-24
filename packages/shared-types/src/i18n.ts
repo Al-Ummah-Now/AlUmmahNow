@@ -928,6 +928,10 @@ export interface AppTranslations {
     allowDownloadsLabel?: string;
     allowDownloadsToggle?: string;
     allowDownloadsHelp?: string;
+    downloadVideo?: string;
+    downloadingVideo?: string;
+    downloadStarted?: string;
+    downloadFailed?: string;
     /** Shorts viewer (D-SEO-10) */
     nextShort?: string;
     previousShort?: string;

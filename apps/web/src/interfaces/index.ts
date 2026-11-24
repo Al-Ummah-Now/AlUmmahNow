@@ -14,6 +14,8 @@ export interface VideoObject {
     thumbnailUrl: string;
     videoUrl: string;
     playUrl?: string; // HLS streaming URL (e.g., https://vz-xxx.b-cdn.net/{videoGuid}/playlist.m3u8)
+    /** Public progressive R2 video.mp4 URL when ready (used for SEO & Web Download eligibility) */
+    contentUrl?: string;
     userId: string;
     channel: string;
     channelId: string | null;
