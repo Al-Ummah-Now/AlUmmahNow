@@ -82,7 +82,7 @@ export const CONTACT_EN: ContactTranslations = {
     account: { label: 'Account & sign-in', hint: 'Signing in, your profile and data' },
     problem: { label: 'Report a problem', hint: 'Something isn’t working' },
     content: { label: 'Content & copyright', hint: 'Rights, takedowns and corrections' },
-    partnership: { label: 'Partnership', hint: 'Channels, organisations and press' },
+    partnership: { label: 'Partnership', hint: 'Channels, organizations and press' },
   },
   submit: 'Send message',
   sending: 'Sending…',

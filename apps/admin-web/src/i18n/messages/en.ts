@@ -245,7 +245,7 @@ const en = {
     undone: 'The previous {lang} text is back.',
     sourceEmpty: 'Type the {lang} text first.',
     required: 'Enter the {lang} text, or use Translate.',
-    quran: 'This is Quran text: it is never machine-translated. Paste the official text and a recognised translation.',
+    quran: 'This is Quran text: it is never machine-translated. Paste the official text and a recognized translation.',
     quranRefs: 'Found: {refs}.',
     missingAr: 'Arabic missing',
     missingEn: 'English missing',
