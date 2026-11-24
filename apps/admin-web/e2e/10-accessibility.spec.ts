@@ -100,16 +100,19 @@ test.describe('axe - signed in pages', () => {
           problems.push(`BackLink center covered by ${topEl?.tagName ?? 'null'}`);
         }
 
-        // Resolve computed link foreground and plate background via a 1x1 canvas (handles rgb/oklch/color-mix)
-        const toRgb = (cssColor: string): [number, number, number] => {
+        // Resolve computed link foreground and plate background via a 1x1 canvas (handles rgb/oklch/color-mix).
+        // Reject invalid or non-opaque colours so a missing plate never falls back to transparent/black.
+        const toOpaqueRgb = (cssColor: string): [number, number, number] | null => {
+          if (!cssColor || !CSS.supports('color', cssColor)) return null;
           const canvas = document.createElement('canvas');
           canvas.width = 1;
           canvas.height = 1;
           const ctx = canvas.getContext('2d')!;
+          ctx.clearRect(0, 0, 1, 1);
           ctx.fillStyle = cssColor;
           ctx.fillRect(0, 0, 1, 1);
-          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-          return [r, g, b];
+          const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+          return a === 255 ? [r, g, b] : null;
         };
         const lum = ([r, g, b]: [number, number, number]) => {
           const lin = [r, g, b].map((c) => {
@@ -118,9 +121,11 @@ test.describe('axe - signed in pages', () => {
           });
           return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
         };
-        const l1 = lum(toRgb(linkCs.color));
-        const l2 = lum(toRgb(linkBefore.backgroundColor));
-        const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        const fg = toOpaqueRgb(linkCs.color);
+        const bg = toOpaqueRgb(linkBefore.backgroundColor);
+        if (!fg) problems.push(`BackLink foreground colour is invalid or transparent: ${linkCs.color}`);
+        if (!bg) problems.push(`BackLink::before plate background is invalid or transparent: ${linkBefore.backgroundColor}`);
+        const ratio = fg && bg ? (Math.max(lum(fg), lum(bg)) + 0.05) / (Math.min(lum(fg), lum(bg)) + 0.05) : 0;
 
         return { problems, ratio };
       });

@@ -206,44 +206,50 @@ describe('spend', () => {
   }
 
   it('SpendSection shows Month to date under Spent so far and no Not set under spend tiles when budget is unset', () => {
+    const extractTile = (markup: string, id: string) =>
+      markup
+        .split('<div class="rounded-lg border border-border bg-surface-2 p-4">')
+        .find((part) => part.includes(`data-testid="${id}"`))
+        ?.split('</div>')[0] ?? '';
+
     for (const locale of ['en', 'ar'] as const) {
-      const html = renderToStaticMarkup(
+      const t = createTranslator(locale);
+      const f = opsFormats(locale);
+      const msgs = (locale === 'ar' ? ar : en).operations.spend;
+
+      const unsetHtml = renderToStaticMarkup(
         React.createElement(SpendSection as unknown as React.FC<Parameters<SpendSec>[0]>, {
           c: sampleCosts(null),
-          t: createTranslator(locale),
-          f: opsFormats(locale),
+          t,
+          f,
           locale,
         }),
       );
-      const tile = (id: string) =>
-        html
-          .split('<div class="rounded-lg border border-border bg-surface-2 p-4">')
-          .find((part) => part.includes(`data-testid="${id}"`))
-          ?.split('</div>')[0] ?? '';
-      const notSet = locale === 'ar' ? 'غير محددة' : 'Not set';
-      const mtdLabel = locale === 'ar' ? 'منذ بداية الشهر' : 'Month to date';
 
-      const spentTile = tile('ops-spend-mtd');
-      assert.ok(spentTile.includes(mtdLabel), `${locale} ops-spend-mtd should show "${mtdLabel}": ${spentTile}`);
-      assert.ok(!spentTile.includes(notSet), `${locale} ops-spend-mtd must not show "${notSet}": ${spentTile}`);
+      const spentTile = extractTile(unsetHtml, 'ops-spend-mtd');
+      assert.ok(spentTile.includes(msgs.spentSub), `${locale} ops-spend-mtd should show "${msgs.spentSub}": ${spentTile}`);
+      assert.ok(!spentTile.includes(msgs.notSet), `${locale} ops-spend-mtd must not show "${msgs.notSet}": ${spentTile}`);
 
-      const projectedTile = tile('ops-spend-projected');
+      const projectedTile = extractTile(unsetHtml, 'ops-spend-projected');
       assert.equal((projectedTile.match(/<dd\b/g) ?? []).length, 1, `${locale} ops-spend-projected should omit sub-label when budget is unset: ${projectedTile}`);
-      assert.ok(!projectedTile.includes(notSet), `${locale} ops-spend-projected must not show "${notSet}": ${projectedTile}`);
+      assert.ok(!projectedTile.includes(msgs.notSet), `${locale} ops-spend-projected must not show "${msgs.notSet}": ${projectedTile}`);
 
-      assert.ok(tile('ops-spend-left').includes(notSet), `${locale} ops-spend-left should still show "${notSet}" for the budget tile`);
+      assert.ok(extractTile(unsetHtml, 'ops-spend-left').includes(msgs.notSet), `${locale} ops-spend-left should still show "${msgs.notSet}" for the budget tile`);
+
+      const capped = sampleCosts(600);
+      const cappedHtml = renderToStaticMarkup(
+        React.createElement(SpendSection as unknown as React.FC<Parameters<SpendSec>[0]>, {
+          c: capped,
+          t,
+          f,
+          locale,
+        }),
+      );
+      const expectedSpentShare = msgs.share.replace('{percent}', f.percent(capped.budget.share!));
+      const expectedProjectedShare = msgs.share.replace('{percent}', f.percent(capped.budget.projectedShare!));
+      assert.ok(extractTile(cappedHtml, 'ops-spend-mtd').includes(expectedSpentShare), `${locale} capped ops-spend-mtd should show "${expectedSpentShare}"`);
+      assert.ok(extractTile(cappedHtml, 'ops-spend-projected').includes(expectedProjectedShare), `${locale} capped ops-spend-projected should show "${expectedProjectedShare}"`);
     }
-
-    const withCap = renderToStaticMarkup(
-      React.createElement(SpendSection as unknown as React.FC<Parameters<SpendSec>[0]>, {
-        c: sampleCosts(600),
-        t: createTranslator('en'),
-        f: opsFormats('en'),
-        locale: 'en',
-      }),
-    );
-    assert.match(withCap, /data-testid="ops-spend-mtd"[^]*?of the budget/);
-    assert.match(withCap, /data-testid="ops-spend-projected"[^]*?of the budget/);
   });
 });
 
