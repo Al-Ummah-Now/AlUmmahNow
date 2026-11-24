@@ -564,6 +564,30 @@ describe('channel actions', () => {
 		assert.equal(JSON.parse(raw.videos.store.get('livestream:ls')!).userId, OTHER);
 	});
 
+	it('a new owner with no email closes no email invitation (null, never an empty match) (Gemini nit)', async () => {
+		const { call, jobOf, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { email: undefined }) },
+		});
+		const when = new Date(Date.now() + 86_400_000).toISOString();
+		db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES ('blank', 'ch1', 'editor', NULL, '', 1, ?, 'pending', '2026-01-01', ?)`).run(OWNER, when);
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(job.result.invitesCancelled, 0);
+		assert.equal((db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'blank'`).get() as { status: string }).status, 'pending');
+	});
+
+	it('one move notice failing does not stop the other (Gemini nit)', async () => {
+		const { raw, call, jobOf } = await setup();
+		const send = raw.queue.send.bind(raw.queue);
+		raw.queue.send = (async (msg: any) => {
+			if (msg?.payload?.notificationKey === 'channelMovedIn') throw new Error('queue down');
+			return send(msg);
+		}) as typeof raw.queue.send;
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded');
+		assert.ok(raw.queue.messages.some((m: any) => m.payload?.notificationKey === 'channelMovedOutByTeam' && m.payload.recipientUserId === OWNER));
+	});
+
 	it('verify fails the move (so it retries) while a record still names the previous owner', async () => {
 		const { raw, call, jobOf } = await setup();
 		// An old-owner write that lands after the video step: the video comes back on OWNER once
