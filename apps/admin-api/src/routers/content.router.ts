@@ -294,6 +294,13 @@ app.post('/channels/:id/transfer', async (c) => {
  * take an official handle back from the channel that holds it, or release a channel's handle
  * (it gets a default one at once).
  */
+interface HandleTakeResult {
+  handle: string;
+  previousHandle: string | null;
+  tookFrom: string | null;
+  holderHandle: string | null;
+}
+
 const handleReason = async (c: C): Promise<string | null> => {
   const reason = (await body(c)).reason;
   const text = typeof reason === 'string' ? reason.trim() : '';
@@ -308,8 +315,24 @@ app.post('/channels/:id/handle/take', async (c) => {
   if (!handle) return apiError(c, 400, 'invalid_request', { error: 'handle is required' });
   const reason = await handleReason(c);
   if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
-  return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-take', details: { handle, reason } }, () =>
-    videos(c, `/channels/${encodeURIComponent(id)}/handle/take`, { method: 'POST', json: { handle } })));
+  const taken = await audited(
+    c,
+    { kind: 'channel', id, action: 'handle-take', details: { handle, reason } },
+    () => videos<HandleTakeResult>(c, `/channels/${encodeURIComponent(id)}/handle/take`, { method: 'POST', json: { handle } }),
+    (r) => ({ handle: r.previousHandle ?? null }),
+  );
+  // The channel the handle came from has its own row: what it lost, what it has now, and why
+  if (taken.tookFrom) {
+    await writeAudit(c.env.REPORTS_DB, {
+      kind: 'channel',
+      id: taken.tookFrom,
+      action: 'handle-taken-away',
+      actorId: actorOf(c),
+      details: { handle: taken.holderHandle, takenFor: id, reason },
+      previous: { handle: taken.handle },
+    }).catch((e) => logger.error('[Content] Could not audit the channel a handle was taken from', { channelId: taken.tookFrom, error: String(e) }));
+  }
+  return ok(c, taken);
 });
 
 app.post('/channels/:id/handle/release', async (c) => {
@@ -317,8 +340,12 @@ app.post('/channels/:id/handle/release', async (c) => {
   const id = c.req.param('id');
   const reason = await handleReason(c);
   if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
-  return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-release', details: { reason } }, () =>
-    videos(c, `/channels/${encodeURIComponent(id)}/handle/release`, { method: 'POST' })));
+  return ok(c, await audited(
+    c,
+    { kind: 'channel', id, action: 'handle-release', details: { reason } },
+    () => videos<{ handle: string; previousHandle: string | null }>(c, `/channels/${encodeURIComponent(id)}/handle/release`, { method: 'POST' }),
+    (r) => ({ handle: r.previousHandle ?? null }),
+  ));
 });
 
 app.delete('/channels/:id', async (c) => {

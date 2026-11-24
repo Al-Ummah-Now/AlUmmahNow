@@ -299,15 +299,19 @@ export interface ChannelEdit {
 	coverUrl?: string | null;
 }
 
-export async function updateChannel(env: AdminServiceEnv, id: string, edit: ChannelEdit): Promise<Row> {
+export async function updateChannel(env: AdminServiceEnv, id: string, edit: ChannelEdit, options: { officialTakeBack?: boolean } = {}): Promise<Row> {
 	const channels = repo(env.channels);
 	const existing = await channels.getObject(id);
 	if (!existing || existing.isDeleted) throw new AdminError(404, 'channel_not_found');
 	let claimed: string | null = null;
 	if (edit.handle !== undefined && normalizeHandleInput(edit.handle) !== (existing.handle || '')) {
 		if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
-		// Admins may give official (reserved) handles, like super admins in the app
-		const claim = await claimHandle(env.channel_tabs, edit.handle, existing, { allowOfficial: true });
+		// Official (reserved) handles are given only by the take-back tool (super admins, a reason, the
+		// holder told); a plain channel edit refuses them
+		if (!options.officialTakeBack && OFFICIAL_HANDLES.has(normalizeHandleInput(edit.handle).toLowerCase())) {
+			throw new AdminError(409, 'official_handle_take_back');
+		}
+		const claim = await claimHandle(env.channel_tabs, edit.handle, existing, { allowOfficial: options.officialTakeBack === true });
 		if (claim.ok === false) throw new AdminError(409, 'handle_unavailable', claim.reason);
 		claimed = claim.handle;
 	}
@@ -367,7 +371,12 @@ export async function releaseChannelHandle(env: AdminServiceEnv, channelId: stri
  * was reserved) and gives it to `channelId`. Only names on the official list; the holder gets a
  * default handle and a notice (CC-D9). A handle no channel holds is simply set.
  */
-export async function takeOfficialHandle(env: AdminServiceEnv, channelId: string, handle: string, actorId: string): Promise<{ handle: string; tookFrom: string | null }> {
+export async function takeOfficialHandle(
+	env: AdminServiceEnv,
+	channelId: string,
+	handle: string,
+	actorId: string,
+): Promise<{ handle: string; previousHandle: string | null; tookFrom: string | null; holderHandle: string | null }> {
 	if (!env.channel_tabs) throw new AdminError(400, 'handles_unavailable');
 	const wanted = normalizeHandleInput(handle).toLowerCase();
 	if (!OFFICIAL_HANDLES.has(wanted)) throw new AdminError(400, 'not_official_handle');
@@ -378,15 +387,19 @@ export async function takeOfficialHandle(env: AdminServiceEnv, channelId: string
 	for (const id of [channelId, ...(tookFrom ? [tookFrom] : [])]) {
 		if (await openTransferJob(env, id)) throw new AdminError(409, 'transfer_in_progress');
 	}
+	const previousHandle = typeof target.handle === 'string' ? target.handle : null;
+	let holderHandle: string | null = null;
 	if (tookFrom) {
 		const replaced = await replaceWithDefaultHandle(env, tookFrom);
+		holderHandle = replaced.to;
 		await notifyHandleChange(env, replaced.channel, replaced.to, actorId);
-		// The holder's old name must not keep redirecting to it: it now names the other channel
-		await env.channel_tabs.delete(handleHistoryKey(wanted)).catch(() => undefined);
 	}
-	const saved = await updateChannel(env, channelId, { handle: wanted });
+	// The name must not keep redirecting to a channel that gave it up, and a take-back overrides the
+	// 14-day hold that keeps a replaced handle for its last channel
+	await env.channel_tabs.delete(handleHistoryKey(wanted)).catch(() => undefined);
+	const saved = await updateChannel(env, channelId, { handle: wanted }, { officialTakeBack: true });
 	logger.info('[Admin] Official handle taken back', { channelId, handle: wanted, tookFrom, actorId });
-	return { handle: saved.handle as string, tookFrom };
+	return { handle: saved.handle as string, previousHandle, tookFrom, holderHandle };
 }
 
 async function notifyHandleChange(env: AdminServiceEnv, channel: Row, handle: string, actorId: string): Promise<void> {
