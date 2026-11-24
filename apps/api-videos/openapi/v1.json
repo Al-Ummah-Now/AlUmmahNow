@@ -29226,7 +29226,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -29522,7 +29521,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -30326,7 +30324,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -31213,7 +31210,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",

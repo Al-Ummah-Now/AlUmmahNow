@@ -7,7 +7,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ProfileCreate } from '../src/endpoints/profile/profileCreate';
 import { ProfileUpdate } from '../src/endpoints/profile/profileUpdate';
-import { tokenEmail, withAccountEmail } from '../src/lib/account-email';
+import { WatchHistoryAdd } from '../src/endpoints/profile/watchHistoryAdd';
+import { accountEmailField, tokenEmail, withAccountEmail } from '../src/lib/account-email';
+import { setIntentionalPreferences } from '../src/lib/intentional-preferences';
+import { markOnboarding } from '../src/lib/onboarding';
+import { setPlaybackSettings } from '../src/lib/playback-settings';
+import { setWatchHistoryPaused } from '../src/lib/watch-history';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -24,6 +29,7 @@ function setup(opts: { email?: string; profile?: Record<string, unknown> } = {})
 	const app = buildApp((r: any) => {
 		r.post('/api/profiles', ProfileCreate);
 		r.put('/api/profile', ProfileUpdate);
+		r.post('/api/profiles/watch-history', WatchHistoryAdd);
 	}, { userId: ME, email: opts.email ?? 'me@example.com' });
 	const send = (method: string, path: string, body: unknown) =>
 		app.request(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, env);
@@ -86,10 +92,42 @@ describe("a profile's email is the signed-in account's", () => {
 	});
 });
 
+describe('a profile made by a first setting or a first watch', () => {
+	const writers: [string, (bucket: R2Bucket, email: string | undefined) => Promise<unknown>][] = [
+		['onboarding', (b, email) => markOnboarding(b, ME, email, { identityTour: 1 })],
+		['intentional preferences', (b, email) => setIntentionalPreferences(b, ME, email, {})],
+		['playback settings', (b, email) => setPlaybackSettings(b, ME, email, { autoplayNext: false })],
+		['watch history paused', (b, email) => setWatchHistoryPaused(b, ME, email, true)],
+	];
+	for (const [name, write] of writers) {
+		it(`${name}: the account email, trimmed and in lower case; none without one`, async () => {
+			for (const [email, expected] of [[' Me@Example.COM ', 'me@example.com'], ['', undefined], [undefined, undefined]] as const) {
+				const bucket = new MemoryBucket();
+				await write(bucket as unknown as R2Bucket, email);
+				assert.equal(bucket.read(ME).email, expected, String(email));
+			}
+		});
+	}
+
+	it('watch history: the same', async () => {
+		for (const [email, expected] of [[' Me@Example.COM ', 'me@example.com'], ['', undefined]] as const) {
+			const { send, profiles } = setup({ email });
+			assert.equal((await send('POST', '/api/profiles/watch-history', { videoId: 'v1', watchTime: 5 })).status, 200);
+			assert.equal(profiles.read(ME).email, expected, email);
+		}
+	});
+});
+
 describe('account email helpers', () => {
 	it('reads the token email, or null', () => {
 		assert.equal(tokenEmail({ email: ' A@B.co ' }), 'a@b.co');
 		for (const auth of [null, undefined, {}, { email: '' }, { email: '  ' }]) assert.equal(tokenEmail(auth), null);
+	});
+
+	it('gives the email field of a new profile, or no key', () => {
+		assert.deepEqual(accountEmailField('A@b.co'), { email: 'a@b.co' });
+		assert.deepEqual(accountEmailField(''), {});
+		assert.deepEqual(accountEmailField(undefined), {});
 	});
 
 	it('drops the submitted email from the fields', () => {

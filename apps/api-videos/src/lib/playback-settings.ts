@@ -12,6 +12,7 @@
  * stored value gets the new default, off.
  * The profile view (transformProfileToView) is an allowlist, so this never reaches public reads.
  */
+import { accountEmailField } from './account-email';
 import R2Repository from './r2Repo';
 
 export interface PlaybackSettings {
@@ -59,7 +60,7 @@ export async function setPlaybackSettings(
 		{
 			initial: () => ({
 				id: userId,
-				email: email || 'unknown',
+				...accountEmailField(email),
 				dateCreated: now,
 				dateModified: now,
 				channels: [],

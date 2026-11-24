@@ -10,6 +10,7 @@
  *   message structure.
  */
 import type { WatchHistoryEvent } from '@al-ummah/shared-types';
+import { accountEmailField } from './account-email';
 import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
@@ -47,7 +48,7 @@ export async function setWatchHistoryPaused(
 		{
 			initial: () => ({
 				id: userId,
-				email: email || 'unknown',
+				...accountEmailField(email),
 				dateCreated: now,
 				dateModified: now,
 				channels: [],

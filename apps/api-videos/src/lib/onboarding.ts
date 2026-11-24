@@ -8,6 +8,7 @@
  * older client can't make a newer tour show again. The profile view (transformProfileToView) is an
  * allowlist, so this never reaches public reads.
  */
+import { accountEmailField } from './account-email';
 import R2Repository from './r2Repo';
 
 export interface OnboardingState {
@@ -52,7 +53,7 @@ export async function markOnboarding(
 		{
 			initial: () => ({
 				id: userId,
-				email: email || 'unknown',
+				...accountEmailField(email),
 				dateCreated: now,
 				dateModified: now,
 				channels: [],

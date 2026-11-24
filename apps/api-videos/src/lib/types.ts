@@ -240,7 +240,7 @@ const WatchHistoryEntry = z.object({
 
 export const Profile = z.object({
     id: Str(),
-    email: Str().email(),
+    email: Str().email().optional().describe("The account's email; absent when the token that made the profile had none"),
     userName: Str().optional(),
     displayName: Str().optional(),
     displayNameLocalized: z.record(z.string(), z.string()).optional(),
