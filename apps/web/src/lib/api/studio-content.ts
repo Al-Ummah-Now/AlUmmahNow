@@ -6,7 +6,7 @@ import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
 import { apiRequestServer, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 
-export type StudioVideo = VideoObject & { studioStatus: StudioVideoStatus; isDraft: boolean; failureKind?: 'upload' | 'publish' | null };
+export type StudioVideo = VideoObject & { studioStatus: StudioVideoStatus; isDraft: boolean; failureKind?: 'upload' | 'publish' | null; premiere?: { streamId: string; startsAt: string | null } };
 
 export interface ChannelContentParams {
   status: StudioVideoStatus;

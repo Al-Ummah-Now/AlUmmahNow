@@ -42,7 +42,7 @@ export const getStudioFeatures = cache(async (channelId: string, role: StudioRol
     can(role, 'channel.edit') ? getStudioSite(channelId).then((site) => !!site) : Promise.resolve(false),
     getFeatures(channelId),
   ]);
-  return { site: hasSite, live: features.live, social: features.socialAutopost, upload: features.upload, bulkSchedule: features.bulkSchedule, siteDomains: features.siteDomains, youtubeImport: features.youtubeImport };
+  return { site: hasSite, live: features.live || features.livePremieres, liveStreams: features.live, liveChat: features.liveChat, livePremieres: features.livePremieres, liveEvents: features.liveEvents, liveReminders: features.liveReminders, social: features.socialAutopost, upload: features.upload, bulkSchedule: features.bulkSchedule, siteDomains: features.siteDomains, youtubeImport: features.youtubeImport };
 });
 
 /**

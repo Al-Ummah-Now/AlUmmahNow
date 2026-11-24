@@ -9,6 +9,7 @@ import { readWindow } from '../useChatReplay';
 const readChat = jest.fn();
 const postChat = jest.fn();
 const moderateChat = jest.fn();
+const heldChat = jest.fn();
 let mockFrame: ((data: unknown) => void) | null = null;
 let mockChannel = '';
 let mockUser: { id: string } | null = { id: 'me' };
@@ -44,6 +45,7 @@ jest.mock('@/lib/live/api', () => ({
   readChat: (...a: unknown[]) => readChat(...a),
   postChat: (...a: unknown[]) => postChat(...a),
   moderateChat: (...a: unknown[]) => moderateChat(...a),
+  heldChat: (...a: unknown[]) => heldChat(...a),
 }));
 
 let mockText = LIVE_WATCH_EN;
@@ -82,6 +84,7 @@ beforeEach(() => {
   mockActiveChannel = null;
   readChat.mockResolvedValue(page([msg(1), msg(2)]));
   moderateChat.mockResolvedValue(undefined);
+  heldChat.mockResolvedValue([]);
   confirm.mockResolvedValue(true);
   ensureHuman.mockResolvedValue({ ok: true, token: 'human' });
 });
@@ -311,6 +314,32 @@ describe('writing', () => {
 });
 
 describe('moderating', () => {
+  it('shows moderators what is held for review, and only them', async () => {
+    readChat.mockResolvedValue(page([msg(1)]));
+    heldChat.mockResolvedValue([msg(8), msg(9)]);
+    const { unmount } = await show();
+    expect(heldChat).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('live-chat-held-bar')).toBeNull();
+    unmount();
+
+    await show({ canModerate: true });
+    const toggle = await screen.findByTestId('live-chat-held-toggle');
+    expect(toggle).toHaveTextContent('2 messages held for review');
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getAllByTestId('live-chat-held-show')[0]!);
+    expect(moderateChat).toHaveBeenLastCalledWith('s1', 'm8', 'restore');
+    expect(toggle).toHaveTextContent('1 message held for review');
+    // Shown in the chat without waiting for the next read
+    expect(screen.getAllByTestId('live-chat-message').map((el) => el.getAttribute('data-message-id'))).toContain('m8');
+    moderateChat.mockRejectedValueOnce(new LiveApiError(409, 'conflict'));
+    heldChat.mockResolvedValue([msg(9)]);
+    await userEvent.click(screen.getByTestId('live-chat-held-remove'));
+    expect(await screen.findByText(LIVE_WATCH_EN.chatActionFailed)).toBeInTheDocument();
+    moderateChat.mockResolvedValue(undefined);
+    await userEvent.click(screen.getByTestId('live-chat-held-remove'));
+    await waitFor(() => expect(screen.queryByTestId('live-chat-held-bar')).toBeNull());
+  });
+
   it('a viewer may report others and remove their own, after asking', async () => {
     readChat.mockResolvedValue(page([msg(1), msg(2, { userId: 'me' })]));
     await show();

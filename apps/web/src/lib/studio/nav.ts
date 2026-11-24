@@ -12,7 +12,14 @@ type Requires = readonly StudioCapability[];
  */
 export interface StudioFeatures {
   site?: boolean;
+  /** Live streams or premieres: the Live tab */
   live?: boolean;
+  /** What the Live tab offers on this channel (wiki E17) */
+  liveStreams?: boolean;
+  liveChat?: boolean;
+  livePremieres?: boolean;
+  liveEvents?: boolean;
+  liveReminders?: boolean;
   /** Social auto-post: on and at least one network set up (socialAutopost) */
   social?: boolean;
   upload?: boolean;
@@ -22,6 +29,18 @@ export interface StudioFeatures {
   youtubeImport?: boolean;
 }
 export type StudioFeature = keyof StudioFeatures;
+
+/** What the Live tab offers: streams, premieres, and what can be set on them. */
+export interface LiveOffers {
+  streams: boolean;
+  premieres: boolean;
+  chat: boolean;
+  events: boolean;
+  /** A start time brings reminders and the upcoming list */
+  schedule: boolean;
+}
+
+export const liveOffers = (f: StudioFeatures): LiveOffers => ({ streams: f.liveStreams === true, premieres: f.livePremieres === true, chat: f.liveChat === true, events: f.liveEvents === true, schedule: f.liveReminders === true || f.liveEvents === true });
 
 export interface StudioTab {
   id: string;

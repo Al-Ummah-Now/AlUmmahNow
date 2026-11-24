@@ -6,6 +6,7 @@ import { Channel as BusinessChannel, ResponseError, Video as BusinessVideo } fro
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { transformVideoToView } from "../../lib/transformations";
+import { premiereTimes } from "../../lib/live/premieres";
 import { channelContentCounts, channelContentIds, healChannelContentRows, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 
 const MAX_PAGE = 100;
@@ -127,9 +128,10 @@ export class ChannelContentList extends AuthenticatedRoute {
 		const page = ids.slice(0, limit);
 		const loaded = await Promise.all(page.map((id) => repository.getObject(id)));
 		timer.mark("r2", `${page.length} video records, in parallel`);
+		const premieres = await premiereTimes(c.env as never, loaded);
 		const items = loaded
 			.filter((video): video is VideoType => !!video && !video.isDeleted)
-			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video) }));
+			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video), ...(premieres.get(video.id) ? { premiere: premieres.get(video.id) } : {}) }));
 
 		// Held videos show the live queue time (VR6); read once per list, only when one is held
 		const held = items.some((item) => item.studioStatus === "in_review" && (item as { review?: { status?: string } }).review?.status !== "checking");

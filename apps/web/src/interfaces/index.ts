@@ -63,6 +63,8 @@ export interface VideoObject {
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes
     // Scheduling fields
+    /** Waiting for its premiere (wiki E17), its team only */
+    premiereHold?: import('@al-ummah/shared-types').PremiereHold;
     scheduledPublishDate?: string;        // ISO 8601 datetime in UTC
     scheduledPublishTimezone?: string;    // IANA timezone (e.g., 'America/New_York')
     scheduledPublishStatus?: 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';

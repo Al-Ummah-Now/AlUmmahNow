@@ -67,7 +67,7 @@ export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'sched
  * Row actions in display order. The server still decides, per video. `uploadOn` is features.upload
  * for the channel: without it a failed upload offers no Upload again (hidden when off).
  */
-export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null, appealUsed = false, uploadOn = true): VideoRowAction[] {
+export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null, appealUsed = false, uploadOn = true, held = false): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
@@ -75,7 +75,8 @@ export function rowActions(status: VideosStatus, role: StudioRole, isPublic = fa
     case 'published':
       return [...edit, 'view', ...(can(role, 'analytics.view') ? ['analytics' as const] : []), 'copyLink', ...(schedule && !isPublic ? ['schedule' as const] : []), ...remove];
     case 'scheduled':
-      return [...edit, ...(schedule ? ['reschedule' as const, 'publishNow' as const, 'cancelSchedule' as const] : []), ...remove];
+      // Waiting for its premiere (wiki E17): everything about its time is the premiere's
+      return [...edit, ...(schedule && !held ? ['reschedule' as const, 'publishNow' as const, 'cancelSchedule' as const] : []), ...remove];
     case 'drafts':
       return [...edit, ...(schedule ? ['publishNow' as const, 'schedule' as const] : []), ...remove];
     case 'failed': {
