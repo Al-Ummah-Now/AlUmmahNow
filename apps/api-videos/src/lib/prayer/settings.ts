@@ -41,8 +41,8 @@ export const DEFAULT_PRAYER_ADMIN_SETTINGS: PrayerAdminSettings = {
 
 export class PrayerSettingsError extends Error {
 	constructor(
-		readonly status: 400 | 409,
-		readonly code: 'invalid_request' | 'conflict',
+		readonly status: 400 | 409 | 503,
+		readonly code: 'invalid_request' | 'conflict' | 'storage_unavailable',
 		readonly detail?: string,
 	) {
 		super(detail ?? code);
@@ -97,7 +97,7 @@ export interface PrayerSettingsInput {
 
 /** Applies a change when `version` matches; a country set to null goes back to the shipped default. */
 export async function writePrayerAdminSettings(env: { global_settings?: R2Bucket }, input: PrayerSettingsInput, actorId: string, now = new Date().toISOString()): Promise<{ previous: PrayerAdminSettings; settings: PrayerAdminSettings }> {
-	if (!env.global_settings) throw new PrayerSettingsError(400, 'invalid_request', 'settings storage is not bound');
+	if (!env.global_settings) throw new PrayerSettingsError(503, 'storage_unavailable');
 	const previous = await readPrayerAdminSettings(env, { fresh: true });
 	if (input.version !== previous.version) throw new PrayerSettingsError(409, 'conflict');
 	if (input.provider !== undefined && !(PRAYER_PROVIDERS as readonly string[]).includes(input.provider)) throw new PrayerSettingsError(400, 'invalid_request', 'provider');

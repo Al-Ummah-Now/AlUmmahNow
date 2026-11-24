@@ -39,7 +39,7 @@ import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
 import { PrayerSettingsError, readPrayerAdminSettings, writePrayerAdminSettings } from '../lib/prayer/settings';
 import { COUNTRY_METHOD_DEFAULTS, PRAYER_METHOD_IDS, isPrayerMethodId } from '../lib/prayer/methods';
-import { prayerKey } from '../lib/prayer/service';
+import { hijriKey, prayerKey } from '../lib/prayer/service';
 import { apiError } from '../lib/api-error';
 import { createSeason, deleteSeason, listSeasons, purgeSeasons, readSeason, restoreSeason, SEASON_ITEMS_MAX, SEASON_ITEM_TYPES, SEASON_KINDS, SeasonError, updateSeason } from '../lib/islamic-seasons';
 import R2Repository from '../lib/r2Repo';
@@ -242,9 +242,12 @@ app.post('/prayer-cache/purge', async (c) => {
 	const input = parse(PrayerPurgeBody, await body(c));
 	if (!isPrayerMethodId(input.method)) throw new admin.AdminError(400, 'invalid_request', 'method');
 	const settings = await readPrayerAdminSettings(c.env as never, { fresh: true });
-	const key = prayerKey(settings.provider, settings.hijriSource, input.method, input.asr, input.cityId, input.month);
-	await (c.env as { global_settings?: R2Bucket }).global_settings?.delete(key);
-	return ok(c, { key });
+	const bucket = (c.env as { global_settings?: R2Bucket }).global_settings;
+	if (!bucket) throw new PrayerSettingsError(503, 'storage_unavailable');
+	// The city's month and that month's Hijri dates (the city-less /api/hijri copy)
+	const keys = [prayerKey(settings.provider, settings.hijriSource, input.method, input.asr, input.cityId, input.month), hijriKey(settings.provider, settings.hijriSource, input.month)];
+	await bucket.delete(keys);
+	return ok(c, { keys });
 });
 
 // Islamic seasons (wiki Epic 21 §4 21.2): admin-api checks the admin's permission and audits each change

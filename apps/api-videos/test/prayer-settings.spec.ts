@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { PrayerTimesGet, setPrayerSettingsForTests } from '../src/endpoints/prayer/prayerTimes';
 import { aladhanProvider } from '../src/lib/prayer/aladhan';
 import { forgetPrayerSettingsCache, normalizeSettings, PrayerSettingsError, readPrayerAdminSettings, writePrayerAdminSettings } from '../src/lib/prayer/settings';
-import { prayerKey } from '../src/lib/prayer/service';
+import { hijriKey, prayerKey } from '../src/lib/prayer/service';
 import adminRouter from '../src/routers/admin.router';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, buildApp } from './helpers';
@@ -63,7 +63,9 @@ describe('prayer settings', () => {
 	it('the internal admin routes read, write and purge one stored month', async () => {
 		const env = { global_settings: new MemoryBucket(), SEARCH_DB: new SqliteD1() as unknown as D1Database };
 		const key = prayerKey('aladhan', 'HJCoSA', 5, 'standard', '360630', '2026-11');
+		const hijri = hijriKey('aladhan', 'HJCoSA', '2026-11');
 		await env.global_settings.put(key, '{}');
+		await env.global_settings.put(hijri, '{}');
 		const req = (method: string, path: string, body?: unknown) =>
 			adminRouter.request(path, { method, headers: { 'content-type': 'application/json', 'X-Admin-Actor': 'admin-9' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
 		const got = (await (await req('GET', '/prayer-settings')).json()) as any;
@@ -77,5 +79,7 @@ describe('prayer settings', () => {
 		const purge = await req('POST', '/prayer-cache/purge', { cityId: '360630', month: '2026-11', method: 5, asr: 'standard' });
 		assert.equal(purge.status, 200);
 		assert.equal(await env.global_settings.get(key), null);
+		assert.equal(await env.global_settings.get(hijri), null);
+		await assert.rejects(writePrayerAdminSettings({} as never, { version: 0 }, 'admin-1'), (e: unknown) => e instanceof PrayerSettingsError && e.status === 503);
 	});
 });
