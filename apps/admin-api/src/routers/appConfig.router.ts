@@ -27,6 +27,7 @@ import { lookupMany } from '../lib/moderation/reportMeta';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { auditOriginJson } from '../lib/request-origin';
+import { apiError } from '../lib/api-error';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -92,11 +93,11 @@ app.post('/releases/refresh', async (c) => {
 
 app.put('/releases/available', async (c) => {
   if (!hasPermission(c.get('auth')?.roles, 'app_versions:manage')) {
-    return c.json({ success: false, code: 'forbidden', error: 'Only super admins mark store uploads available' }, 403);
+    return apiError(c, 403, 'forbidden', { error: 'Only super admins mark store uploads available' });
   }
   const body = (await c.req.json().catch(() => null)) as { app?: unknown; platform?: unknown; source?: unknown; version?: unknown } | null;
   if (!body || typeof body.app !== 'string' || typeof body.platform !== 'string' || (body.source !== 'testflight' && body.source !== 'amazon') || !(body.version === null || typeof body.version === 'string')) {
-    return c.json({ success: false, code: 'bad_request', error: 'app, platform, source (testflight or amazon) and version (or null) are required' }, 400);
+    return apiError(c, 400, 'bad_request', { error: 'app, platform, source (testflight or amazon) and version (or null) are required' });
   }
   const db = c.env.REPORTS_DB;
   const id = crypto.randomUUID();
@@ -144,7 +145,7 @@ app.put('/:key', async (c) => {
   if (!isKey(key)) return c.json({ success: false, code: 'not_found', error: 'Unknown document' }, 404);
   // Minimum versions can lock users out: super admins only (issue #1434, wiki AUN-APP-UPDATES §4.2)
   if (key === 'versions' && !hasPermission(c.get('auth')?.roles, 'app_versions:manage')) {
-    return c.json({ success: false, code: 'forbidden', error: 'Only super admins change app versions' }, 403);
+    return apiError(c, 403, 'forbidden', { error: 'Only super admins change app versions' });
   }
   const body = (await c.req.json().catch(() => null)) as { value?: unknown; expected?: unknown } | null;
   if (!body || body.value === undefined) return c.json({ success: false, code: 'bad_request', error: 'value is required' }, 400);
