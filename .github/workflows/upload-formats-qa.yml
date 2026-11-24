@@ -32,8 +32,10 @@ jobs:
     # Only a dispatch on main
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    # up to 90 min waiting for a release and the encode slot, ~20 min of uploads, 15 of encodes, teardown
-    timeout-minutes: 180
+    # Nested timeouts: Playwright 55 min (uploads stop starting at 30, the encode wait ends by 42, then the
+    # deletes) < the test step 60 < the qa-encode lock 65 < this job: 15 setup + 90 waiting for a release +
+    # 65 for the slot + 60 for the test + 45 for the teardown (account deletion, leftover check, probe)
+    timeout-minutes: 280
     permissions:
       contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?; the release check below
@@ -154,7 +156,7 @@ jobs:
         timeout-minutes: 65
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" acquire "$E2E_ENV-encode" --slots 2 --ttl-min 50 --max-wait-min 60
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" acquire "$E2E_ENV-encode" --slots 2 --ttl-min 65 --max-wait-min 60
 
       - name: Upload every format and wait for the encodes
         id: formats
