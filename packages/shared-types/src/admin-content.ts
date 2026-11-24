@@ -570,6 +570,12 @@ export const ADMIN_JOB_KINDS = [
    */
   'profiles.restore-legacy',
   /**
+   * Compare the profiles' (and their channels') stored emails with the sign-in accounts, and on
+   * request write the account's where they differ (api-videos lib/admin/profile-emails.ts). Target
+   * id 'profile-emails'.
+   */
+  'profiles.repair-emails',
+  /**
    * Check every video's thumbnail against its shape (Bunny's width/height) and
    * replace auto frames captured at the wrong aspect, in resumable steps
    * (api-videos lib/thumbnail/repair.ts). Target id 'thumbnail-repair'.
@@ -749,6 +755,8 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'user.delete-data': ['users:manage', 'content:delete'],
   'user.erase-run': ['users:manage', 'content:delete'],
   'profiles.restore-legacy': ['users:manage'],
+  // admin-api also requires a super admin for this kind (its report names accounts' emails)
+  'profiles.repair-emails': ['users:manage'],
   'videos.repair-thumbnails': ['videos:manage'],
   'search.rebuild-ownership': ['videos:manage'],
   'playlist.add-videos': ['videos:manage'],

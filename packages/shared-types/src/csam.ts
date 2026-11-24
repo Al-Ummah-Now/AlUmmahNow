@@ -254,6 +254,7 @@ export function validCsamRetentionDays(days: unknown): days is number {
 export const CSAM_ACCESS_ACTIONS = [
   'case.opened',
   'case.viewed',
+  'cases.email_checked',
   'case.mapped',
   'manifest.viewed',
   'file.downloaded',

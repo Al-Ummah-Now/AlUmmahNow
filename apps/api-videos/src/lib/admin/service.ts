@@ -65,6 +65,7 @@ import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jo
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
+import { runProfileEmails, type ProfileEmailsEnv } from './profile-emails';
 import { accountEmailForDisplay, authEmail, normalizeEmail } from './authUsers';
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
@@ -2261,6 +2262,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),
 	'user.erase-run': (env, job) => runRunUserErase(env as AdminServiceEnv, job),
 	'profiles.restore-legacy': (env, job) => runLegacyRestore(env as AdminServiceEnv, job),
+	// Profile emails compared with the accounts (lib/admin/profile-emails.ts)
+	'profiles.repair-emails': (env, job) => runProfileEmails(env as ProfileEmailsEnv, job),
 	// Thumbnail aspect repair (lib/thumbnail/repair.ts), started from the admin Processing page
 	'videos.repair-thumbnails': (env, job) => runThumbnailRepairStep(env as ThumbnailRepairEnv, job) as unknown as Promise<JobOutcome>,
 	// Ownership index rebuild (lib/search/ownershipRebuild.ts), started from the Errors page's drift flag

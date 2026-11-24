@@ -33,6 +33,7 @@ import { videoThumbnailFolder } from '../lib/admin/purgeCopies';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { canCancel, canRetry, cancelJob, cancellableKind, countJobs, getJob, getJobWithLog, listJobs, retryJob } from '../lib/admin/jobs';
+import { listProfileEmailJobs, profileEmailsReport, startProfileEmails } from '../lib/admin/profile-emails';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
@@ -504,6 +505,14 @@ app.get('/deletions', async (c) => {
 });
 app.post('/deletions/:kind/:id/restore', async (c) => ok(c, await admin.restoreDeletion(c.env, deletionKind(c), c.req.param('id'), actor(c))));
 app.post('/deletions/:kind/:id/purge', async (c) => ok(c, { deletion: await admin.requestDeletionPurge(c.env, deletionKind(c), c.req.param('id'), actor(c)) }));
+
+// Profile emails (lib/admin/profile-emails.ts): a check or repair job, and its private report
+app.get('/profile-emails/jobs', async (c) => ok(c, { items: await listProfileEmailJobs(c.env as never) }));
+app.post('/profile-emails/jobs', async (c) => {
+	const input = parse(z.object({ mode: z.enum(['check', 'repair']), checkJobId: z.string().min(8).max(64).optional() }).strict(), await body(c));
+	return ok(c, await startProfileEmails(c.env as never, input as { mode: 'check' | 'repair'; checkJobId?: string }, actor(c)));
+});
+app.get('/profile-emails/jobs/:id/report', async (c) => ok(c, await profileEmailsReport(c.env as never, c.req.param('id'), Number(c.req.query('page') ?? 0))));
 
 // Restore legacy profile fields (lib/admin/legacy-restore.ts): dry run, then a queued job
 const LegacyRestoreRequest = z.object({

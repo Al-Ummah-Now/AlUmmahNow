@@ -62,6 +62,8 @@ export function canRetryJob(job: Pick<AdminJob, 'kind'>, permissions: readonly A
 export function jobTargetHref(job: Pick<AdminJob, 'targetKind' | 'targetId'> & Partial<Pick<AdminJob, 'kind'>>): string {
   // The legacy profile restore covers many profiles: it lives on its own page
   if (job.kind === 'profiles.restore-legacy') return '/legacy-profiles';
+  // Profile emails cover every profile: they have their own page
+  if (job.kind === 'profiles.repair-emails') return '/profile-emails';
   // The thumbnail shape check spans many videos: it opens Processing health
   if (job.kind === 'videos.repair-thumbnails') return '/processing';
   // The index rebuild covers a whole bucket: its flag lives on the Errors page

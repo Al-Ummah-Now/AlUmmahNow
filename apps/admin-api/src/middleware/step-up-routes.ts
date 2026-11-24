@@ -31,6 +31,8 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   // Videos user: ban (suspend on the videos site), unban, delete the user's data
   { method: 'POST', path: '/api/content/users/:id/ban', what: 'Ban a user' },
   { method: 'POST', path: '/api/content/users/:id/unban', what: 'Unban a user' },
+  // Profile emails: a check lists accounts' emails, a repair rewrites the profiles'
+  { method: 'POST', path: '/api/content/profile-emails/jobs', what: 'Check or repair profile emails' },
   { method: 'POST', path: '/api/content/users/:id/delete-data', what: "Delete a user's data" },
   { method: 'POST', path: '/api/moderation/reports/:reportId/action', what: "Report outcome \"banned\" (bans the owner)", when: reportActionBans },
   // Permanent deletes ("Delete permanently now")

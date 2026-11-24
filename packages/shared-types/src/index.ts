@@ -123,6 +123,7 @@ export * from './user-warnings';
 export * from './error-reporting';
 // Legacy (pre-SSO) profile restore planning (admin job + CLI)
 export * from './legacy-profiles';
+export * from './profile-emails';
 // Per-channel roles (owner/admin/editor/moderator), separate from site roles
 export * from './channel-roles';
 // Studio Comments page: one comment row across a channel's videos and posts (#771)

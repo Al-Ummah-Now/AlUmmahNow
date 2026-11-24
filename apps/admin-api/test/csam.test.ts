@@ -33,6 +33,10 @@ function fakeVideos(account: { email: string; deleted: boolean } | null | 'down'
       calls.push(call);
       const reply = (result: unknown, status = 200) => new Response(JSON.stringify(status < 400 ? { success: true, result } : { success: false, code: result }), { status, headers: { 'content-type': 'application/json' } });
       const p = call.path;
+      if (p === '/internal/csam/accounts' && !call.body.ids.includes('usr_uploader')) {
+        const known: Record<string, { email: string; deleted: boolean }> = { usr_same: { email: 'same@example.test', deleted: false }, usr_differs: { email: 'account@example.test', deleted: false }, usr_deleted: { email: 'deleted@example.test', deleted: true } };
+        return reply({ accounts: Object.fromEntries(Object.entries(known).filter(([id]) => call.body.ids.includes(id))) });
+      }
       if (p === '/internal/csam/accounts') return account === 'down' ? reply('auth_unavailable', 503) : reply({ accounts: account && call.body.ids.includes('usr_uploader') ? { usr_uploader: account } : {} });
       if (p === '/internal/csam/resolve') {
         const host = new URL(call.body.url).hostname;
@@ -118,6 +122,46 @@ describe('who may use it', () => {
     assert.deepEqual(listed[1].params, { userId: 'u' });
     assert.equal((await t.json('/api/content/jobs', { roles: 'super_admin' })).body.result.items[0].params.caseId, 'c');
     assert.equal((await t.call('/api/content/jobs/j1/retry', { method: 'POST', roles: 'admin' })).status, 403);
+  });
+});
+
+describe('case emails', () => {
+  it('lists the cases whose captured email is not the uploader account email, pages by id and logs the read', async () => {
+    const t = setup();
+    const add = (id: string, uploader: string | null, email: string | null) =>
+      t.db
+        .prepare("INSERT INTO csam_cases (id, matched_url, url_key, source, status, uploader_id, facts, detected_at, created_by, created_at, updated_at) VALUES (?, 'u', ?, 'paste', 'reported', ?, ?, '2026-11-01', 'a', '2026-11-01', '2026-11-01')")
+        .bind(id, id, uploader, JSON.stringify({ uploader: { userId: uploader, email } }))
+        .run();
+    const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    await add(id(1), 'usr_same', 'Same@Example.test');
+    await add(id(2), 'usr_differs', 'copy@example.test');
+    await add(id(3), 'usr_noacct', 'copy2@example.test');
+    await add(id(4), 'usr_differs', null);
+    await add(id(5), null, null);
+    // Deleted, not purged: still compared
+    await add(id(6), 'usr_deleted', 'deleted@example.test');
+    const page = (await t.json('/api/csam/email-check')).body.result;
+    assert.deepEqual(page, {
+      checked: 6,
+      items: [
+        { caseId: id(2), userId: 'usr_differs', captured: 'copy@example.test', account: 'account@example.test' },
+        { caseId: id(3), userId: 'usr_noacct', captured: 'copy2@example.test', account: null },
+      ],
+      next: null,
+    });
+    const log = (await t.json('/api/csam/log')).body.result.items;
+    assert.deepEqual(log.map((l: any) => [l.action, l.detail]), [['cases.email_checked', { checked: 6, found: 2 }]]);
+
+    for (let n = 7; n <= 52; n++) await add(id(n), 'usr_same', 'same@example.test');
+    const first = (await t.json('/api/csam/email-check')).body.result;
+    assert.deepEqual([first.checked, first.next], [50, id(50)]);
+    const second = (await t.json(`/api/csam/email-check?after=${first.next}`)).body.result;
+    assert.deepEqual([second.checked, second.next], [2, null]);
+    assert.equal((await t.json('/api/csam/email-check?after=%27')).status, 400);
+    for (const roles of ['admin', 'moderator', '']) assert.equal((await t.call('/api/csam/email-check', { roles })).status, 403);
+    const plan = (await t.db.prepare('EXPLAIN QUERY PLAN SELECT id, uploader_id, facts FROM csam_cases WHERE id > ? ORDER BY id LIMIT ?').bind('', 50).all<{ detail: string }>()).results;
+    assert.ok(plan.every((p) => /^SEARCH csam_cases USING INDEX sqlite_autoindex_csam_cases_1 \(id>\?\)/.test(p.detail)), JSON.stringify(plan));
   });
 });
 

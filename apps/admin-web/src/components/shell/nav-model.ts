@@ -116,6 +116,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Payments (wiki AUN-SUBS): providers, prices, tax, subscriptions; billing:read, changes per billing permission
   { href: '/payments', label: 'nav.payments', icon: 'card', group: 'people', requires: (a) => a.billing === true },
   { href: '/auth-requests', label: 'nav.authRequests', icon: 'key', group: 'people' },
+  // Profile emails compared with the sign-in accounts; super admins only
+  { href: '/profile-emails', label: 'nav.profileEmails', icon: 'key', group: 'people', requires: (a) => a.superAdmin === true },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 
   { href: '/operations', label: 'nav.operations', icon: 'activity', group: 'operations', requires: (a) => a.ops },

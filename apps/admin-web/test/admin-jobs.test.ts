@@ -30,7 +30,7 @@ describe('admin jobs', () => {
   });
 
   it('every legacy profiles and admin jobs string exists in both languages, with the same placeholders', () => {
-    for (const group of ['legacyProfiles', 'adminJobs'] as const) {
+    for (const group of ['legacyProfiles', 'profileEmails', 'adminJobs'] as const) {
       for (const [key, value] of Object.entries(en[group])) {
         if (typeof value !== 'string') continue;
         const arabic = (ar[group] as Record<string, unknown>)[key];
