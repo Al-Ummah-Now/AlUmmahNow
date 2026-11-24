@@ -67,7 +67,7 @@ import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin
 import { eraseChannelComments, eraseCommentsOfChannel } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
-import { eraseMoveOffers, exportMoveOffers, withoutMoveMark } from '../channelMoveData';
+import { eraseMoveOffers, exportMoveOffers, RECEIVED_OFFERS_SQL, withoutMoveMark } from '../channelMoveData';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -1219,13 +1219,13 @@ export async function eraseUserData(
 	// Phases of their own: the profile's can't resume part way, so what is added there raises what one pass must fit.
 	const moveOffers = (first: boolean): Phase => async (ctx) => {
 		if (!db) return;
-		const { closed, received, flippedAt } = await eraseMoveOffers({ SEARCH_DB: db as unknown as D1Database, channels: env.channels }, userId, DELETED_USER_ID, { afterProfile: !first, spend: (n) => ctx.budget.spend(n) });
+		const { closed, received, flippedAt } = await eraseMoveOffers({ SEARCH_DB: db as unknown as D1Database, channels: env.channels }, userId, DELETED_USER_ID, (n) => ctx.budget.spend(n));
 		if (closed > 0) bump(summary.deleted, 'channelMoveOffers', closed);
 		const cp = ctx.checkpoint;
-		// After the flip of any move found here, whichever worker's clock wrote it
-		if (first) cp.t = Math.max(Date.now(), flippedAt) + 1;
-		// Over from the top; the first phase forgets the offer then, so a pass that dies here finds it again
-		else if (received) Object.assign(cp, { p: -1, o: [], more: undefined });
+		// After every move that brought the user a channel, whichever worker's clock wrote it
+		if (first) cp.t = Math.max(cp.t, Date.now(), flippedAt) + 1;
+		// Over from the top: a channel came meanwhile, and its offer names the user until it is erased
+		else if (received.length) Object.assign(cp, { p: -1, o: [], more: undefined });
 		else if (env.NOTIFICATIONS_DB) {
 			// A move that finished its records as the profile went may have brought the channel's subscriptions (runTransfer)
 			ctx.budget.spend();
@@ -1253,9 +1253,12 @@ export async function eraseUserData(
 			(ix) => ix.channels,
 			async (ctx) => {
 				const owned = await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'channel' AND owner_id = ?`, [userId]);
+				// And what a move just brought, in case the index has not followed yet
+				ctx.budget.spend();
+				const { results: received } = await (db as unknown as D1Database).prepare(RECEIVED_OFFERS_SQL).bind(userId).all<{ channel_id: string }>();
 				ctx.budget.spend();
 				const subscribed = await footprintTargets(db!, userId, 'channel');
-				await eachItem(ctx, [...owned, ...subscribed], (key) => eraseInChannelKey(ctx, key));
+				await eachItem(ctx, new Set([...owned, ...(received ?? []).map((r) => r.channel_id), ...subscribed]), (key) => eraseInChannelKey(ctx, key));
 			},
 			(ctx) =>
 				scanPages(channels, undefined, ctx, async (objects) => {

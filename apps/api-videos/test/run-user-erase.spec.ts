@@ -8,6 +8,7 @@ import { ADMIN_BACKUPS_UNBOUND_ERROR, LEGACY_RESTORE_POINTERS_PREFIX, backupKey,
 import { logger } from '../src/lib/logger';
 import { MemoryBucket, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
+import { createSqliteD1 } from './sqlite-d1';
 
 const channel = (id: string, userId: string, extra: Record<string, unknown> = {}) => ({ id, name: id, userId, dateCreated: '2026-01-01T00:00:00.000Z', subscriptions: [], ...extra });
 
@@ -154,6 +155,30 @@ describe('run-account erasure through the indexes (#887)', () => {
 		const second = await eraseRunUserData(full as never, 'run1', new OperationBudget(900), {}, first.step);
 		assert.equal(second.complete, true);
 		assert.equal(env.channels.store.has('chX'), false);
+		assert.equal(JSON.stringify(db.db.prepare('SELECT * FROM channel_move_offers').all()).includes('run1'), false);
+	});
+
+	it('a channel a move brought before the index followed goes too, and no subscription a move brought stays (CC-6 review)', async () => {
+		const db = new SqliteD1();
+		const notifications = createSqliteD1();
+		const { env } = buckets();
+		const full = { ...env, SEARCH_DB: db, NOTIFICATIONS_DB: notifications };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		db.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES ('o', 'chX', 'other', 'run1', 'moved', '2026', '2099', '2026')`).run();
+		db.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES ('open', 'ch1', 'run1', 'other', 'offered', '2026', '2099', '2026')`).run();
+		env.channels.store.set('chX', JSON.stringify({ ...JSON.parse(env.channels.store.get('chX')!), userId: 'run1' }));
+		const remove = env.profiles.delete.bind(env.profiles);
+		env.profiles.delete = (async (key: string) => {
+			notifications.raw.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES ('chY', 'chX', 'run1', 's1', 1)`).run();
+			return remove(key);
+		}) as typeof remove;
+		// A pass with no room for the first look goes on in the next
+		const none = await eraseRunUserData(full as never, 'run1', new OperationBudget(0));
+		assert.deepEqual([none.complete, none.step], [false, 0]);
+		assert.equal((db.db.prepare(`SELECT status FROM channel_move_offers WHERE id = 'open'`).get() as { status: string }).status, 'offered', 'nothing was done without room for it');
+		assert.equal((await eraseRunUserData(full as never, 'run1', new OperationBudget(900))).complete, true);
+		assert.equal(env.channels.store.has('chX'), false);
+		assert.equal((notifications.raw.prepare('SELECT COUNT(*) AS n FROM channel_subscriptions').get() as { n: number }).n, 0);
 		assert.equal(JSON.stringify(db.db.prepare('SELECT * FROM channel_move_offers').all()).includes('run1'), false);
 	});
 
