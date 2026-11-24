@@ -11,7 +11,18 @@ import { Hono } from 'hono';
 import adminRouter from '../src/routers/admin.router';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
-import { approvedFromPlan, backupKey, planLegacyRestore, runLegacyRestore, type AuthUsersDb } from '../src/lib/admin/legacy-restore';
+import {
+	LEGACY_RESTORE_POINTERS_PREFIX,
+	approvedFromPlan,
+	backupKey,
+	backupPointerKey,
+	eraseLegacyRestoreBackups,
+	planLegacyRestore,
+	runLegacyRestore,
+	type AuthUsersDb,
+} from '../src/lib/admin/legacy-restore';
+import { eraseUserData } from '../src/lib/privacy/user-data';
+import { OperationBudget } from '../src/lib/privacy/scan';
 import { MemoryBucket } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -157,9 +168,11 @@ describe('restore legacy profile fields: run', () => {
 		assert.equal(after.firstName, 'Mahmoud');
 		assert.deepEqual(after.channels, ['ch1']);
 
-		// the pre-change copy, byte for byte, under the job's prefix
+		// the pre-change copy, byte for byte, under the job's prefix, plus its per-user pointer
 		const key = backupKey(job.id, USR, etagBefore);
+		const pointer = backupPointerKey(USR, job.id, etagBefore);
 		assert.deepEqual(JSON.parse((env.ADMIN_BACKUPS as any).store.get(key)), currentProfile);
+		assert.equal((env.ADMIN_BACKUPS as any).store.has(pointer), true);
 
 		const done = (await call('GET', `/jobs/${job.id}`)).body.result;
 		assert.equal(done.status, 'succeeded');
@@ -217,10 +230,13 @@ describe('restore legacy profile fields: run', () => {
 		const after = stored(env, USR);
 		assert.equal(after.bio, 'Mine');
 		assert.equal(after.firstNameLocalized.ar, 'محمود');
-		// one backup per copy it tried to replace; the first is the untouched original
-		const backups = [...(env.ADMIN_BACKUPS as any).store.entries()];
+		// one backup and one per-user pointer per copy it tried to replace; the first is the untouched original
+		const entries = [...(env.ADMIN_BACKUPS as any).store.entries()] as [string, string][];
+		const backups = entries.filter(([k]) => !k.startsWith(LEGACY_RESTORE_POINTERS_PREFIX));
+		const pointers = entries.filter(([k]) => k.startsWith(LEGACY_RESTORE_POINTERS_PREFIX));
 		assert.equal(backups.length, 2);
-		assert.ok(backups.some(([, v]: [string, string]) => !JSON.parse(v).bio));
+		assert.equal(pointers.length, 2);
+		assert.ok(backups.some(([, v]) => !JSON.parse(v).bio));
 	});
 
 	it('never writes without its backup bucket; the job fails, flags the admin, and Retry resumes it', async () => {
@@ -265,5 +281,178 @@ describe('restore legacy profile fields: run', () => {
 		const { call } = setup();
 		assert.equal((await call('POST', '/legacy-profiles/restore', { approved: [] })).status, 400);
 		assert.equal((await call('POST', '/legacy-profiles/restore', { approved: [{ id: 'usr_x', legacyId: LEGACY, fields: ['a'] }] })).status, 400);
+	});
+});
+
+function erasureBuckets(profiles: MemoryBucket, backups: MemoryBucket) {
+	return {
+		profiles,
+		channels: new MemoryBucket(),
+		channel_sections: new MemoryBucket(),
+		channel_tabs: new MemoryBucket(),
+		videos: new MemoryBucket(),
+		watch_history: new MemoryBucket(),
+		community_posts: new MemoryBucket(),
+		playlists: new MemoryBucket(),
+		'upload-defaults': new MemoryBucket(),
+		reports: new MemoryBucket(),
+		ADMIN_BACKUPS: backups,
+	};
+}
+
+describe('restore legacy profile fields: account erasure', () => {
+	it('eraseUserData deletes a user\'s legacy-restore copies and pointers without listing the whole prefix', async () => {
+		const LEGACY2 = 'cccccccccccccccccccccccccccccccc';
+		const USR2 = 'usr_cccccccccccccccccccccccccccccccc';
+		const { env, call, drain } = setup({
+			profiles: {
+				[LEGACY]: legacyRecord,
+				[USR]: currentProfile,
+				[LEGACY2]: { id: LEGACY2, email: 'b@example.com', bioLocalized: { ar: 'نبذة' } },
+				[USR2]: { id: USR2, email: 'b@example.com', bio: '' },
+			},
+			users: [{ id: USR, email: 'owner@example.com' }, { id: USR2, email: 'b@example.com' }],
+		});
+		const plan = (await call('GET', '/legacy-profiles/plan')).body.result;
+		const approved = plan.items.map((i: any) => ({ id: i.id, legacyId: i.legacyId, fields: i.changes.map((c: any) => c.field) }));
+		await call('POST', '/legacy-profiles/restore', { approved });
+		await drain();
+
+		// Add a second backup copy + pointer for USR from another job to prove multi-copy deletion
+		const secondKey = backupKey('job-earlier', USR, 'v99');
+		const secondPtr = backupPointerKey(USR, 'job-earlier', 'v99');
+		await env.ADMIN_BACKUPS.put(secondPtr, '');
+		await env.ADMIN_BACKUPS.put(secondKey, JSON.stringify(currentProfile));
+
+		const listPrefixes: Array<string | undefined> = [];
+		const realList = env.ADMIN_BACKUPS.list.bind(env.ADMIN_BACKUPS);
+		env.ADMIN_BACKUPS.list = (async (opts: { prefix?: string } = {}) => {
+			listPrefixes.push(opts.prefix);
+			return realList(opts as never);
+		}) as never;
+
+		const summary = await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+		assert.equal(summary.complete, true);
+		assert.equal(summary.deleted.legacyRestoreBackups, 2);
+		assert.equal(env.profiles.store.has(USR), false);
+		assert.deepEqual(listPrefixes, [`${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/`], 'only the user pointer prefix is listed, never legacy-restore/');
+
+		const remainingKeys = [...env.ADMIN_BACKUPS.store.keys()];
+		assert.equal(remainingKeys.some((k) => k.includes(USR)), false, 'no backup or pointer remains for the erased user');
+		assert.equal(remainingKeys.filter((k) => k.includes(USR2)).length, 2, 'other user backup and pointer are untouched');
+	});
+
+	it('eraseLegacyRestoreBackups deletes copies before pointers across resumable small budgets', async () => {
+		const backups = new MemoryBucket();
+		for (const jobId of ['j1', 'j2']) {
+			await backups.put(backupPointerKey(USR, jobId, 'v1'), '');
+			await backups.put(backupKey(jobId, USR, 'v1'), JSON.stringify(currentProfile));
+		}
+		// Budget of 2: enough for 1 list + 1 delete (the backup copies), exhausts before deleting pointers
+		await assert.rejects(eraseLegacyRestoreBackups(backups as never, USR, new OperationBudget(2)));
+		assert.equal(backups.store.has(backupKey('j1', USR, 'v1')), false, 'backup copies deleted before pointers');
+		assert.equal(backups.store.has(backupKey('j2', USR, 'v1')), false);
+		assert.equal(backups.store.has(backupPointerKey(USR, 'j1', 'v1')), true, 'pointers still present so retry finishes cleanly');
+
+		// Retry with enough budget clears the pointers idempotently
+		await eraseLegacyRestoreBackups(backups as never, USR, new OperationBudget(10));
+		assert.equal(backups.store.size, 0);
+	});
+
+	it('a queued restore running after erasure does not recreate the profile or write backups', async () => {
+		const { env, call, drain } = setup();
+		const plan = (await call('GET', '/legacy-profiles/plan')).body.result;
+		const { job } = (await call('POST', '/legacy-profiles/restore', {
+			approved: [{ id: USR, legacyId: LEGACY, fields: plan.items[0].changes.map((c: any) => c.field) }],
+		})).body.result;
+
+		// User is erased before the queued restore job executes
+		const erased = await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+		assert.equal(erased.complete, true);
+		assert.equal(env.profiles.store.has(USR), false);
+
+		await drain();
+		const done = (await call('GET', `/jobs/${job.id}`)).body.result;
+		assert.equal(done.status, 'succeeded');
+		assert.deepEqual(done.result, { written: [], skipped: [{ id: USR, reason: 'profile is gone' }] });
+		assert.equal(env.profiles.store.has(USR), false, 'erased profile was not brought back');
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'no backup or pointer was written');
+	});
+
+	it('after a restore and subsequent erasure, re-planning and re-running cannot bring the profile back', async () => {
+		const { env, call, drain } = setup();
+		const plan = (await call('GET', '/legacy-profiles/plan')).body.result;
+		const approved = [{ id: USR, legacyId: LEGACY, fields: plan.items[0].changes.map((c: any) => c.field) }];
+		await call('POST', '/legacy-profiles/restore', { approved });
+		await drain();
+		assert.equal(env.ADMIN_BACKUPS.store.size, 2);
+
+		await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+		assert.equal(env.profiles.store.has(USR), false);
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0);
+
+		const afterPlan = await planLegacyRestore(env as never);
+		assert.deepEqual(afterPlan.items, []);
+		const replay = await runLegacyRestore(env as never, { id: 'job-replay', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved }, result: null } as any);
+		assert.deepEqual(replay, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is gone' }] } });
+		assert.equal(env.profiles.store.has(USR), false);
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0);
+	});
+
+	it('concurrent erasure mid-restore neither resurrects the profile nor leaves a backup behind', async () => {
+		const { env } = setup();
+		const realPut = env.profiles.put.bind(env.profiles);
+		let raced = false;
+		env.profiles.put = (async (key: string, value: string, options?: any) => {
+			if (key === USR && options?.onlyIf?.etagMatches && !raced) {
+				raced = true;
+				// Erasure completes between restoreOne reading the profile (and writing its backup) and its conditional put
+				await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+			}
+			return realPut(key, value, options);
+		}) as never;
+
+		const job = { id: 'job-race', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		const out = await runLegacyRestore(env as never, job);
+		assert.deepEqual(out, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is gone' }] } });
+		assert.equal(env.profiles.store.has(USR), false, 'conditional put did not recreate the erased profile');
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'no backup or pointer left behind');
+	});
+
+	it('erasure between pointer write and backup write cleans up the just-written backup even if a fresh profile exists', async () => {
+		const { env } = setup();
+		const realBackupsPut = env.ADMIN_BACKUPS.put.bind(env.ADMIN_BACKUPS);
+		let raced = false;
+		env.ADMIN_BACKUPS.put = (async (key: string, value: string, options?: any) => {
+			const res = await realBackupsPut(key, value, options);
+			if (key.startsWith(LEGACY_RESTORE_POINTERS_PREFIX) && !raced) {
+				raced = true;
+				// Erasure deletes the profile and pointer BEFORE the backup object is written; then a fresh profile is created
+				await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+				await env.profiles.put(USR, JSON.stringify({ id: USR, email: 'owner@example.com' }));
+			}
+			return res;
+		}) as never;
+
+		const job = { id: 'job-ptr-race', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		const out = await runLegacyRestore(env as never, job);
+		assert.deepEqual(out, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is gone' }] } });
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'pre-erasure backup written after pointer sweep is removed');
+		assert.equal(stored(env, USR).firstNameLocalized, undefined, 'new profile was not overwritten with pre-erasure plan');
+	});
+
+	it('skips soft-deleted profiles (pending deletion) in both planning and execution', async () => {
+		const { env } = setup({
+			profiles: {
+				[LEGACY]: legacyRecord,
+				[USR]: { ...currentProfile, adminDeletion: { at: '2026-11-20T00:00:00.000Z', by: 'usr_admin' } },
+			},
+		});
+		const plan = await planLegacyRestore(env as never);
+		assert.deepEqual(plan.items, []);
+		const job = { id: 'job-soft', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		const out = await runLegacyRestore(env as never, job);
+		assert.deepEqual(out, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is pending deletion' }] } });
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0);
 	});
 });

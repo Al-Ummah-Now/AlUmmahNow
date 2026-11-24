@@ -4,6 +4,7 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { eraseRunUserData, OwnershipIndexIncomplete } from '../src/lib/privacy/run-user-erase';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { jobQueueFor } from '../src/lib/admin/jobs';
+import { LEGACY_RESTORE_POINTERS_PREFIX, backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
 import { MemoryBucket, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -12,17 +13,20 @@ const channel = (id: string, userId: string, extra: Record<string, unknown> = {}
 /** Buckets whose list() calls are recorded: a full scan is a list without a prefix. */
 function buckets() {
 	const scans: string[] = [];
+	const backupListPrefixes: Array<string | undefined> = [];
 	const make = (name: string, initial: Record<string, unknown> = {}) => {
 		const b = new MemoryBucket(initial);
 		const list = b.list.bind(b);
 		b.list = (async (opts: { prefix?: string } = {}) => {
 			if (!opts.prefix) scans.push(name);
+			if (name === 'ADMIN_BACKUPS') backupListPrefixes.push(opts.prefix);
 			return list(opts as never);
 		}) as never;
 		return b;
 	};
 	return {
 		scans,
+		backupListPrefixes,
 		env: {
 			videos: make('videos', {
 				v1: videoFixture({ id: 'v1', userId: 'run1', channelId: 'ch1' }),
@@ -38,6 +42,12 @@ function buckets() {
 			community_posts: make('community_posts', { 'posts/ch1/p1.json': { id: 'p1' }, 'post-locations/p1': { channelId: 'ch1' }, 'likes/p1/u9.json': {}, 'posts/chX/p2.json': { id: 'p2' } }),
 			playlists: make('playlists'),
 			reports: make('reports'),
+			ADMIN_BACKUPS: make('ADMIN_BACKUPS', {
+				[backupKey('job1', 'run1', 'v1')]: { id: 'run1', email: 'run1@test.local' },
+				[backupPointerKey('run1', 'job1', 'v1')]: '',
+				[backupKey('job1', 'other', 'v1')]: { id: 'other', email: 'other@test.local' },
+				[backupPointerKey('other', 'job1', 'v1')]: '',
+			}),
 		},
 	};
 }
@@ -45,16 +55,19 @@ function buckets() {
 describe('run-account erasure through the indexes (#887)', () => {
 	it('erases what the account owns, never lists a whole bucket, and leaves other users alone', async () => {
 		const db = new SqliteD1();
-		const { env, scans } = buckets();
+		const { env, scans, backupListPrefixes } = buckets();
 		const full = { ...env, SEARCH_DB: db };
 		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
 		scans.length = 0;
+		backupListPrefixes.length = 0;
 
 		const deletedMedia: string[] = [];
 		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900), { onVideoDeleted: async (id) => { deletedMedia.push(id); } });
 
 		assert.equal(result.complete, true);
 		assert.deepEqual(scans, [], 'no bucket was listed without a prefix');
+		assert.deepEqual(backupListPrefixes, [`${LEGACY_RESTORE_POINTERS_PREFIX}run1/`], 'ADMIN_BACKUPS only lists the user pointer prefix');
+		assert.equal(result.deleted.legacyRestoreBackups, 1);
 		assert.deepEqual(result.deletedVideoIds.sort(), ['v1', 'v2'], 'its soft-deleted video too');
 		assert.deepEqual(deletedMedia.sort(), ['v1', 'v2']);
 		assert.deepEqual([...env.videos.store.keys()], ['v3']);
@@ -65,6 +78,7 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal(env.channel_sections.store.size, 0);
 		assert.deepEqual([...env.channel_tabs.store.keys()], [], 'its tabs and @handle are freed');
 		assert.deepEqual([...env.community_posts.store.keys()], ['posts/chX/p2.json']);
+		assert.deepEqual([...env.ADMIN_BACKUPS.store.keys()].sort(), [backupPointerKey('other', 'job1', 'v1'), backupKey('job1', 'other', 'v1')].sort());
 	});
 
 	it('erases its playlists without a channel (Watch later, personal) and its footprints, not someone else\'s', async () => {
