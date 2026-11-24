@@ -517,7 +517,11 @@ async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobI
 	await (env.SEARCH_DB as D1Database | undefined)?.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id IN (?, \'\')').bind(channelId, jobId).run();
 }
 
-/** An active support payee or a live pledge on the channel (support tables, indexed by channel). */
+/**
+ * Whether the channel has money attached (wiki AUN-CHANNEL-CLAIM CC-D10): a payee being set up or
+ * active, a live pledge, or a creator balance that isn't zero in any currency (support_ledger by
+ * channel, idx_support_ledger_channel), even when the payee is disabled or closed.
+ */
 async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promise<boolean> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return false;
@@ -525,9 +529,14 @@ async function channelHasSupport(env: AdminServiceEnv, channelId: string): Promi
 		const row = await db
 			.prepare(
 				`SELECT 1 AS found FROM support_payees WHERE channel_id = ? AND status IN ('pending', 'action_needed', 'active', 'restricted')
-				 UNION ALL SELECT 1 FROM support_pledges WHERE channel_id = ? AND status IN ('active', 'past_due') LIMIT 1`,
+				 UNION ALL SELECT 1 FROM support_pledges WHERE channel_id = ? AND status IN ('active', 'past_due')
+				 UNION ALL SELECT 1 FROM (
+				   SELECT SUM(amount) AS total FROM support_ledger
+				   WHERE channel_id = ? AND account >= 'creator:' AND account < 'creator;'
+				   GROUP BY account, currency HAVING total <> 0
+				 ) LIMIT 1`,
 			)
-			.bind(channelId, channelId)
+			.bind(channelId, channelId, channelId)
 			.first<{ found: number }>();
 		return !!row;
 	} catch (error) {
