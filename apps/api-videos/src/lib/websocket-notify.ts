@@ -16,6 +16,7 @@
  * fails the API response.
  */
 
+import { ACCESS_CHANGED_EVENT } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { categoryOf, enqueueNotification, isCategoryEnabled, isNotificationKey, NotificationsEnv } from './notifications';
 
@@ -87,6 +88,11 @@ export async function broadcast(
     return false;
   }
   return sendWebSocketNotification(env.WEBSOCKET_URL, apiKey, channel, buildRealtimeMessage(channel, type, data));
+}
+
+/** Tells a person's open sockets that what they may see changed (shared-types ACCESS_CHANGED_EVENT). Never throws. */
+export function accessChangedFor(env: RealtimeEnv, userId: string): Promise<boolean> {
+  return broadcast(env, `user:${userId}`, ACCESS_CHANGED_EVENT, {});
 }
 
 /**

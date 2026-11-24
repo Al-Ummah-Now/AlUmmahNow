@@ -20256,6 +20256,18 @@
                   "allowChat": {
                     "type": "boolean"
                   },
+                  "chatReplay": {
+                    "type": "boolean"
+                  },
+                  "slowModeSeconds": {
+                    "type": "integer"
+                  },
+                  "subscribersOnly": {
+                    "type": "boolean"
+                  },
+                  "madeForKids": {
+                    "type": "boolean"
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -20818,6 +20830,18 @@
                   "allowChat": {
                     "type": "boolean"
                   },
+                  "chatReplay": {
+                    "type": "boolean"
+                  },
+                  "slowModeSeconds": {
+                    "type": "integer"
+                  },
+                  "subscribersOnly": {
+                    "type": "boolean"
+                  },
+                  "madeForKids": {
+                    "type": "boolean"
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21121,6 +21145,940 @@
                     }
                   },
                   "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/live-streams/{id}/chat": {
+      "get": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Live chat messages",
+        "description": "Published messages, oldest first. Without a cursor: the latest. `afterId`: those after that message (`resync: true` when it is gone; start over from this page). `before`: those before that message. `fromMs` (and `toMs`, at most 60 s later), on an ended stream: the replay beside the recording, by the time since the start; `truncated` when one window held more than fits. Poll only while the realtime channel `live:<id>` is not connected, every 10 s.",
+        "operationId": "get_LiveChatList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "afterId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "before",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "fromMs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "toMs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "streamId": {
+                                "type": "string"
+                              },
+                              "userId": {
+                                "type": "string"
+                              },
+                              "authorName": {
+                                "type": "string"
+                              },
+                              "authorHandle": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "authorAvatar": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "authorRole": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "owner",
+                                  "moderator",
+                                  null
+                                ]
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "offsetMs": {
+                                "type": "integer"
+                              },
+                              "isPinned": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "streamId",
+                              "userId",
+                              "authorName",
+                              "authorHandle",
+                              "authorAvatar",
+                              "authorRole",
+                              "text",
+                              "offsetMs",
+                              "isPinned",
+                              "createdAt"
+                            ]
+                          }
+                        },
+                        "pinned": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "streamId": {
+                              "type": "string"
+                            },
+                            "userId": {
+                              "type": "string"
+                            },
+                            "authorName": {
+                              "type": "string"
+                            },
+                            "authorHandle": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "authorAvatar": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "authorRole": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "owner",
+                                "moderator",
+                                null
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "offsetMs": {
+                              "type": "integer"
+                            },
+                            "isPinned": {
+                              "type": "boolean"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "streamId",
+                            "userId",
+                            "authorName",
+                            "authorHandle",
+                            "authorAvatar",
+                            "authorRole",
+                            "text",
+                            "offsetMs",
+                            "isPinned",
+                            "createdAt"
+                          ]
+                        },
+                        "resync": {
+                          "type": "boolean"
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "messages",
+                        "pinned",
+                        "resync",
+                        "hasMore"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such stream, or its chat is off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Post in a live chat",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 At most 500 characters; links only from the stream’s team. As the channel in the channelId header, or as yourself.",
+        "operationId": "post_LiveChatPost",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Post as this channel"
+            },
+            "required": false,
+            "description": "Post as this channel",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "streamId": {
+                              "type": "string"
+                            },
+                            "userId": {
+                              "type": "string"
+                            },
+                            "authorName": {
+                              "type": "string"
+                            },
+                            "authorHandle": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "authorAvatar": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "authorRole": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "owner",
+                                "moderator",
+                                null
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            },
+                            "offsetMs": {
+                              "type": "integer"
+                            },
+                            "isPinned": {
+                              "type": "boolean"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "streamId",
+                            "userId",
+                            "authorName",
+                            "authorHandle",
+                            "authorAvatar",
+                            "authorRole",
+                            "text",
+                            "offsetMs",
+                            "isPinned",
+                            "createdAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "live_chat_empty, live_chat_too_long, live_chat_link or live_chat_blocked_word",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "live_chat_subscribers_only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such stream, or its chat is off or not open yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "live_chat_slow_mode or live_chat_duplicate (with retryAfter), or rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/live-streams/{id}/chat/settings": {
+      "patch": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Live chat settings",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 The stream’s owner, or live.manage or live.moderate on its channel.",
+        "operationId": "patch_LiveChatSettingsUpdate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allowChat": {
+                    "type": "boolean"
+                  },
+                  "chatReplay": {
+                    "type": "boolean"
+                  },
+                  "slowModeSeconds": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "enum": [
+                          0
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          5
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          10
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          30
+                        ]
+                      },
+                      {
+                        "type": "number",
+                        "enum": [
+                          60
+                        ]
+                      }
+                    ],
+                    "description": "0, 5, 10, 30 or 60"
+                  },
+                  "subscribersOnly": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "allowChat": {
+                              "type": "boolean"
+                            },
+                            "chatReplay": {
+                              "type": "boolean"
+                            },
+                            "slowModeSeconds": {
+                              "type": "number"
+                            },
+                            "subscribersOnly": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "allowChat",
+                            "chatReplay",
+                            "slowModeSeconds",
+                            "subscribersOnly"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "settings"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/live-streams/{id}/chat/{messageId}/moderate": {
+      "post": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Moderate a live chat message",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 The stream’s owner, or live.manage, live.moderate or comment.moderate on its channel. An author may `remove` their own message. `block_author` also removes what they wrote on this stream; they are not told.",
+        "operationId": "post_LiveChatModerate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Message id"
+            },
+            "required": true,
+            "description": "Message id",
+            "name": "messageId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "remove",
+                      "restore",
+                      "pin",
+                      "unpin",
+                      "block_author"
+                    ]
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "messageId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "remove",
+                            "restore",
+                            "pin",
+                            "unpin",
+                            "block_author"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "messageId",
+                        "action"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not yours to moderate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already so",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
                     "error"
                   ]
                 }

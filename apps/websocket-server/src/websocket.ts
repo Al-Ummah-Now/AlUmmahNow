@@ -15,7 +15,7 @@
  */
 
 import { DurableObject } from "cloudflare:workers";
-import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously } from './auth';
+import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously, isLiveChat, isPublicFeed } from './auth';
 import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket, type ViewIndex } from './view-counter';
@@ -24,9 +24,10 @@ import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post
 import { AdminCoalescer, coalescerName, eventsOf } from './admin-coalescer';
 import { QoeLive, type QoeStorage } from './qoe-live';
 import { LiveViewers, isNet, isViewerId } from './live-viewers';
-import { adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
+import { ACCESS_CHANGED_EVENT, adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 import { channelFeatureOff } from './lib/feature-gate';
+import { mayJoinLiveChat } from './lib/live-chat';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
 const SOCKET_TAG = 'socket';
@@ -340,9 +341,9 @@ export class WebSocketDurableObject extends DurableObject {
       return false;
     }
     for (const channel of state.channels) {
-      if (!canSubscribeAnonymously(channel)) this.unindex(ws, channel);
+      if (!isPublicFeed(channel)) this.unindex(ws, channel);
     }
-    state.channels = state.channels.filter(canSubscribeAnonymously);
+    state.channels = state.channels.filter(isPublicFeed);
     state.authenticated = false;
     state.adminLevel = undefined;
     this.save(ws, state);
@@ -354,7 +355,7 @@ export class WebSocketDurableObject extends DurableObject {
 
   /** A private channel's message must not reach a socket whose token has expired, even a silent one. */
   private expiredForChannel(ws: WebSocket, channel: string): boolean {
-    return !canSubscribeAnonymously(channel) && this.expireAuthIfNeeded(ws);
+    return !isPublicFeed(channel) && this.expireAuthIfNeeded(ws);
   }
 
   private async handleAuthentication(ws: WebSocket, token: string): Promise<void> {
@@ -433,6 +434,14 @@ export class WebSocketDurableObject extends DurableObject {
       return;
     }
 
+    // A live chat is open only as far as its stream is
+    if (isLiveChat(channel) && !(await mayJoinLiveChat(this.env as never, channel, state.authenticated ? state.userId : undefined))) {
+      this.sendMessage(ws, { type: 'error', error: 'Not allowed to subscribe to this channel', code: 'FORBIDDEN' });
+      return;
+    }
+    // Closed while the stream was read
+    if (this.sockets.get(ws) !== state) return;
+
     const join = this.needsJoin(channel);
     if (!this.addChannel(ws, state, channel)) {
       this.sendMessage(ws, { type: 'error', error: 'Too many channels on this connection', code: 'SUBSCRIBE_FAILED' });
@@ -441,6 +450,13 @@ export class WebSocketDurableObject extends DurableObject {
     this.save(ws, state);
     // Confirmed only once the channel's directory routes its broadcasts here
     if (join) await this.joinTopic(channel, state.shard);
+    // Closed while the stream was read or the directory joined: such a close never reached this socket. The
+    // stream's row is written before the close is sent, so reading it now settles it
+    if (isLiveChat(channel) && !(await mayJoinLiveChat(this.env as never, channel, state.authenticated ? state.userId : undefined))) {
+      this.leave(ws, state, channel);
+      this.sendMessage(ws, { type: 'error', error: 'Not allowed to subscribe to this channel', code: 'FORBIDDEN' });
+      return;
+    }
     this.sendMessage(ws, { type: 'subscribed', channel });
   }
 
@@ -538,13 +554,38 @@ export class WebSocketDurableObject extends DurableObject {
   deliver(channel: string, message: unknown): number {
     const subscribers = this.subscribers.get(channel);
     if (!subscribers || subscribers.size === 0) return 0;
+    // What this person may see changed (a ban, a role taken away): their sockets leave every live chat, and
+    // join again those they may still read
+    if (channel.startsWith('user:') && (message as { type?: unknown } | null)?.type === ACCESS_CHANGED_EVENT) {
+      for (const ws of [...subscribers]) {
+        const state = this.sockets.get(ws);
+        for (const live of state?.channels.filter(isLiveChat) ?? []) this.leave(ws, state!, live);
+      }
+    }
     const payload = JSON.stringify(message);
     let delivered = 0;
     for (const ws of [...subscribers]) {
       if (this.expiredForChannel(ws, channel)) continue;
       if (this.sendRaw(ws, payload)) delivered++;
     }
+    // The chat closed (private, deleted, switched off there): nobody stays on it; those still allowed join again
+    if (isLiveChat(channel) && (message as { type?: unknown } | null)?.type === 'live_chat_closed') this.evict(channel);
     return delivered;
+  }
+
+  /** Ends every subscription to a channel on this shard. */
+  private evict(channel: string): void {
+    for (const ws of [...(this.subscribers.get(channel) ?? [])]) {
+      const state = this.sockets.get(ws);
+      if (state) this.leave(ws, state, channel);
+      else this.unindex(ws, channel);
+    }
+  }
+
+  private leave(ws: WebSocket, state: SocketState, channel: string): void {
+    state.channels = state.channels.filter((c) => c !== channel);
+    this.save(ws, state);
+    this.unindex(ws, channel);
   }
 
   /** Kept for callers of the old API. */

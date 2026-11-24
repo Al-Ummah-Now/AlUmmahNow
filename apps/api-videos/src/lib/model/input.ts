@@ -1,4 +1,4 @@
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN, isLiveChatSlowMode } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
@@ -150,12 +150,21 @@ export const CommentUpdateInput = z.object({
 });
 
 // Phase 2: Live Streaming input schemas
+/** Live in the apps (wiki E17): the chat's settings, and content made for kids (no chat, replay or reminders) */
+const LiveStreamAppFields = {
+    chatReplay: z.boolean().optional(),
+    slowModeSeconds: z.number().int().refine(isLiveChatSlowMode, '0, 5, 10, 30 or 60').optional(),
+    subscribersOnly: z.boolean().optional(),
+    madeForKids: z.boolean().optional(),
+};
+
 export const LiveStreamInput = z.object({
     title: Str({ description: "Live stream title" }),
     description: Str({ required: false, description: "Live stream description" }),
     scheduledStartTime: z.string().optional().describe("ISO 8601 scheduled start time"),
     isPrivate: z.boolean().optional(),
     allowChat: z.boolean().optional(),
+    ...LiveStreamAppFields,
     maxViewers: z.number().optional(),
     tags: z.array(z.string()).optional(),
 });
@@ -166,6 +175,7 @@ export const LiveStreamUpdateInput = z.object({
     scheduledStartTime: z.string().optional().describe("ISO 8601 scheduled start time"),
     isPrivate: z.boolean().optional(),
     allowChat: z.boolean().optional(),
+    ...LiveStreamAppFields,
     maxViewers: z.number().optional(),
     tags: z.array(z.string()).optional(),
     status: z.enum(['scheduled', 'live', 'ended', 'cancelled']).optional(),

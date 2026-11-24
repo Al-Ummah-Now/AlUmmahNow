@@ -33,6 +33,11 @@ import {
   recordIndexRepair,
   type IndexRepairEntity,
   type IndexRepairReason,
+  CHANNEL_ACCESS_TABLE,
+  channelMembersOf,
+  liveChatChannel,
+  liveChatOpenToAnyone,
+  projectLiveMetadata,
   syncLiveMetadata,
   syncOwnership,
   r2Version,
@@ -48,6 +53,9 @@ import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../chan
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 import { kickRepairJob, type RepairJobEnv } from './repairs';
 import { kickLivePurge } from '../live/metadata';
+import { deleteEdgeCache } from '../edge-cache';
+import { chatCacheUrl } from '../live/chat';
+import { accessChangedFor, broadcast } from '../websocket-notify';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -184,6 +192,16 @@ export class SearchSyncQueue {
   }
 }
 
+/** A channel's roles as indexed before a write (a primary key range; a team is at most 50 people). */
+async function channelTeam(db: SearchDb, channelId: string): Promise<Map<string, string> | null> {
+  try {
+    const { results } = await db.prepare(`SELECT user_id, role FROM ${CHANNEL_ACCESS_TABLE} WHERE channel_id = ?`).bind(channelId).all<{ user_id: string; role: string }>();
+    return new Map((results ?? []).map(r => [r.user_id, r.role]));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Write the ownership row inline. A failed write is repaired per object
  * (repairLater) instead of marking the whole index incomplete, which sent
@@ -193,7 +211,13 @@ async function syncOwnershipInline(ctx: RepairContext, type: SearchEntityType, i
   const kind = ownershipKindFor(type);
   if (!kind) return;
   try {
+    const before = kind === 'channel' ? await channelTeam(ctx.db, id) : null;
     await syncOwnership(ctx.db, kind, id, object, Date.now(), version);
+    // Taken off the team, or given a lesser role: their open sockets leave the live chats they read through it
+    if (before?.size) {
+      const after = new Map(object == null ? [] : channelMembersOf(object as never).map((m): [string, string] => [m.userId, m.role]));
+      for (const [userId, role] of before) if (after.get(userId) !== role) ctx.waitUntil(accessChangedFor(ctx.jobs as never, userId));
+    }
   } catch (error) {
     await repairLater(ctx, { entity: kind, id, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error), object, version });
   }
@@ -217,6 +241,14 @@ async function syncStreamInline(ctx: RepairContext, id: string, key: string, obj
   try {
     await syncOwnership(ctx.db, 'stream', id, object, Date.now(), version);
     await syncLiveMetadata(ctx.db, id, object, version);
+    // Private, hidden, cancelled, deleted or chat off: whoever is on the realtime channel leaves it. Every
+    // write of the record passes here, so no path (a suspension, an erasure) is missed
+    const row = object == null ? null : projectLiveMetadata(id, object);
+    if (!row || !liveChatOpenToAnyone(row)) {
+      const cached = chatCacheUrl(ctx.jobs as never, id);
+      if (cached) deleteEdgeCache(cached, ctx.waitUntil);
+      ctx.waitUntil(broadcast(ctx.jobs as never, liveChatChannel(id), 'live_chat_closed', { streamId: id }));
+    }
     if (object == null) ctx.waitUntil(kickLivePurge(ctx.jobs).catch(error => logger.warn('[SearchSync] Could not start the live purge job', { error: error instanceof Error ? error.message : String(error) })));
   } catch (error) {
     await repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });

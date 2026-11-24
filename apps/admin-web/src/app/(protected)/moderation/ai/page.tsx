@@ -5,7 +5,7 @@ import { getI18n } from '@/i18n/server';
 import { formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { formatFixed, formatMoney } from '@al-ummah/shared-types';
+import { MODERATION_SURFACES, formatFixed, formatMoney } from '@al-ummah/shared-types';
 import { Select } from '@/components/select/Select';
 
 import { LocalTime } from '@/components/LocalTime';
@@ -15,7 +15,7 @@ const PAGE_SIZE = 25;
 const REVIEW = ['pending', 'agreed', 'disagreed', 'n/a'] as const;
 const DECISIONS = ['would_flag', 'would_hide', 'flag', 'hide', 'skipped', 'none'] as const;
 const LANGUAGES = ['ar', 'en', 'other'] as const;
-const SURFACES = ['video_comment', 'community_post', 'post_comment', 'video_metadata'] as const;
+const SURFACES = MODERATION_SURFACES;
 
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
 

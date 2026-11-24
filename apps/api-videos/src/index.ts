@@ -293,6 +293,9 @@ for (const path of [
 app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.report'));
 // Live watching heartbeats (AlUmmahNow#30), per IP: bounds made-up viewers with the per-network cap in the object
 app.use('/api/live-streams/:id/viewers', edgeRateLimit('LIVE_VIEWER_LIMITER', 'videos.live_viewers'));
+// Live chat (wiki E17): its own per-person limit, apart from comments; the per-address one is in the endpoint
+app.use('/api/live-streams/:id/chat', edgeRateLimit('LIVE_CHAT_LIMITER', 'videos.live_chat'));
+app.use('/api/live-streams/:id/chat', requireHuman('videos.live_chat', 'first'));
 app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
 // Tier requests on /upgrade: Turnstile on every request (wiki AUN-TIER-REQUESTS)
 app.use('/api/me/tier-requests', requireHuman('videos.tier_request', 'always'));

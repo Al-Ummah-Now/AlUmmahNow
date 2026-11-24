@@ -7,9 +7,9 @@
  */
 import type { Logger } from '@al-ummah/logger';
 import type { D1Database, ModerationScanPayload } from '@al-ummah/shared-types';
-import { MODERATION_MAX_TEXT } from '@al-ummah/shared-types';
+import { MODERATION_MAX_TEXT, MODERATION_SURFACES } from '@al-ummah/shared-types';
 import { AiBinding, AiContext, runExtensions, runGuard, translateToEnglish } from './ai';
-import { loadConfig, PROMPT_VERSION } from './config';
+import { DEFAULT_LIVE_CHAT_SHARE, loadConfig, PROMPT_VERSION } from './config';
 import { decide } from './decide';
 import { MODELS } from './pricing';
 import { writeSignal } from './store';
@@ -28,7 +28,10 @@ export type ScanOutcome =
   | { status: 'done'; signalId?: string; decision: string }
   | { status: 'retry'; error: string };
 
-const SURFACES = new Set(['video_comment', 'community_post', 'post_comment', 'video_metadata']);
+/** ai_budget_daily row of live chat's share */
+export const LIVE_CHAT_FEATURE = 'live_chat';
+
+const SURFACES = new Set<string>(MODERATION_SURFACES);
 
 export function isScanPayload(value: unknown): value is ModerationScanPayload {
   const p = value as ModerationScanPayload | null;
@@ -66,12 +69,21 @@ export async function handleModerationScan(
   const arabic = arabicLetterCount(text);
   const latin = latinLetterCount(text);
   const estimate = estimateScanNeurons(text, { arabic: arabic > 0, latin: latin > 0, extensions: config.extensionsEnabled });
-  if (!(await reserveBudget(db, config.dailyNeuronCap, estimate, now))) {
-    logger.warn('[Moderation] Daily neuron cap reached, scan skipped', { cap: config.dailyNeuronCap, subjectId: payload.subjectId });
+  // Live chat draws on its own share first, so one busy stream cannot use up the site's day (wiki E17-D4)
+  const chat = payload.surface === 'live_chat';
+  const chatCap = chat && config.dailyNeuronCap !== null ? Math.floor(config.dailyNeuronCap * (config.liveChatShare ?? DEFAULT_LIVE_CHAT_SHARE)) : null;
+  const chatReserved = chat && (await reserveBudget(db, chatCap, estimate, now, LIVE_CHAT_FEATURE));
+  if ((chat && !chatReserved) || !(await reserveBudget(db, config.dailyNeuronCap, estimate, now))) {
+    if (chatReserved) await settleBudget(db, estimate, 0, now, LIVE_CHAT_FEATURE);
+    logger.warn('[Moderation] Daily neuron cap reached, scan skipped', { cap: config.dailyNeuronCap, surface: payload.surface, subjectId: payload.subjectId });
     const signalId = await writeSignal(db, { ...base, decision: 'skipped', skipReason: 'budget' }, now);
     return { status: 'done', signalId, decision: 'skipped:budget' };
   }
 
+  const settle = async (spent: number) => {
+    await settleBudget(db, estimate, spent, now);
+    if (chatReserved) await settleBudget(db, estimate, spent, now, LIVE_CHAT_FEATURE);
+  };
   const ctx: AiContext = { ai: env.AI, db, logger, gatewayId: env.AI_GATEWAY_ID || undefined, surface: payload.surface, spent: 0, now };
   const models: string[] = [];
   let translation: string | undefined;
@@ -105,7 +117,7 @@ export async function handleModerationScan(
       models.push(MODELS.extensions);
     }
   } catch (error) {
-    await settleBudget(db, estimate, ctx.spent, now);
+    await settle(ctx.spent);
     const message = error instanceof Error ? error.message : String(error);
     if (!opts.lastAttempt) {
       logger.warn('[Moderation] AI call failed, will retry', { subjectId: payload.subjectId, error: message });
@@ -116,7 +128,7 @@ export async function handleModerationScan(
     return { status: 'done', signalId, decision: 'skipped:error' };
   }
 
-  await settleBudget(db, estimate, ctx.spent, now);
+  await settle(ctx.spent);
 
   // Trust score arrives with story 28.2; until then nobody is "low trust", so charity_scam can only flag.
   const result = decide(scores, config.policies, { lowTrust: false, autoHideAvailable: false });
