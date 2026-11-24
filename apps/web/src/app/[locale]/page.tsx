@@ -5,8 +5,10 @@ import type { Metadata } from 'next';
 import { homeMetadata, websiteLd } from '@/lib/seo/structured-data';
 import { fetchVideosWithPagination } from '@/lib/api/videos';
 import { getHomeRails } from '@/lib/api/discovery-home';
+import { getHomeLibrary } from '@/lib/api/home-library';
 import { withinBudget } from '@/lib/ssr/first-data';
-import { stableImages } from '@/lib/ssr/stable-images';
+import { hasStableThumb, stableImages } from '@/lib/ssr/stable-images';
+import { withPublicHistoryThumbs } from '@/lib/home/library-row';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { SIGN_IN_BANNER_SCRIPT } from '@/lib/home/sign-in-banner';
 import HomePageClient from './HomePageClient';
@@ -15,8 +17,9 @@ import HomePageClient from './HomePageClient';
  * The home page (client, HomePageClient.tsx) with the site's WebSite + SearchAction for search
  * engines. The first page of videos is read here, as the viewer, so the HTML already has the hero
  * and the cards (wiki AUN-SEO, phase 4); the client goes on from it. The ranked rails (wiki E07
- * "Discovery ranking") are read here too, in the page language, so their headings and cards are in the HTML. Its images are the stable /thumb
- * ones, never signed CDN URLs (lib/ssr/stable-images.ts).
+ * "Discovery ranking") and the signed-in viewer's "Your library" row are read here too, so their
+ * headings and cards are in the first HTML paint without a layout shift. Images are the stable
+ * /thumb ones, never signed CDN URLs (lib/ssr/stable-images.ts).
  */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   return homeMetadata((await params).locale);
@@ -25,14 +28,37 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const language = locale === 'ar' ? 'ar' : 'en';
-  const [requestHeaders, firstPage, rails] = await Promise.all([
+  const [requestHeaders, firstPage, rails, library] = await Promise.all([
     headers(),
     withinBudget(() => fetchVideosWithPagination(null)),
     withinBudget(() => getHomeRails(language)),
+    withinBudget(() => getHomeLibrary()),
   ]);
   const host = requestHeaders.get('host');
   const stable = firstPage ? stableImages(firstPage) : undefined;
   const stableRails = rails ? stableImages(rails) : undefined;
+
+  let stableLibrary: ReturnType<typeof stableImages<NonNullable<typeof library>['cards']>> | undefined;
+  if (library) {
+    const publicVideoIds = new Set<string>();
+    for (const v of firstPage?.data ?? []) {
+      if (hasStableThumb(v) && v.id) publicVideoIds.add(v.id);
+    }
+    for (const r of rails ?? []) {
+      for (const v of r.data) {
+        if (hasStableThumb(v) && v.id) publicVideoIds.add(v.id);
+      }
+    }
+    for (const card of library.cards) {
+      if (card.kind !== 'continue') {
+        for (const v of [card.top, ...card.next]) {
+          if (hasStableThumb(v) && v.id) publicVideoIds.add(v.id);
+        }
+      }
+    }
+    stableLibrary = stableImages(withPublicHistoryThumbs(library.cards, publicVideoIds));
+  }
+
   return (
     <>
       {host ? <JsonLd data={websiteLd(locale, originFromHost(host))} /> : null}
@@ -43,6 +69,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         initialPartial={stable?.partial}
         initialRails={stableRails?.value}
         initialRailsPartial={stableRails?.partial}
+        initialLibrary={stableLibrary?.value}
+        initialLibraryPartial={stableLibrary?.partial}
+        initialLibraryUserId={library?.userId}
       />
     </>
   );

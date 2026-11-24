@@ -32,38 +32,24 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { WatchHistoryService, entryTitle, type WatchHistoryItem } from '@/services/api/watch-history';
 import { LibraryService, type LibraryVideo } from '@/services/api/library';
+import {
+  buildContinueCard,
+  buildListCard,
+  LIBRARY_ROW_LOAD,
+  mergeFreshLibraryCards,
+  type ContinueLibraryCard,
+  type HomeLibraryCard,
+  type LibraryListKind,
+  type ListLibraryCard,
+} from '@/lib/home/library-row';
 import { formatVideoCount, keepNumbersWithUnits } from '@/lib/format/videoMeta';
 import { watchHref } from '@/lib/playlists/playback';
-import { storedIndexOf } from '@/lib/playlists/playlist-utils';
 import { channelLabel } from '@/lib/channel-name';
 import { removeUnwantedChars } from '@/lib/utility';
 import { logger } from '@/lib/logger-client';
 import '@/theme/home-rails.css';
 
-type ListKind = 'watch-later' | 'liked';
-
-/** How many videos a card loads: its cover's and the two a lone wide card lists under "Up next" */
-const LOAD = 3;
-
-interface ContinueCard {
-  kind: 'continue';
-  top: WatchHistoryItem;
-  next: WatchHistoryItem[];
-  total: number;
-}
-
-interface ListCard {
-  kind: ListKind;
-  top: LibraryVideo;
-  next: LibraryVideo[];
-  total: number;
-  /** The first video's index in the list's stored order (the watch URL's `index`) */
-  index: number;
-}
-
-type LibraryCard = ContinueCard | ListCard;
-
-const LIST: Record<ListKind, { alias: string; path: string }> = {
+const LIST: Record<LibraryListKind, { alias: string; path: string }> = {
   'watch-later': { alias: 'WL', path: 'library/watch-later' },
   liked: { alias: 'LL', path: 'library/liked' },
 };
@@ -71,19 +57,21 @@ const LIST: Record<ListKind, { alias: string; path: string }> = {
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Continue watching: the newest unfinished video and how many there are, unless history is paused */
-async function loadContinue(): Promise<ContinueCard | null> {
-  const [paused, page] = await Promise.all([WatchHistoryService.getPaused(), WatchHistoryService.list({ limit: LOAD, completed: false })]);
+async function loadContinue(): Promise<ContinueLibraryCard | null> {
+  const [paused, page] = await Promise.all([
+    WatchHistoryService.getPaused(),
+    WatchHistoryService.list({ limit: LIBRARY_ROW_LOAD, completed: false }),
+  ]);
   // The service reads a malformed page as empty; this guards any other caller's shape too
-  if (paused !== false || !page || !Array.isArray(page.entries) || page.entries.length === 0) return null;
-  return { kind: 'continue', top: page.entries[0], next: page.entries.slice(1, LOAD), total: Math.max(page.total || 0, page.entries.length) };
+  return buildContinueCard(paused, page);
 }
 
-async function loadList(kind: ListKind): Promise<ListCard | null> {
-  const page = kind === 'watch-later' ? await LibraryService.watchLater({ limit: LOAD }) : await LibraryService.liked({ limit: LOAD });
-  if (!page || !Array.isArray(page.items) || page.items.length === 0) return null;
-  const top = page.items[0];
-  const storedIds = 'videoIds' in page && Array.isArray(page.videoIds) ? page.videoIds : null;
-  return { kind, top, next: page.items.slice(1, LOAD), total: Math.max(page.total || 0, page.items.length), index: storedIndexOf(storedIds, top.id, 0) };
+async function loadList(kind: LibraryListKind): Promise<ListLibraryCard | null> {
+  const page =
+    kind === 'watch-later'
+      ? await LibraryService.watchLater({ limit: LIBRARY_ROW_LOAD })
+      : await LibraryService.liked({ limit: LIBRARY_ROW_LOAD });
+  return buildListCard(kind, page);
 }
 
 /** One list's load: a failure leaves its card out and is logged, never thrown */
@@ -92,6 +80,15 @@ function settle<T>(load: Promise<T | null>, list: string): Promise<T | null> {
     logger.warn('[LibraryRow] Could not load a library list', { list, error: errorText(error) });
     return null;
   });
+}
+
+async function loadAllCards(): Promise<HomeLibraryCard[]> {
+  const loaded = await Promise.all([
+    settle(loadContinue(), 'continue'),
+    settle(loadList('watch-later'), 'watch-later'),
+    settle(loadList('liked'), 'liked'),
+  ]);
+  return loaded.filter((card): card is HomeLibraryCard => card !== null);
 }
 
 interface NextItem {
@@ -131,30 +128,63 @@ function UpNext({ items, label, testId }: { items: NextItem[]; label: string; te
 const actionClass =
   'inline-flex items-center gap-1.5 rounded-full bg-[var(--fanous-color-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--fanous-color-on-primary)] shadow hover:bg-[var(--fanous-color-primary-hover)] hover:text-[var(--fanous-color-on-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]';
 
-export function LibraryRow() {
+export interface LibraryRowProps {
+  /**
+   * Cards loaded on the server (app/[locale]/page.tsx) so the row is in the first HTML paint
+   * with zero layout shift. An empty array means the server already confirmed there is nothing
+   * to show (signed out or empty lists), so the client makes no fetch. Omitted when the server
+   * could not load them in time (or when rendered standalone).
+   */
+  initialCards?: HomeLibraryCard[];
+  /** The server dropped a signed thumbnail on a card: refresh thumbnails in place after hydration. */
+  initialPartial?: boolean;
+  /** Which signed-in user `initialCards` belongs to (guards against showing stale cards after an account switch). */
+  initialUserId?: string | null;
+}
+
+export function LibraryRow({ initialCards, initialPartial = false, initialUserId }: LibraryRowProps = {}) {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
-  const [cards, setCards] = useState<LibraryCard[] | null>(null);
   const userId = user?.id;
+  const serverMatchesUser =
+    initialCards !== undefined && (initialUserId === undefined || (userId ?? null) === initialUserId);
+  const [cards, setCards] = useState<HomeLibraryCard[] | null>(() => (serverMatchesUser ? initialCards : null));
 
   useEffect(() => {
+    if (!userId) {
+      setCards(null);
+      return;
+    }
+
+    if (serverMatchesUser) {
+      setCards(initialCards);
+      if (!initialPartial || initialCards.length === 0) return;
+      let cancelled = false;
+      void loadAllCards().then((loaded) => {
+        if (!cancelled) {
+          setCards((shown) => (shown ? mergeFreshLibraryCards(shown, loaded) : shown));
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setCards(null);
-    if (!userId) return;
     let cancelled = false;
-    void Promise.all([
-      settle(loadContinue(), 'continue'),
-      settle(loadList('watch-later'), 'watch-later'),
-      settle(loadList('liked'), 'liked'),
-    ]).then((loaded) => {
-      if (!cancelled) setCards(loaded.filter((card): card is LibraryCard => card !== null));
+    void loadAllCards().then((loaded) => {
+      if (!cancelled) setCards(loaded);
     });
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, serverMatchesUser, initialCards, initialPartial]);
 
-  if (!cards || cards.length === 0) return null;
+  // Never show cards fetched for a different account during a client-side account switch
+  const visibleCards = initialUserId !== undefined && (userId ?? null) !== initialUserId && cards === initialCards ? null : cards;
+  if (!userId || !visibleCards || visibleCards.length === 0) return null;
 
+  const coverLoading = serverMatchesUser ? ('eager' as const) : undefined;
   const heading = t.library.homeRow;
   const headingId = 'home-library-heading';
 
@@ -162,7 +192,7 @@ export function LibraryRow() {
   const watchedText = (percent: number) => keepNumbersWithUnits(t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent)));
   const videoTitle = (video: LibraryVideo) => removeUnwantedChars(getLocalizedValue(video.titleLocalized, video.title || '', lang));
 
-  const renderCard = (card: LibraryCard) => {
+  const renderCard = (card: HomeLibraryCard) => {
     if (card.kind === 'continue') {
       const { top, total, next } = card;
       const title = removeUnwantedChars(entryTitle(top, lang));
@@ -177,7 +207,7 @@ export function LibraryRow() {
             countLabel={formatVideoCount(total, lang, { compact: true })}
             progress={percent}
             cover={(overlay) => (
-              <VideoThumbnail src={top.videoThumbnail} alt="" style={THUMBNAIL_16_9}>
+              <VideoThumbnail src={top.videoThumbnail} alt="" style={THUMBNAIL_16_9} loading={coverLoading}>
                 {overlay}
               </VideoThumbnail>
             )}
@@ -229,7 +259,7 @@ export function LibraryRow() {
           title={listTitle}
           countLabel={formatVideoCount(total, lang, { compact: true })}
           cover={(overlay) => (
-            <VideoThumbnail src={top.thumbnailUrl} alt="" style={THUMBNAIL_16_9}>
+            <VideoThumbnail src={top.thumbnailUrl} alt="" style={THUMBNAIL_16_9} loading={coverLoading}>
               {overlay}
             </VideoThumbnail>
           )}
@@ -266,7 +296,7 @@ export function LibraryRow() {
   };
 
   return (
-    <section className="hlib" aria-labelledby={headingId} data-testid="home-library" data-count={cards.length}>
+    <section className="hlib" aria-labelledby={headingId} data-testid="home-library" data-count={visibleCards.length}>
       <div className="hr-head">
         <span className="hr-badge" aria-hidden="true">
           <LibraryIcon />
@@ -280,8 +310,8 @@ export function LibraryRow() {
           <ChevronRight aria-hidden="true" />
         </Link>
       </div>
-      <ul className="hlib-list" data-count={cards.length}>
-        {cards.map(renderCard)}
+      <ul className="hlib-list" data-count={visibleCards.length}>
+        {visibleCards.map(renderCard)}
       </ul>
     </section>
   );

@@ -1,0 +1,114 @@
+jest.mock('@/lib/logger-server', () => ({
+  logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
+}));
+
+const mockGetServerAuthContext = jest.fn();
+jest.mock('../server-auth', () => ({
+  getServerAuthContext: () => mockGetServerAuthContext(),
+}));
+
+const mockApiRequestServerResult = jest.fn();
+jest.mock('../api-client', () => ({
+  apiRequestServerResult: (...args: unknown[]) => mockApiRequestServerResult(...args),
+  buildApiUrl: (path: string) => `http://api.test${path}`,
+}));
+
+import { getHomeLibrary } from '../home-library';
+
+const historyEntry = (videoId: string) => ({
+  id: `u1:${videoId}`,
+  userId: 'u1',
+  videoId,
+  videoTitle: `Talk ${videoId}`,
+  videoThumbnail: `https://vz-1.b-cdn.net/${videoId}/thumbnail.jpg?token=abc&expires=999`,
+  videoDuration: 600,
+  channelId: 'c1',
+  channelName: 'Noor',
+  firstWatchedAt: '',
+  lastWatchedAt: '',
+  watchCount: 1,
+  progress: 240,
+  completed: false,
+  percentageWatched: 40,
+});
+
+const libraryVideo = (id: string) => ({
+  id,
+  title: `Video ${id}`,
+  thumbnailUrl: `https://vz-1.b-cdn.net/${id}/thumbnail.jpg?token=abc&expires=999`,
+  channelName: 'Noor',
+  isPublic: true,
+});
+
+describe('getHomeLibrary (server-side home library loader)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns empty cards without calling the API when signed out', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce(null);
+    await expect(getHomeLibrary()).resolves.toEqual({ cards: [], userId: null });
+    expect(mockApiRequestServerResult).not.toHaveBeenCalled();
+  });
+
+  it('loads Continue watching, Watch later, and Liked videos in order when signed in', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1', channelId: 'c1' });
+    mockApiRequestServerResult
+      .mockResolvedValueOnce({ status: 200, data: { paused: false } })
+      .mockResolvedValueOnce({ status: 200, data: { entries: [historyEntry('h1')], total: 4, hasMore: true } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [libraryVideo('w1')], total: 2, videoIds: ['x', 'w1'], nextCursor: null, playlistId: 'wl' } } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [libraryVideo('l1')], total: 5, nextCursor: null } } });
+
+    const res = await getHomeLibrary();
+    expect(res?.userId).toBe('u1');
+    expect(res?.cards.map((c) => c.kind)).toEqual(['continue', 'watch-later', 'liked']);
+    expect(res?.cards[1]).toMatchObject({ kind: 'watch-later', index: 1, total: 2 });
+    expect(mockApiRequestServerResult).toHaveBeenCalledTimes(4);
+  });
+
+  it('returns empty cards (not undefined) when all three lists are legitimately empty', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1' });
+    mockApiRequestServerResult
+      .mockResolvedValueOnce({ status: 200, data: { paused: false } })
+      .mockResolvedValueOnce({ status: 200, data: { entries: [], total: 0, hasMore: false } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [], total: 0, videoIds: [], nextCursor: null, playlistId: 'wl' } } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [], total: 0, nextCursor: null } } });
+
+    await expect(getHomeLibrary()).resolves.toEqual({ cards: [], userId: 'u1' });
+  });
+
+  it('drops Continue watching when history is paused and keeps Watch later and Liked', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1' });
+    mockApiRequestServerResult
+      .mockResolvedValueOnce({ status: 200, data: { paused: true } })
+      .mockResolvedValueOnce({ status: 200, data: { entries: [historyEntry('h1')], total: 1, hasMore: false } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [libraryVideo('w1')], total: 1, videoIds: ['w1'], nextCursor: null, playlistId: 'wl' } } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [], total: 0, nextCursor: null } } });
+
+    const res = await getHomeLibrary();
+    expect(res?.cards.map((c) => c.kind)).toEqual(['watch-later']);
+  });
+
+  it('keeps surviving cards when one list fails (partial outage)', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1' });
+    mockApiRequestServerResult
+      .mockResolvedValueOnce({ status: 500, data: null })
+      .mockResolvedValueOnce({ status: 500, data: null })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [libraryVideo('w1')], total: 1, videoIds: ['w1'], nextCursor: null, playlistId: 'wl' } } })
+      .mockResolvedValueOnce({ status: 200, data: { result: { items: [], total: 0, nextCursor: null } } });
+
+    const res = await getHomeLibrary();
+    expect(res?.cards.map((c) => c.kind)).toEqual(['watch-later']);
+  });
+
+  it('returns undefined when every library request fails (timeout / outage / 401)', async () => {
+    mockGetServerAuthContext.mockResolvedValueOnce({ userId: 'u1', accessToken: 'tok-1' });
+    mockApiRequestServerResult
+      .mockResolvedValueOnce({ status: null, data: null })
+      .mockResolvedValueOnce({ status: null, data: null })
+      .mockResolvedValueOnce({ status: 503, data: null })
+      .mockResolvedValueOnce({ status: 500, data: null });
+
+    await expect(getHomeLibrary()).resolves.toBeUndefined();
+  });
+});

@@ -11,6 +11,7 @@ import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { LibraryRow } from "@/components/home/LibraryRow";
+import type { HomeLibraryCard } from "@/lib/home/library-row";
 import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
 import { pickHomeFeatured } from "@/lib/video/hero";
 import type { PaginationResponse } from "@/lib/api/types";
@@ -49,12 +50,32 @@ interface HomePageClientProps {
   initialRails?: HomeRail[];
   /** The server dropped an image in the rails: reload them after hydration */
   initialRailsPartial?: boolean;
+  /**
+   * The signed-in viewer's "Your library" cards, read on the server (page.tsx) so the row is in the
+   * first HTML paint with zero layout shift. An empty array means the server confirmed nothing to
+   * show (signed out or empty lists). Omitted only when the server timed out or failed: the fallback
+   * then mounts below the feed so its late arrival never shifts content above the fold.
+   */
+  initialLibrary?: HomeLibraryCard[];
+  /** The server dropped a signed thumbnail on a library card: refresh thumbnails in place after hydration */
+  initialLibraryPartial?: boolean;
+  /** Which signed-in user `initialLibrary` belongs to */
+  initialLibraryUserId?: string | null;
 }
 
-const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial = false, initialRails, initialRailsPartial = false }) => {
+const VideosPage: React.FC<HomePageClientProps> = ({
+  initialPage,
+  initialPartial = false,
+  initialRails,
+  initialRailsPartial = false,
+  initialLibrary,
+  initialLibraryPartial = false,
+  initialLibraryUserId,
+}) => {
   const { t, isRTL, lang } = useLanguage();
   const [rails, setRails] = useState<HomeRail[]>(() => initialRails ?? []);
   const { user: _user } = useAuth();
+  const serverLibraryReady = initialLibrary !== undefined;
   const [videos, setVideos] = useState<VideoObject[]>(() => initialPage?.data ?? []);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
   const [nextCursor, setNextCursor] = useState<string | null>(() => (initialPage ? getNextVideosCursor(initialPage) : null));
@@ -154,7 +175,13 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
         >
 {/* Signed-out visitors only, decided on the server (no flash for the signed-in) */}
 <SignInBanner />
-<LibraryRow />
+{serverLibraryReady && (
+  <LibraryRow
+    initialCards={initialLibrary}
+    initialPartial={initialLibraryPartial}
+    initialUserId={initialLibraryUserId}
+  />
+)}
 {featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
 <HomeRails rails={rails} />
 <h1 className="home-h street-plate text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>
@@ -219,6 +246,8 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial
               </button>
             </div>
           )}
+          {/* Server library timed out or failed: mount the client fallback below the feed so its late arrival never shifts content above the fold (CLS 0) */}
+          {!serverLibraryReady && <LibraryRow />}
         </main>
   );
 };
