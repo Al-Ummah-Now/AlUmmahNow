@@ -4,7 +4,8 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { eraseRunUserData, OwnershipIndexIncomplete } from '../src/lib/privacy/run-user-erase';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { jobQueueFor } from '../src/lib/admin/jobs';
-import { LEGACY_RESTORE_POINTERS_PREFIX, backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
+import { ADMIN_BACKUPS_UNBOUND_ERROR, LEGACY_RESTORE_POINTERS_PREFIX, backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
+import { logger } from '../src/lib/logger';
 import { MemoryBucket, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -157,5 +158,27 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal(jobQueueFor({ ADMIN_JOBS_QUEUE: admin, RUN_ERASE_QUEUE: runErase }, 'user.erase-run'), runErase);
 		assert.equal(jobQueueFor({ ADMIN_JOBS_QUEUE: admin, RUN_ERASE_QUEUE: runErase }, 'user.delete-data'), admin);
 		assert.equal(jobQueueFor({ ADMIN_JOBS_QUEUE: admin }, 'user.erase-run'), admin, 'without the binding (stage) it shares the admin-jobs queue');
+	});
+
+	it('logs a warning and reports an error when ADMIN_BACKUPS is unbound', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		delete (env as { ADMIN_BACKUPS?: unknown }).ADMIN_BACKUPS;
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+
+		const warnings: unknown[][] = [];
+		const realWarn = logger.warn.bind(logger);
+		logger.warn = ((...args: unknown[]) => {
+			warnings.push(args);
+		}) as never;
+		try {
+			const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+			assert.equal(result.complete, true);
+			assert.deepEqual(result.errors, [ADMIN_BACKUPS_UNBOUND_ERROR]);
+			assert.ok(warnings.some((args) => String(args[0]).includes('ADMIN_BACKUPS is not bound')));
+		} finally {
+			logger.warn = realWarn;
+		}
 	});
 });
