@@ -3,7 +3,7 @@
  * and the two-admins conflict are tested without a browser (test/features-page.test.ts).
  * Wiki AUN-FEATURES §2.2 (dependencies) and §3 (the page).
  */
-import { FEATURE_GROUPS, dependantsOf, featureDefinition, type FeatureDefinition, type FeatureGroup, type FeatureKey } from '@al-ummah/shared-types';
+import { FEATURE_GROUPS, dependantsOf, featureDefinition, type FeatureDefinition, type FeatureGroup, type FeatureKey, type FeatureText } from '@al-ummah/shared-types';
 import type { FeatureItem } from '@/lib/api/features';
 import type { Locale } from '@/i18n/config';
 
@@ -108,22 +108,22 @@ export function lockReason(item: FeatureItem, canManage: boolean): LockReason {
   return 'readOnly';
 }
 
-/** A row after a refused write: the server's current row replaces ours; the note names who changed it. */
-export interface ConflictNote {
-  key: FeatureKey;
-  by: string | null;
-}
-
-export function applyConflict(items: readonly FeatureItem[], current: FeatureItem): { items: FeatureItem[]; note: ConflictNote } {
-  return { items: items.map((i) => (i.key === current.key ? current : i)), note: { key: current.key, by: current.updatedBy?.name ?? null } };
+/**
+ * A row after a refused write (409 feature_changed): admin-api sends the stored value and version now
+ * (not who changed it), so the switch shows the real value at once and the page then reloads the
+ * rows for the rest. Without `current` nothing changes here and the reload does it all.
+ */
+export function applyConflict(items: readonly FeatureItem[], key: FeatureKey, current: { enabled: boolean; version: number } | null): FeatureItem[] {
+  if (!current) return [...items];
+  return applyWrite(items, key, current.enabled, current.version, null, null);
 }
 
 /** A successful write applied to the list (Undo included). */
-export function applyWrite(items: readonly FeatureItem[], key: FeatureKey, enabled: boolean, version: number, by: { id: string; name: string } | null, at: string): FeatureItem[] {
+export function applyWrite(items: readonly FeatureItem[], key: FeatureKey, enabled: boolean, version: number, by: { id: string; name: string | null } | null, at: string | null): FeatureItem[] {
   const stored = Object.fromEntries(items.map((i) => [i.key, i.key === key ? enabled : i.enabled])) as Record<FeatureKey, boolean>;
   return items.map((i) => {
     const blocked = featureDefinition(i.key).requires.filter((r) => !effectiveOf(r, stored));
-    const next = i.key === key ? { ...i, enabled, version, updatedAt: at, updatedBy: by ?? i.updatedBy } : i;
+    const next = i.key === key ? { ...i, enabled, version, updatedAt: at ?? i.updatedAt, updatedBy: by ?? i.updatedBy } : i;
     return { ...next, blockedBy: blocked, effective: next.enabled && blocked.length === 0 && !next.envOverride };
   });
 }
@@ -137,4 +137,20 @@ function effectiveOf(key: FeatureKey, stored: Record<FeatureKey, boolean>, seen 
 /** Header summary: how many are off for people right now. */
 export function offCount(items: readonly FeatureItem[]): number {
   return items.filter((i) => !i.effective).length;
+}
+
+/**
+ * A 409 feature_precondition body: the check's reason in both languages (the owning epic words it,
+ * wiki AUN-FEATURES §5.3) and its stable code. The server's bare `message` is never shown, so the
+ * page can't end up with one language inside the other.
+ */
+export function preconditionOf(body: Record<string, unknown> | undefined): { reason: FeatureText | null; reasonKey: string | null } {
+  const r = body?.reason as Partial<FeatureText> | undefined;
+  const reason = r && typeof r.en === 'string' && r.en.trim() && typeof r.ar === 'string' && r.ar.trim() ? { en: r.en, ar: r.ar } : null;
+  return { reason, reasonKey: typeof body?.reasonKey === 'string' && body.reasonKey ? body.reasonKey : null };
+}
+
+/** The sentence under the switch, in the page's language; `fallback` (a message key's text) when no reason came. */
+export function preconditionText(reason: FeatureText | null, locale: Locale, fallback: string): string {
+  return reason?.[locale]?.trim() || fallback;
 }

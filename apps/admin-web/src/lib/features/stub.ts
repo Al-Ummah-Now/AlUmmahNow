@@ -12,8 +12,8 @@
  *   slow          the list takes 20 s (the loading skeleton)
  */
 import { cookies } from 'next/headers';
-import { FEATURE_REGISTRY, blockedBy, withDefaults, type FeatureKey } from '@al-ummah/shared-types';
-import type { FeatureHistoryEntry, FeatureHistoryPage, FeatureItem, FeatureWriteResult } from '@/lib/api/features';
+import { FEATURE_REGISTRY, apiErrorBody, apiErrorMessage, blockedBy, isFeatureKey, withDefaults, type FeatureHistoryEntry, type FeatureItem, type FeatureKey } from '@al-ummah/shared-types';
+import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin, normalizeRole } from '@/lib/roles';
 
@@ -24,7 +24,7 @@ interface StoredRow {
   enabled: boolean;
   version: number;
   updatedAt: string | null;
-  updatedBy: { id: string; name: string } | null;
+  updatedBy: { id: string; name: string | null } | null;
   parked: number;
 }
 
@@ -38,6 +38,8 @@ const FATIMA = { id: 'u-fatima', name: 'Fatima Rahman' };
 const YUSUF = { id: 'u-yusuf', name: 'Yusuf Ali' };
 const AMINA = { id: 'u-amina', name: 'Amina Yusuf' };
 const PEOPLE = [FATIMA, YUSUF, AMINA];
+/** An account with no name to show (admin-api sends name: null): the page says "an admin" */
+const NAMELESS = { id: 'u-nameless', name: null };
 
 /** A fixed clock, so frames and tests never move: 2026-11-22 15:40 UTC. */
 const NOW = Date.UTC(2026, 10, 22, 15, 40);
@@ -50,7 +52,7 @@ function seed(scenario: Scenario): StubState {
   const history = new Map<FeatureKey, FeatureHistoryEntry[]>();
   for (const def of FEATURE_REGISTRY) rows.set(def.key, { enabled: def.default, version: 0, updatedAt: null, updatedBy: null, parked: 0 });
 
-  const change = (key: FeatureKey, values: boolean[], by: (typeof PEOPLE)[number][], minutesAgo: number[]) => {
+  const change = (key: FeatureKey, values: boolean[], by: { id: string; name: string | null }[], minutesAgo: number[]) => {
     const entries: FeatureHistoryEntry[] = [];
     let old: boolean | null = null;
     values.forEach((v, i) => {
@@ -68,7 +70,7 @@ function seed(scenario: Scenario): StubState {
   // A long history on one row, so the sheet shows a second page
   const flips = Array.from({ length: 63 }, (_, i) => i % 2 === 0);
   change('youtubeImport', flips, PEOPLE, Array.from({ length: 63 }, (_, i) => (63 - i) * 1440 + 95));
-  change('newsletter', [false, true], [YUSUF, FATIMA], [4320, 2905]);
+  change('newsletter', [false, true], [YUSUF, NAMELESS], [4320, 2905]);
   change('captionsTranslate', [false, true], [AMINA, AMINA], [180, 178]);
   change('tierRequests', [true], [FATIMA], [26]);
   change('socialAutopost', [false, true], [YUSUF, YUSUF], [10080, 9990]);
@@ -126,7 +128,35 @@ function toItem(state: StubState, key: FeatureKey, who: { manage: boolean; super
   };
 }
 
-export async function stubList(): Promise<FeatureItem[]> {
+/**
+ * admin-api /api/features as the stub: the same `{ success: true, result }` envelopes and the same
+ * refusals (thrown as AdminApiError with the error body, as requestAdmin does), so the page reads the
+ * stub through the same readers as the real API (shared-types features-api.ts).
+ */
+export async function stubRequest(endpoint: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+  const url = new URL(endpoint, 'http://stub');
+  const parts = url.pathname.split('/').filter(Boolean); // api, features, [key], [history]
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (parts.length === 2 && method === 'GET') return { success: true, result: { items: await stubList() } };
+  const key = decodeURIComponent(parts[2] ?? '');
+  if (!isFeatureKey(key)) await refuse(404, 'not_found');
+  if (parts[3] === 'history') return { success: true, result: await stubHistory(key as FeatureKey, url.searchParams.get('cursor')) };
+  const input = JSON.parse(String(init.body ?? '{}')) as { enabled: boolean; expectedVersion: number; undo?: boolean };
+  return { success: true, result: await stubSet(key as FeatureKey, input.enabled, input.expectedVersion, { undo: input.undo === true }) };
+}
+
+async function refuse(status: number, code: string, extra: Record<string, unknown> = {}): Promise<never> {
+  let lang: 'en' | 'ar' = 'en';
+  try {
+    lang = (await cookies()).get('admin_locale')?.value === 'ar' ? 'ar' : 'en';
+  } catch {
+    // outside a request (unit tests): English
+  }
+  const body = { ...apiErrorBody(code, extra), message: apiErrorMessage(code, status, lang), lang };
+  throw new AdminApiError(body.message, status, code, undefined, undefined, body);
+}
+
+async function stubList(): Promise<FeatureItem[]> {
   const { scenario, state } = await current();
   if (scenario === 'loadError') throw new Error('Admin API unreachable');
   if (scenario === 'slow') await new Promise((r) => setTimeout(r, 20_000));
@@ -134,11 +164,11 @@ export async function stubList(): Promise<FeatureItem[]> {
   return FEATURE_REGISTRY.map((d) => toItem(state, d.key, who));
 }
 
-export async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: number, opts: { undo?: boolean }): Promise<FeatureWriteResult> {
+async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: number, opts: { undo?: boolean }): Promise<{ previous: boolean; enabled: boolean; version: number }> {
   const { state } = await current();
   const who = await viewerRole();
   const item = toItem(state, key, who);
-  if (!item.canToggle) return { ok: false, kind: 'error', status: 403, message: 'You can’t change this feature.', code: 'forbidden' };
+  if (!item.canToggle) return refuse(403, 'forbidden');
   const row = state.rows.get(key)!;
   if (state.conflictPending) {
     // Someone else got there first: they made the change this admin was about to make
@@ -147,11 +177,18 @@ export async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion
     row.version += 1;
     row.updatedAt = new Date(NOW - 20_000).toISOString();
     row.updatedBy = YUSUF;
-    return { ok: false, kind: 'changed', feature: toItem(state, key, who), message: 'Someone else changed this feature.' };
+    return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
   }
-  if (row.version !== expectedVersion) return { ok: false, kind: 'changed', feature: item, message: 'Someone else changed this feature.' };
+  if (row.version !== expectedVersion) return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
   if (key === 'creatorSupport' && enabled) {
-    return { ok: false, kind: 'precondition', message: 'Creator support can’t be switched on yet: the organization isn’t formed and there is no finance approver.' };
+    return refuse(409, 'feature_precondition', {
+      reasonKey: 'organization_not_formed',
+      reason: {
+        en: 'Creator support can’t be switched on yet: the organization isn’t formed and there is no finance approver.',
+        ar: 'لا يمكن تشغيل دعم صنّاع المحتوى بعد: لم تُؤسَّس المنظمة ولا يوجد معتمِد مالي.',
+      },
+      feature: key,
+    });
   }
   const previous = row.enabled;
   row.enabled = enabled;
@@ -161,13 +198,14 @@ export async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion
   const entries = state.history.get(key) ?? [];
   entries.unshift({ id: `${key}-w${row.version}`, oldEnabled: previous, newEnabled: enabled, actor: row.updatedBy, source: opts.undo ? 'undo' : 'features_page', createdAt: row.updatedAt });
   state.history.set(key, entries);
-  return { ok: true, data: { previous, enabled, version: row.version } };
+  return { previous, enabled, version: row.version };
 }
 
-export async function stubHistory(key: FeatureKey, cursor: string | null): Promise<FeatureHistoryPage> {
+/** admin-api's history page shape: `items` with the actor's id and name (null when the account has none). */
+async function stubHistory(key: FeatureKey, cursor: string | null): Promise<{ items: FeatureHistoryEntry[]; nextCursor: string | null }> {
   const { state } = await current();
   const all = state.history.get(key) ?? [];
   const start = cursor ? Number(cursor) || 0 : 0;
-  const entries = all.slice(start, start + 50);
-  return { entries, nextCursor: start + 50 < all.length ? String(start + 50) : null };
+  const items = all.slice(start, start + 50);
+  return { items, nextCursor: start + 50 < all.length ? String(start + 50) : null };
 }

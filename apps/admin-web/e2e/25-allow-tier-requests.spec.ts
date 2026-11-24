@@ -12,11 +12,12 @@ import { SHARED_STATE_PROJECT, storageStatePath } from './support/env';
 interface Settings { allowed: boolean; mode: string; providerEnabled: boolean }
 interface Feature { key: string; enabled: boolean; version: number }
 const readMode = async () => (await adminApi<Settings>('/api/content/tier-requests/settings')).body.result!;
-const readFeature = async () => ((await adminApi('/api/features')).body.features as Feature[]).find((f) => f.key === 'tierRequests')!;
+const readFeature = async () => ((await adminApi<{ items: Feature[] }>('/api/features')).body.result?.items ?? []).find((f) => f.key === 'tierRequests')!;
 const write = async (enabled: boolean) => {
   const current = await readFeature();
   if (current.enabled === enabled) return;
-  await adminApi('/api/features/tierRequests', { method: 'PUT', body: JSON.stringify({ enabled, expectedVersion: current.version }) });
+  const res = await adminApi('/api/features/tierRequests', { method: 'PUT', body: JSON.stringify({ enabled, expectedVersion: current.version }) });
+  if (res.status !== 200) throw new Error(`tierRequests write answered ${res.status}: ${String(res.body.code ?? res.body.error)}`);
 };
 
 test.describe.configure({ mode: 'serial' });

@@ -103,3 +103,13 @@ export function saveErrorMessage(result: { status: number; code?: string }): Mes
   if (result.status === 400) return 'youtubeImport.errorClientId';
   return 'youtubeImport.saveFailed';
 }
+
+/**
+ * The "Move from YouTube" switch lives on the Features page (AUN-FEATURES O39); the settings view's own
+ * `enabled` is the old switch. `stored` (the admin's switch) decides whether the client id may be
+ * cleared; `effective` (on for people, Uploads included) decides the readiness badge. Without an
+ * answer from the Features list, the old value stands.
+ */
+export function switchOf(view: Pick<YoutubeImportSettingsView, 'enabled'>, feature: { enabled: boolean; effective: boolean } | null | undefined): { stored: boolean; effective: boolean } {
+  return feature ? { stored: feature.enabled, effective: feature.effective } : { stored: view.enabled, effective: view.enabled };
+}
