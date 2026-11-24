@@ -14,6 +14,7 @@ import suggestRouter from '../src/routers/suggest.router';
 import moderationRouter from '../src/routers/moderation.router';
 import { buildHistorySql, buildQueueSql, endOf, likeTerm, parseHistoryQuery, parseQueueQuery, QueueQueryError, sharedWhere } from '../src/lib/moderation/reportQueue';
 import { syncReportMeta } from '../src/lib/moderation/reportMeta';
+import { eraseTombstoneKey } from '@al-ummah/shared-types';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { sqliteD1 } from './d1-sqlite';
@@ -368,6 +369,124 @@ describe('report copies fill', () => {
     }
   });
 
+  describe('erased people', () => {
+    const AT = Date.parse('2026-11-20T00:00:00Z');
+    const erase = async (t: ReturnType<typeof setup>, id: string) => void (await t.db.prepare('INSERT INTO erased_users (user_key, erased_at) VALUES (?, ?)').bind(await eraseTombstoneKey(id), AT).run());
+    const copies = (t: ReturnType<typeof setup>, id: string) => t.rows('SELECT entity_title, channel_name, owner_id, owner_name FROM reports WHERE id = ?', id).then((r) => r[0]);
+
+    it('a row not filled before the erasure is filled without them, while the index still has them', async () => {
+      const t = setup(BASE);
+      await erase(t, 'usr_owner');
+      await erase(t, 'usr_commenter');
+      await syncReportMeta(t.env as never);
+      assert.deepEqual(await copies(t, 'r1'), { entity_title: null, channel_name: null, owner_id: 'deleted-user', owner_name: null });
+      // A comment keeps the name of the channel it was written on
+      assert.deepEqual(await copies(t, 'r4'), { entity_title: null, channel_name: 'Other Channel', owner_id: 'deleted-user', owner_name: null });
+      assert.equal((await t.rows("SELECT COUNT(*) AS n FROM reports WHERE owner_id IN ('usr_owner', 'usr_commenter')"))[0].n, 0);
+    });
+
+    it('a refresh and the queue page never write them back, and the page does not show them', async () => {
+      const t = setup(BASE);
+      await syncReportMeta(t.env as never);
+      await erase(t, 'usr_owner');
+      await erase(t, 'usr_commenter');
+      await erase(t, 'usr_r1');
+      await t.db.prepare("UPDATE reports SET owner_id = 'deleted-user', owner_name = NULL, entity_title = NULL, channel_name = CASE WHEN entity_type = 'comment' THEN channel_name END WHERE owner_id IN ('usr_owner', 'usr_commenter')").run();
+      await t.db.prepare('UPDATE reports SET meta_synced_at = NULL').run();
+      const { body } = await t.call('/api/moderation/queue');
+      for (const secret of ['Omar Owner', 'Carl Commenter', 'Bad video', 'rude words', 'usr_owner', 'usr_commenter', 'Rana Reporter']) assert.ok(!JSON.stringify(body).includes(secret), secret);
+      await syncReportMeta(t.env as never);
+      for (const id of ['r1', 'r4']) assert.deepEqual([(await copies(t, id)).owner_id, (await copies(t, id)).owner_name, (await copies(t, id)).entity_title], ['deleted-user', null, null]);
+    });
+
+    it('what they wrote never comes back, even after their tombstone is purged; other content may have a new owner', async () => {
+      const t = setup(BASE);
+      await t.db.prepare("UPDATE reports SET owner_id = 'deleted-user'").run();
+      const { body } = await t.call('/api/moderation/queue');
+      const item = (await t.call('/api/moderation/queue/items/comment/c_1')).body;
+      for (const secret of ['rude words', 'usr_commenter', 'Carl Commenter']) for (const shown of [body, item]) assert.ok(!JSON.stringify(shown).includes(secret), secret);
+      await syncReportMeta(t.env as never);
+      assert.deepEqual(await copies(t, 'r4'), { entity_title: null, channel_name: 'Other Channel', owner_id: 'deleted-user', owner_name: null });
+      assert.equal((await copies(t, 'r1')).owner_id, 'usr_owner');
+      // Nor are they banned for it, and a new report about it does not learn who wrote it
+      await t.db.prepare("INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason) VALUES ('r7', 'comment', 'c_1', 'usr_r2', 'spam')").run();
+      await syncReportMeta(t.env as never);
+      assert.equal((await copies(t, 'r7')).owner_id, 'deleted-user');
+      assert.equal((await t.call('/api/moderation/queue/items/comment/c_1/action', { method: 'POST', json: { action: 'banned' } })).status, 200);
+      assert.ok(!t.calls.some((c) => c.path.startsWith('/users/')));
+    });
+
+    it('nobody is banned for the content of an erased person', async () => {
+      const t = setup(BASE);
+      await erase(t, 'usr_owner');
+      const res = await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'banned' } });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      assert.ok(!t.calls.some((c) => c.path.startsWith('/users/')));
+      assert.deepEqual(await t.rows("SELECT DISTINCT banned_user_id FROM reports WHERE entity_id = 'v_1'"), [{ banned_user_id: null }]);
+    });
+
+    // The processor's order: the tombstone, then the clearing pass
+    const eraseNow = async (t: ReturnType<typeof setup>, id: string) => {
+      await erase(t, id);
+      await t.db.prepare("UPDATE reports SET reporter_id = 'deleted-user', reporter_name = NULL WHERE reporter_id = ?").bind(id).run();
+      await t.db.prepare("UPDATE reports SET owner_id = 'deleted-user', owner_name = NULL, entity_title = NULL, channel_name = NULL WHERE owner_id = ?").bind(id).run();
+      await t.db.prepare("UPDATE reports SET banned_user_id = 'deleted-user' WHERE banned_user_id = ?").bind(id).run();
+    };
+    const everything = async (t: ReturnType<typeof setup>) => JSON.stringify(await t.rows('SELECT * FROM reports'));
+
+    for (const [name, write] of [
+      ['the fill', async (t: ReturnType<typeof setup>) => void (await syncReportMeta(t.env as never))],
+      ['the queue page', async (t: ReturnType<typeof setup>) => void (await t.call('/api/moderation/queue/items/video/v_1'))],
+    ] as const) {
+      it(`an erasure between reading people and writing them: ${name} is refused, and the next run is without them`, async () => {
+        const t = setup(BASE);
+        const batch = t.db.batch.bind(t.db);
+        let erasing = true;
+        (t.env as any).REPORTS_DB = { prepare: t.db.prepare, batch: async (list: never) => { if (erasing) { erasing = false; for (const id of ['usr_owner', 'usr_commenter', 'usr_r1']) await eraseNow(t, id); } return batch(list); } };
+        await write(t);
+        assert.equal(erasing, false, 'the erasure ran inside the write');
+        for (const secret of ['usr_owner', 'Omar Owner', 'usr_commenter', 'Carl Commenter', 'rude words', 'Rana Reporter']) assert.ok(!(await everything(t)).includes(secret), secret);
+        await syncReportMeta(t.env as never);
+        for (const secret of ['usr_owner', 'Omar Owner', 'usr_commenter', 'Carl Commenter', 'rude words', 'Rana Reporter']) assert.ok(!(await everything(t)).includes(secret), secret);
+        // Nothing is held back by it: every row was filled
+        assert.equal((await t.rows('SELECT COUNT(*) AS n FROM reports WHERE meta_synced_at IS NULL'))[0].n, 0);
+      });
+    }
+
+    it('an erasure while the ban is being made leaves no id on the report', async () => {
+      const t = setup(BASE);
+      const fetch = t.env.VIDEOS.fetch;
+      t.env.VIDEOS.fetch = async (input: string, init: RequestInit = {}) => { const res = await fetch(input, init); if (/\/ban$/.test(new URL(input).pathname)) await eraseNow(t, 'usr_owner'); return res; };
+      assert.equal((await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'banned' } })).status, 200);
+      assert.ok(t.calls.some((c) => c.path === '/users/usr_owner/ban'));
+      assert.deepEqual(await t.rows("SELECT DISTINCT banned_user_id FROM reports WHERE entity_id = 'v_1' AND action = 'banned'"), [{ banned_user_id: 'deleted-user' }]);
+    });
+
+    it('the guards use indexes', async () => {
+      const t = setup(BASE);
+      const seen: string[] = [];
+      const prepare = t.db.prepare.bind(t.db);
+      (t.env as any).REPORTS_DB = { batch: t.db.batch.bind(t.db), prepare: (sql: string) => (seen.push(sql), prepare(sql)) };
+      await syncReportMeta(t.env as never);
+      const guarded = seen.filter((sql) => /erased_users|owner_id = \?/.test(sql));
+      assert.ok(guarded.length >= 3);
+      for (const sql of guarded) {
+        const n = sql.includes('?1') ? 12 : (sql.match(/\?/g) ?? []).length;
+        const plan = ((await prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...Array(n).fill('[]')).all()).results as any[]).map((r) => r.detail);
+        assert.ok(plan.length > 0, sql);
+        assert.ok(!plan.some((d) => /^SCAN (reports|erased_users)/.test(d)), plan.join(' | '));
+      }
+    });
+
+    it('while erased people cannot be read, nothing is read back', async () => {
+      const t = setup(BASE);
+      const prepare = t.db.prepare.bind(t.db);
+      (t.env as any).REPORTS_DB = { ...t.db, batch: t.db.batch, prepare: (sql: string) => { if (/erased_users/.test(sql)) throw new Error('D1 is down'); return prepare(sql); } };
+      assert.equal(await syncReportMeta(t.env as never), 0);
+      assert.equal((await copies(t, 'r1')).owner_id, null);
+    });
+  });
+
   it('does nothing without api-videos', async () => {
     const t = setup(BASE);
     assert.equal(await syncReportMeta({ REPORTS_DB: t.db } as never), 0);
@@ -417,7 +536,7 @@ describe('live streams and live chat (wiki E17 §5.2)', () => {
   });
 
   it('migration 0051 keeps every report, takes live_chat, refuses unknown types and keeps the indexes', async () => {
-    const files = readdirSync(join(process.cwd(), 'migrations')).filter((f) => f.endsWith('.sql')).sort();
+    const files = readdirSync(join(process.cwd(), 'migrations')).filter((f) => f.endsWith('.sql') && f < '0052').sort();
     const indexesOf = async (db: D1Database) => ((await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'reports' AND name LIKE 'idx%' ORDER BY name").all()).results as any[]).map((r) => r.name);
     const before = files.slice(0, files.findIndex((f) => f.startsWith('0051_reports_live_chat')));
     const put = "INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, created_at, moderator_notes) VALUES ('old', 'comment', 'c', 'u', 'spam', '2026-11-01', 'kept')";

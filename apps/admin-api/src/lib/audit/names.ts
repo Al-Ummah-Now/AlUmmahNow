@@ -14,8 +14,7 @@ import {
   type ReportableEntityType,
   auditRefKind,
 } from '@al-ummah/shared-types';
-import type { VideosClientEnv } from '../content/videosClient';
-import { lookupMany } from '../moderation/reportMeta';
+import { lookupMany, type MetaEnv } from '../moderation/reportMeta';
 
 const isReportable = (kind: string): kind is ReportableEntityType => (REPORTABLE_ENTITY_TYPES as readonly string[]).includes(kind);
 const cleanId = (id: unknown): string | null => (typeof id === 'string' && id.trim() && id.length <= 200 ? id.trim() : null);
@@ -42,7 +41,7 @@ export function cleanNamesRequest(body: unknown): { users: string[]; items: { ki
  * Names the users and items (an empty result when api-videos cannot be reached). Emails only
  * with `includeEmail` (roles with audit:read): moderators get names, not addresses.
  */
-export async function resolveNames(env: VideosClientEnv, req: { users: string[]; items: { kind: ReportableEntityType; id: string }[] }, includeEmail = false): Promise<AdminNames> {
+export async function resolveNames(env: MetaEnv, req: { users: string[]; items: { kind: ReportableEntityType; id: string }[] }, includeEmail = false): Promise<AdminNames> {
   const names: AdminNames = { users: {}, items: {} };
   if (!req.users.length && !req.items.length) return names;
   const lookup = await lookupMany(env, req.items.map((i) => ({ type: i.kind, id: i.id })), req.users);

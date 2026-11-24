@@ -185,20 +185,29 @@ describe('reports about the person (wiki E17 §5.2)', () => {
     await t.report('r2', VIEWER);
     t.reports.raw.prepare("UPDATE reports SET owner_name = 'Creator Name' WHERE id = 'r1'").run();
     t.reports.raw.prepare("INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, entity_title, owner_id, owner_name) VALUES ('c1', 'comment', 'c', ?, 'spam', 'my comment', ?, 'Creator Name'), ('v1', 'video', 'v', ?, 'spam', 'A lecture', ?, 'Creator Name')").run(VIEWER, CREATOR, VIEWER, CREATOR);
+    t.reports.raw.prepare("UPDATE reports SET channel_name = 'Host' WHERE id IN ('c1', 'v1')").run();
+    t.reports.raw.prepare("UPDATE reports SET banned_user_id = ? WHERE id = 'v1'").run(CREATOR);
+    t.reports.raw.prepare("UPDATE reports SET banned_user_id = 'someone' WHERE id = 'r2'").run();
     expect(await t.deliver(MessageType.UserDataErased, { userId: CREATOR })).toBe(true);
+    expect((t.reports.raw.prepare("SELECT banned_user_id FROM reports WHERE id = 'r2'").get() as { banned_user_id: string }).banned_user_id).toBe('someone');
     expect(t.row('r1')).toEqual({ reporter_id: VIEWER, entity_title: null, entity_parent_id: 's1', channel_id: 'ch1', owner_id: 'deleted-user', owner_name: null });
     expect(t.row('c1')).toMatchObject({ entity_title: null, owner_id: 'deleted-user', owner_name: null });
-    expect(t.row('v1')).toMatchObject({ entity_title: 'A lecture', owner_id: 'deleted-user', owner_name: null });
+    expect(t.row('v1')).toMatchObject({ entity_title: null, owner_id: 'deleted-user', owner_name: null });
+    // Their channel's name goes with their own content; the channel they commented on keeps its name
+    expect(t.reports.raw.prepare("SELECT id, channel_name, banned_user_id FROM reports WHERE id IN ('c1', 'v1') ORDER BY id").all().map((r) => ({ ...(r as object) }))).toEqual([{ id: 'c1', channel_name: 'Host', banned_user_id: null }, { id: 'v1', channel_name: null, banned_user_id: 'deleted-user' }]);
     expect(t.row('r2')).toMatchObject({ entity_title: 'bad words', owner_id: VIEWER });
     const plan = t.reports.raw.prepare("EXPLAIN QUERY PLAN UPDATE reports SET owner_id = 'x' WHERE owner_id = 'y'").all();
     expect(JSON.stringify(plan)).toContain('idx_reports_owner');
+    const banned = t.reports.raw.prepare("EXPLAIN QUERY PLAN UPDATE reports SET banned_user_id = 'x' WHERE banned_user_id = 'y'").all();
+    expect(JSON.stringify(banned)).toContain('idx_reports_banned_user');
   });
 
   it('a report still in the queue when its author is erased is stored without them', async () => {
     const t = setup();
     await t.deliver(MessageType.UserDataErased, { userId: CREATOR });
+    await t.deliver(MessageType.UserDataErased, { userId: VIEWER });
     await t.report('r1');
-    expect(t.row('r1')).toMatchObject({ entity_title: null, owner_id: 'deleted-user', entity_parent_id: 's1' });
+    expect(t.row('r1')).toMatchObject({ reporter_id: 'deleted-user', entity_title: null, owner_id: 'deleted-user', entity_parent_id: 's1' });
   });
 });
 

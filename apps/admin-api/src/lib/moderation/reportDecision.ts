@@ -19,7 +19,7 @@ import { applyContentModeration } from '../contentModeration';
 import type { CasBucket } from '../r2Cas';
 import { banVideosUser } from '../content/userBan';
 import { callVideos, type VideosClientEnv } from '../content/videosClient';
-import { lookupMany } from './reportMeta';
+import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, lookupMany } from './reportMeta';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import type { AdminBindings } from '../../base/types';
@@ -102,7 +102,11 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
 
   if (effect.bannedUserId) {
     for (const id of claimed) {
-      await db.prepare('UPDATE reports SET banned_user_id = ? WHERE id = ?').bind(effect.bannedUserId, id).run();
+      // Erased while the ban was being made: the report keeps no id of theirs
+      await db
+        .prepare(`UPDATE reports SET banned_user_id = CASE WHEN ${NOBODY_ERASED} THEN ? ELSE ? END WHERE id = ?`)
+        .bind(await erasedKeysOf([effect.bannedUserId]), effect.bannedUserId, DELETED_USER_ID, id)
+        .run();
     }
   }
 
@@ -154,7 +158,8 @@ async function perform(
     const lookup = await lookupMany(env, [{ type: p.entityType as never, id: p.entityId }], []);
     if (!lookup) throw new Error('The item\'s owner could not be looked up');
     const ownerId = lookup.items.get(`${p.entityType}:${p.entityId}`)?.ownerId ?? null;
-    if (ownerId) {
+    // An owner whose account was erased is nobody to ban
+    if (ownerId && ownerId !== DELETED_USER_ID) {
       await banVideosUser(env, {
         userId: ownerId,
         actorId: p.actorId,
