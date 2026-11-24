@@ -76,10 +76,14 @@ async function createChannelViaMenu(page: Page, name: string, placeholder: strin
   // channel is then listed in the reopened channel list
   await expect(input).toBeHidden();
   await page.waitForLoadState('networkidle').catch(() => undefined);
-  await showMenuView(menu, 'channel');
   const created = menu.getByTestId('nav-channel-option').filter({ hasText: name });
-  await expect(created).toBeVisible();
-  await expect(created).toHaveAttribute('data-channel-id', /.+/);
+  // The reload can remount the menu closed after it was seen open (run 45305782717): reopen and re-check,
+  // as switchTo does
+  await expect(async () => {
+    await showMenuView(menu, 'channel');
+    await expect(created).toBeVisible({ timeout: 3000 });
+    await expect(created).toHaveAttribute('data-channel-id', /.+/, { timeout: 3000 });
+  }).toPass({ timeout: 30000 });
   // The form closed (input hidden above). Whether it can be opened again depends on the creator
   // tier's channel limit (3), which the scratch user reaches with these tests' channels
 }
