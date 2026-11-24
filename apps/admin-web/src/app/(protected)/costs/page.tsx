@@ -1,5 +1,5 @@
-import { getCostsDashboard } from '@/lib/api/costs';
-import type { CostsDashboard } from '@/lib/api/costs-types';
+import { getCostDatabases, getCostsDashboard } from '@/lib/api/costs';
+import type { CostDatabases, CostsDashboard } from '@/lib/api/costs-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
@@ -11,6 +11,8 @@ import { opsFormats } from '../operations/model';
 import { BudgetNotice, BudgetSection, CollectorFailures, CostsHeader, EnvsPanel, MoversSection, ProductsPanel, TokenNotice, TrendPanel } from './sections';
 import { CostThresholds, MyCostAlerts } from './CostAlertForms';
 import { CostConnections } from './CostConnections';
+import { DatabasesSection } from './DatabasesSection';
+import { DatabaseSettings } from './DatabaseSettings';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +33,17 @@ export default async function CostsPage() {
   if (!canReadOps(session?.user.role)) return <ErrorAlert testId="costs-no-access">{t('costs.noAccess')}</ErrorAlert>;
 
   let d: CostsDashboard | null = null;
+  let databases: CostDatabases | null = null;
   let error = '';
   try {
-    d = await getCostsDashboard();
+    [d, databases] = await Promise.all([
+      getCostsDashboard(),
+      // Its own failure (say, before cost-monitor migration 0004) leaves the rest of the page working
+      getCostDatabases().catch((e) => {
+        logger.error('[costs] Failed to load the databases', { error: e instanceof Error ? e.message : String(e), status: e instanceof AdminApiError ? e.status : undefined });
+        return null;
+      }),
+    ]);
   } catch (e) {
     logger.error('[costs] Failed to load the dashboard', { error: e instanceof Error ? e.message : String(e), status: e instanceof AdminApiError ? e.status : undefined });
     error = loadError(e, t);
@@ -58,6 +68,7 @@ export default async function CostsPage() {
           </div>
           <TrendPanel d={d} t={t} f={f} locale={locale} />
           <MoversSection d={d} t={t} locale={locale} />
+          {databases && <DatabasesSection data={databases} t={t} f={f} settings={databases.canManage ? <DatabaseSettings data={databases} /> : null} />}
           <div className={`grid grid-cols-1 gap-6 ${d.canManage ? 'xl:grid-cols-5' : ''}`}>
             <div className={`min-w-0 ${d.canManage ? 'xl:col-span-2' : 'max-w-2xl'}`}>
               <MyCostAlerts me={d.me} accountEmail={session?.user.email ?? null} digest={d.settings} />

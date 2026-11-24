@@ -110,3 +110,35 @@ export interface CostCredentialResult {
   view: CostCredentialView;
   test: CostTestResult;
 }
+
+/** One D1 database on the Costs page's Databases section (admin-api GET /api/costs/databases). */
+export interface CostDatabase {
+  id: string;
+  env: string;
+  name: string;
+  bytes: number | null;
+  share: number | null;
+  growthPerDay: number | null;
+  daysTo70: number | null;
+  rowsWrittenPerDay: number | null;
+  peakBusy: number | null;
+  alerts: string[];
+}
+
+export interface CapacityRule {
+  id: string;
+  kind: string;
+  metric: 'storage_pct' | 'storage_days_to_70' | 'busy_pct' | 'account_storage_pct';
+  op: '>' | '<';
+  value: number;
+  window_hours: number;
+  enabled: number;
+}
+
+export interface CostDatabases {
+  limits: { maxDbBytes: number; accountBytes: number };
+  databases: CostDatabase[];
+  account: { bytes: number; databases: number; share: number; hour: string; alerts: string[] } | null;
+  rules: CapacityRule[];
+  canManage: boolean;
+}

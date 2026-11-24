@@ -39,6 +39,8 @@ import {
   type ResourceDay,
 } from './opsCost';
 import type { D1Database } from './types';
+import { loadD1Limits, parseD1LimitsInput } from './d1Capacity';
+import type { D1Limits } from '@al-ummah/shared-types';
 import { localTime, queueCostEmails, type CostDigest } from './cost-alert-mail';
 import { auditOriginJson } from './request-origin';
 
@@ -46,6 +48,7 @@ export const CF_ACCOUNT_ID = '0e4b6e7f9faf280c3c9bf95995edc64f';
 export const CF_API = 'https://api.cloudflare.com/client/v4';
 export const CREDENTIAL_AUDIT_PREFIX = 'costs:credential:';
 export const SETTINGS_AUDIT_KEY = 'costs:settings';
+export const D1_LIMITS_AUDIT_KEY = 'costs:d1-limits';
 export const SUBSCRIPTION_AUDIT_PREFIX = 'costs:subscription:';
 
 type SecretBinding = string | { get(): Promise<string> } | undefined;
@@ -267,6 +270,18 @@ export async function saveSettings(env: CostsEnv, input: unknown, actor: Actor, 
     .bind('alerts', JSON.stringify(next), actor.id, now.toISOString())
     .run();
   return next;
+}
+
+/** Saves the D1 limits the capacity alerts judge against (cost_settings 'd1_limits'), audited. */
+export async function saveD1Limits(env: CostsEnv, input: unknown, actor: Actor, now = new Date()): Promise<D1Limits | string> {
+  const parsed = parseD1LimitsInput(input);
+  if (typeof parsed === 'string') return parsed;
+  const current = await loadD1Limits(env.COSTS_DB!);
+  await audit(env, D1_LIMITS_AUDIT_KEY, current, parsed, actor, now);
+  await env.COSTS_DB!.prepare('INSERT INTO cost_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at')
+    .bind('d1_limits', JSON.stringify(parsed), actor.id, now.toISOString())
+    .run();
+  return parsed;
 }
 
 export interface MySubscription {

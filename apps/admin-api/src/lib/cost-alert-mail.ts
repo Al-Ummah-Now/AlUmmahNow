@@ -17,6 +17,7 @@ import { renderEmail, type EmailDoc } from './email/layout';
 import { MAX_ATTEMPTS, type QueueMessageLike } from './contact-mail-queue';
 import { logger } from './logger';
 import type { CostAlert, CostAlertData } from './opsCost';
+import type { CapacityMailPayload } from './d1Capacity';
 import type { D1Database } from './types';
 
 export const COST_MAIL_VERSION = 1;
@@ -47,7 +48,7 @@ export interface CostDigest {
   openAlerts: number;
 }
 
-export type CostMailPayload = CostAlertData | CostDigest;
+export type CostMailPayload = CostAlertData | CostDigest | CapacityMailPayload;
 
 // ---------------------------------------------------------------------------------------------
 // Copy
@@ -72,6 +73,20 @@ const COPY = {
     spikeHeading: 'Daily spending jumped',
     digestSubject: (week: string) => `Costs: weekly digest (week of ${week})`,
     digestHeading: 'Your weekly cost digest',
+    capacitySubject: (what: string) => `Capacity: ${what} needs attention`,
+    capacityHeading: 'A database is getting close to a Cloudflare limit',
+    capacityMetric: {
+      storage_pct: 'Size, share of the database limit',
+      storage_days_to_70: 'Days until 70% of the database limit',
+      busy_pct: 'Busy, share of each hour spent running queries',
+      account_storage_pct: 'D1 storage, share of the account limit',
+    },
+    capacityWhat: 'Database',
+    capacityAccount: 'All D1 databases on the account',
+    capacityValue: 'Now',
+    capacityThreshold: 'Alert at',
+    capacityDays: (n: string) => `${n} days`,
+    capacityNext: 'The Databases section of the Costs page shows every database and what to do next.',
     spent: 'Spent this month',
     budget: 'Monthly budget',
     budgetUnset: 'Not set',
@@ -105,6 +120,20 @@ const COPY = {
     spikeHeading: 'قفز الإنفاق اليومي',
     digestSubject: (week: string) => `التكاليف: الملخص الأسبوعي (أسبوع ${week})`,
     digestHeading: 'ملخص التكاليف الأسبوعي',
+    capacitySubject: (what: string) => `السعة: ${what} يحتاج إلى متابعة`,
+    capacityHeading: 'قاعدة بيانات تقترب من أحد حدود Cloudflare',
+    capacityMetric: {
+      storage_pct: 'الحجم، نسبةً إلى حد قاعدة البيانات',
+      storage_days_to_70: 'الأيام المتبقية حتى ٧٠٪ من حد قاعدة البيانات',
+      busy_pct: 'الانشغال، نسبة كل ساعة في تنفيذ الاستعلامات',
+      account_storage_pct: 'تخزين D1، نسبةً إلى حد الحساب',
+    },
+    capacityWhat: 'قاعدة البيانات',
+    capacityAccount: 'كل قواعد بيانات D1 في الحساب',
+    capacityValue: 'الآن',
+    capacityThreshold: 'التنبيه عند',
+    capacityDays: (n: string) => `${n} يومًا`,
+    capacityNext: 'يعرض قسم قواعد البيانات في صفحة التكاليف كل قاعدة بيانات وما يجب فعله بعد ذلك.',
     spent: 'المُنفق هذا الشهر',
     budget: 'الميزانية الشهرية',
     budgetUnset: 'غير محددة',
@@ -185,6 +214,22 @@ export function renderCostEmail(input: CostEmailInput): RenderedEmail {
     subject = s.spikeSubject(what);
     heading = s.spikeHeading;
     blocks.push({ kind: 'facts', rows: [[s.what, what], [s.environment, env(p.env)], [s.day, isoLabel(p.day, l)], [s.cost, money(p.cost, l)], [s.baseline, money(p.baseline, l)]] });
+  } else if (p.type === 'capacity') {
+    const what = p.name || s.capacityAccount;
+    const show = (v: number | null) =>
+      v === null ? '—' : p.metric === 'storage_days_to_70' ? s.capacityDays(formatNumber(l, Math.round(v))) : formatPercent(l, v);
+    subject = s.capacitySubject(what);
+    heading = s.capacityHeading;
+    blocks.push({
+      kind: 'facts',
+      rows: [
+        [s.capacityWhat, what],
+        ...(p.name ? ([[s.environment, env(p.env)]] as [string, string][]) : []),
+        [s.capacityMetric[p.metric], show(p.value)],
+        [s.capacityThreshold, show(p.threshold)],
+      ],
+    });
+    blocks.push({ kind: 'p', text: s.capacityNext });
   } else {
     const days = formatNumber(l, WEEK_DAYS);
     subject = s.digestSubject(isoLabel(p.week, l));
@@ -201,8 +246,8 @@ export function renderCostEmail(input: CostEmailInput): RenderedEmail {
       blocks.push({ kind: 'facts', rows: p.movers.slice(0, 5).map((m) => [`${product(m.label)} · ${env(m.env)}`, signed(m.change, l)] as [string, string]) });
     }
   }
-  blocks.push({ kind: 'small', text: s.estimate });
-  const url = input.adminUrl ? `${input.adminUrl.replace(/\/$/, '')}/costs` : null;
+  if (p.type !== 'capacity') blocks.push({ kind: 'small', text: s.estimate });
+  const url = input.adminUrl ? `${input.adminUrl.replace(/\/$/, '')}/costs${p.type === 'capacity' ? '#databases' : ''}` : null;
   const doc: EmailDoc = {
     locale: l,
     subject: `${envTag(input.environment)}${subject}`,

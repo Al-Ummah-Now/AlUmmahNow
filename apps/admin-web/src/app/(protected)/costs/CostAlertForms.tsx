@@ -36,7 +36,9 @@ export function MyCostAlerts({ me, accountEmail, digest }: { me: CostSubscriptio
       ? digest.digestEnabled
         ? t('costs.alerts.help.digest', { day: weekdayNames(locale)[digest.digestWeekday] ?? '', hour: hourName(digest.digestHour, locale) })
         : t('costs.alerts.help.digestOff')
-      : t(`costs.alerts.help.${k}`);
+      : k === 'capacity'
+        ? t('costs.alerts.help.capacity', { pct: numberFormat(locale, { style: 'percent' }).format(0.7), days: numberFormat(locale).format(60) })
+        : t(`costs.alerts.help.${k}`);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
