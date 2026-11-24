@@ -4,6 +4,7 @@
  * Updates the playback progress for a video
  */
 
+import { kidsVideo } from '../../lib/contentFlags';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -117,6 +118,8 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         // Nothing to update yet: the client records the first watch instead
         return c.json({ videoId, recorded: false }, 200);
       }
+      // Made for kids: an entry from before it was marked stays as it is (wiki E20 §5.5)
+      if (await kidsVideo(c.env, videoId)) return c.json({ videoId, recorded: false }, 200);
 
       // Calculate progress metrics
       const now = new Date().toISOString();

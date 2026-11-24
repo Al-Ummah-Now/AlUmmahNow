@@ -487,6 +487,28 @@ describe('cancel, reschedule, swap', () => {
 		assert.equal((await t.made()).madeForKids, true);
 	});
 
+	it('its start tells the fan-out so, also when it was marked while it waited', async () => {
+		const payload = (t: Awaited<ReturnType<typeof setup>>) => t.raw.queue.messages.find((m: Json) => m.payload?.kind === 'live_started')?.payload as Json;
+		const plain = await setup();
+		await plain.made();
+		await plain.tick(Date.now() + 2 * HOUR);
+		assert.ok(payload(plain) && !('madeForKids' in payload(plain)));
+
+		const marked = await setup();
+		await marked.putVideo({ madeForKids: true });
+		await marked.made();
+		await marked.tick(Date.now() + 2 * HOUR);
+		assert.equal(payload(marked).madeForKids, true);
+
+		const later = await setup();
+		await writeFeatureSwitch(later.env as never, { key: 'ageRules', enabled: true, expectedVersion: 0, actorId: 'usr_a', currentStored: false });
+		const s = await later.made();
+		assert.equal((await later.call('owner', 'PUT', 'videos/v1', { madeForKids: true })).status, 200);
+		assert.equal((await later.stream(s.id)).madeForKids, true);
+		await later.tick(Date.now() + 2 * HOUR);
+		assert.equal(payload(later).madeForKids, true);
+	});
+
 	it('so does its owner’s own choice, which wins over what the source said', async () => {
 		const own = await setup();
 		await own.putVideo({ madeForKids: true });

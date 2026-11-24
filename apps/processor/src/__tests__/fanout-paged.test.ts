@@ -164,6 +164,12 @@ describe('paged fan-out', () => {
       expect([r.result, r.stored, r.t.social.length, r.t.pushDispatched.length, r.t.queued.length]).toEqual(['ok', 0, 1, 0, 0]);
     });
 
+    it('a live start: neither subscribers nor those who asked for a reminder', async () => {
+      const live = kids();
+      const r = await run(() => row(1), { ...live, payload: { ...(live.payload as object), kind: 'live_started' } } as AlUmmahMessage);
+      expect([r.result, r.stored, r.t.social.length, r.t.queued.length]).toEqual(['ok', 0, 1, 0]);
+    });
+
     it('age rules off: subscribers are notified as before', async () => {
       const r = await run(() => row(0));
       expect(r.result).toBe('ok');
@@ -172,7 +178,7 @@ describe('paged fan-out', () => {
 
     it('switch unreadable: nobody is notified and the message is retried', async () => {
       const r = await run(() => { throw new Error('D1 down'); });
-      expect([r.result, r.stored, r.t.pushDispatched.length]).toEqual(['failed', 0, 0]);
+      expect([r.result, r.stored, r.t.pushDispatched.length, r.t.social.length]).toEqual(['failed', 0, 0, 0]);
     });
 
     it('any other video never reads the switch', async () => {

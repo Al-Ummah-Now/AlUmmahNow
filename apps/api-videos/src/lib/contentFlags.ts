@@ -7,6 +7,13 @@ import { apiError } from './api-error';
 import { getCommentSettings, type CommentSettings } from './comments';
 import { featureOff } from './features/off';
 import { logger } from './logger';
+import R2Repository from './r2Repo';
+
+/**
+ * Whether `ageRestricted` may be set. Off until E20-B4 keeps an age-restricted video's media from everyone but
+ * signed-in 18+ accounts on every read path: until then asking for it is 404 feature_off, whatever the switch says.
+ */
+export const AGE_RESTRICTION_ENFORCED: boolean = false;
 
 /** Whether the age rules are on. Throws when the switches can't be read. */
 export async function ageRulesOn(env: unknown): Promise<boolean> {
@@ -27,6 +34,12 @@ export async function kidsRulesApply(env: unknown, video: ContentFlagFields | nu
 	}
 }
 
+/** The same by id, for a write that doesn't read the video otherwise: it is read only while the rules are on. */
+export async function kidsVideo(env: { videos: R2Bucket } & object, videoId: string): Promise<boolean> {
+	if (!(await ageRulesOn(env).catch(() => true))) return false;
+	return isMadeForKids(await new R2Repository<ContentFlagFields>(env.videos).getObject(videoId));
+}
+
 /** The video's comment setting as it applies: off on a video made for kids. */
 export async function commentSettingsOf(env: unknown, video: (ContentFlagFields & { commentSettings?: unknown }) | null | undefined): Promise<CommentSettings> {
 	return (await kidsRulesApply(env, video)) ? 'off' : getCommentSettings(video);
@@ -44,7 +57,7 @@ export async function contentFlagRefusal(c: Context, input: ContentFlagInput, vi
 	} catch {
 		return apiError(c, 503, 'service_unavailable');
 	}
-	if (!on) return featureOff(c, 'ageRules');
+	if (!on || (input.ageRestricted !== undefined && !AGE_RESTRICTION_ENFORCED)) return featureOff(c, 'ageRules');
 	const problem = applyContentFlags({ ...video }, input);
 	return problem ? contentFlagProblem(c, problem) : null;
 }

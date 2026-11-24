@@ -163,6 +163,15 @@ export async function createPremiere(env: PremiereEnv, input: NewPremiere, now =
 	return { stream };
 }
 
+/** Its video was marked as made for kids while it waits: the premiere has no chat or reminders either (wiki E20 §5.5). */
+export async function markPremiereMadeForKids(env: PremiereEnv, streamId: string): Promise<void> {
+	await streams(env).updateObject(streamKey(streamId), (fresh) => {
+		if (!isPremiere(fresh) || fresh.madeForKids === true) return false;
+		fresh.madeForKids = true;
+		return true;
+	});
+}
+
 /** Shows another video instead, before the start. */
 export async function swapPremiere(env: PremiereEnv, stream: PremiereStream, video: PremiereVideo, actorId: string, now = Date.now()): Promise<{ stream: PremiereStream } | { problem: PremiereProblem | 'forbidden' | 'not_found' | 'premiere_started' }> {
 	const previous = stream.premiereVideoId;
@@ -283,7 +292,7 @@ export async function startPremiere(env: PremiereEnv, streamId: string, options:
  * tick does it again.
  */
 async function finishStart(env: PremiereEnv, stream: PremiereStream, now: number): Promise<void> {
-	await videos(env).updateObject(stream.premiereVideoId!, (fresh) => {
+	const video = await videos(env).updateObject(stream.premiereVideoId!, (fresh) => {
 		if (fresh.premiereHold?.streamId !== stream.id) return false;
 		const before = { ...fresh };
 		delete fresh.premiereHold;
@@ -295,7 +304,7 @@ async function finishStart(env: PremiereEnv, stream: PremiereStream, now: number
 		return true;
 	});
 	// One notification per premiere: this one, and not "new video" too (the processor de-duplicates repeats)
-	const announced = !stream.channelId || (await announceLiveStarted(env as never, { id: stream.id, channelId: stream.channelId, userId: stream.userId, title: stream.title }).catch(() => false));
+	const announced = !stream.channelId || (await announceLiveStarted(env as never, { id: stream.id, channelId: stream.channelId, userId: stream.userId, title: stream.title, madeForKids: isMadeForKids(video as ContentFlagFields | null) || stream.madeForKids === true }).catch(() => false));
 	if (!announced) {
 		logger.warn('[Premiere] Not announced yet; the next minute tries again', { streamId: stream.id });
 		return;

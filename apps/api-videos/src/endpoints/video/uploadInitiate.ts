@@ -50,7 +50,7 @@ export const InitiateBodySchema = z.object({
 	descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
 	category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
-	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only (switch ageRules)"),
+	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only. Not available yet: 404 feature_off"),
 	madeForKids: z.boolean().optional().describe("Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"),
 	categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
 		.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),

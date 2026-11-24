@@ -7,7 +7,7 @@
  *
  * Rules live in lib/watch-state.ts; storage is the watch history entry.
  */
-import { kidsRulesApply } from '../../lib/contentFlags';
+import { kidsRulesApply, kidsVideo } from '../../lib/contentFlags';
 import { z } from 'zod';
 import type { WatchHistoryEntry, WatchHistoryEvent } from '@al-ummah/shared-types';
 import { AuthenticatedRoute } from '../../base';
@@ -80,10 +80,12 @@ export class WatchStatePut extends AuthenticatedRoute {
 
 		// A new entry needs the video's card fields (and the video must be viewable)
 		let initial: WatchHistoryEntry | undefined;
-		if (!(await repo.getObject(id))) {
+		const existing = await repo.getObject(id);
+		// Made for kids: no position is kept, for an entry from before it was marked either (wiki E20 §5.5)
+		if (existing && (await kidsVideo(c.env, videoId))) return c.json({ applied: false, paused: false, state: toWatchState(existing) });
+		if (!existing) {
 			const video = (await new R2Repository<VideoType>(c.env.videos).getObject(videoId)) as any;
 			if (!video || !canViewVideo(video, userId)) return c.json({ error: 'Video not found' }, 404);
-			// Made for kids: no position is kept (wiki E20 §5.5)
 			if (await kidsRulesApply(c.env, video)) return c.json({ applied: false, paused: false, state: null });
 			initial = {
 				id,

@@ -71,7 +71,7 @@ export async function announceNewVideo(env: EventsEnv, video: PublishableVideo):
 /** Tell subscribers a live stream started. */
 export async function announceLiveStarted(
 	env: EventsEnv,
-	stream: { id: string; channelId?: string; userId?: string; title?: string },
+	stream: { id: string; channelId?: string; userId?: string; title?: string; madeForKids?: boolean },
 ): Promise<boolean> {
 	if (!stream.channelId) return false;
 	return enqueueFanout(env, {
@@ -83,6 +83,7 @@ export async function announceLiveStarted(
 		// The live watch page (web /[locale]/live/[id])
 		actionUrl: `/live/${stream.id}`,
 		actorUserId: stream.userId,
+		...(stream.madeForKids === true ? { madeForKids: true } : {}),
 	});
 }
 

@@ -40,7 +40,7 @@ const BatchVideoSchema = z.object({
 	descriptionLocalized: z.object({ en: z.string().max(5000).optional(), ar: z.string().max(5000).optional() }).optional().describe("Descriptions per language"),
 	language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video"),
 	commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for review, or off"),
-	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only (switch ageRules)"),
+	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only. Not available yet: 404 feature_off"),
 	madeForKids: z.boolean().optional().describe("Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"),
 	fileName: z.string().max(255).optional().describe("The file's name as picked (kept for bulk rename's {filename})"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),

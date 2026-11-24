@@ -13,7 +13,7 @@ import { VideoUpdateInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
-import { heldForPremiere } from '../../lib/live/premieres';
+import { heldForPremiere, markPremiereMadeForKids } from '../../lib/live/premieres';
 import { apiError } from '../../lib/api-error';
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
@@ -264,6 +264,10 @@ export class VideoUpdate extends AuthenticatedRoute {
 		if (rejected) {
 			return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
 		}
+
+		// Held for a premiere: its stream follows a video newly marked as made for kids
+		const premiere = (updatedVideo as { premiereHold?: { streamId: string } }).premiereHold;
+		if (flags.madeForKids === true && premiere) await markPremiereMadeForKids(c.env as never, premiere.streamId);
 
 		// Made public after processing: tell subscribers (processor de-duplicates per video)
 		if (previous.isPublic === false && updatedVideo.isPublic !== false) {
