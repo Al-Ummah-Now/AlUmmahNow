@@ -36,14 +36,16 @@ async function anyIslamicFeatureOn(c: AppContext): Promise<boolean> {
 }
 
 const Adjustment = z.number().int().min(-ADJUSTMENT_MAX_MINUTES).max(ADJUSTMENT_MAX_MINUTES);
-const Adjustments = z.object({
-	fajr: Adjustment,
-	sunrise: Adjustment,
-	dhuhr: Adjustment,
-	asr: Adjustment,
-	maghrib: Adjustment,
-	isha: Adjustment,
-});
+const Adjustments = z
+	.object({
+		fajr: Adjustment,
+		sunrise: Adjustment,
+		dhuhr: Adjustment,
+		asr: Adjustment,
+		maghrib: Adjustment,
+		isha: Adjustment,
+	})
+	.strict();
 const Method = z.union([z.literal('auto'), z.number().int().min(0).max(99)]);
 
 const Preferences = z.object({
@@ -112,6 +114,7 @@ export class IslamicPreferencesUpdate extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		if (!(await anyIslamicFeatureOn(c))) return featureOff(c, 'prayerTimes');
+		if (!c.env.profiles) return apiError(c, 503, 'storage_unavailable');
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const email = (this.getAuth(c) as { email?: string }).email;

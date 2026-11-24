@@ -27307,6 +27307,7 @@
                         "maghrib",
                         "isha"
                       ],
+                      "additionalProperties": false,
                       "description": "Applied on the device, never sent to the prayer API"
                     },
                     "hijriEnabled": {
@@ -27451,7 +27452,8 @@
                         "minimum": -60,
                         "maximum": 60
                       }
-                    }
+                    },
+                    "additionalProperties": false
                   },
                   "hijriEnabled": {
                     "type": "boolean"
@@ -27560,6 +27562,7 @@
                         "maghrib",
                         "isha"
                       ],
+                      "additionalProperties": false,
                       "description": "Applied on the device, never sent to the prayer API"
                     },
                     "hijriEnabled": {
