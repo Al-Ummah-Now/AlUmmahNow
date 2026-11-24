@@ -39,13 +39,16 @@ const request: WorkflowRequestView = {
   steps: [],
 };
 
+/** Without the direction marks and isolates, which nobody sees. */
+const plain = (text: string) => text.replace(/[\u2068\u2069\u200e\u200f]/g, '');
+
 describe('rendering', () => {
   it('English: subject, intro, changed fields only, the review link and no approve link', () => {
     const e = renderWorkflowEmail({ to: 'a@example.org', locale: 'en', event: 'proposed', request, actorName: 'Amina', names: new Map(), adminUrl: 'https://admin.qa.alummahnow.net/', environment: 'qa' });
     assert.equal(e.subject, '[qa] Approval needed: Change the PayGood card fee (USD)');
     assert.match(e.text, /Amina asked for this change/);
     assert.match(e.text, /Percentage/);
-    assert.match(e.text, /2\.9% → 1\.9%/);
+    assert.match(plain(e.text), /2\.9% → 1\.9%/);
     assert.doesNotMatch(e.text, /Fixed fee/, 'unchanged fields are left out');
     assert.match(e.text, /Card, Wallet/);
     assert.match(e.text, /Approvals: 1 of 2/);
@@ -57,7 +60,7 @@ describe('rendering', () => {
     const e = renderWorkflowEmail({ to: 'b@example.org', locale: 'ar', event: 'proposed', request, actorName: 'أمينة', names: new Map(), adminUrl: 'https://admin.alummahnow.net' });
     assert.match(e.subject, /^موافقة مطلوبة: /);
     assert.match(e.text, /الموافقات: ١ من ٢/);
-    assert.match(e.text, /٪٢٫٩ ← ٪١٫٩/);
+    assert.match(plain(e.text), /٪٢٫٩ ← ٪١٫٩/);
     assert.match(e.text, /بطاقة، محفظة/);
     const prose = e.text.split('\n').filter((l) => !/https?:\/\//.test(l) && !/PayGood|USD/.test(l));
     for (const line of prose) assert.doesNotMatch(line, /[0-9]/, line);
@@ -225,9 +228,28 @@ describe('review fixes (#1832)', () => {
     assert.match(fieldValue(people, ids, 'ar', names), /و٢ غيرهم$/);
     const about = { key: 'user', label: { en: 'Creator', ar: 'صانع المحتوى' }, kind: 'person' as const, before: 'a', after: 'a' };
     const e = renderWorkflowEmail({ to: 'a@example.org', locale: 'en', event: 'proposed', request: { ...request, fields: [about, people] }, actorName: 'Amina', names });
-    assert.match(e.text, /Creator: *Name a\n/);
-    assert.match(e.text, /Creators: *\u2068Name a\u2069, \u2068Name b\u2069/);
+    assert.match(plain(e.text), /Creator: *Name a\n/);
+    assert.match(plain(e.text), /Creators: *Name a, Name b/);
     assert.doesNotMatch(e.text, /→/, 'nothing to compare');
+  });
+  it('every row keeps the email\'s direction in HTML, whatever is in it (the cells are dir="auto")', () => {
+    const names = new Map([['a', 'Yusuf Rahman'], ['b', 'عائشة'], ['c', 'Bilal Ahmed']]);
+    const f = (key: string, kind: 'person' | 'bps' | 'text', before: unknown, after: unknown) => ({ key, label: { en: key, ar: key }, kind, before, after });
+    const fields = [f('latinList', 'person', null, ['a', 'c']), f('mixedList', 'person', null, ['b', 'a']), f('arabicFirst', 'person', 'b', 'a'), f('latinFirst', 'person', 'a', 'b'), f('same', 'person', 'a', 'a'), f('numbers', 'bps', 290, 190), f('words', 'text', 'Creator', 'عالِم')];
+    for (const [locale, mark, arrow] of [['ar', '\u200f', ' ← '], ['en', '\u200e', ' → ']] as const) {
+      const e = renderWorkflowEmail({ to: 'a@example.org', locale, event: 'proposed', request: { ...request, fields }, actorName: 'Amina', names });
+      const cells = [...e.html.matchAll(/<td class="t"[^>]*dir="auto"[^>]*>([^<]*)<\/td>/g)].map((m) => m[1]);
+      assert.equal(cells.length, fields.length);
+      for (const cell of cells) assert.ok(cell.startsWith(mark), `${locale}: ${cell}`);
+      const iso = (x: string) => `\u2068${x}\u2069`;
+      const comma = locale === 'ar' ? '، ' : ', ';
+      assert.equal(cells[0], `${mark}${iso('Yusuf Rahman')}${comma}${iso('Bilal Ahmed')}`);
+      assert.equal(cells[1], `${mark}${iso('عائشة')}${comma}${iso('Yusuf Rahman')}`);
+      assert.equal(cells[2], `${mark}${iso('عائشة')}${arrow}${iso('Yusuf Rahman')}`);
+      assert.equal(cells[3], `${mark}${iso('Yusuf Rahman')}${arrow}${iso('عائشة')}`);
+      assert.equal(cells[4], `${mark}Yusuf Rahman`);
+      assert.equal(cells[6], `${mark}${iso('Creator')}${arrow}${iso('عالِم')}`);
+    }
   });
   it('percent and bps show % and ٪', () => {
     assert.equal(fieldValue(f('percent'), 2.9, 'en', new Map()), '2.9%');

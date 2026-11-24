@@ -139,6 +139,15 @@ export function arDigits(v: number | string): string {
   return String(v).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
 }
 
+/** A value with its own direction (FSI…PDI), so what is inside never reorders what is around it. */
+const isolate = (text: string) => `\u2068${text}\u2069`;
+/**
+ * A row in the email's direction. The layout's cell is dir="auto": it reads the first letter outside an
+ * isolate, and a row of numbers or isolated names has none, so it would fall back to left to right. The
+ * mark (RLM, LRM) is that letter, unseen.
+ */
+const emailRow = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u200f' : '\u200e'}${text}`;
+
 /** How many people of a list an email names (each name is one lookup); the request page names them all. */
 const EMAIL_PEOPLE = 5;
 
@@ -156,7 +165,7 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
   if (f.kind === 'person') {
     if (!Array.isArray(v)) return names.get(String(v)) ?? c.someone;
     // Each name isolated (FSI…PDI), as admin-web's workflowValue does: a Latin name must not reorder an Arabic list
-    const shown = v.slice(0, EMAIL_PEOPLE).map((id) => `\u2068${names.get(String(id)) ?? c.someone}\u2069`).join(locale === 'ar' ? '، ' : ', ');
+    const shown = v.slice(0, EMAIL_PEOPLE).map((id) => isolate(names.get(String(id)) ?? c.someone)).join(locale === 'ar' ? '، ' : ', ');
     return v.length > EMAIL_PEOPLE ? c.andMore(shown, v.length - EMAIL_PEOPLE) : shown;
   }
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale] ?? String(x);
@@ -200,8 +209,8 @@ export function renderWorkflowEmail(input: {
     blocks.push({ kind: 'facts', rows: changed.map((f): [string, string] => {
       const after = fieldValue(f, f.after, locale, input.names);
       // Someone the change is about (nothing to compare): just who
-      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], after];
-      return [f.label[locale], `${fieldValue(f, f.before, locale, input.names)}${locale === 'ar' ? ' ← ' : ' → '}${after}`];
+      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], emailRow(locale, after)];
+      return [f.label[locale], emailRow(locale, `${isolate(fieldValue(f, f.before, locale, input.names))}${locale === 'ar' ? ' ← ' : ' → '}${isolate(after)}`)];
     }) });
   }
   const after: EmailBlock[] = [];
