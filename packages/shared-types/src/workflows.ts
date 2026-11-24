@@ -258,6 +258,32 @@ export const WORKFLOW_SEEDED_SCOPES: Readonly<Partial<Record<WorkflowActionType,
 });
 
 /**
+ * `tiers.change` scopes (WF-10): a creator's tier (one, many, or a tier request approved), the default
+ * tier, and the tiers themselves (add, edit, delete, reorder). Each can be given approvers on its own.
+ */
+export const TIER_CHANGE_SCOPES = ['assign', 'default', 'tiers'] as const;
+export type TierChangeScope = (typeof TIER_CHANGE_SCOPES)[number];
+
+/** Scopes the rules page always lists (with the action's default rule until edited), besides the seeded ones. */
+export const WORKFLOW_LISTED_SCOPES: Readonly<Partial<Record<WorkflowActionType, readonly string[]>>> = Object.freeze({
+  'tiers.change': TIER_CHANGE_SCOPES,
+});
+
+const SCOPE_LABELS: Readonly<Partial<Record<WorkflowActionType, Readonly<Record<string, WorkflowLocalized>>>>> = Object.freeze({
+  'tiers.change': {
+    assign: { en: 'A creator’s tier', ar: 'مستوى صانع محتوى' },
+    default: { en: 'The default tier', ar: 'المستوى الافتراضي' },
+    tiers: { en: 'Tiers and their limits', ar: 'المستويات وحدودها' },
+  },
+  'workflows.rule.set': { [WORKFLOW_RULE_CHANGE_MONEY_SCOPE]: { en: 'Money rules', ar: 'قواعد المال' } },
+});
+
+/** A scope's name for people (null: show the scope as it is, such as a feature switch named elsewhere). */
+export function workflowScopeLabel(type: WorkflowActionType, scope: string): WorkflowLocalized | null {
+  return SCOPE_LABELS[type]?.[scope] ?? null;
+}
+
+/**
  * The floor for an action in a scope. One scope carries the money floor although its action doesn't:
  * changes to money rules (rule-change scope 'money'), so they can't be lowered or approved by tech
  * staff or the owner. Feature switches have none, creatorSupport included (owner 2026-11-24: switching

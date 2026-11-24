@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { WORKFLOW_ACTIONS, WORKFLOW_STATUSES, type WorkflowField } from '@al-ummah/shared-types';
 import { createTranslator } from '../src/i18n/translate';
-import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, permissionLabel, ruleSummary, statusLabel, workflowValue } from '../src/lib/workflows';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, permissionLabel, ruleSummary, scopeName, statusLabel, workflowValue } from '../src/lib/workflows';
 
 const en = createTranslator('en');
 const ar = createTranslator('ar');
@@ -70,5 +70,16 @@ describe('statuses and views', () => {
     assert.equal(parseWorkflowView('mine'), 'mine');
     assert.equal(parseWorkflowView('nope'), 'waiting');
     assert.equal(parseWorkflowView(undefined), 'waiting');
+  });
+});
+
+describe('rule scope names (rules page)', () => {
+  it('names tier scopes and feature switches in the page language; the default scope has none', () => {
+    assert.deepEqual(scopeName('tiers.change', 'default', 'en'), { text: 'The default tier', named: true });
+    assert.deepEqual(scopeName('tiers.change', 'assign', 'ar'), { text: 'مستوى صانع محتوى', named: true });
+    assert.equal(scopeName('features.set', 'creatorSupport', 'en')?.text, 'Creator support');
+    assert.equal(scopeName('workflows.rule.set', 'money', 'ar')?.text, 'قواعد المال');
+    assert.deepEqual(scopeName('features.set', 'somethingElse', 'en'), { text: 'somethingElse', named: false });
+    assert.equal(scopeName('tiers.change', '', 'en'), null);
   });
 });

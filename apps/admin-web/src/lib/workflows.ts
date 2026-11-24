@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, formatMoney, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -96,3 +96,16 @@ export const permissionLabel = (t: Translator) => (p: string) => {
   const key = p.replace('support:', '');
   return (MONEY_PERMISSION_KEYS as readonly string[]).includes(p) ? t(`workflows.permissions.${key}` as MessageKey) : p;
 };
+
+/**
+ * A rule scope's name on the rules page: the action's own scope names (tiers.change: "A creator's tier",
+ * "The default tier", "Tiers and their limits"), a feature switch's name, else the scope as stored.
+ * `null` for the default scope (the page says "Default").
+ */
+export function scopeName(type: WorkflowActionType, scope: string, locale: Locale): { text: string; named: boolean } | null {
+  if (!scope) return null;
+  const label = workflowScopeLabel(type, scope);
+  if (label) return { text: label[locale], named: true };
+  if (type === 'features.set' && isFeatureKey(scope)) return { text: featureDefinition(scope).name[locale], named: true };
+  return { text: scope, named: false };
+}

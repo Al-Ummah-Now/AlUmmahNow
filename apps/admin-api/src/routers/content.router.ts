@@ -77,6 +77,10 @@ import { dropAudit, readAudit, setAuditPrevious, setAuditSubject, writeAudit, ty
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { apiError } from '../lib/api-error';
+import { proposeChange, ruleNeedsApproval, WorkflowError } from '../lib/workflows/engine';
+import { readTierOp, runTierOp, tierScope, TierOpError, DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID } from '../lib/workflows/tier-actions';
+import { workflowCtx } from './workflows.router';
+import { stepUpAnswer } from '../middleware/passkeys';
 import { logger } from '../lib/logger';
 import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -104,6 +108,8 @@ app.onError((error, c) => {
     logger.warn('[Content] Permission denied', { userId: actorOf(c as C), permission: error.permission, path: c.req.path });
     return c.json({ success: false, code: 'forbidden', error: error.message }, 403);
   }
+  if (error instanceof TierOpError) return apiError(c, error.status, error.code, { error: error.message, ...error.extra } as never);
+  if (error instanceof WorkflowError) return apiError(c, error.status, error.code, error.extra as never);
   if (error instanceof VideosError) {
     return c.json({ success: false, code: error.code, error: error.message, ...(error.details ?? {}) }, error.status as 400);
   }
@@ -745,10 +751,26 @@ app.post('/legacy-profiles/restore', async (c) => {
 // ---------------------------------------------------------------------------
 
 type TierAssignment = Pick<CreatorTierAssignment, 'tierId' | 'source'> & Partial<Pick<CreatorTierAssignment, 'assignedBy' | 'assignedAt'>>;
-/** The audit id of default-tier changes (kind 'creator-tier', action 'set-default') */
-const DEFAULT_TIER_AUDIT_ID = 'default';
-/** The audit id of rank changes (kind 'creator-tier', action 'reorder') */
-const TIER_ORDER_AUDIT_ID = 'order';
+/**
+ * A tier change (wiki AUN-WORKFLOWS WF-10, `tiers.change`): runs now while its scope's rule is direct
+ * (the default, WF-D1); once admins give the scope approvers, it becomes a change request (202) that
+ * runs on approval under the proposer's name (lib/workflows/tier-actions.ts, the same checks and audit).
+ */
+async function tierChange(c: C, raw: Record<string, unknown>, reason?: unknown) {
+  need(c, 'creators:manage');
+  const op = readTierOp(raw);
+  if (c.env.SEARCH_DB) {
+    const ctx = workflowCtx(c.env as never, { steppedUp: stepUpAnswer(c as never) === null });
+    if (await ruleNeedsApproval(ctx, 'tiers.change', tierScope(op))) {
+      const actor = await ctx.directory.actor(actorOf(c), auth(c)?.roles ?? []);
+      const why = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 1000) : 'Tier change';
+      const out = await proposeChange(ctx, actor, { type: 'tiers.change', payload: op, reason: why });
+      logger.info('[Content] Tier change sent for approval', { op: op.op, scope: tierScope(op), actorId: actorOf(c), status: out.status });
+      return c.json({ success: true, result: out }, out.status === 'applied' ? 200 : 202);
+    }
+  }
+  return ok(c, await runTierOp(c.env, actorOf(c), op));
+}
 
 app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
 // ?counts=0 passes through: the definitions without the (full-table) counts. With counts, the
@@ -769,19 +791,8 @@ app.get('/creator-tiers/audit', async (c) => {
 // Add tier: admins never type ids; api-videos makes it from the name. The audit row is written
 // first (no unaudited change) and moved to the new tier's id once api-videos has made it
 app.post('/creator-tiers', async (c) => {
-  need(c, 'creators:manage');
-  const { id: _ignored, ...input } = await body(c);
-  const db = c.env.REPORTS_DB;
-  const auditId = await writeAudit(db, { kind: 'creator-tier', id: 'new', action: 'create', details: input, actorId: actorOf(c) });
-  try {
-    const result = await videos<{ tier: { id: string } }>(c, '/creator-tiers', { method: 'POST', json: input });
-    await setAuditSubject(db, auditId, 'creator-tier', result.tier.id);
-    logger.info('[Content] Action', { kind: 'creator-tier', id: result.tier.id, action: 'create', actorId: actorOf(c) });
-    return ok(c, result);
-  } catch (error) {
-    await dropAudit(db, auditId).catch((e) => logger.error('[Content] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
-    throw error;
-  }
+  const input = await body(c);
+  return tierChange(c, { op: 'create', input }, input.reason);
 });
 
 /**
@@ -790,16 +801,8 @@ app.post('/creator-tiers', async (c) => {
  * admin's Undo sets back through this same route.
  */
 app.put('/creator-tiers/default', async (c) => {
-  need(c, 'creators:manage');
   const input = await body(c);
-  const tierId = typeof input.tierId === 'string' ? input.tierId.trim() : '';
-  if (!tierId) return c.json({ success: false, code: 'invalid_request', error: "tierId is required (a tier id, or 'none')" }, 400);
-  const current = await videos<{ defaultTierId?: string }>(c, '/creator-tiers', { query: { counts: '0' } });
-  return ok(c, await audited(c, {
-    kind: 'creator-tier', id: DEFAULT_TIER_AUDIT_ID, action: 'set-default',
-    details: { tierId, ...(input.undo === true ? { undo: true } : {}) },
-    previous: { tierId: current.defaultTierId ?? null },
-  }, () => videos(c, '/creator-tiers/default', { method: 'PUT', json: { tierId } })));
+  return tierChange(c, { op: 'setDefault', tierId: input.tierId, undo: input.undo }, input.reason);
 });
 
 /**
@@ -807,39 +810,19 @@ app.put('/creator-tiers/default', async (c) => {
  * move up/down). Audited with the previous order, which Undo sends back.
  */
 app.put('/creator-tiers/order', async (c) => {
-  need(c, 'creators:manage');
   const input = await body(c);
-  const ids = Array.isArray(input.ids) ? input.ids.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
-  if (!ids.length) return c.json({ success: false, code: 'invalid_request', error: 'ids: every tier id, lowest rank first' }, 400);
-  const current = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers', { query: { counts: '0' } });
-  return ok(c, await audited(c, {
-    kind: 'creator-tier', id: TIER_ORDER_AUDIT_ID, action: 'reorder',
-    details: { ids, ...(input.undo === true ? { undo: true } : {}) },
-    previous: { ids: current.items.map((t) => t.id) },
-  }, () => videos(c, '/creator-tiers/order', { method: 'PUT', json: { ids } })));
+  return tierChange(c, { op: 'reorder', ids: input.ids, undo: input.undo }, input.reason);
 });
 
 app.put('/creator-tiers/:id', async (c) => {
-  need(c, 'creators:manage');
-  const id = c.req.param('id');
   const input = await body(c);
-  const current = (await videos<{ items: Array<Record<string, unknown>> }>(c, '/creator-tiers', { query: { counts: '0' } })).items.find((t) => t.id === id);
-  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'edit', details: input, previous: current ? previousOf(current as never, input) : undefined }, () =>
-    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'PUT', json: input })));
+  return tierChange(c, { op: 'edit', id: c.req.param('id'), input });
 });
 
 /** Soft delete: restorable for 30 days in Recently deleted (/api/trash), then purged by the hourly cleanup. */
 app.delete('/creator-tiers/:id', async (c) => {
-  need(c, 'creators:manage');
-  const id = c.req.param('id');
-  // Pending invites carry the tier to their account: move or revoke them first (api-videos checks the users and the default)
-  const invites = await pendingInvitesForTier(c.env.REPORTS_DB, id);
-  if (invites > 0) {
-    return c.json({ success: false, code: 'tier_has_invites', error: `${invites} pending invites carry this tier; change or revoke them first`, invites }, 409);
-  }
-  const reason = cleanTrashReason((await body(c)).reason);
-  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'delete', details: reason ? { reason } : undefined }, () =>
-    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
+  const input = await body(c);
+  return tierChange(c, { op: 'delete', id: c.req.param('id'), reason: input.reason }, input.reason);
 });
 
 app.get('/users/:id/creator-tier', async (c) => {
@@ -856,24 +839,8 @@ app.get('/users/:id/creator-tier', async (c) => {
  * needs `confirmSuperAdmin: true` (the admin's explicit second confirmation).
  */
 app.put('/users/:id/creator-tier', async (c) => {
-  need(c, 'creators:manage');
-  const id = c.req.param('id');
   const input = await body(c);
-  const tierId = typeof input.tierId === 'string' ? input.tierId.trim() : '';
-  // Every account has a tier: there is no "remove"
-  if (!tierId) return c.json({ success: false, code: 'tier_required', error: 'tierId is required: every account has a tier' }, 400);
-  const source = input.source === 'subscription' ? 'subscription' : 'admin';
-  const current = await videos<{ assignment: TierAssignment | null }>(c, `/users/${encodeURIComponent(id)}/creator-tier`);
-  const superAdmin = creatorTierOrigin(current.assignment as CreatorTierAssignment | null) === 'super_admin';
-  if (superAdmin && input.confirmSuperAdmin !== true) {
-    logger.warn('[Content] Refused a change to a super admin tier', { userId: id, actorId: actorOf(c) });
-    return c.json({ success: false, code: 'super_admin_tier', error: 'This user is a super admin: their Unlimited tier is automatic' }, 409);
-  }
-  return ok(c, await audited(c, {
-    kind: 'user', id, action: 'creator-tier',
-    details: { tierId, source, ...(superAdmin ? { overrodeSuperAdmin: true } : {}) },
-    previous: { tierId: current.assignment?.tierId ?? null, source: current.assignment?.source ?? null },
-  }, () => videos(c, `/users/${encodeURIComponent(id)}/creator-tier`, { method: 'PUT', json: { tierId, source } })));
+  return tierChange(c, { op: 'assign', userId: c.req.param('id'), tierId: input.tierId, source: input.source, confirmSuperAdmin: input.confirmSuperAdmin }, input.reason);
 });
 
 /**
@@ -920,22 +887,7 @@ app.get('/tier-requests/:id', async (c) => {
   ]);
   return ok(c, { ...current, audit });
 });
-app.post('/tier-requests/:id/approve', async (c) => {
-  need(c, 'creators:manage');
-  const id = c.req.param('id');
-  const { request } = await videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}`);
-  if (request.status !== 'pending') return c.json({ success: false, code: TIER_REQUEST_ERRORS.notPending, error: 'This request was already decided' }, 409);
-  const result = await audited(c, {
-    kind: 'user', id: request.userId, action: 'creator-tier',
-    details: { tierId: request.tierId, source: 'admin', tierRequest: id },
-    // On the default tier the user had no assignment: null, as the tier control audits it
-    previous: { tierId: request.currentIsDefault ? null : request.currentTierId, source: null },
-  }, () => videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}/decide`, { method: 'POST', json: { decision: 'approve' } }));
-  await writeAudit(c.env.REPORTS_DB, { kind: 'tier-request', id, action: 'approve', actorId: actorOf(c), details: { userId: request.userId, tierId: request.tierId } })
-    .catch((e) => logger.warn('[Content] Could not write the tier request audit row', { id, error: String(e) }));
-  await deliverDecision(c, id, result.request.decidedAt);
-  return ok(c, result);
-});
+app.post('/tier-requests/:id/approve', async (c) => tierChange(c, { op: 'approveRequest', requestId: c.req.param('id') }));
 app.post('/tier-requests/:id/decline', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
@@ -1064,39 +1016,8 @@ app.delete('/captions/quran-translations/:lang', async (c) => {
  * skipped and users already on the tier are left alone, so a retry is safe.
  */
 app.post('/creators/tier', async (c) => {
-  need(c, 'creators:manage');
   const input = await body(c);
-  const userIds = Array.isArray(input.userIds) ? [...new Set(input.userIds.filter((v): v is string => typeof v === 'string' && v.length > 0))] : [];
-  // Every account has a tier: no bulk "remove"
-  const tierId = typeof input.tierId === 'string' && input.tierId ? input.tierId : undefined;
-  if (!userIds.length || userIds.length > MAX_BULK_CREATOR_TIER || tierId === undefined) {
-    return c.json({ success: false, code: 'invalid_request', error: `userIds (1 to ${MAX_BULK_CREATOR_TIER}) and tierId are required` }, 400);
-  }
-  const plan = await videos<CreatorTierBulkResult>(c, '/creators/tier', { method: 'POST', json: { userIds, tierId, dryRun: true } });
-  if (!plan.changed.length) return ok(c, plan);
-  const db = c.env.REPORTS_DB;
-  const runId = crypto.randomUUID();
-  const auditIds = new Map<string, string>();
-  const drop = (ids: string[]) => Promise.all(ids.map((auditId) => dropAudit(db, auditId).catch((e) => logger.error('[Content] Could not drop the audit row of a failed action', { auditId, error: String(e) }))));
-  try {
-    for (const change of plan.changed) {
-      auditIds.set(change.userId, await writeAudit(db, {
-        kind: 'user', id: change.userId, action: 'creator-tier',
-        details: { tierId, source: 'admin', bulk: runId },
-        previous: { tierId: change.previous?.tierId ?? null, source: change.previous?.source ?? null },
-        actorId: actorOf(c),
-      }));
-    }
-    const result = await videos<CreatorTierBulkResult>(c, '/creators/tier', { method: 'POST', json: { userIds: plan.changed.map((ch) => ch.userId), tierId } });
-    // Someone else changed a user between the plan and the change: no row for a change that did not happen
-    const changed = new Set(result.changed.map((ch) => ch.userId));
-    await drop([...auditIds].filter(([userId]) => !changed.has(userId)).map(([, auditId]) => auditId));
-    logger.info('[Content] Action', { kind: 'user', action: 'creator-tier-bulk', tierId, users: result.changed.length, runId, actorId: actorOf(c) });
-    return ok(c, { ...result, unchanged: [...plan.unchanged, ...result.unchanged], skippedSuperAdmin: [...plan.skippedSuperAdmin, ...result.skippedSuperAdmin] });
-  } catch (error) {
-    await drop([...auditIds.values()]);
-    throw error;
-  }
+  return tierChange(c, { op: 'bulk', userIds: input.userIds, tierId: input.tierId }, input.reason);
 });
 
 // ---------------------------------------------------------------------------
