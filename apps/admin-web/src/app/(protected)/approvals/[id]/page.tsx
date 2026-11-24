@@ -1,0 +1,194 @@
+import { WORKFLOW_ACTIONS, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
+import Link from '@/components/AppLink';
+import { LocalTime } from '@/components/LocalTime';
+import { fillNodes } from '@/components/audit/fill';
+import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
+import { RequestActions } from '@/components/workflows/RequestActions';
+import { getI18n } from '@/i18n/server';
+import { formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
+import { getNames } from '@/lib/api/audit';
+import { approveWorkflowRequest, commentOnWorkflowRequest, getWorkflowRequest, rejectWorkflowRequest, retryWorkflowRequest, withdrawWorkflowRequest } from '@/lib/api/workflows';
+import { logger } from '@/lib/logger';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, statusLabel, workflowValue } from '@/lib/workflows';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * One change request (wiki AUN-WORKFLOWS §10): what changes (before and after), why, who did what and
+ * when, and the Approve, Reject, Withdraw, Retry and Comment actions the signed-in admin may take.
+ * When they may not approve, the page says why.
+ */
+export default async function ApprovalPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ all?: string }> }) {
+  const { t, locale } = await getI18n();
+  const { id } = await params;
+  const showAll = (await searchParams).all === '1';
+  let request: WorkflowRequestView | null = null;
+  try {
+    request = await getWorkflowRequest(id);
+  } catch (error) {
+    logger.warn('[approvals] Request failed to load', { id, error: error instanceof Error ? error.message : String(error) });
+  }
+  if (!request) {
+    return (
+      <div>
+        <BackLink label={t('workflows.back')} />
+        <ErrorAlert testId="approval-error">{t('workflows.detailLoadFailed')}</ErrorAlert>
+      </div>
+    );
+  }
+
+  const people = new Set<string>([request.proposedBy, ...request.steps.map((s) => s.actor)]);
+  for (const f of request.fields) if (f.kind === 'person') for (const v of [f.before, f.after]) if (typeof v === 'string') people.add(v);
+  people.delete('system');
+  const named = await getNames({ users: [...people] });
+  const names: Record<string, string> = {};
+  for (const [uid, u] of Object.entries(named.users)) names[uid] = u.name ?? (u.found ? t('workflows.someone') : t('workflows.deletedAccount'));
+  const nameOf = (uid: string) => (uid === 'system' ? t('workflows.system') : (names[uid] ?? t('workflows.someone')));
+
+  const title = locale === 'ar' ? request.title.ar : request.title.en;
+  const changed = request.fields.filter(fieldChanges);
+  const fields = showAll ? request.fields : changed;
+  const can = request.can ?? { approve: false, reject: false, withdraw: false, blocks: [] };
+  const domainKey = request.domain;
+
+  return (
+    <div className="max-w-4xl">
+      <BackLink label={t('workflows.back')} />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{translateDynamic(t, 'workflows.domain', domainKey)}</p>
+          <h1 className="mt-1 text-2xl font-bold text-fg sm:text-3xl" dir="auto" data-testid="approval-heading">
+            {title}
+          </h1>
+          <p className="mt-2 text-sm text-fg-muted">
+            <span dir="auto">{t('workflows.proposedBy', { name: nameOf(request.proposedBy) })}</span>
+            {t('common.sep')}
+            <LocalTime value={request.proposedAt} withTime />
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-1 text-sm text-fg-muted sm:items-end">
+          <span className={`self-start sm:self-end rounded px-2 py-0.5 font-medium ${WORKFLOW_STATUS_CHIP[request.status]}`} data-testid="approval-status">
+            {statusLabel(t, request.status)}
+          </span>
+          {request.approvalsNeeded > 0 && (
+            <span data-testid="approval-count">{t('workflows.approvals', { count: formatNumber(request.approvalsCount, locale), needed: formatNumber(request.approvalsNeeded, locale) })}</span>
+          )}
+          {request.status === 'pending' && <span>{fillNodes(t('workflows.expires'), { date: <LocalTime value={request.expiresAt} withTime /> })}</span>}
+        </div>
+      </div>
+
+      <section className={`${cardClass} mb-4`} aria-labelledby="approval-reason">
+        <h2 id="approval-reason" className="text-sm font-semibold text-fg-muted">{t('workflows.reason')}</h2>
+        <p className="mt-2 whitespace-pre-wrap break-words text-fg" dir="auto" data-testid="approval-reason">
+          {request.reason}
+        </p>
+      </section>
+
+      <section className={`${cardClass} mb-4`} aria-labelledby="approval-changes">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="approval-changes" className="text-lg font-semibold text-fg">{t('workflows.changes')}</h2>
+          {changed.length !== request.fields.length && (
+            <Link href={`/approvals/${encodeURIComponent(request.id)}${showAll ? '' : '?all=1'}`} className={`${linkClass} text-sm`} data-testid="approval-fields-toggle">
+              {showAll ? t('workflows.showChanged') : t('workflows.showAll')}
+            </Link>
+          )}
+        </div>
+        <DiffTable fields={fields} t={t} locale={locale} names={names} />
+      </section>
+
+      {(can.approve || can.reject || can.withdraw || request.status === 'failed' || request.status === 'pending') && (
+        <section className={`${cardClass} mb-4`} data-testid="approval-actions-card">
+          {request.status === 'pending' && !can.approve && can.blocks.length > 0 && (
+            <div className="mb-4" data-testid="approval-why-not">
+              <h2 className="text-sm font-semibold text-fg">{t('workflows.whyNot')}</h2>
+              <ul className="mt-1 list-disc ps-5 text-sm text-fg-muted">
+                {[...new Set(can.blocks)].map((b) => (
+                  <li key={b}>{t(`workflows.block.${b}` as MessageKey)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <RequestActions
+            id={request.id}
+            version={request.version}
+            title={title}
+            status={request.status}
+            can={can}
+            canRetry={request.status === 'failed'}
+            actions={{ approve: approveWorkflowRequest, reject: rejectWorkflowRequest, withdraw: withdrawWorkflowRequest, retry: retryWorkflowRequest, comment: commentOnWorkflowRequest }}
+          />
+        </section>
+      )}
+
+      <section className={cardClass} aria-labelledby="approval-steps">
+        <h2 id="approval-steps" className="text-lg font-semibold text-fg">{t('workflows.steps')}</h2>
+        <ol className="mt-3 space-y-3 border-s-2 border-border ps-4" data-testid="approval-steps">
+          {request.steps.map((s) => (
+            <li key={s.seq} className="text-sm" data-step={s.kind}>
+              <p className="text-fg" dir="auto">
+                {t(`workflows.step.${s.kind}` as MessageKey, { name: nameOf(s.actor) })}
+              </p>
+              <p className="text-fg-muted">
+                <LocalTime value={s.at} withTime />
+                {s.stepUp && (
+                  <>
+                    {t('common.sep')}
+                    {t('workflows.stepUp')}
+                  </>
+                )}
+              </p>
+              {s.note && (
+                <p className="mt-1 whitespace-pre-wrap break-words rounded border-s-2 border-border bg-surface-2 px-3 py-2 text-fg" dir="auto">
+                  {s.note}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+        <p className="mt-4 text-xs text-fg-subtle">{WORKFLOW_ACTIONS[request.type] ? (locale === 'ar' ? WORKFLOW_ACTIONS[request.type].label.ar : WORKFLOW_ACTIONS[request.type].label.en) : request.type}</p>
+      </section>
+    </div>
+  );
+}
+
+function BackLink({ label }: { label: string }) {
+  return (
+    <p className="mb-4 text-sm">
+      <Link href="/approvals" className={linkClass} data-testid="approval-back">
+        <span aria-hidden="true" className="inline-block rtl:-scale-x-100">←</span> {label}
+      </Link>
+    </p>
+  );
+}
+
+function DiffTable({ fields, t, locale, names }: { fields: WorkflowField[]; t: Parameters<typeof workflowValue>[3]; locale: Parameters<typeof workflowValue>[2]; names: Record<string, string> }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-sm" data-testid="approval-diff">
+        <thead>
+          <tr className="border-b border-border text-start text-fg-muted">
+            <th scope="col" className="py-2 pe-3 text-start font-medium" />
+            <th scope="col" className="py-2 pe-3 text-start font-medium">{t('workflows.before')}</th>
+            <th scope="col" className="py-2 text-start font-medium">{t('workflows.after')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fields.map((f) => {
+            const changes = fieldChanges(f);
+            return (
+              <tr key={f.key} className="border-b border-border last:border-b-0 align-top" data-field={f.key} data-changed={changes ? '1' : '0'}>
+                <th scope="row" className="py-2 pe-3 text-start font-medium text-fg">{locale === 'ar' ? f.label.ar : f.label.en}</th>
+                <td className={`py-2 pe-3 ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`} dir="auto">
+                  {workflowValue(f, f.before, locale, t, names)}
+                </td>
+                <td className={`py-2 ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`} dir="auto">
+                  {workflowValue(f, f.after, locale, t, names)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}

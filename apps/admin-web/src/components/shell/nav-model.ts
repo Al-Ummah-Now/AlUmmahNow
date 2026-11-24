@@ -50,6 +50,8 @@ export interface NavBadges {
   errors?: number | null;
   /** Pending tier requests (wiki AUN-TIER-REQUESTS) */
   tierRequests?: number | null;
+  /** Change requests waiting for the signed-in admin (wiki AUN-WORKFLOWS) */
+  approvals?: number | null;
 }
 
 export interface NavItem {
@@ -145,6 +147,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Field Core Web Vitals of the videos site (docs/operations/rum.md, AUN-SEO phase 4); ops:read
   { href: '/web-vitals', label: 'nav.vitals', icon: 'activity', group: 'operations', requires: (a) => a.ops },
 
+  // Approval workflows (wiki AUN-WORKFLOWS §10): every admin role sees requests; admin-api decides who may act
+  { href: '/approvals', label: 'nav.approvals', icon: 'check', group: 'site', badge: 'approvals', badgeTestId: 'approvals-nav-badge', badgeLabel: 'workflows.navBadge' },
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
   // Settings › Emails: the system emails' wording in en + ar, versions, preview, test send (emails:manage)
