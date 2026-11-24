@@ -61,7 +61,7 @@ const TIER_BODY = [
   'uploads', 'channels', 'pages', 'requestable', 'hidden', 'sortOrder', 'nameAr', 'description', 'descriptionAr',
 ];
 
-type Assignment = { tierId: string; source: string; assignedBy?: string };
+type Assignment = { tierId: string; source: string; assignedBy?: string; assignedAt?: string };
 type Tier = { id: string; name: string; nameAr?: string; perHour?: number; updatedAt?: string; updatedBy?: string };
 
 /** api-videos' tier routes with state, and its answers going missing on demand. */
@@ -108,7 +108,7 @@ function fakeVideos() {
           const id = decodeURIComponent(user[1]);
           if (method !== 'PUT') return ok({ assignment: assignments.get(id) ?? null });
           return wrote(`assign:${id}:${body.tierId}`, () => {
-            assignments.set(id, { tierId: body.tierId, source: body.source, assignedBy: actor });
+            assignments.set(id, { tierId: body.tierId, source: body.source, assignedBy: actor, assignedAt: at });
             return { assignment: assignments.get(id) };
           });
         }
@@ -404,6 +404,19 @@ describe('tiers.change: a tier request approved', () => {
     t.videos.state.request = { ...t.videos.state.request, status: 'approved', decidedBy: 'someone-else', decidedAt: new Date().toISOString() };
     assert.equal((await t.retry(id)).status, 'stale');
     assert.equal((await t.tierAudit()).length, 0);
+  });
+});
+
+describe('tiers.change: a creator\'s tier', () => {
+  it('the same tier the proposer gave before the request is not taken for this request\'s work', async () => {
+    const t = setup();
+    t.videos.assignments.set('u1', { tierId: 'creator', source: 'admin', assignedBy: 'admin-1', assignedAt: '2026-01-01T00:00:00.000Z' });
+    await t.needApprover('assign');
+    const id = (await t.call('PUT', '/users/u1/creator-tier', { tierId: 'creator' })).body.result.request.id as string;
+    t.videos.fail.next = 'refused';
+    assert.equal((await t.approve(id)).status, 'failed');
+    assert.equal((await t.retry(id)).status, 'applied');
+    assert.deepEqual(t.videos.writes, ['assign:u1:creator']);
   });
 });
 
