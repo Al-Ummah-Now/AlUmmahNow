@@ -502,12 +502,13 @@ export function Autocomplete(props: AutocompleteProps) {
                 onClick={() => choose(option)}
               >
                 <Thumbnail option={option} />
+                {/* Names keep their own direction but line up with the page (Chromium and Safari know only the prefixed value) */}
                 <span className="min-w-0 flex-1">
-                  <span dir="auto" className="block truncate text-[var(--fanous-color-text-primary)] [text-align:match-parent]">
+                  <span dir="auto" className="block truncate text-[var(--fanous-color-text-primary)] [text-align:-webkit-match-parent] [text-align:match-parent]">
                     <Highlight text={option.label} query={query} />
                   </span>
                   {option.subtitle && (
-                    <span dir="auto" className="block truncate text-xs text-[var(--fanous-color-text-secondary)] [text-align:match-parent]">{option.subtitle}</span>
+                    <span dir="auto" className="block truncate text-xs text-[var(--fanous-color-text-secondary)] [text-align:-webkit-match-parent] [text-align:match-parent]">{option.subtitle}</span>
                   )}
                 </span>
                 {option.selected && <Check className="h-4 w-4 shrink-0 text-brand" aria-label={a.selected} />}

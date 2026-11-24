@@ -59,7 +59,7 @@ export default function MoveOffers() {
 
   if (problem === 'off') return <NotFoundPage />;
   return (
-    <div className="min-h-screen">
+    <main className="min-h-screen">
       <div className="container mx-auto max-w-3xl space-y-6 px-4 py-8" data-testid="move-offers">
         <div>
           <h1 className={`text-2xl font-bold ${TEXT}`}>{m.offers.title}</h1>
@@ -71,6 +71,6 @@ export default function MoveOffers() {
         {offers && <Section title={m.offers.received} offers={offers.received} testId="move-offers-received" />}
         {offers && <Section title={m.offers.sent} offers={offers.sent} testId="move-offers-sent" />}
       </div>
-    </div>
+    </main>
   );
 }
