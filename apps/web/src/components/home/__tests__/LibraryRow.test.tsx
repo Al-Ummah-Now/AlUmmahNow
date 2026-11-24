@@ -333,4 +333,57 @@ describe('LibraryRow: Your library row with Watch later and Liked videos (owner 
     expect(library.watchLater).not.toHaveBeenCalled();
     expect(library.liked).not.toHaveBeenCalled();
   });
+
+  it('renders server-loaded initialCards immediately on first paint without client requests', () => {
+    const initialCards = [
+      { kind: 'continue' as const, top: entry('a', 40), next: [], total: 7 },
+      { kind: 'watch-later' as const, top: video('w1'), next: [], total: 3, index: 2 },
+    ];
+    render(<LibraryRow initialCards={initialCards} initialUserId="u1" />);
+    const row = screen.getByTestId('home-library');
+    expect(row).toHaveAttribute('data-count', '2');
+    expect(screen.getByTestId('continue-watching-card')).toBeInTheDocument();
+    expect(screen.getByTestId('home-library-watch-later-card')).toBeInTheDocument();
+    expect(service.getPaused).not.toHaveBeenCalled();
+    expect(service.list).not.toHaveBeenCalled();
+    expect(library.watchLater).not.toHaveBeenCalled();
+    expect(library.liked).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing and makes zero requests when server confirmed an empty library ([])', () => {
+    const { container } = render(<LibraryRow initialCards={[]} initialUserId="u1" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(service.getPaused).not.toHaveBeenCalled();
+    expect(service.list).not.toHaveBeenCalled();
+    expect(library.watchLater).not.toHaveBeenCalled();
+    expect(library.liked).not.toHaveBeenCalled();
+  });
+
+  it('refreshes stripped thumbnails in place when initialPartial is true without changing card count', async () => {
+    const initialCards = [
+      { kind: 'continue' as const, top: { ...entry('a', 40), videoThumbnail: undefined }, next: [], total: 7 },
+    ];
+    render(<LibraryRow initialCards={initialCards} initialPartial initialUserId="u1" />);
+    // Present synchronously on first paint with its card frame intact
+    expect(screen.getByTestId('home-library')).toHaveAttribute('data-count', '1');
+    // Background refresh fills the thumbnail in place without adding the other cards that arrived late
+    await waitFor(() =>
+      expect(within(screen.getByTestId('continue-watching-card')).getByTestId('thumb')).toHaveAttribute('data-src', 'https://img/a.jpg'),
+    );
+    expect(screen.getByTestId('home-library')).toHaveAttribute('data-count', '1');
+    expect(screen.queryByTestId('home-library-watch-later')).toBeNull();
+  });
+
+  it('never shows another user’s initialCards after a client-side account switch', async () => {
+    mockUser = { id: 'u2' };
+    const u1Cards = [{ kind: 'watch-later' as const, top: video('u1-only'), next: [], total: 1, index: 0 }];
+    library.watchLater.mockResolvedValue(EMPTY_WL);
+    library.liked.mockResolvedValue(EMPTY_LL);
+    service.list.mockResolvedValue({ entries: [], total: 0, hasMore: false });
+
+    const { container } = render(<LibraryRow initialCards={u1Cards} initialUserId="u1" />);
+    expect(screen.queryByTestId('home-library-watch-later')).toBeNull();
+    await settle();
+    expect(container).toBeEmptyDOMElement();
+  });
 });
