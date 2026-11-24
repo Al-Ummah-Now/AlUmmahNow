@@ -20,6 +20,26 @@ import type { D1Database } from './types';
 import { queueCostEmails } from './cost-alert-mail';
 
 const ENVS = "('production', 'stage', 'qa')";
+const CAPACITY_IN = CAPACITY_METRICS.map((m) => `'${m}'`).join(', ');
+
+/**
+ * Every query of this module, exported so a test can assert each plan seeks an index or a primary
+ * key (cost-monitor migration 0005 adds the ones they need).
+ */
+export const CAPACITY_SQL = {
+  daily: `SELECT resource_id, env, name, day, stored_bytes, writes FROM ops_daily WHERE env IN ${ENVS} AND kind = 'd1' AND day >= ? AND day <= ? ORDER BY day`,
+  busy: `SELECT resource_id, MAX(COALESCE(requests, 0) * COALESCE(latency_p50, 0) / 3600000.0) AS peak
+         FROM ops_hourly WHERE env IN ${ENVS} AND kind = 'd1' AND hour >= ? AND hour < ? GROUP BY resource_id`,
+  rules: `SELECT id, kind, metric, op, value, window_hours, enabled, updated_by, updated_at FROM ops_thresholds WHERE metric IN (${CAPACITY_IN}) ORDER BY id`,
+  alerts: `SELECT a.rule_id, a.resource_id FROM ops_thresholds t JOIN ops_alerts a ON a.rule_id = t.id WHERE t.metric IN (${CAPACITY_IN})`,
+  account: 'SELECT hour, bytes, databases FROM d1_account_storage ORDER BY hour DESC LIMIT 1',
+  emails: `SELECT a.key, a.env, a.resource_id, a.value, a.opened_at, t.metric, t.value AS threshold
+       FROM ops_thresholds t JOIN ops_alerts a ON a.rule_id = t.id WHERE t.metric IN (${CAPACITY_IN})`,
+} as const;
+
+const DAY_MS = 86_400_000;
+/** 'YYYY-MM-DD' of the UTC day `n` days before `now`'s. */
+const dayBefore = (now: Date, n: number) => new Date(Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`) - n * DAY_MS).toISOString().slice(0, 10);
 /** Days the rows-written average and the peak busy share look back. */
 export const ACTIVITY_DAYS = 7;
 
@@ -72,27 +92,32 @@ export async function loadD1Limits(db: D1Database): Promise<D1Limits> {
 /** Every D1 database the cost-monitor sees, sorted by days to 70% (soonest first), then by size. */
 export async function databasesOverview(db: D1Database, now = new Date()): Promise<DatabasesOverview> {
   const limits = await loadD1Limits(db);
-  const since = new Date(now.getTime() - FORECAST_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const activitySince = new Date(now.getTime() - ACTIVITY_DAYS * 86_400_000);
-  const activityDay = activitySince.toISOString().slice(0, 10);
-  const activityHour = activitySince.toISOString().slice(0, 13) + ':00:00Z';
+  // Exact windows: the forecast fits FORECAST_DAYS dates (today and the 13 before it); rows written
+  // average the ACTIVITY_DAYS complete days before today (a day with no row counts as 0); peak busy
+  // looks at the ACTIVITY_DAYS × 24 complete hours before this one.
+  const today = dayBefore(now, 0);
+  const since = dayBefore(now, FORECAST_DAYS - 1);
+  const activityFirst = dayBefore(now, ACTIVITY_DAYS);
+  const activityLast = dayBefore(now, 1);
+  const hourNow = new Date(now);
+  hourNow.setUTCMinutes(0, 0, 0);
+  const hourIso = (d: Date) => d.toISOString().replace('.000Z', 'Z');
+  const activityHourFrom = hourIso(new Date(hourNow.getTime() - ACTIVITY_DAYS * 24 * 3_600_000));
+  const activityHourTo = hourIso(hourNow);
 
   const [daily, busy, rulesRes, alertsRes, account] = await Promise.all([
     db
-      .prepare(`SELECT resource_id, env, name, day, stored_bytes, writes FROM ops_daily WHERE env IN ${ENVS} AND kind = 'd1' AND day >= ? ORDER BY day`)
-      .bind(since)
+      .prepare(CAPACITY_SQL.daily)
+      .bind(dayBefore(now, Math.max(FORECAST_DAYS - 1, ACTIVITY_DAYS)), today)
       .all<{ resource_id: string; env: string; name: string; day: string; stored_bytes: number | null; writes: number | null }>(),
     db
-      .prepare(
-        `SELECT resource_id, MAX(COALESCE(requests, 0) * COALESCE(latency_p50, 0) / 3600000.0) AS peak
-         FROM ops_hourly WHERE env IN ${ENVS} AND kind = 'd1' AND hour >= ? GROUP BY resource_id`,
-      )
-      .bind(activityHour)
+      .prepare(CAPACITY_SQL.busy)
+      .bind(activityHourFrom, activityHourTo)
       .all<{ resource_id: string; peak: number | null }>(),
-    db.prepare('SELECT id, kind, metric, op, value, window_hours, enabled, updated_by, updated_at FROM ops_thresholds ORDER BY id').all<CapacityRule>(),
-    db.prepare('SELECT rule_id, resource_id FROM ops_alerts').all<{ rule_id: string; resource_id: string }>(),
+    db.prepare(CAPACITY_SQL.rules).all<CapacityRule>(),
+    db.prepare(CAPACITY_SQL.alerts).all<{ rule_id: string; resource_id: string }>(),
     db
-      .prepare('SELECT hour, bytes, databases FROM d1_account_storage ORDER BY hour DESC LIMIT 1')
+      .prepare(CAPACITY_SQL.account)
       .first<{ hour: string; bytes: number; databases: number }>()
       .catch((error) => {
         // Before cost-monitor migration 0004 the table does not exist yet
@@ -113,8 +138,8 @@ export async function databasesOverview(db: D1Database, now = new Date()): Promi
   const byId = new Map<string, { env: string; name: string; points: { day: string; bytes: number }[]; writes: number[] }>();
   for (const r of daily.results ?? []) {
     const e = byId.get(r.resource_id) ?? { env: r.env, name: r.name, points: [], writes: [] };
-    if (typeof r.stored_bytes === 'number') e.points.push({ day: r.day, bytes: r.stored_bytes });
-    if (r.day >= activityDay && typeof r.writes === 'number') e.writes.push(r.writes);
+    if (r.day >= since && typeof r.stored_bytes === 'number') e.points.push({ day: r.day, bytes: r.stored_bytes });
+    if (r.day >= activityFirst && r.day <= activityLast && typeof r.writes === 'number') e.writes.push(r.writes);
     byId.set(r.resource_id, e);
   }
 
@@ -128,7 +153,8 @@ export async function databasesOverview(db: D1Database, now = new Date()): Promi
       share: latest === null ? null : round(latest / limits.maxDbBytes, 4),
       growthPerDay: round(bytesPerDay(e.points), 0),
       daysTo70: daysTo70(e.points, limits.maxDbBytes),
-      rowsWrittenPerDay: e.writes.length ? Math.round(e.writes.reduce((a, b) => a + b, 0) / e.writes.length) : null,
+      // Over all ACTIVITY_DAYS days, a missing day as 0; null only when none of them has a row
+      rowsWrittenPerDay: e.writes.length ? Math.round(e.writes.reduce((a, b) => a + b, 0) / ACTIVITY_DAYS) : null,
       peakBusy: round(peakBy.get(id) ?? null, 4),
       alerts: alertsBy.get(id) ?? [],
     };
@@ -155,7 +181,8 @@ export interface D1LimitsInput {
 export function parseD1LimitsInput(body: unknown): D1LimitsInput | string {
   if (!body || typeof body !== 'object') return 'body must be an object';
   const b = body as Record<string, unknown>;
-  const gb = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= max ? Math.round(v) : null);
+  // Whole GB only: 1.5 is refused, not rounded
+  const gb = (v: unknown, max: number) => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= max ? v : null);
   const db = gb(b.maxDbGb, 1_000);
   const acct = gb(b.accountGb, 100_000);
   if (db === null) return 'maxDbGb must be 1–1000';
@@ -180,13 +207,8 @@ export interface CapacityMailPayload {
 export async function queueCapacityEmails(env: Parameters<typeof queueCostEmails>[0] & { COSTS_DB?: D1Database }, now = new Date()): Promise<number> {
   const db = env.COSTS_DB;
   if (!db) return 0;
-  const metrics = CAPACITY_METRICS.map(() => '?').join(', ');
   const { results } = await db
-    .prepare(
-      `SELECT a.key, a.env, a.resource_id, a.value, a.opened_at, t.metric, t.value AS threshold
-       FROM ops_alerts a JOIN ops_thresholds t ON t.id = a.rule_id WHERE t.metric IN (${metrics})`,
-    )
-    .bind(...CAPACITY_METRICS)
+    .prepare(CAPACITY_SQL.emails)
     .all<{ key: string; env: string; resource_id: string; value: number | null; opened_at: string; metric: CapacityMetric; threshold: number }>();
   let queued = 0;
   for (const a of results ?? []) {

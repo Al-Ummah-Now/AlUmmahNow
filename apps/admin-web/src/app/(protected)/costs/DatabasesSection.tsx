@@ -30,6 +30,21 @@ export function ShareBar({ share, label }: { share: number | null; label: string
   );
 }
 
+/** A database name that wraps only after its hyphens, never inside a word. */
+export function BreakableName({ name }: { name: string }) {
+  const parts = name.split('-');
+  return (
+    <bdi>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {p}
+          {i < parts.length - 1 && <>-<wbr /></>}
+        </span>
+      ))}
+    </bdi>
+  );
+}
+
 const envName = (t: Translator, env: string) => (['production', 'stage', 'qa'].includes(env) ? t(`costs.databases.envs.${env as 'production' | 'stage' | 'qa'}`) : env);
 
 function daysText(t: Translator, f: OpsFormats, d: CostDatabase): string {
@@ -66,25 +81,27 @@ export function DatabasesSection({ data, t, f, settings }: { data: CostDatabases
         <p className="text-fg-muted" data-testid="costs-databases-empty">{t('costs.databases.empty')}</p>
       ) : (
         <>
-          <ul className="space-y-2 sm:hidden" data-testid="costs-databases-list">
+          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:hidden" data-testid="costs-databases-list">
             {databases.map((d) => (
               <li key={d.id} className="cost-tile p-3" data-database={d.name}>
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 break-all font-medium text-fg"><bdi>{d.name}</bdi></span>
+                  <span className="min-w-0 font-medium text-fg"><BreakableName name={d.name} /></span>
                   <span className="shrink-0 font-semibold text-fg tabular-nums">{d.share === null ? '—' : f.percent(d.share)}</span>
                 </div>
                 <ShareBar share={d.share} label={d.share === null ? '—' : f.percent(d.share)} />
                 <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <div><dt className="text-fg-muted">{t('costs.databases.columns.env')}</dt><dd className="text-fg">{envName(t, d.env)}</dd></div>
                   <div><dt className="text-fg-muted">{t('costs.databases.columns.size')}</dt><dd className="text-fg tabular-nums">{d.bytes === null ? '—' : f.bytes(d.bytes)}</dd></div>
+                  <div><dt className="text-fg-muted">{t('costs.databases.columns.growth')}</dt><dd className="text-fg tabular-nums">{d.growthPerDay === null || d.growthPerDay === 0 ? '—' : f.bytes(d.growthPerDay)}</dd></div>
                   <div><dt className="text-fg-muted">{t('costs.databases.columns.days', { pct: f.percent(0.7) })}</dt><dd className="text-fg tabular-nums">{daysText(t, f, d)}</dd></div>
+                  <div><dt className="text-fg-muted">{t('costs.databases.columns.writes')}</dt><dd className="text-fg tabular-nums">{d.rowsWrittenPerDay === null ? '—' : f.count(d.rowsWrittenPerDay)}</dd></div>
                   <div><dt className="text-fg-muted">{t('costs.databases.columns.busy')}</dt><dd className="text-fg tabular-nums">{d.peakBusy === null ? '—' : f.percent(d.peakBusy)}</dd></div>
                 </dl>
                 {d.alerts.length > 0 && <p className="mt-1 text-xs font-medium text-warning-fg">{t('costs.databases.alertOpen')}</p>}
               </li>
             ))}
           </ul>
-          <div className="relative -mx-3 hidden overflow-x-auto sm:block focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-label={t('costs.databases.title')}>
+          <div className="relative -mx-3 hidden overflow-x-auto xl:block focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-label={t('costs.databases.title')}>
             <table className="w-full min-w-[52rem] text-sm" data-testid="costs-databases-table">
               <caption className="sr-only">{t('costs.databases.title')}</caption>
               <thead>
@@ -103,7 +120,7 @@ export function DatabasesSection({ data, t, f, settings }: { data: CostDatabases
                 {databases.map((d) => (
                   <tr key={d.id} className="border-t border-border" data-database={d.name}>
                     <th scope="row" className={`${td} text-start font-medium text-fg`}>
-                      <bdi>{d.name}</bdi>
+                      <BreakableName name={d.name} />
                       {d.alerts.length > 0 && <span className="ms-2 text-xs font-medium text-warning-fg">{t('costs.databases.alertOpen')}</span>}
                     </th>
                     <td className={`${td} text-fg`}>{envName(t, d.env)}</td>

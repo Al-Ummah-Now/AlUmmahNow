@@ -10,7 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import costsRouter from '../src/routers/costs.router';
-import { databasesOverview, parseD1LimitsInput, queueCapacityEmails } from '../src/lib/d1Capacity';
+import { CAPACITY_SQL, databasesOverview, parseD1LimitsInput, queueCapacityEmails } from '../src/lib/d1Capacity';
 import { renderCostEmail } from '../src/lib/cost-alert-mail';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -93,6 +93,47 @@ function app(roles: string[]) {
   return { env, req: (path: string, init?: RequestInit) => a.request(path, init, env as never) };
 }
 
+describe('query plans (no scans of COSTS_DB)', () => {
+  it('every Databases and capacity-email query seeks an index or a primary key', () => {
+    const dir = join(process.cwd(), '..', 'cost-monitor', 'migrations');
+    const raw = new DatabaseSync(':memory:');
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) raw.exec(readFileSync(join(dir, f), 'utf8'));
+    const queries: [string, unknown[]][] = [
+      [CAPACITY_SQL.daily, ['2026-11-10', '2026-11-24']],
+      [CAPACITY_SQL.busy, ['2026-11-17T12:00:00Z', '2026-11-24T12:00:00Z']],
+      [CAPACITY_SQL.rules, []],
+      [CAPACITY_SQL.alerts, []],
+      [CAPACITY_SQL.account, []],
+      [CAPACITY_SQL.emails, []],
+      // queueCostEmails' subscriber lookup (lib/cost-alert-mail.ts)
+      ['SELECT user_id FROM cost_alert_subscriptions WHERE kind = ?', ['capacity']],
+    ];
+    for (const [sql, args] of queries) {
+      const plan = (raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+      for (const step of plan) assert.doesNotMatch(step, /^SCAN \w+$/, `${sql.slice(0, 60)}… → ${plan.join(' | ')}`);
+      assert.ok(plan.some((s) => /USING (COVERING )?INDEX|USING INTEGER PRIMARY KEY|PRIMARY KEY/.test(s)), `${sql.slice(0, 60)}… → ${plan.join(' | ')}`);
+    }
+  });
+});
+
+describe('exact windows', () => {
+  it('the forecast uses 14 dates, rows written average the 7 complete days before today with missing days as 0', async () => {
+    const db = costsD1();
+    const row = (d: string, bytes: number, writes: number | null) =>
+      db.prepare(`INSERT INTO ops_daily (day, resource_id, kind, env, name, stored_bytes, writes, updated_at) VALUES (?, 'd1:w', 'd1', 'qa', 'w', ?, ?, 'x')`).bind(d, bytes, writes).run();
+    // 2026-11-10 (15 days back) is outside the 14 dates: its huge size must not bend the trend
+    await row('2026-11-10', 9.9 * GB, null);
+    for (let i = 11; i <= 24; i++) await row(`2026-11-${i}`, 5 * GB + (i - 11) * 0.1 * GB, null);
+    // Writes on only 3 of the 7 complete days before today (11-17 … 11-23); today's partial day is left out
+    await db.prepare("UPDATE ops_daily SET writes = 700 WHERE day IN ('2026-11-17', '2026-11-20', '2026-11-23')").run();
+    await db.prepare("UPDATE ops_daily SET writes = 999999 WHERE day IN ('2026-11-16', '2026-11-24')").run();
+    const d = (await databasesOverview(db, NOW)).databases[0]!;
+    assert.equal(d.growthPerDay, 0.1 * GB);
+    assert.equal(d.daysTo70, 7, '6.3 GB now, 0.1 GB a day, 7 GB is 70%');
+    assert.equal(d.rowsWrittenPerDay, 300, '2,100 rows over 7 days');
+  });
+});
+
 describe('/api/costs/databases and /d1-limits', () => {
   it('admins read the overview; only super admins change the limits, audited', async () => {
     const admin = app(['Admin']);
@@ -119,6 +160,7 @@ describe('/api/costs/databases and /d1-limits', () => {
     assert.equal(typeof parseD1LimitsInput({ maxDbGb: 1001, accountGb: 1000 }), 'string');
     assert.equal(typeof parseD1LimitsInput({ maxDbGb: 10 }), 'string');
     assert.equal(typeof parseD1LimitsInput(null), 'string');
+    assert.equal(typeof parseD1LimitsInput({ maxDbGb: 1.5, accountGb: 1000 }), 'string', 'fractional GB is refused, not rounded');
   });
 });
 
