@@ -102,6 +102,7 @@ export * from './i18n-captions';
 export * from './i18n-audio-tracks';
 export * from './i18n-billing';
 export * from './i18n-channel-roles';
+export * from './i18n-channel-moves';
 export * from './i18n-channel-sections';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)

@@ -28,6 +28,7 @@ import {
   BadgeCheck,
   CreditCard,
   AtSign,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -76,6 +77,13 @@ export default function SettingsPage() {
       description: t.channelRoles.invitationsDescription,
       icon: Users,
       href: `/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`,
+    },
+    // Hidden when off: channel offers only while the channelMove switch is on
+    features.channelMove && {
+      title: t.channelMoves.offers.title,
+      description: t.channelMoves.offers.description,
+      icon: ArrowRightLeft,
+      href: `/${lang}/channel-moves`,
     },
     {
       title: t.upgrade.settingsTier.title,

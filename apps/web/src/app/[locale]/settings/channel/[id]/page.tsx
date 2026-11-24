@@ -1,6 +1,7 @@
 import { requireChannelPage } from '@/lib/channels/guard';
 import { canOpenSettingsPage } from '@/lib/channels/permissions';
 import { getChannelById } from '@/lib/api/channels';
+import { getFeatures } from '@/lib/features/server';
 import { notFound } from 'next/navigation';
 import { getTranslations } from '@/lib/i18n';
 import Link from '@/components/common/AppLink';
@@ -35,6 +36,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
   if (!channel) {
     notFound();
   }
+
+  // Hidden when off: Move channel only for the owner, while the channelMove switch is on
+  const canMove = role === 'owner' && (await getFeatures()).channelMove === true;
 
   const t = getTranslations(locale as 'en' | 'ar');
   const isRTL = locale === 'ar';
@@ -310,6 +314,26 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               </div>
             </div>
           </Link>
+
+          {canMove && (
+            <Link
+              href={`/${locale}/settings/channel/${id}/move`}
+              data-testid="channel-settings-move"
+              className="c block p-6 transition-shadow hover:shadow-lg"
+            >
+              <div className="flex items-start gap-4">
+                <div className={ICON_TILE}>
+                  <svg className={`${ICON_GLYPH} rtl:-scale-x-100`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </div>
+                <div className="text-start">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">{t.channelMoves.title}</h2>
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)]">{t.channelMoves.description}</p>
+                </div>
+              </div>
+            </Link>
+          )}
         </div>
 
         {/* Back to Channel */}

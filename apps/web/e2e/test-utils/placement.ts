@@ -215,6 +215,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/multi-account.spec.ts': { placement: 'local', reason: 'web cookie split and account switcher; mock issuer must honour prompt=login' },
   'apps/web/e2e/release/network-error.player.spec.ts': { placement: 'local', reason: 'player retry UI with CDN aborted by route' },
   'apps/web/e2e/release/page-frame.spec.ts': { placement: 'local', reason: 'header/sidebar/tab bar layout, Upload states' },
+  'apps/web/e2e/release/channel-move.spec.ts': { placement: 'local', reason: 'an owner offers the channel to one of its admins, another account is refused, the admin accepts (both languages, axe), 404 and feature_off while the switch is off; stack SQL, local only' },
   'apps/web/e2e/release/parents-guide.spec.ts': { placement: 'local', reason: 'the parents’ guide (404 and unlinked while its switch is off; both languages with axe while on); stack SQL, local only' },
   'apps/web/e2e/release/playlists-no-channel.spec.ts': { placement: 'local', reason: 'a viewer without a channel creates a personal playlist with Save (watch page and card menu), sees it under You, makes it Unlisted, plays it and deletes it (en/ar); own creator/videos/viewer' },
   'apps/web/e2e/release/playlist-playback.player.spec.ts': { placement: 'local', reason: 'playlist order, autoplay and pane over its own uploads; fake Bunny HLS plays locally' },

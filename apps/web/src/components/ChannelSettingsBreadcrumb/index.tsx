@@ -4,7 +4,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { BreadcrumbTrail, type Crumb } from '@/components/settings/SettingsBreadcrumb';
 import { channelPath } from '@/lib/channel-url';
 
-export type ChannelSettingsPage = 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'communityNew' | 'playlists' | 'team';
+export type ChannelSettingsPage = 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'communityNew' | 'playlists' | 'team' | 'move';
 
 interface ChannelSettingsBreadcrumbProps {
   channelId: string;
@@ -45,6 +45,7 @@ export default function ChannelSettingsBreadcrumb({
     community: t.channel.communitySettings || 'Community',
     playlists: t.playlist.managePlaylists,
     team: t.channelRoles.team,
+    move: t.channelMoves.title,
   };
 
   const settingsLabel = t.header?.settings || 'Settings';
