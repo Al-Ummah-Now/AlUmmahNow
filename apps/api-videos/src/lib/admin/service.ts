@@ -58,7 +58,7 @@ import { endSession, ensureProviderStopped } from '../live/service';
 import type { LiveSessionRow } from '../live/store';
 import { notifyTeam, recordTeamActivity } from '../channelTeam';
 import { channelParams } from '../channelName';
-import { countChannelSlots, readAssignment, removeTierOfErasedAccount, resolveCreator } from '../creatorTiers';
+import { channelOwnerTier, countChannelSlots, readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
@@ -535,9 +535,11 @@ async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobI
 
 /** Whether the user's creator tier lets them own one more channel (the same rule as creating one). */
 async function hasChannelRoom(db: D1Database, userId: string): Promise<boolean> {
-	const creator = await resolveCreator(db, { userId });
-	if (!creator.tier || !tierAllowsChannels(creator.tier)) return false;
-	const max = creator.tier.unlimited ? null : creator.tier.maxChannels;
+	// Read only: resolveCreator without the caller's roles would drop a super admin's automatic
+	// Unlimited assignment. channelOwnerTier reads the stored assignment and writes nothing.
+	const tier = await channelOwnerTier(db, userId);
+	if (!tier || !tierAllowsChannels(tier)) return false;
+	const max = tier.unlimited ? null : tier.maxChannels;
 	return max === null || (await countChannelSlots(db, userId)) < max;
 }
 

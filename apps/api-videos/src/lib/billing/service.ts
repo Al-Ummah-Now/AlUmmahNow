@@ -28,7 +28,7 @@ import {
 	type PaymentProviderId,
 	type MyCheckout,
 } from '@al-ummah/shared-types';
-import { readTiers, resolveCreator } from '../creatorTiers';
+import { channelOwnerTier, readTiers } from '../creatorTiers';
 import { logger } from '../logger';
 import { createJob, type JobEnv, type JobOutcome } from '../admin/jobs';
 import {
@@ -267,8 +267,9 @@ export async function startCheckout(env: ServiceEnv, user: { userId: string; ema
 	// A hidden tier does not exist for anyone not on it: the same 404 as a tier without a price (owner, 2026-11-19)
 	const tier = (await readTiers(env.SEARCH_DB as D1Database)).find((t) => t.id === price.tierId);
 	if (tier?.hidden) {
-		const current = await resolveCreator(env.SEARCH_DB as D1Database, { userId: user.userId });
-		if (current.tier?.id !== tier.id) throw new BillingError(404, BILLING_ERRORS.notForSale, 'No price for that period and currency');
+		// Read only (no roles here): resolveCreator without roles would drop a super admin's automatic tier
+		const current = await channelOwnerTier(env.SEARCH_DB as D1Database, user.userId);
+		if (current?.id !== tier.id) throw new BillingError(404, BILLING_ERRORS.notForSale, 'No price for that period and currency');
 	}
 	const at = now.toISOString();
 	const subs = await userSubscriptions(env, user.userId);
