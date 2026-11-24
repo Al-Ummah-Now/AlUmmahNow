@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
+import { heldForPremiere } from '../../lib/live/premieres';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject, ScheduledVideoMetadata, VideoScheduleResponse } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
@@ -176,6 +177,7 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
       // The owner, or a channel member allowed to schedule (lib/channelAccess.ts);
       // the write below re-checks the video still has the owner checked here
       const current = await videoRepo.getObject(videoId);
+      if (current) await heldForPremiere(c.env as never, { ...current, id: videoId });
       const allowedOwner = current && (await canOnVideo(c.env as never, current, userId, 'video.schedule')) ? current.userId : null;
       const { data: video, rejected } = await videoRepo.updateObjectOrReject<Refusal>(videoId, (fresh) => {
         // Check the caller may schedule this video
@@ -185,6 +187,10 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         // Check if video is already published
         if (fresh.isPublic) {
           return { reject: { status: 409, error: 'Cannot schedule a video that is already published', code: 'SCH005' } };
+        }
+        // Waiting for its premiere (wiki E17): cancel that first
+        if (fresh.premiereHold) {
+          return { reject: { status: 409, error: 'This video is waiting for its premiere. Cancel the premiere first.', code: 'premiere_scheduled' } };
         }
         // Check if video is already scheduled
         if (fresh.scheduledPublishStatus === 'scheduled' || fresh.scheduledPublishStatus === 'publishing') {

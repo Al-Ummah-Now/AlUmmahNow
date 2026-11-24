@@ -1,5 +1,6 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { liveRecordingWithheld, recordingHidden } from './liveSession';
+import { liveRecordingWithheld, recordingHidden, switchOn } from './liveSession';
+import { isPremiere } from '../../lib/live/premieres';
 import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
@@ -87,6 +88,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			}
 			const managesStream = (stream: { userId?: string; channelId?: string | null }) =>
 				!!auth && (stream.userId === auth.userId || (channelManager && stream.channelId === channelId));
+			// A scheduled premiere is its team's only while premieres are off (wiki E17 §3.1)
+			const premieresOn = await switchOn(c, 'livePremieres');
 			const isListed = (stream: LiveStreamType | null): stream is LiveStreamType => {
 				if (!stream) return false;
 				if (status && stream.status !== status) return false;
@@ -94,6 +97,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				const isOwner = managesStream(stream);
 				// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
 				if ((stream as { isHidden?: boolean }).isHidden && !isOwner) return false;
+				if (!isOwner && !premieresOn && isPremiere(stream) && stream.status === 'scheduled') return false;
 				// Private streams only for their owner
 				if (stream.isPrivate && !isOwner) return false;
 				// A recording held for review or rejected (VR9) is listed for its owner only
@@ -152,6 +156,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			// Transform to view models
 			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
 				...stream,
+				// Which video a premiere shows is its team's unless it is on or over (wiki E17)
+				...(!managesStream(stream) && stream.status !== 'live' && stream.status !== 'ended' ? { premiereVideoId: undefined } : {}),
 				// Who created it (a channel member) is for those who manage the channel's live
 				...(managesStream(stream) && createdBy ? { createdBy } : {}),
 				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)

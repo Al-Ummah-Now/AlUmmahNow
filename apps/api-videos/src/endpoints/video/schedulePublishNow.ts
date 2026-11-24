@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ResponseError } from '../../lib/types';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
+import { heldForPremiere } from '../../lib/live/premieres';
+import { apiError } from '../../lib/api-error';
 import Queue, { MessageType } from '../../lib/queue';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
@@ -133,9 +135,12 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
       // Publish on the fresh video with a conditional write (SCALABILITY-AUDIT AV-3)
       const now = new Date().toISOString();
       let previousStatus = video.scheduledPublishStatus;
+      // Waiting for its premiere (wiki E17): cancel that first. A premiere that is gone lets go of the video
+      if (video.premiereHold && (await heldForPremiere(c.env as never, { ...video, id }))) return apiError(c, 409, 'premiere_scheduled');
       const { data: updatedVideo, rejected } = await videoRepository.updateObjectOrReject<{ status: 403 | 409; error: string }>(id, (fresh) => {
         if (fresh.userId !== video.userId) return { reject: { status: 403, error: 'Not authorized to publish this video' } };
         if (fresh.isPublic === true) return { reject: { status: 409, error: 'Video is already public' } };
+        if (fresh.premiereHold) return { reject: { status: 409, error: 'This video is waiting for its premiere. Cancel the premiere first.' } };
         previousStatus = fresh.scheduledPublishStatus;
         const before = { ...fresh };
         fresh.isPublic = true;

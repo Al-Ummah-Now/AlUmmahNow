@@ -30,8 +30,10 @@ import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/liv
 import type { SessionTier } from '../../lib/live/service';
 import { featureOff } from '../../lib/features/off';
 import { openTransferJob } from '../../lib/admin/service';
-import { LIVE_TIER_ERROR_CODES, featureGate } from '@al-ummah/shared-types';
+import { LIVE_TIER_ERROR_CODES, featureGate, type FeatureKey } from '@al-ummah/shared-types';
+import { apiError } from '../../lib/api-error';
 import { readChatStream } from '../../lib/live/chat';
+import { cancelPremiere, endPremiere, isPremiere, startPremiere } from '../../lib/live/premieres';
 import { chatState } from './liveChat';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
@@ -61,19 +63,35 @@ export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
 		dislikesCount: Array.isArray(dislikes) ? dislikes.length : 0,
 		commentsCount: Array.isArray(comments) ? comments.length : 0,
 		...(isOwner ? { providerMove: providerMove ?? null } : {}),
+		// Which video a premiere shows is its team's unless it is on or over (wiki E17)
+		...(!isOwner && s.status !== 'live' && s.status !== 'ended' ? { premiereVideoId: undefined } : {}),
 		// The channel member who created it, for those who manage the channel's live
 		...(isOwner && createdBy ? { createdBy } : {}),
 	};
 }
+
+/** The switch is on; off while it cannot be read. */
+export const switchOn = async (c: AppContext, key: FeatureKey): Promise<boolean> => (await featureGate(c.env as never, key).catch(() => ({ on: false as const }))).on;
 
 async function visibleStream(c: AppContext, id: string, userId: string | undefined): Promise<LiveStreamRecord | Response> {
 	const stream = await readStream(env(c), id);
 	// The owner, or a channel member with live.manage (docs/specs/CHANNEL-ROLES.md)
 	const isOwner = !!stream && !!userId && await canManageLiveStream(c.env as never, stream, userId);
 	if (!stream || ((stream.isPrivate || stream.isHidden) && !isOwner)) return fail(c, 404, 'not_found', 'Live stream not found');
+	// A scheduled premiere is its team's only while premieres are off (wiki E17 §3.1)
+	if (!isOwner && isPremiere(stream) && stream.status === 'scheduled' && !(await switchOn(c, 'livePremieres'))) return fail(c, 404, 'not_found', 'Live stream not found');
 	// A recording held for review (or rejected) reaches its owner only, like a held video (VR9)
 	if (!isOwner && liveRecordingWithheld(stream)) return fail(c, 404, 'not_found', 'Live stream not found');
 	return stream;
+}
+
+/** What the apps need beside the session (wiki E17): a premiere's clock and video, the schedule. */
+function liveAppState(stream: LiveStreamRecord, manages: boolean) {
+	const s = stream as LiveStreamRecord & { scheduledStartTime?: string };
+	const base = { kind: isPremiere(stream) ? 'premiere' : 'live', scheduledStartTime: s.scheduledStartTime ?? null, premiereVideoId: null as string | null, durationSeconds: null as number | null };
+	if (!isPremiere(stream)) return base;
+	// Played as the video it is (GET /api/videos/:id/playback), at serverNow - startedAt
+	return { ...base, premiereVideoId: manages || stream.status === 'live' || stream.status === 'ended' ? (stream.premiereVideoId ?? null) : null, durationSeconds: stream.durationSeconds ?? null, startedAt: stream.actualStartTime ?? null, endedAt: stream.actualEndTime ?? null, playbackUrl: null, vodUrl: null };
 }
 
 async function ownedStream(c: AppContext, id: string, userId: string): Promise<LiveStreamRecord | Response> {
@@ -158,7 +176,8 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const stream = await visibleStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		const state = await streamState(env(c), stream);
-		const hideRecording = recordingHidden(stream, await canManageLiveStream(c.env as never, stream, this.getUserId(c)));
+		const manages = await canManageLiveStream(c.env as never, stream, this.getUserId(c));
+		const hideRecording = recordingHidden(stream, manages);
 		const settings = env(c).SEARCH_DB ? await readLiveRouting(env(c).SEARCH_DB!) : null;
 		// People watching now (AlUmmahNow#30), only while live: Studio polls this every 5 s
 		const live = state.status === 'live' || state.sessionStatus === 'live';
@@ -171,7 +190,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...chat },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), ...chat },
 		};
 	}
 }
@@ -188,6 +207,7 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
+		if (isPremiere(stream)) return apiError(c, 409, 'premiere_no_ingest');
 		// An ended stream only shows its last settings; anything that may provision a session is gated
 		let tier: SessionTier = {};
 		if (stream.status !== 'ended' && stream.status !== 'cancelled') {
@@ -218,8 +238,16 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		if (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) return fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos');
+		// The route serves both kinds, so the switch is checked here (feature-routes.ts 'handler'). Unreadable: refused
+		const key = isPremiere(stream) ? 'livePremieres' : 'live';
+		if (!(await switchOn(c, key))) return featureOff(c, key);
 		// A channel being moved to another owner can't go live until the move finishes (wiki AUN-CHANNEL-CLAIM §3.3)
 		if (stream.channelId && (await openTransferJob(c.env as never, stream.channelId))) return fail(c, 409, 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.');
+		if (isPremiere(stream)) {
+			const outcome = await startPremiere(c.env as never, stream.id, { early: true });
+			if (outcome !== 'started') return outcome === 'waiting' ? apiError(c, 409, 'premiere_not_startable') : apiError(c, 409, outcome === 'cancelled' ? 'premiere_video_not_ready' : 'premiere_started');
+			return { success: true, result: { ingest: null, state: liveAppState((await readStream(env(c), stream.id)) ?? stream, true) } };
+		}
 		const tier = await liveTierGate(c, stream, 'start', this.getUserId(c));
 		if (tier instanceof Response) return tier;
 		try {
@@ -243,6 +271,10 @@ export class LiveStreamEnd extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
+		if (isPremiere(stream)) {
+			if (stream.status === 'scheduled') return apiError(c, 409, 'premiere_fixed');
+			return { success: true, result: { state: liveAppState((await endPremiere(c.env as never, stream.id)) ?? stream, true) } };
+		}
 		const out = await streamEnd(env(c), stream, 'owner');
 		return { success: true, result: { state: await streamState(env(c), out.stream) } };
 	}
@@ -260,6 +292,8 @@ export class LiveStreamDelete extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
+		// A scheduled premiere is cancelled first, so its video is free; a running one is ended first by its owner
+		if (isPremiere(stream) && (stream.status === 'scheduled' || stream.status === 'live') && (await cancelPremiere(c.env as never, stream.id, 'owner')).outcome === 'started') return apiError(c, 409, 'premiere_started');
 		await deleteStream(env(c), stream);
 		return { success: true, result: { deleted: true } };
 	}

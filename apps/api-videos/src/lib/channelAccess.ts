@@ -179,7 +179,7 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/captions(?:\/|$)/, capability: 'video.edit' },
 	// Renditions pre-encoded in desktop Studio belong to the upload (D11)
 	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/renditions(?:\/|$)/, capability: 'video.upload' },
-	{ methods: ['POST', 'PATCH', 'DELETE'], path: /^\/api\/videos\/[^/]+\/(?:schedule|publish-now)\/?$/, capability: 'video.schedule' },
+	{ methods: ['POST', 'PATCH', 'DELETE'], path: /^\/api\/videos\/[^/]+\/(?:schedule|publish-now|premiere)\/?$/, capability: 'video.schedule' },
 	{ methods: ['DELETE'], path: /^\/api\/videos\/(?!bulk-|upload|tus)[^/]+\/?$/, capability: 'video.delete' },
 	// Restoring a deleted video (bulk-restore and DELETE …/permanent stay owner only)
 	{ methods: ['POST'], path: /^\/api\/videos\/(?!bulk-|upload|tus)[^/]+\/restore\/?$/, capability: 'video.delete' },
@@ -203,6 +203,7 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST'], path: /^\/api\/live-streams\/?$/, capability: 'live.manage' },
 	{ methods: ['PATCH', 'DELETE'], path: /^\/api\/live-streams\/[^/]+\/?$/, capability: 'live.manage' },
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/(?:start|end)\/?$/, capability: 'live.manage' },
+	{ methods: ['PATCH'], path: /^\/api\/live-streams\/[^/]+\/premiere\/?$/, capability: 'live.manage' },
 	// Live chat (wiki E17): posting as the channel, moderating, its settings (the endpoints decide)
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/chat\/?$/, capability: 'channel.speak' },
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/chat\/[^/]+\/moderate\/?$/, capability: 'channel.speak' },

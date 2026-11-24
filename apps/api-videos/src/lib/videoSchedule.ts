@@ -24,8 +24,9 @@ export function formatLocalDate(date: Date, timezone: string): string {
 }
 
 /** Why a video can't be scheduled, checked on the fresh copy inside a conditional write. */
-export function scheduleRefusal(video: VideoObject): 'Already published' | 'Already scheduled' | null {
+export function scheduleRefusal(video: VideoObject): 'Already published' | 'Already scheduled' | 'Waiting for its premiere' | null {
   if (video.isPublic) return 'Already published';
+  if (video.premiereHold) return 'Waiting for its premiere';
   if (video.scheduledPublishStatus === 'scheduled' || video.scheduledPublishStatus === 'publishing') return 'Already scheduled';
   return null;
 }

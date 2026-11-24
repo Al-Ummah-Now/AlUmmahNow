@@ -521,7 +521,7 @@ async function scheduleImported(c: AppContext, repository: R2Repository<any>, vi
 	if (problem === 'too_far' || problem === 'invalid') return;
 	if (problem === 'too_soon') date = new Date(now.getTime() + 6 * 60_000);
 	const saved = await patchVideo(repository, videoId, (fresh: any) => {
-		if (fresh.isPublic || fresh.scheduledPublishStatus) return false;
+		if (fresh.isPublic || fresh.scheduledPublishStatus || fresh.premiereHold) return false;
 		applySchedule(fresh, { date, timezone: 'UTC', userId, now });
 		return {};
 	}, { ownerId });

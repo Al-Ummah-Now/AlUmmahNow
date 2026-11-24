@@ -60,6 +60,8 @@ export async function publishVideo(
       return 'already-public';
     }
     if (videoData.scheduledPublishStatus === 'cancelled') return 'cancelled';
+    // Waiting for its premiere (wiki E17), which api-videos runs: a leftover entry never opens it
+    if (videoData.premiereHold) return 'cancelled';
     if (videoData.scheduledPublishStatus === 'published') return 'already-public';
     // Rescheduled to later than this entry says (the old entry is stale)
     const current = videoData.scheduledPublishDate ? Date.parse(videoData.scheduledPublishDate) : NaN;

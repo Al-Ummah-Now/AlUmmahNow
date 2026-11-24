@@ -97,6 +97,18 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   live_chat_slow_mode: { action: 'retry', en: 'Please wait a moment before your next message.', ar: 'يُرجى الانتظار قليلًا قبل رسالتك التالية.' },
   live_chat_duplicate: { action: 'none', en: 'You just sent this message.', ar: 'أرسلت هذه الرسالة قبل قليل.' },
   live_chat_cannot_block: { action: 'none', en: 'This person can’t be blocked here.', ar: 'لا يمكن حظر هذا الشخص هنا.' },
+  // Premieres (wiki E17)
+  premiere_bad_time: { action: 'none', en: 'Choose a time from 5 minutes to a year ahead.', ar: 'اختر وقتًا بعد ٥ دقائق على الأقل وخلال سنة.' },
+  premiere_video_unsuitable: { action: 'none', en: 'This video can’t be shown as a premiere.', ar: 'لا يمكن عرض هذا المرئي عرضًا أول.' },
+  premiere_video_not_ready: { action: 'none', en: 'This video isn’t ready yet.', ar: 'هذا المرئي ليس جاهزًا بعد.' },
+  premiere_video_already_open: { action: 'none', en: 'People can already watch this video, so it can’t be a premiere.', ar: 'هذا المرئي متاح للمشاهدة بالفعل، فلا يمكن عرضه عرضًا أول.' },
+  premiere_video_scheduled: { action: 'none', en: 'This video has a publish date. Cancel it first.', ar: 'لهذا المرئي موعد نشر. ألغه أولًا.' },
+  premiere_exists: { action: 'none', en: 'This video already has a premiere.', ar: 'لهذا المرئي عرض أول بالفعل.' },
+  premiere_scheduled: { action: 'none', en: 'This video is waiting for its premiere. Cancel the premiere first.', ar: 'ينتظر هذا المرئي عرضه الأول. ألغِ العرض الأول أولًا.' },
+  premiere_started: { action: 'none', en: 'This premiere has already started.', ar: 'بدأ هذا العرض الأول بالفعل.' },
+  premiere_not_startable: { action: 'retry', en: 'This premiere can’t start right now.', ar: 'لا يمكن بدء هذا العرض الأول الآن.' },
+  premiere_no_ingest: { action: 'none', en: 'A premiere plays an uploaded video, so there’s nothing to stream.', ar: 'يعرض العرض الأول مرئيًا مرفوعًا، فلا يوجد ما يُبث.' },
+  premiere_fixed: { action: 'none', en: 'This can’t be changed on a premiere.', ar: 'لا يمكن تغيير هذا في عرض أول.' },
   // Creator support (wiki AUN-MEMBERS): Studio › Support payout setup
   support_invalid_country: { action: 'none', en: 'Choose the country your bank account or wallet is in.', ar: 'اختر الدولة التي يوجد فيها حسابك المصرفي أو محفظتك.' },
   support_decision_open: { action: 'none', en: 'Payouts can’t be set up yet.', ar: 'لا يمكن إعداد استلام الدفعات بعد.' },

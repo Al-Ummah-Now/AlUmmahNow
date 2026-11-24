@@ -12,6 +12,8 @@ import { VideoUpdateInput } from "../../lib/model/input";
 import { VideoView } from "../../lib/model/view";
 import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
+import { heldForPremiere } from '../../lib/live/premieres';
+import { apiError } from '../../lib/api-error';
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
@@ -218,11 +220,17 @@ export class VideoUpdate extends AuthenticatedRoute {
 			}
 		}
 
+		// Waiting for its premiere (wiki E17): its visibility is the premiere's until then
+		const changesVisibility = videoUpdateInput.isPublic !== undefined || videoUpdateInput.isUnlisted !== undefined || visibility !== undefined;
+		if (changesVisibility && (await heldForPremiere(c.env as never, { ...(existingVideo as object), id } as never))) return apiError(c, 409, 'premiere_scheduled');
+
 		// Save the updated video: a conditional write on the fresh copy, so a
 		// concurrent comment, like or view flush is not overwritten
 		let previous = existingVideo;
-		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
+		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true | 'held'>(id, (fresh) => {
 			if (fresh.userId !== existingVideo.userId) return { reject: true };
+			// Held since the check above
+			if (changesVisibility && (fresh as { premiereHold?: unknown }).premiereHold) return { reject: 'held' };
 			previous = { ...fresh };
 			const next = applyUpdate(fresh);
 			// Fields the update removed (format 'auto' clears the uploader's
@@ -241,6 +249,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 		if (!updatedVideo) {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
+		if (rejected === 'held') return apiError(c, 409, 'premiere_scheduled');
 		if (rejected) {
 			return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
 		}

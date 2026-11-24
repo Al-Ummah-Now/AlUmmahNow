@@ -68,6 +68,8 @@ export interface VideoVisibilityFields extends VisibilityFlags {
   /** Absent on older videos, which count as ready */
   uploadStatus?: string;
   scheduledPublishStatus?: string;
+  /** Waiting for its premiere (wiki E17): closed to everyone but its team until it starts */
+  premiereHold?: { streamId?: string } | null;
   /** Pre-publication review (video-review.ts); absent = never reviewed */
   review?: { status?: VideoReviewState['status'] | string } | null;
 }
@@ -99,9 +101,9 @@ export function isVideoReady(video: VideoVisibilityFields | null | undefined): b
   return isReviewCleared(video.review);
 }
 
-/** Released by its owner: not a draft and not waiting for (or in the middle of) a scheduled publish. */
+/** Released by its owner: not a draft, not waiting for (or in the middle of) a scheduled publish, not held for a premiere. */
 export function isVideoReleased(video: VideoVisibilityFields | null | undefined): boolean {
-  if (!video || video.isDraft === true) return false;
+  if (!video || video.isDraft === true || video.premiereHold) return false;
   return video.scheduledPublishStatus !== 'scheduled' && video.scheduledPublishStatus !== 'publishing';
 }
 

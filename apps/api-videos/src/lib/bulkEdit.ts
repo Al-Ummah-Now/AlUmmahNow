@@ -60,6 +60,7 @@ export const EDITABLE_FIELDS = [
   'descriptionLocalized',
   'isDraft',
 ] as const;
+const VISIBILITY_FIELDS = ['isPublic', 'isUnlisted', 'isDraft'] as const satisfies readonly EditableField[];
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 interface Editable {
@@ -76,6 +77,7 @@ interface Editable {
   descriptionLocalized?: Record<string, string>;
   dateModified?: string;
   scheduledPublishStatus?: string;
+  premiereHold?: unknown;
   isDraft?: boolean;
 }
 
@@ -133,7 +135,7 @@ export function changedFields<T extends Editable>(before: T, after: T): Editable
 
 /**
  * The video with the changes applied, or an error code:
- * - `scheduled`: visibility of a scheduled video is managed by its schedule
+ * - `scheduled`: visibility of a scheduled video is managed by its schedule, of one waiting for its premiere by that
  * - `too_many_tags`: the result would exceed MAX_TAGS
  * - `title_empty` / `title_too_long`, `description_too_long`
  * Tag matching for removal ignores case; added tags keep their spelling and
@@ -145,7 +147,7 @@ export function applyBulkChanges<T extends Editable>(
   now: string,
   perVideo: PerVideoChanges = {},
 ): { ok: true; video: T; changed: boolean; fields: EditableField[] } | { ok: false; error: BulkEditError } {
-  if ((changes.isPublic !== undefined || changes.visibility !== undefined) && video.scheduledPublishStatus === 'scheduled') {
+  if ((changes.isPublic !== undefined || changes.visibility !== undefined) && (video.scheduledPublishStatus === 'scheduled' || video.premiereHold)) {
     return { ok: false, error: 'scheduled' };
   }
 
@@ -223,6 +225,11 @@ export function revertFields<T extends Editable>(
   const kept: EditableField[] = [];
   for (const field of Object.keys(after) as EditableField[]) {
     if (!EDITABLE_FIELDS.includes(field)) continue;
+    // Waiting for its premiere (wiki E17): its visibility is the premiere's, an undo does not bring back an older one
+    if (video.premiereHold && (VISIBILITY_FIELDS as readonly string[]).includes(field)) {
+      kept.push(field);
+      continue;
+    }
     if (JSON.stringify(next[field] ?? null) !== JSON.stringify(after[field] ?? null)) {
       kept.push(field);
       continue;

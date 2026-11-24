@@ -261,7 +261,7 @@ export async function runImportAttach(env: AttachEnv, job: AdminJob): Promise<Jo
 				repo,
 				video.id as string,
 				(current) => {
-					if (current.isDeleted || current.isPublic || (current as { scheduledPublishStatus?: string }).scheduledPublishStatus) return false;
+					if (current.isDeleted || current.isPublic || (current as { scheduledPublishStatus?: string }).scheduledPublishStatus || (current as { premiereHold?: unknown }).premiereHold) return false;
 					applySchedule(current, { date, timezone: 'UTC', userId: job.actorId, now });
 					return {};
 				},
