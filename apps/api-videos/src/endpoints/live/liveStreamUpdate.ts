@@ -1,3 +1,4 @@
+import { forManager } from './liveSession';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -212,6 +213,9 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			// Transform to view model for response
 			const streamView = {
 				...updatedStream,
+				// Only those who manage the stream reach here
+				...(updatedStream.playbackUrl ? { playbackUrl: await forManager(c, updatedStream, true, updatedStream.playbackUrl) } : {}),
+				...(updatedStream.vodUrl ? { vodUrl: await forManager(c, updatedStream, true, updatedStream.vodUrl) } : {}),
 				eventType: shownEventType(updatedStream, await switchOn(c, 'liveEvents')),
 				likesCount: updatedStream.likes?.length || 0,
 				dislikes: [],

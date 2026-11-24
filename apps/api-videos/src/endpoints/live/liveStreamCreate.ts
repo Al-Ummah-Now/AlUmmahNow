@@ -1,3 +1,4 @@
+import { forManager } from './liveSession';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -159,6 +160,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		// Transform to view model for response
 		const streamView = {
 			...liveStream,
+			playbackUrl: await forManager(c, liveStream, true, attached.session.playback_url),
 			likesCount: liveStream.likes.length,
 			dislikesCount: PUBLIC_DISLIKES_COUNT,
 			commentsCount: liveStream.comments.length,

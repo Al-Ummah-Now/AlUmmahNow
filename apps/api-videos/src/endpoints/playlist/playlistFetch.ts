@@ -15,6 +15,7 @@ import { waitUntilOf } from "../../lib/search/ownership";
 import { playlistSortOf } from "@al-ummah/shared-types";
 import { channelNameFields } from "../../lib/channelName";
 import { GONE_BODY, isPurged } from '../../lib/gone';
+import { privateAnswer } from '../../lib/private-answer';
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
 
 // Upper bound on videos resolved for a single playlist page
@@ -136,6 +137,8 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // exact version of the playlist. The playlist is read and its visibility checked first, so a
         // suspension, deletion or private switch applies at once; the cached videos are at most
         // EXPANDED_PLAYLIST_TTL_SECONDS old (the video list cache's window).
+        // Its items' playUrls are signed for this request
+        if (includeVideos) privateAnswer(c);
         const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded/${encodeURIComponent(id)}`) : null;
         const version = String(playlist.dateModified ?? playlist.dateCreated ?? '');
         if (cacheUrl) {

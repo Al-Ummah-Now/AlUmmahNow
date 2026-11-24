@@ -1,3 +1,4 @@
+import { privateAnswer } from '../../lib/private-answer';
 import { kidsRulesApply } from '../../lib/contentFlags';
 import { withPlayback } from '../../lib/media/playback';
 import { Str } from "../../lib/chanfana-params";
@@ -182,6 +183,8 @@ export class VideoFetch extends OptionalAuthRoute {
 		// No queue message: a fetch is not a view (POST /videos/:id/view records views),
 		// and per-read messages only cost queue operations and processor invocations.
 
+		// Its playUrl is signed for this caller
+		privateAnswer(c);
 		return videoView;
 	}
 }

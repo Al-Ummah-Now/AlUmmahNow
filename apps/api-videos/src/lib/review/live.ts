@@ -31,6 +31,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { enqueueNotification, type NotificationsEnv } from '../notifications';
 import { streamKey, type LiveStreamRecord } from '../live/streams';
+import { openReviewIds } from '../live/access';
 import { signReviewVodUrl, type VodSignEnv } from '../live/vod-sign';
 import { decisionTransition, outcomeTransition } from './apply';
 import { reviewExtractionFor, type ReviewScanEnv } from './scan';
@@ -244,7 +245,7 @@ export async function liveReviewSubject(env: LiveReviewEnv, streamId: string) {
 		duration,
 		status: s.status,
 		review: s.review ?? null,
-		playUrl: await signReviewVodUrl(env as never, s.vodUrl ?? null, s.review?.reviewId ?? s.reviewShadow?.reviewId),
+		playUrl: await signReviewVodUrl(env as never, s.vodUrl ?? null, openReviewIds(s)[0]),
 		thumbnailUrl: s.thumbnailUrl ?? null,
 	};
 }
