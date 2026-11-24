@@ -233,7 +233,8 @@ describe('autocomplete: own source items (channel transfer, #713)', () => {
     const file = readFileSync(new URL('../src/app/(protected)/channels/[id]/ChannelTransfer.tsx', import.meta.url), 'utf8');
     assert.match(file, /<Autocomplete/);
     assert.match(file, /testId="channel-transfer-owner"/);
-    assert.doesNotMatch(file, /<input/, 'no hand-made field asks for an id');
+    // The move options are checkboxes; no text field asks for an id
+    assert.doesNotMatch(file, /<input(?![^>]*type="checkbox")/, 'no hand-made field asks for an id');
     assert.doesNotMatch(en.channels.newOwner, /\bID\b/);
     assert.doesNotMatch(ar.channels.newOwner, /معرّف|رقم/);
   });

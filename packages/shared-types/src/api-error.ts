@@ -69,6 +69,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   bad_request: { action: 'none', en: 'Something in this request isn’t right. Check it and try again.', ar: 'في هذا الطلب ما لا يصح. راجعه وحاول مرة أخرى.' },
   invalid_request: { action: 'none', en: 'Some details aren’t right. Check them and try again.', ar: 'بعض التفاصيل غير صحيحة. راجعها وحاول مرة أخرى.' },
   validation_error: { action: 'none', en: 'Some details aren’t right. Check them and try again.', ar: 'بعض التفاصيل غير صحيحة. راجعها وحاول مرة أخرى.' },
+  transfer_reason_required: { action: 'none', en: 'Give a reason of 10 to 500 characters.', ar: 'اكتب سببًا من ١٠ إلى ٥٠٠ حرف.' },
   unauthorized: { action: 'sign_in', en: 'Please sign in again.', ar: 'يُرجى تسجيل الدخول مرة أخرى.' },
   authentication_required: { action: 'sign_in', en: 'Please sign in to continue.', ar: 'يُرجى تسجيل الدخول للمتابعة.' },
   token_expired: { action: 'sign_in', en: 'Your session has ended. Please sign in again.', ar: 'انتهت جلستك. يُرجى تسجيل الدخول مرة أخرى.' },
