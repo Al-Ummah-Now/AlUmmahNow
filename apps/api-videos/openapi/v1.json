@@ -19375,6 +19375,99 @@
         }
       }
     },
+    "/api/v1/downloads/revocations": {
+      "get": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "Poll urgent/CSAM download revocations feed",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication (exempt from `offlineDownloads` switch so cleanup always runs). Returns strictly monotonic `{ seq, videoId }` entries after `since` (max 100 per page) with no title, channel, reason, or PII.",
+        "operationId": "get_DownloadsRevocations",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Last processed monotonic seq cursor (non-negative integer, default 0)."
+            },
+            "required": false,
+            "description": "Last processed monotonic seq cursor (non-negative integer, default 0).",
+            "name": "since",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-ordered revocations page (seq + videoId only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seq": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "videoId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "seq",
+                          "videoId"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                    "hasMore"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid since parameter"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Revocations store unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/downloads/sync": {
       "post": {
         "tags": [

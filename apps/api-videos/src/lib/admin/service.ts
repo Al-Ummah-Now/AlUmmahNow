@@ -106,6 +106,7 @@ import {
 import { resolveDisplayName, tierAllowsChannels, type NameFields } from '@al-ummah/shared-types';
 import { markPublished, type PublishableState } from '../published';
 import { runContainStep, type ContainEnv } from '../csam/contain';
+import { runDownloadRevokeJob, type DownloadRevokeEnv } from '../downloads/revocations';
 import { backfillImageOwnersStep } from '../csam/imageOwners';
 
 type Row = Record<string, any>;
@@ -2800,6 +2801,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'import.takeout-match': (env, job) => runTakeoutJob(env as SourceSyncEnv, job),
 	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
 	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
+	// Urgent/legal offline download revocation (E14-D8 / E14-S11a)
+	'downloads.revoke': (env, job) => runDownloadRevokeJob(env as DownloadRevokeEnv, job),
 	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),
 	// R2 transcode troubleshooting (lib/media/troubleshoot.ts), videos admin → Delivery
 	'media.transcode-retry': (env, job) => runTranscodeAction(env as never, job),
