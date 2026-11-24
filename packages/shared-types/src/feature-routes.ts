@@ -242,6 +242,13 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   listenMode: 'E14-S3 adds the audio playback route and maps it here',
   offlineDownloads: 'E14-S3 adds the download license routes and maps them here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
+  prayerTimes: 'E21.1 adds the preference routes and maps them here',
+  qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
+  hijriCalendar: 'E21.2 adds the season and preference routes and maps them here',
+  ramadanMode: 'E21.2 adds the season routes and maps them here',
+  recitationTools: 'E21.4a adds the recitation reference routes and maps them here',
+  intentionalViewing: 'E21.6 adds the intentional-viewing routes and maps them here',
+  studyNotes: 'E21.8a adds the private-notes routes and maps them here',
 });
 
 /** The routes a worker gates in its middleware. */

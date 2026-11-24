@@ -16,7 +16,7 @@
  */
 import type { UserFeatureKey } from './features';
 
-export const FEATURE_GROUPS = ['create', 'captions', 'grow', 'people', 'site'] as const;
+export const FEATURE_GROUPS = ['create', 'captions', 'grow', 'people', 'site', 'islamic'] as const;
 export type FeatureGroup = (typeof FEATURE_GROUPS)[number];
 
 export interface FeatureText {
@@ -90,6 +90,13 @@ export const FEATURE_KEYS = [
   'supportExternalLinks',
   'charityDonations',
   'supportPerks',
+  'prayerTimes',
+  'qibla',
+  'hijriCalendar',
+  'ramadanMode',
+  'recitationTools',
+  'intentionalViewing',
+  'studyNotes',
   'tierRequests',
   'eventCalendar',
   'newsletter',
@@ -417,6 +424,112 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'both',
     requires: ['creatorSupport'],
     userFeatureKeys: ['supportPerks'],
+    offline: 'lastKnownElseHidden',
+  },
+  // --- Islamic experience (E21; all off until the owner enables them) --------
+  {
+    key: 'prayerTimes',
+    group: 'islamic',
+    name: { en: 'Prayer times', ar: 'أوقات الصلاة' },
+    help: {
+      en: 'Prayer times, reminders, and auto-pause disappear from every app.',
+      ar: 'تختفي أوقات الصلاة والتذكيرات والإيقاف المؤقت التلقائي من كل التطبيقات.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['prayerTimes'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'qibla',
+    group: 'islamic',
+    name: { en: 'Qibla direction', ar: 'اتجاه القبلة' },
+    help: {
+      en: 'The Qibla bearing and compass disappear from every app.',
+      ar: 'تختفي زاوية القبلة والبوصلة من كل التطبيقات.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['qibla'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'hijriCalendar',
+    group: 'islamic',
+    name: { en: 'Hijri calendar', ar: 'التقويم الهجري' },
+    help: {
+      en: 'Optional Hijri dates disappear from every app.',
+      ar: 'تختفي التواريخ الهجرية الاختيارية من كل التطبيقات.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['hijriCalendar'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'ramadanMode',
+    group: 'islamic',
+    name: { en: 'Ramadan and Islamic seasons', ar: 'رمضان والمواسم الإسلامية' },
+    help: {
+      en: 'Ramadan, Dhul-Hijjah, and Jumu’ah seasonal tools disappear.',
+      ar: 'تختفي أدوات رمضان وذي الحجة والجمعة.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: ['hijriCalendar', 'prayerTimes'],
+    userFeatureKeys: ['ramadanMode'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'recitationTools',
+    group: 'islamic',
+    name: { en: 'Recitation tools', ar: 'أدوات التلاوة' },
+    help: {
+      en: 'Recitation references, reciter details, and surah and ayah links disappear. Existing captions are unchanged.',
+      ar: 'تختفي مراجع التلاوة وبيانات القارئ وروابط السور والآيات. تبقى الترجمات النصية الحالية دون تغيير.',
+    },
+    default: false,
+    toggle: 'superAdmin',
+    confirm: 'both',
+    requires: [],
+    userFeatureKeys: ['recitationTools', 'recitationMetadata'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'intentionalViewing',
+    group: 'islamic',
+    name: { en: 'Intentional viewing', ar: 'المشاهدة الهادفة' },
+    help: {
+      en: 'Finite sessions, daily-time reminders, and finite Lamahat disappear.',
+      ar: 'تختفي الجلسات المحدودة وتذكيرات الوقت اليومي واللمحات المحدودة.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['intentionalViewing'],
+    offline: 'lastKnownElseHidden',
+  },
+  {
+    key: 'studyNotes',
+    group: 'islamic',
+    name: { en: 'Private notes', ar: 'الملاحظات الخاصة' },
+    help: {
+      en: 'Time-stamped notes on videos, their list, and Markdown export disappear. Existing notes are kept and stay private.',
+      ar: 'تختفي الملاحظات المرتبطة بوقت في المرئي وقائمتها وتصديرها. تبقى الملاحظات الحالية محفوظة وخاصة.',
+    },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['studyNotes'],
     offline: 'lastKnownElseHidden',
   },
   // --- People --------------------------------------------------------------
