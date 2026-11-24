@@ -1502,7 +1502,7 @@ const en = {
       hours: '{count, plural, one {# hour} other {# hours}}',
       days: '{count, plural, one {# day} other {# days}}',
       floorNote: 'Minimum: {count, plural, one {# approver} other {# approvers}}',
-      floorNone: 'Minimum: none',
+      floorNone: 'Minimum: no approvers',
       floorMoney: 'Money: approvers come only from the finance list, never tech staff or the owner',
       pendingChange: 'A change to this rule is waiting for approval',
       edit: 'Edit',

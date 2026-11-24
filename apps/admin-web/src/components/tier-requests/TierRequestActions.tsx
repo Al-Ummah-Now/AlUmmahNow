@@ -38,10 +38,14 @@ export function TierRequestActions({ id, name, tier, actions, pendingRequest }: 
   async function run(kind: 'approve' | 'decline', reason = '') {
     setBusy(kind);
     setMessage(null);
+    // Sent for approval refreshes by itself (useSentRequest)
+    let sentNow = false;
     try {
       const result = kind === 'approve' ? await actions.approve(id) : await actions.decline(id, reason);
-      if (result.ok === 'sent') send(result.requestId);
-      else if (result.ok) {
+      if (result.ok === 'sent') {
+        sentNow = true;
+        send(result.requestId);
+      } else if (result.ok) {
         setMessage({ tone: 'ok', text: kind === 'approve' ? t('tierRequests.approved', { name, tier }) : t('tierRequests.declinedDone') });
       } else {
         const failure = decisionFailure(result);
@@ -53,7 +57,7 @@ export function TierRequestActions({ id, name, tier, actions, pendingRequest }: 
       setMessage({ tone: 'error', text: t('tierRequests.failed') });
     } finally {
       setBusy(null);
-      router.refresh();
+      if (!sentNow) router.refresh();
     }
   }
 

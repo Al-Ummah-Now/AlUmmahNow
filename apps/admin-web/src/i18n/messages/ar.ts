@@ -1501,7 +1501,7 @@ const ar: Messages = {
       hours: '{count, plural, one {ساعة واحدة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}',
       days: '{count, plural, one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}',
       floorNote: 'الحد الأدنى: {count, plural, one {موافِق واحد} two {موافِقان} few {# موافِقين} many {# موافِقًا} other {# موافِق}}',
-      floorNone: 'الحد الأدنى: لا شيء',
+      floorNone: 'الحد الأدنى: بلا موافِقين',
       floorMoney: 'المال: الموافِقون من قائمة المالية فقط، وليس الفريق التقني ولا المالك أبدًا',
       pendingChange: 'تغيير على هذه القاعدة بانتظار الموافقة',
       edit: 'تعديل',
