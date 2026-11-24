@@ -265,7 +265,6 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 			owner_id: channel.userId ?? null,
 			title: channel.name,
 			handle: channel.handle,
-			email: channel.email,
 			is_verified: channel.isVerified ? 1 : 0,
 			is_suspended: channel.isSuspended ? 1 : 0,
 			is_public: channel.isPrivate ? 0 : 1,
@@ -874,9 +873,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (fresh.userId === newOwnerId) return false;
 		fresh.userId = newOwnerId;
 		fresh.isMain = makeMain;
-		// The previous owner's addresses: the account email follows the owner, the public contact is cleared
-		if (newOwnerEmail) fresh.email = newOwnerEmail;
-		else delete fresh.email;
+		// The previous owner's addresses: an older record's copy of the account email, and the public contact
+		delete fresh.email;
 		if (!keepContactEmail) delete fresh.contactEmail;
 		fresh.transferredAt = now();
 		// Owners hold no member role: a new owner who was a member loses that entry

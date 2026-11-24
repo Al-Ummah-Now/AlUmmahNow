@@ -273,7 +273,8 @@ export const Profile = z.object({
 export const Channel = z.object({
     id: Str(),
     userId: Str(),
-    email: Str().email(),
+    // Not written any more: the owner's email is the account's (lib/admin/authUsers.ts). Older records may hold one
+    email: Str().email().optional(),
     name: Str(),
     nameLocalized: z.record(z.string(), z.string()).optional(),
     description: Str().optional(),

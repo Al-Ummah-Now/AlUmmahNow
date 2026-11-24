@@ -53,6 +53,14 @@ function create(e: ReturnType<typeof env>, name: string) {
 }
 
 describe('POST /api/channels duplicate-name guard', () => {
+	it('the new channel carries no copy of the account email', async () => {
+		const e = env();
+		const res = await create(e, 'New Lectures');
+		assert.equal(res.status, 200);
+		const { id } = ((await res.json()) as any).result.channel;
+		assert.equal('email' in e.raw.channels.read(id), false);
+	});
+
 	it('uses the ownership index once complete: no bucket listing, one GET per owned channel', async () => {
 		const e = env();
 		await runOwnershipPass(e.raw as never, 'channel', { maxPages: 50 });

@@ -145,7 +145,8 @@ describe('GET /api/channels/:id/owner', () => {
 			assert.equal(res.status, 200);
 			assert.equal(res.headers.get('Cache-Control'), 'private, no-store');
 			const body = await res.json() as Record<string, unknown>;
-			assert.equal(body.email, OWNER_EMAIL);
+			// The account's email is not a channel field, even on a record that still holds a copy
+			assert.equal('email' in body, false);
 			assert.equal(body.contactEmail, 'published@example.org');
 		}
 	});

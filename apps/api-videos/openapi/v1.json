@@ -3008,7 +3008,8 @@
                             },
                             "email": {
                               "type": "string",
-                              "format": "email"
+                              "format": "email",
+                              "description": "Not returned any more; the account's email is on the profile"
                             },
                             "name": {
                               "type": "string"
@@ -3107,7 +3108,6 @@
                           "required": [
                             "id",
                             "userId",
-                            "email",
                             "name",
                             "isMain",
                             "dateCreated",
@@ -6176,7 +6176,8 @@
                             },
                             "email": {
                               "type": "string",
-                              "format": "email"
+                              "format": "email",
+                              "description": "Not returned any more; the account's email is on the profile"
                             },
                             "name": {
                               "type": "string"
@@ -6275,7 +6276,6 @@
                           "required": [
                             "id",
                             "userId",
-                            "email",
                             "name",
                             "isMain",
                             "dateCreated",
@@ -11413,7 +11413,8 @@
                     },
                     "email": {
                       "type": "string",
-                      "format": "email"
+                      "format": "email",
+                      "description": "Not returned any more; the account's email is on the profile"
                     },
                     "name": {
                       "type": "string"
@@ -11512,7 +11513,6 @@
                   "required": [
                     "id",
                     "userId",
-                    "email",
                     "name",
                     "isMain",
                     "dateCreated",

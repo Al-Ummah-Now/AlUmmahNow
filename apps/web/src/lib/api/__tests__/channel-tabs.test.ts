@@ -57,7 +57,6 @@ const createMockTabConfig = (overrides?: Partial<ChannelTabConfig>): ChannelTabC
 const createMockChannel = (overrides?: Partial<Channel>): Channel => ({
   id: 'test-channel-id',
   userId: 'user-123',
-  email: 'test@example.com',
   name: 'Test Channel',
   description: 'Test description',
   avatarUrl: 'https://example.com/avatar.jpg',
