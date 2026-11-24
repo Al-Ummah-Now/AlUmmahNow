@@ -456,6 +456,34 @@ describe('held for review (E17-D4)', () => {
 		assert.ok(t.sent.some((e) => e.type === 'live_chat_message' && e.message.id === id));
 	});
 
+	it('a banned member of the team sees none of them, and nobody does while the ban cannot be read', async () => {
+		const t = await setup();
+		await t.post('ali', 'one');
+		hold(t, 'one');
+		for (const who of ['owner', 'mod']) {
+			forgetCachedBan(who);
+			assert.deepEqual(t.texts(await t.call(who, 'GET', 's1/chat/held')), ['one']);
+			t.db.db.prepare("INSERT INTO videos_bans (user_id, reason, banned_by, banned_at) VALUES (?, NULL, 'a', '2026')").run(who);
+			forgetCachedBan(who);
+			// The stream is public, so they may still read its chat as a visitor
+			assert.deepEqual([(await t.call(who, 'GET', 's1/chat/held')).status, (await t.read(who)).status], [403, 200]);
+			t.db.db.prepare('DELETE FROM videos_bans').run();
+			forgetCachedBan(who);
+		}
+		t.db.db.prepare('ALTER TABLE videos_bans RENAME TO gone').run();
+		forgetCachedBan('mod');
+		assert.equal((await t.call('mod', 'GET', 's1/chat/held')).status, 403);
+		forgetCachedBan('mod');
+	});
+
+	it('of a deleted stream nothing is shown, to its owner either', async () => {
+		const t = await setup();
+		await t.post('ali', 'one');
+		hold(t, 'one');
+		t.db.db.prepare("UPDATE live_stream_metadata SET visibility = 'deleted', purge_pending = 1 WHERE stream_id = 's1'").run();
+		for (const who of ['owner', 'mod']) assert.equal((await t.call(who, 'GET', 's1/chat/held')).status, 404);
+	});
+
 	it('a blocked person’s messages are not among them, and the list is an index seek', async () => {
 		const t = await setup();
 		await t.post('ali', 'one');

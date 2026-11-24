@@ -17,7 +17,7 @@ import { resolveCommentAuthors } from '../../lib/commentAuthors';
 import { deleteEdgeCache, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
 import { featureOff } from '../../lib/features/off';
 import { hasSuspensionHolds } from '../../lib/admin/frozen';
-import { MAX_PAGE, REPLAY_WINDOW_MS, SNAPSHOT_TTL_SECONDS, chatCacheUrl, chatRole, heldForReview, isSubscriber, latestPage, mayRead, olderPage, ownerTierHasChat, pinMessage, postMessage, postingOpen, readChatStream, readMessage, readSnapshot, removeAllBy, removeMessage, replayPage, restoreMessage, withOwnHeld, type ChatStream, type Snapshot } from '../../lib/live/chat';
+import { MAX_PAGE, REPLAY_WINDOW_MS, SNAPSHOT_TTL_SECONDS, chatCacheUrl, chatRole, heldForReview, isSubscriber, latestPage, mayRead, mayReview, olderPage, ownerTierHasChat, pinMessage, postMessage, postingOpen, readChatStream, readMessage, readSnapshot, removeAllBy, removeMessage, replayPage, restoreMessage, withOwnHeld, type ChatStream, type Snapshot } from '../../lib/live/chat';
 import { streamKey, type LiveStreamRecord } from '../../lib/live/streams';
 import { logger } from '../../lib/logger';
 import { scanInBackground } from '../../lib/moderation-scan';
@@ -133,7 +133,8 @@ export class LiveChatHeld extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const stream = await readChatStream(db, params.id);
 		if (!stream) return notFound(c);
-		if (!(await chatRole(c.env as never, stream, userId)).moderates) return (await mayRead(c.env as never, stream, userId)) ? apiError(c, 403, 'forbidden') : notFound(c);
+		// The ban middleware lets reads through, so it is asked here
+		if (!(await mayReview(c.env as never, stream, userId))) return (await mayRead(c.env as never, stream, userId)) ? apiError(c, 403, 'forbidden') : notFound(c);
 		return c.json({ success: true, result: { messages: await heldForReview(db, stream.id) } }, 200, { 'Cache-Control': 'private, no-store' });
 	}
 }
