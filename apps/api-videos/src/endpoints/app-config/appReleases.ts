@@ -74,7 +74,7 @@ export class AppReleasesAvailablePut extends PublicRoute {
 	async handle(c: AppContext) {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const kv = c.env.APP_CONFIG;
-		if (!kv) return c.json({ success: false, error: 'APP_CONFIG KV namespace is not bound' }, 503);
+		if (!kv) return apiError(c, 503, 'service_unavailable', { error: 'app_config_unbound' });
 		const doc = ((await kv.get(AVAILABILITY_KEY, { type: 'json' })) ?? {}) as AvailabilityDocument;
 		const key = `${body.app}/${body.platform}/${body.source}`;
 		if (body.version) doc[key] = body.version;

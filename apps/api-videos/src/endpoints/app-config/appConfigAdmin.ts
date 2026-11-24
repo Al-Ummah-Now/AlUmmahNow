@@ -25,6 +25,7 @@ import type { AppConfigKey } from '../../lib/app-config-store';
 import { ConfigRulesDocumentSchema, RulesDocumentSchema, evaluateConfig, evaluateFlags } from '../../lib/feature-flags';
 import type { FlagContext, FlagRule } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 import { AVAILABILITY_KEY, type AvailabilityDocument } from '../../lib/app-updates/answer';
 import { minimumProblems } from '../../lib/app-updates/minimum';
 import { readReleases } from '../../lib/app-updates/releases';
@@ -86,7 +87,7 @@ export class AppConfigDocumentPut extends PublicRoute {
 			// A minimum no install source can give users yet would strand them (AUN-APP-UPDATES §3.4)
 			const [releases, availability] = await Promise.all([readReleases(kv), kv.get(AVAILABILITY_KEY, { type: 'json' })]);
 			const problems = minimumProblems(parsed.data as VersionsDocument, releases, (availability ?? {}) as AvailabilityDocument).map((p) => ({ path: [p.key, p.field], message: p.message }));
-			if (problems.length) return c.json({ success: false, error: 'invalid_document', issues: problems, problems }, 400);
+			if (problems.length) return apiError(c, 400, 'validation_error', { error: 'invalid_document', issues: problems, problems });
 		}
 		await kv.put(params.key, JSON.stringify(parsed.data));
 		forgetAppConfigDocument(kv, params.key);
