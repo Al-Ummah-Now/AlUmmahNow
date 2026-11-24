@@ -52,8 +52,8 @@ export default async function ApprovalPage({ params, searchParams }: { params: P
   const domainKey = request.domain;
 
   return (
+    // The header breadcrumb (Site › Approvals) leads back; a link above the title would sit under its halo
     <div className="max-w-4xl">
-      <BackLink label={t('workflows.back')} />
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{translateDynamic(t, 'workflows.domain', domainKey)}</p>
@@ -178,10 +178,10 @@ function DiffTable({ fields, t, locale, names }: { fields: WorkflowField[]; t: P
             return (
               <tr key={f.key} className="border-b border-border last:border-b-0 align-top" data-field={f.key} data-changed={changes ? '1' : '0'}>
                 <th scope="row" className="py-2 pe-3 text-start font-medium text-fg">{locale === 'ar' ? f.label.ar : f.label.en}</th>
-                <td className={`py-2 pe-3 ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`} dir="auto">
+                <td className={`py-2 pe-3 ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`}>
                   {workflowValue(f, f.before, locale, t, names)}
                 </td>
-                <td className={`py-2 ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`} dir="auto">
+                <td className={`py-2 ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
                   {workflowValue(f, f.after, locale, t, names)}
                 </td>
               </tr>
