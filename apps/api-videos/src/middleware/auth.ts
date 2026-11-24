@@ -144,10 +144,24 @@ async function validateJWTWithSignature(token: string, env?: any, route?: string
 }
 
 /**
+ * Anonymous public routes that never read auth state, verify bearer tokens,
+ * attach user identity to logs, or key rate limits by user (wiki Epic 21 §3).
+ */
+const ANONYMOUS_API_PATHS = new Set(['/api/prayer-times', '/api/hijri']);
+
+export function isAnonymousApiPath(path: string): boolean {
+  const normalized = path.replace(/^\/api\/v\d+(?=\/)/, '/api').replace(/\/+$/, '');
+  return ANONYMOUS_API_PATHS.has(normalized);
+}
+
+/**
  * Optional middleware for endpoints that can work with or without auth
  * This sets auth context if token is present but doesn't fail if missing
  */
 export async function optionalAuthMiddleware(c: Context, next: Next) {
+  if (isAnonymousApiPath(c.req.path)) {
+    return await next();
+  }
   try {
     const authHeader = c.req.header('Authorization');
 
@@ -227,6 +241,9 @@ export function channelRefusesWrite(method: string, path: string): boolean {
  * If channelId is invalid or doesn't belong to user, returns 403
  */
 export async function channelIdMiddleware(c: Context, next: Next) {
+  if (isAnonymousApiPath(c.req.path)) {
+    return await next();
+  }
   try {
     // Get channelId from header
     const channelId = c.req.header('channelId');

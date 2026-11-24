@@ -5,9 +5,15 @@
  * (cap, backoff, breaker with a single probe, lease takeover), stale serving, 503 with nothing
  * known, and that nothing about the caller reaches the provider.
  */
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
+import { FIRST_PARTY_CLIENT_IDS, writeFeatureSwitch } from '@al-ummah/shared-types';
+import worker from '../src/index';
 import { HijriMonthGet, PrayerTimesGet, setPrayerSettingsForTests } from '../src/endpoints/prayer/prayerTimes';
+import { forgetFeatureCaches } from '../src/lib/features';
+import { logger } from '../src/lib/logger';
+import { __resetClientForTests } from '../src/lib/openauth-client';
 import { aladhanProvider, parseCalendar, ProviderError } from '../src/lib/prayer/aladhan';
 import { findCity } from '../src/lib/prayer/cities';
 import { resolveMethod } from '../src/lib/prayer/methods';
@@ -270,5 +276,114 @@ describe('provider gate', () => {
 		assert.deepEqual(await acquire(db, 'aladhan', 'p2', limits, now), { ok: false, reason: 'circuit_open' }, 'only one probe');
 		await release(db, 'aladhan', 'p1', probe.leaseId, { ok: true }, now);
 		assert.equal((await acquire(db, 'aladhan', 'p3', limits, now + 1)).ok, true, 'closed again');
+	});
+});
+
+describe('anonymous contract through the real Worker entry', () => {
+	it('ignores Authorization and channelId on /api and /api/v1 prayer and Hijri routes, never logs userId, and rate-limits by IP', async () => {
+		__resetClientForTests();
+		forgetFeatureCaches();
+		const realFetch = globalThis.fetch;
+		const qaIssuer = 'https://auth.qa.alummahnow.net';
+		const { publicKey, privateKey } = await generateKeyPair('ES256');
+		const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+		const token = await new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_signed_in', email: 'viewer@example.com' } })
+			.setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+			.setIssuer(qaIssuer)
+			.setAudience(FIRST_PARTY_CLIENT_IDS.qa.web)
+			.setSubject('user:signed-in')
+			.setIssuedAt()
+			.setExpirationTime('15m')
+			.sign(privateKey);
+
+		let authFetchCalls = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+			if (url.origin === qaIssuer) {
+				authFetchCalls++;
+				if (url.pathname === '/.well-known/oauth-authorization-server') {
+					return Response.json({ issuer: qaIssuer, jwks_uri: `${qaIssuer}/.well-known/jwks.json` });
+				}
+				if (url.pathname === '/.well-known/jwks.json') return Response.json({ keys: [jwk] });
+			}
+			return new Response('not found', { status: 404 });
+		}) as typeof fetch;
+
+		const requestLogs: Array<Record<string, unknown>> = [];
+		const reqMock = mock.method(logger, 'request', (fields: Record<string, unknown>) => {
+			requestLogs.push(fields);
+		});
+
+		try {
+			const month = thisMonth();
+			const [y, m] = month.split('-').map(Number);
+			const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+			const { fn, calls } = mockFetch((url) => {
+				if (url.includes('/gToHCalendar/')) {
+					return Response.json({
+						code: 200,
+						data: Array.from({ length: days }, (_, i) => ({
+							gregorian: { date: `${String(i + 1).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}` },
+							hijri: { day: String(i + 1), month: { number: 6 }, year: '1448' },
+						})),
+					});
+				}
+				return Response.json(monthBody(month));
+			});
+			setPrayerSettingsForTests(() => settings(fn));
+
+			const limiterKeys: string[] = [];
+			const e = {
+				...env(),
+				ENVIRONMENT: 'qa',
+				Issuer: qaIssuer,
+				ClientId: FIRST_PARTY_CLIENT_IDS.qa.web,
+				PRAYER_LIMITER: {
+					async limit({ key }: { key: string }) {
+						limiterKeys.push(key);
+						return { success: true };
+					},
+				},
+			};
+			await writeFeatureSwitch(e as never, { key: 'prayerTimes', enabled: true, expectedVersion: 0, actorId: 'usr_admin', currentStored: false });
+			await writeFeatureSwitch(e as never, { key: 'hijriCalendar', enabled: true, expectedVersion: 0, actorId: 'usr_admin', currentStored: false });
+			forgetFeatureCaches();
+
+			const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+			const headers = {
+				Authorization: `Bearer ${token}`,
+				channelId: 'ch_should_be_ignored',
+				Cookie: 'session=secret',
+				'CF-Connecting-IP': '203.0.113.42',
+			};
+			const paths = [
+				`/api/prayer-times?city=${MAKKAH}&month=${month}`,
+				`/api/v1/prayer-times?city=${MAKKAH}&month=${month}`,
+				`/api/hijri?month=${month}`,
+				`/api/v1/hijri?month=${month}`,
+			];
+			for (const path of paths) {
+				const res = await worker.fetch(new Request(`https://videos.api.example${path}`, { headers }), e as never, ctx);
+				assert.equal(res.status, 200, `${path} answered ${res.status}`);
+			}
+
+			assert.equal(authFetchCalls, 0, 'bearer token is never verified on anonymous prayer/Hijri routes');
+			assert.deepEqual(limiterKeys, ['ip:203.0.113.42', 'ip:203.0.113.42', 'ip:203.0.113.42', 'ip:203.0.113.42']);
+			assert.equal(requestLogs.length, 4);
+			for (const entry of requestLogs) {
+				assert.equal(entry.userId, undefined, `request log must not carry userId (${String(entry.route)})`);
+			}
+			assert.equal(calls.length, 2, 'one upstream call for prayer-times and one for hijri; /api/v1 hits R2');
+			for (const call of calls) {
+				const h = new Headers(call.init?.headers);
+				assert.equal(h.get('authorization'), null);
+				assert.equal(h.get('cookie'), null);
+			}
+		} finally {
+			reqMock.mock.restore();
+			globalThis.fetch = realFetch;
+			__resetClientForTests();
+			forgetFeatureCaches();
+		}
 	});
 });
