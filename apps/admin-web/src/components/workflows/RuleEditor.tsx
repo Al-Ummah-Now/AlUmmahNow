@@ -89,11 +89,11 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
     }
   }
 
-  const checkbox = (id: string, label: string, checked: boolean, onChange: (on: boolean) => void, locked = false, testId?: string) => (
+  const checkbox = (id: string, label: string, checked: boolean, onChange: (on: boolean) => void, locked: false | 'floor' | 'money' | 'always' = false, testId?: string) => (
     <label htmlFor={id} className={`flex min-h-11 items-center gap-2 text-sm sm:min-h-0 ${locked ? 'text-fg-muted' : 'text-fg'}`}>
-      <input id={id} type="checkbox" className="h-4 w-4 accent-accent" checked={checked} disabled={locked} onChange={(e) => onChange(e.target.checked)} data-testid={testId} />
+      <input id={id} type="checkbox" className="h-4 w-4 accent-accent" checked={checked} disabled={!!locked} onChange={(e) => onChange(e.target.checked)} data-testid={testId} />
       <span>{label}</span>
-      {locked && <span className="text-xs text-fg-subtle">({t('workflows.rules.locked')})</span>}
+      {locked && <span className="text-xs text-fg-subtle">({t(locked === 'money' ? 'workflows.rules.lockedMoney' : locked === 'always' ? 'workflows.rules.lockedAlways' : 'workflows.rules.locked')})</span>}
     </label>
   );
 
@@ -156,9 +156,9 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
 
           <fieldset className="space-y-1">
             <legend className="text-sm font-medium">{t('workflows.rules.approvers')}</legend>
-            {checkbox(`${ids}-sa`, t('workflows.rules.roleSuper'), hasRole('super_admin'), (on) => toggleSet((a) => a.kind === 'role' && a.role === 'super_admin', on, { kind: 'role', role: 'super_admin' }), floor.money, 'approval-rule-super')}
-            {checkbox(`${ids}-ad`, t('workflows.rules.roleAdmin'), hasRole('admin'), (on) => toggleSet((a) => a.kind === 'role' && a.role === 'admin', on, { kind: 'role', role: 'admin' }), floor.money, 'approval-rule-admin')}
-            {checkbox(`${ids}-fi`, t('workflows.rules.financeAny'), !!finance, (on) => toggleSet((a) => a.kind === 'finance', on, { kind: 'finance' }), floor.money && !!finance, 'approval-rule-finance')}
+            {checkbox(`${ids}-sa`, t('workflows.rules.roleSuper'), hasRole('super_admin'), (on) => toggleSet((a) => a.kind === 'role' && a.role === 'super_admin', on, { kind: 'role', role: 'super_admin' }), floor.money && 'money', 'approval-rule-super')}
+            {checkbox(`${ids}-ad`, t('workflows.rules.roleAdmin'), hasRole('admin'), (on) => toggleSet((a) => a.kind === 'role' && a.role === 'admin', on, { kind: 'role', role: 'admin' }), floor.money && 'money', 'approval-rule-admin')}
+            {checkbox(`${ids}-fi`, t('workflows.rules.financeAny'), !!finance, (on) => toggleSet((a) => a.kind === 'finance', on, { kind: 'finance' }), floor.money && !!finance && 'money', 'approval-rule-finance')}
             {finance && (
               <div className="ms-6 flex flex-col gap-1">
                 <label htmlFor={`${ids}-fp`} className="text-xs text-fg-muted">{t('workflows.rules.financePermission')}</label>
@@ -220,9 +220,9 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
 
           <fieldset className="space-y-1">
             <legend className="text-sm font-medium">{t('workflows.rules.exclusions')}</legend>
-            {checkbox(`${ids}-xs`, t('workflows.rules.exSubject'), true, () => undefined, true)}
-            {checkbox(`${ids}-xt`, t('workflows.rules.exTech'), draft.exclusions.techStaff || floor.money, (on) => ex('techStaff', on), floor.money, 'approval-rule-ex-tech')}
-            {checkbox(`${ids}-xo`, t('workflows.rules.exOwner'), draft.exclusions.owner || floor.money, (on) => ex('owner', on), floor.money, 'approval-rule-ex-owner')}
+            {checkbox(`${ids}-xs`, t('workflows.rules.exSubject'), true, () => undefined, 'always')}
+            {checkbox(`${ids}-xt`, t('workflows.rules.exTech'), draft.exclusions.techStaff || floor.money, (on) => ex('techStaff', on), floor.money && 'money', 'approval-rule-ex-tech')}
+            {checkbox(`${ids}-xo`, t('workflows.rules.exOwner'), draft.exclusions.owner || floor.money, (on) => ex('owner', on), floor.money && 'money', 'approval-rule-ex-owner')}
             {checkbox(`${ids}-x1`, t('workflows.rules.exOneStep'), draft.exclusions.oneStepPerPerson, (on) => ex('oneStepPerPerson', on), false, 'approval-rule-ex-onestep')}
           </fieldset>
 
@@ -232,7 +232,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
               <Select id={`${ids}-su`} value={draft.stepUp} onChange={(e) => set({ stepUp: e.target.value as WorkflowStepUp })} data-testid="approval-rule-stepup">
                 {STEP_UPS.map((s) => (
                   <option key={s} value={s} disabled={!stepUpAtLeast(s, floor.minStepUp)}>
-                    {t(`workflows.rules.stepUp.${s}` as MessageKey)}
+                    {t(`workflows.rules.stepUpOption.${s}` as MessageKey)}
                   </option>
                 ))}
               </Select>
