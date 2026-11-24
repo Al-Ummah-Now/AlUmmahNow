@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground, notifyUserInBackground } from "../../lib/websocket-notify";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { apiError } from "../../lib/api-error";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import {
@@ -22,6 +23,8 @@ import { CommentListItemSchema } from "./commentList";
 import { scanInBackground } from '../../lib/moderation-scan';
 import { reactorId } from "../../lib/reactions";
 import { blockedChannelsOf } from "../../lib/channelComments/blocks";
+import { ownerOfRecord, ownsRecord } from '../../lib/channelAccess';
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 
 export class CommentCreate extends AuthenticatedRoute {
@@ -113,12 +116,30 @@ export class CommentCreate extends AuthenticatedRoute {
 		// Conditional write (SCALABILITY-AUDIT AV-2): the checks and the append
 		// run on the fresh video each attempt, so a concurrent comment, like or
 		// edit is re-read instead of overwritten.
-		const { data: video, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string; message?: string }>(id, (fresh) => {
+		//
+		// Who the commenter is to the video is the channel's word of now, read outside the write for the
+		// channel the video is on; a video that changed channel meanwhile is read again.
+		const standingOn = async (record: VideoType) => ({
+			channelId: record.channelId ?? null,
+			recordOwner: record.userId ?? null,
+			isOwner: await ownsRecord(c.env as never, record, userId),
+			closed: await isClosedTo(c.env, { ...record, isPublic: false, isUnlisted: false }, userId),
+		});
+		const current = await repository.getObject(id);
+		if (!current) return apiError(c, 404, 'not_found');
+		let standing = await standingOn(current);
+		let moved = undefined as VideoType | undefined;
+		const append = () => repository.updateObjectOrReject<{ status: 403 | 404; error: string; message?: string }>(id, (fresh) => {
 			comment = undefined;
 			parent = undefined;
+			moved = undefined;
 			if (isVideoRemoved(fresh)) return { reject: { status: 404, error: "Object not found" } };
+			if ((fresh.channelId ?? null) !== standing.channelId || (fresh.userId ?? null) !== standing.recordOwner) {
+				moved = fresh;
+				return { reject: { status: 404, error: "Object not found" } };
+			}
 			// Check privacy permissions for commenting on videos
-			if (isRestrictedVideo(fresh) && fresh.userId !== userId) {
+			if (isRestrictedVideo(fresh) && standing.closed) {
 				// Don't reveal that private video exists
 				return { reject: { status: 404, error: "Object not found" } };
 			}
@@ -131,7 +152,7 @@ export class CommentCreate extends AuthenticatedRoute {
 				fresh.comments = [];
 			}
 			const stored = fresh.comments as unknown as StoredComment[];
-			const isVideoOwner = fresh.userId === userId;
+			const isVideoOwner = standing.isOwner;
 
 			// Replies attach to the top-level comment (one level of nesting)
 			if (requestedParentId) {
@@ -173,6 +194,11 @@ export class CommentCreate extends AuthenticatedRoute {
 			// Note: commentsCount is calculated in view layer, not stored
 			return true;
 		});
+		let { data: video, rejected } = await append();
+		if (moved) {
+			standing = await standingOn(moved);
+			({ data: video, rejected } = await append());
+		}
 
 		if (!video) {
 			return c.json({ success: false, error: "Object not found" }, 404);
@@ -181,7 +207,7 @@ export class CommentCreate extends AuthenticatedRoute {
 			const failure = rejected ?? { status: 404 as const, error: "Object not found" };
 			return c.json({ success: false, error: failure.error, ...(failure.message ? { message: failure.message } : {}) }, failure.status);
 		}
-		const isVideoOwner = video.userId === userId;
+		const isVideoOwner = standing.isOwner;
 
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.CommentCreate, {
@@ -209,8 +235,9 @@ export class CommentCreate extends AuthenticatedRoute {
 				comment: { ...item, isLiked: false, isDisliked: false },
 			});
 		}
-		if (video.userId && video.userId !== userId && !blocked) {
-			notifyUserInBackground(c, video.userId, {
+		const ownerId = await ownerOfRecord(c.env as never, video).catch(() => null);
+		if (ownerId && ownerId !== userId && !blocked) {
+			notifyUserInBackground(c, ownerId, {
 				notificationType: 'comment',
 				notificationKey: 'newComment',
 				params: { videoTitle: video.title || '' },

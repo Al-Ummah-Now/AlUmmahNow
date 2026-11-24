@@ -38,6 +38,8 @@ export interface VideoTusUpload {
   target?: 'bunny' | 'r2';
   fileSize: number;
   createdAt: string;
+  /** An admin's import (lib/bunny/tus.ts TusProxySession.adminImport): the importing admin needs no role on the channel */
+  adminImport?: true;
 }
 
 /** Last Bunny offset the sweep saw, to tell a slow upload from a stopped one. */
@@ -97,6 +99,8 @@ export async function markUploadComplete(
     // that processing already marked ready stays ready.
     await repository.updateObject(upload.videoId, (video) => {
       changed = false;
+      // Removed, or stopped (the reaper, a channel move): late bytes do not bring it back
+      if ((video as { abandoned?: unknown }).abandoned || (video as { isDeleted?: boolean }).isDeleted) return false;
       if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') {
         if (!video.tusUpload && !video.uploadWatch) return false;
         delete video.tusUpload;

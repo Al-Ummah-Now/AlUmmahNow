@@ -17,6 +17,7 @@ import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoList
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { channelNameFields } from '../../lib/channelName';
 import { publicCommentsCount } from '../../lib/comments';
+import { memoChannels, ownsRecord } from '../../lib/channelAccess';
 
 /** Seconds the anonymous first page of the general feed is reused. */
 
@@ -130,9 +131,11 @@ export class VideosList extends OptionalAuthRoute {
 		// filtered channel with a role allowing it (channelIdMiddleware resolved
 		// it from the channel record), that channel owner's
 		const actingRole = c.get('channelRole');
-		const privateOwnerId: string | null = filterChannelId && channelId === filterChannelId && actingRole && actingRole !== 'owner' && can(actingRole, 'video.view_private')
-			? (c.get('channelOwnerId') ?? null)
-			: (userId || null);
+		const actsAsChannel = !!filterChannelId && channelId === filterChannelId && !!actingRole && actingRole !== 'owner' && can(actingRole, 'video.view_private');
+		// Theirs is decided by the channel of now (lib/channelAccess.ts), never by the account a record names
+		const channelsNow = memoChannels(c.env as never);
+		const isTheirs = async (video: VideoType) => (actsAsChannel && video.channelId === filterChannelId) || (await ownsRecord(channelsNow, video, userId));
+		const seesAllOfChannel = !!filterChannelId && (actsAsChannel || (await ownsRecord(channelsNow, { channelId: filterChannelId }, userId)));
 
 		// Filter videos based on privacy settings, user context, and filters
 		const isVisible = (video: VideoType) => {
@@ -171,10 +174,16 @@ export class VideosList extends OptionalAuthRoute {
 			if (filter === "private" && video.isPublic !== false) return false;
 			if (filter === "live" && !video.isLive) return false;
 
-			// One listing rule (lib/visibility.ts): public + ready for everyone;
-			// the owner (or a channel member acting with video.view_private, as
-			// that owner) also sees their private and processing videos
-			return isVideoListedFor(video, privateOwnerId);
+			return true;
+		};
+
+		// One listing rule (lib/visibility.ts): public + ready for everyone; the owner (or a channel
+		// member acting with video.view_private) also sees private and processing videos
+		const loadListed = async (key: string): Promise<VideoType | null> => {
+			const video = await repository.getObject(key);
+			if (!video || !isVisible(video)) return null;
+			if (isVideoListedFor(video, false)) return video;
+			return isVideoListedFor(video, await isTheirs(video)) ? video : null;
 		};
 
 		const compareVideos = (a: VideoType, b: VideoType) => {
@@ -207,12 +216,12 @@ export class VideosList extends OptionalAuthRoute {
 				limit,
 				query: {
 					sort: INDEX_SORT[sort as VideoSort],
-					privateFor: privateOwnerId,
+					privateFor: seesAllOfChannel ? true : (userId || null),
 					...INDEX_FILTER[(filter || "all") as VideoFilter],
 					...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
 				},
-				load: id => repository.getObject(id),
-				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
+				load: loadListed,
+				isListed: (video): video is VideoType => !!video,
 				compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
 				waitUntil: waitUntilOf(c as never),
 			})
@@ -232,8 +241,8 @@ export class VideosList extends OptionalAuthRoute {
 				// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
 				cursor: isIndexCursor(nextCursor) ? null : nextCursor,
 				limit,
-				load: key => repository.getObject(key),
-				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
+				load: loadListed,
+				isListed: (video): video is VideoType => !!video,
 				label: 'VideosList',
 			});
 			filteredVideos.push(...page.items);

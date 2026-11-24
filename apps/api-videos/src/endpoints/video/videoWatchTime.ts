@@ -6,6 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from "../../lib/logger";
 import { isRestrictedVideo } from '../../lib/visibility';
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 /** Largest delta one report may carry (the player reports at least this often while playing). */
 export const MAX_WATCH_TIME_DELTA_SECONDS = 60;
@@ -64,7 +65,7 @@ export class VideoWatchTime extends OptionalAuthRoute {
 
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(id);
-		if (!video || (isRestrictedVideo(video) && (!userId || video.userId !== userId))) {
+		if (!video || (await isClosedTo(c.env, video, userId))) {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
 

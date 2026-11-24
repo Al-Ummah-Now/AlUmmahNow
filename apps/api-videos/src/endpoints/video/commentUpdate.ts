@@ -9,6 +9,7 @@ import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentT
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { scanInBackground } from '../../lib/moderation-scan';
 import { isRestrictedVideo } from '../../lib/visibility';
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 
 export class CommentUpdate extends AuthenticatedRoute {
@@ -94,7 +95,7 @@ export class CommentUpdate extends AuthenticatedRoute {
 		}
 
 		// Check privacy permissions
-		if (isRestrictedVideo(video) && (!userId || video.userId !== userId)) {
+		if (await isClosedTo(c.env, video, userId)) {
 			return c.json({
 				success: false,
 				error: "Video not found", // Don't reveal that private video exists

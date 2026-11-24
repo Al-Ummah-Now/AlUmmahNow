@@ -359,18 +359,29 @@ export function memberChannelRoles(env: OwnershipEnv, userId: string): Promise<A
 }
 
 /**
- * Ids of the user's not-deleted channels, or of their not-deleted videos in
- * `channelIds` (or in no channel), moderation-hidden ones included: owner-only
- * views such as analytics still count them.
+ * Ids of the not-deleted videos on `channelIds`, and of the user's in no channel, moderation-hidden
+ * ones included: owner-only views such as analytics still count them.
  */
-export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: string, channelIds?: string[], newest?: number): Promise<string[] | null> {
+export function ownedVideoIds(env: OwnershipEnv, userId: string, channelIds: string[]): Promise<string[] | null> {
+  return whenComplete(env, 'video', async db => {
+    const ids: string[] = [];
+    const add = (results: Array<{ id: string }> | undefined) => ids.push(...(results ?? []).map(r => r.id));
+    add((await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND owner_id = ? AND channel_id IS NULL AND is_deleted = 0`).bind(userId).all<{ id: string }>()).results);
+    // By the channel, whoever its rows name (idx_content_ownership_channel)
+    for (let i = 0; i < channelIds.length; i += 90) {
+      const some = channelIds.slice(i, i + 90);
+      add((await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND channel_id IN (${some.map(() => '?').join(', ')}) AND is_deleted = 0`).bind(...some).all<{ id: string }>()).results);
+    }
+    return byKey(ids);
+  });
+}
+
+/** Ids of the user's not-deleted records of one kind, moderation-hidden ones included. */
+export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: string, newest?: number): Promise<string[] | null> {
   return whenComplete(env, kind, async db => {
-    const channelFilter = kind === 'video' && channelIds
-      ? ` AND (channel_id IS NULL${channelIds.length ? ` OR channel_id IN (${channelIds.map(() => '?').join(', ')})` : ''})`
-      : '';
     const { results } = await db.prepare(
-      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0${channelFilter} ${orderAndLimit(newest)}`,
-    ).bind(kind, userId, ...(channelFilter ? channelIds ?? [] : []), ...(newest ? [newest] : [])).all<{ id: string }>();
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0 ${orderAndLimit(newest)}`,
+    ).bind(kind, userId, ...(newest ? [newest] : [])).all<{ id: string }>();
     const ids = (results ?? []).map(r => r.id);
     return newest ? ids : byKey(ids);
   });

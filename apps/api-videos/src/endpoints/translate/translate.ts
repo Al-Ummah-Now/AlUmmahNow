@@ -17,7 +17,7 @@ import { INLINE_TRANSLATE_FIELDS, INLINE_TRANSLATE_LIMITS, can, channelRoleOf, t
 import { AuthenticatedRoute, PublicRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { loadChannelRecord } from '../../lib/channelAccess';
-import { canViewVideo } from '../../lib/playlists';
+import { isVideoPubliclyVisible } from '../../lib/visibility';
 import R2Repository from '../../lib/r2Repo';
 import { readCaptionSettings } from '../../lib/captions/jobs';
 import { channelAllowsViewerTitles, readFairUse, setChannelViewerTitles, TranslateHttpError, translateInline, viewerTranslation } from '../../lib/translate/inline';
@@ -168,7 +168,7 @@ export class VideoTranslatedMetadataGet extends PublicRoute {
 		const { params, query } = await this.getValidatedData<typeof this.schema>();
 		const video = await new R2Repository<VideoObject>(c.env.videos).getObject(params.videoId);
 		// Public videos only: a private or unlisted one is never sent to a model
-		if (!video || !canViewVideo(video as never, null) || (video as { visibility?: string }).visibility === 'unlisted') return c.json({ success: false, error: 'video_not_found' }, 404);
+		if (!video || !isVideoPubliclyVisible(video as never) || (video as { visibility?: string }).visibility === 'unlisted') return c.json({ success: false, error: 'video_not_found' }, 404);
 		try {
 			const result = await viewerTranslation(c.env as never, video, query.lang.toLowerCase());
 			return c.json({ success: true, data: result }, 200, { 'Cache-Control': result.translation ? 'public, max-age=300' : 'no-store' });

@@ -63,7 +63,7 @@ describe('every surface follows the shared rule (#1241)', () => {
 			assert.equal(isVideoOpenToAnyone(v), state.open, 'isVideoOpenToAnyone');
 			assert.equal(isVideoMediaPublic(v), state.mediaPublic, 'isVideoMediaPublic');
 			// Listing surfaces
-			assert.equal(isVideoListedFor(v, 'usr_someone_else'), state.listed, 'lists (isVideoListedFor)');
+			assert.equal(isVideoListedFor(v, false), state.listed, 'lists (isVideoListedFor)');
 			assert.equal(isDiscoverable(v), state.listed, 'discovery / trending');
 			assert.equal(isListableVideo(v), state.listed, 'channel sections');
 			assert.equal(isVideoSearchable(v), state.listed, 'search projection (search, sitemap, IndexNow, feed)');
@@ -78,7 +78,7 @@ describe('every surface follows the shared rule (#1241)', () => {
 	it('the owner still lists every state except removed ones', () => {
 		for (const state of STATES) {
 			const removed = Boolean(state.video.isHidden || state.video.isDeleted || state.video.markedForDeletion);
-			assert.equal(isVideoListedFor(fixture(state.video), OWNER), !removed, state.name);
+			assert.equal(isVideoListedFor(fixture(state.video), true), !removed, state.name);
 		}
 	});
 });

@@ -139,8 +139,11 @@ async function harness(opts: Options = {}) {
   app.route('/api/videos/tus', createTusRouter());
 
   const channelRecords = new Map<string, unknown>();
+  const uploaders = new Map<string, string>();
   const fullEnv = {
     UPLOAD_RATE_LIMIT: 'on',
+    // The videos the uploads are for (the proxy reads them on every step)
+    videos: { get: async (id: string) => (id.startsWith('vid-') ? { json: async () => ({ id, userId: uploaders.get(id), channelId: null, uploadStatus: 'uploading' }) } : null) },
     channels: { get: async (id: string) => (channelRecords.has(id) ? { json: async () => channelRecords.get(id) } : null) },
     ...opts.env,
     SEARCH_DB: db,
@@ -166,7 +169,7 @@ async function harness(opts: Options = {}) {
       headers: { 'content-type': 'application/offset+octet-stream', 'upload-offset': String(offset), 'tus-resumable': '1.0.0' },
     });
   const startUpload = (user: string, uploadId: string, fileSize = 2048 * MB) =>
-    tusKv.put(
+    uploaders.set(`vid-${uploadId}`, user) && tusKv.put(
       `tus:upload:${uploadId}`,
       JSON.stringify({ uploadId, userId: user, videoId: `vid-${uploadId}`, fileSize, uploadOffset: 0, bunnyUploadUrl: `https://bunny.test/tus/${uploadId}` }),
     );

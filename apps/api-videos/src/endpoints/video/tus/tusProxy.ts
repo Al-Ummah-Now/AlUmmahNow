@@ -16,8 +16,10 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { can } from '@al-ummah/shared-types';
+import { roleOnRecord } from '../../../lib/channelAccess';
 import { getAuthContext } from '../../../middleware/auth';
-import { bunnyTusRequestHeaders, parseTusMetadata, tusUploadIndexKey } from '../../../lib/bunny/tus';
+import { bunnyTusRequestHeaders, getTusSessionKey, parseTusMetadata, tusUploadIndexKey, type TusProxySession } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
 import { uploadsToBunny } from '../../../lib/media/ingest';
@@ -59,7 +61,22 @@ interface TusUploadSession {
   createdAt: string;
   expiresAt: string;
   metadata?: Record<string, string>;
+  /** An admin's import: see TusProxySession.adminImport */
+  adminImport?: true;
 }
+
+interface UploadRecord {
+  userId?: string | null;
+  channelId?: string | null;
+  uploadStatus?: string;
+  abandoned?: unknown;
+  isDeleted?: boolean;
+  media?: VideoMediaProviders;
+  fileSize?: number;
+}
+
+/** Whether an upload may go on: `gone` answers like an unknown upload, `unavailable` is retried. */
+type LiveUpload = { kind: 'open'; record: UploadRecord } | { kind: 'gone' } | { kind: 'unavailable' };
 
 // The durable copy of the session on the video record (R2) lets HEAD and
 // PATCH answer from Bunny while KV is unavailable or the KV entry is gone, and
@@ -241,6 +258,7 @@ export class TusProxy {
             uploadOffset: 0,
             createdAt: durable.createdAt,
             expiresAt: durable.createdAt,
+            ...(durable.adminImport ? { adminImport: true as const } : {}),
           };
           cacheSession(sessionId, session);
           return { kind: 'found', session };
@@ -258,20 +276,43 @@ export class TusProxy {
   }
 
   /**
-   * Our own target holds the only copy of the bytes: they may change only while the upload is
-   * unfinished (the same rule as POST). A finished, removed or abandoned video refuses.
+   * Whether the upload may go on now, read again on every step: the video is still there and not
+   * abandoned, and the uploader may upload to its channel today (lib/channelAccess.ts: the live
+   * channel decides, so a channel that moved or a role that was taken away stops the upload). An
+   * admin's import needs no role on the channel. A store that cannot be read is `unavailable`.
    */
-  private async ownTargetOpen(videoId: string): Promise<'open' | 'finished' | 'gone' | 'unavailable'> {
+  private async liveUpload(session: Pick<TusUploadSession, 'videoId' | 'userId' | 'adminImport' | 'metadata'>): Promise<LiveUpload> {
     try {
-      const object = await this.env.videos.get(videoId);
-      if (!object) return 'gone';
-      const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean };
-      if (record.abandoned || record.isDeleted) return 'gone';
-      return record.uploadStatus === 'initiated' || record.uploadStatus === 'uploading' || !record.uploadStatus ? 'open' : 'finished';
+      const object = await this.env.videos.get(session.videoId);
+      if (!object) return { kind: 'gone' };
+      const record = (await object.json()) as UploadRecord;
+      if (record.abandoned || record.isDeleted) return { kind: 'gone' };
+      if (can(await roleOnRecord(this.env, record, session.userId), 'video.upload')) return { kind: 'open', record };
+      if (await this.isAdminImport(session)) return { kind: 'open', record };
+      logger.info('[TUS Proxy] The uploader may not upload to this channel (any more)', { videoId: session.videoId, channelId: record.channelId });
+      return { kind: 'gone' };
     } catch (error) {
-      logger.warn('[TUS Proxy] Video record unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
-      return 'unavailable';
+      logger.warn('[TUS Proxy] Video or channel record unavailable', { videoId: session.videoId, error: error instanceof Error ? error.message : String(error) });
+      return { kind: 'unavailable' };
     }
+  }
+
+  /** An admin's import: marked on the upload, or (uploads from before the mark) on the session it was created with. */
+  private async isAdminImport(session: Pick<TusUploadSession, 'userId' | 'adminImport' | 'metadata'>): Promise<boolean> {
+    if (session.adminImport) return true;
+    const id = session.metadata?.tusSessionId;
+    if (!id) return false;
+    const raw = await this.getSessionStore().get(getTusSessionKey(id));
+    const stored = raw ? (JSON.parse(raw) as Partial<TusProxySession>) : null;
+    return stored?.adminImport === true && stored.userId === session.userId;
+  }
+
+  /**
+   * Our own target holds the only copy of the bytes: they may change only while the upload is
+   * unfinished (the same rule as POST).
+   */
+  private ownTargetFinished(record: UploadRecord): boolean {
+    return !(record.uploadStatus === 'initiated' || record.uploadStatus === 'uploading' || !record.uploadStatus);
   }
 
   /** Our own target: the offset is what the originals bucket holds from byte 0. */
@@ -300,7 +341,7 @@ export class TusProxy {
    * Our own target: one PATCH is one part at its offset. The offset must be where the stored bytes
    * end (409 otherwise: the client asks HEAD and resumes); the length must be known (411).
    */
-  private async patchR2(c: any, session: TusUploadSession, uploadId: string): Promise<Response> {
+  private async patchR2(c: any, session: TusUploadSession, uploadId: string, record: UploadRecord): Promise<Response> {
     const uploadKey = parseTusUploadId(uploadId)?.sessionId ?? uploadId;
     const offsetHeader = c.req.header('Upload-Offset');
     const lengthHeader = c.req.header('Content-Length');
@@ -312,10 +353,7 @@ export class TusProxy {
     if (offset + length > session.fileSize) return c.json({ error: 'Chunk goes past Upload-Length' }, 400);
     const body = c.req.raw.body as ReadableStream<Uint8Array> | null;
     if (!body && length > 0) return c.json({ error: 'No request body' }, 400);
-    const state = await this.ownTargetOpen(session.videoId);
-    if (state === 'unavailable') return this.retryLater('Video store unavailable, retry');
-    if (state === 'gone') return c.json({ error: 'Upload not found' }, 404);
-    if (state === 'finished') return c.json({ error: 'Upload already completed' }, 409);
+    if (this.ownTargetFinished(record)) return c.json({ error: 'Upload already completed' }, 409);
     let stored: number;
     try {
       stored = await r2UploadOffset(this.env, session.videoId, uploadKey);
@@ -335,7 +373,7 @@ export class TusProxy {
       }
     }
     const newOffset = offset + length;
-    if (newOffset >= session.fileSize) await this.markUploaded(session, uploadId);
+    if (newOffset >= session.fileSize && !(await this.markUploaded(session, uploadId))) return c.json({ error: 'Upload not found' }, 404);
     return new Response(null, {
       status: 204,
       headers: {
@@ -346,9 +384,17 @@ export class TusProxy {
     });
   }
 
-  /** Every byte is stored (Bunny or our own target): lib/uploads/lifecycle.ts (idempotent, never throws). */
-  private async markUploaded(session: TusUploadSession, uploadId: string): Promise<void> {
+  /**
+   * Every byte is stored (Bunny or our own target): lib/uploads/lifecycle.ts (idempotent, never
+   * throws). Checked once more first: the channel can move while the last chunk is on its way. False
+   * when the upload may not finish; when the stores cannot say, the next HEAD or the sweep marks it.
+   */
+  private async markUploaded(session: TusUploadSession, uploadId: string): Promise<boolean> {
+    const live = await this.liveUpload(session);
+    if (live.kind === 'gone') return false;
+    if (live.kind === 'unavailable') return true;
     await markUploadComplete(this.env, { videoId: session.videoId, userId: session.userId, fileSize: session.fileSize, uploadId, uploadKey: parseTusUploadId(uploadId)?.sessionId });
+    return true;
   }
 
   /**
@@ -429,23 +475,15 @@ export class TusProxy {
 
       // Only an unfinished video takes a new upload: a long-lived session
       // must not let anyone replace a finished video's content at Bunny.
-      let videoStatus: string | undefined;
-      let toBunny = true;
-      let declaredSize: number | undefined;
-      try {
-        const object = await this.env.videos.get(videoId);
-        if (!object) return c.json({ error: 'Video not found' }, 404);
-        const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean; media?: VideoMediaProviders; fileSize?: number };
-        declaredSize = record.fileSize;
-        // Bunny takes the bytes only when it holds this video (lib/media/ingest.ts); otherwise our own target does
-        toBunny = uploadsToBunny(record);
-        // Abandoned by the upload reaper (deleted at Bunny): gone, like a deleted video
-        if (record.abandoned || record.isDeleted) return c.json({ error: 'Video not found' }, 404);
-        videoStatus = record.uploadStatus;
-      } catch (error) {
-        logger.warn('[TUS Proxy] Video record unavailable on POST', { videoId, error: error instanceof Error ? error.message : String(error) });
-        return this.retryLater('Video store unavailable, retry');
-      }
+      const adminImport = storedSession.adminImport === true;
+      const live = await this.liveUpload({ videoId, userId, ...(adminImport ? { adminImport: true as const } : {}) });
+      if (live.kind === 'unavailable') return this.retryLater('Video store unavailable, retry');
+      // Removed, abandoned by the upload reaper (deleted at Bunny), or on a channel the uploader may not upload to: gone
+      if (live.kind === 'gone') return c.json({ error: 'Video not found' }, 404);
+      const declaredSize = live.record.fileSize;
+      // Bunny takes the bytes only when it holds this video (lib/media/ingest.ts); otherwise our own target does
+      const toBunny = uploadsToBunny(live.record);
+      const videoStatus = live.record.uploadStatus;
       if (videoStatus === 'ready' || videoStatus === 'processing') {
         return c.json({ error: 'Upload already completed' }, 409);
       }
@@ -533,6 +571,7 @@ export class TusProxy {
         createdAt,
         expiresAt: new Date(Date.now() + TUS_UPLOAD_SESSION_TTL_SECONDS * 1000).toISOString(),
         metadata,
+        ...(adminImport ? { adminImport: true as const } : {}),
       };
 
       // Two copies, each written once per upload: KV (fast path) and the video
@@ -548,8 +587,8 @@ export class TusProxy {
         ),
         new R2Repository<z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }>(this.env.videos)
           .updateObject(videoId, (video) => {
-            if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return false;
-            video.tusUpload = { sessionId: uploadKey, bunnyUploadUrl, ...(toBunny ? {} : { target: 'r2' as const }), fileSize, createdAt };
+            if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing' || (video as UploadRecord).abandoned || (video as UploadRecord).isDeleted) return false;
+            video.tusUpload = { sessionId: uploadKey, bunnyUploadUrl, ...(toBunny ? {} : { target: 'r2' as const }), fileSize, createdAt, ...(adminImport ? { adminImport: true as const } : {}) };
             return true;
           }),
       ]);
@@ -599,6 +638,9 @@ export class TusProxy {
       if (session.userId !== this.authContext?.userId) {
         return new Response(null, { status: 403 });
       }
+      const live = await this.liveUpload(session);
+      if (live.kind === 'unavailable') return this.headRetryLater();
+      if (live.kind === 'gone') return new Response(null, { status: 404, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
       if (session.target === 'r2') return await this.headR2(session, uploadId);
       if (!session.bunnyUploadUrl) {
         return new Response(null, { status: 404, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
@@ -684,7 +726,11 @@ export class TusProxy {
         return c.json({ error: 'Unauthorized' }, 403);
       }
 
-      if (session.target === 'r2') return await this.patchR2(c, session, uploadId);
+      const live = await this.liveUpload(session);
+      if (live.kind === 'unavailable') return this.retryLater('Video store unavailable, retry');
+      if (live.kind === 'gone') return c.json({ error: 'Upload not found' }, 404);
+
+      if (session.target === 'r2') return await this.patchR2(c, session, uploadId, live.record);
 
       if (!session.bunnyUploadUrl) {
         logger.error('[TUS Proxy] No bunnyUploadUrl in session', { uploadId });
@@ -764,9 +810,7 @@ export class TusProxy {
       const offsetNow = parseInt(newOffset || '0', 10);
 
       // Upload complete: mark it (never fails the chunk Bunny already took)
-      if (offsetNow >= session.fileSize) {
-        await this.markUploaded(session, uploadId);
-      }
+      if (offsetNow >= session.fileSize && !(await this.markUploaded(session, uploadId))) return c.json({ error: 'Upload not found' }, 404);
 
       return new Response(null, {
         status: 204,
@@ -804,12 +848,14 @@ export class TusProxy {
         return new Response(null, { status: 403 });
       }
 
+      const live = await this.liveUpload(session);
+      if (live.kind === 'unavailable') return this.retryLater('Video store unavailable, retry');
+      if (live.kind === 'gone') return new Response(null, { status: 404 });
+
       if (session.target === 'r2') {
         // Never the bytes of a finished upload: they are the video's only copy
-        const state = await this.ownTargetOpen(session.videoId);
-        if (state === 'unavailable') return this.retryLater('Video store unavailable, retry');
-        if (state === 'finished') return c.json({ error: 'Upload already completed' }, 409);
-        if (state === 'open') await deleteR2Upload(this.env, session.videoId, parseTusUploadId(uploadId)?.sessionId ?? uploadId);
+        if (this.ownTargetFinished(live.record)) return c.json({ error: 'Upload already completed' }, 409);
+        await deleteR2Upload(this.env, session.videoId, parseTusUploadId(uploadId)?.sessionId ?? uploadId);
       } else {
         // Forward DELETE to Bunny.net
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);

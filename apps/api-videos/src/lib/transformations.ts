@@ -72,7 +72,8 @@ export function uploaderProcessingIssue(
 ): { processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string } } {
     const issue = video.processingIssue;
     if (!issue?.kind || !viewerId) return {};
-    const mayUpload = (!!video.userId && video.userId === viewerId) || can(channelRoleOf(channel, viewerId), 'video.upload');
+    // The channel of now; the record's own owner only where there is none
+    const mayUpload = channel ? can(channelRoleOf(channel, viewerId), 'video.upload') : !!video.userId && video.userId === viewerId;
     if (!mayUpload) return {};
     return {
         processingIssue: {

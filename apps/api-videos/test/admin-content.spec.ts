@@ -43,7 +43,7 @@ import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } fro
 import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, retryJob, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers, STARTED_JOB_SQL, TRANSFER_LOCK_SQL } from '../src/lib/admin/service';
-import { createJob } from '../src/lib/admin/jobs';
+import { createJob, getJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 import { AuthDb } from './auth-db';
@@ -624,6 +624,89 @@ describe('channel actions', () => {
 		assert.equal((await jobOf(res)).status, 'succeeded');
 		assert.equal(JSON.parse(raw.community_posts.store.get('posts/ch1/p1.json')!).userId, OTHER);
 		assert.equal(JSON.parse(raw.videos.store.get('livestream:ls')!).userId, OTHER);
+	});
+
+	it('says on every exit whether the channel changed hands', async () => {
+		const changed = (j: any) => j.result?.changedHands;
+		{
+			const { call, jobOf } = await setup();
+			assert.equal(changed(await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))), true, 'finished');
+		}
+		for (const [name, store, expected] of [['deleted before it ran', { isDeleted: true }, false], ['deleted after it changed hands', { isDeleted: true, userId: OTHER }, true], ['gone', null, null]] as const) {
+			const { raw, env, call, jobs, jobOf } = await setup();
+			const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+			if (store) raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), ...store }));
+			else raw.channels.store.delete('ch1');
+			await jobs.drain(env);
+			const job = await jobOf(res);
+			assert.equal(job.status, 'succeeded', name);
+			assert.equal(changed(job), expected, name);
+		}
+		// A failure before the change of hands, then the same job going through
+		const { raw, db, env, call, jobOf } = await setup();
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		const id = res.body.result.job.id;
+		const stored = () => JSON.parse((db.db.prepare('SELECT result FROM admin_jobs WHERE id = ?').get(id) as any).result);
+		const run = async () => ADMIN_JOB_HANDLERS['channel.transfer']!(env as never, (await getJob(env as never, id)) as never);
+		db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
+		await assert.rejects(run(), /index is being rebuilt/);
+		assert.deepEqual(stored(), { changedHands: false });
+		// The write lands but the worker never hears of it: the earlier "no" is gone
+		db.db.prepare(`INSERT OR REPLACE INTO search_meta (key, value, updated_at) VALUES (?, '1', 't')`).run(ownershipCompleteKey('playlist'));
+		const put = raw.channels.put.bind(raw.channels);
+		raw.channels.put = (async (key: string, value: unknown, opts?: unknown) => {
+			await put(key, value as never, opts as never);
+			throw new Error('worker restarted');
+		}) as typeof put;
+		await assert.rejects(run(), /worker restarted/);
+		assert.equal((db.db.prepare('SELECT result FROM admin_jobs WHERE id = ?').get(id) as any).result, null);
+		raw.channels.put = put;
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		// A failure after it
+		const list = raw.community_posts.list.bind(raw.community_posts);
+		raw.community_posts.list = (async () => { throw new Error('posts unavailable'); }) as typeof list;
+		await assert.rejects(run(), /posts unavailable/);
+		assert.deepEqual(stored(), { changedHands: true });
+		// Its channel deleted meanwhile: what it knew stays
+		raw.channels.store.delete('ch1');
+		const last = (await run()) as any;
+		assert.deepEqual(last.result, { skipped: 'channel_not_found', changedHands: true });
+		assert.ok(jobOf);
+	});
+
+	it('stops the previous owner\'s own unfinished uploads, and nobody else\'s', async () => {
+		const upload = (id: string, over: Record<string, unknown> = {}) => videoFixture({ id, title: id, userId: OWNER, channelId: 'ch1', uploadStatus: 'uploading', tusUpload: { sessionId: 's', bunnyUploadUrl: 'https://b', fileSize: 10, createdAt: 'x' }, ...over });
+		const seedVideos = () => ({
+			mine: upload('mine'),
+			started: upload('started', { uploadStatus: 'initiated' }),
+			again: upload('again', { uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload' } }),
+			member: upload('member', { uploadedBy: 'usr_member' }),
+			imported: upload('imported', { tusUpload: { sessionId: 's', bunnyUploadUrl: 'https://b', fileSize: 10, createdAt: 'x', adminImport: true } }),
+			failed: upload('failed', { uploadStatus: 'failed', processingIssue: { kind: 'encode_failed' } }),
+			encoding: upload('encoding', { uploadStatus: 'processing' }),
+			done: upload('done', { uploadStatus: 'ready' }),
+			elsewhere: upload('elsewhere', { channelId: 'ch-elsewhere' }),
+		});
+		const { raw, call, jobOf } = await setup({ videos: seedVideos() });
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(job.result.uploadsStopped, 3);
+		const read = (id: string) => JSON.parse(raw.videos.store.get(id)!);
+		for (const id of ['mine', 'started', 'again']) {
+			const v = read(id);
+			assert.deepEqual([v.isDeleted, v.uploadStatus, v.tusUpload, v.abandoned.bunnyDeleted, v.userId], [true, 'failed', undefined, true, OTHER], id);
+		}
+		for (const id of ['member', 'imported', 'failed', 'encoding', 'done']) assert.deepEqual([read(id).isDeleted ?? false, read(id).abandoned], [false, undefined], id);
+		assert.deepEqual([read('elsewhere').userId, read('elsewhere').abandoned], [OWNER, undefined]);
+
+		assert.deepEqual(bunny.calls.splice(0).sort(), ['again', 'mine', 'started'].map((id) => `DELETE /library/7/videos/${id}`), 'only their own bytes go');
+
+		// Kept on as a channel admin: goes on as a member
+		const kept = await setup({ videos: seedVideos() });
+		const keptJob = await kept.jobOf(await kept.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, keepPreviousOwnerAsAdmin: true }));
+		assert.equal(keptJob.result.uploadsStopped, 0);
+		const mine = JSON.parse(kept.raw.videos.store.get('mine')!);
+		assert.deepEqual([mine.uploadedBy, mine.abandoned, mine.uploadStatus], [OWNER, undefined, 'uploading']);
 	});
 
 	it('a new owner with no email closes no email invitation (null, never an empty match) (Gemini nit)', async () => {
@@ -1957,7 +2040,11 @@ describe('channel actions', () => {
 				if (point.endsWith('Auth is down')) assert.equal(job!.status, 'succeeded');
 				// A move that never changed hands says so on its job, however it ended
 				const ended = db.db.prepare(`SELECT result FROM admin_jobs WHERE kind = 'channel.transfer' AND status = 'succeeded'`).all() as Array<{ result: string | null }>;
-				for (const { result } of ended) if (!flipped) assert.match(JSON.parse(result ?? '{}').skipped ?? '', /^(stopped|channel_not_found)$/);
+				for (const { result } of ended) if (!flipped) {
+					const r = JSON.parse(result ?? '{}');
+					assert.match(r.skipped ?? '', /^(stopped|channel_not_found)$/);
+					assert.equal(r.changedHands, r.skipped === 'stopped' ? false : null, 'a stopped move says it did not change hands');
+				}
 				// The cooldown counts only a move that happened
 				if (ch && !flipped) {
 					raw.channels.store.set('ch1', JSON.stringify({ ...ch, members: [{ userId: 'usr_new', role: 'admin', addedBy: OWNER, addedAt: '2026' }] }));

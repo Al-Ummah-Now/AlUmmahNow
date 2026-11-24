@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
+import { canOnVideo } from '../../lib/channelAccess';
 
 /**
  * POST /api/videos/:id/retention
@@ -62,7 +63,7 @@ export class VideoRetention extends OptionalAuthRoute {
 
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(id);
-		if (!video || isVideoRemoved(video) || (video.isPublic === false && (!userId || video.userId !== userId))) {
+		if (!video || isVideoRemoved(video) || (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private')))) {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
 

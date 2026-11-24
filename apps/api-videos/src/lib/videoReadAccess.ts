@@ -29,6 +29,11 @@ export async function videoReadAccess(
 	return (await canOnVideo(env as never, video, userId, 'video.view_private')) ? 'viewer' : null;
 }
 
+/** A private video this viewer may not open: the check of what hangs on a video (comments, views, watch time). */
+export async function isClosedTo(env: unknown, video: VisibilityFields & AccessVideo, userId: string | null | undefined): Promise<boolean> {
+	return isRestrictedVideo(video) && !(await canOnVideo(env as never, video, userId, 'video.view_private'));
+}
+
 /** The video GET's answer for a missing or hidden video. */
 export const VIDEO_NOT_FOUND = { success: false, error: 'Object not found' } as const;
 

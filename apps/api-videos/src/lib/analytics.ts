@@ -16,7 +16,7 @@
  */
 
 import { logger } from './logger';
-import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
+import { OwnershipEnv, ownedVideoIds, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
 import { subscriberDailyStats } from './subscription-store';
@@ -343,7 +343,7 @@ async function indexedIds(
   channelIds?: Set<string>
 ): Promise<string[] | null> {
   if (!lookup) return null;
-  const ids = await ownerContentIds(lookup.env, kind, userId, channelIds && [...channelIds]);
+  const ids = kind === 'video' ? await ownedVideoIds(lookup.env, userId, [...(channelIds ?? [])]) : await ownerContentIds(lookup.env, kind, userId);
   if (!ids) scheduleOwnershipHeal(lookup.env, lookup.waitUntil, kind);
   return ids;
 }
@@ -372,7 +372,7 @@ export async function loadOwnedChannels(bucket: R2Bucket, userId: string, lookup
 }
 
 /**
- * Videos (any visibility) belonging to the given channels and owned by the user.
+ * Videos (any visibility) of the given channels (the user's, or ones they may see), and the user's own without a channel.
  * Reads only those videos when the ownership index is complete; otherwise
  * scans at most `maxObjects` keys.
  */
@@ -386,7 +386,8 @@ export async function loadOwnedVideos(
   onIncomplete?: () => void
 ): Promise<AnalyticsVideo[]> {
   const isOwned = (video: AnalyticsVideo | null): video is AnalyticsVideo =>
-    !!video?.id && !video.isDeleted && video.userId === userId && (!video.channelId || channelIds.has(video.channelId));
+    // On one of the channels, whoever the record names; a video without a channel is its own owner's
+    !!video?.id && !video.isDeleted && (video.channelId ? channelIds.has(video.channelId) : video.userId === userId);
   const ids = await indexedIds(lookup, 'video', userId, channelIds);
   if (ids) {
     const videos = await Promise.all(ids.map(id => readJson<AnalyticsVideo>(bucket, id)));

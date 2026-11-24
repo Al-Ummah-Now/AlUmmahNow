@@ -16,7 +16,7 @@ import { CAPTION_JOB_ERRORS, type CaptionAudioReport, type CaptionJobError, type
 import R2Repository from '../../lib/r2Repo';
 import { CaptionJobHttpError, finishJob, onAudioReport, onProgress, readJob, retryJob, type CaptionJobsEnv } from '../../lib/captions/jobs';
 import { logger } from '../../lib/logger';
-import { canViewVideo } from '../../lib/playlists';
+import { isVideoPubliclyVisible } from '../../lib/visibility';
 import { saveViewerTranslation, TranslateHttpError } from '../../lib/translate/inline';
 
 type Env = CaptionJobsEnv & { videos: R2Bucket };
@@ -61,7 +61,7 @@ export function createCaptionJobsInternalRouter() {
 		const body = (await c.req.json().catch(() => null)) as Partial<{ videoId: string; lang: string; sourceHash: string; title: string; description: string | null; provider: string; model: string }> | null;
 		if (!body || typeof body.videoId !== 'string' || typeof body.lang !== 'string' || typeof body.sourceHash !== 'string' || typeof body.title !== 'string') return c.json({ success: false, error: 'invalid' }, 400);
 		const stored = await video(c.env, body.videoId);
-		if (!stored || !canViewVideo(stored as never, null)) return c.json({ success: false, error: 'video_gone' }, 404);
+		if (!stored || !isVideoPubliclyVisible(stored as never)) return c.json({ success: false, error: 'video_gone' }, 404);
 		try {
 			await saveViewerTranslation(c.env, stored, {
 				lang: body.lang,

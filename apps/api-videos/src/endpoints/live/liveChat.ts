@@ -166,7 +166,7 @@ export class LiveChatPost extends AuthenticatedRoute {
 		const now = Date.now();
 		const stream = await readChatStream(db, params.id);
 		if (!stream || !postingOpen(stream, now) || !(await mayRead(c.env as never, stream, userId))) return notFound(c);
-		if (!(await ownerTierHasChat(db, stream, now))) return featureOff(c, 'liveChat');
+		if (!(await ownerTierHasChat(c.env as never, stream, now))) return featureOff(c, 'liveChat');
 		const role = await chatRole(c.env as never, stream, userId);
 		if (stream.settings.subscribersOnly && !role.moderates && !(await isSubscriber((c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB, stream.channelId, userId))) {
 			return apiError(c, 403, 'live_chat_subscribers_only');
@@ -303,7 +303,7 @@ export class LiveChatSettingsUpdate extends AuthenticatedRoute {
 export async function chatState(c: AppContext, stream: ChatStream | null, userId: string | undefined, switchedOn: boolean) {
 	const db = dbOf(c);
 	const off = { enabled: false, replay: false, slowModeSeconds: 0, subscribersOnly: false, canPost: false };
-	if (!db || !stream || !switchedOn || stream.gate.madeForKids || !(await ownerTierHasChat(db, stream))) return { chat: off, canModerate: false };
+	if (!db || !stream || !switchedOn || stream.gate.madeForKids || !(await ownerTierHasChat(c.env as never, stream))) return { chat: off, canModerate: false };
 	const role = await chatRole(c.env as never, stream, userId);
 	const ended = stream.gate.status === 'ended';
 	return {

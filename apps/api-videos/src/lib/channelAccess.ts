@@ -20,6 +20,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isSystemPlaylist } from './library';
+import { moveOutcomeOfRow } from './channelMoveOutcome';
 
 export interface ChannelAccessEnv {
 	channels?: R2Bucket;
@@ -69,6 +70,15 @@ export async function ownsRecord(env: ChannelAccessEnv, record: { userId?: strin
 		logger.warn('[ChannelAccess] Channel read failed; ownership refused', { channelId: record.channelId, error: error instanceof Error ? error.message : String(error) });
 		return false;
 	}
+}
+
+/** Who owns the record now: its live channel's owner; its own `userId` where there is no channel. Throws when the channel cannot be read. */
+export async function ownerOfRecord(env: ChannelAccessEnv, record: { userId?: string | null; channelId?: string | null }): Promise<string | null> {
+	if (record.channelId && env.channels) {
+		const object = await env.channels.get(record.channelId);
+		if (object) return ((await object.json()) as AccessChannel | null)?.userId ?? null;
+	}
+	return record.userId ?? null;
 }
 
 /**
@@ -125,8 +135,8 @@ export async function maySpeakAs(env: ChannelAccessEnv, channelId: string | null
 /**
  * Whether `userId` may delete a comment they wrote, by the channel it was written as: as maySpeakAs,
  * and their own words once that channel is gone and nobody else ever owned it (its owner deleted it).
- * A channel that moved to another account (its finished move, idx_admin_jobs_target) or cannot be
- * read refuses.
+ * A channel that moved to another account, or may have (its moves, idx_admin_jobs_target,
+ * lib/channelMoveOutcome.ts), or that cannot be read refuses.
  */
 export async function mayDeleteOwn(env: ChannelAccessEnv, channelId: string | null | undefined, userId: string): Promise<boolean> {
 	if (!channelId || channelId === userId) return true;
@@ -135,11 +145,11 @@ export async function mayDeleteOwn(env: ChannelAccessEnv, channelId: string | nu
 		if (await env.channels.head(channelId)) return maySpeakAs(env, channelId, userId);
 		const db = env.SEARCH_DB as SearchDb | undefined;
 		if (!db) return true;
-		const moved = await db
-			.prepare(`SELECT 1 AS n FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer' AND status = 'succeeded' LIMIT 1`)
+		const { results } = await db
+			.prepare(`SELECT status, params, result FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer'`)
 			.bind(channelId)
-			.first();
-		return !moved;
+			.all<{ status: string; params: string | null; result: string | null }>();
+		return (results ?? []).every((row) => moveOutcomeOfRow(row) === 'not_moved');
 	} catch (error) {
 		logger.warn('[ChannelAccess] Channel read failed; refused', { channelId, error: error instanceof Error ? error.message : String(error) });
 		return false;

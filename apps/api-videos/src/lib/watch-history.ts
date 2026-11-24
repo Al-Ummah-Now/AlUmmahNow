@@ -14,7 +14,8 @@ import { accountEmailField } from './account-email';
 import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
-import { canViewVideo, type VideoType } from './playlists';
+import type { VideoType } from './playlists';
+import { videoViewer } from './videoViewer';
 import { channelNamesByIds } from './channelNames';
 
 interface ProfileWithHistorySettings {
@@ -129,16 +130,17 @@ export async function withChannelNames<T extends { channelId?: string; channelNa
  * (as it did for the thumbnail): no extra reads.
  */
 export async function withLiveVideoFields<T extends { videoId: string; videoThumbnail?: string; videoTitle?: string }>(
-  videos: R2Bucket | undefined,
+  env: { videos?: R2Bucket; channels?: R2Bucket },
   userId: string,
   entries: T[],
 ): Promise<Array<T & { videoTitleLocalized?: Record<string, string> }>> {
-  if (!videos) return entries;
-  const repo = new R2Repository<VideoType>(videos);
+  if (!env.videos) return entries;
+  const repo = new R2Repository<VideoType>(env.videos);
+  const sees = videoViewer({ channels: env.channels }, userId);
   return Promise.all(
     entries.map(async (entry) => {
       const video = (await repo.getObject(entry.videoId).catch(() => null)) as (VideoType & { thumbnail?: string; titleLocalized?: Record<string, string> }) | null;
-      if (!video || !canViewVideo(video, userId)) return entry;
+      if (!video || !(await sees(video as never))) return entry;
       const live = video.thumbnailUrl || video.thumbnail;
       const localized = video.titleLocalized && Object.values(video.titleLocalized).some(Boolean) ? video.titleLocalized : undefined;
       return {

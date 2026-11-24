@@ -175,7 +175,7 @@ export async function markPremiereMadeForKids(env: PremiereEnv, streamId: string
 /** Shows another video instead, before the start. */
 export async function swapPremiere(env: PremiereEnv, stream: PremiereStream, video: PremiereVideo, actorId: string, now = Date.now()): Promise<{ stream: PremiereStream } | { problem: PremiereProblem | 'forbidden' | 'not_found' | 'premiere_started' }> {
 	const previous = stream.premiereVideoId;
-	if (video.userId !== stream.userId || video.channelId !== stream.channelId) return { problem: 'forbidden' };
+	if (video.channelId !== stream.channelId) return { problem: 'forbidden' };
 	const held = await hold(env, video.id, video.userId, { streamId: stream.id, heldAt: new Date(now).toISOString(), heldBy: actorId });
 	if ('problem' in held) return held;
 	let saved: { data: PremiereStream | null; rejected?: true };

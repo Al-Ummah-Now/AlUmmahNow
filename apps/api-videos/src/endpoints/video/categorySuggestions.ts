@@ -18,6 +18,7 @@ import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { searchDbOf, sendCategorySuggest } from "../../lib/categorySuggestions";
+import { ownsRecord } from '../../lib/channelAccess';
 
 const ScoreSchema = z.object({ category: z.string(), confidence: z.number() });
 const SuggestionSchema = z.object({
@@ -176,7 +177,7 @@ export class CategorySuggestionGet extends AuthenticatedRoute {
 		}
 		if (query.videoId) {
 			const video = await new R2Repository<VideoObject>(c.env.videos).getObject(query.videoId);
-			if (!video || video.userId !== userId) return c.json({ success: false, error: "not_found" }, 404);
+			if (!video || !(await ownsRecord(c.env as never, video, userId))) return c.json({ success: false, error: "not_found" }, 404);
 			const row = await getCategorySuggestion(db, query.videoId);
 			if (!row) return c.json({ success: false, error: "not_found" }, 404);
 			const categorySource = video.category ? (video.categorySource ?? "uploader") : null;
