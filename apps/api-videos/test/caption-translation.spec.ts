@@ -160,9 +160,9 @@ describe('transcript translation jobs', () => {
 		const own = await requestTranslationJob(asEnv, { video: video({ userId: 'boss' }), userId: 'boss', roles: null, sourceLanguage: 'ar', language: 'en', replace: false, waive: true }, NOV);
 		assert.ok('job' in own);
 		const row = await d1.prepare("SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = 'boss'").first();
-		assert.deepEqual(row, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
+		assert.deepEqual({ ...row }, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
 		const subject = await d1.prepare('SELECT subject_id, waived FROM caption_jobs WHERE id = ?').bind(own.job.id).first();
-		assert.deepEqual(subject, { subject_id: 'boss', waived: 1 });
+		assert.deepEqual({ ...subject }, { subject_id: 'boss', waived: 1 });
 		// On someone else's video the job is recorded against the channel owner, as before
 		const other = await requestTranslationJob(asEnv, { video: video(), userId: 'boss', roles: null, sourceLanguage: 'ar', language: 'fr', replace: false, waive: true }, NOV);
 		assert.ok('job' in other);
