@@ -27,7 +27,7 @@ import { eraseUserContactData } from './contact/erase';
 import { eraseUserTraces } from './erasure/user-traces';
 import { eraseArchiveSubject } from './erasure/archive-subjects';
 import { recordEraseTombstone } from './erasure/tombstones';
-import { eraseReportedOwner, reportSubjectFor } from './erasure/reports';
+import { eraseReportedOwner, storeReport } from './erasure/reports';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, ReportSubject, SocialEventPayload } from '@al-ummah/shared-types';
@@ -990,7 +990,10 @@ export class MessageProcessor {
     // dead-letters on its own. Queued first: if a later step fails, this message is
     // retried and queues it again, which is harmless (the step is idempotent).
     await this.queueContactDataErase(message, userId, env);
-    const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
+    // Erase tombstone (#1255) first: whatever names the person later (an error report from an open page, a
+    // report in the queue, a copy being refreshed) is refused or anonymised, and what is there now is cleared below
+    await recordEraseTombstone(env.REPORTS_DB, userId);
+    const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ?, reporter_name = NULL WHERE reporter_id = ?')
       .bind(DELETED_USER_ID, userId)
       .run();
     // AI moderation signals (Epic 28): tombstone the author, drop reviewer translations
@@ -1001,10 +1004,7 @@ export class MessageProcessor {
     // Their titles and channel names in the archive become placeholders (#1254): its own queued
     // step, paged, so a large channel never runs in this delivery
     await this.queueArchiveTitlesErase(message, userId, env);
-    // Erase tombstone (#1255): error reports arriving later (pages still open) are anonymised
-    await recordEraseTombstone(env.REPORTS_DB, userId);
-    // Reports about what the person made: who they were, and their words (a comment, a chat message), go.
-    // After the tombstone: a report still in the queue is stored without them
+    // Reports about what the person made: who they were, and their words (a comment, a chat message), go
     await eraseReportedOwner(env.REPORTS_DB, userId, DELETED_USER_ID);
     // The archive's pseudonym secret (#1177): the user's archived events no longer lead to them
     const archiveSubject = await eraseArchiveSubject(env.NOTIFICATIONS_DB, userId);
@@ -1096,13 +1096,7 @@ export class MessageProcessor {
       case MessageType.ReportCreate:
         const { description, subject } = message.payload as { description?: string; subject?: ReportSubject };
         const createdAt = timestamp || new Date().toISOString();
-        // What api-videos kept of the item when it was reported (a chat message goes with its stream)
-        const kept = subject ? await reportSubjectFor(env.REPORTS_DB, subject, DELETED_USER_ID) : null;
-
-        await env.REPORTS_DB.prepare(`
-          INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at, entity_title, entity_parent_id, channel_id, owner_id)
-          VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-        `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt, kept?.text || null, kept?.parentId ?? null, kept?.channelId ?? null, kept?.ownerId ?? null).run();
+        await storeReport(env.REPORTS_DB, { id: reportId, entityType, entityId, reporterId, reason, description: description || null, createdAt, subject: subject ?? null }, DELETED_USER_ID);
 
         this.logger.debug(`Report ${reportId} saved for ${entityType} ${entityId}`, {
           reason,

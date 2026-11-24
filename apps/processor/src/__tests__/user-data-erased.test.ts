@@ -33,7 +33,7 @@ describe('UserDataErased', () => {
     const { env, processor, prepare, bind, run } = setup();
     const result = await processor.processMessage(message({ userId: 'user-123', timestamp: new Date().toISOString() }), env);
     expect(result.success).toBe(true);
-    expect(prepare).toHaveBeenCalledWith('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?');
+    expect(prepare).toHaveBeenCalledWith('UPDATE reports SET reporter_id = ?, reporter_name = NULL WHERE reporter_id = ?');
     expect(bind).toHaveBeenCalledWith(DELETED_USER_ID, 'user-123');
     expect(run).toHaveBeenCalled();
   });

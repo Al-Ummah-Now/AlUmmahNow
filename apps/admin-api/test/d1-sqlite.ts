@@ -30,7 +30,7 @@ export function sqliteD1(
     }
     const stmt = db.prepare(sql);
     const params = args.map((a) => (a === undefined ? null : a)) as never[];
-    if (/^\s*(SELECT|WITH)/i.test(sql)) return { results: stmt.all(...params), success: true, meta: { changes: 0 } };
+    if (/^\s*(SELECT|WITH|EXPLAIN)/i.test(sql)) return { results: stmt.all(...params), success: true, meta: { changes: 0 } };
     // INSERT/UPDATE ... RETURNING: rows come back like a SELECT
     if (/\bRETURNING\b/i.test(sql)) {
       const rows = stmt.all(...params);

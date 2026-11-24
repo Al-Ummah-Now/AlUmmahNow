@@ -5,17 +5,51 @@
 import { eraseTombstoneKey, type ReportSubject } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
 
-/** Reports about the erased person's content, by idx_reports_owner. Idempotent. */
+/**
+ * The erased person in reports about their content (idx_reports_owner) and in ban decisions
+ * (idx_reports_banned_user). Titles go for every kind, as everywhere after an erasure (#1253, #1254), and the
+ * name of their channel; a comment or chat message keeps the name of the channel it was written on.
+ * Rows not filled yet, and refreshes, are admin-api's: its lookup drops erased people (reportMeta.ts). Idempotent.
+ */
 export async function eraseReportedOwner(db: D1Database, userId: string, tombstone: string): Promise<void> {
-  await db
-    .prepare("UPDATE reports SET owner_id = ?, owner_name = NULL, entity_title = CASE WHEN entity_type IN ('comment', 'live_chat') THEN NULL ELSE entity_title END WHERE owner_id = ?")
-    .bind(tombstone, userId)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE reports SET owner_id = ?, owner_name = NULL, entity_title = NULL, channel_name = CASE WHEN entity_type IN ('comment', 'live_chat') THEN channel_name ELSE NULL END WHERE owner_id = ?"
+      )
+      .bind(tombstone, userId),
+    db.prepare('UPDATE reports SET banned_user_id = ? WHERE banned_user_id = ?').bind(tombstone, userId),
+  ]);
 }
 
-/** The copies a new report starts with; nothing of a person erased before this message was read. */
-export async function reportSubjectFor(db: D1Database, subject: ReportSubject, tombstone: string): Promise<ReportSubject> {
-  if (!subject.ownerId) return subject;
-  const erased = await db.prepare('SELECT 1 AS x FROM erased_users WHERE user_key = ?').bind(await eraseTombstoneKey(subject.ownerId)).first();
-  return erased ? { ...subject, text: '', ownerId: tombstone } : subject;
+export interface NewReport {
+  id: string;
+  entityType: string;
+  entityId: string;
+  reporterId: string;
+  reason: string;
+  description: string | null;
+  createdAt: string;
+  /** What api-videos kept of the item when it was reported (a chat message goes with its stream) */
+  subject: ReportSubject | null;
+}
+
+/**
+ * Stores a report, without anyone erased before it was read from the queue. One statement: the erasure records
+ * its tombstone first and clears the reports after, so it either finds this row or was seen by it.
+ */
+export async function storeReport(db: D1Database, r: NewReport, tombstone: string): Promise<void> {
+  const ERASED = (n: number) => `EXISTS (SELECT 1 FROM erased_users WHERE user_key = ?${n})`;
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO reports (id, entity_type, entity_id, reporter_id, reason, description, status, created_at, entity_title, entity_parent_id, channel_id, owner_id)
+       VALUES (?1, ?2, ?3, CASE WHEN ${ERASED(12)} THEN ?14 ELSE ?4 END, ?5, ?6, 'pending', ?7,
+               CASE WHEN ${ERASED(13)} THEN NULL ELSE ?8 END, ?9, ?10, CASE WHEN ?11 IS NULL THEN NULL WHEN ${ERASED(13)} THEN ?14 ELSE ?11 END)`
+    )
+    .bind(
+      r.id, r.entityType, r.entityId, r.reporterId, r.reason, r.description, r.createdAt,
+      r.subject?.text || null, r.subject?.parentId ?? null, r.subject?.channelId ?? null, r.subject?.ownerId ?? null,
+      await eraseTombstoneKey(r.reporterId), r.subject?.ownerId ? await eraseTombstoneKey(r.subject.ownerId) : null, tombstone,
+    )
+    .run();
 }

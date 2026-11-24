@@ -35,7 +35,7 @@ import {
   type ReportedItemSummary,
 } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
-import { itemKey, lookupMany, type Lookup, type MetaEnv } from './reportMeta';
+import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany, type Lookup, type MetaEnv } from './reportMeta';
 import { logger } from '../logger';
 
 export const OPEN = "('pending', 'reviewing')";
@@ -309,6 +309,7 @@ export function itemSummary(copy: ItemCopy, lookup: Lookup | null): ReportedItem
 }
 
 const personName = (lookup: Lookup | null, id: string, copy: string | null): string | null => {
+  if (id === DELETED_USER_ID) return null;
   const user = lookup?.users.get(id);
   if (user) return user.found ? user.displayName || user.userName : null;
   return copy;
@@ -438,7 +439,7 @@ export async function buildGroups(env: MetaEnv, rows: GroupRow[]): Promise<{ gro
 
 /** Keeps the search copies of shown items current (renamed titles, channels, owners). */
 async function storeItemCopies(db: D1Database, rows: ItemCopy[], lookup: Lookup): Promise<void> {
-  const statements = rows.flatMap((row) => {
+  const statements = (await Promise.all(rows.map(async (row) => {
     const live = lookup.items.get(itemKey(row.entity_type, row.entity_id));
     if (!live?.found) return [];
     const owner = live.ownerId ? lookup.users.get(live.ownerId) : undefined;
@@ -446,10 +447,10 @@ async function storeItemCopies(db: D1Database, rows: ItemCopy[], lookup: Lookup)
     if (live.title === row.entity_title && live.channelName === row.channel_name && live.ownerId === row.owner_id && ownerName === row.owner_name && live.parentId === row.entity_parent_id) return [];
     return [
       db
-        .prepare('UPDATE reports SET entity_title = ?, entity_parent_id = ?, channel_id = ?, channel_name = ?, owner_id = ?, owner_name = ? WHERE entity_type = ? AND entity_id = ?')
-        .bind(live.title, live.parentId, live.channelId, live.channelName, live.ownerId, ownerName, row.entity_type, row.entity_id),
+        .prepare(`UPDATE reports SET entity_title = ?, entity_parent_id = ?, channel_id = ?, channel_name = ?, owner_id = ?, owner_name = ? WHERE entity_type = ? AND entity_id = ? AND ${NOBODY_ERASED}`)
+        .bind(live.title, live.parentId, live.channelId, live.channelName, live.ownerId, ownerName, row.entity_type, row.entity_id, await erasedKeysOf([live.ownerId])),
     ];
-  });
+  }))).flat();
   if (statements.length === 0) return;
   await db.batch(statements).catch((error) => logger.warn('[ReportQueue] Could not store refreshed item copies', { items: statements.length, error: String(error) }));
 }

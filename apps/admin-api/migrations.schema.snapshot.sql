@@ -43,6 +43,7 @@
 --   apps/admin-api/migrations/0049_invite_typographic_quotes.sql
 --   apps/admin-api/migrations/0050_channel_verification_kind.sql
 --   apps/admin-api/migrations/0051_reports_live_chat.sql
+--   apps/admin-api/migrations/0052_reports_banned_user_idx.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -173,6 +174,7 @@ CREATE INDEX idx_newsletter_subscribers_ip ON newsletter_subscribers (ip_hash, u
 CREATE INDEX idx_newsletter_subscribers_status ON newsletter_subscribers (status, id);
 CREATE INDEX idx_plan_audit_entity ON plan_audit_log(entity_type, entity_id, created_at);
 CREATE UNIQUE INDEX idx_plans_one_default ON plans(is_default) WHERE is_default = 1;
+CREATE INDEX idx_reports_banned_user ON reports(banned_user_id) WHERE banned_user_id IS NOT NULL;
 CREATE INDEX idx_reports_closed ON reports(status, resolved_at);
 CREATE INDEX idx_reports_created_at ON reports(created_at);
 CREATE INDEX idx_reports_entity ON reports(entity_type, entity_id);
