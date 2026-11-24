@@ -274,6 +274,8 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 	return {
 		...row,
 		description: channel.description ?? '',
+		verificationKind:
+			channel.isVerified === true && (channel.verificationKind === 'scholar' || channel.verificationKind === 'institution') ? channel.verificationKind : null,
 		coverUrl: channel.coverUrl ?? null,
 		isMain: channel.isMain === true,
 		suspension: (channel.suspension as SuspensionInfo | undefined) ?? null,

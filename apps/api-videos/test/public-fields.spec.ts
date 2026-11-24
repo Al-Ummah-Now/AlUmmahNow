@@ -77,6 +77,15 @@ describe('public channel output', () => {
 		]);
 	});
 
+	it('a verified channel shows the label kind and date, never the reason or the admin (E21-D4)', () => {
+		const verified = { ...channel, isVerified: true, verificationKind: 'institution', verifiedAt: '2026-11-20T10:00:00.000Z', verifiedByUserId: 'admin-1', verificationNote: 'internal' };
+		const out = JSON.parse(JSON.stringify(toPublicChannel(verified as never)));
+		assert.deepEqual(out.verification, { kind: 'institution', verifiedAt: '2026-11-20T10:00:00.000Z' });
+		assert.doesNotMatch(JSON.stringify(out), /admin-1|internal/);
+		const legacy = JSON.parse(JSON.stringify(toPublicChannel({ ...channel, isVerified: true } as never)));
+		assert.deepEqual(legacy.verification, { kind: null, verifiedAt: null });
+	});
+
 	it('GET /api/channels/:id has no account details, signed out or signed in', async () => {
 		for (const auth of [null, { userId: 'owner' }, { userId: 'someone' }]) {
 			const app = buildApp((r) => r.get('/api/channels/:id', ChannelFetch), auth);

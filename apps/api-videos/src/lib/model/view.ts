@@ -246,6 +246,10 @@ export const PublicChannelView = z.object({
     isMain: z.boolean(),
     isPrivate: z.boolean().optional(),
     isVerified: z.boolean().optional(),
+    verification: z
+        .object({ kind: z.enum(['scholar', 'institution']).nullable(), verifiedAt: z.string().nullable() })
+        .optional()
+        .describe("The verified label while it is granted (wiki Epic 21, E21-D4): kind and date. Granted by admins; the reason is never public"),
     avatarUrl: Str().optional(),
     coverUrl: Str().optional(),
     handle: Str().optional().describe("Unique @handle (display casing)"),

@@ -24,6 +24,15 @@ type StoredProfile = z.infer<typeof BusinessProfile>;
  * (subscriberCounts, SCALABILITY-AUDIT AV-4). Without it the legacy array in
  * the channel JSON is counted.
  */
+/** The verified label's public part: its kind and date, never the reason or the admin (E21-D4). */
+function publicVerification(channel: StoredChannel): { kind: 'scholar' | 'institution' | null; verifiedAt: string | null } {
+	const raw = channel as StoredChannel & { verificationKind?: unknown; verifiedAt?: unknown };
+	return {
+		kind: raw.verificationKind === 'scholar' || raw.verificationKind === 'institution' ? raw.verificationKind : null,
+		verifiedAt: typeof raw.verifiedAt === 'string' ? raw.verifiedAt : null,
+	};
+}
+
 export function toPublicChannel(channel: StoredChannel, subscribers?: number): z.infer<typeof PublicChannelView> {
 	return {
 		id: channel.id,
@@ -35,6 +44,7 @@ export function toPublicChannel(channel: StoredChannel, subscribers?: number): z
 		isMain: channel.isMain === true,
 		isPrivate: channel.isPrivate,
 		isVerified: channel.isVerified === true,
+		...(channel.isVerified === true ? { verification: publicVerification(channel) } : {}),
 		avatarUrl: channel.avatarUrl,
 		coverUrl: channel.coverUrl,
 		handle: channel.handle,

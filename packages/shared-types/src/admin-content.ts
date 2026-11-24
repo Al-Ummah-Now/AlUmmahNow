@@ -220,6 +220,8 @@ export interface AdminChannelRow {
 
 export interface AdminChannelDetail extends AdminChannelRow {
   description: string;
+  /** The scholar label's kind while verified (wiki Epic 21, E21-D4) */
+  verificationKind: 'scholar' | 'institution' | null;
   coverUrl: string | null;
   isMain: boolean;
   suspension: SuspensionInfo | null;
