@@ -4,7 +4,7 @@
  */
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
 import { getSecret } from '../env-helpers';
-import { REVIEW_URL_SECONDS, signLiveUrl } from './access';
+import { signReviewUrl } from './access';
 import type { LiveEnv } from './providers';
 
 export interface VodSignEnv {
@@ -32,7 +32,8 @@ export async function signLiveVodUrl(env: VodSignEnv, url: string | null): Promi
 	return signedBunnyUrl(host, m[1], 'playlist.m3u8', await bunnyDirectoryToken(key, m[1], expires), expires);
 }
 
-/** A recording's URL for its review (the media worker, the review page): also while the recording is held. */
-export async function signReviewVodUrl(env: VodSignEnv & LiveEnv, url: string | null): Promise<string | null> {
-	return signLiveUrl(env, await signLiveVodUrl(env, url), REVIEW_URL_SECONDS);
+/** A recording's URL for one review of it (the media worker, the review page), whatever the stream's state while it is open. */
+export async function signReviewVodUrl(env: VodSignEnv & LiveEnv, url: string | null, reviewId: string | null | undefined): Promise<string | null> {
+	const signed = await signLiveVodUrl(env, url);
+	return reviewId ? signReviewUrl(env, signed, reviewId) : signed;
 }

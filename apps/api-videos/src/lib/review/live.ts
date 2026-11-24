@@ -91,7 +91,7 @@ export async function startLiveVodReview(env: LiveReviewEnv, streamId: string, s
 		});
 		if (why || !saved) return { started: false, why: why ?? 'stream not found' };
 		const review = await reviewExtractionFor(env);
-		const vodUrl = await signReviewVodUrl(env as never, session.vod_url);
+		const vodUrl = await signReviewVodUrl(env as never, session.vod_url, reviewId);
 		if (env.TRANSCODE_QUEUE && review && vodUrl) {
 			const job: LiveReviewJobMessage = { kind: 'live_review', streamId, reviewId, rev: rev(), vodUrl, review, queuedAt: now.toISOString() };
 			try {
@@ -244,7 +244,7 @@ export async function liveReviewSubject(env: LiveReviewEnv, streamId: string) {
 		duration,
 		status: s.status,
 		review: s.review ?? null,
-		playUrl: await signReviewVodUrl(env as never, s.vodUrl ?? null),
+		playUrl: await signReviewVodUrl(env as never, s.vodUrl ?? null, s.review?.reviewId ?? s.reviewShadow?.reviewId),
 		thumbnailUrl: s.thumbnailUrl ?? null,
 	};
 }

@@ -54,7 +54,7 @@ import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../chan
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 import { kickRepairJob, type RepairJobEnv } from './repairs';
 import { kickLivePurge } from '../live/metadata';
-import { purgeClosedSessions } from '../live/access';
+import { indexedAccess, purgeWhenClosed } from '../live/access';
 import { deleteEdgeCache } from '../edge-cache';
 import { chatCacheUrl } from '../live/chat';
 import { accessChangedFor, broadcast } from '../websocket-notify';
@@ -242,6 +242,7 @@ function streamIdForKey(key: string): string | null {
  */
 async function syncStreamInline(ctx: RepairContext, id: string, key: string, object: unknown, version: number): Promise<void> {
   try {
+    const before = await indexedAccess(ctx.db, id);
     await syncOwnership(ctx.db, 'stream', id, object, Date.now(), version);
     await syncLiveMetadata(ctx.db, id, object, version);
     // Private, hidden, cancelled, deleted or chat off: whoever is on the realtime channel leaves it. Every
@@ -253,7 +254,7 @@ async function syncStreamInline(ctx: RepairContext, id: string, key: string, obj
       ctx.waitUntil(broadcast(ctx.jobs as never, liveChatChannel(id), 'live_chat_closed', { streamId: id }));
     }
     // Its media leaves the CDN with it (lib/live/access.ts; the edge itself follows the record)
-    ctx.waitUntil(purgeClosedSessions(ctx.jobs as never, id, object && typeof object === 'object' ? object : null));
+    ctx.waitUntil(purgeWhenClosed(ctx.jobs as never, id, before, object && typeof object === 'object' ? object : null));
     if (object == null) ctx.waitUntil(kickLivePurge(ctx.jobs).catch(error => logger.warn('[SearchSync] Could not start the live purge job', { error: error instanceof Error ? error.message : String(error) })));
   } catch (error) {
     await repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });

@@ -1,5 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { liveRecordingWithheld, recordingHidden } from './liveSession';
+import { forManager, liveRecordingWithheld, recordingHidden } from './liveSession';
 import { isPremiere } from '../../lib/live/premieres';
 import { Num, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -164,7 +164,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 
 			const reminders = await reminderCounts(c, streams.map((s) => s.id));
 			// Transform to view models
-			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
+			const streamViews = await Promise.all(streams.map(async ({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
 				...stream,
 				eventType: shownEventType(stream, eventsOn),
 				reminderCount: reminders.get(stream.id) ?? 0,
@@ -174,7 +174,9 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				...(managesStream(stream) && createdBy ? { createdBy } : {}),
 				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)
 				...(managesStream(stream) && review ? { review } : {}),
-				...(recordingHidden({ review }, managesStream(stream)) ? { vodUrl: null } : {}),
+				// What is not open to everyone plays for its managers only, with a signed URL
+				...(stream.playbackUrl ? { playbackUrl: await forManager(c, { ...stream, review, liveAgainSessionId: _la }, managesStream(stream), stream.playbackUrl) } : {}),
+				...(recordingHidden({ review }, managesStream(stream)) ? { vodUrl: null } : stream.vodUrl ? { vodUrl: await forManager(c, { ...stream, review, liveAgainSessionId: _la }, managesStream(stream), stream.vodUrl) } : {}),
 				likesCount: stream.likes?.length || 0,
 				dislikes: [],
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
@@ -186,7 +188,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				// Remove sensitive data for public view
 				streamKey: undefined,
 				rtmpUrl: managesStream(stream) ? stream.rtmpUrl : undefined,
-			}));
+			})));
 
 			// Sort by date created (newest first) and status (live streams first)
 			streamViews.sort((a, b) => {
