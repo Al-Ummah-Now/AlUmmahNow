@@ -182,6 +182,10 @@ export const Video = z.object({
     isLive: z.boolean().default(false),
     // Per-video comment settings (Story 29.2): on | held (for review) | off
     commentSettings: z.enum(['on', 'held', 'off']).optional(),
+    // Content flags (@al-ummah/shared-types content-flags): signed-in 18+ only; made for kids
+    ageRestricted: z.boolean().optional(),
+    ageRestrictedBy: z.enum(['creator', 'staff']).optional(),
+    madeForKids: z.boolean().optional(),
     // Scheduling fields
     scheduledPublishDate: DateTime().optional(),
     scheduledPublishTimezone: Str().optional(),

@@ -629,6 +629,11 @@ export class MessageProcessor {
     };
     // The first page also tells social (auto-posts, webhooks): once per event, whatever the subscriber count
     if (!payload.afterUserId && !reminders) await this.announceToSocial(env, { channelId: payload.channelId, event: payload.kind === 'live_started' ? 'live' : payload.isHighlight ? 'video' : 'short', entityId: payload.entityId });
+    // Made for kids: social still hears about it, nobody is notified (wiki E20 §5.5); an unreadable switch retries
+    if (payload.madeForKids && (await featureGate(env as never, 'ageRules')).on) {
+      this.logger.debug('Made for kids; subscribers not notified', { entityId: payload.entityId });
+      return;
+    }
     // One page of subscribers per message (SCALABILITY-AUDIT PR-5): the next
     // page is queued first, so a failure below retries only this page
     const page = await fanoutNotificationPage(env.NOTIFICATIONS_DB, payload);

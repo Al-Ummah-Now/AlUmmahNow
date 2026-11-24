@@ -4,7 +4,8 @@ import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/librarie
 import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
 import { unsignedBunnyUrl } from "../../lib/bunny-signing";
 import { canOnVideo } from "../../lib/channelAccess";
-import { applyFormatChoice } from "@al-ummah/shared-types";
+import { applyContentFlags, applyFormatChoice, type ContentFlagProblem } from "@al-ummah/shared-types";
+import { contentFlagProblem, contentFlagRefusal } from '../../lib/contentFlags';
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -155,6 +156,11 @@ export class VideoUpdate extends AuthenticatedRoute {
 		const refused = categoryRefusal(c, videoUpdateInput.category, existingVideo.category);
 		if (refused) return refused;
 
+		// Age-restricted / made for kids (switch ageRules, lib/contentFlags.ts)
+		const flags = { ageRestricted: videoUpdateInput.ageRestricted, madeForKids: videoUpdateInput.madeForKids };
+		const flagsRefused = await contentFlagRefusal(c, flags, existingVideo);
+		if (flagsRefused) return flagsRefused;
+
 		// A new thumbnail must have the video's shape (lib/thumbnail/shape.ts)
 		let thumbnailType: 'auto' | 'custom' | undefined;
 		if (videoUpdateInput.thumbnailUrl !== undefined && videoUpdateInput.thumbnailUrl !== existingVideo.thumbnailUrl) {
@@ -168,7 +174,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Update the video with new values (applied to the fresh copy on every
 		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
-		const { category, tags, format, visibility, ...restInput } = videoUpdateInput;
+		const { category, tags, format, visibility, ageRestricted: _ageRestricted, madeForKids: _madeForKids, ...restInput } = videoUpdateInput;
 		const applyUpdate = (base: VideoType): VideoType => {
 			const next: VideoType = {
 			...base,
@@ -227,12 +233,16 @@ export class VideoUpdate extends AuthenticatedRoute {
 		// Save the updated video: a conditional write on the fresh copy, so a
 		// concurrent comment, like or view flush is not overwritten
 		let previous = existingVideo;
-		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true | 'held'>(id, (fresh) => {
+		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true | 'held' | ContentFlagProblem>(id, (fresh) => {
 			if (fresh.userId !== existingVideo.userId) return { reject: true };
+			// Staff may have locked it, or the other flag been set, since the check above
+			const flagProblem = applyContentFlags({ ...fresh }, flags);
+			if (flagProblem) return { reject: flagProblem };
 			// Held since the check above
 			if (changesVisibility && (fresh as { premiereHold?: unknown }).premiereHold) return { reject: 'held' };
 			previous = { ...fresh };
 			const next = applyUpdate(fresh);
+			applyContentFlags(next, flags);
 			// Fields the update removed (format 'auto' clears the uploader's
 			// choice) must go from the stored copy too: Object.assign only adds
 			for (const key of Object.keys(fresh)) {
@@ -250,6 +260,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
 		if (rejected === 'held') return apiError(c, 409, 'premiere_scheduled');
+		if (rejected && rejected !== true) return contentFlagProblem(c, rejected);
 		if (rejected) {
 			return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
 		}

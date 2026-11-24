@@ -88,6 +88,8 @@ export const VideoUpdateInput = z.object({
     tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
     commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for the owner's review, or off"),
+    ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only (switch ageRules)"),
+    madeForKids: z.boolean().optional().describe("Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"),
     format: z.enum(['short', 'video', 'auto']).optional().describe("Publish as a Short or as a video; 'auto' detects it (≤ 3 min and vertical or square = Short)"),
 });
 

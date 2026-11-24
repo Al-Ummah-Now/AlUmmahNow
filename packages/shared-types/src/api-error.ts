@@ -168,6 +168,9 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   not_matched: { action: 'none', en: 'Only a matched file can be uploaded.', ar: 'لا يُرفع إلا ملف تمت مطابقته.' },
   has_file: { action: 'none', en: 'That record already has its video.', ar: 'لذلك السجل مرئي بالفعل.' },
   not_uploading: { action: 'none', en: 'This file isn’t being uploaded.', ar: 'هذا الملف لا يُرفع الآن.' },
+  // Content flags (wiki E20)
+  content_flags_conflict: { action: 'none', en: 'A video can’t be both age-restricted and made for kids.', ar: 'لا يمكن أن يكون المرئي مقيّدًا بالعمر ومخصصًا للأطفال معًا.' },
+  age_restricted_locked: { action: 'none', en: 'Our team set this age restriction, so it can’t be removed here.', ar: 'وضع فريقنا هذا التقييد العمري، لذلك لا يمكن إزالته من هنا.' },
   // 500 family
   server_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },
   internal_error: { action: 'retry', en: 'Something on our side failed. We’ve been told, so please try again in a moment.', ar: 'حدث خطأ من جهتنا وأُبلغنا به. يُرجى المحاولة بعد قليل.' },

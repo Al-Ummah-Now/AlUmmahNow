@@ -486,6 +486,15 @@ describe('cancel, reschedule, swap', () => {
 		await t.putVideo({ importedFrom: { kind: 'youtube', madeForKids: true } });
 		assert.equal((await t.made()).madeForKids, true);
 	});
+
+	it('so does its owner’s own choice, which wins over what the source said', async () => {
+		const own = await setup();
+		await own.putVideo({ madeForKids: true });
+		assert.equal((await own.made()).madeForKids, true);
+		const cleared = await setup();
+		await cleared.putVideo({ madeForKids: false, importedFrom: { kind: 'youtube', madeForKids: true } });
+		assert.ok(!(await cleared.made()).madeForKids);
+	});
 });
 
 it('the cron’s queries use the premiere index', async () => {

@@ -12,6 +12,7 @@ import {
   SearchStatement,
   SearchVideoPayload,
   buildFtsQuery,
+  isMadeForKids,
 } from '@al-ummah/shared-types';
 import { DiscoveryVideo, isDiscoverable, loadDiscoverableVideos } from './discovery';
 import { logger } from './logger';
@@ -66,6 +67,7 @@ function fromRow(row: CandidateRow): DiscoveryVideo | null {
       category: payload.category,
       language: payload.language,
       tags: payload.tags,
+      ...(payload.madeForKids ? { madeForKids: true } : {}),
     };
   } catch {
     return null;
@@ -130,30 +132,33 @@ export interface CandidatePool {
   source: 'index' | 'scan';
 }
 
+/**
+ * The profile's seeds: the video being watched, then the viewer's history. With the age rules on (wiki E20
+ * §5.5) a video made for kids is never a history seed, and next to one the list doesn't depend on the viewer.
+ */
+export function poolSeeds(seed: DiscoveryVideo | null, history: DiscoveryVideo[], kidsRules: boolean): DiscoveryVideo[] {
+  const used = !kidsRules ? history : isMadeForKids(seed) ? [] : history.filter(video => !isMadeForKids(video));
+  return [...(seed ? [seed] : []), ...used];
+}
+
 async function readSeedObject(bucket: R2Bucket, id: string): Promise<DiscoveryVideo | null> {
   return bucket.get(id).then(o => (o ? o.json<DiscoveryVideo>() : null)).catch(() => null);
 }
 
-async function poolFromIndex(db: SearchDb, bucket: R2Bucket, videoId: string | undefined, historyIds: string[]): Promise<CandidatePool | null> {
+async function poolFromIndex(db: SearchDb, bucket: R2Bucket, videoId: string | undefined, historyIds: string[], kidsRules: boolean): Promise<CandidatePool | null> {
   const found = await indexedSeeds(db, [...new Set([...(videoId ? [videoId] : []), ...historyIds])]);
   // A video outside the index (e.g. private) can still seed its own shelf.
   const seed = videoId ? found.get(videoId) ?? await readSeedObject(bucket, videoId) : null;
-  const seeds = [
-    ...(seed ? [seed] : []),
-    ...historyIds.map(id => found.get(id)).filter((video): video is DiscoveryVideo => !!video),
-  ];
+  const seeds = poolSeeds(seed, historyIds.map(id => found.get(id)).filter((video): video is DiscoveryVideo => !!video), kidsRules);
   const candidates = await indexedCandidates(db, seeds);
   return candidates.length > 0 ? { seeds, candidates, source: 'index' } : null;
 }
 
-async function poolFromScan(bucket: R2Bucket, videoId: string | undefined, historyIds: string[]): Promise<CandidatePool> {
+async function poolFromScan(bucket: R2Bucket, videoId: string | undefined, historyIds: string[], kidsRules: boolean): Promise<CandidatePool> {
   const candidates = await loadDiscoverableVideos(bucket);
   const byId = new Map(candidates.map(video => [video.id, video]));
   const seed = videoId ? byId.get(videoId) ?? await readSeedObject(bucket, videoId) : null;
-  const seeds = [
-    ...(seed ? [seed] : []),
-    ...historyIds.map(id => byId.get(id)).filter((video): video is DiscoveryVideo => !!video),
-  ];
+  const seeds = poolSeeds(seed, historyIds.map(id => byId.get(id)).filter((video): video is DiscoveryVideo => !!video), kidsRules);
   return { seeds, candidates, source: 'scan' };
 }
 
@@ -162,18 +167,19 @@ export async function loadCandidatePool(
   env: { SEARCH_DB?: unknown; videos: R2Bucket },
   videoId: string | undefined,
   historyIds: string[],
+  kidsRules = false,
 ): Promise<CandidatePool> {
   const db = env.SEARCH_DB as SearchDb | undefined;
   if (db) {
     try {
-      const pool = await poolFromIndex(db, env.videos, videoId, historyIds);
+      const pool = await poolFromIndex(db, env.videos, videoId, historyIds, kidsRules);
       if (pool) return pool;
       logger.warn('[Recommendations] Index returned no candidates, scanning the bucket');
     } catch (error) {
       logger.warn('[Recommendations] Index lookup failed, scanning the bucket', { error: error instanceof Error ? error.message : String(error) });
     }
   }
-  return poolFromScan(env.videos, videoId, historyIds);
+  return poolFromScan(env.videos, videoId, historyIds, kidsRules);
 }
 
 export function hydrationCount(limit: number): number {

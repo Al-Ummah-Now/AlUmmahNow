@@ -1,3 +1,5 @@
+import { contentFlagFields } from '@al-ummah/shared-types';
+import { contentFlagRefusal } from '../../lib/contentFlags';
 import { fileReusedVideo, uploadCollection } from "../../lib/channelCollection";
 import { categoryRefusal } from "../../lib/categories";
 import { uploadIdentity } from "../../lib/channelAccess";
@@ -38,6 +40,8 @@ const BatchVideoSchema = z.object({
 	descriptionLocalized: z.object({ en: z.string().max(5000).optional(), ar: z.string().max(5000).optional() }).optional().describe("Descriptions per language"),
 	language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video"),
 	commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for review, or off"),
+	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only (switch ageRules)"),
+	madeForKids: z.boolean().optional().describe("Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"),
 	fileName: z.string().max(255).optional().describe("The file's name as picked (kept for bulk rename's {filename})"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 	fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB): retrying the same file reuses its unfinished video"),
@@ -160,6 +164,12 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				}
 			}
 
+			// Age-restricted / made for kids (switch ageRules, lib/contentFlags.ts)
+			for (const video of requestedVideos) {
+				const flagsRefused = await contentFlagRefusal(c, video);
+				if (flagsRefused) return flagsRefused;
+			}
+
 			// channelIdMiddleware already verified the header belongs to this user.
 			// A body channelId is only accepted when it matches the header.
 			const headerChannelId = request.headers.channelId || undefined;
@@ -203,6 +213,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 					...(sharedMetadata?.category ? { category: sharedMetadata.category, categorySource: 'uploader' as const } : {}),
 					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
+					...contentFlagFields(videoData),
 					fileSize: videoData.fileSize,
 					originalFormat: videoData.mimeType,
 				};
@@ -239,6 +250,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							...(videoData.descriptionLocalized ? { descriptionLocalized: dropEmpty(videoData.descriptionLocalized) } : {}),
 							...(videoData.language ? { language: videoData.language } : {}),
 							...(videoData.commentSettings ? { commentSettings: videoData.commentSettings } : {}),
+							ageRestricted: videoData.ageRestricted,
+							madeForKids: videoData.madeForKids,
 							...(videoData.fileName ? { originalFilename: videoData.fileName } : {}),
 							category: sharedMetadata?.category,
 							format: videoData.format,

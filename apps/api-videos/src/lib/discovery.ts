@@ -31,6 +31,8 @@ export interface DiscoveryVideo {
   channelNameLocalized?: Record<string, string>;
   channelAvatarUrl?: string;
   thumbnailUrl?: string;
+  /** Made for kids (wiki E20 §5.5): never a seed while the age rules are on */
+  madeForKids?: boolean;
   videoUrl?: string;
   playUrl?: string;
   dateCreated?: string;

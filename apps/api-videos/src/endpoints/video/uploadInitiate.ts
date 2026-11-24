@@ -31,6 +31,8 @@ import { bunnyRef } from "../../lib/media/providers";
 import { prepareImportUpload, recordImportUpload, youtubeItemClaimKey, YtHttpError, type ImportUpload, type YtEnv } from "../../lib/youtube-import/service";
 import { confirmYoutubeImportItem } from "../../middleware/upload-limits";
 import { applySchedule, announceSchedule, scheduleDateProblem } from "../../lib/videoSchedule";
+import { contentFlagFields } from "@al-ummah/shared-types";
+import { contentFlagRefusal } from "../../lib/contentFlags";
 
 /** The initiate's JSON body (also the admin import's, wiki TOOLS-ADMIN TA-5, without youtubeImport). */
 export const InitiateBodySchema = z.object({
@@ -48,6 +50,8 @@ export const InitiateBodySchema = z.object({
 	descriptionLocalized: z.record(z.string(), z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
 	category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
+	ageRestricted: z.boolean().optional().describe("Signed-in viewers of 18 or over only (switch ageRules)"),
+	madeForKids: z.boolean().optional().describe("Made for kids: no comments, live chat, notifications or personalization (switch ageRules)"),
 	categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
 		.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),
 	thumbnail: z.object({
@@ -203,6 +207,11 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			}, 400);
 		}
 
+		// Age-restricted / made for kids (switch ageRules); a Move from YouTube item decides its own
+		const flags = youtubeImport ? {} : { ageRestricted: input.ageRestricted, madeForKids: input.madeForKids };
+		const flagsRefused = await contentFlagRefusal(c, flags);
+		if (flagsRefused) return flagsRefused;
+
 		// Move from YouTube: the item's snapshot decides the metadata (lib/youtube-import/service.ts)
 		let imported: ImportUpload | null = null;
 		if (youtubeImport) {
@@ -288,6 +297,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 			...(format && format !== 'auto' && { format }),
 			fileSize,
 			originalFormat: mimeType,
+			...contentFlagFields(flags),
 			...importFields,
 		};
 
@@ -327,6 +337,7 @@ export async function initiateUpload(c: AppContext, who: UploadWho, input: Initi
 					category,
 					...(category && { categorySource: 'uploader' as const }),
 					format,
+					...flags,
 					fileSize,
 					mimeType,
 					customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,

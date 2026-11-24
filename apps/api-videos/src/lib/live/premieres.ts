@@ -9,6 +9,7 @@
  * Runs in api-videos only, and only on a bucket wrapped by withSearchSync (the write hooks move the
  * media and index the video and the stream). The scheduler Worker takes no part.
  */
+import { isMadeForKids, type ContentFlagFields } from '@al-ummah/shared-types';
 import { LIVE_METADATA_TABLE, isShort, isVideoOpenToAnyone, isVideoReady, isVideoRemoved, isOpenByLink, featureGate, tierAllowsLiveCapability, type PremiereHold, type VideoObject } from '@al-ummah/shared-types';
 import { channelOwnerTier } from '../creatorTiers';
 import { hasSuspensionHolds } from '../admin/frozen';
@@ -137,7 +138,7 @@ export async function createPremiere(env: PremiereEnv, input: NewPremiere, now =
 		premiereVideoId: video.id,
 		durationSeconds: Math.max(1, Math.round(Number(video.duration))),
 		// The creator's word for it on the source platform: no chat, no replay, no reminders
-		...((video.importedFrom as { madeForKids?: boolean } | undefined)?.madeForKids === true ? { madeForKids: true } : {}),
+		...(isMadeForKids(video as ContentFlagFields) ? { madeForKids: true } : {}),
 		userId: video.userId,
 		...(input.actorId !== video.userId ? { createdBy: input.actorId } : {}),
 		channelId: video.channelId,
@@ -174,7 +175,7 @@ export async function swapPremiere(env: PremiereEnv, stream: PremiereStream, vid
 			if (fresh.status !== 'scheduled' || fresh.premiereVideoId !== previous) return { reject: true };
 			fresh.premiereVideoId = video.id;
 			fresh.durationSeconds = Math.max(1, Math.round(Number(held.video.duration)));
-			if ((held.video.importedFrom as { madeForKids?: boolean } | undefined)?.madeForKids === true) fresh.madeForKids = true;
+			if (isMadeForKids(held.video as ContentFlagFields)) fresh.madeForKids = true;
 			fresh.dateModified = new Date(now).toISOString();
 			return true;
 		});

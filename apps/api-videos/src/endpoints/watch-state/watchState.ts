@@ -7,6 +7,7 @@
  *
  * Rules live in lib/watch-state.ts; storage is the watch history entry.
  */
+import { kidsRulesApply } from '../../lib/contentFlags';
 import { z } from 'zod';
 import type { WatchHistoryEntry, WatchHistoryEvent } from '@al-ummah/shared-types';
 import { AuthenticatedRoute } from '../../base';
@@ -82,6 +83,8 @@ export class WatchStatePut extends AuthenticatedRoute {
 		if (!(await repo.getObject(id))) {
 			const video = (await new R2Repository<VideoType>(c.env.videos).getObject(videoId)) as any;
 			if (!video || !canViewVideo(video, userId)) return c.json({ error: 'Video not found' }, 404);
+			// Made for kids: no position is kept (wiki E20 §5.5)
+			if (await kidsRulesApply(c.env, video)) return c.json({ applied: false, paused: false, state: null });
 			initial = {
 				id,
 				userId,

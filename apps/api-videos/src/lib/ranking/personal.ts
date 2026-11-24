@@ -10,6 +10,7 @@
  * site ranking, videos already watched are left out, and the list is mixed
  * across channels. Nothing is stored: the list is computed per request.
  */
+import { ageRulesOn } from '../contentFlags';
 import { buildProfile, recommendationScore, type DiscoveryVideo } from '../discovery';
 import { indexedCandidates, indexedSeeds, loadRecentHistory } from '../recommendations';
 import { subscribedChannelIds } from '../subscription-store';
@@ -96,7 +97,9 @@ export async function personalOrder(env: PersonalEnv, userId: string, topIds: re
 	if (history.seedIds.length === 0 && subscribed.length === 0) return null;
 
 	const seedMap = await indexed(db, history.seedIds);
-	const seeds = history.seedIds.map((id) => seedMap.get(id)).filter((v): v is DiscoveryVideo => !!v);
+	// A video made for kids never shapes what is suggested, even one watched before it was marked (wiki E20 §5.5)
+	const kidsRules = await ageRulesOn(env).catch(() => true);
+	const seeds = history.seedIds.map((id) => seedMap.get(id)).filter((v): v is DiscoveryVideo => !!v && !(kidsRules && v.madeForKids === true));
 	const fromSubscriptions = subscribed.length ? ((await subscriptionFeedIds(env, subscribed, SUBSCRIPTION_CANDIDATES, 0))?.ids ?? []) : [];
 	const [similar, byId] = await Promise.all([
 		seeds.length ? indexedCandidates(db, seeds) : Promise.resolve([] as DiscoveryVideo[]),

@@ -4,6 +4,7 @@
  * Records a video view in the user's watch history
  */
 
+import { kidsRulesApply } from '../../lib/contentFlags';
 import { z } from "zod";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -114,6 +115,9 @@ export class RecordWatchHistory extends AuthenticatedRoute {
       if (!video) {
         return c.json({ error: "Video not found" }, 404);
       }
+
+      // Made for kids: watching it is not kept (wiki E20 §5.5)
+      if (await kidsRulesApply(c.env, video)) return c.json({ videoId, recorded: false }, 200);
 
       // Generate watch history entry ID (effectiveUserId:videoId)
       const entryId = `${effectiveUserId}:${videoId}`;

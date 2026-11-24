@@ -8,6 +8,7 @@
 
 import { isShort, type VideoFormatInput } from './video-format';
 import type { NotificationQuietHours, NotificationQuietHoursUpdate } from './notification-quiet-hours';
+import { isMadeForKids, type ContentFlagFields } from './content-flags';
 
 /** Settings categories a user can turn on/off. */
 export const OPTIONAL_NOTIFICATION_CATEGORIES = [
@@ -178,6 +179,8 @@ export type NotificationFanoutKind = 'new_video' | 'live_started' | 'live_soon';
 
 /** Queue payload of MessageType.NotificationFanout. */
 export interface NotificationFanoutPayload {
+  /** Made for kids: nobody is notified while the ageRules switch is on (the processor decides) */
+  madeForKids?: boolean;
   kind: NotificationFanoutKind;
   channelId: string;
   entityId: string;
@@ -362,7 +365,7 @@ export interface NotificationSettingsUpdateRequest {
 }
 
 /** The fields of a stored video the "new video" fan-out reads. */
-export interface NewVideoFanoutVideo extends VideoFormatInput {
+export interface NewVideoFanoutVideo extends VideoFormatInput, Pick<ContentFlagFields, 'madeForKids' | 'importedFrom'> {
   id: string;
   channelId?: string;
   userId?: string;
@@ -385,5 +388,6 @@ export function newVideoFanout(video: NewVideoFanoutVideo & { channelId: string 
     params: { ...channelParams, videoTitle: video.title || '' },
     actionUrl: `/video/${video.id}`,
     actorUserId: video.userId,
+    ...(isMadeForKids(video) ? { madeForKids: true } : {}),
   };
 }

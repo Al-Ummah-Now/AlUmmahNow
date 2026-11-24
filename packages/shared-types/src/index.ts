@@ -4,6 +4,7 @@ export * from './admin-audit';
 export * from './token-audience';
 export * from './token-key-refetch';
 export * from './video-visibility';
+export * from './content-flags';
 export * from './video-review';
 export * from './quran';
 export * from './captions';

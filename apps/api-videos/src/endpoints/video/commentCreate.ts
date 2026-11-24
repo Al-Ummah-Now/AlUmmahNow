@@ -1,3 +1,5 @@
+import { isMadeForKids } from '@al-ummah/shared-types';
+import { ageRulesOn } from '../../lib/contentFlags';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -105,6 +107,9 @@ export class CommentCreate extends AuthenticatedRoute {
 		// Channels that blocked the commenter (silent: the comment is held for them alone, #771)
 		const blockedBy = await blockedChannelsOf(c.env.SEARCH_DB as never, userId);
 
+		// No comments on a video made for kids (wiki E20 §5.5); unreadable switches count as on
+		const kidsRules = await ageRulesOn(c.env).catch(() => true);
+
 		// Conditional write (SCALABILITY-AUDIT AV-2): the checks and the append
 		// run on the fresh video each attempt, so a concurrent comment, like or
 		// edit is re-read instead of overwritten.
@@ -117,7 +122,7 @@ export class CommentCreate extends AuthenticatedRoute {
 				// Don't reveal that private video exists
 				return { reject: { status: 404, error: "Object not found" } };
 			}
-			const settings = getCommentSettings(fresh);
+			const settings = kidsRules && isMadeForKids(fresh) ? 'off' : getCommentSettings(fresh);
 			if (settings === 'off') {
 				return { reject: { status: 403, error: "comments_disabled", message: "Comments are turned off for this video" } };
 			}

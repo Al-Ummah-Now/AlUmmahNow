@@ -1,3 +1,5 @@
+import { isMadeForKids, type ContentFlagFields } from '@al-ummah/shared-types';
+import { ageRulesOn } from '../../lib/contentFlags';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -93,6 +95,12 @@ export class WatchHistoryAdd extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 
 		const { videoId, watchTime, totalDuration, completed } = request.body;
+
+		// Made for kids: watching it is not kept (wiki E20 §5.5). The video is read only while the rules are on
+		if (await ageRulesOn(c.env).catch(() => true)) {
+			const video = await new R2Repository<ContentFlagFields>(c.env.videos).getObject(videoId);
+			if (isMadeForKids(video)) return { success: true, result: { message: 'Not kept: made for kids', historyLength: 0 } };
+		}
 
 		// Get user profile from storage
 		const bucket = c.env.profiles;
