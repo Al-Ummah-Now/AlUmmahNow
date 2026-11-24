@@ -17,6 +17,7 @@ import { fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { InviteVideoPickers, type InviteVideoItems, type InviteVideoValue } from './InviteVideoPickers';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
+import { fillNodes } from '@/components/audit/fill';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { localizeDigits, parseDigits } from '@al-ummah/shared-types';
@@ -79,7 +80,8 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
     if (result.ok && (result.data.authUser || result.data.profile || result.data.invite)) setLookup(result.data);
   }
 
-  const existingUser = lookup?.authUser ?? (lookup?.profile ? { id: lookup.profile.id, name: lookup.profile.displayName, email } : null);
+  // The account with the email decides; another user's videos profile that carries it is only a warning
+  const existingUser = lookup?.authUser ?? null;
   const blocked = !!existingUser || !!lookup?.invite;
 
   if (done) {
@@ -166,6 +168,16 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
                 <p>{t('invites.exists', { name: existingUser.name || existingUser.email })}</p>
                 <Link href={`/users/${encodeURIComponent(existingUser.id)}`} className={linkClass} data-testid="invite-existing-user-link">
                   {t('invites.existsAction')}
+                </Link>
+              </Notice>
+            </div>
+          )}
+          {!blocked && lookup?.profile && (
+            <div className="md:col-span-2">
+              <Notice tone="warn" testId="invite-profile-email">
+                <p>{fillNodes(t('invites.profileHasEmail'), { name: <bdi>{lookup.profile.displayName || t('content.unnamedAccount')}</bdi>, id: <bdi dir="ltr" className="font-mono [overflow-wrap:anywhere]">{lookup.profile.id}</bdi> })}</p>
+                <Link href={`/users/${encodeURIComponent(lookup.profile.id)}`} className={linkClass} data-testid="invite-profile-email-link">
+                  {t('invites.profileHasEmailAction')}
                 </Link>
               </Notice>
             </div>

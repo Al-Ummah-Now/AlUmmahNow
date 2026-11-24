@@ -53,7 +53,7 @@ describe('CSAM nav', () => {
 
 describe('CyberTipline checklist', () => {
   it('pre-fills every report field from the record, and leaves the IP address to the reporter', () => {
-    const rows = csamFactRows(FACTS, (k) => `kind:${k}`);
+    const rows = csamFactRows(FACTS, (k) => `kind:${k}`, (s) => `source:${s}`);
     assert.deepEqual(rows.map((r) => r.id), [...CSAM_FACT_IDS]);
     const value = (id: string) => rows.find((r) => r.id === id)!.value;
     assert.equal(value('matchedUrl'), FACTS.matchedUrl);
@@ -63,6 +63,12 @@ describe('CyberTipline checklist', () => {
     assert.equal(value('timeZone'), 'UTC');
     assert.equal(value('itemKind'), 'kind:video_thumbnail');
     assert.equal(value('email'), 'synthetic@example.invalid');
+    assert.equal(value('emailSource'), 'source:unrecorded', 'a case from before the source was kept says so');
+    const source = (uploader: Partial<CsamReportFacts['uploader']>) =>
+      csamFactRows({ ...FACTS, uploader: { ...FACTS.uploader, ...uploader } }, (k) => k, (s) => s).find((r) => r.id === 'emailSource')!.value;
+    for (const s of ['auth', 'deleted_account', 'none', 'unavailable'] as const) assert.equal(source({ emailSource: s }), s);
+    assert.equal(source({ userId: null, emailSource: null }), null);
+    for (const key of ['auth', 'deleted_account', 'none', 'unavailable', 'unrecorded'] as const) assert.ok(en.csamPage.emailSources[key] && ar.csamPage.emailSources[key]);
     assert.equal(value('files'), '01-matched-image.jpg, record-video.json');
     assert.equal(value('ipAddress'), null);
     // Blank values count as unknown
@@ -72,7 +78,7 @@ describe('CyberTipline checklist', () => {
   });
 
   it('"Copy all" lists the filled fields with their labels', () => {
-    const text = csamFactsText(csamFactRows(FACTS, (k) => k), (id) => `L-${id}`);
+    const text = csamFactsText(csamFactRows(FACTS, (k) => k, (s) => s), (id) => `L-${id}`);
     assert.ok(text.startsWith('L-incidentAt: 2026-11-14 03:00:00\n'));
     assert.ok(text.includes(`L-matchedUrl: ${FACTS.matchedUrl}`));
     assert.equal(text.includes('L-ipAddress'), false);

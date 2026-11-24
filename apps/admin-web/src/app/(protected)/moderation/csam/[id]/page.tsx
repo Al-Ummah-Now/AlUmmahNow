@@ -39,7 +39,7 @@ export default async function CsamCasePage({ params, searchParams }: { params: P
   const log = await getCsamCaseLogSafe(id);
   const can = caseActions(c);
   const kindLabel = (kind: string) => t(`csamPage.kinds.${kind}` as MessageKey);
-  const facts = csamFactRows(c.facts, kindLabel);
+  const facts = csamFactRows(c.facts, kindLabel, (source) => t(`csamPage.emailSources.${source}` as MessageKey));
 
   return (
     <div className="space-y-6">

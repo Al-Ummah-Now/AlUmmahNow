@@ -85,6 +85,7 @@ export const CSAM_FACT_IDS = [
   'uploadedAt',
   'userId',
   'email',
+  'emailSource',
   'displayName',
   'handle',
   'channelId',
@@ -94,12 +95,15 @@ export const CSAM_FACT_IDS = [
 ] as const;
 export type CsamFactId = (typeof CSAM_FACT_IDS)[number];
 
+/** Where the captured email is from (`unrecorded`: a case from before the source was kept). */
+export type CsamEmailSource = NonNullable<CsamReportFacts['uploader']['emailSource']> | 'unrecorded';
+
 /**
  * The report's fields, filled from the record captured before the takedown (§ 2258A(b)): the
  * incident (when, where), the account (who) and the files to attach. The IP address is never
  * collected by the platform, so it stays empty for the reporter to state.
  */
-export function csamFactRows(facts: CsamReportFacts, kindLabel: (kind: string) => string): CsamFactRow[] {
+export function csamFactRows(facts: CsamReportFacts, kindLabel: (kind: string) => string, sourceLabel: (source: CsamEmailSource) => string): CsamFactRow[] {
   const u = facts.uploader;
   const utc = (value: string | null) => (value ? utcTime(value) : null);
   const rows: Array<[CsamFactId, string | null, boolean]> = [
@@ -111,6 +115,7 @@ export function csamFactRows(facts: CsamReportFacts, kindLabel: (kind: string) =
     ['uploadedAt', utc(facts.uploadedAt), true],
     ['userId', u.userId, true],
     ['email', u.email, true],
+    ['emailSource', u.userId ? sourceLabel(u.emailSource ?? 'unrecorded') : null, false],
     ['displayName', u.displayName, false],
     ['handle', u.handle, true],
     ['channelId', u.channelId, true],

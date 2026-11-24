@@ -113,10 +113,9 @@ export interface AccountNoticeResult {
   queued: boolean;
 }
 
-/** GET /internal/admin/users/:id/account-email: what an account email needs. */
-export interface AccountEmailContact {
+/** GET /internal/admin/users/:id/email-settings: how the user wants account emails (videos data only). */
+export interface AccountEmailSettings {
   userId: string;
-  email: string | null;
   displayName: string;
   /** "Email me about my account". */
   accountEmail: boolean;
@@ -124,6 +123,11 @@ export interface AccountEmailContact {
   locale: NotificationEmailLocale;
   /** The user's saved email language; null = never picked. */
   savedLocale: NotificationEmailLocale | null;
+}
+
+/** GET /internal/admin/users/:id/account-email: what an account email needs; `email` is the sign-in account's. */
+export interface AccountEmailContact extends AccountEmailSettings {
+  email: string | null;
 }
 
 export type AccountEmailDecision =

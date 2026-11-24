@@ -87,6 +87,16 @@ describe('account notices (warn-user)', () => {
 		assert.equal((await call('GET', '/users/usr_gone/account-email')).status, 404);
 	});
 
+	it('gives the email settings from videos data only, also while accounts cannot be read', async () => {
+		const { env, call } = setup();
+		env.AUTH_DB.fail = true;
+		const res = await call('GET', '/users/usr_1/email-settings');
+		assert.deepEqual([res.status, res.body.result], [200, { userId: 'usr_1', displayName: 'Amina', accountEmail: true, locale: 'en', savedLocale: null }]);
+		assert.equal((await call('GET', '/users/usr_gone/email-settings')).status, 404);
+		assert.equal(env.AUTH_DB.queries.length, 0, 'no account lookup');
+		assert.equal((await call('POST', '/users/usr_1/account-notices', { kind: 'warning', noticeId: 'wrn_2', reasonCode: 'spam', count: 1 })).status, 200, 'the in-app notice goes out too');
+	});
+
 	it("mails the sign-in account's address only: never the profile's copy, and nobody without an account", async () => {
 		const { env, call } = setup();
 		const email = async (id: string) => (await call('GET', `/users/${id}/account-email`)).body.result.email;

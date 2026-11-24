@@ -40,7 +40,7 @@ import {
   type CreatorTierBulkResult,
   cleanTrashReason,
   warningEscalation,
-  type AccountEmailContact,
+  type AccountEmailSettings,
   type AccountNoticeRequest,
   type AccountNoticeResult,
   type IssueUserWarningRequest,
@@ -470,7 +470,7 @@ const issuerName = (c: C) => {
  */
 async function savedEmailLanguage(c: C, userId: string): Promise<NotificationEmailLocale | null> {
   try {
-    return (await videos<AccountEmailContact>(c, `/users/${encodeURIComponent(userId)}/account-email`)).savedLocale ?? null;
+    return (await videos<AccountEmailSettings>(c, `/users/${encodeURIComponent(userId)}/email-settings`)).savedLocale ?? null;
   } catch (error) {
     if (!(error instanceof VideosError && error.status === 404)) {
       logger.warn('[Content] Could not read the user\'s email language', { userId, error: error instanceof Error ? error.message : String(error) });
@@ -497,8 +497,9 @@ app.post('/users/:id/warnings', async (c) => {
     if (error instanceof WarningInputError) return c.json({ success: false, code: error.code, error: error.message }, 400);
     throw error;
   }
-  // 404 for someone who is not a videos user (no profile to notify)
-  await videos<AccountEmailContact>(c, `/users/${encodeURIComponent(id)}/account-email`);
+  // 404 for someone who is not a videos user (no profile to notify). Videos data only: the warning and its
+  // in-app notice go through while accounts cannot be read; only the queued email waits for the address
+  await videos<AccountEmailSettings>(c, `/users/${encodeURIComponent(id)}/email-settings`);
 
   const db = c.env.REPORTS_DB;
   const warningId = newWarningId();

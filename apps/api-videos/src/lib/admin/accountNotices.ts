@@ -12,6 +12,7 @@ import {
 	DEFAULT_NOTIFICATION_EMAIL_LOCALE,
 	REPORT_REASONS,
 	type AccountEmailContact,
+	type AccountEmailSettings,
 	type AccountNoticeRequest,
 	type AccountNoticeResult,
 } from '@al-ummah/shared-types';
@@ -47,22 +48,25 @@ export async function accountNotice(env: Env, userId: string, notice: AccountNot
 	return { queued };
 }
 
-/**
- * The user's email address, name and email preferences. The address is the sign-in account's: null
- * (no mail) when Auth has no such account, 503 (the mail job retries) when Auth cannot be read; the
- * profile's copy is never used.
- */
-export async function accountEmailContact(env: Env, userId: string): Promise<AccountEmailContact> {
+/** The user's name and email preferences, from videos data only (no account lookup). 404 when the user has no videos profile. */
+export async function accountEmailSettings(env: Env, userId: string): Promise<AccountEmailSettings> {
 	const profile = await readProfile(env, userId);
 	const row = toUserRow(userId, profile, false);
-	const email = await authEmail(env, userId);
 	const prefs = env.NOTIFICATIONS_DB ? await getEmailSettings(env.NOTIFICATIONS_DB, userId) : null;
 	return {
 		userId,
-		email,
 		displayName: row.displayName,
 		accountEmail: prefs?.account ?? true,
 		locale: prefs?.locale ?? DEFAULT_NOTIFICATION_EMAIL_LOCALE,
 		savedLocale: prefs?.locale ?? null,
 	};
+}
+
+/**
+ * The same with the user's email address. The address is the sign-in account's: null (no mail) when Auth
+ * has no such account, 503 (the mail job retries) when Auth cannot be read; the profile's copy is never used.
+ */
+export async function accountEmailContact(env: Env, userId: string): Promise<AccountEmailContact> {
+	const settings = await accountEmailSettings(env, userId);
+	return { ...settings, email: await authEmail(env, userId) };
 }

@@ -68,7 +68,10 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <h1 className="text-2xl sm:text-3xl font-bold text-fg break-words" dir="auto" data-testid="user-name">{adminUserName(u, t('auditLog.unknownUser'))}</h1>
           <p className="text-sm text-fg-muted flex flex-wrap gap-x-3">
             {/* No @handle under a person: handles belong to channels (owner rule) */}
-            {u.email && <span dir="ltr">{u.email}</span>}
+            {u.email && <span dir="ltr" data-testid="user-email" data-source={u.emailSource}>{u.email}</span>}
+            {u.emailSource === 'none' && <span data-testid="user-no-account">{t('users.noAccount')}</span>}
+            {u.emailSource === 'unavailable' && <span data-testid="user-email-unavailable">{t('users.emailUnavailable')}</span>}
+            {u.profileEmail && <span data-testid="user-profile-email">{fillNodes(t('users.profileEmail'), { email: <bdi dir="ltr">{u.profileEmail}</bdi> })}</span>}
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
