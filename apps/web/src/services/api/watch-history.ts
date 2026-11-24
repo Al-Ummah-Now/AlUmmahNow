@@ -23,6 +23,7 @@ import { logger } from '@/lib/logger-client';
 import { EncryptedStorage } from '@/lib/storage/EncryptedStorage';
 import { getApiUrl } from '@/lib/runtime-config';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
+import { parseWatchHistoryPage } from '@/lib/watch-history/parse-page';
 
 /** Resolved per call: runtime config is injected after module evaluation. */
 const apiBase = (): string => getApiUrl();
@@ -87,22 +88,12 @@ let warnedMalformedPage = false;
  * caller that maps over it. Warned once per page load, not on every call.
  */
 export function toWatchHistoryPage(body: unknown): WatchHistoryPage {
-  const page = (body && typeof body === 'object' ? body : {}) as Partial<WatchHistoryPage>;
-  if (!Array.isArray(page.entries)) {
-    if (!warnedMalformedPage) {
-      warnedMalformedPage = true;
-      logger.warn('[WatchHistoryService] History page without an entries array; showing none', {
-        entriesType: page.entries === null ? 'null' : typeof page.entries,
-      });
-    }
-    return { entries: [], total: 0, hasMore: false };
+  const { page, malformed, entriesType } = parseWatchHistoryPage(body);
+  if (malformed && !warnedMalformedPage) {
+    warnedMalformedPage = true;
+    logger.warn('[WatchHistoryService] History page without an entries array; showing none', { entriesType });
   }
-  return {
-    ...page,
-    entries: page.entries,
-    total: typeof page.total === 'number' ? page.total : page.entries.length,
-    hasMore: page.hasMore === true,
-  } as WatchHistoryPage;
+  return page;
 }
 
 /** Test hook: lets the once-per-load warning fire again. */

@@ -4,6 +4,7 @@ import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { openSideDrawer } from './test-utils/navigation';
 import { API_URL, userApi } from './test-utils/e2e-videos';
 import { ownPublicVideos } from './test-utils/own-public-video';
+import { useOwnData } from './release/builders';
 
 /**
  * Library (Story 29.6): hub, Watch later (watch page + card menu), liked videos
@@ -160,8 +161,10 @@ test.describe('Library (signed in)', () => {
 
     const SIGNED_URL = /bcdn_token=|[?&](?:amp;|\\u0026)?token=[^&"'\\\s]+(?:&|&amp;|\\u0026)expires=|\/priv\/\d{9,}\./;
     await page.emulateMedia({ colorScheme: 'dark' });
-    // Delay any browser-side library/history fetches to verify the home page never waits on them or shifts
+    // Delay and count any browser-side library/history fetches: a fully server-rendered library must trigger zero
+    const clientLibraryRequests: string[] = [];
     await page.route(/\/api\/(library\/|watch-history)/, async (route) => {
+      clientLibraryRequests.push(route.request().url());
       await new Promise((r) => setTimeout(r, 800));
       await route.continue();
     });
@@ -169,10 +172,10 @@ test.describe('Library (signed in)', () => {
     await page.addInitScript(() => {
       const w = window as unknown as {
         __cls: number | null;
-        __firstPaintTop: { hero: number | null; h1: number | null; hasLibrary: boolean };
+        __firstPaintTop: { hero: number | null; h1: number | null; hasLibrary: boolean; continueThumbSrc: string | null };
       };
       w.__cls = PerformanceObserver.supportedEntryTypes?.includes('layout-shift') ? 0 : null;
-      w.__firstPaintTop = { hero: null, h1: null, hasLibrary: false };
+      w.__firstPaintTop = { hero: null, h1: null, hasLibrary: false, continueThumbSrc: null };
       if (w.__cls !== null) {
         new PerformanceObserver((list) => {
           for (const e of list.getEntries() as Array<PerformanceEntry & { value: number; hadRecentInput: boolean }>) {
@@ -183,10 +186,12 @@ test.describe('Library (signed in)', () => {
       document.addEventListener('DOMContentLoaded', () => {
         const hero = document.querySelector('section.home-hero');
         const h1 = document.querySelector('main h1');
+        const continueImg = document.querySelector('[data-testid="continue-watching"] img[data-testid="thumbnail-image"]');
         w.__firstPaintTop = {
           hero: hero ? Math.round(hero.getBoundingClientRect().top) : null,
           h1: h1 ? Math.round(h1.getBoundingClientRect().top) : null,
           hasLibrary: !!document.querySelector('[data-testid="home-library"]'),
+          continueThumbSrc: continueImg?.getAttribute('src') ?? null,
         };
       });
     });
@@ -195,10 +200,13 @@ test.describe('Library (signed in)', () => {
       ['en', { width: 1440, height: 900 }],
       ['ar', { width: 390, height: 844 }],
     ] as const) {
+      clientLibraryRequests.length = 0;
       await page.setViewportSize(viewport);
       let docHtml = '';
+      let docCacheControl = '';
       const onResponse = async (res: import('@playwright/test').Response) => {
         if (res.request().resourceType() === 'document' && new URL(res.url()).pathname === `/${lang}`) {
+          docCacheControl = res.headers()['cache-control'] ?? '';
           docHtml = await res.text().catch(() => '');
         }
       };
@@ -210,13 +218,15 @@ test.describe('Library (signed in)', () => {
       await page.waitForLoadState('networkidle').catch(() => undefined);
       await page.waitForTimeout(1000);
 
+      expect(docCacheControl, `${lang}: signed-in home HTML must not be stored by shared caches`).toMatch(/private|no-store/);
       expect(docHtml, `${lang}: Your library must be in the server HTML`).toContain('data-testid="home-library"');
       expect(SIGNED_URL.exec(docHtml), `${lang}: server HTML must not carry signed media URLs`).toBeNull();
+      expect(clientLibraryRequests, `${lang}: server-rendered library must trigger zero browser library requests`).toEqual([]);
 
       const stats = await page.evaluate(() => {
         const w = window as unknown as {
           __cls: number | null;
-          __firstPaintTop: { hero: number | null; h1: number | null; hasLibrary: boolean };
+          __firstPaintTop: { hero: number | null; h1: number | null; hasLibrary: boolean; continueThumbSrc: string | null };
         };
         const hero = document.querySelector('section.home-hero');
         const h1 = document.querySelector('main h1');
@@ -228,6 +238,7 @@ test.describe('Library (signed in)', () => {
         };
       });
       expect(stats.firstPaint.hasLibrary, `${lang}: library row present at DOMContentLoaded`).toBe(true);
+      expect(stats.firstPaint.continueThumbSrc, `${lang}: Continue watching cover present at first paint`).toMatch(/^\/thumb\/.+\.jpg$/);
       if (stats.firstPaint.hero !== null && stats.settledHero !== null) {
         expect(Math.abs(stats.settledHero - stats.firstPaint.hero), `${lang}: hero shifted ${stats.firstPaint.hero} -> ${stats.settledHero}`).toBeLessThanOrEqual(2);
       }
@@ -299,9 +310,18 @@ test.describe('Library (signed in)', () => {
 });
 
 test.describe('Library (signed in, empty library)', () => {
-  test.use({ storageState: AUTH_STATE.none, colorScheme: 'dark' });
+  test.use({ storageState: ANONYMOUS_STATE, colorScheme: 'dark' });
+  const ownEmpty = useOwnData(test);
 
-  test('leaves no hollow library space or shift when the signed-in user has no library items', async ({ page }) => {
+  test('leaves no hollow library space, shift, or client requests when the signed-in user has no library items', async ({ page }) => {
+    // Own fresh signed-in user with guaranteed empty history, Watch later, and likes (erased in afterAll)
+    await ownEmpty.createUser(page, 'empty-lib');
+
+    const clientLibraryRequests: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/(library\/|watch-history)/.test(req.url())) clientLibraryRequests.push(req.url());
+    });
+
     await page.addInitScript(() => {
       const w = window as unknown as { __cls: number | null };
       w.__cls = PerformanceObserver.supportedEntryTypes?.includes('layout-shift') ? 0 : null;
@@ -314,12 +334,23 @@ test.describe('Library (signed in, empty library)', () => {
       }
     });
 
+    let docCacheControl = '';
+    const onResponse = (res: import('@playwright/test').Response) => {
+      if (res.request().resourceType() === 'document' && new URL(res.url()).pathname === '/en') {
+        docCacheControl = res.headers()['cache-control'] ?? '';
+      }
+    };
+    page.on('response', onResponse);
     await page.goto('/en');
+    page.off('response', onResponse);
+
     await expect(page.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
     await page.waitForLoadState('networkidle').catch(() => undefined);
     await page.waitForTimeout(500);
 
+    expect(docCacheControl, 'signed-in home HTML must not be stored by shared caches').toMatch(/private|no-store/);
     await expect(page.getByTestId('home-library')).toHaveCount(0);
+    expect(clientLibraryRequests, 'confirmed-empty server library must trigger zero browser requests').toEqual([]);
     const cls = await page.evaluate(() => (window as unknown as { __cls: number | null }).__cls);
     if (cls !== null) expect(cls, 'CLS with empty library').toBeLessThan(0.05);
   });
