@@ -3,12 +3,16 @@
  * versions, soft delete with restore and a 30-day purge, the public active-season read, and
  * indexed queries only.
  */
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
+import worker from '../src/index';
 import { IslamicSeasonGet } from '../src/endpoints/prayer/season';
 import { activeSeason, createSeason, deleteSeason, listSeasons, purgeSeasons, restoreSeason, SeasonError, updateSeason, validDate, type SeasonInput } from '../src/lib/islamic-seasons';
-import { forgetFeatureSwitches, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { FIRST_PARTY_CLIENT_IDS, forgetFeatureSwitches, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { computeFeatures, featureSwitchState, forgetFeatureCaches } from '../src/lib/features';
+import { logger } from '../src/lib/logger';
+import { __resetClientForTests } from '../src/lib/openauth-client';
 import { SqliteD1 } from './search-sqlite-d1';
 import { buildApp } from './helpers';
 
@@ -109,6 +113,106 @@ describe('Islamic seasons', () => {
 		]) {
 			const { results } = await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all<{ detail: string }>();
 			assert.match((results ?? []).map((r) => r.detail).join(' | '), /USING (COVERING )?INDEX idx_islamic_seasons_/, sql);
+		}
+	});
+
+	it('ignores Authorization on /api and /api/v1 season routes through the real Worker entry and never logs userId', async () => {
+		__resetClientForTests();
+		forgetFeatureSwitches();
+		forgetFeatureCaches();
+		const realFetch = globalThis.fetch;
+		const qaIssuer = 'https://auth.qa.alummahnow.net';
+		const { publicKey, privateKey } = await generateKeyPair('ES256');
+		const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+		const token = await new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_signed_in', email: 'viewer@example.com' } })
+			.setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+			.setIssuer(qaIssuer)
+			.setAudience(FIRST_PARTY_CLIENT_IDS.qa.web)
+			.setSubject('user:signed-in')
+			.setIssuedAt()
+			.setExpirationTime('15m')
+			.sign(privateKey);
+
+		let authFetchCalls = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+			if (url.origin === qaIssuer) {
+				authFetchCalls++;
+				if (url.pathname === '/.well-known/oauth-authorization-server') {
+					return Response.json({ issuer: qaIssuer, jwks_uri: `${qaIssuer}/.well-known/jwks.json` });
+				}
+				if (url.pathname === '/.well-known/jwks.json') return Response.json({ keys: [jwk] });
+			}
+			return new Response('not found', { status: 404 });
+		}) as typeof fetch;
+
+		const requestLogs: Array<Record<string, unknown>> = [];
+		const reqMock = mock.method(logger, 'request', (fields: Record<string, unknown>) => {
+			requestLogs.push(fields);
+		});
+
+		try {
+			const db = new SqliteD1() as unknown as D1Database;
+			const s = await createSeason(db, RAMADAN, 'admin-1');
+			await updateSeason(db, s.id, 1, { ...RAMADAN, state: 'published' }, 'admin-1');
+			const e = { SEARCH_DB: db, ENVIRONMENT: 'qa', Issuer: qaIssuer, ClientId: FIRST_PARTY_CLIENT_IDS.qa.web };
+			for (const key of ['prayerTimes', 'hijriCalendar', 'ramadanMode']) {
+				await writeFeatureSwitch(e as never, { key, enabled: true, expectedVersion: 0, actorId: 'usr_admin', currentStored: false });
+			}
+			forgetFeatureSwitches();
+			forgetFeatureCaches();
+
+			const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+			const headers = { Authorization: `Bearer ${token}`, Cookie: 'session=secret' };
+			for (const path of ['/api/islamic/season?date=2027-02-10', '/api/v1/islamic/season?date=2027-02-10']) {
+				const res = await worker.fetch(new Request(`https://videos.api.example${path}`, { headers }), e as never, ctx);
+				assert.equal(res.status, 200, `${path} answered ${res.status}`);
+				const body = (await res.json()) as { data?: { season?: { title?: { ar?: string } } } };
+				assert.equal(body.data?.season?.title?.ar, 'رمضان', path);
+			}
+
+			assert.equal(authFetchCalls, 0, 'bearer token is never verified on /api/islamic/season');
+			assert.equal(requestLogs.length, 2);
+			for (const entry of requestLogs) {
+				assert.equal(entry.userId, undefined, `request log must not carry userId (${String(entry.route)})`);
+			}
+		} finally {
+			reqMock.mock.restore();
+			globalThis.fetch = realFetch;
+			__resetClientForTests();
+			forgetFeatureSwitches();
+			forgetFeatureCaches();
+		}
+	});
+
+	it('ignores channelId on /api and /api/v1 season routes through the real Worker entry instead of answering 401/403', async () => {
+		forgetFeatureSwitches();
+		forgetFeatureCaches();
+		try {
+			const db = new SqliteD1() as unknown as D1Database;
+			const s = await createSeason(db, RAMADAN, 'admin-1');
+			await updateSeason(db, s.id, 1, { ...RAMADAN, state: 'published' }, 'admin-1');
+			const e = { SEARCH_DB: db, ENVIRONMENT: 'qa' };
+			for (const key of ['prayerTimes', 'hijriCalendar', 'ramadanMode']) {
+				await writeFeatureSwitch(e as never, { key, enabled: true, expectedVersion: 0, actorId: 'usr_admin', currentStored: false });
+			}
+			forgetFeatureSwitches();
+			forgetFeatureCaches();
+
+			const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+			for (const path of ['/api/islamic/season?date=2027-02-10', '/api/v1/islamic/season?date=2027-02-10']) {
+				const res = await worker.fetch(
+					new Request(`https://videos.api.example${path}`, { headers: { channelId: 'ch_should_be_ignored' } }),
+					e as never,
+					ctx,
+				);
+				assert.equal(res.status, 200, `${path} answered ${res.status}`);
+				const body = (await res.json()) as { data?: { season?: { title?: { ar?: string } } } };
+				assert.equal(body.data?.season?.title?.ar, 'رمضان', path);
+			}
+		} finally {
+			forgetFeatureSwitches();
+			forgetFeatureCaches();
 		}
 	});
 });

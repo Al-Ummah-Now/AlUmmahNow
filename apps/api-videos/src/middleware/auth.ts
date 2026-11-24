@@ -145,9 +145,9 @@ async function validateJWTWithSignature(token: string, env?: any, route?: string
 
 /**
  * Anonymous public routes that never read auth state, verify bearer tokens,
- * attach user identity to logs, or key rate limits by user (wiki Epic 21 §3).
+ * attach user identity to logs, or key rate limits by user (wiki Epic 21 §3, §5.3).
  */
-const ANONYMOUS_API_PATHS = new Set(['/api/prayer-times', '/api/hijri']);
+const ANONYMOUS_API_PATHS = new Set(['/api/prayer-times', '/api/hijri', '/api/islamic/season']);
 
 export function isAnonymousApiPath(path: string): boolean {
   const normalized = path.replace(/^\/api\/v\d+(?=\/)/, '/api').replace(/\/+$/, '');
