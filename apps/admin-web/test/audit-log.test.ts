@@ -40,6 +40,15 @@ describe('audit log', () => {
     // Status page actions read by their verb
     assert.equal(actionLabel('status.incident.edit', t), 'Edited');
     assert.equal(actionLabel('site-domain-add', tAr), 'أُضيف نطاق');
+    // Channel moves and handles (wiki AUN-CHANNEL-CLAIM)
+    assert.equal(actionLabel('move-offer-stop', t), 'Channel offer stopped');
+    assert.equal(actionLabel('move-offer-stop', tAr), 'أُوقف عرض القناة');
+    assert.equal(actionLabel('transfer-refused', t), 'Ownership transfer refused');
+    assert.equal(actionLabel('handle-take', tAr), 'استُعيد معرّف رسمي');
+    assert.equal(actionLabel('handle-release', t), 'Handle released');
+    assert.equal(actionLabel('handle-taken-away', t), 'Official handle taken for another channel');
+    // Labels are found by the key form of their action, so a label under any other key never shows
+    for (const key of Object.keys(en.auditLog.actions)) assert.equal(actionKey(key), key, key);
     // An action with no words yet still reads as words
     assert.equal(actionLabel('brand_new.thing-done', t), 'brand new thing done');
     assert.equal(actionKey('Site-Grant'), 'site_grant');
