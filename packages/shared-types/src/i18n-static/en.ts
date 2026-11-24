@@ -428,7 +428,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     contactEmail: 'Contact email',
     contactEmailHelp: 'Shown publicly on your About tab. Leave empty to hide it.',
     defaultAllowDownloads: 'Allow offline downloads by default',
-    defaultAllowDownloadsHelp: 'Viewers on eligible tiers may save new videos from this channel for encrypted offline playback. You can override this per video.',
+    defaultAllowDownloadsHelp: 'Signed-in viewers may save new videos from this channel for offline playback or download. You can override this per video.',
     invalidEmail: 'Enter a valid email address',
     location: 'Location',
     locationPlaceholder: 'e.g. Cairo, Egypt',
