@@ -556,17 +556,18 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	if (refused) throw new AdminError(409, refused);
 	let job: AdminJob;
 	try {
-		// Read again under the lock: another move may have finished since the read above
-		if (options.expectedOwnerId) {
-			const fresh = await repo(env.channels).getObject(id);
-			if (!fresh || fresh.isDeleted || fresh.userId !== options.expectedOwnerId || channel.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
-		}
+		// Read again under the lock: another move may have finished since the read above, and the job
+		// must name the owner it takes the channel from, or that owner's records stay behind
+		const fresh = await repo(env.channels).getObject(id);
+		if (!fresh || fresh.isDeleted) throw new AdminError(404, 'channel_not_found');
+		if (options.expectedOwnerId && fresh.userId !== options.expectedOwnerId) throw new AdminError(409, 'owner_changed');
+		if (fresh.userId === newOwnerId) throw new AdminError(409, 'already_owner');
 		job = await createJob(env, {
 			kind: 'channel.transfer',
 			targetKind: 'channel',
 			targetId: id,
 			actorId,
-			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}) },
+			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}) },
 		});
 	} catch (error) {
 		await releaseTransferLock(env, id, '');
