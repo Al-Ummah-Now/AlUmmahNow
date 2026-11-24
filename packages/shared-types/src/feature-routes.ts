@@ -133,8 +133,10 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('admin-api', 'POST', '/api/newsletter/issues/:id/send', 'newsletter'),
   // Channel moves by owners (wiki AUN-CHANNEL-CLAIM §5)
   r('api-videos', 'GET', '/api/channels/:id/move-receivers', 'channelMove'),
+  r('api-videos', 'GET', '/api/channels/:id/move-offers', 'channelMove'),
   r('api-videos', 'POST', '/api/channels/:id/move-offers', 'channelMove'),
   r('api-videos', 'GET', '/api/move-offers', 'channelMove'),
+  r('api-videos', 'GET', '/api/move-offers/:id', 'channelMove'),
   r('api-videos', 'POST', '/api/move-offers/:id/accept', 'channelMove'),
   r('api-videos', 'POST', '/api/move-offers/:id/decline', 'channelMove'),
   r('api-videos', 'DELETE', '/api/move-offers/:id', 'channelMove'),

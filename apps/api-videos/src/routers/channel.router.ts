@@ -17,7 +17,7 @@ import { ChannelUpdate } from '../endpoints/channel/channelUpdate';
 import { ChannelDelete } from '../endpoints/channel/channelDelete';
 import { ChannelAbout, ChannelByHandleFetch, ChannelHandleAvailability } from '../endpoints/channel/channelHandle';
 import { ChannelAuditList, ChannelInviteCancel, ChannelInviteCreate } from '../endpoints/channel/channelInvites';
-import { ChannelMoveOfferCreate, ChannelMoveReceivers } from '../endpoints/channel/channelMoveOffers';
+import { ChannelMoveOfferCreate, ChannelMoveReceivers, ChannelMoveStateFetch } from '../endpoints/channel/channelMoveOffers';
 import { ChannelAccessList, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../endpoints/channel/channelMembers';
 
 // Channel content endpoints
@@ -145,6 +145,7 @@ channelRouter.delete('/:id/members/:userId', ChannelMemberRemove);
 channelRouter.post('/:id/invites', ChannelInviteCreate);
 channelRouter.delete('/:id/invites/:inviteId', ChannelInviteCancel);
 channelRouter.get('/:id/move-receivers', ChannelMoveReceivers);
+channelRouter.get('/:id/move-offers', ChannelMoveStateFetch);
 channelRouter.post('/:id/move-offers', ChannelMoveOfferCreate);
 channelRouter.get('/:id/audit', ChannelAuditList);
 

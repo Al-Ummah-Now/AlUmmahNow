@@ -11374,6 +11374,254 @@
       }
     },
     "/api/v1/channels/{id}/move-offers": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "The channel’s open offer",
+        "description": "🔒 Owner only; 404 for anyone else. The open offer, if any, and from when the owner may move the channel again (`movableAt`; null: now).",
+        "operationId": "get_ChannelMoveStateFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The open offer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "offer": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "offered",
+                                "accepting",
+                                "moved",
+                                "declined",
+                                "cancelled",
+                                "expired",
+                                "stopped",
+                                "refused"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "expiresAt": {
+                              "type": "string"
+                            },
+                            "respondedAt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "keepContactEmail": {
+                              "type": "boolean"
+                            },
+                            "channel": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "nameLocalized": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "handle": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "avatarUrl": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "handle",
+                                "avatarUrl"
+                              ]
+                            },
+                            "from": {
+                              "type": "object",
+                              "properties": {
+                                "userId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "nameLocalized": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "avatarUrl": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "userId",
+                                "name",
+                                "avatarUrl"
+                              ]
+                            },
+                            "to": {
+                              "type": "object",
+                              "properties": {
+                                "userId": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "nameLocalized": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "avatarUrl": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "userId",
+                                "name",
+                                "avatarUrl"
+                              ]
+                            },
+                            "viewerRole": {
+                              "type": "string",
+                              "enum": [
+                                "from",
+                                "to",
+                                "owner"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "status",
+                            "createdAt",
+                            "expiresAt",
+                            "respondedAt",
+                            "keepContactEmail",
+                            "channel",
+                            "from",
+                            "to",
+                            "viewerRole"
+                          ]
+                        },
+                        "movableAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "offer",
+                        "movableAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "channel_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "Channels"
@@ -25046,7 +25294,7 @@
           "Channels"
         ],
         "summary": "My open channel offers",
-        "description": "🔒 Offers made to me and by me that are still open.",
+        "description": "🔒 Offers made to me and by me that are still open, newest first, 20 of each at most, with the channel and both people by name.",
         "operationId": "get_MyMoveOffers",
         "responses": {
           "200": {
@@ -25070,33 +25318,160 @@
                               "id": {
                                 "type": "string"
                               },
-                              "channelId": {
-                                "type": "string"
-                              },
-                              "fromUserId": {
-                                "type": "string"
-                              },
-                              "toUserId": {
-                                "type": "string"
-                              },
                               "status": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "offered",
+                                  "accepting",
+                                  "moved",
+                                  "declined",
+                                  "cancelled",
+                                  "expired",
+                                  "stopped",
+                                  "refused"
+                                ]
                               },
                               "createdAt": {
                                 "type": "string"
                               },
                               "expiresAt": {
                                 "type": "string"
+                              },
+                              "respondedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "keepContactEmail": {
+                                "type": "boolean"
+                              },
+                              "channel": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "handle": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "handle",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "from": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "userId",
+                                  "name",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "to": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "userId",
+                                  "name",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "viewerRole": {
+                                "type": "string",
+                                "enum": [
+                                  "from",
+                                  "to",
+                                  "owner"
+                                ]
                               }
                             },
                             "required": [
                               "id",
-                              "channelId",
-                              "fromUserId",
-                              "toUserId",
                               "status",
                               "createdAt",
-                              "expiresAt"
+                              "expiresAt",
+                              "respondedAt",
+                              "keepContactEmail",
+                              "channel",
+                              "from",
+                              "to",
+                              "viewerRole"
                             ]
                           }
                         },
@@ -25108,33 +25483,160 @@
                               "id": {
                                 "type": "string"
                               },
-                              "channelId": {
-                                "type": "string"
-                              },
-                              "fromUserId": {
-                                "type": "string"
-                              },
-                              "toUserId": {
-                                "type": "string"
-                              },
                               "status": {
-                                "type": "string"
+                                "type": "string",
+                                "enum": [
+                                  "offered",
+                                  "accepting",
+                                  "moved",
+                                  "declined",
+                                  "cancelled",
+                                  "expired",
+                                  "stopped",
+                                  "refused"
+                                ]
                               },
                               "createdAt": {
                                 "type": "string"
                               },
                               "expiresAt": {
                                 "type": "string"
+                              },
+                              "respondedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "keepContactEmail": {
+                                "type": "boolean"
+                              },
+                              "channel": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "handle": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "handle",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "from": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "userId",
+                                  "name",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "to": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "avatarUrl": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "userId",
+                                  "name",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "viewerRole": {
+                                "type": "string",
+                                "enum": [
+                                  "from",
+                                  "to",
+                                  "owner"
+                                ]
                               }
                             },
                             "required": [
                               "id",
-                              "channelId",
-                              "fromUserId",
-                              "toUserId",
                               "status",
                               "createdAt",
-                              "expiresAt"
+                              "expiresAt",
+                              "respondedAt",
+                              "keepContactEmail",
+                              "channel",
+                              "from",
+                              "to",
+                              "viewerRole"
                             ]
                           }
                         }
@@ -25157,6 +25659,236 @@
       }
     },
     "/api/v1/move-offers/{id}": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "A channel offer",
+        "description": "🔒 The two people of the offer and the channel’s owner; 404 for anyone else. Answered for closed offers too, so a notice’s page can say what happened.",
+        "operationId": "get_MoveOfferFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Offer id"
+            },
+            "required": true,
+            "description": "Offer id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The offer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "offered",
+                            "accepting",
+                            "moved",
+                            "declined",
+                            "cancelled",
+                            "expired",
+                            "stopped",
+                            "refused"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        },
+                        "respondedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "keepContactEmail": {
+                          "type": "boolean"
+                        },
+                        "channel": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "nameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "handle": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "handle",
+                            "avatarUrl"
+                          ]
+                        },
+                        "from": {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "nameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "userId",
+                            "name",
+                            "avatarUrl"
+                          ]
+                        },
+                        "to": {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "nameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "avatarUrl": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "userId",
+                            "name",
+                            "avatarUrl"
+                          ]
+                        },
+                        "viewerRole": {
+                          "type": "string",
+                          "enum": [
+                            "from",
+                            "to",
+                            "owner"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "createdAt",
+                        "expiresAt",
+                        "respondedAt",
+                        "keepContactEmail",
+                        "channel",
+                        "from",
+                        "to",
+                        "viewerRole"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "offer_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Channels"

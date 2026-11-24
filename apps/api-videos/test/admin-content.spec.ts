@@ -29,7 +29,7 @@ import { ProfileCreate } from '../src/endpoints/profile/profileCreate';
 import { ProfileCurrentFetch } from '../src/endpoints/profile/profileCurrentFetch';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { errorHandler } from '../src/middleware/error-handler';
-import { ChannelMoveOfferCreate, ChannelMoveReceivers, MOVE_ROUTE_CODES, MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MyMoveOffers } from '../src/endpoints/channel/channelMoveOffers';
+import { ChannelMoveOfferCreate, ChannelMoveReceivers, ChannelMoveStateFetch, MOVE_ROUTE_CODES, MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MoveOfferFetch, MyMoveOffers } from '../src/endpoints/channel/channelMoveOffers';
 import { authMiddleware, channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import { __resetClientForTests } from '../src/lib/openauth-client';
@@ -56,6 +56,8 @@ import handleChannelAvatarUpdate from '../src/endpoints/channel/channelAvatarUpd
 import handleChannelCoverUpdate from '../src/endpoints/channel/channelCoverUpdate';
 import { footprintCompleteKey } from '../src/lib/privacy/footprints';
 import { OperationBudget } from '../src/lib/privacy/scan';
+import { channelMoveState, LAST_MOVE_SQL, OPEN_OFFER_SQL, readOfferView } from '../src/lib/channelMoveViews';
+import { memberMayActAs } from '../src/lib/channelAccess';
 import { acceptMoveOffer, cancelMoveOffer, createMoveOffer, declineMoveOffer, moveReceivers, MoveError, myMoveOffers, stopMoveOffer } from '../src/lib/channelMoves';
 import { createSqliteD1 } from './sqlite-d1';
 import { scheduleKey } from '../src/lib/videoSideRecords';
@@ -2401,6 +2403,142 @@ describe('channel actions', () => {
 			assert.match(plan, /SEARCH o USING INDEX idx_channel_move_offers_(to|from) \((to|from)_user_id=\?/, plan);
 			assert.match(plan, /SEARCH j USING (COVERING )?INDEX sqlite_autoindex_admin_jobs_1 \(id=\?\)/, plan);
 		}
+	});
+
+	it('only the two people of an offer and the channel’s owner can read it, by name; 404 for anyone else (CC-7)', async () => {
+		const { raw, env, db, jobs } = await setup({
+			profiles: {
+				[OWNER]: profile(OWNER, { channels: ['ch1'], displayName: 'Bilal Ahmed', displayNameLocalized: { ar: 'بلال أحمد' } }),
+				[OTHER]: profile(OTHER, { displayName: undefined, firstName: 'Amina', lastName: 'Yusuf', avatarUrl: 'https://cdn.test/a.jpg', email: 'amina@example.com' }),
+				usr_editor: profile('usr_editor'),
+				usr_stranger: profile('usr_stranger', { channels: [] }),
+			},
+			channels: { ch1: channel('ch1', { handle: 'morning', nameLocalized: { ar: 'أذكار الصباح' }, members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }, { userId: 'usr_editor', role: 'editor', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const as = (userId: string) => {
+			const app = new Hono();
+			app.onError(errorHandler);
+			app.use('*', async (c, next) => {
+				c.set('auth' as never, { userId, email: null, payload: { authTime: Math.floor(Date.now() / 1000) } } as never);
+				c.set('userId' as never, userId as never);
+				await next();
+			});
+			const router = fromHono(app);
+			router.get('/api/channels/:id/move-offers', ChannelMoveStateFetch);
+			router.get('/api/move-offers', MyMoveOffers);
+			router.get('/api/move-offers/:id', MoveOfferFetch);
+			return async (path: string) => {
+				const res = await app.request(path, {}, env as never);
+				return { status: res.status, body: (await res.json()) as any, cache: res.headers.get('Cache-Control') };
+			};
+		};
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@morning', authTime: Math.floor(Date.now() / 1000), keepContactEmail: true });
+		const path = `/api/move-offers/${offer.id}`;
+		const seen = await as(OTHER)(path);
+		assert.equal(seen.status, 200);
+		assert.match(seen.cache ?? '', /no-store/);
+		assert.deepEqual(seen.body.data, {
+			id: offer.id, status: 'offered', createdAt: offer.created_at, expiresAt: offer.expires_at, respondedAt: null, keepContactEmail: true,
+			channel: { id: 'ch1', name: 'Channel ch1', nameLocalized: { ar: 'أذكار الصباح' }, handle: 'morning', avatarUrl: null },
+			from: { userId: OWNER, name: 'Bilal Ahmed', nameLocalized: { en: 'Bilal Ahmed', ar: 'بلال أحمد' }, avatarUrl: null },
+			to: { userId: OTHER, name: 'Amina Yusuf', avatarUrl: 'https://cdn.test/a.jpg' },
+			viewerRole: 'to',
+		});
+		assert.ok(!JSON.stringify(seen.body).includes('@example.com'), 'no email');
+		assert.equal((await as(OWNER)(path)).body.data.viewerRole, 'from');
+		for (const id of ['usr_stranger', 'usr_editor']) {
+			for (const p of [path, '/api/channels/ch1/move-offers']) {
+				const refused = await as(id)(p);
+				assert.equal(refused.status, 404, `${id} ${p}`);
+				assert.deepEqual(Object.keys(refused.body).sort(), ['code', 'success']);
+			}
+			assert.deepEqual((await as(id)('/api/move-offers')).body.data, { received: [], sent: [] });
+		}
+		assert.equal((await as(OTHER)('/api/channels/ch1/move-offers')).status, 404, 'channel settings: the owner only');
+		assert.equal((await as(OWNER)('/api/move-offers/nope')).status, 404);
+		assert.equal((await as(OWNER)('/api/channels/nope/move-offers')).status, 404);
+		// Lists and the channel's settings
+		assert.deepEqual([(await as(OTHER)('/api/move-offers')).body.data.received.map((o: any) => o.id), (await as(OWNER)('/api/move-offers')).body.data.sent.map((o: any) => o.channel.name)], [[offer.id], ['Channel ch1']]);
+		const state = await as(OWNER)('/api/channels/ch1/move-offers');
+		assert.deepEqual([state.body.data.offer.id, state.body.data.offer.to.name, state.body.data.movableAt], [offer.id, 'Amina Yusuf', null]);
+		// Moved: both still read what happened; the new owner sees when the channel can move again
+		await acceptMoveOffer(env as never, offer.id, OTHER);
+		await jobs.drain(env);
+		assert.deepEqual([(await as(OWNER)(path)).body.data.status, (await as(OTHER)(path)).body.data.status], ['moved', 'moved']);
+		assert.equal((await as(OWNER)('/api/channels/ch1/move-offers')).status, 404, 'no longer the owner');
+		const after = (await as(OTHER)('/api/channels/ch1/move-offers')).body.data;
+		assert.equal(after.offer, null);
+		assert.ok(Math.abs(Date.parse(after.movableAt) - (Date.now() + 30 * 86_400_000)) < 60_000);
+		// An admin moved it on: the owner now reads the channel's earlier offer too
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), userId: 'usr_stranger' }));
+		assert.equal((await as('usr_stranger')(path)).body.data.viewerRole, 'owner');
+		// A gone channel or person has no name, and their record shows nothing
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), isDeleted: true }));
+		raw.profiles.store.delete(OWNER);
+		const gone = (await as(OTHER)(path)).body.data;
+		assert.deepEqual([gone.channel, gone.from], [{ id: 'ch1', name: null, handle: null, avatarUrl: null }, { userId: null, name: null, avatarUrl: null }]);
+		assert.equal((await as('usr_stranger')(path)).status, 404, 'the owner of a deleted channel reads nothing');
+		// Every read through an index
+		for (const [sql, index] of [[OPEN_OFFER_SQL, 'idx_channel_move_offers'], [LAST_MOVE_SQL, 'idx_channel_move_offers_channel'], ['SELECT * FROM channel_move_offers WHERE id = ?', 'sqlite_autoindex_channel_move_offers_1']]) {
+			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('x') as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+			assert.match(plan, new RegExp(`SEARCH channel_move_offers USING (COVERING )?INDEX ${index}`), plan);
+			assert.ok(!/SCAN|TEMP B-TREE/.test(plan), plan);
+		}
+	});
+
+	it('channel settings show an offer only while it is open (CC-7)', async () => {
+		const { env, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const offer = await createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		const set = (sql: string, ...args: string[]) => db.db.prepare(`UPDATE channel_move_offers SET ${sql} WHERE id = ?`).run(...args, offer.id);
+		const status = async () => (await channelMoveState(env as never, 'ch1', OWNER))!.offer?.status ?? null;
+		const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+		assert.equal(await status(), 'offered');
+		set(`status = 'accepting', updated_at = ?`, ago(1));
+		assert.equal(await status(), 'accepting');
+		set(`updated_at = ?`, ago(11));
+		assert.equal(await status(), null, 'an accept that never finished');
+		set(`status = 'offered', expires_at = ?`, ago(1));
+		assert.equal(await status(), null, 'expired');
+		assert.equal((await readOfferView(env as never, offer.id, OTHER))!.status, 'expired', 'before the row says so too');
+		for (const closed of ['declined', 'cancelled', 'stopped', 'refused']) {
+			set(`status = ?`, closed);
+			assert.equal(await status(), null, closed);
+			assert.equal((await readOfferView(env as never, offer.id, OWNER))!.status, closed);
+		}
+		set(`options_json = 'broken'`);
+		assert.equal((await readOfferView(env as never, offer.id, OWNER))!.keepContactEmail, false);
+	});
+
+	it('an offer’s notices open its page and carry names in both languages; members answer offers while acting as a channel (CC-7)', async () => {
+		const { raw, env } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'], displayName: 'Bilal Ahmed', displayNameLocalized: { ar: 'بلال أحمد' } }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const make = () => createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: Math.floor(Date.now() / 1000) });
+		const declined = await make();
+		await declineMoveOffer(env as never, declined.id, OTHER);
+		const withdrawn = await make();
+		await cancelMoveOffer(env as never, withdrawn.id, OWNER);
+		const stopped = await make();
+		await stopMoveOffer(env as never, 'ch1', stopped.id);
+		const moved = await make();
+		await acceptMoveOffer(env as never, moved.id, OTHER);
+		const notices = raw.queue.messages.map((m: any) => m.payload).filter((p: any) => /^channelMove(Offered|Accepted|Declined|Cancelled|Stopped)$/.test(p?.notificationKey ?? ''));
+		const byKey = Object.fromEntries(notices.map((p: any) => [p.notificationKey, p.actionUrl]));
+		assert.deepEqual(byKey, { channelMoveOffered: `/channel-moves/${moved.id}`, channelMoveDeclined: `/channel-moves/${declined.id}`, channelMoveCancelled: `/channel-moves/${withdrawn.id}`, channelMoveStopped: `/channel-moves/${stopped.id}`, channelMoveAccepted: `/channel-moves/${moved.id}` });
+		const offered = notices.find((p: any) => p.notificationKey === 'channelMoveOffered')!.params;
+		assert.deepEqual([offered.owner, offered.owner_ar], ['Bilal Ahmed', 'بلال أحمد']);
+		// The web app sends the active channel with every request: an admin acting as it still answers
+		for (const role of ['admin', 'editor', 'moderator'] as const) {
+			for (const [method, path] of [['POST', '/api/move-offers/x/accept'], ['POST', '/api/move-offers/x/decline'], ['DELETE', '/api/move-offers/x'], ['POST', '/api/channels/ch9/move-offers'], ['GET', '/api/move-offers/x'], ['GET', '/api/channels/ch9/move-receivers']]) {
+				assert.equal(memberMayActAs(role, method, path), true, `${role} ${method} ${path}`);
+			}
+		}
+		assert.equal(memberMayActAs(null, 'POST', '/api/move-offers/x/accept'), false);
+		assert.equal(memberMayActAs('admin', 'PUT', '/api/move-offers/x'), false);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
