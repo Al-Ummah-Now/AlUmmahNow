@@ -1,7 +1,8 @@
 /**
  * REAL upload of every accepted video format on QA (issue #1938), by hand. Not part of any CI job
  * or release: it is not in test-utils/placement.ts and playwright.release.config.ts does not see it.
- * Run it once the format fix is on QA:
+ * In CI it is the "Upload formats on QA" workflow (workflow_dispatch, main, QA only: the secrets are
+ * only in GitHub Actions). By hand, with the QA secrets, once the format fix is on QA:
  *
  *   cd apps/web
  *   E2E_FORMATS_REAL=1 E2E_ENV=qa E2E_RUN_ID=formats-$(date +%s)-1 \
@@ -35,6 +36,7 @@ import { apiFetch, createProfile, signUpOnWeb, type WebUser } from '../release/w
 import { grantCreatorTier } from '../release/creator-tier';
 import { submitNewChannelInMenu } from '../release/account-menu';
 import { trackRunUploads } from '../release/run-videos';
+import { recordResource } from '../release/builders';
 
 test.use({ trace: 'off' });
 test.describe.configure({ retries: 0, mode: 'serial' });
@@ -71,7 +73,7 @@ interface Outcome {
   note: string;
 }
 
-const BUNNY_TIMEOUT_MS = 12 * 60_000;
+const BUNNY_TIMEOUT_MS = 15 * 60_000;
 
 async function channelIn(page: Page, user: WebUser, name: string): Promise<string> {
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -97,6 +99,8 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
   expect(initiate.status, `initiate for ${mimeType}: ${await initiate.clone().text()}`).toBeLessThan(300);
   const { result } = (await initiate.json()) as { result?: { videoId?: string; tusSessionId?: string } };
   const id = result?.videoId ?? '';
+  // The run's upload cap counts it (the form's uploads are recorded by trackRunUploads)
+  if (id) recordResource('video', id);
   expect(id && result?.tusSessionId, 'initiate returned no video id or TUS session').toBeTruthy();
   const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
   const create = await apiFetch(user, '/api/videos/tus', {
@@ -131,7 +135,7 @@ async function status(user: WebUser, id: string, channelId: string): Promise<{ s
 test('every accepted format uploads on QA, is encoded by Bunny and by our transcoder, and is deleted', async ({ page }) => {
   test.skip(process.env.E2E_FORMATS_REAL !== '1', 'set E2E_FORMATS_REAL=1 to run this real-upload check by hand');
   expect(releaseEnv(), 'this check runs on QA only').toBe('qa');
-  test.setTimeout(90 * 60_000);
+  test.setTimeout(75 * 60_000);
   trackRunUploads(page);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aun-formats-'));
@@ -147,6 +151,8 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     await grantCreatorTier(user);
     const channelId = await channelIn(page, user, `Formats check ${Date.now().toString(36)}`);
 
+    // Phase 1: upload every clip, one after another (the form's flow, or the API for what the form refuses)
+    const waiting: Array<{ out: Outcome; id: string }> = [];
     for (const f of FORMATS) {
       const out: Outcome = { format: f.label, file: f.file, formAccepted: null, bunny: '-', r2: '-', note: '' };
       outcomes.push(out);
@@ -183,24 +189,31 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
         }, { timeout: 60_000 })
         .not.toBe('');
       made.push({ id, channelId });
+      waiting.push({ out, id });
+    }
 
-      // Done when Bunny has an answer AND our transcoder has one. A video whose upload-status has no `r2`
-      // yet is not done: the dual write can lag the upload. If Bunny answered and `r2` is still absent a
-      // minute later, this account has no R2 transcode and "no r2" is the answer.
-      const deadline = Date.now() + BUNNY_TIMEOUT_MS;
-      let bunnyAnsweredAt = 0;
-      let s = await status(user, id, channelId);
-      for (;;) {
-        if (terminal(s.status) && !bunnyAnsweredAt) bunnyAnsweredAt = Date.now();
-        const r2Done = terminal(s.r2?.status);
-        const noR2 = !s.r2 && bunnyAnsweredAt > 0 && Date.now() - bunnyAnsweredAt > 60_000;
-        if ((terminal(s.status) && r2Done) || noR2 || Date.now() > deadline) break;
-        await page.waitForTimeout(10_000);
-        s = await status(user, id, channelId);
-      }
-      out.bunny = s.status ?? 'unknown';
-      out.r2 = s.r2 ? `${s.r2.status}${s.r2.error ? `: ${s.r2.error}` : ''}` : 'no r2';
-      if (!terminal(s.status) || (s.r2 && !terminal(s.r2.status))) out.note += ' (still encoding at the deadline)';
+    // Phase 2: wait for all of them together (one deadline, so the encodes run side by side). A video is
+    // done when Bunny has an answer AND our transcoder has one. A video whose upload-status has no `r2`
+    // yet is not done: the dual write can lag the upload. If Bunny answered and `r2` is still absent a
+    // minute later, this account has no R2 transcode and "no r2" is the answer.
+    const deadline = Date.now() + BUNNY_TIMEOUT_MS;
+    const bunnyAnsweredAt = new Map<string, number>();
+    const last = new Map<string, Awaited<ReturnType<typeof status>>>();
+    for (let pending = waiting.slice(); pending.length > 0 && Date.now() < deadline; ) {
+      for (const w of pending) last.set(w.id, await status(user, w.id, channelId));
+      pending = pending.filter((w) => {
+        const s = last.get(w.id)!;
+        if (terminal(s.status) && !bunnyAnsweredAt.has(w.id)) bunnyAnsweredAt.set(w.id, Date.now());
+        const noR2 = !s.r2 && bunnyAnsweredAt.has(w.id) && Date.now() - bunnyAnsweredAt.get(w.id)! > 60_000;
+        return !((terminal(s.status) && terminal(s.r2?.status)) || noR2);
+      });
+      if (pending.length > 0) await page.waitForTimeout(10_000);
+    }
+    for (const w of waiting) {
+      const s = last.get(w.id) ?? (await status(user, w.id, channelId));
+      w.out.bunny = s.status ?? 'unknown';
+      w.out.r2 = s.r2 ? `${s.r2.status}${s.r2.error ? `: ${s.r2.error}` : ''}` : 'no r2';
+      if (!terminal(s.status) || (s.r2 && !terminal(s.r2.status))) w.out.note += ' (still encoding at the deadline)';
     }
   } finally {
     for (const v of made) {
@@ -211,6 +224,18 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     fs.rmSync(dir, { recursive: true, force: true });
     const rows = outcomes.map((o) => `${o.format.padEnd(36)} form:${String(o.formAccepted).padEnd(5)} bunny:${o.bunny.padEnd(8)} r2:${o.r2} ${o.note}`);
     process.stdout.write(`\n[formats] ${made.length} videos made and deleted\n${rows.join('\n')}\n`);
+    // The table for the workflow's job summary (FORMATS_SUMMARY_FILE): no ids, emails or secrets in it
+    if (process.env.FORMATS_SUMMARY_FILE) {
+      const cell = (v: string) => v.replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+      const md = [
+        '| Format | Web form | Bunny | Our transcoder (R2) | Note |',
+        '|---|---|---|---|---|',
+        ...outcomes.map((o) => `| ${cell(o.format)} | ${o.formAccepted === null ? 'not tried' : o.formAccepted ? 'accepted' : 'refused'} | ${cell(o.bunny)} | ${cell(o.r2)} | ${cell(o.note)} |`),
+        '',
+        `${made.length} videos made, then deleted.`,
+      ].join('\n');
+      fs.writeFileSync(process.env.FORMATS_SUMMARY_FILE, `${md}\n`);
+    }
   }
   expect(outcomes.filter((o) => o.formAccepted === false && !FORMATS.find((f) => f.file === o.file)?.viaApi), 'formats on the web list that the form refused').toEqual([]);
 });

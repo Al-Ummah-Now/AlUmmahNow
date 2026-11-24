@@ -1,0 +1,344 @@
+name: Upload formats on QA
+
+# By hand only: real uploads of every video format the website accepts, plus WMV and FLV, on QA
+# (issue #1938; apps/web/e2e/manual/upload-formats-qa.manual.ts). It makes a 5 s clip in each format with
+# ffmpeg, uploads them as a throwaway run account named ...-media-gate (the one account api-videos
+# transcodes, so Bunny AND our own transcoder encode each one), waits for both, writes the result table
+# to the job summary and deletes everything it made. WMV and FLV go through the API (the form refuses
+# them) to learn whether Bunny takes them; if it does, the website can accept them as Desktop Studio does.
+#
+# - workflow_dispatch only: no pull_request, push or schedule. Main only, QA only (nothing here reads a
+#   target from an input or reaches stage or production). The QA test secrets live in GitHub Actions only.
+# - 10 real Bunny uploads and 10 R2 transcodes per run. Run it once QA runs the commit you want to test.
+# - It takes one slot of the QA encode lock like the release suite's encode part (qa-encode, 2 slots), and
+#   waits first for any Release or Rollback run to finish: its own concurrency group (not the release's
+#   `release-aun`, where a queued run of either would cancel the other's pending one).
+# - Account setup and teardown, the leftover check, the upload cap and the artifact scan are the ones of
+#   release-e2e.yml's encode part.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upload-formats-qa
+  cancel-in-progress: false
+
+jobs:
+  upload-formats:
+    name: Upload formats (qa)
+    # Only a dispatch on main
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # up to 90 min waiting for a release and the encode slot, ~20 min of uploads, 15 of encodes, teardown
+    timeout-minutes: 180
+    permissions:
+      contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
+      actions: read  # qa-lock: is the lock's holder run still going?; the release check below
+    env:
+      E2E_ENV: qa
+      PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
+      # Run mode: the run's accounts are e2e+<run>-<attempt>-rel-..., recorded before they exist and
+      # deleted by the teardown below (apps/web/e2e/test-utils/run-users.ts)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}f
+      E2E_FORMATS_REAL: '1'
+      AUTH_URL: https://auth.qa.alummahnow.net
+    steps:
+      - name: Check target
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ] || [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "$E2E_ENV" != "qa" ]; then
+            echo "::error::this workflow runs by hand on main, against QA only"; exit 1
+          fi
+
+      # A Release or Rollback run in flight (or queued) is waited for, never overlapped (the QA library's
+      # encode queue and the release's own QA checks). Starting one while this runs is the owner's call.
+      - name: Wait for any release to finish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        timeout-minutes: 90
+        run: |
+          for _ in $(seq 1 180); do
+            busy=0
+            for wf in release.yml rollback.yml; do
+              n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/runs?per_page=20" --jq '[.workflow_runs[] | select(.status != "completed")] | length')
+              busy=$((busy + n))
+            done
+            if [ "$busy" = 0 ]; then echo "No release or rollback is running."; exit 0; fi
+            echo "$busy release/rollback run(s) in flight; waiting 30 s"
+            sleep 30
+          done
+          echo "::error::a release or rollback was still running after 90 minutes"; exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          # The job token can write refs (the lock): keep it out of .git/config
+          persist-credentials: false
+
+      # The artifact scanner and the teardown scripts come from this workflow's own commit: they run
+      # with the secrets in their env.
+      - name: Check out the artifact scanner (trusted)
+        uses: actions/checkout@v4
+        with:
+          path: .ci-trusted
+          sparse-checkout: |
+            scripts/ci
+            scripts/release
+            scripts/e2e
+            apps/web/e2e/test-utils
+          persist-credentials: false
+
+      - name: Run accounts file
+        run: |
+          {
+            echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt"
+            # Videos the check makes, for the leftover check's Bunny and R2 lookups and the upload cap
+            echo "E2E_RUN_RESOURCES_FILE=$RUNNER_TEMP/run-resources.txt"
+            echo "FORMATS_SUMMARY_FILE=$RUNNER_TEMP/formats-summary.md"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # Same layout as the release suite: the specs, the code-sink helper and the config next to a
+      # standalone @playwright/test.
+      - name: Prepare the suite
+        run: |
+          SUITE="$RUNNER_TEMP/formats-e2e"
+          mkdir -p "$SUITE/e2e/test-utils"
+          cp -R apps/web/e2e/release apps/web/e2e/manual apps/web/e2e/test-fixtures "$SUITE/e2e/"
+          cp apps/web/e2e/test-utils/code-sink.ts apps/web/e2e/test-utils/run-users.ts apps/web/e2e/test-utils/placement.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/playwright.formats-qa.config.ts "$SUITE/"
+          cd "$SUITE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION"
+          echo "SUITE=$SUITE" >> "$GITHUB_ENV"
+
+      - name: Install browsers
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: ${{ env.SUITE }}
+          runner: npx
+          browsers: chromium
+
+      # One password for this run's throwaway users, known to the workflow so the artifact scan below
+      # can look for it (targets.ts TEST_PASSWORD).
+      - name: Generate the test password
+        run: |
+          pw="Rel-$(openssl rand -base64 18 | tr '+/' '-_' | tr -d '=')-1!"
+          echo "::add-mask::$pw"
+          echo "E2E_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
+
+      # The check makes its clips with ffmpeg (H.264, HEVC, VP9, MPEG-4, WMV2, FLV; MP3, AAC, Opus, WMA)
+      - name: Install ffmpeg
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg
+          no-install-recommends: 'true'
+
+      - name: ffmpeg has every encoder the clips need
+        run: |
+          ffmpeg -hide_banner -encoders 2>/dev/null > "$RUNNER_TEMP/encoders.txt"
+          for e in libx264 libx265 libvpx-vp9 mpeg4 wmv2 flv aac libopus libmp3lame wmav2; do
+            grep -qE " $e( |$)" "$RUNNER_TEMP/encoders.txt" || { echo "::error::this ffmpeg has no $e encoder"; exit 1; }
+          done
+
+      # The encodes share the QA library's queue with every other run: at most two runs encode at once
+      # (scripts/ci/qa-lock.ts --slots, #838). Waiting is a queue, never a failure.
+      - name: Acquire a qa-encode slot
+        id: encode-lock
+        if: ${{ !cancelled() }}
+        timeout-minutes: 65
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" acquire "$E2E_ENV-encode" --slots 2 --ttl-min 50 --max-wait-min 60
+
+      - name: Upload every format and wait for the encodes
+        id: formats
+        if: steps.encode-lock.outputs.holder != '' && !cancelled()
+        working-directory: ${{ env.SUITE }}
+        timeout-minutes: 60
+        env:
+          CI: 'true'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+        run: npx playwright test -c playwright.formats-qa.config.ts
+
+      - name: Release the qa-encode slot
+        if: always() && steps.encode-lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" release "${{ steps.encode-lock.outputs.lock }}" --holder "${{ steps.encode-lock.outputs.holder }}"
+
+      # The result table: what the form did, Bunny's encode and our transcoder's, per format
+      - name: Result table
+        if: always()
+        run: |
+          {
+            echo "### Upload formats on QA"
+            echo
+            if [ -f "$FORMATS_SUMMARY_FILE" ]; then cat "$FORMATS_SUMMARY_FILE"; else echo "The check wrote no table (it stopped before the uploads, or never started)."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Real Bunny uploads are capped (a full QA run once made 200-300). This check makes 10: 8 through
+      # the form and 2 through the API, all recorded in the run resource file.
+      - name: Bunny upload cap
+        if: always()
+        env:
+          UPLOAD_CAP: 10
+        run: |
+          n=0
+          if [ -f "$E2E_RUN_RESOURCES_FILE" ]; then n=$(awk '$1 == "video" { print $2 }' "$E2E_RUN_RESOURCES_FILE" | sort -u | wc -l | tr -d ' '); fi
+          echo "### Bunny uploads: $n of at most $UPLOAD_CAP" >> "$GITHUB_STEP_SUMMARY"
+          echo "Real Bunny uploads in this run: $n (cap $UPLOAD_CAP)"
+          if [ "$n" -gt "$UPLOAD_CAP" ]; then
+            echo "::error::$n real Bunny uploads, over the cap of $UPLOAD_CAP"
+            exit 1
+          fi
+
+      # Pass, fail or cancelled: the run's accounts are deleted from the auth server (soft delete +
+      # immediate purge, QA/stage-only route). Trusted copy: it runs with the secrets.
+      # The run accounts' ids, before they are deleted: the leftover check below looks for their rows
+      - name: Record the run accounts
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "E2E_RUN_USER_IDS_FILE=$RUNNER_TEMP/run-user-ids.txt" >> "$GITHUB_ENV"
+          S="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/run-leftovers.ts"
+          if [ ! -f "$S" ]; then echo "run-leftovers.ts is not on the base branch yet"; exit 0; fi
+          E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt" node --experimental-strip-types --no-warnings "$S" --env "$E2E_ENV" --marker "$E2E_RUN_ID" --collect-ids
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The step's timeout grows with the run's accounts (deleted 4 at a time, #1073). A base-branch
+      # script without --step-minutes, or none at all, gets 15 minutes.
+      - name: Size the account deletion
+        id: teardown-size
+        if: always()
+        continue-on-error: true
+        run: |
+          m=$(node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/teardown-run-users.ts" --auth-url "$AUTH_URL" --file "$E2E_RUN_USERS_FILE" --step-minutes 2>/dev/null) || m=15
+          case "$m" in ''|*[!0-9]*) m=15 ;; esac
+          echo "Account deletion step timeout: $m minutes"
+          echo "minutes=$m" >> "$GITHUB_OUTPUT"
+
+      - name: Delete the run accounts
+        if: always()
+        continue-on-error: true
+        timeout-minutes: ${{ fromJSON(steps.teardown-size.outputs.minutes || '15') }}
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+        run: >-
+          node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/teardown-run-users.ts"
+          --auth-url "$AUTH_URL" --file "$E2E_RUN_USERS_FILE"
+
+      # Nothing this run created may be left (owner rule): its accounts, the videos, channels and
+      # tiers they owned (a video left = its Bunny video left). Read-only. A read-only probe for the QA
+      # Bunny library and R2, bound to the Secrets Store key (never on the runner), one per run, deleted
+      # below (as release-e2e.yml and bunny-qa-status.yml do, #951)
+      - name: Deploy the leftover probe
+        if: always()
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          P="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/leftovers-probe"
+          if [ ! -f "$P/worker.js" ]; then echo "the probe is not on the base branch yet"; exit 0; fi
+          name="e2e-leftovers-${E2E_RUN_ID}"
+          echo "LEFTOVERS_PROBE_NAME=$name" >> "$GITHUB_ENV"
+          token=$(openssl rand -hex 32)
+          echo "::add-mask::$token"
+          echo "LEFTOVERS_PROBE_TOKEN=$token" >> "$GITHUB_ENV"
+          dir=$(mktemp -d); cp "$P/worker.js" "$dir/"
+          printf '{"PROBE_TOKEN":"%s"}' "$token" > "$RUNNER_TEMP/probe-secrets.json"
+          cat > "$dir/wrangler.json" <<JSON
+          {
+            "name": "$name",
+            "main": "worker.js",
+            "compatibility_date": "2025-09-01",
+            "workers_dev": true,
+            "r2_buckets": [
+              { "binding": "videos", "bucket_name": "videos-qa" },
+              { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
+              { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
+              { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
+            ],
+            "secrets_store_secrets": [
+              { "binding": "BUNNY_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-key-qa" },
+              { "binding": "BUNNY_LIBRARY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-library-id-qa" }
+            ]
+          }
+          JSON
+          (cd "$dir" && npx -y wrangler@4.161.0 deploy --secrets-file "$RUNNER_TEMP/probe-secrets.json" > "$RUNNER_TEMP/probe-deploy.txt" 2>&1) || { tail -20 "$RUNNER_TEMP/probe-deploy.txt"; exit 1; }
+          rm -f "$RUNNER_TEMP/probe-secrets.json"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/probe-deploy.txt" | head -1)
+          test -n "$url"
+          echo "LEFTOVERS_PROBE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Leftovers
+        if: always()
+        run: |
+          S="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/run-leftovers.ts"
+          if [ ! -f "$S" ]; then echo "run-leftovers.ts is not on the base branch yet"; exit 0; fi
+          node --experimental-strip-types --no-warnings "$S" --env "$E2E_ENV" --marker "$E2E_RUN_ID"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Delete the leftover probe
+        if: always() && env.LEFTOVERS_PROBE_NAME != ''
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx -y wrangler@4.161.0 delete --name "$LEFTOVERS_PROBE_NAME" --force
+
+      # Uploads this run sent (its own users): every upload with bytes is a Bunny encode in the library
+      # QA and stage share. Informational. Trusted copy: it runs with the Cloudflare token.
+      - name: Upload budget
+        if: always()
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/release/upload-budget.ts"
+          --env "$E2E_ENV" --emails "e2e+${E2E_RUN_ID}-%" --label "upload formats check" --max 30
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Artifacts of this public repo are downloadable by anyone signed in to GitHub: drop any report or
+      # trace that holds a secret or a storage state, then fail. Sign-in specs fill secrets in-page with
+      # trace off (secret-fill.ts).
+      - name: Scan test output for secrets
+        if: always()
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+        # Read from the trusted checkout on stdin (-I: no imports from the workspace)
+        run: >-
+          python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
+          --remove "$SUITE/test-results" "$SUITE/release-report"
+          < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: upload-formats-qa
+          path: ${{ env.SUITE }}/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # The table as a file (no ids, emails or secrets in it)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upload-formats-qa-table
+          path: ${{ env.FORMATS_SUMMARY_FILE }}
+          if-no-files-found: ignore
+          retention-days: 30
