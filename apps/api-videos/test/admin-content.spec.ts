@@ -42,7 +42,7 @@ import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, retryJob, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers, TRANSFER_LOCK_SQL } from '../src/lib/admin/service';
+import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion, REVERIFY_SQL, reverifyRecentTransfers, STARTED_JOB_SQL, TRANSFER_LOCK_SQL } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
 import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -733,6 +733,79 @@ describe('channel actions', () => {
 		assert.equal((await call('PATCH', '/channels/ch1', { handle: 'plainname' })).status, 200, 'other handles still change');
 	});
 
+	it('a move lock whose worker died while starting clears by itself, and never hides a move that did start (#1935)', async () => {
+		const start = async (minutes: number, job?: { status: string; minutes: number }) => {
+			const t = await setup({ profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) } });
+			const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+			t.db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(ago(minutes));
+			if (job) t.db.db.prepare(`INSERT INTO admin_jobs (id, kind, target_kind, target_id, actor_id, status, params, created_at, updated_at) VALUES ('job-started', 'channel.transfer', 'channel', 'ch1', 'usr_admin', ?, '{}', ?, ?)`).run(job.status, ago(job.minutes), ago(job.minutes));
+			return t;
+		};
+		const move = (t: Awaited<ReturnType<typeof setup>>) => t.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		// No job was ever created: a moment's lock holds, an old one is stale
+		const young = await start(5);
+		assert.equal(await openTransferJob(young.env as never, 'ch1'), 'starting');
+		assert.equal((await move(young)).body.code, 'transfer_in_progress');
+		const old = await start(11);
+		assert.equal(await openTransferJob(old.env as never, 'ch1'), null, 'Go live and handle edits work again');
+		const moved = await old.jobOf(await move(old));
+		assert.equal(moved.status, 'succeeded');
+		assert.equal(old.db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get(), undefined);
+		// The worker died after creating the job, before naming it on the lock: the job decides, however old the lock
+		for (const [status, code] of [['queued', 'transfer_in_progress'], ['retrying', 'transfer_in_progress'], ['failed', 'transfer_unfinished']]) {
+			const t = await start(60, { status, minutes: 59 });
+			assert.equal(await openTransferJob(t.env as never, 'ch1'), 'job-started', status);
+			assert.equal((await move(t)).body.code, code, status);
+		}
+		const done = await start(60, { status: 'succeeded', minutes: 59 });
+		assert.equal(await openTransferJob(done.env as never, 'ch1'), null);
+		assert.equal((await done.jobOf(await move(done))).status, 'succeeded');
+		// A move that is over while the lock is young: it may be an earlier one's, so the lock holds
+		const fast = await start(1, { status: 'succeeded', minutes: 0 });
+		assert.equal(await openTransferJob(fast.env as never, 'ch1'), 'starting');
+		assert.equal((await move(fast)).body.code, 'transfer_in_progress');
+		// A move its offer no longer stands for never holds the lock it started under
+		const stopped = await start(60, { status: 'failed', minutes: 59 });
+		stopped.db.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES ('o1', 'ch1', ?, ?, 'cancelled', '2026', '2099', '2026')`).run(OWNER, OTHER);
+		stopped.db.db.prepare(`UPDATE admin_jobs SET params = '{"offerId":"o1"}' WHERE id = 'job-started'`).run();
+		assert.equal(await openTransferJob(stopped.env as never, 'ch1'), null);
+		assert.equal((await stopped.jobOf(await move(stopped))).status, 'succeeded');
+		// A job from before the lock is not this lock's
+		const earlier = await start(11, { status: 'failed', minutes: 30 });
+		assert.equal(await openTransferJob(earlier.env as never, 'ch1'), null);
+		const plan = (old.db.db.prepare(`EXPLAIN QUERY PLAN ${STARTED_JOB_SQL}`).all('ch1', '2026') as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.match(plan, /SEARCH j USING INDEX idx_admin_jobs_target \(target_kind=\? AND target_id=\? AND created_at>\?\)/, plan);
+		assert.match(plan, /SEARCH o USING INDEX sqlite_autoindex_channel_move_offers_1 \(id=\?\)/, plan);
+	});
+
+	it('two requests taking over a stale lock start one move, and a finished job never releases the next one’s lock (#1935)', async () => {
+		const { raw, env, db, call, jobOf } = await setup({ profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') } });
+		const lock = (at: string) => db.db.prepare(`INSERT OR REPLACE INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(at);
+		lock(new Date(Date.now() - 11 * 60_000).toISOString());
+		// The first request reads the stale lock; the second takes it over and is starting; the first goes on
+		const prepare = db.prepare.bind(db);
+		let second: Promise<{ status: number; body: any }> | undefined;
+		db.prepare = ((sql: string) => {
+			const statement = prepare(sql);
+			if (second || !/^DELETE FROM channel_transfer_locks/.test(sql)) return statement;
+			second = Promise.resolve({ status: 0, body: {} });
+			db.db.prepare(`UPDATE channel_transfer_locks SET created_at = ? WHERE channel_id = 'ch1'`).run(new Date().toISOString());
+			return statement;
+		}) as typeof db.prepare;
+		const first = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		db.prepare = prepare as typeof db.prepare;
+		assert.deepEqual([first.status, first.body.code], [409, 'transfer_in_progress'], 'the other request holds it now');
+		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
+
+		// A move that finished is delivered once more while the next request is starting
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded');
+		lock(new Date(Date.now() + 1000).toISOString());
+		await (ADMIN_JOB_HANDLERS as Record<string, (env: unknown, job: unknown) => Promise<unknown>>)['channel.transfer'](env, job);
+		assert.ok(db.db.prepare(`SELECT 1 FROM channel_transfer_locks WHERE channel_id = 'ch1' AND job_id = ''`).get(), "the next request's lock stays");
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+	});
+
 	it('a move takes the channel from its owner at the lock, not from the one read before it', async () => {
 		const { raw, call, jobOf, db } = await setup({ profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') } });
 		const get = raw.profiles.get.bind(raw.profiles);
@@ -1233,7 +1306,7 @@ describe('channel actions', () => {
 		db.db.prepare(`UPDATE live_sessions SET status = 'ended' WHERE id = 's-on'`).run();
 
 		// Between taking the lock and creating the job, the channel already counts as being moved
-		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(new Date().toISOString());
 		assert.equal(await openTransferJob(env as never, 'ch1'), 'starting');
 		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
 		assert.equal(await openTransferJob(env as never, 'ch1'), null);
@@ -1265,7 +1338,7 @@ describe('channel actions', () => {
 			return { status: res.status, body: (await res.json()) as { code?: string } };
 		};
 		// Between taking the lock and creating the job
-		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(new Date().toISOString());
 		assert.deepEqual(await start(), { status: 409, body: { success: false, code: 'transfer_in_progress', error: 'This channel is being moved to another account. Try again shortly.' } });
 		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
 		// While the move's job is queued
@@ -1724,7 +1797,7 @@ describe('channel actions', () => {
 		edit({ isSuspended: false });
 
 		// Being moved: Go live keeps its own answer
-		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', ?)`).run(new Date().toISOString());
 		await move('move_in_progress', { en: 'This channel is already being moved. Try again once that finishes.', ar: 'يجري نقل هذه القناة بالفعل. حاول مرة أخرى بعد انتهائه.' });
 		await other('go live', (lang) => as(OWNER)('/api/live-streams/go/start', lang), 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.', CONFLICT);
 		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
