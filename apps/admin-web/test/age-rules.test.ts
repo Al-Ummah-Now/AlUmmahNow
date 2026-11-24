@@ -49,6 +49,13 @@ describe('form', () => {
     assert.match(html, /<button[^>]*disabled=""[^>]*data-testid="age-rules-save"|data-testid="age-rules-save"[^>]*disabled=""/);
   });
 
+  it('names come with the page, and no paragraph holds one (a disclosure there breaks hydration)', () => {
+    const entry = { id: '1', from: NUMBERS, to: { ...NUMBERS, liveChat: 18 }, actorId: 'usr_gone', actorName: null, createdAt: '2026-11-24T10:00:00Z' };
+    const html = render(form(view({ numbers: entry.to, version: 2, updatedAt: '2026-11-24T10:00:00Z', updatedBy: { id: 'usr_a', name: null } }), [entry]));
+    for (const [, inner] of html.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/g)) assert.ok(!/<(details|div|ul|p)\b/.test(inner!), inner);
+    assert.match(render(form(view({ numbers: NUMBERS, version: 1, updatedAt: '2026-11-24T10:00:00Z', updatedBy: { id: 'usr_a', name: 'Yusuf Rahman' } }))), /Yusuf Rahman/);
+  });
+
   it('read-only for anyone else', () => {
     const html = render(form(view({ canEdit: false })));
     assert.match(html, /Only super admins/);
