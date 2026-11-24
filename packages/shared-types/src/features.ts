@@ -70,6 +70,18 @@ export const USER_FEATURE_KEYS = [
   'listenMode',
   /** Encrypted offline downloads on native apps and creator download settings (wiki E14) */
   'offlineDownloads',
+  /** E21: every entry is off until its feature switch and implementation readiness turn it on */
+  'prayerTimes',
+  'qibla',
+  'hijriCalendar',
+  'ramadanMode',
+  /** Reading recitation tools; text still needs a fresh Quran Foundation copy */
+  'recitationTools',
+  /** Editing reciter metadata, separately gated by the channel owner's tier and video.edit */
+  'recitationMetadata',
+  'intentionalViewing',
+  /** Private time-stamped notes; signed-in viewers only, note limit per admin-managed tier */
+  'studyNotes',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];

@@ -78,15 +78,31 @@ test('every /api/me/features key is switched or listed as automatic', () => {
   assert.equal(new Set(all).size, all.length, 'a /api/me/features key belongs to one switch at most');
 });
 
-test('defaults keep today’s behaviour (caption download, creator support, offline/listen and event calendar start off)', () => {
+test('defaults keep today’s behaviour (caption download, creator support, offline/listen, event calendar and E21 start off)', () => {
   const off = r.FEATURE_KEYS.filter((k) => !r.DEFAULT_FEATURE_SWITCHES[k]);
-  assert.deepEqual(off, ['viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'eventCalendar', 'listenMode', 'offlineDownloads']);
+  assert.deepEqual(off, [
+    'viewerCaptionDownload',
+    'creatorSupport',
+    'supportExternalLinks',
+    'charityDonations',
+    'supportPerks',
+    'prayerTimes',
+    'qibla',
+    'hijriCalendar',
+    'ramadanMode',
+    'recitationTools',
+    'intentionalViewing',
+    'studyNotes',
+    'eventCalendar',
+    'listenMode',
+    'offlineDownloads',
+  ]);
 });
 
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'live', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks'],
+    ['upload', 'createChannel', 'live', 'viewerCaptionDownload', 'creatorSupport', 'supportExternalLinks', 'charityDonations', 'supportPerks', 'recitationTools'],
   );
 });
 
@@ -120,6 +136,29 @@ test('applySwitchesToUserFeatures turns covered keys off and leaves the rest', (
   assert.deepEqual(out, { live: false, upload: false, youtubeImport: false, quranText: true, billing: false });
   assert.equal(r.switchForUserFeature('live'), 'live');
   assert.equal(r.switchForUserFeature('quranText'), null);
+});
+
+test('E21 hides every public and role-specific user feature by default', () => {
+  const keys = [
+    'prayerTimes',
+    'qibla',
+    'hijriCalendar',
+    'ramadanMode',
+    'recitationTools',
+    'recitationMetadata',
+    'intentionalViewing',
+    'studyNotes',
+  ] as const;
+  const configured = Object.fromEntries(keys.map((key) => [key, true])) as Record<(typeof keys)[number], boolean>;
+  const out = r.applySwitchesToUserFeatures(configured, r.effectiveSwitches(r.DEFAULT_FEATURE_SWITCHES));
+  for (const key of keys) assert.equal(out[key], false, key);
+
+  const ready = r.withDefaults({ prayerTimes: true, hijriCalendar: true, ramadanMode: true });
+  assert.deepEqual(r.blockedBy('ramadanMode', ready), []);
+  const blocked = r.withDefaults({ ...ready, hijriCalendar: false });
+  assert.deepEqual(r.blockedBy('ramadanMode', blocked), ['hijriCalendar']);
+  assert.equal(r.effectiveSwitches(blocked).ramadanMode, false);
+  assert.equal(blocked.ramadanMode, true, 'a dependency never rewrites the stored choice');
 });
 
 test('featureOffMessage names the feature in the asked language', () => {
