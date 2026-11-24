@@ -71,9 +71,19 @@ interface Outcome {
   bunny: string;
   r2: string;
   note: string;
+  /** What stopped this format (its own failure; the others go on) */
+  error?: string;
 }
 
+/**
+ * Time budget, nested so cleanup always runs (the workflow: Playwright 55 min < step 60 < qa-encode lock 65
+ * < job): uploads stop starting after UPLOADS_END, the encode wait ends by ENCODES_END, then the videos are
+ * deleted and the table written, with the rest of the 55 minutes to spare.
+ */
 const BUNNY_TIMEOUT_MS = 15 * 60_000;
+const UPLOADS_END_MS = 30 * 60_000;
+const ENCODES_END_MS = 42 * 60_000;
+const TEST_TIMEOUT_MS = 55 * 60_000;
 
 async function channelIn(page: Page, user: WebUser, name: string): Promise<string> {
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -92,7 +102,7 @@ async function channelIn(page: Page, user: WebUser, name: string): Promise<strin
 }
 
 /** The form's own calls (initiate, TUS create and PATCH, complete) for a file the form refuses. Returns the video id. */
-async function uploadViaApi(user: WebUser, channelId: string, file: string, mimeType: string, title: string): Promise<string> {
+async function uploadViaApi(user: WebUser, channelId: string, file: string, mimeType: string, title: string, onInitiate: (id: string) => void): Promise<string> {
   const bytes = fs.readFileSync(file);
   const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json', channelId }, body: JSON.stringify(body) });
   const initiate = await apiFetch(user, '/api/videos/upload/initiate', json({ title, description: 'Formats check', fileSize: bytes.length, mimeType, isPublic: false }));
@@ -100,7 +110,10 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
   const { result } = (await initiate.json()) as { result?: { videoId?: string; tusSessionId?: string } };
   const id = result?.videoId ?? '';
   // The run's upload cap counts it (the form's uploads are recorded by trackRunUploads)
-  if (id) recordResource('video', id);
+  if (id) {
+    recordResource('video', id);
+    onInitiate(id); // deleted in the end even when the bytes never arrive
+  }
   expect(id && result?.tusSessionId, 'initiate returned no video id or TUS session').toBeTruthy();
   const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
   const create = await apiFetch(user, '/api/videos/tus', {
@@ -135,13 +148,23 @@ async function status(user: WebUser, id: string, channelId: string): Promise<{ s
 test('every accepted format uploads on QA, is encoded by Bunny and by our transcoder, and is deleted', async ({ page }) => {
   test.skip(process.env.E2E_FORMATS_REAL !== '1', 'set E2E_FORMATS_REAL=1 to run this real-upload check by hand');
   expect(releaseEnv(), 'this check runs on QA only').toBe('qa');
-  test.setTimeout(75 * 60_000);
+  test.setTimeout(TEST_TIMEOUT_MS);
+  const startedAt = Date.now();
   trackRunUploads(page);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aun-formats-'));
-  const made: Array<{ id: string; channelId: string }> = [];
+  // Every video the run initiated, recorded the moment its id is known: all of them are deleted at the end,
+  // including one whose bytes never arrived
+  const made = new Map<string, string>();
   const outcomes: Outcome[] = [];
   let user: WebUser | undefined;
+  let channelId = '';
+  page.on('response', async (res) => {
+    if (res.request().method() !== 'POST' || !/\/api\/videos\/upload\/initiate$/.test(new URL(res.url()).pathname)) return;
+    const body = (await res.json().catch(() => ({}))) as { result?: { videoId?: string } };
+    if (body.result?.videoId && channelId) made.set(body.result.videoId, channelId);
+  });
+  const oneLine = (e: unknown) => String(e instanceof Error ? e.message : e).split('\n')[0]!.slice(0, 220);
   try {
     for (const f of FORMATS) {
       execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25:duration=5', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100:duration=5', ...f.args, path.join(dir, f.file)]);
@@ -149,58 +172,62 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     user = await signUpOnWeb(page, 'media-gate');
     await createProfile(user);
     await grantCreatorTier(user);
-    const channelId = await channelIn(page, user, `Formats check ${Date.now().toString(36)}`);
+    channelId = await channelIn(page, user, `Formats check ${Date.now().toString(36)}`);
 
-    // Phase 1: upload every clip, one after another (the form's flow, or the API for what the form refuses)
+    // Phase 1: upload every clip, one after another (the form's flow, or the API for what the form refuses).
+    // Each format is on its own: a failure is noted in the table and the others go on.
     const waiting: Array<{ out: Outcome; id: string }> = [];
     for (const f of FORMATS) {
       const out: Outcome = { format: f.label, file: f.file, formAccepted: null, bunny: '-', r2: '-', note: '' };
       outcomes.push(out);
+      if (Date.now() - startedAt > UPLOADS_END_MS) {
+        out.error = 'not tried: out of time';
+        continue;
+      }
       const title = `Formats check ${f.file} ${Date.now().toString(36)}`;
       let id = '';
-      if (f.viaApi) {
-        // The web list does not take it: say what the form does, then upload the way the form would
+      try {
         await page.goto(`${target().web}/en/upload`);
         await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30_000 });
         await page.getByTestId('upload-file-input').setInputFiles(path.join(dir, f.file));
         out.formAccepted = await page.getByTestId('upload-details').isVisible().catch(() => false);
-        out.note = out.formAccepted ? 'the form took it' : 'the form refuses it (expected); uploaded through the API';
-        id = await uploadViaApi(user, channelId, path.join(dir, f.file), f.viaApi, title);
-      } else {
-        await page.goto(`${target().web}/en/upload`);
-        await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30_000 });
-        await page.getByTestId('upload-file-input').setInputFiles(path.join(dir, f.file));
-        out.formAccepted = await page.getByTestId('upload-details').isVisible().catch(() => false);
-        if (!out.formAccepted) {
-          out.note = `refused: ${(await page.getByTestId('upload-page-error').textContent().catch(() => '')) ?? ''}`;
-          continue;
+        if (f.viaApi) {
+          // The web list does not take it: the form's answer, then the same calls the form would make
+          out.note = out.formAccepted ? 'the form took it' : 'the form refuses it (expected); uploaded through the API';
+          id = await uploadViaApi(user, channelId, path.join(dir, f.file), f.viaApi, title, (videoId) => made.set(videoId, channelId));
+        } else {
+          if (!out.formAccepted) {
+            out.error = `the form refused it: ${(await page.getByTestId('upload-page-error').textContent().catch(() => '')) ?? ''}`.trim();
+            continue;
+          }
+          await page.getByTestId('upload-title-en').fill(title);
+          await page.getByTestId('upload-is-public').uncheck();
+          await page.getByTestId('upload-submit').click();
+          await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150_000 });
         }
-        await page.getByTestId('upload-title-en').fill(title);
-        await page.getByTestId('upload-is-public').uncheck();
-        await page.getByTestId('upload-submit').click();
-        await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150_000 });
+        await expect
+          .poll(async () => {
+            const res = await apiFetch(user!, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
+            id = ((await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> }).data?.find((v) => v.title === title)?.id ?? id;
+            return id;
+          }, { timeout: 60_000 })
+          .not.toBe('');
+        made.set(id, channelId);
+        waiting.push({ out, id });
+      } catch (error) {
+        out.error = `upload failed: ${oneLine(error)}`;
       }
-
-      await expect
-        .poll(async () => {
-          const res = await apiFetch(user!, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
-          id = ((await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> }).data?.find((v) => v.title === title)?.id ?? id;
-          return id;
-        }, { timeout: 60_000 })
-        .not.toBe('');
-      made.push({ id, channelId });
-      waiting.push({ out, id });
     }
 
     // Phase 2: wait for all of them together (one deadline, so the encodes run side by side). A video is
     // done when Bunny has an answer AND our transcoder has one. A video whose upload-status has no `r2`
     // yet is not done: the dual write can lag the upload. If Bunny answered and `r2` is still absent a
     // minute later, this account has no R2 transcode and "no r2" is the answer.
-    const deadline = Date.now() + BUNNY_TIMEOUT_MS;
+    const deadline = Math.min(Date.now() + BUNNY_TIMEOUT_MS, startedAt + ENCODES_END_MS);
     const bunnyAnsweredAt = new Map<string, number>();
     const last = new Map<string, Awaited<ReturnType<typeof status>>>();
     for (let pending = waiting.slice(); pending.length > 0 && Date.now() < deadline; ) {
-      for (const w of pending) last.set(w.id, await status(user, w.id, channelId));
+      for (const w of pending) last.set(w.id, await status(user, w.id, channelId).catch(() => ({})));
       pending = pending.filter((w) => {
         const s = last.get(w.id)!;
         if (terminal(s.status) && !bunnyAnsweredAt.has(w.id)) bunnyAnsweredAt.set(w.id, Date.now());
@@ -210,32 +237,38 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
       if (pending.length > 0) await page.waitForTimeout(10_000);
     }
     for (const w of waiting) {
-      const s = last.get(w.id) ?? (await status(user, w.id, channelId));
+      const s = last.get(w.id) ?? (await status(user, w.id, channelId).catch(() => ({})));
       w.out.bunny = s.status ?? 'unknown';
       w.out.r2 = s.r2 ? `${s.r2.status}${s.r2.error ? `: ${s.r2.error}` : ''}` : 'no r2';
-      if (!terminal(s.status) || (s.r2 && !terminal(s.r2.status))) w.out.note += ' (still encoding at the deadline)';
+      const graceOver = bunnyAnsweredAt.has(w.id) && Date.now() - bunnyAnsweredAt.get(w.id)! > 60_000;
+      if (!terminal(s.status) || (s.r2 ? !terminal(s.r2.status) : !graceOver)) w.out.note += ' (still encoding at the deadline)';
     }
+  } catch (error) {
+    // Sign-up, channel or ffmpeg failed: nothing more can be tried, the cleanup below still runs
+    outcomes.forEach((o) => (o.error ??= `stopped: ${oneLine(error)}`));
+    if (outcomes.length === 0) outcomes.push({ format: '(setup)', file: '', formAccepted: null, bunny: '-', r2: '-', note: '', error: `stopped: ${oneLine(error)}` });
   } finally {
-    for (const v of made) {
+    for (const [id, channel] of made) {
       if (!user) break;
-      await apiFetch(user, `/api/videos/${v.id}`, { method: 'DELETE', headers: { channelId: v.channelId } }).catch(() => undefined);
-      await apiFetch(user, `/api/videos/${v.id}/permanent`, { method: 'DELETE', headers: { channelId: v.channelId } }).catch(() => undefined);
+      await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId: channel } }).catch(() => undefined);
+      await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId: channel } }).catch(() => undefined);
     }
     fs.rmSync(dir, { recursive: true, force: true });
-    const rows = outcomes.map((o) => `${o.format.padEnd(36)} form:${String(o.formAccepted).padEnd(5)} bunny:${o.bunny.padEnd(8)} r2:${o.r2} ${o.note}`);
-    process.stdout.write(`\n[formats] ${made.length} videos made and deleted\n${rows.join('\n')}\n`);
+    const rows = outcomes.map((o) => `${o.format.padEnd(36)} form:${String(o.formAccepted).padEnd(5)} bunny:${o.bunny.padEnd(8)} r2:${o.r2} ${o.note} ${o.error ? `ERROR ${o.error}` : ''}`);
+    process.stdout.write(`\n[formats] ${made.size} videos made and deleted\n${rows.join('\n')}\n`);
     // The table for the workflow's job summary (FORMATS_SUMMARY_FILE): no ids, emails or secrets in it
     if (process.env.FORMATS_SUMMARY_FILE) {
       const cell = (v: string) => v.replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
       const md = [
         '| Format | Web form | Bunny | Our transcoder (R2) | Note |',
         '|---|---|---|---|---|',
-        ...outcomes.map((o) => `| ${cell(o.format)} | ${o.formAccepted === null ? 'not tried' : o.formAccepted ? 'accepted' : 'refused'} | ${cell(o.bunny)} | ${cell(o.r2)} | ${cell(o.note)} |`),
+        ...outcomes.map((o) => `| ${cell(o.format)} | ${o.formAccepted === null ? 'not tried' : o.formAccepted ? 'accepted' : 'refused'} | ${cell(o.bunny)} | ${cell(o.r2)} | ${cell([o.note, o.error ? `FAILED: ${o.error}` : ''].filter(Boolean).join(' '))} |`),
         '',
-        `${made.length} videos made, then deleted.`,
+        `${made.size} videos made, then deleted.`,
       ].join('\n');
       fs.writeFileSync(process.env.FORMATS_SUMMARY_FILE, `${md}\n`);
     }
   }
-  expect(outcomes.filter((o) => o.formAccepted === false && !FORMATS.find((f) => f.file === o.file)?.viaApi), 'formats on the web list that the form refused').toEqual([]);
+  // A format on the web list that failed is a failure of the check; WMV and FLV are probes, their table row is the answer
+  expect(outcomes.filter((o) => o.error && !FORMATS.find((f) => f.file === o.file)?.viaApi), 'formats on the web list that failed').toEqual([]);
 });
