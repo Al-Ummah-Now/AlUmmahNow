@@ -92,6 +92,8 @@ export const USER_FEATURE_KEYS = [
   'studyNotes',
   /** Daily and prayer-time push quiet hours (switch quietHours, wiki E22) */
   'quietHours',
+  /** Help has the parents' guide (switch parentsGuide, wiki E20) */
+  'parentsGuide',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];

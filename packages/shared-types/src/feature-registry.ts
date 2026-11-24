@@ -109,6 +109,7 @@ export const FEATURE_KEYS = [
   'offlineDownloads',
   'appUpdates',
   'ageRules',
+  'parentsGuide',
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -738,6 +739,23 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
     confirm: 'both',
     requires: [],
     userFeatureKeys: [],
+    offline: 'lastKnownElseHidden',
+  },
+  // --- Parents' guide (wiki E20) ----------------------------------------------
+  {
+    key: 'parentsGuide',
+    group: 'site',
+    name: { en: 'Parents’ guide', ar: 'دليل الوالدين' },
+    help: {
+      en: 'Help has no guide for parents, and its address shows “not found”. Turn it on before its address goes into the App Store.',
+      ar: 'لا يوجد دليل للوالدين في المساعدة، ويظهر عند عنوانه «غير موجود». فعّله قبل وضع عنوانه في متجر آبل.',
+    },
+    offMessage: { en: 'This guide isn’t available right now.', ar: 'هذا الدليل غير متاح الآن.' },
+    default: false,
+    toggle: 'admin',
+    confirm: 'never',
+    requires: [],
+    userFeatureKeys: ['parentsGuide'],
     offline: 'lastKnownElseHidden',
   },
 ] satisfies FeatureDefinition[]);

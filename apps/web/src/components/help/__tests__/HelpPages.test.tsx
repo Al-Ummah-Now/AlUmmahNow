@@ -32,9 +32,10 @@ function tourRequests() {
 }
 
 describe('Help home', () => {
-  beforeEach(() => { lang = 'en'; push.mockReset(); });
+  beforeEach(() => { lang = 'en'; push.mockReset(); mockFeatures = {}; });
 
   it('lists every topic and starts the tour', () => {
+    mockFeatures = { parentsGuide: true };
     render(<HelpHome />);
     expect(screen.getByRole('heading', { level: 1, name: HELP_EN.title })).toBeInTheDocument();
     for (const id of HELP_TOPIC_IDS) {
@@ -44,6 +45,16 @@ describe('Help home', () => {
     fireEvent.click(screen.getByTestId('help-take-tour'));
     expect(tour.seen).toHaveLength(1);
     tour.stop();
+  });
+
+  it('has no parents’ guide, here or under another topic, while its switch is off', () => {
+    mockFeatures = {};
+    const { unmount } = render(<HelpHome />);
+    expect(screen.queryByTestId('help-topic-parents')).toBeNull();
+    expect(screen.getByTestId('help-topic-privacy')).toBeInTheDocument();
+    unmount();
+    render(<HelpTopicPage topic="privacy" />);
+    expect(screen.queryByRole('link', { name: HELP_EN.topics.parents.title })).toBeNull();
   });
 
   it('searches every section and opens the one picked', () => {

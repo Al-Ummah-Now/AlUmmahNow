@@ -2,11 +2,12 @@
 /** Help home (/[locale]/help): search, the tour, every topic. */
 import '@/theme/help.css';
 import Link from '@/components/common/AppLink';
-import { ArrowRight, BookOpen, Compass, Languages, PlayCircle, Share2, ShieldCheck, Upload, Users, UserRound, type LucideIcon } from 'lucide-react';
-import { HELP_TOPIC_IDS, type HelpTopicId } from '@al-ummah/shared-types';
+import { ArrowRight, BookOpen, Compass, Languages, PlayCircle, Share2, ShieldCheck, SlidersHorizontal, Upload, Users, UserRound, type LucideIcon } from 'lucide-react';
+import type { HelpTopicId } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
-import { helpHref } from '@/lib/help/content';
+import { useFeatures } from '@/hooks/useFeatures';
+import { helpHref, visibleHelpTopics } from '@/lib/help/content';
 import { requestIdentityTour } from '@/lib/help/tour-events';
 import { HelpSearch } from './HelpSearch';
 
@@ -18,12 +19,14 @@ export const HELP_TOPIC_ICONS: Record<HelpTopicId, LucideIcon> = {
   social: Share2,
   community: Users,
   privacy: ShieldCheck,
+  parents: SlidersHorizontal,
   appearance: Languages,
 };
 
 export function HelpHome() {
   const { t, lang, isRTL } = useLanguage();
   const h = t.help;
+  const { features } = useFeatures();
   return (
     <main id={MAIN_CONTENT_ID} className="hp" dir={isRTL ? 'rtl' : 'ltr'} data-testid="help-home">
       <header className="hp-head aun-glass aun-card-pad">
@@ -46,7 +49,7 @@ export function HelpHome() {
       <section aria-labelledby="hp-topics">
         <h2 id="hp-topics" className="hp-h2">{h.topicsHeading}</h2>
         <ul className="hp-topics">
-          {HELP_TOPIC_IDS.map((id) => {
+          {visibleHelpTopics(features).map((id) => {
             const Icon = HELP_TOPIC_ICONS[id];
             const topic = h.topics[id];
             return (
