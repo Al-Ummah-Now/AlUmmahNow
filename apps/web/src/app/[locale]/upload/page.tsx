@@ -11,6 +11,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import NotFoundPage from "@/components/NotFoundPage";
 import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
+import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { VIDEO_PICKER_ACCEPT, isAcceptedVideoFile, videoFormatsText } from "@/lib/upload/video-formats";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";

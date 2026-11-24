@@ -1,5 +1,5 @@
 'use client';
-import { formatBytes, formatPercent, isArabicLocale } from '@al-ummah/shared-types';
+import { formatBytes, formatPercent } from '@al-ummah/shared-types';
 import { hasAnyLanguage, primaryText } from '@/lib/localized-input';
 import { logger } from '@/lib/logger-client';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
