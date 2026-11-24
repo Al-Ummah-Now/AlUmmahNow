@@ -36,7 +36,7 @@ const ModerationFieldsSchema = {
 // Report Zod schema for OpenAPI documentation
 export const ReportSchema = z.object({
   id: Str(),
-  entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post']),
+  entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat']),
   entity_id: Str(),
   reporter_id: Str(),
   reason: z.enum(['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other']),

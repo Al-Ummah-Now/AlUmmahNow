@@ -132,7 +132,7 @@ export async function streamState(env: StreamsEnv, stream: LiveStreamRecord, now
 export async function markStreamLive(env: StreamsEnv, streamId: string, now = Date.now()): Promise<void> {
 	let became = false;
 	const updated = await repo(env).updateObject(streamKey(streamId), (fresh) => {
-		if (fresh.status === 'live') return false;
+		if (fresh.status === 'live' || streamIsRemoved(fresh)) return false;
 		fresh.status = 'live';
 		// Live again after a held or rejected recording (VR9): the hold ends for this session only
 		const review = (fresh as { review?: { status?: string } }).review;
@@ -160,14 +160,25 @@ export async function markStreamEnded(env: StreamsEnv, streamId: string, session
 	});
 }
 
+/** Ends the stream's session when it is still open (provisioned or live). */
+export async function endOpenSession(env: StreamsEnv, stream: LiveStreamRecord, reason: string, now = Date.now()): Promise<void> {
+	const session = stream.sessionId && env.SEARCH_DB ? await readSession(env.SEARCH_DB, stream.sessionId) : null;
+	if (session && (session.status === 'provisioned' || session.status === 'live')) await endSession(env, session, reason, now);
+}
+
+/** Hidden or deleted by a moderator (or a suspension): nothing is provisioned for it, and it does not go on air. */
+export const streamIsRemoved = (stream: object): boolean => {
+	const { isHidden, isDeleted } = stream as { isHidden?: boolean; isDeleted?: boolean };
+	return isHidden === true || isDeleted === true;
+};
+
 /**
  * Owner deletes a stream: a session still open (provisioned or live) is ended
  * first, so the provider stops ingest and the comparison keeps its rows; then
  * the record goes.
  */
 export async function deleteStream(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now()): Promise<void> {
-	const session = stream.sessionId && env.SEARCH_DB ? await readSession(env.SEARCH_DB, stream.sessionId) : null;
-	if (session && (session.status === 'provisioned' || session.status === 'live')) await endSession(env, session, 'deleted', now);
+	await endOpenSession(env, stream, 'deleted', now);
 	await repo(env).deleteObject(streamKey(stream.id));
 }
 

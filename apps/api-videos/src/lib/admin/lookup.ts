@@ -2,7 +2,7 @@
  * Batch lookup for the admin reports queue (POST /internal/admin/lookup):
  * titles, channels and owners of many reported items, and the names and ban
  * state of many users, in one call. Reads the admin index in D1
- * (content_ownership, admin_comments, videos_bans); only playlists, which the
+ * (content_ownership, admin_comments, live_chat_messages, videos_bans); only playlists, which the
  * index does not hold, are read from R2 (one get each, bounded by the caller's
  * page size). Posts are stored under their channel and cannot be found by id
  * alone, so they come back `found: false`.
@@ -10,6 +10,7 @@
 import {
 	ADMIN_LOOKUP_MAX_ITEMS,
 	ADMIN_LOOKUP_MAX_USERS,
+	LIVE_METADATA_TABLE,
 	OWNERSHIP_TABLE,
 	type AdminLookupItem,
 	type AdminLookupRequest,
@@ -25,10 +26,12 @@ type Row = Record<string, any>;
 /** Longest text excerpt kept for a comment. */
 const EXCERPT = 200;
 
+/** On one line; null when empty. A chat message is short enough to judge whole. */
+const flat = (text: unknown): string | null => (typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '') || null;
+
 const excerpt = (text: unknown): string | null => {
-	const flat = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
-	if (!flat) return null;
-	return flat.length > EXCERPT ? `${flat.slice(0, EXCERPT - 1)}…` : flat;
+	const line = flat(text);
+	return line && line.length > EXCERPT ? `${line.slice(0, EXCERPT - 1)}…` : line;
 };
 
 const notFound = (type: ReportableEntityType, id: string): AdminLookupItem => ({
@@ -44,7 +47,7 @@ const notFound = (type: ReportableEntityType, id: string): AdminLookupItem => ({
 	isDeleted: null,
 });
 
-async function ownershipRows(db: SearchDb, kind: 'video' | 'channel' | 'profile', ids: string[]): Promise<Map<string, Row>> {
+async function ownershipRows(db: SearchDb, kind: 'video' | 'stream' | 'channel' | 'profile', ids: string[]): Promise<Map<string, Row>> {
 	const out = new Map<string, Row>();
 	if (ids.length === 0) return out;
 	const { results } = await db
@@ -80,8 +83,10 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 	const idsOf = (...types: ReportableEntityType[]) => request.items.filter((i) => types.includes(i.type)).map((i) => i.id);
 
 	const commentIds = idsOf('comment');
-	const [videos, channels, comments, playlists] = await Promise.all([
-		ownershipRows(db, 'video', idsOf('video', 'livestream')),
+	const chatIds = idsOf('live_chat');
+	const [videos, streams, channels, comments, chats, playlists] = await Promise.all([
+		ownershipRows(db, 'video', idsOf('video')),
+		ownershipRows(db, 'stream', idsOf('livestream')),
 		ownershipRows(db, 'channel', idsOf('channel')),
 		commentIds.length
 			? db
@@ -90,12 +95,19 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 					.all<Row>()
 					.then(({ results }) => new Map((results ?? []).map((r) => [r.comment_id as string, r])))
 			: Promise.resolve(new Map<string, Row>()),
+		chatIds.length
+			? db
+					.prepare(`SELECT m.id, m.stream_id, m.user_id, m.text, m.status, s.channel_id FROM json_each(?) j JOIN live_chat_messages m ON m.id = j.value LEFT JOIN ${LIVE_METADATA_TABLE} s ON s.stream_id = m.stream_id`)
+					.bind(JSON.stringify(chatIds))
+					.all<Row>()
+					.then(({ results }) => new Map((results ?? []).map((r) => [r.id as string, r])))
+			: Promise.resolve(new Map<string, Row>()),
 		readMany(env.playlists, idsOf('playlist')),
 	]);
 
 	const items: AdminLookupItem[] = request.items.map(({ type, id }) => {
 		if (type === 'video' || type === 'livestream') {
-			const v = videos.get(id);
+			const v = type === 'video' ? videos.get(id) : streams.get(id);
 			return v
 				? { type, id, found: true, title: v.admin_title ?? null, parentId: null, channelId: v.channel_id ?? null, channelName: null, ownerId: v.owner_id ?? null, isHidden: v.is_hidden === 1, isDeleted: v.is_deleted === 1 }
 				: notFound(type, id);
@@ -110,6 +122,12 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 			const cm = comments.get(id);
 			return cm
 				? { type, id, found: true, title: excerpt(cm.text), parentId: cm.video_id ?? null, channelId: cm.channel_id ?? null, channelName: null, ownerId: cm.user_id ?? null, isHidden: cm.is_hidden === 1, isDeleted: false }
+				: notFound(type, id);
+		}
+		if (type === 'live_chat') {
+			const m = chats.get(id);
+			return m
+				? { type, id, found: true, title: flat(m.text), parentId: m.stream_id ?? null, channelId: m.channel_id ?? null, channelName: null, ownerId: m.user_id ?? null, isHidden: m.status !== 'published', isDeleted: false }
 				: notFound(type, id);
 		}
 		if (type === 'playlist') {

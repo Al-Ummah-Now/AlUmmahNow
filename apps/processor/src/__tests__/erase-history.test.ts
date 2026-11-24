@@ -150,6 +150,58 @@ describe('archive titles (#1254)', () => {
   });
 });
 
+describe('reports about the person (wiki E17 §5.2)', () => {
+  function setup() {
+    const reports = createSqliteD1(REPORTS_MIGRATIONS_DIR);
+    const env = {
+      MESSAGE_QUEUE: { send: jest.fn() },
+      MESSAGES_BUCKET: bucket(),
+      NOTIFICATIONS_DB: createSqliteD1(),
+      REPORTS_DB: reports,
+      SEARCH_DB: createSqliteD1(SEARCH_MIGRATIONS_DIR),
+      MESSAGE_ARCHIVE: 'none',
+      ENVIRONMENT: 'test',
+      LOG_LEVEL: 'error',
+    } as unknown as QueueEnvironment;
+    const processor = new MessageProcessor(logger);
+    const deliver = async (type: MessageType, payload: Record<string, unknown>) => (await processor.processMessage({ id: crypto.randomUUID(), type, timestamp: new Date().toISOString(), payload } as AlUmmahMessage, env)).success;
+    const report = (id: string, ownerId: string | null = CREATOR) =>
+      deliver(MessageType.ReportCreate, { reportId: id, entityType: 'live_chat', entityId: `m-${id}`, reporterId: VIEWER, reason: 'spam', timestamp: '2026-11-20T10:00:00Z', subject: { text: 'bad words', parentId: 's1', channelId: 'ch1', ownerId } });
+    const row = (id: string) => ({ ...(reports.raw.prepare('SELECT reporter_id, entity_title, entity_parent_id, channel_id, owner_id, owner_name FROM reports WHERE id = ?').get(id) as object) });
+    return { reports, deliver, report, row };
+  }
+
+  it('a report keeps the message it is about', async () => {
+    const t = setup();
+    expect(await t.report('r1')).toBe(true);
+    expect(t.row('r1')).toEqual({ reporter_id: VIEWER, entity_title: 'bad words', entity_parent_id: 's1', channel_id: 'ch1', owner_id: CREATOR, owner_name: null });
+    expect(await t.deliver(MessageType.ReportCreate, { reportId: 'r2', entityType: 'video', entityId: 'v1', reporterId: VIEWER, reason: 'spam' })).toBe(true);
+    expect(t.row('r2')).toMatchObject({ entity_title: null, owner_id: null });
+  });
+
+  it('erasing its author takes their id, name and words out, and leaves other reports', async () => {
+    const t = setup();
+    await t.report('r1');
+    await t.report('r2', VIEWER);
+    t.reports.raw.prepare("UPDATE reports SET owner_name = 'Creator Name' WHERE id = 'r1'").run();
+    t.reports.raw.prepare("INSERT INTO reports (id, entity_type, entity_id, reporter_id, reason, entity_title, owner_id, owner_name) VALUES ('c1', 'comment', 'c', ?, 'spam', 'my comment', ?, 'Creator Name'), ('v1', 'video', 'v', ?, 'spam', 'A lecture', ?, 'Creator Name')").run(VIEWER, CREATOR, VIEWER, CREATOR);
+    expect(await t.deliver(MessageType.UserDataErased, { userId: CREATOR })).toBe(true);
+    expect(t.row('r1')).toEqual({ reporter_id: VIEWER, entity_title: null, entity_parent_id: 's1', channel_id: 'ch1', owner_id: 'deleted-user', owner_name: null });
+    expect(t.row('c1')).toMatchObject({ entity_title: null, owner_id: 'deleted-user', owner_name: null });
+    expect(t.row('v1')).toMatchObject({ entity_title: 'A lecture', owner_id: 'deleted-user', owner_name: null });
+    expect(t.row('r2')).toMatchObject({ entity_title: 'bad words', owner_id: VIEWER });
+    const plan = t.reports.raw.prepare("EXPLAIN QUERY PLAN UPDATE reports SET owner_id = 'x' WHERE owner_id = 'y'").all();
+    expect(JSON.stringify(plan)).toContain('idx_reports_owner');
+  });
+
+  it('a report still in the queue when its author is erased is stored without them', async () => {
+    const t = setup();
+    await t.deliver(MessageType.UserDataErased, { userId: CREATOR });
+    await t.report('r1');
+    expect(t.row('r1')).toMatchObject({ entity_title: null, owner_id: 'deleted-user', entity_parent_id: 's1' });
+  });
+});
+
 describe('admin history (#1253)', () => {
   function seed() {
     const search = createSqliteD1(SEARCH_MIGRATIONS_DIR);

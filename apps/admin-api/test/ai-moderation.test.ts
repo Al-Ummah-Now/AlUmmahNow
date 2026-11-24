@@ -120,6 +120,18 @@ describe('AI moderation review (admin-api)', () => {
     assert.deepEqual(actions.map((a: any) => [a.action, a.actor_id]), [['hide', 'mod-1'], ['restore', 'mod-2'], ['restore', 'mod-2']]);
   });
 
+  it('a live chat message is hidden and restored through api-videos, and audited', async () => {
+    insertSignal(db, { id: 'lc', subject_type: 'live_chat', subject_id: 'm1', parent_id: 's1', surface: 'live_chat' });
+    const sent: unknown[] = [];
+    const chat = (answer: { found: boolean; changed: boolean }) => async (id: string, action: string) => (sent.push([id, action]), answer);
+    assert.deepEqual(await setCommentHidden(db, videos, 'lc', true, 'mod-1', 'harassment', undefined, chat({ found: true, changed: true })), { ok: true, changed: true });
+    assert.deepEqual(await setCommentHidden(db, videos, 'lc', false, 'mod-2', undefined, undefined, chat({ found: true, changed: false })), { ok: true, changed: false });
+    assert.deepEqual(await setCommentHidden(db, videos, 'lc', true, 'mod-1', undefined, undefined, chat({ found: false, changed: false })), { ok: false, error: 'subject_missing' });
+    assert.deepEqual(sent, [['m1', 'removed'], ['m1', 'restored'], ['m1', 'removed']]);
+    const actions = db.raw.prepare('SELECT action, actor_id FROM moderation_actions ORDER BY rowid').all();
+    assert.deepEqual(actions.map((a: any) => [a.action, a.actor_id]), [['hide', 'mod-1'], ['restore', 'mod-2']]);
+  });
+
   it('hide refuses non-comment subjects and missing signals', async () => {
     insertSignal(db, { id: 'sv', subject_type: 'video', subject_id: 'v1', parent_id: null, surface: 'video_metadata' });
     assert.deepEqual(await setCommentHidden(db, videos, 'sv', true, 'mod-1'), { ok: false, error: 'unsupported' });

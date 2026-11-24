@@ -121,7 +121,7 @@ describe('the processor archive', () => {
     const { env, puts, notifications } = envWith();
     const processor = new MessageProcessor(logger);
     await processor.processMessage(
-      message(MessageType.ReportCreate, { reportId: 'r1', entityType: 'video', entityId: 'v1', reporterId: ALICE, reason: 'spam', description: 'private words', timestamp: '2026-11-13T10:00:00Z' }),
+      message(MessageType.ReportCreate, { reportId: 'r1', entityType: 'video', entityId: 'v1', reporterId: ALICE, reason: 'spam', description: 'private words', subject: { text: 'private words', parentId: 's1', channelId: 'ch1', ownerId: BOB }, timestamp: '2026-11-13T10:00:00Z' }),
       env
     );
     await processor.processMessage(message(MessageType.UserDataErased, { userId: ALICE, timestamp: '2026-11-13T10:01:00Z' }), env);
@@ -130,12 +130,14 @@ describe('the processor archive', () => {
     expect(archived.length).toBeGreaterThanOrEqual(2);
     for (const entry of archived) {
       expect(entry.body).not.toContain(ALICE);
+      expect(entry.body).not.toContain(BOB);
       expect(entry.body).not.toContain('private words');
       expect(JSON.parse(entry.body).privacy).toBe(ARCHIVE_PRIVACY_VERSION);
     }
     const erase = archived.map((p) => JSON.parse(p.body)).find((r) => r.type === MessageType.UserDataErased);
     expect(erase.payload.userId).toBe(ARCHIVE_ERASED_MARKER);
     // The erasure cleared the secret the report's pseudonym was made with
-    expect(notifications.raw.prepare('SELECT COUNT(*) AS n FROM archive_subjects WHERE secret IS NOT NULL').get()).toEqual({ n: 0 });
+    // (the reported person, who is not erased, keeps theirs)
+    expect(notifications.raw.prepare('SELECT COUNT(*) AS n FROM archive_subjects WHERE secret IS NOT NULL').get()).toEqual({ n: 1 });
   });
 });

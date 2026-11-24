@@ -653,6 +653,7 @@ const ar: Messages = {
     livestream: 'بث مباشر',
     playlist: 'قائمة تشغيل',
     post: 'منشور',
+    live_chat: 'رسالة في محادثة بث',
   },
   reason: {
     inappropriate: 'غير لائق',

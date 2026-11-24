@@ -1,7 +1,7 @@
 import type { AdminSuggestKind, ReportStatus, ReportableEntityType } from '@al-ummah/shared-types';
 
 export const REPORT_STATUSES: ReportStatus[] = ['pending', 'reviewing', 'resolved', 'dismissed'];
-export const ENTITY_TYPES: ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post'];
+export const ENTITY_TYPES: ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post', 'live_chat'];
 export const PAGE_SIZE = 20;
 
 export interface ModerationFilters {

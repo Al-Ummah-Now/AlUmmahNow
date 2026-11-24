@@ -9,6 +9,9 @@ import { reportClaimKey } from "../../lib/report-claims";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
+import { featureOff } from '../../lib/features/off';
+import { reportableChatMessage } from '../../lib/live/reportable';
 
 export class ReportCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -57,6 +60,14 @@ export class ReportCreate extends AuthenticatedRoute {
 					},
 				},
 			},
+			"404": {
+				description: "A live chat message that is not there for this person, or live chat is off (feature_off)",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"409": {
 				description: "Conflict - duplicate report for the same entity",
 				content: {
@@ -85,6 +96,11 @@ export class ReportCreate extends AuthenticatedRoute {
 		const inputReport = request.body;
 
 		try {
+			// A chat message (wiki E17 §5.2): only one this person may read; what it said goes with the report
+			const subject = inputReport.entityType === 'live_chat' ? await reportableChatMessage(c.env as never, inputReport.entityId, userId) : undefined;
+			if (subject === 'off') return featureOff(c, 'liveChat');
+			if (subject === null) return apiError(c, 404, 'not_found');
+
 			// Check if user has already reported this entity (prevent spam)
 			const bucket = c.env.reports; // Use dedicated reports bucket for reports storage
 			type ReportType = z.infer<typeof BusinessReport>;
@@ -158,6 +174,7 @@ export class ReportCreate extends AuthenticatedRoute {
 				// The processor persists this to D1; omitting it left every
 				// report in the admin queue without the reporter's description.
 				description: report.description,
+				...(subject ? { subject } : {}),
 				timestamp: new Date().toISOString(),
 			});
 

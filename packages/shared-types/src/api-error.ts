@@ -106,6 +106,7 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   premiere_exists: { action: 'none', en: 'This video already has a premiere.', ar: 'لهذا المرئي عرض أول بالفعل.' },
   premiere_scheduled: { action: 'none', en: 'This video is waiting for its premiere. Cancel the premiere first.', ar: 'ينتظر هذا المرئي عرضه الأول. ألغِ العرض الأول أولًا.' },
   premiere_started: { action: 'none', en: 'This premiere has already started.', ar: 'بدأ هذا العرض الأول بالفعل.' },
+  live_stream_removed: { action: 'none', en: 'A moderator removed this live stream.', ar: 'أزال أحد المشرفين هذا البث.' },
   premiere_not_startable: { action: 'retry', en: 'This premiere can’t start right now.', ar: 'لا يمكن بدء هذا العرض الأول الآن.' },
   premiere_no_ingest: { action: 'none', en: 'A premiere plays an uploaded video, so there’s nothing to stream.', ar: 'يعرض العرض الأول مرئيًا مرفوعًا، فلا يوجد ما يُبث.' },
   premiere_fixed: { action: 'none', en: 'This can’t be changed on a premiere.', ar: 'لا يمكن تغيير هذا في عرض أول.' },

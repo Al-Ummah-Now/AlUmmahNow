@@ -19,7 +19,7 @@ import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { liveStreamIsFrozen } from '../../lib/admin/frozen';
 import { LiveProviderError } from '../../lib/live/providers';
 import { LiveRefusedError } from '../../lib/live/service';
-import { deleteStream, readStream, streamEnd, streamIngest, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
+import { deleteStream, readStream, streamEnd, streamIngest, streamIsRemoved, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
@@ -211,6 +211,7 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
+		if (streamIsRemoved(stream)) return (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) ? fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos') : apiError(c, 403, 'live_stream_removed');
 		if (isPremiere(stream)) return apiError(c, 409, 'premiere_no_ingest');
 		// An ended stream only shows its last settings; anything that may provision a session is gated
 		let tier: SessionTier = {};
@@ -242,6 +243,7 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		if (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) return fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos');
+		if (streamIsRemoved(stream)) return apiError(c, 403, 'live_stream_removed');
 		// The route serves both kinds, so the switch is checked here (feature-routes.ts 'handler'). Unreadable: refused
 		const key = isPremiere(stream) ? 'livePremieres' : 'live';
 		if (!(await switchOn(c, key))) return featureOff(c, key);
