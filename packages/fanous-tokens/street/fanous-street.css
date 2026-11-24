@@ -25,7 +25,8 @@ html.fanous-street body::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -1;
+  /* -2 so ::after (last child in tree order) still paints behind .street-plate::before at -1 */
+  z-index: -2;
   pointer-events: none;
 }
 
@@ -45,7 +46,30 @@ html[data-fanous-street-variant='2'] { --fanous-street-tile-pick: var(--fanous-s
 html[data-fanous-street-variant='3'] { --fanous-street-tile-pick: var(--fanous-street-tile-3, var(--fanous-street-tile)); }
 html[data-fanous-street-variant='4'] { --fanous-street-tile-pick: var(--fanous-street-tile-4, var(--fanous-street-tile)); }
 
+/* Text on the page itself sits on a soft plate of the page colour so no lantern or string ever
+   crosses its glyphs (owner, 2026-11-22). Painted on ::before at z-index: -1 (with z-index: auto
+   on the host so it does not create a stacking context), it sits in the page stacking layer right
+   after the street layers and strictly below every heading, subtitle, icon, pill and card — even
+   when plated elements are flex items, grid items or inline-blocks. */
+html.fanous-street .street-plate {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+html.fanous-street .street-plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--fanous-color-background);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: var(--fanous-street-plate-shadow, 0 0 0 12px var(--fanous-color-background), 0 0 20px 22px var(--fanous-color-background));
+}
+
 @media print {
   html.fanous-street body::before,
-  html.fanous-street body::after { display: none; }
+  html.fanous-street body::after,
+  html.fanous-street .street-plate::before { display: none; }
 }

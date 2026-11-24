@@ -11,7 +11,8 @@
 .hr-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-md,10px);
   background:var(--m-primary,var(--fanous-color-primary));color:var(--fanous-color-on-primary);box-shadow:var(--m-primary-edge,none)}
 .hr-badge svg{width:18px;height:18px}
-.hr-title{margin:0;min-width:0;font-size:20px;font-weight:700;line-height:1.3;color:var(--fanous-color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr-title{margin:0;min-width:0;font-size:20px;font-weight:700;line-height:1.3;color:var(--fanous-color-text-primary)}
+.hr-title-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[lang=ar] .hr-title{line-height:1.6}
 .hr-rule{flex:1 1 24px;min-width:24px;height:1px;background:linear-gradient(var(--to-end,to right),color-mix(in srgb,var(--fanous-color-primary) 55%,transparent),transparent 85%)}
 .hr-all{flex:none;display:inline-flex;align-items:center;gap:2px;height:32px;padding-inline:12px 8px;border-radius:var(--r-pill,999px);
@@ -60,7 +61,8 @@ html[lang=ar] .hr-title{line-height:1.6}
   .hr-list{grid-auto-columns:80%;margin-inline:-16px;padding-inline:16px;scroll-padding-inline:16px}
   .hr-track[data-more-end] .hr-list,.hr-track[data-more-start] .hr-list,.hr-track[data-more-start][data-more-end] .hr-list{-webkit-mask-image:none;mask-image:none}
   /* A long category name wraps to a second line instead of losing its end */
-  .hr-title{font-size:18px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .hr-title{font-size:18px}
+  .hr-title-text{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .hr-rule{display:none}
   .hr-all{margin-inline-start:auto}
 }

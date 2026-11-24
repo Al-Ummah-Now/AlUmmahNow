@@ -272,7 +272,7 @@ export function LibraryRow() {
           <LibraryIcon />
         </span>
         <h2 id={headingId} className="hr-title street-plate">
-          {heading}
+          <span className="hr-title-text">{heading}</span>
         </h2>
         <span className="hr-rule" aria-hidden="true" />
         <Link href={`/${lang}/library`} className="hr-all" aria-label={t.rails.seeAllLabel.replace('{rail}', heading)} data-testid="home-library-all">

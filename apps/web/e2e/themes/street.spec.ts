@@ -194,3 +194,39 @@ test('street: no elements, fixed layers or animations of its own; the watch page
     }
   }
 });
+
+test('street plates paint on ::before at z-index -1, never on the host element', async ({ page, context, baseURL }) => {
+  test.setTimeout(180_000);
+  await signIn(context, baseURL!);
+  await mockApi(page);
+  for (const [path, ready] of [
+    ['/en', 'home-rail'],
+    ['/en/library', 'library-page'],
+    ['/en/explore', 'explore-page'],
+  ] as const) {
+    await open(page, path);
+    await expect(page.getByTestId(ready).first()).toBeVisible({ timeout: 30_000 });
+    await applyTheme(page, 'fawanees', 'dark');
+    await settle(page);
+    const bad = await page.evaluate(() => {
+      const plates = Array.from(document.querySelectorAll('.street-plate'));
+      const issues: string[] = [];
+      const host = document.querySelector('.demo-layer') ?? document.body;
+      const streetZ = Number(getComputedStyle(host, '::after').zIndex);
+      if (!(streetZ < -1)) issues.push(`street ::after z-index is ${streetZ}, expected < -1 so plates cover lanterns`);
+      if (plates.length === 0) issues.push('no .street-plate elements found');
+      for (const el of plates) {
+        const cs = getComputedStyle(el);
+        const before = getComputedStyle(el, '::before');
+        const label = `${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 3).join('.')}`;
+        if (cs.boxShadow !== 'none') issues.push(`${label} has host box-shadow: ${cs.boxShadow}`);
+        if (cs.zIndex !== 'auto') issues.push(`${label} creates stacking context with z-index: ${cs.zIndex}`);
+        if (before.content === 'none') issues.push(`${label} missing ::before street plate`);
+        if (before.zIndex !== '-1') issues.push(`${label}::before z-index is ${before.zIndex}, expected -1`);
+        if (before.boxShadow === 'none') issues.push(`${label}::before missing plate box-shadow`);
+      }
+      return issues;
+    });
+    expect(bad, `${path}: ${bad.join('; ')}`).toEqual([]);
+  }
+});
