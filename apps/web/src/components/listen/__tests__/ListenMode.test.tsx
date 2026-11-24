@@ -5,6 +5,11 @@ import { ListenModeSwitch } from '@/components/VideoPagePlayer/ListenModeSwitch'
 
 let mockLang: 'en' | 'ar' = 'en';
 let mockFeatures: Record<string, boolean> = { listenMode: false };
+let mockUser: { id: string } | null = { id: 'viewer-1' };
+
+jest.mock('@/components/AuthProvider/authContext', () => ({
+  useAuth: () => ({ user: mockUser }),
+}));
 
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => {
@@ -63,13 +68,15 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
   beforeEach(() => {
     mockLang = 'en';
     mockFeatures = { listenMode: false };
+    mockUser = { id: 'viewer-1' };
     mockFetchVideoAudio.mockReset();
     mockFetchVideoAudio.mockResolvedValue({
       videoId: 'vid-42',
-      format: 'm4a',
-      url: 'https://media.alummahnow.test/pub/vid-42/r1/audio.m4a',
-      contentType: 'audio/mp4',
-      extracting: false,
+      format: 'hls',
+      url: 'https://media.alummahnow.test/pub/vid-42/r1/a/orig/index.m3u8',
+      contentType: 'application/vnd.apple.mpegurl',
+      trackId: 'orig',
+      tracks: [{ id: 'orig', language: 'ar', isDefault: true }],
     });
     jest.spyOn(window.HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
     jest.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
@@ -80,6 +87,15 @@ describe('Web Listen mode & persistent mini bar (E14-S6)', () => {
   });
 
   it('renders nothing at all when listenMode feature switch is OFF', () => {
+    render(<Harness />);
+    expect(screen.queryByTestId('watch-listen-controls')).toBeNull();
+    expect(screen.queryByTestId('listen-mini-bar')).toBeNull();
+    expect(screen.queryByTestId('listen-audio-element')).toBeNull();
+  });
+
+  it('renders nothing at all when signed out even if listenMode is ON (E14-D3)', () => {
+    mockUser = null;
+    mockFeatures = { listenMode: true };
     render(<Harness />);
     expect(screen.queryByTestId('watch-listen-controls')).toBeNull();
     expect(screen.queryByTestId('listen-mini-bar')).toBeNull();

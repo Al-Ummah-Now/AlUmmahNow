@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider/authContext';
 import { useFeatures } from '@/hooks/useFeatures';
 import { ListenMiniBar } from './ListenMiniBar';
 import {
@@ -17,8 +18,10 @@ export { LISTEN_SPEEDS, SLEEP_PRESETS, useListenAudio };
 export type { ListenAudioContextValue, ListenTrack, SleepTimerSetting };
 
 export function ListenAudioProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const { features } = useFeatures();
-  const enabled = features.listenMode === true;
+  // E14-D3: Listen mode is strictly for signed-in viewers and gated behind the listenMode switch.
+  const enabled = Boolean(user) && features.listenMode === true;
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [current, setCurrent] = useState<ListenTrack | null>(null);
