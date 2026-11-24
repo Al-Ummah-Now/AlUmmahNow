@@ -2,6 +2,8 @@ import { getI18n } from '@/i18n/server';
 import { featureHistory, listFeatures, setFeature, type FeatureItem } from '@/lib/api/features';
 import { getAdminSession } from '@/lib/auth';
 import { normalizeRole } from '@/lib/roles';
+import { getNames } from '@/lib/api/audit';
+import { adminUserName } from '@/lib/user-name';
 import { logger } from '@/lib/logger';
 import { FeaturesView } from '@/components/features/FeaturesView';
 import { FeaturesLoadError } from '@/components/features/FeaturesLoadError';
@@ -18,12 +20,16 @@ export default async function FeaturesPage() {
   const session = await getAdminSession();
   const role = normalizeRole(session?.user.role);
   const canManage = role === 'admin' || role === 'super_admin';
-  let items: FeatureItem[] | null = null;
-  try {
-    items = await listFeatures();
-  } catch (error) {
-    logger.error('[features] Failed to load the features', { error: error instanceof Error ? error.message : String(error) });
-  }
+  // The viewer's own name for "Changed by" after a switch (the session carries only the email);
+  // the lookup never throws and falls back to the email
+  const [listed, names] = await Promise.all([
+    listFeatures().catch((error: unknown) => {
+      logger.error('[features] Failed to load the features', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }),
+    session?.user.id ? getNames({ users: [session.user.id], items: [] }) : Promise.resolve(null),
+  ]);
+  const items: FeatureItem[] | null = listed;
   if (!items) {
     return (
       <div>
@@ -35,6 +41,8 @@ export default async function FeaturesPage() {
       </div>
     );
   }
-  const me = { id: session?.user.id ?? '', name: session?.user.displayName || session?.user.email || '' };
+  const id = session?.user.id ?? '';
+  const known = id ? names?.users[id] : undefined;
+  const me = { id, name: adminUserName({ displayName: known?.name || session?.user.displayName, email: known?.email || session?.user.email }) };
   return <FeaturesView initial={items} canManage={canManage} me={me} actions={{ setFeature, featureHistory }} />;
 }
