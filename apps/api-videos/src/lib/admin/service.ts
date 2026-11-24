@@ -594,6 +594,13 @@ export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, c
 	return lock.jobId || 'starting';
 }
 
+/** A lock with no job this old is stale: its worker died between taking it and creating the job (#1935). */
+const STARTING_LOCK_MS = 10 * 60 * 1000;
+/** The move job a lock started, when its worker died before naming it on the lock (idx_admin_jobs_target). */
+export const STARTED_JOB_SQL = `SELECT j.id AS id, j.status AS status, json_extract(j.params, '$.offerId') AS offer_id, o.status AS offer_status
+ FROM admin_jobs j LEFT JOIN channel_move_offers o ON o.id = json_extract(j.params, '$.offerId')
+ WHERE j.target_kind = 'channel' AND j.target_id = ? AND j.created_at >= ? AND j.kind = 'channel.transfer' ORDER BY j.created_at DESC LIMIT 1`;
+
 /** Lock holder of the daily re-verify's repair (reverifyRecentTransfers); it has no admin job. */
 const REPAIR_LOCK_PREFIX = 'reverify:';
 /** A repair's lock older than this is stale: its worker died (a scheduled run lasts 15 minutes at most). */
@@ -605,6 +612,20 @@ const REPAIR_MAX_MS = 15 * 60 * 1000;
 export const TRANSFER_LOCK_SQL = `SELECT l.job_id AS job_id, l.created_at AS created_at, j.status AS status, json_extract(j.params, '$.offerId') AS offer_id, o.status AS offer_status
  FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id LEFT JOIN channel_move_offers o ON o.id = json_extract(j.params, '$.offerId') WHERE l.channel_id = ?`;
 
+/** A lock's move job and the offer it carries out; no job: every field is null. */
+interface LockedMove {
+	status: string | null;
+	offer_id: string | null;
+	offer_status: string | null;
+}
+
+/**
+ * What a lock's move job makes of it: the job's status, or 'missing' for a move its offer no longer
+ * stands for, which stops before the owner changes (runTransfer) and so holds nothing. One that
+ * changed hands first has an offer that says moved.
+ */
+const moveLockStatus = (move: LockedMove): string | null => (move.offer_id && !offerStands(move.offer_status) ? 'missing' : move.status);
+
 /** An offer whose move may still change hands, or did. */
 const offerStands = (status: string | null | undefined): boolean => status === 'accepting' || status === 'moved';
 
@@ -612,19 +633,24 @@ const offerStands = (status: string | null | undefined): boolean => status === '
  * The channel's move lock (channel_transfer_locks, wiki AUN-CHANNEL-CLAIM §3.3) with its job's
  * status. A lock whose job succeeded or no longer exists is stale.
  */
-async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<{ jobId: string; status: string } | null> {
+async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channelId: string): Promise<{ jobId: string; status: string; heldAs: string; createdAt: string } | null> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return null;
 	const row = await db
 		.prepare(TRANSFER_LOCK_SQL)
 		.bind(channelId)
-		.first<{ job_id: string; created_at: string; status: string | null; offer_id: string | null; offer_status: string | null }>();
+		.first<{ job_id: string; created_at: string } & LockedMove>();
 	if (!row) return null;
-	// A move its offer no longer stands for: it stops before the owner changes (runTransfer), so it holds nothing.
-	// One that changed hands first has an offer that says moved
-	if (row.offer_id && !offerStands(row.offer_status)) return { jobId: row.job_id, status: 'missing' };
-	if (row.job_id.startsWith(REPAIR_LOCK_PREFIX)) return { jobId: row.job_id, status: Date.parse(row.created_at) > Date.now() - REPAIR_LOCK_MS ? 'repairing' : 'missing' };
-	return { jobId: row.job_id, status: row.status ?? (row.job_id ? 'missing' : 'starting') };
+	const lock = { jobId: row.job_id, heldAs: row.job_id, createdAt: row.created_at };
+	const younger = (ms: number) => Date.parse(row.created_at) > Date.now() - ms;
+	if (row.job_id.startsWith(REPAIR_LOCK_PREFIX)) return { ...lock, status: younger(REPAIR_LOCK_MS) ? 'repairing' : 'missing' };
+	if (row.job_id) return { ...lock, status: moveLockStatus(row) ?? 'missing' };
+	// Taken, and its job not named on it yet: the job it started decides, else it is stale after a while. A young
+	// lock is never read as over: the job found may be an earlier move's, started by a worker with a faster clock
+	const started = await db.prepare(STARTED_JOB_SQL).bind(channelId, row.created_at).first<{ id: string } & LockedMove>();
+	const status = started ? moveLockStatus(started)! : 'missing';
+	if (status !== 'succeeded' && status !== 'missing') return { ...lock, jobId: started!.id, status };
+	return { ...lock, status: younger(STARTING_LOCK_MS) ? 'starting' : status };
 }
 
 /**
@@ -639,7 +665,8 @@ async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: str
 	if (lock) {
 		if (lock.status === 'failed') return 'transfer_unfinished';
 		if (lock.status !== 'succeeded' && lock.status !== 'missing') return 'transfer_in_progress';
-		await db.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id = ?').bind(channelId, lock.jobId).run();
+		// Exactly the lock that was read: never one another request took over meanwhile
+		await db.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id = ? AND created_at = ?').bind(channelId, lock.heldAs, lock.createdAt).run();
 	}
 	const inserted = await db
 		.prepare('INSERT OR IGNORE INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES (?, ?, ?)')
