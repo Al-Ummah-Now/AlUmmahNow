@@ -19,12 +19,16 @@ export interface NameRefs {
   videos?: Iterable<string | null | undefined>;
   comments?: Iterable<string | null | undefined>;
   posts?: Iterable<string | null | undefined>;
+  /** Live chat messages (wiki E17): named by id only. Their text is not searched: the table grows without bound and has no text index */
+  chats?: Iterable<string | null | undefined>;
 }
 
 export type NameKind = keyof NameRefs;
+export type SearchKind = Exclude<NameKind, 'chats'>;
 export type NameMaps = Record<NameKind, Map<string, string>>;
 
-const KINDS: NameKind[] = ['profiles', 'channels', 'videos', 'comments', 'posts'];
+const SEARCH_KINDS: SearchKind[] = ['profiles', 'channels', 'videos', 'comments', 'posts'];
+const KINDS: NameKind[] = [...SEARCH_KINDS, 'chats'];
 
 /** Ids (or matches) per kind, at most this many (bounded json_each lists). */
 export const MAX_IDS = 200;
@@ -35,13 +39,14 @@ const SQL: Record<NameKind, string> = {
   videos: `SELECT id, admin_title AS name FROM content_ownership WHERE kind = 'video' AND id IN (SELECT value FROM json_each(?))`,
   comments: `SELECT comment_id AS id, text AS name FROM admin_comments WHERE comment_id IN (SELECT value FROM json_each(?))`,
   posts: `SELECT id, json_extract(payload, '$.content') AS name FROM search_posts WHERE id IN (SELECT value FROM json_each(?))`,
+  chats: `SELECT id, text AS name FROM live_chat_messages WHERE id IN (SELECT value FROM json_each(?))`,
 };
 
-const emptyMaps = (): NameMaps => ({ profiles: new Map(), channels: new Map(), videos: new Map(), comments: new Map(), posts: new Map() });
+const emptyMaps = (): NameMaps => ({ profiles: new Map(), channels: new Map(), videos: new Map(), comments: new Map(), posts: new Map(), chats: new Map() });
 
 const unique = (ids: Iterable<string | null | undefined> | undefined) => [...new Set([...(ids ?? [])].filter((x): x is string => !!x))].slice(0, MAX_IDS);
 
-/** Display names (or the clipped text, for comments and posts) of the given ids, one D1 batch. */
+/** Display names (or the clipped text, for comments, posts and chat messages) of the given ids, one D1 batch. */
 export async function resolveNames(search: D1Database | undefined, refs: NameRefs): Promise<NameMaps> {
   const maps = emptyMaps();
   if (!search) return maps;
@@ -61,9 +66,9 @@ export async function resolveNames(search: D1Database | undefined, refs: NameRef
   return maps;
 }
 
-export type IdMatches = Record<NameKind, string[]>;
+export type IdMatches = Record<SearchKind, string[]>;
 
-const MATCH_SQL: Record<NameKind, string> = {
+const MATCH_SQL: Record<SearchKind, string> = {
   profiles: `SELECT id FROM content_ownership WHERE kind = 'profile' AND (lower(admin_title) LIKE ?1 ESCAPE '\\' OR lower(handle) LIKE ?1 ESCAPE '\\' OR lower(email) LIKE ?1 ESCAPE '\\') LIMIT ?2`,
   channels: `SELECT id FROM content_ownership WHERE kind = 'channel' AND (lower(admin_title) LIKE ?1 ESCAPE '\\' OR lower(handle) LIKE ?1 ESCAPE '\\') LIMIT ?2`,
   videos: `SELECT id FROM content_ownership WHERE kind = 'video' AND lower(admin_title) LIKE ?1 ESCAPE '\\' LIMIT ?2`,
@@ -75,7 +80,7 @@ const MATCH_SQL: Record<NameKind, string> = {
  * Ids whose name or text matches `q` (up to MAX_IDS per kind), one D1 batch:
  * the queue search then matches its own rows by these ids.
  */
-export async function matchIds(search: D1Database | undefined, q: string, kinds: NameKind[] = KINDS): Promise<IdMatches> {
+export async function matchIds(search: D1Database | undefined, q: string, kinds: SearchKind[] = SEARCH_KINDS): Promise<IdMatches> {
   const out: IdMatches = { profiles: [], channels: [], videos: [], comments: [], posts: [] };
   const term = q.trim();
   if (!search || !term || kinds.length === 0) return out;

@@ -7,9 +7,9 @@
  */
 import type { Logger } from '@al-ummah/logger';
 import type { D1Database, ModerationScanPayload } from '@al-ummah/shared-types';
-import { MODERATION_MAX_TEXT, MODERATION_SURFACES } from '@al-ummah/shared-types';
+import { DEFAULT_LIVE_CHAT_SHARE, MODERATION_MAX_TEXT, MODERATION_SURFACES } from '@al-ummah/shared-types';
 import { AiBinding, AiContext, runExtensions, runGuard, translateToEnglish } from './ai';
-import { DEFAULT_LIVE_CHAT_SHARE, loadConfig, PROMPT_VERSION } from './config';
+import { loadConfig, PROMPT_VERSION } from './config';
 import { decide } from './decide';
 import { MODELS } from './pricing';
 import { writeSignal } from './store';

@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, localizeDigits, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, localizeDigits, parseDigits, type CreatorTier, type TierLiveCapability } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel, arabicMissing } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -194,7 +194,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
     );
   };
 
-  const flag = (field: 'uploads' | 'channels' | 'requestable' | 'hidden', label: string, forcedOn: boolean, describedBy?: string) => (
+  const flag = (field: 'uploads' | 'channels' | 'requestable' | 'hidden' | TierLiveCapability, label: string, forcedOn: boolean, describedBy?: string) => (
     <label className="flex items-center gap-2 text-sm text-fg">
       <input
         type="checkbox"
@@ -333,7 +333,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         </div>
       )}
       <fieldset className="flex flex-col gap-3 border-t border-border pt-4" data-testid={`tier-${key}-live`}>
-        <legend className="text-fg font-medium text-sm">{t('creators.tierLive')}</legend>
+        <legend className="pe-3 text-fg font-medium text-sm">{t('creators.tierLive')}</legend>
         {form.unlimited ? (
           <p className="text-xs text-fg-muted" data-testid={`tier-${key}-live-unlimited`}>{t('creators.helpLiveUnlimited')}</p>
         ) : (
@@ -354,11 +354,26 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
               <span id={`${ids}-live-help`} className="text-xs text-fg-muted">{t('creators.helpLive')}</span>
             </div>
             {form.live && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {number('liveHoursMonth', t('creators.tierLiveHours'))}
-                {number('liveMaxConcurrent', t('creators.tierLiveConcurrent'))}
-                {number('liveMaxStreamMinutes', t('creators.tierLiveMaxMinutes'))}
-              </div>
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {number('liveHoursMonth', t('creators.tierLiveHours'))}
+                  {number('liveMaxConcurrent', t('creators.tierLiveConcurrent'))}
+                  {number('liveMaxStreamMinutes', t('creators.tierLiveMaxMinutes'))}
+                </div>
+                {/* Wiki E17 §3.2: what live includes on this tier */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid={`tier-${key}-live-capabilities`}>
+                  {([
+                    ['liveChat', 'creators.tierLiveChat', 'creators.helpLiveChat'],
+                    ['livePremieres', 'creators.tierPremieres', 'creators.helpPremieres'],
+                    ['liveEvents', 'creators.tierEventTags', 'creators.helpEventTags'],
+                  ] as const).map(([field, label, help]) => (
+                    <div key={field} className="flex flex-col gap-1">
+                      {flag(field, t(label), false, `${ids}-${field}-help`)}
+                      <span id={`${ids}-${field}-help`} className="ps-6 text-xs text-fg-muted">{t(help)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}

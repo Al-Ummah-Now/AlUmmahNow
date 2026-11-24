@@ -3,7 +3,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES } from '@al-ummah/shared-types';
+import { LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, MODERATION_SURFACES } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -13,7 +13,7 @@ describe('AI moderation labels', () => {
   const groups: [keyof typeof en, string[]][] = [
     ['aiCategory', [...Object.keys(LLAMA_GUARD_CATEGORIES), ...MODERATION_EXTENSION_CATEGORIES]],
     ['aiDecision', ['none', 'would_flag', 'would_hide', 'flag', 'hide', 'skipped']],
-    ['aiSurface', ['video_comment', 'community_post', 'post_comment', 'video_metadata']],
+    ['aiSurface', [...MODERATION_SURFACES]],
     ['aiReview', ['pending', 'agreed', 'disagreed', 'n/a']],
     ['aiSkip', ['disabled', 'budget', 'error', 'empty']],
   ];

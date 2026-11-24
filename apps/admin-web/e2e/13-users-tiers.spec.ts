@@ -178,6 +178,7 @@ test.describe('creator tiers on Users and Tiers', () => {
     await expect(page.getByTestId('tier-creator-liveMaxStreamMinutes-error')).toBeVisible();
     await expect(page.getByTestId('tier-creator-confirm-dialog')).toBeHidden();
     // Turning live off hides the limits (kept for turning it back on); nothing saved here
+    await expect(live.getByTestId('tier-creator-live-capabilities').getByRole('checkbox')).toHaveCount(3);
     await live.getByTestId('tier-creator-liveAllowed').uncheck();
     await expect(page.getByTestId('tier-creator-liveMaxStreamMinutes')).toBeHidden();
     await live.getByTestId('tier-creator-liveAllowed').check();

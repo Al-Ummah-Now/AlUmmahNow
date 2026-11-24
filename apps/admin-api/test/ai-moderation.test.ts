@@ -142,15 +142,19 @@ describe('AI moderation review (admin-api)', () => {
     assert.match(validateConfigPatch({ policies: { S10: { action: 'hide' } } })!, /only spam and charity_scam/);
     assert.match(validateConfigPatch({ policies: { made_up: { mode: 'enforce' } } })!, /Unknown category/);
     assert.match(validateConfigPatch({ dailyNeuronCap: -1 })!, /dailyNeuronCap/);
+    for (const liveChatShare of [-0.1, 1.1, Number.NaN]) assert.match(validateConfigPatch({ liveChatShare })!, /liveChatShare/);
+    assert.equal(validateConfigPatch({ liveChatShare: 0 }), null);
     assert.equal(validateConfigPatch({ enabled: true, policies: { spam: { action: 'hide', mode: 'enforce', threshold: 0.95 } } }), null);
 
     assert.equal((await readConfig(db, '100000')).enabled, false); // no row = off
     assert.equal((await readConfig(db, '100000')).dailyNeuronCap, 100000);
-    await writeConfig(db, { enabled: true, dailyNeuronCap: 5000, policies: { spam: { mode: 'enforce' } } }, 'admin-1');
+    assert.equal((await readConfig(db)).liveChatShare, 0.25); // no row = the default
+    await writeConfig(db, { enabled: true, liveChatShare: 0.4, dailyNeuronCap: 5000, policies: { spam: { mode: 'enforce' } } }, 'admin-1');
     await writeConfig(db, { policies: { spam: { threshold: 0.95 } } }, 'admin-1');
     const config = await readConfig(db);
     assert.equal(config.enabled, true);
     assert.equal(config.dailyNeuronCap, 5000);
+    assert.equal(config.liveChatShare, 0.4);
     assert.deepEqual(config.policies.spam, { mode: 'enforce', threshold: 0.95 });
     assert.equal(config.updatedBy, 'admin-1');
     const audit = db.raw.prepare("SELECT COUNT(*) AS n FROM moderation_actions WHERE action = 'config_change'").get() as any;

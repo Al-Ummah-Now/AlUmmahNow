@@ -182,6 +182,7 @@ export class AiConfigUpdate extends AdminRoute {
             schema: z.object({
               enabled: z.boolean().optional(),
               dailyNeuronCap: z.number().int().min(0).max(10_000_000).optional(),
+              liveChatShare: z.number().min(0).max(1).optional(),
               extensionsEnabled: z.boolean().optional(),
               policies: z.record(z.string(), policySchema).optional(),
             }),

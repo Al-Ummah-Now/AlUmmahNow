@@ -12,9 +12,11 @@ import {
   DEFAULT_TIER_ID,
   NO_CREATOR_TIER,
   NO_DEFAULT_TIER,
+  TIER_LIVE_CAPABILITIES,
   type AdminUserTierFilter,
   type CreatorTier,
   type CreatorTierOrigin,
+  type TierLiveCapability,
 } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
@@ -29,18 +31,28 @@ export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 
       | 'liveHoursMonth'
       | 'liveMaxConcurrent'
       | 'liveMaxStreamMinutes'
+      | TierLiveCapability
       | 'uploads'
       | 'channels'
       | 'importCountsAgainstLimits'
     >
   >;
 
+const LIVE_CAPABILITY_LEFT_OUT: Record<TierLiveCapability, MessageKey> = {
+  liveChat: 'creators.effectNoLiveChat',
+  livePremieres: 'creators.effectNoPremieres',
+  liveEvents: 'creators.effectNoEventTags',
+};
+
 /** The live streaming sentence of a tier's effect (none when the tier predates live). */
 function liveEffect(tier: TierLimits, t: Translator, n: (value: number) => string): string {
   if (tier.live === undefined) return '';
   if (!tier.live) return t('creators.effectLiveOff');
   const params = { hours: n(tier.liveHoursMonth ?? 0), concurrent: n(tier.liveMaxConcurrent ?? 1), minutes: n(tier.liveMaxStreamMinutes ?? 0) };
-  return tier.liveMaxConcurrent === 1 ? t('creators.effectLiveOne', params) : t('creators.effectLive', params);
+  const limits = tier.liveMaxConcurrent === 1 ? t('creators.effectLiveOne', params) : t('creators.effectLive', params);
+  // What the tier leaves out (wiki E17 §3.2)
+  const without = TIER_LIVE_CAPABILITIES.filter((c) => tier[c] === false).map((c) => t(LIVE_CAPABILITY_LEFT_OUT[c]));
+  return [limits, ...without].join(' ');
 }
 
 /** What holding `tier` lets a user do; null = no tier. Missing flags read as allowed (tiers before the flags). */
@@ -129,6 +141,10 @@ export interface TierFormValues {
   liveHoursMonth: number;
   liveMaxConcurrent: number;
   liveMaxStreamMinutes: number;
+  /** Live chat, premieres and event tags (wiki E17 §3.2): only with `live` */
+  liveChat: boolean;
+  livePremieres: boolean;
+  liveEvents: boolean;
   /** YouTube imports count against perHour/perDay (wiki AUN-YT-IMPORT); ignored when unlimited */
   importCountsAgainstLimits: boolean;
 }
@@ -199,6 +215,10 @@ export function tierToForm(tier?: CreatorTier): TierFormValues {
     liveHoursMonth: tier?.liveHoursMonth || DEFAULT_CREATOR_TIER.liveHoursMonth,
     liveMaxConcurrent: tier?.liveMaxConcurrent || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
     liveMaxStreamMinutes: tier?.liveMaxStreamMinutes || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
+    // Unset, they follow `live`
+    liveChat: tier?.liveChat ?? true,
+    livePremieres: tier?.livePremieres ?? true,
+    liveEvents: tier?.liveEvents ?? true,
     // Imports count against the upload limits unless an admin turns that off (wiki AUN-YT-IMPORT)
     importCountsAgainstLimits: tier?.importCountsAgainstLimits ?? true,
   };

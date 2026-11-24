@@ -26,7 +26,7 @@ const run = (db: D1Database, sql: string, ...args: unknown[]) => db.prepare(sql)
 /** The search index tables the queues read (from the api-videos snapshot). */
 function searchD1(): D1Database {
   const snapshot = readFileSync(join(process.cwd(), '..', 'api-videos', 'migrations', 'search.schema.snapshot.sql'), 'utf8');
-  const wanted = ['content_ownership', 'admin_comments', 'search_posts'];
+  const wanted = ['content_ownership', 'admin_comments', 'search_posts', 'live_chat_messages'];
   const ddl = snapshot.split('\n').filter((line) => wanted.some((t) => line.startsWith(`CREATE TABLE ${t} (`)));
   assert.equal(ddl.length, wanted.length, 'search snapshot tables found');
   const raw = new DatabaseSync(':memory:');
@@ -38,6 +38,7 @@ function searchD1(): D1Database {
       ('channel', 'ch1', 'Noor Channel', 'noor', NULL),
       ('video', 'v1', 'Tafsir of Surah Al-Kahf', NULL, NULL);
     INSERT INTO admin_comments (video_id, comment_id, user_id, channel_id, text) VALUES ('v1', 'c1', 'usr_author', 'ch1', 'a rude reply about the lecture');
+    INSERT INTO live_chat_messages (id, stream_id, user_id, author_name, text, status, created_at, updated_at) VALUES ('m1', 's1', 'usr_author', 'Bilal', 'a rude chat message', 'published', 1, 1);
     INSERT INTO search_posts (id, channel_id, payload) VALUES ('p1', 'ch1', '{"content":"Charity drive for the masjid"}');
   `);
   return sqliteD1Like(raw);
@@ -116,6 +117,18 @@ describe('AI moderation queue', () => {
     const history = (await listAiQueue(db, search, filters({ tab: 'history' }))).items;
     assert.deepEqual(history.find((i) => i.id === 'reviewed')?.handled, { outcome: 'agree', by: { id: 'usr_mod', name: 'Maryam Moderator' }, at: '2026-11-06T09:00:00.000Z' });
     assert.deepEqual(history.find((i) => i.id === 'hidden')?.handled?.by, { id: 'usr_gone', name: 'old-admin@example.org' });
+  });
+
+  it('a live chat message shows its text and leads to its channel; its text is never searched', async () => {
+    const chatDb = sqliteD1();
+    await signal(chatDb, { id: 'lc', subject_type: 'live_chat', subject_id: 'm1', parent_id: 's1', surface: 'live_chat' });
+    await signal(chatDb, { id: 'gone', subject_type: 'live_chat', subject_id: 'm-gone', parent_id: 's1', surface: 'live_chat', channel_id: null, created_at: '2026-11-09T10:00:00.000Z' });
+    const items = (await listAiQueue(chatDb, search, filters({ type: 'live_chat' }))).items;
+    assert.deepEqual(items.map((i) => [i.id, i.subjectLabel, i.link]), [['lc', 'a rude chat message', { kind: 'channel', id: 'ch1' }], ['gone', null, null]]);
+    const seen: string[] = [];
+    const spied = { ...search, prepare: (sql: string) => (seen.push(sql), search.prepare(sql)), batch: search.batch } as unknown as D1Database;
+    assert.deepEqual((await listAiQueue(chatDb, spied, filters({ q: 'rude chat' }))).items, []);
+    assert.ok(!seen.some((sql) => /live_chat_messages/.test(sql)));
   });
 
   it('filters History by outcome, actor and the handled date; counts follow the filters', async () => {

@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import { CREATOR_TIER_IDS, DEFAULT_TIER_ID, type AdminAuditEntry, type CreatorTiersList  } from '@al-ummah/shared-types';
+import { CREATOR_TIER_IDS, DEFAULT_TIER_ID, TIER_LIVE_CAPABILITIES, type AdminAuditEntry, type CreatorTiersList } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
@@ -28,18 +28,28 @@ const FIELD_LABEL: Record<string, MessageKey> = {
   requestable: 'creators.tierRequestable',
   hidden: 'creators.tierHidden',
   sortOrder: 'creators.tierSortOrder',
+  live: 'creators.tierLive',
+  liveHoursMonth: 'creators.tierLiveHours',
+  liveMaxConcurrent: 'creators.tierLiveConcurrent',
+  liveMaxStreamMinutes: 'creators.tierLiveMaxMinutes',
+  liveChat: 'creators.tierLiveChat',
+  livePremieres: 'creators.tierPremieres',
+  liveEvents: 'creators.tierEventTags',
 };
 
+/** A live capability that was never set follows live, so turning it on explicitly changes nothing. */
+const auditValue = (field: string, value: unknown) => ((TIER_LIVE_CAPABILITIES as readonly string[]).includes(field) ? value ?? true : value);
+
 /** What a tier audit row changed, in words (never raw JSON). */
-function auditSummary(entry: AdminAuditEntry, t: Translator, list: CreatorTiersList | null, locale: Locale): string {
+export function auditSummary(entry: AdminAuditEntry, t: Translator, list: CreatorTiersList | null, locale: Locale): string {
   if (entry.action === 'reorder') return t('creators.auditReorder');
   if (entry.action === 'set-default') return t('creators.auditSetDefault', { tier: defaultTierName(String(entry.details?.tierId ?? ''), list?.items ?? [], t, locale) });
   const previous = (entry as AdminAuditEntry & { previous?: Record<string, unknown> | null }).previous ?? null;
   // An edit sends the whole form: name only the fields whose value changed
-  const fields = Object.keys(entry.details ?? {}).filter((k) => k !== 'id' && (!previous || previous[k] !== entry.details?.[k]));
+  const fields = Object.keys(entry.details ?? {}).filter((k) => k !== 'id' && (!previous || auditValue(k, previous[k]) !== auditValue(k, entry.details?.[k])));
   if (entry.action === 'create') return t('creators.auditCreate');
   if (entry.action === 'delete') return t('creators.auditDelete');
-  return t('creators.auditEdit', { fields: fields.filter((f) => FIELD_LABEL[f]).map((f) => t(FIELD_LABEL[f])).join(', ') || '—' });
+  return t('creators.auditEdit', { fields: fields.filter((f) => FIELD_LABEL[f]).map((f) => t(FIELD_LABEL[f])).join(locale === 'ar' ? '، ' : ', ') || '—' });
 }
 
 /** Users per tier (stored rows); accounts not backfilled yet work as Free, so Free counts them too. */

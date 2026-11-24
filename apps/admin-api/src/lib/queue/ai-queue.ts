@@ -133,6 +133,9 @@ export function aiLink(r: Pick<Row, 'subject_type' | 'subject_id' | 'parent_id' 
     case 'post_comment':
       // Post comments have no admin page: the post they are on
       return r.parent_id ? { kind: 'post', id: r.parent_id, parentId: r.channel_id } : null;
+    case 'live_chat':
+      // Chat messages and streams have no admin page: the channel the stream is on
+      return r.channel_id ? { kind: 'channel', id: r.channel_id } : null;
     default:
       return null;
   }
@@ -159,11 +162,13 @@ export async function listAiQueue(db: D1Database, search: D1Database | undefined
     videos: rows.filter((r) => r.subject_type === 'video').map((r) => r.subject_id),
     comments: rows.filter((r) => r.subject_type === 'comment').map((r) => r.subject_id),
     posts: rows.filter((r) => r.subject_type === 'post').map((r) => r.subject_id),
+    chats: rows.filter((r) => r.subject_type === 'live_chat').map((r) => r.subject_id),
   });
   const subjectLabel = (r: Row): string | null => {
     if (r.subject_type === 'video') return names.videos.get(r.subject_id) ?? null;
     if (r.subject_type === 'comment') return names.comments.get(r.subject_id) ?? null;
     if (r.subject_type === 'post') return names.posts.get(r.subject_id) ?? null;
+    if (r.subject_type === 'live_chat') return names.chats.get(r.subject_id) ?? null;
     return null;
   };
 

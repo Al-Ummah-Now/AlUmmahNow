@@ -90,6 +90,9 @@ export interface ModerationCategoryPolicy {
   enabled: boolean;
 }
 
+/** Most of the daily cap live chat may use until an admin says otherwise (wiki E17-D4) */
+export const DEFAULT_LIVE_CHAT_SHARE = 0.25;
+
 /** Remote config (D1 moderation_config), as served by admin-api. */
 export interface AiModerationConfig {
   enabled: boolean;
