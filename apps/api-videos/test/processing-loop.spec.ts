@@ -15,11 +15,17 @@ import {
 	syncVideoFromBunny,
 	SWEEP_MAX_OBJECTS,
 } from '../src/lib/processing/loop';
-import { createProcessingInternalRouter } from '../src/endpoints/video/processingInternal';
+import {
+	createProcessingInternalRouter,
+	PROCESSING_BUNNY_CONCURRENCY,
+	PROCESSING_FALLBACK_SCAN_CAP,
+	PROCESSING_INDEX_SCAN_CAP,
+	PROCESSING_MAX_LIVE_BUNNY,
+} from '../src/endpoints/video/processingInternal';
 import { MessageType } from '@al-ummah/shared-types';
 import { MemoryBucket, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
-import { ownershipCompleteKey, ownershipUpsertStatement, projectOwnership } from '@al-ummah/shared-types';
+import { ownershipCompleteKey, ownershipDirtyKey, ownershipUpsertStatement, projectOwnership } from '@al-ummah/shared-types';
 
 const HOST = 'vz-215a1ffd-a5a.b-cdn.net';
 const WRONG = 'vz-25839d05-80d.b-cdn.net';
@@ -738,5 +744,411 @@ describe('processing result announcement (uploader "ready" / "failed" notificati
 		// Already announced: running it again sends nothing
 		await app.request('/mark-failed', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env);
 		assert.equal(resultMessages(env).length, 1);
+	});
+});
+
+describe('processing health speed guards (index seeks, R2 budget, Bunny call cap)', () => {
+	async function seedCatalogue(opts: { ready: number; stuck: number; abandoned?: number; thumbRuns?: number }) {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		const now = Date.now();
+		const base = Date.parse('2026-11-01T00:00:00.000Z');
+		const statements = [];
+
+		for (let i = 0; i < opts.ready; i++) {
+			const id = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+			const iso = new Date(base + i * 60_000).toISOString();
+			const v = videoFixture({ id, channelId: `ch-${i % 4}`, dateCreated: iso, uploadStatus: 'ready', availableResolutions: ['360p', '720p'] });
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+
+		const stuckIds: string[] = [];
+		for (let i = 0; i < opts.stuck; i++) {
+			const id = `11111111-1111-4000-8000-${String(i).padStart(12, '0')}`;
+			stuckIds.push(id);
+			const iso = new Date(base + (opts.ready + i) * 60_000).toISOString();
+			const status = i % 3 === 0 ? 'failed' : i % 3 === 1 ? 'processing' : 'uploading';
+			const v = videoFixture({
+				id,
+				channelId: `ch-${i % 2}`,
+				dateCreated: iso,
+				uploadStatus: status,
+				...(status === 'failed'
+					? { processingIssue: { kind: i % 2 === 0 ? 'needs_reupload' : 'encode_failed', reason: 'Video not found at Bunny', at: iso } }
+					: i % 6 === 1
+						? { processingIssue: { kind: 'stalled', reason: 'Still encoding', at: iso } }
+						: {}),
+				processingCheck: {
+					loopId: `loop-${i}`,
+					startedAt: iso,
+					attempt: 2,
+					lastCheckedAt: iso,
+					...(status === 'failed' && i % 2 === 0
+						? { bunnyMissing: true, finishedAt: iso, outcome: 'needs_reupload' }
+						: { bunnyStatus: status === 'failed' ? 5 : 3, bunnyProgress: status === 'processing' ? 42 : 0, bunnyResolutions: '360p' }),
+				},
+			});
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+
+		for (let i = 0; i < (opts.abandoned ?? 0); i++) {
+			const id = `22222222-2222-4000-8000-${String(i).padStart(12, '0')}`;
+			const iso = new Date(base + i * 30_000).toISOString();
+			const v = videoFixture({
+				id,
+				dateCreated: iso,
+				uploadStatus: 'failed',
+				isDeleted: true,
+				abandoned: { at: iso, reason: 'stale', by: 'reaper', bunnyDeleted: true },
+			});
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+
+		for (let i = 0; i < statements.length; i += 500) await db.batch(statements.slice(i, i + 500) as never);
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', now);
+
+		for (let i = 0; i < (opts.thumbRuns ?? 0); i++) {
+			const iso = new Date(base + i * 86_400_000).toISOString();
+			db.db
+				.prepare(
+					`INSERT INTO admin_jobs (id, kind, target_kind, target_id, params, status, attempts, actor_id, created_at, updated_at)
+					 VALUES (?, 'videos.repair-thumbnails', 'video', 'thumbnail-repair', '{"dryRun":true}', 'succeeded', 1, 'admin-1', ?, ?)`,
+				)
+				.run(`33333333-3333-4000-8000-${String(i).padStart(12, '0')}`, iso, iso);
+		}
+
+		const env = makeEnv(videos);
+		env.SEARCH_DB = db;
+		return { db, videos, env, stuckIds };
+	}
+
+	it('uses indexed D1 seeks with no temp B-tree, zero R2 list scans, and zero Bunny calls by default', async () => {
+		const { db, videos, env, stuckIds } = await seedCatalogue({ ready: 2000, stuck: 30, abandoned: 15, thumbRuns: 10 });
+		let bunnyCalls = 0;
+		const prevFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (new URL(String(input)).hostname === 'video.bunnycdn.com') bunnyCalls++;
+			return prevFetch(input, init);
+		}) as typeof fetch;
+
+		const origList = videos.list.bind(videos);
+		let listCalls = 0;
+		videos.list = async (o?: any) => {
+			listCalls++;
+			return origList(o);
+		};
+
+		const app = createProcessingInternalRouter();
+		for (const query of [
+			'/videos?status=stuck',
+			'/videos?status=processing',
+			'/videos?status=failed',
+			'/videos?status=stalled',
+			'/videos?status=needs_reupload',
+			'/videos?status=stuck&channelId=ch-0',
+			'/videos?status=all&limit=20',
+			'/videos?status=all&channelId=ch-0&limit=20',
+			'/errors',
+		]) {
+			db.trace = [];
+			const callsBefore = videos.calls;
+			const res = await app.request(query, {}, env);
+			assert.equal(res.status, 200, query);
+			const body = (await res.json()) as any;
+			assert.equal(listCalls, 0, `${query}: must not list R2 when ownership index is complete`);
+			assert.ok(videos.calls - callsBefore <= 30, `${query}: read ${videos.calls - callsBefore} R2 objects instead of scanning 2045`);
+			const selectQueries = db.trace.filter((q) => /^\s*SELECT/i.test(q.sql) && q.sql.includes('content_ownership'));
+			assert.ok(selectQueries.length > 0, `${query}: read content_ownership`);
+			for (const q of selectQueries) {
+				const plan = db.plan(q).join(' | ');
+				assert.match(plan, /USING (COVERING )?INDEX/, `${query}: unindexed plan:\n${q.sql}\n${plan}`);
+				assert.doesNotMatch(plan, /TEMP B-TREE/, `${query}: temp B-tree sort:\n${q.sql}\n${plan}`);
+			}
+			if (query === '/videos?status=stuck') {
+				assert.equal(body.result.items.length, 30);
+				assert.equal(body.result.scanned, 30);
+				// Stored Bunny state is populated from processingCheck without hitting Bunny
+				const missingRow = body.result.items.find((r: any) => r.processingCheck?.bunnyMissing);
+				assert.equal(missingRow.bunny, null, 'missing video derived from stored processingCheck');
+				const encodingRow = body.result.items.find((r: any) => r.uploadStatus === 'processing');
+				assert.deepEqual(encodingRow.bunny, { status: 3, encodeProgress: 42, availableResolutions: '360p' });
+			}
+			if (query === '/videos?status=all&limit=20') {
+				assert.equal(body.result.items.length, 20);
+				assert.equal(videos.calls - callsBefore, 20);
+			}
+		}
+		assert.equal(bunnyCalls, 0, 'default list and errors pages make 0 live Bunny API calls');
+
+		// Thumbnail runs: defaults to latest 1 run and seeks idx_admin_jobs_target_id with no temp B-tree
+		db.trace = [];
+		const thumbsRes = await app.request('/thumbnails', {}, env);
+		assert.equal(thumbsRes.status, 200);
+		const thumbsBody = (await thumbsRes.json()) as any;
+		assert.equal(thumbsBody.result.runs.length, 1, 'defaults to latest 1 run');
+		const jobQuery = db.trace.find((q) => q.sql.includes('admin_jobs'));
+		assert.ok(jobQuery, 'queried admin_jobs');
+		const jobPlan = db.plan(jobQuery).join(' | ');
+		assert.match(jobPlan, /USING INDEX idx_admin_jobs_target_id/, jobPlan);
+		assert.doesNotMatch(jobPlan, /TEMP B-TREE/, `temp B-tree on admin_jobs:\n${jobPlan}`);
+		assert.equal(stuckIds.length, 30);
+	});
+
+	it('caps live Bunny calls and concurrency when bunny=1 is explicitly requested', async () => {
+		const { env, stuckIds } = await seedCatalogue({ ready: 50, stuck: 40 });
+		let calls = 0;
+		let inFlight = 0;
+		let maxInFlight = 0;
+		globalThis.fetch = (async () => {
+			calls++;
+			inFlight++;
+			maxInFlight = Math.max(maxInFlight, inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 2));
+			inFlight--;
+			return new Response(JSON.stringify({ status: 3, encodeProgress: 77, availableResolutions: '360p' }), { status: 200 });
+		}) as typeof fetch;
+
+		const app = createProcessingInternalRouter();
+		const res = await app.request('/videos?status=stuck&bunny=1&limit=100', {}, env);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.equal(body.result.items.length, stuckIds.length);
+		assert.equal(calls, PROCESSING_MAX_LIVE_BUNNY, 'live Bunny fetches capped per page');
+		assert.ok(maxInFlight <= PROCESSING_BUNNY_CONCURRENCY, `concurrency ${maxInFlight} exceeded cap ${PROCESSING_BUNNY_CONCURRENCY}`);
+		// First PROCESSING_MAX_LIVE_BUNNY rows got live Bunny progress 77; remaining rows still have stored state
+		assert.equal(body.result.items[0].bunny.encodeProgress, 77);
+		assert.notEqual(body.result.items[PROCESSING_MAX_LIVE_BUNNY].bunny, undefined);
+	});
+
+	it('caps the R2 fallback scan when SEARCH_DB is unavailable', async () => {
+		const videos = new MemoryBucket();
+		for (let i = 0; i < PROCESSING_FALLBACK_SCAN_CAP + 250; i++) {
+			const id = `r${String(i).padStart(6, '0')}`;
+			videos.store.set(id, JSON.stringify(videoFixture({ id, uploadStatus: 'ready' })));
+		}
+		const env = makeEnv(videos);
+		const app = createProcessingInternalRouter();
+		const res = await app.request('/videos?status=stuck', {}, env);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.equal(body.result.scanned, PROCESSING_FALLBACK_SCAN_CAP);
+		assert.ok(videos.calls <= PROCESSING_FALLBACK_SCAN_CAP + 10, `fallback did ${videos.calls} R2 calls`);
+	});
+
+	it('falls back to R2 when any video ownership row is dirty so a missed index write is still returned', async () => {
+		const { db, videos, env } = await seedCatalogue({ ready: 20, stuck: 2 });
+		const dirtyId = '99999999-9999-4000-8000-000000000001';
+		// Present in R2 as processing, but stale in content_ownership (marked dirty after a failed index write)
+		videos.store.set(dirtyId, JSON.stringify(videoFixture({ id: dirtyId, uploadStatus: 'processing', dateCreated: '2026-11-20T00:00:00.000Z' })));
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipDirtyKey('video', dirtyId), '1', Date.now());
+
+		let listCalls = 0;
+		const origList = videos.list.bind(videos);
+		videos.list = async (o?: any) => {
+			listCalls++;
+			return origList(o);
+		};
+
+		const app = createProcessingInternalRouter();
+		const res = await app.request('/videos?status=stuck', {}, env);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.ok(listCalls > 0, 'dirty ownership row triggers R2 fallback');
+		assert.ok(body.result.items.some((r: any) => r.id === dirtyId), 'dirty stuck video is still returned');
+	});
+
+	it('keyset-pages past 600 newer non-ready rows to find older needs_reupload and stalled videos without temp B-trees', async () => {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		const now = Date.now();
+		const base = Date.parse('2026-10-01T00:00:00.000Z');
+		const statements = [];
+
+		const oldReuploadId = '55555555-5555-4000-8000-000000000001';
+		const oldStalledId = '55555555-5555-4000-8000-000000000002';
+		const olderRecords = [
+			videoFixture({
+				id: oldReuploadId,
+				dateCreated: new Date(base).toISOString(),
+				uploadStatus: 'failed',
+				processingIssue: { kind: 'needs_reupload', reason: 'Missing at Bunny', at: new Date(base).toISOString() },
+			}),
+			videoFixture({
+				id: oldStalledId,
+				dateCreated: new Date(base + 1_000).toISOString(),
+				uploadStatus: 'processing',
+				processingIssue: { kind: 'stalled', reason: 'Still encoding', at: new Date(base + 1_000).toISOString() },
+			}),
+		];
+		for (const v of olderRecords) {
+			videos.store.set(v.id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', v.id, v)!, now, now));
+		}
+		// 600 newer encode_failed videos ahead of them (past the old 200-500 window, under PROCESSING_INDEX_SCAN_CAP)
+		for (let i = 0; i < 600; i++) {
+			const id = `66666666-6666-4000-8000-${String(i).padStart(12, '0')}`;
+			// Include timestamp ties every 10 rows to exercise both keyset arms
+			const iso = new Date(base + (10 + Math.floor(i / 10)) * 60_000).toISOString();
+			const v = videoFixture({
+				id,
+				dateCreated: iso,
+				uploadStatus: 'failed',
+				processingIssue: { kind: 'encode_failed', reason: 'Codec error', at: iso },
+			});
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+		for (let i = 0; i < statements.length; i += 500) await db.batch(statements.slice(i, i + 500) as never);
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', now);
+
+		const env = makeEnv(videos);
+		env.SEARCH_DB = db;
+		const app = createProcessingInternalRouter();
+
+		for (const [status, expectedId] of [
+			['needs_reupload', oldReuploadId],
+			['stalled', oldStalledId],
+		] as const) {
+			db.trace = [];
+			const res = await app.request(`/videos?status=${status}&limit=10`, {}, env);
+			assert.equal(res.status, 200);
+			const body = (await res.json()) as any;
+			assert.deepEqual(body.result.items.map((r: any) => r.id), [expectedId], `${status} finds older flagged video`);
+			assert.equal(body.result.truncated, undefined, `${status} exhausted index cleanly`);
+			const selects = db.trace.filter((q) => /^\s*SELECT/i.test(q.sql) && q.sql.includes('content_ownership'));
+			assert.ok(selects.length >= 2, `${status} executed multiple keyset pages`);
+			for (const q of selects) {
+				const plan = db.plan(q).join(' | ');
+				assert.match(plan, /USING (COVERING )?INDEX/, `${status}: unindexed keyset plan:\n${q.sql}\n${plan}`);
+				assert.doesNotMatch(plan, /TEMP B-TREE/, `${status}: temp B-tree in keyset plan:\n${q.sql}\n${plan}`);
+			}
+		}
+
+		// When more than PROCESSING_INDEX_SCAN_CAP non-ready rows sit ahead, stops at cap and flags truncated
+		const extraStatements = [];
+		for (let i = 600; i < PROCESSING_INDEX_SCAN_CAP + 50; i++) {
+			const id = `66666666-6666-4000-8000-${String(i).padStart(12, '0')}`;
+			const iso = new Date(base + (1000 + i) * 60_000).toISOString();
+			const v = videoFixture({ id, dateCreated: iso, uploadStatus: 'failed', processingIssue: { kind: 'encode_failed', reason: 'x', at: iso } });
+			videos.store.set(id, JSON.stringify(v));
+			extraStatements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+		await db.batch(extraStatements as never);
+		const cappedRes = await app.request('/videos?status=needs_reupload&limit=10', {}, env);
+		const cappedBody = (await cappedRes.json()) as any;
+		assert.equal(cappedBody.result.scanned, PROCESSING_INDEX_SCAN_CAP);
+		assert.equal(cappedBody.result.truncated, true);
+	});
+
+	it('avoids short pages when abandoned records still have is_deleted = 0 in the index', async () => {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		const now = Date.now();
+		const base = Date.parse('2026-11-01T00:00:00.000Z');
+		const statements = [];
+		const realIds: string[] = [];
+
+		// 10 older real stuck videos
+		for (let i = 0; i < 10; i++) {
+			const id = `77777777-7777-4000-8000-${String(i).padStart(12, '0')}`;
+			realIds.push(id);
+			const iso = new Date(base + i * 60_000).toISOString();
+			const v = videoFixture({ id, dateCreated: iso, uploadStatus: 'processing' });
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+		// 10 newer abandoned videos whose is_deleted is still 0 (e.g. legacy abandoned record)
+		for (let i = 0; i < 10; i++) {
+			const id = `88888888-8888-4000-8000-${String(i).padStart(12, '0')}`;
+			const iso = new Date(base + (100 + i) * 60_000).toISOString();
+			const v = videoFixture({
+				id,
+				dateCreated: iso,
+				uploadStatus: 'failed',
+				isDeleted: false,
+				abandoned: { at: iso, reason: 'stale', by: 'reaper', bunnyDeleted: true },
+			});
+			videos.store.set(id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+		await db.batch(statements as never);
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', now);
+
+		const env = makeEnv(videos);
+		env.SEARCH_DB = db;
+		const app = createProcessingInternalRouter();
+		const res = await app.request('/videos?status=stuck&limit=10', {}, env);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.deepEqual(
+			body.result.items.map((r: any) => r.id),
+			[...realIds].reverse(),
+			'refills past non-deleted abandoned rows to return a full limit=10 page',
+		);
+	});
+
+	it('matches the unindexed R2 scan across every status filter, channelId, and /errors (parity)', async () => {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		const now = Date.now();
+		const base = Date.parse('2026-11-01T00:00:00.000Z');
+		const fixtures = [
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000001', channelId: 'ch-0', dateCreated: new Date(base + 1_000).toISOString(), uploadStatus: 'ready' }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000002', channelId: 'ch-1', dateCreated: new Date(base + 2_000).toISOString(), uploadStatus: 'ready' }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000003', channelId: 'ch-0', dateCreated: new Date(base + 3_000).toISOString(), uploadStatus: 'initiated' }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000004', channelId: 'ch-1', dateCreated: new Date(base + 4_000).toISOString(), uploadStatus: 'uploading' }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000005', channelId: 'ch-0', dateCreated: new Date(base + 5_000).toISOString(), uploadStatus: 'processing' }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000006', channelId: 'ch-0', dateCreated: new Date(base + 5_000).toISOString(), uploadStatus: 'processing', processingIssue: { kind: 'stalled', reason: 'Slow', at: new Date(base + 6_000).toISOString() } }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000007', channelId: 'ch-1', dateCreated: new Date(base + 7_000).toISOString(), uploadStatus: 'failed', processingIssue: { kind: 'encode_failed', reason: 'Bad codec', at: new Date(base + 7_000).toISOString() } }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000008', channelId: 'ch-0', dateCreated: new Date(base + 8_000).toISOString(), uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', reason: 'Missing', at: new Date(base + 8_000).toISOString() } }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000009', channelId: 'ch-0', dateCreated: new Date(base + 9_000).toISOString(), uploadStatus: 'failed', isDeleted: true }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000010', channelId: 'ch-0', dateCreated: new Date(base + 10_000).toISOString(), uploadStatus: 'failed', isDeleted: true, abandoned: { at: new Date(base + 10_000).toISOString(), reason: 'stale', by: 'reaper', bunnyDeleted: true } }),
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000011', channelId: 'ch-1', dateCreated: new Date(base + 11_000).toISOString(), uploadStatus: 'failed', isDeleted: false, abandoned: { at: new Date(base + 11_000).toISOString(), reason: 'stale', by: 'reaper', bunnyDeleted: true } }),
+		];
+		const statements = [];
+		for (const v of fixtures) {
+			videos.store.set(v.id, JSON.stringify(v));
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', v.id, v)!, now, now));
+		}
+		await db.batch(statements as never);
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', now);
+
+		const indexedEnv = Object.assign(makeEnv(videos), { SEARCH_DB: db });
+		const scanEnv = makeEnv(videos);
+		const app = createProcessingInternalRouter();
+
+		for (const path of [
+			'/videos?status=stuck',
+			'/videos?status=processing',
+			'/videos?status=failed',
+			'/videos?status=stalled',
+			'/videos?status=needs_reupload',
+			'/videos?status=all',
+			'/videos?status=stuck&channelId=ch-0',
+			'/videos?status=all&channelId=ch-0',
+		]) {
+			const [a, b] = await Promise.all([
+				app.request(path, {}, indexedEnv).then((r) => r.json() as Promise<any>),
+				app.request(path, {}, scanEnv).then((r) => r.json() as Promise<any>),
+			]);
+			assert.deepEqual(
+				a.result.items.map((x: any) => x.id).sort(),
+				b.result.items.map((x: any) => x.id).sort(),
+				`parity mismatch for ${path}`,
+			);
+		}
+
+		const [errIdx, errScan] = await Promise.all([
+			app.request('/errors', {}, indexedEnv).then((r) => r.json() as Promise<any>),
+			app.request('/errors', {}, scanEnv).then((r) => r.json() as Promise<any>),
+		]);
+		assert.deepEqual(
+			errIdx.result.videos.map((x: any) => x.id),
+			errScan.result.videos.map((x: any) => x.id),
+			'parity mismatch for /errors',
+		);
 	});
 });

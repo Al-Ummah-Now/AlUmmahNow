@@ -86,6 +86,7 @@
 --   apps/api-videos/migrations/search/0132_download_revocations.sql
 --   apps/api-videos/migrations/search/0133_age_rules.sql
 --   apps/api-videos/migrations/search/0134_account_events.sql
+--   apps/api-videos/migrations/search/0135_processing_list_indexes.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
 CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -282,6 +283,7 @@ CREATE INDEX idx_admin_jobs_csam_case ON admin_jobs (json_extract(params, '$.cas
 CREATE INDEX idx_admin_jobs_finished ON admin_jobs (finished_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
+CREATE INDEX idx_admin_jobs_target_id ON admin_jobs (target_kind, target_id, created_at, id);
 CREATE INDEX idx_billing_checkouts_ref ON billing_checkouts (provider, provider_ref);
 CREATE INDEX idx_billing_checkouts_user ON billing_checkouts (user_id, created_at);
 CREATE INDEX idx_billing_customers_user ON billing_customers (user_id, provider, mode);
@@ -355,6 +357,7 @@ CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_content_ownership_public_views ON content_ownership (kind, views DESC, id) WHERE kind = 'video' AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1 AND (upload_status IS NULL OR upload_status = 'ready');
 CREATE INDEX idx_content_ownership_unfinished ON content_ownership (upload_status, created_at DESC, id) WHERE kind = 'video' AND is_deleted = 0 AND upload_status <> 'ready';
 CREATE INDEX idx_content_ownership_upload ON content_ownership (kind, upload_status, id);
+CREATE INDEX idx_content_ownership_upload_created ON content_ownership (kind, upload_status, is_deleted, COALESCE(created_at, 0), id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;

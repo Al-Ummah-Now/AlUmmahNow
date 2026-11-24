@@ -45,12 +45,16 @@ describe('/api/processing', () => {
     assert.equal(calls.length, 0);
   });
 
-  it('lists stuck videos through the VIDEOS binding with the internal key and Bunny status', async () => {
+  it('lists stuck videos through the VIDEOS binding using stored state by default, forwarding explicit bunny=1', async () => {
     const { req, calls } = setup(['Admin']);
     const res = await req('/api/processing/videos?status=stuck');
     assert.equal(res.status, 200);
-    assert.equal(calls[0].path, '/internal/processing/videos?status=stuck&bunny=1');
+    assert.equal(calls[0].path, '/internal/processing/videos?status=stuck');
     assert.equal(calls[0].key, 'k');
+
+    const live = await req('/api/processing/videos?status=stuck&bunny=1');
+    assert.equal(live.status, 200);
+    assert.equal(calls[1].path, '/internal/processing/videos?status=stuck&bunny=1');
   });
 
   it('lists only the videos the reader’s lists show, page by page', async () => {
