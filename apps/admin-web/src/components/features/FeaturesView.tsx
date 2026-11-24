@@ -15,6 +15,7 @@ import { featureDefinition, formatCompact, formatList, type FeatureKey, type Fea
 import type { FeatureHistoryPage, FeatureItem, FeatureWrite, FeatureWriteResult } from '@/lib/api/features';
 import {
   applyConflict,
+  clearDecidedNotices,
   applyWrite,
   confirmContent,
   featureNotes,
@@ -59,11 +60,15 @@ export function FeaturesView({ initial, canManage, me, actions, now }: { initial
   const { run } = useUndoableAction();
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  // a refresh brings the rows as admin-api has them now (after a conflict, or a waiting change decided elsewhere)
-  useEffect(() => setItems(initial), [initial]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<FeatureKey | null>(null);
   const [messages, setMessages] = useState<Partial<Record<FeatureKey, RowMessage>>>({});
+  // A refresh brings the server's rows (a waiting change approved or rejected elsewhere)
+  useEffect(() => {
+    setItems(initial);
+    // A waiting change decided meanwhile: its "Sent for approval" notice goes with it
+    setMessages((m) => clearDecidedNotices(m, initial));
+  }, [initial]);
   const [confirm, setConfirm] = useState<ConfirmContent | null>(null);
   const [historyKey, setHistoryKey] = useState<FeatureKey | null>(null);
   const [target, setTarget] = useState<string | null>(null);

@@ -23,7 +23,7 @@ import {
   offCount,
   switchWords,
 } from '../src/lib/features/page-model';
-import { pendingOf } from '../src/lib/features/page-model';
+import { clearDecidedNotices, pendingOf } from '../src/lib/features/page-model';
 import { NAV_ITEMS, groupedItems, visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { FeaturesView } from '../src/components/features/FeaturesView';
@@ -249,5 +249,20 @@ describe('a switch change sent for approval (AUN-WORKFLOWS WF-9)', () => {
     assert.equal(pendingOf({ status: 'pending_approval', request: { id: 'wfr_2' } }), 'wfr_2');
     assert.equal(pendingOf({ success: true, result: { previous: false, enabled: true, version: 3 } }), null);
     assert.equal(pendingOf({ status: 'applied', requestId: 'wfr_3' }), null);
+  });
+});
+
+describe('a decided change clears its notice (AUN-WORKFLOWS WF-9)', () => {
+  it('drops a "Sent for approval" notice once its row has no change waiting, and keeps everything else', () => {
+    type M = { kind: string };
+    const messages: Partial<Record<FeatureKey, M>> = { creatorSupport: { kind: 'pending' }, live: { kind: 'pending' }, upload: { kind: 'error' } };
+    const items = [
+      { key: 'creatorSupport' as FeatureKey, pending: null },
+      { key: 'live' as FeatureKey, pending: { requestId: 'wfr_1', enabled: false } },
+      { key: 'upload' as FeatureKey, pending: null },
+    ];
+    assert.deepEqual(Object.keys(clearDecidedNotices(messages, items)).sort(), ['live', 'upload']);
+    const still = { live: { kind: 'pending' } } as Partial<Record<FeatureKey, M>>;
+    assert.equal(clearDecidedNotices(still, items), still, 'same object when nothing is decided');
   });
 });

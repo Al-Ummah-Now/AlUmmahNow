@@ -149,3 +149,19 @@ export function sentencePart(note: string | null | undefined): string | null {
   const trimmed = note?.trim().replace(/[.。؛!]+$/u, '').trim();
   return trimmed ? trimmed : null;
 }
+
+/**
+ * After the rows are refreshed, a "Sent for approval" notice whose row no longer has a change waiting
+ * (approved or rejected meanwhile) goes away; every other notice stays. Returns the same object when
+ * nothing changes, so React skips the update.
+ */
+export function clearDecidedNotices<M extends { kind: string }>(messages: Partial<Record<FeatureKey, M>>, items: Pick<FeatureItem, 'key' | 'pending'>[]): Partial<Record<FeatureKey, M>> {
+  const waiting = new Set(items.filter((i) => i.pending).map((i) => i.key));
+  let changed = false;
+  const out: Partial<Record<FeatureKey, M>> = {};
+  for (const [key, message] of Object.entries(messages) as [FeatureKey, M][]) {
+    if (message.kind === 'pending' && !waiting.has(key)) changed = true;
+    else out[key] = message;
+  }
+  return changed ? out : messages;
+}
