@@ -113,6 +113,7 @@ import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
 import { handleUserFeatures } from "./endpoints/creator/features";
 import { socialInternalRouter, socialRouter } from "./routers/social.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
+import { purgeSeasons } from "./lib/islamic-seasons";
 import { sweepStaging } from "./lib/media/prebuilt";
 import { runHealthCheck } from "./lib/media/health";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
@@ -858,6 +859,18 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				reportJobFailure(rawEnv, ctx, 'deletion-cleanup', error);
 			}),
 		);
+		// Hourly: Islamic seasons deleted more than 30 days ago are purged (lib/islamic-seasons.ts, wiki Epic 21 §5.3)
+		if (rawEnv.SEARCH_DB) {
+			ctx.waitUntil(
+				purgeSeasons(rawEnv.SEARCH_DB as D1Database).then(
+					(ids) => (ids.length ? logger.info('[Seasons] Purged', { count: ids.length }) : undefined),
+					(error) => {
+						logger.error('[Seasons] Purge failed', { error: error instanceof Error ? error.message : String(error) });
+						reportJobFailure(rawEnv, ctx, 'islamic-seasons-purge', error);
+					},
+				),
+			);
+		}
 		// Hourly: uploads that went quiet are completed or flagged for a
 		// re-upload, never left hanging (lib/uploads/lifecycle.ts). Through the
 		// search-sync wrapper so the ownership index sees the new status.

@@ -19227,6 +19227,9 @@
         "responses": {
           "200": {
             "description": "{ season } or { season: null }"
+          },
+          "400": {
+            "description": "Not a real date"
           }
         }
       }

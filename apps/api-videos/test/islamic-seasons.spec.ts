@@ -6,7 +6,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { IslamicSeasonGet } from '../src/endpoints/prayer/season';
-import { activeSeason, createSeason, deleteSeason, listSeasons, purgeSeasons, restoreSeason, SeasonError, updateSeason, type SeasonInput } from '../src/lib/islamic-seasons';
+import { activeSeason, createSeason, deleteSeason, listSeasons, purgeSeasons, restoreSeason, SeasonError, updateSeason, validDate, type SeasonInput } from '../src/lib/islamic-seasons';
+import { forgetFeatureSwitches, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { computeFeatures, featureSwitchState, forgetFeatureCaches } from '../src/lib/features';
 import { SqliteD1 } from './search-sqlite-d1';
 import { buildApp } from './helpers';
 
@@ -66,6 +68,37 @@ describe('Islamic seasons', () => {
 		assert.deepEqual(await purgeSeasons(db, '2027-02-01T00:00:00Z'), [s.id]);
 		const left = await db.prepare('SELECT COUNT(*) AS n FROM islamic_season_items WHERE season_id = ?').bind(s.id).first<{ n: number }>();
 		assert.equal(left?.n, 0);
+	});
+
+	it('refuses impossible dates, bad cursors and odd limits instead of failing', async () => {
+		const db = new SqliteD1() as unknown as D1Database;
+		assert.equal(validDate('2027-02-29'), false);
+		assert.equal(validDate('2028-02-29'), true);
+		assert.equal(validDate('2027-99-99'), false);
+		await assert.rejects(activeSeason(db, '2027-99-99'), (e: unknown) => e instanceof SeasonError && e.status === 400);
+		await assert.rejects(createSeason(db, { ...RAMADAN, startsOn: '2027-02-30' }, 'admin-1'), SeasonError);
+		await assert.rejects(listSeasons(db, { cursor: 'nopipe' }), (e: unknown) => e instanceof SeasonError && e.status === 400);
+		await assert.rejects(listSeasons(db, { cursor: '2027-99-99|x' }), SeasonError);
+		assert.deepEqual((await listSeasons(db, { limit: Number('abc') })).items, []);
+		const res = await buildApp((r) => r.get('/api/islamic/season', IslamicSeasonGet), null).request('/api/islamic/season?date=2027-99-99', {}, { SEARCH_DB: db } as never);
+		assert.equal(res.status, 400);
+	});
+
+	it('/api/me/features shows Ramadan mode once switched on, and the admin readiness needs a published season', async () => {
+		const db = new SqliteD1() as unknown as D1Database;
+		const env = { SEARCH_DB: db } as never;
+		forgetFeatureSwitches();
+		forgetFeatureCaches();
+		for (const key of ['prayerTimes', 'hijriCalendar', 'ramadanMode']) await writeFeatureSwitch(env, { key, enabled: true, expectedVersion: 0, actorId: 'admin-1' });
+		forgetFeatureSwitches();
+		assert.equal((await computeFeatures(env, { userId: null })).ramadanMode, true);
+		const before = await featureSwitchState(env);
+		assert.equal(before.ready.ramadanMode, false);
+		const s = await createSeason(db, RAMADAN, 'admin-1');
+		await updateSeason(db, s.id, 1, { ...RAMADAN, state: 'published' }, 'admin-1');
+		const after = await featureSwitchState(env);
+		assert.equal(after.ready.ramadanMode, true);
+		forgetFeatureSwitches();
 	});
 
 	it('reads an index for the public and admin lists', async () => {
