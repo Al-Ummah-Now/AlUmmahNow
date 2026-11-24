@@ -3,7 +3,7 @@
 /** What /[locale]/live gains with wiki E17: the event filter (while event tags are on) and the upcoming list. */
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { LIVE_EVENT_LABELS, LIVE_EVENT_TYPES, type LiveEventType, type LiveStream } from '@al-ummah/shared-types';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { PriorityStrip } from '@/components/ui/PriorityStrip';
 import { useFeatures } from '@/hooks/useFeatures';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -25,6 +25,7 @@ export function LiveEventFilter({ value, onChange }: { value: LiveEventType | un
       testId="live-event-strip"
       className="mb-6"
       moreIsButton
+      moreClassName={buttonVariants({ variant: 'outline', size: 'sm' })}
       moreLabel={t.liveWatch.eventMore}
       menuLabel={t.liveWatch.eventMoreMenu}
       onSelect={(item) => onChange(item.type)}
