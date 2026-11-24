@@ -7,6 +7,7 @@
  */
 
 import { isShort, type VideoFormatInput } from './video-format';
+import type { NotificationQuietHours, NotificationQuietHoursUpdate } from './notification-quiet-hours';
 
 /** Settings categories a user can turn on/off. */
 export const OPTIONAL_NOTIFICATION_CATEGORIES = [
@@ -349,12 +350,15 @@ export interface NotificationSettingsResult {
   categories: readonly NotificationCategory[];
   alwaysOn: readonly NotificationCategory[];
   email: NotificationEmailSettings;
+  /** Present only while the `quietHours` feature switch is on. */
+  quietHours?: NotificationQuietHours;
 }
 
 /** PUT /api/notifications/settings body: any subset. */
 export interface NotificationSettingsUpdateRequest {
   settings?: Partial<Record<OptionalNotificationCategory, boolean>>;
   email?: Partial<NotificationEmailSettings>;
+  quietHours?: NotificationQuietHoursUpdate;
 }
 
 /** The fields of a stored video the "new video" fan-out reads. */

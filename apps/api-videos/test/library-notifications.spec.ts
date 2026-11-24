@@ -1,12 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType } from '@al-ummah/shared-types';
+import { MessageType, forgetFeatureSwitches, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { WatchLaterAdd, WatchLaterList, WatchLaterRemove, WatchLaterReorder, WatchLaterStatus } from '../src/endpoints/library/watchLater';
 import { LikedVideosList, SavedPostAdd, SavedPostRemove, SavedPostStatus, SavedPostsList } from '../src/endpoints/library/liked';
 import { LibraryBackfill, collectLikeRows } from '../src/endpoints/library/backfill';
 import {
 	ChannelBellGet,
 	ChannelBellUpdate,
+	NotificationQuietHoursGet,
+	NotificationQuietHoursUpdateRoute,
 	NotificationSettingsGet,
 	NotificationSettingsUpdate,
 	NotificationsDelete,
@@ -23,6 +25,7 @@ import { announceLiveStarted, announceNewVideo, isAnnounceable, isHighlightVideo
 import { addToWatchLater, newWatchLater, pageIds, WATCH_LATER_MAX_ITEMS } from '../src/lib/library';
 import { decodeCursor, encodeCursor } from '../src/lib/notifications';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
 import { createSqliteD1 } from './sqlite-d1';
 
 function env(overrides: Record<string, unknown> = {}) {
@@ -64,6 +67,8 @@ function notificationRoutes(r: any) {
 	r.post('/api/notifications/read-all', NotificationsMarkAllRead);
 	r.get('/api/notifications/settings', NotificationSettingsGet);
 	r.put('/api/notifications/settings', NotificationSettingsUpdate);
+	r.get('/api/notifications/quiet-hours', NotificationQuietHoursGet);
+	r.put('/api/notifications/quiet-hours', NotificationQuietHoursUpdateRoute);
 	r.get('/api/notifications/channels/:channelId/bell', ChannelBellGet);
 	r.put('/api/notifications/channels/:channelId/bell', ChannelBellUpdate);
 	r.delete('/api/notifications/:id', NotificationsDelete);
@@ -295,6 +300,144 @@ describe('Notifications API', () => {
 		assert.deepEqual(((await (await put({ locale: 'ar' })).json()) as any).result.email, { account: false, locale: 'ar' });
 		assert.equal((await put({ locale: 'fr' })).status, 400);
 		assert.deepEqual(e.NOTIFICATIONS_DB.rows("SELECT account_email, email_locale FROM notification_email_prefs WHERE user_id = 'me'"), [{ account_email: 0, email_locale: 'ar' }]);
+	});
+
+	it('gates quiet hours behind the quietHours switch and ignores quietHours fields on PUT /settings when off (E22-D6)', async () => {
+		const searchDb = new SqliteD1();
+		const e = env({ SEARCH_DB: searchDb });
+		forgetFeatureSwitches();
+		const app = buildApp(notificationRoutes, { userId: 'me' });
+
+		// Switch off by default: dedicated routes answer 404 feature_off; /settings omits quietHours and ignores it on PUT
+		const getOff = await app.request('/api/notifications/quiet-hours', {}, e);
+		assert.equal(getOff.status, 404);
+		assert.equal(((await getOff.json()) as any).code, 'feature_off');
+		const putOff = await app.request('/api/notifications/quiet-hours', { ...json({ enabled: true }), method: 'PUT' }, e);
+		assert.equal(putOff.status, 404);
+
+		const settingsOff = (await (await app.request('/api/notifications/settings', {}, e)).json()) as any;
+		assert.equal('quietHours' in settingsOff.result, false);
+
+		// Even an invalid quietHours payload is completely ignored while quietHours switch is OFF (no 400, other settings save)
+		const saveInvalidWhileOff = await app.request(
+			'/api/notifications/settings',
+			{
+				...json({
+					settings: { comments: false },
+					email: { locale: 'ar' },
+					quietHours: { enabled: true, timezone: 'Invalid/Zone', startMinute: 500, endMinute: 500 },
+				}),
+				method: 'PUT',
+			},
+			e,
+		);
+		assert.equal(saveInvalidWhileOff.status, 200);
+		const savedWhileOffBody = (await saveInvalidWhileOff.json()) as any;
+		assert.equal(savedWhileOffBody.result.settings.comments, false);
+		assert.equal(savedWhileOffBody.result.email.locale, 'ar');
+		assert.equal('quietHours' in savedWhileOffBody.result, false);
+		assert.deepEqual(e.NOTIFICATIONS_DB.rows("SELECT user_id FROM notification_quiet_hours WHERE user_id = 'me'"), []);
+
+		// Turn switch ON: dedicated routes and /settings both read & update quiet hours
+		await writeFeatureSwitch(e, { key: 'quietHours', enabled: true, expectedVersion: 0, actorId: 'usr_admin', currentStored: false });
+		forgetFeatureSwitches();
+
+		const defaults = (await (await app.request('/api/notifications/settings', {}, e)).json()) as any;
+		assert.deepEqual(defaults.result.quietHours, {
+			enabled: false,
+			timezone: 'UTC',
+			startMinute: 1320,
+			endMinute: 360,
+			prayerQuietEnabled: false,
+			prayerWindows: [],
+			prayerWindowsUpdatedAt: null,
+		});
+
+		const put = (quietHours: unknown, headers: Record<string, string> = {}) =>
+			app.request('/api/notifications/quiet-hours', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', ...headers },
+				body: JSON.stringify(quietHours),
+			}, e);
+
+		const saved = ((await (await put({
+			enabled: true,
+			timezone: 'Asia/Riyadh',
+			startMinute: 1350,
+			endMinute: 360,
+			prayerQuietEnabled: true,
+			prayerWindows: [{ startMinute: 310, endMinute: 335 }, { startMinute: 730, endMinute: 760 }],
+		})).json()) as any).result;
+		assert.equal(saved.enabled, true);
+		assert.equal(saved.timezone, 'Asia/Riyadh');
+		assert.equal(saved.startMinute, 1350);
+		assert.equal(saved.endMinute, 360);
+		assert.equal(saved.prayerQuietEnabled, true);
+		assert.deepEqual(saved.prayerWindows, [{ startMinute: 310, endMinute: 335 }, { startMinute: 730, endMinute: 760 }]);
+		assert.equal(typeof saved.prayerWindowsUpdatedAt, 'number');
+
+		const directGet = ((await (await app.request('/api/notifications/quiet-hours', {}, e)).json()) as any).result;
+		assert.equal(directGet.enabled, true);
+		assert.equal(directGet.prayerWindowsUpdatedAt, saved.prayerWindowsUpdatedAt);
+
+		// Atomic PUT /settings validation when switch is ON: invalid quietHours returns 400 WITHOUT writing settings or email
+		const atomicBadTz = await app.request(
+			'/api/notifications/settings',
+			{
+				...json({
+					settings: { replies: false },
+					email: { account: false },
+					quietHours: { timezone: 'Not/AZone' },
+				}),
+				method: 'PUT',
+			},
+			e,
+		);
+		assert.equal(atomicBadTz.status, 400);
+		const atomicEqualMinutes = await app.request(
+			'/api/notifications/settings',
+			{
+				...json({
+					settings: { replies: false },
+					email: { account: false },
+					quietHours: { startMinute: 360 },
+				}),
+				method: 'PUT',
+			},
+			e,
+		);
+		assert.equal(atomicEqualMinutes.status, 400);
+		const afterRejectedSaves = ((await (await app.request('/api/notifications/settings', {}, e)).json()) as any).result;
+		assert.equal(afterRejectedSaves.settings.replies, true, 'replies was not half-applied on 400');
+		assert.equal(afterRejectedSaves.email.account, true, 'email.account was not half-applied on 400');
+
+		// Uses the user's saved profile timezone instead of defaulting to UTC when available
+		const tzEnv = env({
+			SEARCH_DB: searchDb,
+			profiles: new MemoryBucket({ tzUser: { id: 'tzUser', timezone: 'Asia/Dubai' } }),
+		});
+		const tzApp = buildApp(notificationRoutes, { userId: 'tzUser' });
+		const tzDefaults = ((await (await tzApp.request('/api/notifications/quiet-hours', {}, tzEnv)).json()) as any).result;
+		assert.equal(tzDefaults.timezone, 'Asia/Dubai');
+		const tzEnabled = ((
+			await (
+				await tzApp.request('/api/notifications/quiet-hours', { ...json({ enabled: true }), method: 'PUT' }, tzEnv)
+			).json()
+		) as any).result;
+		assert.equal(tzEnabled.enabled, true);
+		assert.equal(tzEnabled.timezone, 'Asia/Dubai');
+
+		// Rejects invalid IANA zone, equal start/end minutes, or > 5 prayer windows
+		assert.equal((await put({ timezone: 'Not/AZone' })).status, 400);
+		assert.equal((await put({ startMinute: 500, endMinute: 500 })).status, 400);
+		assert.equal((await put({ startMinute: 360 })).status, 400, 'matches stored endMinute 360');
+		assert.equal(
+			(await put({
+				prayerWindows: Array.from({ length: 6 }, (_, i) => ({ startMinute: i * 60, endMinute: i * 60 + 20 })),
+			})).status,
+			400,
+		);
+		forgetFeatureSwitches();
 	});
 
 	it('manages the per-channel bell for subscribed channels only', async () => {

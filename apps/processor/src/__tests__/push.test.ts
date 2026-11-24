@@ -4,7 +4,7 @@
  * prunes tokens the provider rejected.
  */
 import { createLogger } from '@al-ummah/logger';
-import { MessageType, PUSH_DISPATCH_BATCH, PUSH_RETRY_DELAYS_SECONDS, type PushDispatchPayload } from '@al-ummah/shared-types';
+import { forgetFeatureSwitches, MessageType, PUSH_DISPATCH_BATCH, PUSH_RETRY_DELAYS_SECONDS, type PushDispatchPayload } from '@al-ummah/shared-types';
 import { MessageProcessor } from '../messageProcessor';
 import { AlUmmahMessage, QueueEnvironment } from '../types';
 import { deviceWants, dispatchPush, enqueuePush } from '../push/dispatch';
@@ -99,6 +99,111 @@ describe('push fan-out', () => {
     expect(summary).toMatchObject({ sent: 1, skipped: 1 });
     expect(p.sent.map((s) => s.target.installId)).toEqual(['i-phone']);
     expect((await dispatchPush(db, payload(['a'], 'liveStarted'), all(new RecordingProvider()))).sent).toBe(2);
+  });
+
+  it('suppresses optional pushes during daily or fresh prayer quiet windows while letting account notices through and ignoring stale prayer windows (E22-D6)', async () => {
+    device('i-quiet-phone', 'quiet-user');
+    device('i-quiet-tablet', 'quiet-user', { provider: 'fcm' });
+    device('i-prayer', 'prayer-user');
+    device('i-stale-prayer', 'stale-prayer-user');
+    device('i-awake', 'awake-user');
+
+    const nightUtc = Date.UTC(2026, 10, 23, 20, 30);
+    const staleSyncUtc = nightUtc - 8 * 24 * 60 * 60 * 1000;
+
+    // quiet-user (2 devices): 22:00 (1320) – 06:00 (360) Asia/Riyadh (UTC+3). At 20:30 UTC it is 23:30 Riyadh.
+    db.raw
+      .prepare(
+        `INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+         VALUES ('quiet-user', 1, 'Asia/Riyadh', 1320, 360, 0, '[]', NULL, 0)`,
+      )
+      .run();
+    // prayer-user: daily off, fresh prayer window 23:20–23:50 Riyadh (1400..1430)
+    db.raw
+      .prepare(
+        `INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+         VALUES ('prayer-user', 0, 'Asia/Riyadh', 1320, 360, 1, '[{"startMinute":1400,"endMinute":1430}]', ?, 0)`,
+      )
+      .run(nightUtc - 3600_000);
+    // stale-prayer-user: prayer window matches time of day, but synced 8 days ago (> 7d max age) -> ignored!
+    db.raw
+      .prepare(
+        `INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+         VALUES ('stale-prayer-user', 0, 'Asia/Riyadh', 1320, 360, 1, '[{"startMinute":1400,"endMinute":1430}]', ?, 0)`,
+      )
+      .run(staleSyncUtc);
+
+    // Default options fail closed (quietHoursEnabled defaults to false -> no suppression)
+    const defaultOffProvider = new RecordingProvider();
+    const defaultOffSummary = await dispatchPush(
+      db,
+      payload(['quiet-user', 'prayer-user', 'stale-prayer-user', 'awake-user'], 'newVideo'),
+      all(defaultOffProvider),
+      nightUtc,
+    );
+    expect(defaultOffSummary).toMatchObject({ devices: 5, sent: 5, skipped: 0, retry: [] });
+
+    const optProvider = new RecordingProvider();
+    const optSummary = await dispatchPush(
+      db,
+      payload(['quiet-user', 'prayer-user', 'stale-prayer-user', 'awake-user'], 'newVideo'),
+      all(optProvider),
+      nightUtc,
+      { quietHoursEnabled: true },
+    );
+    expect(optSummary).toMatchObject({ devices: 5, sent: 2, skipped: 3, retry: [] });
+    expect(optProvider.sent.map((s) => s.target.installId).sort()).toEqual(['i-awake', 'i-stale-prayer']);
+
+    // When quietHours switch is explicitly false, stored quiet-hour rows do not suppress pushes
+    const switchOffProvider = new RecordingProvider();
+    const switchOffSummary = await dispatchPush(
+      db,
+      payload(['quiet-user', 'prayer-user', 'awake-user'], 'newVideo'),
+      all(switchOffProvider),
+      nightUtc,
+      { quietHoursEnabled: false },
+    );
+    expect(switchOffSummary).toMatchObject({ devices: 4, sent: 4, skipped: 0 });
+
+    // Account notices (accountWarning) bypass quiet hours and prayer windows even when quietHoursEnabled is true
+    const acctProvider = new RecordingProvider();
+    const acctSummary = await dispatchPush(
+      db,
+      payload(['quiet-user', 'prayer-user', 'awake-user'], 'accountWarning'),
+      all(acctProvider),
+      nightUtc,
+      { quietHoursEnabled: true },
+    );
+    expect(acctSummary).toMatchObject({ devices: 4, sent: 4, skipped: 0 });
+
+    // Outside quiet hours (09:00 UTC = 12:00 Riyadh): everyone receives optional pushes
+    const noonUtc = Date.UTC(2026, 10, 24, 9, 0);
+    const noonProvider = new RecordingProvider();
+    const noonSummary = await dispatchPush(
+      db,
+      payload(['quiet-user', 'prayer-user', 'awake-user'], 'newVideo'),
+      all(noonProvider),
+      noonUtc,
+      { quietHoursEnabled: true },
+    );
+    expect(noonSummary).toMatchObject({ devices: 4, sent: 4, skipped: 0 });
+  });
+
+  it('chunks quiet-hour lookups safely across full batches (> 90 unique recipients)', async () => {
+    const nightUtc = Date.UTC(2026, 10, 23, 20, 30);
+    const users = Array.from({ length: PUSH_DISPATCH_BATCH }, (_, idx) => `u-${idx}`);
+    for (const u of users) {
+      device(`inst-${u}`, u);
+      db.raw
+        .prepare(
+          `INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+           VALUES (?, 1, 'Asia/Riyadh', 1320, 360, 0, '[]', NULL, 0)`,
+        )
+        .run(u);
+    }
+    const p = new RecordingProvider();
+    const summary = await dispatchPush(db, payload(users, 'newVideo'), all(p), nightUtc, { quietHoursEnabled: true });
+    expect(summary).toMatchObject({ devices: PUSH_DISPATCH_BATCH, sent: 0, skipped: PUSH_DISPATCH_BATCH });
   });
 
   it('routes by provider and deletes devices whose token was rejected', async () => {
@@ -267,6 +372,103 @@ describe('push fan-out', () => {
       const p = new MessageProcessor(createLogger('push-test', { logLevel: 'error' }), all(new RecordingProvider()));
       const result = await p.processMessage(message(MessageType.PushDispatch, { recipients: 'nope' }), env(jest.fn()));
       expect(result.success).toBe(false);
+    });
+
+    it('wires processPushDispatch to the quietHours switch (off, on, FEATURES_FORCE_OFF, and broken SEARCH_DB fallback)', async () => {
+      device('i-qh', 'qh-user');
+      // Full-day window 00:00 (0) – 23:59 (1439) UTC + wrapping minute 1439..1 so any Date.now() is inside quiet hours
+      db.raw
+        .prepare(
+          `INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+           VALUES ('qh-user', 1, 'UTC', 0, 1439, 1, '[{"startMinute":1438,"endMinute":2}]', ?, 0)`,
+        )
+        .run(Date.now());
+
+      const searchDb = createSqliteD1();
+      searchDb.raw.exec(
+        'CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL, version INTEGER NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)',
+      );
+      forgetFeatureSwitches();
+
+      const provider = new RecordingProvider();
+      const p = new MessageProcessor(createLogger('push-test', { logLevel: 'error' }), all(provider));
+
+      // 1. Unbound SEARCH_DB -> fail closed (quietHours treated as off -> delivers)
+      expect((await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'newVideo')), env(jest.fn()))).success).toBe(true);
+      expect(provider.sent).toHaveLength(1);
+
+      // 2. SEARCH_DB bound with default switch off (no row) -> delivers
+      provider.sent = [];
+      forgetFeatureSwitches();
+      expect(
+        (
+          await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'newVideo')), {
+            ...env(jest.fn()),
+            SEARCH_DB: searchDb,
+          })
+        ).success,
+      ).toBe(true);
+      expect(provider.sent).toHaveLength(1);
+
+      // 3. Switch turned ON in SEARCH_DB -> suppresses optional push, while accountWarning still delivers
+      searchDb.raw
+        .prepare("INSERT INTO feature_switches (key, enabled, version, updated_by, updated_at) VALUES ('quietHours', 1, 1, 'admin', '2026-11-23T00:00:00Z')")
+        .run();
+      forgetFeatureSwitches();
+      provider.sent = [];
+      expect(
+        (
+          await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'newVideo')), {
+            ...env(jest.fn()),
+            SEARCH_DB: searchDb,
+          })
+        ).success,
+      ).toBe(true);
+      expect(provider.sent).toHaveLength(0);
+
+      expect(
+        (
+          await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'accountWarning')), {
+            ...env(jest.fn()),
+            SEARCH_DB: searchDb,
+          })
+        ).success,
+      ).toBe(true);
+      expect(provider.sent).toHaveLength(1);
+
+      // 4. FEATURES_FORCE_OFF overrides SEARCH_DB row -> delivers
+      provider.sent = [];
+      forgetFeatureSwitches();
+      expect(
+        (
+          await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'newVideo')), {
+            ...env(jest.fn()),
+            SEARCH_DB: searchDb,
+            FEATURES_FORCE_OFF: 'quietHours',
+          })
+        ).success,
+      ).toBe(true);
+      expect(provider.sent).toHaveLength(1);
+
+      // 5. Broken SEARCH_DB (featureGate throws) -> treats quietHours as off and still delivers push
+      provider.sent = [];
+      forgetFeatureSwitches();
+      const brokenSearchDb = {
+        prepare() {
+          throw new Error('D1 transient failure');
+        },
+        batch: async () => [],
+      } as unknown as D1Database;
+      expect(
+        (
+          await p.processMessage(message(MessageType.PushDispatch, payload(['qh-user'], 'newVideo')), {
+            ...env(jest.fn()),
+            SEARCH_DB: brokenSearchDb,
+          })
+        ).success,
+      ).toBe(true);
+      expect(provider.sent).toHaveLength(1);
+      forgetFeatureSwitches();
     });
   });
 });

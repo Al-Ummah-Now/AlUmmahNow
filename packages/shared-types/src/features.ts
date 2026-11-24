@@ -90,6 +90,8 @@ export const USER_FEATURE_KEYS = [
   'intentionalViewing',
   /** Private time-stamped notes; signed-in viewers only, note limit per admin-managed tier */
   'studyNotes',
+  /** Daily and prayer-time push quiet hours (switch quietHours, wiki E22) */
+  'quietHours',
 ] as const;
 
 export type UserFeatureKey = (typeof USER_FEATURE_KEYS)[number];

@@ -79,6 +79,7 @@ export * from './localization';
 export * from './i18n';
 
 // Notification center & library (Epic 29)
+export * from './notification-quiet-hours';
 export * from './notifications';
 export * from './i18n-library';
 export * from './i18n-public-profile';

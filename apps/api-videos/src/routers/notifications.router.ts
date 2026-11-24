@@ -18,6 +18,8 @@ import { fromHono } from 'chanfana';
 import {
   ChannelBellGet,
   ChannelBellUpdate,
+  NotificationQuietHoursGet,
+  NotificationQuietHoursUpdateRoute,
   NotificationSettingsGet,
   NotificationSettingsUpdate,
   NotificationsDelete,
@@ -41,6 +43,8 @@ notificationsRouter.post('/unread', NotificationsMarkUnread);
 notificationsRouter.post('/read-all', NotificationsMarkAllRead);
 notificationsRouter.get('/settings', NotificationSettingsGet);
 notificationsRouter.put('/settings', NotificationSettingsUpdate);
+notificationsRouter.get('/quiet-hours', NotificationQuietHoursGet);
+notificationsRouter.put('/quiet-hours', NotificationQuietHoursUpdateRoute);
 notificationsRouter.get('/channels/:channelId/bell', ChannelBellGet);
 notificationsRouter.put('/channels/:channelId/bell', ChannelBellUpdate);
 notificationsRouter.delete('/:id', NotificationsDelete);

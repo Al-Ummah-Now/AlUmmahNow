@@ -24780,6 +24780,167 @@
         }
       }
     },
+    "/api/v1/notifications/quiet-hours": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Read my notification quiet hours",
+        "operationId": "get_NotificationQuietHoursGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Active channel ID"
+            },
+            "required": false,
+            "description": "Active channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quiet hours settings"
+          },
+          "503": {
+            "description": "Notifications not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Update my notification quiet hours",
+        "operationId": "put_NotificationQuietHoursUpdateRoute",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Active channel ID"
+            },
+            "required": false,
+            "description": "Active channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "startMinute": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1439
+                  },
+                  "endMinute": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1439
+                  },
+                  "prayerQuietEnabled": {
+                    "type": "boolean"
+                  },
+                  "prayerWindows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "startMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1439
+                        },
+                        "endMinute": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1439
+                        }
+                      },
+                      "required": [
+                        "startMinute",
+                        "endMinute"
+                      ]
+                    },
+                    "maxItems": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quiet hours"
+          },
+          "503": {
+            "description": "Notifications not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications/read": {
       "post": {
         "tags": [
@@ -25102,7 +25263,8 @@
                         "description": "Language of the emails"
                       }
                     }
-                  }
+                  },
+                  "quietHours": {}
                 }
               }
             }
@@ -64067,6 +64229,7 @@
               "studyNotes",
               "tierRequests",
               "eventCalendar",
+              "quietHours",
               "newsletter",
               "listenMode",
               "offlineDownloads",

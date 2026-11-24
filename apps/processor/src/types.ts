@@ -101,6 +101,7 @@ export interface QueueEnvironment extends PushSenderEnv {
   NOTIFICATIONS_DB?: D1Database;
   /** D1 search index shared with api-videos (Story 29.9); optional, sync is skipped when unbound */
   SEARCH_DB?: D1Database;
+  FEATURES_FORCE_OFF?: string;
   ENVIRONMENT: string;
   LOG_LEVEL: string;
   /** Base URL of the websocket-server (realtime broadcasts are skipped when unset) */

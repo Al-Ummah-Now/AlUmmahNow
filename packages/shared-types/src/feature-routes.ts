@@ -120,6 +120,8 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   // Upgrade mode (O37): the page shows "not available" rather than refusing
   r('api-videos', 'GET', '/api/tiers/upgrade', 'tierRequests', 'handler'),
   r('api-videos', 'POST', '/api/me/tier-requests', 'tierRequests', 'handler'),
+  r('api-videos', 'GET', '/api/notifications/quiet-hours', 'quietHours'),
+  r('api-videos', 'PUT', '/api/notifications/quiet-hours', 'quietHours'),
   r('admin-api', 'POST', '/internal/newsletter/subscribe', 'newsletter'),
   r('admin-api', 'POST', '/internal/newsletter/confirm', 'newsletter', 'handler'),
   r('admin-api', 'POST', '/api/newsletter/issues/:id/send', 'newsletter'),
@@ -146,6 +148,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'admin-api', prefix: '/api/sites/:channelId/domains', key: 'siteDomains' },
   { app: 'admin-api', prefix: '/internal/site-domains', key: 'siteDomains' },
   { app: 'api-videos', prefix: '/api/me/tier-requests', key: 'tierRequests' },
+  { app: 'api-videos', prefix: '/api/notifications/quiet-hours', key: 'quietHours' },
   // Creator support (wiki AUN-MEMBERS): every channel support route is the switch's
   { app: 'api-videos', prefix: '/api/channels/:channelId/support', key: 'creatorSupport' },
   { app: 'api-videos', prefix: '/api/me/support', key: 'creatorSupport' },
