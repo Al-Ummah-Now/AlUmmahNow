@@ -17,7 +17,7 @@ import { revokeSource, stillAuthorized } from './authorize';
 import { codedError } from './errors';
 import { fetchSource, itemKind } from './fetchers';
 import { postItem, skipItem, type PostItemEnv } from './post';
-import { takeoutNeedsActionKey } from './takeout';
+import { queueWaitingTakeout, takeoutNeedsActionKey } from './takeout';
 import {
 	changes,
 	dueSources,
@@ -283,6 +283,8 @@ export async function queueDueSources(env: SourceSyncEnv, now = Date.now()): Pro
 			logger.error('[ImportSources] Could not queue a due sync', { sourceId: source.id, error: error instanceof Error ? error.message : String(error) });
 		}
 	}
+	// Resume any YouTube source with uploaded Takeout files waiting to post (e.g. skipped while uploads were off)
+	queued += await queueWaitingTakeout(env, DUE_PER_TICK);
 	return queued;
 }
 

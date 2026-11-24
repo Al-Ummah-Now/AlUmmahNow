@@ -473,8 +473,19 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 		await settle();
 	}
 	if (await isCancelled(env, job.id)) return { done: true, result: { ...result(), cancelled: true } };
+	const hasNew = async () =>
+		Number(
+			(await db(env).prepare("SELECT COUNT(*) AS n FROM import_takeout_files WHERE source_id = ? AND state = 'new'").bind(source.id).first<{ n: number }>())?.n ?? 0,
+		) > 0;
 	if (uploadsOff) {
+		// Release the job id, then re-check for 'new' files listed meanwhile: matching needs no uploads,
+		// so if a 'new' file arrived before the release we take the id back and continue matching it.
+		if (await hasNew()) return again();
 		await db(env).prepare('UPDATE import_sources SET takeout_job_id = NULL WHERE id = ? AND takeout_job_id = ?').bind(source.id, job.id).run();
+		if (await hasNew()) {
+			const took = await db(env).prepare('UPDATE import_sources SET takeout_job_id = ? WHERE id = ? AND takeout_job_id IS NULL').bind(job.id, source.id).run();
+			if (changes(took)) return again();
+		}
 		logger.info('[Takeout] Uploads are off: skipping posting uploaded files', { jobId: job.id, sourceId: source.id, ...result() });
 		return { done: true, result: { ...result(), skipped: 'uploads_off' } };
 	}
@@ -494,6 +505,38 @@ async function runTakeoutSteps(env: SourceSyncEnv, job: AdminJob): Promise<JobOu
 	resolveNeedsAction(env as unknown as ErrorReporterEnv, undefined, takeoutNeedsActionKey(source.id));
 	logger.info('[Takeout] Done', { jobId: job.id, ...result() });
 	return { done: true, result: result() };
+}
+
+/**
+ * Queues a Takeout job for every YouTube source that still has uploaded files waiting to post
+ * (for example, files skipped while uploads were off). Uses idx_import_sources_network and
+ * idx_import_takeout_files_state (no table scans).
+ */
+export async function queueWaitingTakeout(env: SourceSyncEnv, limit = 100): Promise<number> {
+	const { results } = await db(env)
+		.prepare(
+			`SELECT s.*
+			 FROM import_sources s
+			 WHERE s.network = 'youtube'
+			   AND EXISTS (SELECT 1 FROM import_takeout_files f WHERE f.source_id = s.id AND f.state = 'uploaded')
+			 LIMIT ?`,
+		)
+		.bind(limit)
+		.all<SourceRow>();
+	let queued = 0;
+	for (const source of results ?? []) {
+		try {
+			if (source.takeout_job_id) {
+				const existing = await getJob(env, source.takeout_job_id);
+				if (existing && ['queued', 'running', 'retrying'].includes(existing.status)) continue;
+			}
+			await startTakeoutJob(env, source, source.created_by);
+			queued++;
+		} catch (error) {
+			logger.error('[Takeout] Could not queue waiting Takeout job', { sourceId: source.id, error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	return queued;
 }
 
 /** The job failed for good: an Errors page item with Retry (the same route as a sync's). */
