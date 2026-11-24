@@ -60,10 +60,17 @@ export class RankViewerBatch {
     this.rows.clear();
   }
 
-  async flush(db: D1Database): Promise<void> {
-    if (this.rows.size === 0) return;
+  /** Returns the batch's statements and empties it (so a caller can share one D1 transaction). */
+  drainStatements(db: D1Database): D1PreparedStatement[] {
+    if (this.rows.size === 0) return [];
     const statements = rankViewerStatements(db, [...this.rows.values()]);
     this.rows.clear();
+    return statements;
+  }
+
+  async flush(db: D1Database): Promise<void> {
+    const statements = this.drainStatements(db);
+    if (statements.length === 0) return;
     await db.batch(statements);
   }
 }

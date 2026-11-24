@@ -21,8 +21,10 @@
 --   apps/processor/migrations-notifications/0019_live_reminders.sql
 --   apps/processor/migrations-notifications/0020_notification_quiet_hours.sql
 --   apps/processor/migrations-notifications/0021_notification_inbox_retention.sql
+--   apps/processor/migrations-notifications/0023_analytics_dedupe.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
+CREATE TABLE analytics_dedupe (message_id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE archive_subjects (subject TEXT PRIMARY KEY, secret TEXT, created_at INTEGER NOT NULL, erased_at INTEGER);
 CREATE TABLE archive_title_refs (subject TEXT NOT NULL, archive_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (subject, archive_key)) WITHOUT ROWID;
@@ -47,6 +49,7 @@ CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INT
 CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, app TEXT NOT NULL DEFAULT 'viewer' CHECK (app IN ('viewer', 'studio', 'admin')));
 CREATE TABLE review_alerts (review_id TEXT PRIMARY KEY, video_id TEXT, reason TEXT NOT NULL, senior_only INTEGER NOT NULL DEFAULT 0, deadline_at INTEGER, held_at INTEGER NOT NULL, alerted_at INTEGER, escalated_at INTEGER, seniors_at INTEGER, opened_at INTEGER, opened_by TEXT, claimed_at INTEGER, claimed_by TEXT, decided_at INTEGER, alerted_users TEXT NOT NULL DEFAULT '[]');
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
+CREATE INDEX idx_analytics_dedupe_expires ON analytics_dedupe (expires_at);
 CREATE INDEX idx_archive_title_refs_created ON archive_title_refs (created_at);
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
 CREATE INDEX idx_channel_subscriptions_user ON channel_subscriptions(user_id, created_at);

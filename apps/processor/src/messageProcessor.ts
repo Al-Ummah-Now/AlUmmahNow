@@ -7,8 +7,8 @@ import { handlePostLikeEvent } from './handlers/post-like';
 import { eraseUserPostInteractions } from './lib/post-counters';
 import { applyModerationToSearchIndex, handleSearchIndexSync, refreshChannelSearchSubscribers } from './handlers/search-index';
 import { handleCategoryRelabel } from './handlers/category-relabel';
-import { recordRetentionRollup, recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
-import { CounterBatch } from './lib/analytics-counters';
+import { retentionIncrements, viewIncrements, watchTimeIncrements } from './lib/analytics-rollup';
+import { CounterBatch, type CounterIncrement } from './lib/analytics-counters';
 import { RankViewerBatch, rankViewerRow } from './lib/discovery-viewers';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
 import {
@@ -62,6 +62,8 @@ export class MessageProcessor {
   );
   /** Unique qualified viewers for discovery ranking (lib/discovery-viewers.ts), written with the counters */
   private readonly rankViewers = new RankViewerBatch();
+  /** Message ids whose counters/viewers are queued and must not be acked until flushCounters commits. */
+  private readonly pendingFlushMessageIds = new Set<string>();
   private readonly batchCounters: boolean;
 
   constructor(logger: Logger, pushProviders?: PushProviders, opts: { batchCounters?: boolean } = {}) {
@@ -70,40 +72,50 @@ export class MessageProcessor {
     this.batchCounters = opts.batchCounters ?? false;
   }
 
-  /**
-   * Writes the queued analytics increments (one D1 transaction of atomic
-   * upserts). Rollups are derived data: a failure is logged, never retried
-   * through the queue (that would repeat the message's other effects).
-   */
-  async flushCounters(env: QueueEnvironment): Promise<void> {
-    await this.flushRankViewers(env);
-    if (this.counters.size === 0) return;
-    if (!env.NOTIFICATIONS_DB) {
-      this.logger.warn('NOTIFICATIONS_DB not bound; analytics increments dropped', { rows: this.counters.size });
-      this.counters.clear();
-      return;
-    }
-    const rows = this.counters.size;
-    try {
-      await this.counters.flush(env.NOTIFICATIONS_DB);
-      this.logger.debug('Analytics counters written', { rows });
-    } catch (error) {
-      this.logger.error('Failed to write analytics counters', { rows, error });
-    }
+  /** True when this message has analytics counters or viewers waiting for flushCounters(). */
+  isPendingCounterFlush(messageId: string): boolean {
+    return this.pendingFlushMessageIds.has(messageId);
   }
 
-  /** Ranking viewers are derived data too: a failure is logged, never retried through the queue. */
-  private async flushRankViewers(env: QueueEnvironment): Promise<void> {
-    if (this.rankViewers.size === 0) return;
-    if (!env.NOTIFICATIONS_DB) {
-      this.rankViewers.clear();
+  private recordMessageCounters(messageId: string, increments: CounterIncrement[]): boolean {
+    if (this.counters.hasMessage(messageId)) {
+      this.pendingFlushMessageIds.add(messageId);
+      return false;
+    }
+    const added = this.counters.addForMessage(messageId, increments);
+    if (added) this.pendingFlushMessageIds.add(messageId);
+    return added;
+  }
+
+  /**
+   * Writes the queued analytics increments, per-message dedupe markers and
+   * discovery viewers in one atomic D1 batch transaction (#1921). Throws on
+   * failure so the queue handler retries the affected messages instead of
+   * acknowledging and dropping their counts.
+   */
+  async flushCounters(env: QueueEnvironment, now = Date.now()): Promise<void> {
+    const rows = this.counters.size;
+    const viewers = this.rankViewers.size;
+    if (rows === 0 && viewers === 0) {
+      this.pendingFlushMessageIds.clear();
       return;
     }
-    const rows = this.rankViewers.size;
+    if (!env.NOTIFICATIONS_DB) {
+      this.logger.warn('NOTIFICATIONS_DB not bound; analytics increments dropped', { rows, viewers });
+      this.counters.clear();
+      this.rankViewers.clear();
+      this.pendingFlushMessageIds.clear();
+      return;
+    }
+    const extraStatements = this.rankViewers.drainStatements(env.NOTIFICATIONS_DB);
     try {
-      await this.rankViewers.flush(env.NOTIFICATIONS_DB);
+      await this.counters.flush(env.NOTIFICATIONS_DB, 3, { now, extraStatements });
+      this.pendingFlushMessageIds.clear();
+      this.logger.debug('Analytics counters written', { rows, viewers });
     } catch (error) {
-      this.logger.error('Failed to write discovery viewers', { rows, error });
+      this.pendingFlushMessageIds.clear();
+      this.logger.error('Failed to write analytics counters', { rows, viewers, error });
+      throw error;
     }
   }
 
@@ -302,12 +314,12 @@ export class MessageProcessor {
         // Site visits (D-SEO-9): landing pages and sources as daily site counters
         if ((message.payload as { kind?: string }).kind === 'visit') {
           const payload = message.payload as { events?: unknown[]; receivedAt?: string };
-          for (const inc of visitIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? ''))) this.counters.add(inc);
+          this.recordMessageCounters(message.id, visitIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')));
         }
         // Short link clicks (alummahnow.link): link type and source as daily site counters
         if ((message.payload as { kind?: string }).kind === 'short_link') {
           const payload = message.payload as { events?: unknown[]; receivedAt?: string };
-          for (const inc of shortLinkIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? ''))) this.counters.add(inc);
+          this.recordMessageCounters(message.id, shortLinkIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? '')));
         }
         this.logger.debug('Client analytics batch stored', {
           kind: (message.payload as { kind?: string }).kind,
@@ -507,23 +519,34 @@ export class MessageProcessor {
 
     await this.processVideoMessage(message);
 
-    if (recordViewRollup(this.counters, message.payload, message.timestamp)) {
+    const increments = viewIncrements(message.payload, message.timestamp);
+    if (increments && this.recordMessageCounters(message.id, increments)) {
       this.logger.debug('View rollup queued', { videoId: payload.videoId });
     }
-    this.rankViewers.add(rankViewerRow(message.payload, message.timestamp));
+    const viewer = rankViewerRow(message.payload, message.timestamp);
+    if (viewer) {
+      this.rankViewers.add(viewer);
+      this.pendingFlushMessageIds.add(message.id);
+    }
   }
 
   private async processVideoWatchTimeMessage(message: AlUmmahMessage, _env: QueueEnvironment): Promise<void> {
     const payload = message.payload as { videoId?: string };
-    if (!recordWatchTimeRollup(this.counters, message.payload, message.timestamp)) {
+    const increments = watchTimeIncrements(message.payload, message.timestamp);
+    if (!increments) {
       this.logger.warn('Invalid watch-time message ignored', { videoId: payload.videoId });
+      return;
     }
+    this.recordMessageCounters(message.id, increments);
   }
 
   private processVideoRetentionMessage(message: AlUmmahMessage): void {
-    if (!recordRetentionRollup(this.counters, message.payload, message.timestamp)) {
+    const increments = retentionIncrements(message.payload, message.timestamp);
+    if (!increments) {
       this.logger.warn('Invalid retention message ignored', { videoId: (message.payload as { videoId?: string }).videoId });
+      return;
     }
+    this.recordMessageCounters(message.id, increments);
   }
 
   private async processUploadLifecycleMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
