@@ -17,8 +17,8 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin, normalizeRole } from '@/lib/roles';
 
-type Scenario = 'default' | 'uploadsOff' | 'conflict' | 'loadError' | 'slow';
-const SCENARIOS: readonly Scenario[] = ['default', 'uploadsOff', 'conflict', 'loadError', 'slow'];
+type Scenario = 'default' | 'uploadsOff' | 'conflict' | 'loadError' | 'slow' | 'approval';
+const SCENARIOS: readonly Scenario[] = ['default', 'uploadsOff', 'conflict', 'loadError', 'slow', 'approval'];
 
 interface StoredRow {
   enabled: boolean;
@@ -32,6 +32,8 @@ interface StubState {
   rows: Map<FeatureKey, StoredRow>;
   history: Map<FeatureKey, FeatureHistoryEntry[]>;
   conflictPending: boolean;
+  /** approval scenario: changes waiting for approval, by feature */
+  pending: Map<FeatureKey, { requestId: string; enabled: boolean }>;
 }
 
 const FATIMA = { id: 'u-fatima', name: 'Fatima Rahman' };
@@ -80,7 +82,10 @@ function seed(scenario: Scenario): StubState {
     rows.get('youtubeImport')!.parked = 3;
     rows.get('audioTracks')!.parked = 0;
   }
-  return { rows, history, conflictPending: scenario === 'conflict' };
+  // approval: another admin's change to Live streaming already waits; switching creatorSupport on becomes a request
+  const pending = new Map<FeatureKey, { requestId: string; enabled: boolean }>();
+  if (scenario === 'approval') pending.set('live', { requestId: 'wfr_live_off', enabled: false });
+  return { rows, history, conflictPending: scenario === 'conflict', pending };
 }
 
 async function current(): Promise<{ scenario: Scenario; state: StubState }> {
@@ -125,6 +130,7 @@ function toItem(state: StubState, key: FeatureKey, who: { manage: boolean; super
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
     canToggle: who.manage && !envOverride && (def.toggle === 'admin' || who.superAdmin),
+    pending: state.pending.get(key) ?? null,
   };
 }
 
@@ -164,7 +170,7 @@ async function stubList(): Promise<FeatureItem[]> {
   return FEATURE_REGISTRY.map((d) => toItem(state, d.key, who));
 }
 
-async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: number, opts: { undo?: boolean }): Promise<{ previous: boolean; enabled: boolean; version: number }> {
+async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: number, opts: { undo?: boolean }): Promise<Record<string, unknown>> {
   const { state } = await current();
   const who = await viewerRole();
   const item = toItem(state, key, who);
@@ -180,6 +186,11 @@ async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: numbe
     return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
   }
   if (row.version !== expectedVersion) return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
+  if (key === 'creatorSupport' && enabled && state.pending !== undefined && (await current()).scenario === 'approval') {
+    // admin-api's 202: the workflow's answer, the change waiting for a finance approver
+    state.pending.set(key, { requestId: 'wfr_creator_support_on', enabled });
+    return { status: 'pending_approval', request: { id: 'wfr_creator_support_on', type: 'features.set', status: 'pending' } };
+  }
   if (key === 'creatorSupport' && enabled) {
     return refuse(409, 'feature_precondition', {
       reasonKey: 'organization_not_formed',

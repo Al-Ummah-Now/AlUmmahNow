@@ -23,6 +23,7 @@ import {
   offCount,
   switchWords,
 } from '../src/lib/features/page-model';
+import { pendingOf } from '../src/lib/features/page-model';
 import { NAV_ITEMS, groupedItems, visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { FeaturesView } from '../src/components/features/FeaturesView';
@@ -239,5 +240,14 @@ describe('Features messages', () => {
       assert.doesNotMatch(s, /[0-9]/, s);
       assert.doesNotMatch(s, /·/, s);
     }
+  });
+});
+
+describe('a switch change sent for approval (AUN-WORKFLOWS WF-9)', () => {
+  it('reads the 202 answer, wrapped or not, and nothing else', () => {
+    assert.equal(pendingOf({ success: true, result: { status: 'pending_approval', request: { id: 'wfr_1' } } }), 'wfr_1');
+    assert.equal(pendingOf({ status: 'pending_approval', request: { id: 'wfr_2' } }), 'wfr_2');
+    assert.equal(pendingOf({ success: true, result: { previous: false, enabled: true, version: 3 } }), null);
+    assert.equal(pendingOf({ status: 'applied', requestId: 'wfr_3' }), null);
   });
 });
