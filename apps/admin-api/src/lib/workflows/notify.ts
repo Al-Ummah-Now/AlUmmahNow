@@ -141,12 +141,17 @@ export function arDigits(v: number | string): string {
 
 /** A value with its own direction (FSI…PDI), so what is inside never reorders what is around it. */
 const isolate = (text: string) => `\u2068${text}\u2069`;
+/** A phrase in the email's direction (RLI or LRI…PDI), whatever is around it: a list, or a whole row. */
+const inDirection = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u2067' : '\u2066'}${text}\u2069`;
 /**
- * A row in the email's direction. The layout's cell is dir="auto": it reads the first letter outside an
- * isolate, and a row of numbers or isolated names has none, so it would fall back to left to right. The
- * mark (RLM, LRM) is that letter, unseen.
+ * A row in the email's direction, in every client. The layout's cell is dir="auto", which reads the first
+ * letter outside an isolate: the unseen mark (RLM, LRM) is that letter. A client that drops dir and style
+ * still has the isolate, which needs neither.
  */
-const emailRow = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u200f' : '\u200e'}${text}`;
+const emailRow = (locale: EmailLocale, text: string) => `${locale === 'ar' ? '\u200f' : '\u200e'}${inDirection(locale, text)}`;
+/** One side of a change: a list in the email's direction, a single value in its own. */
+const emailSide = (f: WorkflowField, v: unknown, locale: EmailLocale, names: Map<string, string>) =>
+  Array.isArray(v) ? inDirection(locale, fieldValue(f, v, locale, names)) : isolate(fieldValue(f, v, locale, names));
 
 /** How many people of a list an email names (each name is one lookup); the request page names them all. */
 const EMAIL_PEOPLE = 5;
@@ -169,7 +174,7 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
     return v.length > EMAIL_PEOPLE ? c.andMore(shown, v.length - EMAIL_PEOPLE) : shown;
   }
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale] ?? String(x);
-  if (Array.isArray(v)) return v.map(label).join(locale === 'ar' ? '، ' : ', ');
+  if (Array.isArray(v)) return v.map((x) => isolate(label(x))).join(locale === 'ar' ? '، ' : ', ');
   if (f.kind === 'enum') return label(v);
   if (f.kind === 'money' && typeof v === 'number') {
     // Minor units with the currency's own exponent (JPY 0, USD 2, KWD 3)
@@ -207,10 +212,9 @@ export function renderWorkflowEmail(input: {
   if (changed.length) {
     blocks.push({ kind: 'p', text: c.changes });
     blocks.push({ kind: 'facts', rows: changed.map((f): [string, string] => {
-      const after = fieldValue(f, f.after, locale, input.names);
       // Someone the change is about (nothing to compare): just who
-      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], emailRow(locale, after)];
-      return [f.label[locale], emailRow(locale, `${isolate(fieldValue(f, f.before, locale, input.names))}${locale === 'ar' ? ' ← ' : ' → '}${isolate(after)}`)];
+      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], emailRow(locale, fieldValue(f, f.after, locale, input.names))];
+      return [f.label[locale], emailRow(locale, `${emailSide(f, f.before, locale, input.names)}${locale === 'ar' ? ' ← ' : ' → '}${emailSide(f, f.after, locale, input.names)}`)];
     }) });
   }
   const after: EmailBlock[] = [];
