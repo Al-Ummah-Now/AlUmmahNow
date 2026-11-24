@@ -22,7 +22,7 @@ const AVATAR_URL = 'https://images.alummahnow.net/synthetic-placeholder_avatar.j
 interface Call { method: string; path: string; body: any; actor: string | null }
 
 /** api-videos: /internal/csam/* and the admin reads the report facts use. */
-function fakeVideos(uploader: Record<string, unknown> = { email: 'uploader@example.test', emailSource: 'auth' }) {
+function fakeVideos(account: { email: string; deleted: boolean } | null | 'down' = { email: 'uploader@example.test', deleted: false }) {
   const calls: Call[] = [];
   let jobStatus = 'running';
   const fetcher = {
@@ -33,6 +33,7 @@ function fakeVideos(uploader: Record<string, unknown> = { email: 'uploader@examp
       calls.push(call);
       const reply = (result: unknown, status = 200) => new Response(JSON.stringify(status < 400 ? { success: true, result } : { success: false, code: result }), { status, headers: { 'content-type': 'application/json' } });
       const p = call.path;
+      if (p === '/internal/csam/accounts') return account === 'down' ? reply('auth_unavailable', 503) : reply({ accounts: account && call.body.ids.includes('usr_uploader') ? { usr_uploader: account } : {} });
       if (p === '/internal/csam/resolve') {
         const host = new URL(call.body.url).hostname;
         if (host === 'media.alummahnow.net') return reply({ ok: true, resolution: { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: 'usr_uploader' } });
@@ -46,7 +47,7 @@ function fakeVideos(uploader: Record<string, unknown> = { email: 'uploader@examp
       if (/^\/internal\/csam\/cases\/[^/]+\/manifest$/.test(p)) return reply({ v: 1, caseId: 'x', matchedUrl: VIDEO_URL, resolution: {}, files: [{ name: '01-matched.jpg', source: 'MEDIA/pub/x', contentType: 'image/jpeg', bytes: 12, chunkSha256: ['a'], chunkBytes: 8, keyVersion: 1, copiedAt: 't' }], missing: [], createdAt: 't', completedAt: 't' });
       if (/^\/internal\/csam\/cases\/[^/]+\/files\//.test(p)) return new Response('SYNTHETIC', { headers: { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="x"', 'content-length': '9' } });
       if (/^\/internal\/csam\/cases\/[^/]+\/evidence$/.test(p)) return reply({ deleted: 3 });
-      if (p === '/internal/admin/users/usr_uploader') return reply({ id: 'usr_uploader', ...uploader, displayName: 'Synthetic Uploader', userName: 'synthetic' });
+      if (p === '/internal/admin/users/usr_uploader') return reply({ id: 'usr_uploader', email: 'profile.copy@example.test', emailSource: 'auth', displayName: 'Synthetic Uploader', userName: 'synthetic' });
       if (p === '/internal/admin/channels/chan-synth-01') return reply({ id: 'chan-synth-01', name: 'Synthetic channel' });
       if (p === '/internal/admin/videos/vid-synth-01') return reply({ id: 'vid-synth-01', createdAt: '2026-11-01T00:00:00.000Z' });
       if (/^\/internal\/admin\/users\/[^/]+\/ban$/.test(p)) return reply({ ban: {} });
@@ -58,9 +59,9 @@ function fakeVideos(uploader: Record<string, unknown> = { email: 'uploader@examp
   return { fetcher, calls, setJob: (s: string) => { jobStatus = s; } };
 }
 
-function setup(uploader?: Record<string, unknown>) {
+function setup(account?: Parameters<typeof fakeVideos>[0]) {
   const db = sqliteD1();
-  const videos = fakeVideos(uploader);
+  const videos = fakeVideos(account);
   const queued: unknown[] = [];
   const errors: any[] = [];
   const env = {
@@ -168,17 +169,18 @@ describe('intake', () => {
 
 describe('the case', () => {
   it("the report facts keep only the sign-in account's email, and say where it is from", async () => {
-    const facts = async (uploader: Record<string, unknown>) => {
-      const t = setup(uploader);
+    const facts = async (account: Parameters<typeof setup>[0]) => {
+      const t = setup(account);
       const [c] = (await t.json('/api/csam/intake', { method: 'POST', json: { text: VIDEO_URL } })).body.result.cases;
       const { email, emailSource } = (await t.json(`/api/csam/${c.id}`)).body.result.facts.uploader;
       return { email, emailSource };
     };
-    assert.deepEqual(await facts({ email: 'account@example.test', emailSource: 'auth', profileEmail: 'copy@example.test' }), { email: 'account@example.test', emailSource: 'auth' });
-    assert.deepEqual(await facts({ email: null, emailSource: 'none', profileEmail: 'copy@example.test' }), { email: null, emailSource: 'none' });
-    assert.deepEqual(await facts({ email: null, emailSource: 'unavailable' }), { email: null, emailSource: 'unavailable' });
-    // An answer that does not say where its email is from is not trusted
-    assert.deepEqual(await facts({ email: 'copy@example.test' }), { email: null, emailSource: 'unavailable' });
+    assert.deepEqual(await facts({ email: 'account@example.test', deleted: false }), { email: 'account@example.test', emailSource: 'auth' });
+    // Deleted before the capture, not purged yet: still identified
+    assert.deepEqual(await facts({ email: 'account@example.test', deleted: true }), { email: 'account@example.test', emailSource: 'deleted_account' });
+    // Purged, or never had one
+    assert.deepEqual(await facts(null), { email: null, emailSource: 'none' });
+    assert.deepEqual(await facts('down'), { email: null, emailSource: 'unavailable' });
   });
 
   it('shows the job, the evidence list and the report facts captured before the takedown; every view is logged', async () => {

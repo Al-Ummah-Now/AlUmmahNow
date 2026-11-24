@@ -16,7 +16,8 @@
 // ============================================================================
 
 export interface ProfileCreateRequest {
-  email: string;
+  /** Ignored: the API takes the email from the signed-in account */
+  email?: string;
   userName?: string;
   displayName?: string;
   displayNameLocalized?: Record<string, string>;

@@ -8,8 +8,11 @@
  */
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { CSAM_ITEM_KINDS, type CsamResolution } from '@al-ummah/shared-types';
+import { CSAM_ITEM_KINDS, type CsamAccounts, type CsamResolution } from '@al-ummah/shared-types';
+import { apiError } from '../lib/api-error';
 import { logger } from '../lib/logger';
+import { authAccountsWithDeleted } from '../lib/admin/authUsers';
+import { AdminError } from '../lib/admin/service';
 import { retryJob } from '../lib/admin/jobs';
 import { resolveByHand, resolveCsamUrl } from '../lib/csam/resolve';
 import { CSAM_ACTOR, containJobOf, startContainment, validResolution, type ContainEnv } from '../lib/csam/contain';
@@ -56,12 +59,20 @@ const actor = (c: Context<Env>) => c.req.header('X-Admin-Actor') || CSAM_ACTOR;
 
 app.onError((error, c) => {
 	if (error instanceof BadRequest) return c.json({ success: false, code: error.code }, error.status);
+	if (error instanceof AdminError) return apiError(c, error.status, error.code, { error: error.message });
 	if (error instanceof EvidenceKeyError) {
 		logger.error('[CSAM] Evidence key is not configured', { path: c.req.path });
 		return c.json({ success: false, code: 'evidence_key_missing' }, 503);
 	}
 	logger.error('[CSAM] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, code: 'internal_error' }, 500);
+});
+
+/** The accounts behind the uploaders, for the report facts: by user id (primary key), deleted ones not purged yet included. */
+app.post('/accounts', async (c) => {
+	const { ids } = parse(z.object({ ids: z.array(ID).min(1).max(100) }).strict(), await body(c));
+	const result: CsamAccounts = { accounts: Object.fromEntries(await authAccountsWithDeleted(c.env, ids)) };
+	return ok(c, result);
 });
 
 /** What a pasted URL maps to (no side effects). */
