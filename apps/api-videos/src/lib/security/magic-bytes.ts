@@ -13,18 +13,47 @@
  * Each entry contains: [offset, signature bytes, mime type, description]
  */
 const VIDEO_SIGNATURES = [
-  // WebM and Matroska (MKV) share the EBML header; the DocType further in tells them apart (detectEbml)
+  // WebM and Matroska (MKV) share the EBML header; the DocType further in tells them apart (isMatroskaDocType)
   { offset: 0, signature: [0x1A, 0x45, 0xDF, 0xA3], mimeType: 'video/webm', description: 'WebM/Matroska (EBML)' },
-
-  // QuickTime/MOV files: 'ftyp' then the 'qt  ' brand. Before the generic MP4 entry, which also matches 'ftyp'
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x71, 0x74], mimeType: 'video/quicktime', description: 'QuickTime MOV' },
-
-  // M4V (iTunes video) is an MP4 with the 'M4V ' brand
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x4D, 0x34, 0x56], mimeType: 'video/x-m4v', description: 'M4V' },
-
-  // MP4 files (ISO Base Media File Format): 'ftyp' with any other brand (isom, mp42, MSNV, avc1, ...)
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70], mimeType: 'video/mp4', description: 'MP4/MPEG-4' },
 ] as const;
+
+/**
+ * ISO base media files (MP4, M4V, MOV, 3GP) and the files that share the box layout but are not
+ * video (HEIC and AVIF photos, M4A and M4B audio) all start with an 'ftyp' box: size, 'ftyp', major
+ * brand, minor version, then compatible brands. The brand tells them apart, so a bare 'ftyp' is
+ * never enough.
+ */
+const ISO_VIDEO_BRANDS = new Set([
+  'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6', 'iso7', 'iso8', 'iso9', 'mp41', 'mp42', 'mp71', 'avc1', 'avc3',
+  'dash', 'mmp4', 'MSNV', 'XAVC', 'f4v ', 'F4V ', 'NDAS', 'NDSC', 'NDSH', 'NDSM', 'NDSP', 'NDSS', 'NDXC', 'NDXH', 'NDXM', 'NDXP', 'NDXS',
+]);
+/** Major brands of images and audio in the same container: refused even when a compatible brand looks like video (M4A lists mp42 and isom) */
+const ISO_NON_VIDEO_BRANDS = new Set([
+  'heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'hevm', 'hevs', 'mif1', 'msf1', 'avif', 'avis', 'crx ', 'jp2 ', 'jpx ', 'jpm ',
+  'M4A ', 'M4B ', 'M4P ', 'F4A ', 'F4B ',
+]);
+
+const ascii = (buffer: Uint8Array, offset: number): string => String.fromCharCode(...buffer.subarray(offset, offset + 4));
+
+/** The video format of an ISO base media file by its ftyp brands, or null when it is an image, audio or unknown */
+function detectIsoVideo(buffer: Uint8Array): { mimeType: string; description: string } | null {
+  if (buffer.length < 12 || ascii(buffer, 4) !== 'ftyp') return null;
+  const major = ascii(buffer, 8);
+  if (ISO_NON_VIDEO_BRANDS.has(major)) return null;
+  // Compatible brands: from byte 16 to the end of the ftyp box (or of what was read)
+  const boxSize = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getUint32(0);
+  const end = Math.min(buffer.length, boxSize >= 16 ? boxSize : 16);
+  const brands = [major];
+  for (let at = 16; at + 4 <= end; at += 4) brands.push(ascii(buffer, at));
+  if (major === 'qt  ') return { mimeType: 'video/quicktime', description: 'QuickTime MOV' };
+  if (major.startsWith('M4V')) return { mimeType: 'video/x-m4v', description: 'M4V' };
+  const isVideoBrand = (b: string) => ISO_VIDEO_BRANDS.has(b) || b.startsWith('3gp') || b.startsWith('3g2') || b === 'qt  ' || b.startsWith('M4V');
+  // The major brand decides; an unknown one (a camera's own) is video when it is compatible with a video brand
+  if (isVideoBrand(major) || brands.slice(1).some((b) => !ISO_NON_VIDEO_BRANDS.has(b) && isVideoBrand(b))) {
+    return { mimeType: 'video/mp4', description: 'MP4/MPEG-4' };
+  }
+  return null;
+}
 
 /**
  * Image file magic byte signatures
@@ -151,6 +180,9 @@ export function validateVideoMagicBytes(
   if (matchesSignature(buffer, 0, [0x52, 0x49, 0x46, 0x46]) && matchesSignature(buffer, 8, [0x41, 0x56, 0x49, 0x20])) {
     return result('video/x-msvideo', 'AVI', providedMimeType);
   }
+
+  const iso = detectIsoVideo(buffer);
+  if (iso) return result(iso.mimeType, iso.description, providedMimeType);
 
   // Check against all video signatures
   for (const sig of VIDEO_SIGNATURES) {

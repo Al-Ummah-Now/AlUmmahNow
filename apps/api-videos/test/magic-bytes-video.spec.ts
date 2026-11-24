@@ -10,8 +10,9 @@ import { validateVideoMagicBytes } from '../src/lib/security/magic-bytes';
 const ascii = (text: string): number[] => [...text].map((c) => c.charCodeAt(0));
 const pad = (bytes: number[], length = 64): Uint8Array => Uint8Array.from([...bytes, ...new Array(Math.max(0, length - bytes.length)).fill(0)]);
 
-/** An ISO base media file: size, 'ftyp', brand */
-const iso = (brand: string): Uint8Array => pad([0, 0, 0, 0x20, ...ascii('ftyp'), ...ascii(brand.padEnd(4, ' '))]);
+/** An ISO base media file: size, 'ftyp', major brand, minor version, compatible brands */
+const iso = (brand: string, compatible: string[] = []): Uint8Array =>
+	pad([0, 0, 0, 16 + compatible.length * 4, ...ascii('ftyp'), ...ascii(brand.padEnd(4, ' ')), 0, 0, 2, 0, ...compatible.flatMap((b) => ascii(b.padEnd(4, ' ')))]);
 /** An EBML header with its DocType element */
 const ebml = (docType: string): Uint8Array => pad([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x80 + docType.length, ...ascii(docType)]);
 const riff = (kind: string): Uint8Array => pad([...ascii('RIFF'), 0x24, 0, 0, 0, ...ascii(kind)]);
@@ -51,6 +52,31 @@ describe('validateVideoMagicBytes', () => {
 		assert.equal(validateVideoMagicBytes(ebml('webm')).detectedMimeType, 'video/webm');
 		assert.equal(validateVideoMagicBytes(ebml('matroska')).detectedMimeType, 'video/x-matroska');
 		assert.equal(validateVideoMagicBytes(pad([0x1a, 0x45, 0xdf, 0xa3], 12)).detectedMimeType, 'video/webm');
+	});
+
+	it('takes the video brands cameras and tools write, including 3GP and an unknown brand that is compatible with a video one', () => {
+		for (const brand of ['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'dash', 'MSNV', 'XAVC', '3gp5', '3g2a', 'f4v ']) {
+			const r = validateVideoMagicBytes(iso(brand));
+			assert.equal(r.isValid, true, brand);
+			assert.equal(r.detectedMimeType, 'video/mp4', brand);
+		}
+		assert.equal(validateVideoMagicBytes(iso('M4VH')).detectedMimeType, 'video/x-m4v');
+		assert.equal(validateVideoMagicBytes(iso('CAMX', ['isom', 'mp42'])).detectedMimeType, 'video/mp4');
+	});
+
+	it('refuses the ISO files that are not video: HEIC and AVIF photos, M4A and M4B audio, each by its brand', () => {
+		for (const brand of ['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1', 'avif', 'avis', 'M4A', 'M4B', 'M4P', 'F4A', 'crx', 'jp2']) {
+			assert.equal(validateVideoMagicBytes(iso(brand)).isValid, false, brand);
+		}
+		// M4A and HEIC list video-looking compatible brands; the major brand still decides
+		assert.equal(validateVideoMagicBytes(iso('M4A', ['mp42', 'isom'])).isValid, false);
+		assert.equal(validateVideoMagicBytes(iso('heic', ['mif1', 'mp42'])).isValid, false);
+		assert.equal(validateVideoMagicBytes(iso('mif1', ['heic', 'avif'])).isValid, false);
+	});
+
+	it('refuses an ISO file with an unknown brand and no video brand, and one with no brand list at all', () => {
+		assert.equal(validateVideoMagicBytes(iso('ZZZZ')).isValid, false);
+		assert.equal(validateVideoMagicBytes(iso('ZZZZ', ['mif1', 'heic'])).isValid, false);
 	});
 
 	it('refuses other RIFF files (WAV, WebP), which the old check took for AVI', () => {

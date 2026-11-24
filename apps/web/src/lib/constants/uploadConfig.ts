@@ -34,7 +34,7 @@ export const VIDEO_UPLOAD_CONFIG = {
 
 // Error messages
 export const VIDEO_UPLOAD_ERRORS = {
-  INVALID_TYPE: `Please upload a valid video file (${VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY})`,
+  INVALID_TYPE: 'Please upload a valid video file ({formats})',
   FILE_TOO_LARGE: `File size must be less than ${VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE_DISPLAY}`,
   DURATION_TOO_LONG: `Video duration must be less than ${VIDEO_UPLOAD_CONFIG.MAX_DURATION_DISPLAY}`,
   AUTH_REQUIRED: 'Authentication required. Please log in to upload videos.',
