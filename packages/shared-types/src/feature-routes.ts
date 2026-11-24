@@ -285,6 +285,7 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
   x('api-videos', 'GET', '/api/me/tier-requests', READ),
   x('api-videos', 'POST', '/api/me/tier-requests/:id/withdraw', REMOVE),
   x('api-videos', 'POST', '/api/downloads/sync', 'cleanup hygiene runs even while offlineDownloads is off'),
+  x('api-videos', 'GET', '/api/downloads/revocations', 'urgent takedown revocation polling runs even while offlineDownloads is off'),
 ]);
 
 /**

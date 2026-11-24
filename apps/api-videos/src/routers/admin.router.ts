@@ -77,6 +77,7 @@ import { PREBUILT_LIMITS, ingestTargets, type VideoMediaProviders, type VideoObj
 import { cancelRenditions, completeRenditions, putRenditionFile, stageRenditions, type PrebuiltEnv, type PrebuiltOutcome, type StagePlan, type WithPrebuilt } from '../lib/media/prebuiltUploads';
 import { readMediaSettings } from '../lib/media/settings';
 import { featureSwitchState, forgetFeatureSettings } from '../lib/features';
+import { revokeVideoDownloads, type DownloadRevokeEnv } from '../lib/downloads/revocations';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -388,6 +389,34 @@ app.post('/videos/:id/move', async (c) => {
 app.post('/videos/:id/unpublish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), false)));
 app.post('/videos/:id/republish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), true)));
 app.post('/videos/:id/reprocess', async (c) => ok(c, await admin.reprocessVideo(c.env, c.req.param('id'))));
+const RevokeDownloadsBody = z
+	.object({
+		eventId: z
+			.string()
+			.trim()
+			.regex(/^[A-Za-z0-9:_-]{1,160}$/)
+			.optional(),
+		actionId: z
+			.string()
+			.trim()
+			.regex(/^[A-Za-z0-9_-]{1,120}$/)
+			.optional(),
+		reason: z.string().max(1000).optional(),
+	})
+	.strict();
+app.post('/videos/:id/revoke-downloads', async (c) => {
+	const input = parse(RevokeDownloadsBody, await body(c));
+	const eventId = input.eventId ?? `admin:${input.actionId ?? crypto.randomUUID()}`;
+	return ok(
+		c,
+		await revokeVideoDownloads(c.env as unknown as DownloadRevokeEnv, {
+			videoId: c.req.param('id'),
+			eventId,
+			actorId: actor(c),
+			reason: input.reason,
+		}),
+	);
+});
 app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Comments, playlists, community posts

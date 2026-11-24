@@ -675,6 +675,12 @@ export const ADMIN_JOB_KINDS = [
    */
   'csam.contain',
   /**
+   * Urgent/legal offline download revocation (wiki E14 §5.3): verifies metadata is blocked,
+   * purges public/private R2 renditions + CDN prefix, and appends `admin:<actionId>` to
+   * `download_revocations` with retry, DLQ, and Admin Errors alert (O26) on exhaustion.
+   */
+  'downloads.revoke',
+  /**
    * Fill the image_owners index (api-videos lib/csam/imageOwners.ts) from stored profiles,
    * channels and posts, so a matched avatar, cover or post image maps to its uploader. Resumable,
    * idempotent (INSERT OR IGNORE). Target 'user' / 'image-owners'.
@@ -825,6 +831,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'import.takeout-match': ['videos:manage'],
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
+  'downloads.revoke': ['content:delete'],
   'images.index-owners': ['users:manage'],
   // Started with media:manage (admins and super admins), who also hold videos:manage
   'media.transcode-retry': ['videos:manage'],

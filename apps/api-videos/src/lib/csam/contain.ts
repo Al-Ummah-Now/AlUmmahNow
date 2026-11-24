@@ -54,6 +54,7 @@ import { bumpPostComments, postChannelId } from '../community-posts';
 import { moderateLive } from '../admin/liveModeration';
 import { streamKey } from '../live/streams';
 import { coveredBy, deleteBunny, deleteSessionMedia, forgetRemovedRecordings, lateRendition, recordingFiles, recordingInstruction, storedRecordings, type CopiedList, type RecordingEnv, type StoredRecording } from './recordings';
+import { appendDownloadRevocation } from '../downloads/revocations';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -534,6 +535,15 @@ async function purgePublic(env: ContainEnv, p: ContainParams): Promise<ContainPa
 	purge.bunnyEdge = await purgeBunnyEdge(env as never, urls);
 	if (purge.bunnyEdge === 'failed') throw new Error('Bunny edge purge failed');
 	for (const path of paths) await forgetImageOwner(env.SEARCH_DB, path);
+	// E14-D8 / E14-S11a: append to download_revocations LAST, only after metadata block (hideNow),
+	// encrypted evidence copy (copy-public), and pub/ delete + CDN prefix purge all succeeded.
+	if (r.videoId && env.SEARCH_DB) {
+		const rev = await appendDownloadRevocation(env.SEARCH_DB, {
+			eventId: `csam:${p.caseId}`,
+			videoId: r.videoId,
+		});
+		purge.revocationSeq = rev.seq;
+	}
 	return { ...p, phase: 'copy-source', file: 0, purge };
 }
 
