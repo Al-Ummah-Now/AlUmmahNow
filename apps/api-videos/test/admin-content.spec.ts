@@ -832,6 +832,16 @@ describe('channel actions', () => {
 		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
 	});
 
+	it('a move to a super admin goes through and leaves their automatic Unlimited tier in place (Gemini review)', async () => {
+		const { raw, call, jobOf, db } = await setup();
+		db.db.prepare(`UPDATE creator_tier_assignments SET tier_id = 'unlimited', assigned_by = 'system:super-admin' WHERE user_id = ?`).run(OTHER);
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		const row = db.db.prepare('SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = ?').get(OTHER) as { tier_id: string; assigned_by: string } | undefined;
+		assert.deepEqual(row && [row.tier_id, row.assigned_by], ['unlimited', 'system:super-admin'], 'the check wrote nothing');
+	});
+
 	it("the previous owner's notice carries the admin's reason (CC-D11)", async () => {
 		const { raw, call, jobOf } = await setup();
 		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER, reason: 'Requested by the scholar' }));
