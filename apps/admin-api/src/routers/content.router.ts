@@ -305,9 +305,9 @@ app.post('/channels/:id/handle/take', async (c) => {
   const id = c.req.param('id');
   const input = await body(c);
   const handle = typeof input.handle === 'string' ? input.handle.trim().replace(/^@/, '') : '';
-  if (!handle) return c.json({ success: false, code: 'invalid_request', error: 'handle is required' }, 400);
+  if (!handle) return apiError(c, 400, 'invalid_request', { error: 'handle is required' });
   const reason = await handleReason(c);
-  if (!reason) return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
   return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-take', details: { handle, reason } }, () =>
     videos(c, `/channels/${encodeURIComponent(id)}/handle/take`, { method: 'POST', json: { handle } })));
 });
@@ -316,7 +316,7 @@ app.post('/channels/:id/handle/release', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');
   const reason = await handleReason(c);
-  if (!reason) return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
   return ok(c, await audited(c, { kind: 'channel', id, action: 'handle-release', details: { reason } }, () =>
     videos(c, `/channels/${encodeURIComponent(id)}/handle/release`, { method: 'POST' })));
 });
