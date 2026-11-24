@@ -14,7 +14,7 @@
  * Recipients: those the engine names (the proposer and the eligible approvers), plus the rule's extra
  * notify list. Email is skipped when the rule turns email off; the in-app count still shows it.
  */
-import { currencyExponent, type AccountEmailContact, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
+import { currencyExponent, workflowFieldChanged, workflowFieldPeople, workflowFieldShown, type AccountEmailContact, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
 import { envTag, sendContactEmail } from '../contact-email';
@@ -89,6 +89,7 @@ const COPY = {
     no: 'No',
     none: '—',
     someone: 'Someone',
+    andMore: (names: string, n: number) => `${names} and ${n} more`,
     system: 'Al Ummah Now',
     replaced: 'Replaced',
     footer: 'You received this email because you can approve, or asked for, changes in the Al Ummah Now admin.',
@@ -125,6 +126,7 @@ const COPY = {
     no: 'لا',
     none: '—',
     someone: 'أحد المشرفين',
+    andMore: (names: string, n: number) => `${names} و${arDigits(n)} غيرهم`,
     system: 'الأمة الآن',
     replaced: 'استُبدل',
     footer: 'وصلك هذا البريد لأنك تستطيع الموافقة على تغييرات في لوحة إدارة الأمة الآن أو لأنك طلبتها.',
@@ -137,6 +139,9 @@ export function arDigits(v: number | string): string {
   return String(v).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
 }
 
+/** How many people of a list an email names (each name is one lookup); the request page names them all. */
+const EMAIL_PEOPLE = 5;
+
 const dateText = (iso: string, locale: EmailLocale) => {
   const d = iso.slice(0, 16).replace('T', ' ');
   return locale === 'ar' ? arDigits(d) : d;
@@ -148,7 +153,11 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
   if (v === null || v === undefined || v === '') return c.none;
   if (f.kind === 'secret') return v === 'replaced' ? c.replaced : c.none;
   if (f.kind === 'bool') return v ? c.yes : c.no;
-  if (f.kind === 'person') return names.get(String(v)) ?? c.someone;
+  if (f.kind === 'person') {
+    if (!Array.isArray(v)) return names.get(String(v)) ?? c.someone;
+    const shown = v.slice(0, EMAIL_PEOPLE).map((id) => names.get(String(id)) ?? c.someone).join(locale === 'ar' ? '، ' : ', ');
+    return v.length > EMAIL_PEOPLE ? c.andMore(shown, v.length - EMAIL_PEOPLE) : shown;
+  }
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale] ?? String(x);
   if (Array.isArray(v)) return v.map(label).join(locale === 'ar' ? '، ' : ', ');
   if (f.kind === 'enum') return label(v);
@@ -184,10 +193,15 @@ export function renderWorkflowEmail(input: {
   if (r.reason) blocks.push({ kind: 'quote', label: c.reason, text: r.reason });
   const rejection = event === 'rejected' ? [...r.steps].reverse().find((s) => s.kind === 'reject')?.note : null;
   if (rejection) blocks.push({ kind: 'quote', label: c.rejection, text: rejection });
-  const changed = r.fields.filter((f) => f.kind === 'secret' || JSON.stringify(f.before) !== JSON.stringify(f.after)).slice(0, 12);
+  const changed = r.fields.filter(workflowFieldShown).slice(0, 12);
   if (changed.length) {
     blocks.push({ kind: 'p', text: c.changes });
-    blocks.push({ kind: 'facts', rows: changed.map((f) => [f.label[locale], `${fieldValue(f, f.before, locale, input.names)} ← ${fieldValue(f, f.after, locale, input.names)}`.replace(' ← ', locale === 'ar' ? ' ← ' : ' → ')]) });
+    blocks.push({ kind: 'facts', rows: changed.map((f): [string, string] => {
+      const after = fieldValue(f, f.after, locale, input.names);
+      // Someone the change is about (nothing to compare): just who
+      if (f.kind === 'person' && (f.before === null || !workflowFieldChanged(f))) return [f.label[locale], after];
+      return [f.label[locale], `${fieldValue(f, f.before, locale, input.names)}${locale === 'ar' ? ' ← ' : ' → '}${after}`];
+    }) });
   }
   const after: EmailBlock[] = [];
   if (event === 'proposed' || event === 'approved') {
@@ -241,7 +255,7 @@ export async function processWorkflowNotifyJob(env: NotifyEnv, msg: QueueMessage
     const recipients = [...new Set([...job.recipients, ...extra])].filter((u) => u !== job.actor && u !== 'system');
 
     const names = new Map<string, string>();
-    const people = new Set<string>([job.actor, ...request.fields.filter((f) => f.kind === 'person').flatMap((f) => [f.before, f.after]).filter((v): v is string => typeof v === 'string')]);
+    const people = new Set<string>([job.actor, ...workflowFieldPeople(request.fields, EMAIL_PEOPLE)]);
     for (const id of people) {
       if (id === 'system') continue;
       const contact = await contactOf(env, id).catch(() => null);

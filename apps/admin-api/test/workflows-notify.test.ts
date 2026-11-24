@@ -215,6 +215,19 @@ describe('review fixes (#1832)', () => {
     const job: WorkflowNotifyJob = { v: 1, kind: 'workflow_notify', requestId: 'wfr_x', event: 'proposed', actor: 'a', recipients: ['b'] };
     assert.equal(await processWorkflowNotifyJob({ SEARCH_DB: broken } as never, { id: 'm', body: job, attempts: 1, ack() {}, retry() {} }), 'retry');
   });
+  it('people: a list names five and counts the rest, and the person a change is about always shows', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const names = new Map(ids.map((id) => [id, `Name ${id}`]));
+    const people = { key: 'users', label: { en: 'Creators', ar: 'صنّاع المحتوى' }, kind: 'person' as const, before: null, after: ids };
+    assert.equal(fieldValue(people, ids.slice(0, 2), 'ar', names), 'Name a، Name b');
+    assert.equal(fieldValue(people, ids, 'en', names), 'Name a, Name b, Name c, Name d, Name e and 2 more');
+    assert.match(fieldValue(people, ids, 'ar', names), /و٢ غيرهم$/);
+    const about = { key: 'user', label: { en: 'Creator', ar: 'صانع المحتوى' }, kind: 'person' as const, before: 'a', after: 'a' };
+    const e = renderWorkflowEmail({ to: 'a@example.org', locale: 'en', event: 'proposed', request: { ...request, fields: [about, people] }, actorName: 'Amina', names });
+    assert.match(e.text, /Creator: *Name a\n/);
+    assert.match(e.text, /Creators: *Name a, Name b/);
+    assert.doesNotMatch(e.text, /→/, 'nothing to compare');
+  });
   it('percent and bps show % and ٪', () => {
     assert.equal(fieldValue(f('percent'), 2.9, 'en', new Map()), '2.9%');
     assert.equal(fieldValue(f('percent'), 2.9, 'ar', new Map()), '٪٢٫٩');

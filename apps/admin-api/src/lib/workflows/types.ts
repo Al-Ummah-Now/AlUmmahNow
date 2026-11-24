@@ -57,6 +57,9 @@ export interface WorkflowStoredRequest {
   approvedBy: string[];
   status: WorkflowStatus;
   version: number;
+  proposedAt: string;
+  /** How many times applying it has failed (more than none: this is a retry, and an earlier attempt may have made the change). */
+  failedAttempts: number;
 }
 
 export interface WorkflowExecutor<P = unknown, R = unknown> {
@@ -70,6 +73,11 @@ export interface WorkflowExecutor<P = unknown, R = unknown> {
   validate(ctx: WorkflowCtx, input: unknown): Promise<P>;
   describe(ctx: WorkflowCtx, payload: P): Promise<WorkflowDescription>;
   currentVersion(ctx: WorkflowCtx, payload: P): Promise<string>;
+  /**
+   * applyJob only, asked on a retry whose target has changed: whether an earlier attempt of this request made
+   * that change. Then applyJob runs again (and finishes what was left) instead of the request going stale.
+   */
+  alreadyApplied?(ctx: WorkflowCtx, payload: P, request: WorkflowStoredRequest): Promise<boolean>;
   /** Extra reasons this person may not approve, beyond the rule (for example: whoever marked someone as tech staff never approves removing the mark). */
   approverBlocks?(ctx: WorkflowCtx, payload: P, actorId: string): Promise<string[]>;
   /** A floor above the action's own (payout batches: MEM-D24). */

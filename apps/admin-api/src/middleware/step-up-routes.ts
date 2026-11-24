@@ -84,9 +84,8 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'PUT', path: '/api/content/users/:id/creator-tier', what: 'Change a creator tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
   { method: 'POST', path: '/api/content/creators/tier', what: 'Change several creators\' tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
   { method: 'POST', path: '/api/content/tier-requests/:id/approve', what: 'Approve a tier request (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
-  { method: 'PUT', path: '/api/content/creator-tiers/default', what: 'Change the default tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('default') },
   { method: 'POST', path: '/api/content/creator-tiers', what: 'Add a tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('tiers') },
-  { method: 'PUT', path: '/api/content/creator-tiers/:id', what: 'Edit or reorder tiers (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp((c) => (c.req.param('id') === 'default' ? 'default' : 'tiers')) },
+  { method: 'PUT', path: '/api/content/creator-tiers/:id', what: 'Edit or reorder tiers, or change the default tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp((c) => (c.req.param('id') === 'default' ? 'default' : 'tiers')) },
   { method: 'DELETE', path: '/api/content/creator-tiers/:id', what: 'Delete a tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('tiers') },
 ];
 

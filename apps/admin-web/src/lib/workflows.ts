@@ -3,7 +3,7 @@
  * values in the reader's language (٠–٩ in Arabic through the shared formatters), and a rule in one
  * line. Pure, so the server pages and the client dialogs share them and tests need no browser.
  */
-import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
+import { currencyExponent, featureDefinition, formatMoney, isFeatureKey, workflowFieldChanged, workflowScopeLabel, type WorkflowActionType, type WorkflowApproverSet, type WorkflowField, type WorkflowRuleConfig, type WorkflowStatus } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 
@@ -45,16 +45,17 @@ export const WORKFLOW_STATUS_RAIL: Record<WorkflowStatus, string> = {
 export const statusLabel = (t: Translator, status: WorkflowStatus) => translateDynamic(t, 'workflows.status', status);
 
 /** Whether a field changes (secrets always count: their value is never shown). */
-export const fieldChanges = (f: WorkflowField) => f.kind === 'secret' || JSON.stringify(f.before) !== JSON.stringify(f.after);
+export const fieldChanges = workflowFieldChanged;
 
 /** One value of the diff as text, in the reader's language. People come from `names` (never an email). */
 export function workflowValue(f: WorkflowField, v: unknown, locale: Locale, t: Translator, names: Record<string, string>): string {
   if (v === null || v === undefined || v === '') return t('workflows.none');
   if (f.kind === 'secret') return v === 'replaced' ? t('workflows.replaced') : t('workflows.secretSet');
   if (f.kind === 'bool') return v ? t('workflows.yes') : t('workflows.no');
-  if (f.kind === 'person') return names[String(v)] ?? t('workflows.someone');
+  const separator = locale === 'ar' ? '، ' : ', ';
+  if (f.kind === 'person') return (Array.isArray(v) ? v : [v]).map((id) => names[String(id)] ?? t('workflows.someone')).join(separator);
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale === 'ar' ? 'ar' : 'en'] ?? String(x);
-  if (Array.isArray(v)) return v.map(label).join(locale === 'ar' ? '، ' : ', ');
+  if (Array.isArray(v)) return v.map(label).join(separator);
   if (f.kind === 'enum') return label(v);
   if (f.kind === 'date' && (typeof v === 'string' || typeof v === 'number')) return formatDate(v, locale);
   if (typeof v === 'number') {

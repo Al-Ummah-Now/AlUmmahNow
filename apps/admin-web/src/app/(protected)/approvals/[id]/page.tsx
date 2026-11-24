@@ -1,4 +1,4 @@
-import { WORKFLOW_ACTIONS, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
+import { ADMIN_NAMES_MAX, WORKFLOW_ACTIONS, workflowFieldPeople, workflowFieldShown, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
@@ -37,16 +37,15 @@ export default async function ApprovalPage({ params, searchParams }: { params: P
     );
   }
 
-  const people = new Set<string>([request.proposedBy, ...request.steps.map((s) => s.actor)]);
-  for (const f of request.fields) if (f.kind === 'person') for (const v of [f.before, f.after]) if (typeof v === 'string') people.add(v);
-  people.delete('system');
-  const named = await getNames({ users: [...people] });
+  const people = [...new Set([request.proposedBy, ...request.steps.map((s) => s.actor), ...workflowFieldPeople(request.fields)])].filter((id) => id !== 'system');
+  // A bulk change names up to 100 people on top of the ones in the history: one lookup per 100
+  const lookups = await Promise.all(Array.from({ length: Math.ceil(people.length / ADMIN_NAMES_MAX) }, (_, i) => getNames({ users: people.slice(i * ADMIN_NAMES_MAX, (i + 1) * ADMIN_NAMES_MAX) })));
   const names: Record<string, string> = {};
-  for (const [uid, u] of Object.entries(named.users)) names[uid] = u.name ?? (u.found ? t('workflows.someone') : t('workflows.deletedAccount'));
+  for (const [uid, u] of lookups.flatMap((l) => Object.entries(l.users))) names[uid] = u.name ?? (u.found ? t('workflows.someone') : t('workflows.deletedAccount'));
   const nameOf = (uid: string) => (uid === 'system' ? t('workflows.system') : (names[uid] ?? t('workflows.someone')));
 
   const title = locale === 'ar' ? request.title.ar : request.title.en;
-  const changed = request.fields.filter(fieldChanges);
+  const changed = request.fields.filter(workflowFieldShown);
   const fields = showAll ? request.fields : changed;
   const can = request.can ?? { approve: false, reject: false, withdraw: false, blocks: [] };
   const domainKey = request.domain;

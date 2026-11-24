@@ -209,7 +209,7 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
   'tiers.change': def({
     type: 'tiers.change',
     domain: 'platform',
-    label: { en: 'Change a creator tier', ar: 'تغيير مستوى صانع محتوى' },
+    label: { en: 'Change a creator tier', ar: 'تغيير فئة صانع محتوى' },
     scoped: true,
     floor: OPEN_FLOOR,
     defaultRule: rule({ approvalsNeeded: 0, approvers: SUPER_ADMINS, stepUp: 'none' }),
@@ -271,9 +271,9 @@ export const WORKFLOW_LISTED_SCOPES: Readonly<Partial<Record<WorkflowActionType,
 
 const SCOPE_LABELS: Readonly<Partial<Record<WorkflowActionType, Readonly<Record<string, WorkflowLocalized>>>>> = Object.freeze({
   'tiers.change': {
-    assign: { en: 'A creator’s tier', ar: 'مستوى صانع محتوى' },
-    default: { en: 'The default tier', ar: 'المستوى الافتراضي' },
-    tiers: { en: 'Tiers and their limits', ar: 'المستويات وحدودها' },
+    assign: { en: 'A creator’s tier', ar: 'فئة صانع محتوى' },
+    default: { en: 'The default tier', ar: 'الفئة الافتراضية' },
+    tiers: { en: 'Tiers and their limits', ar: 'الفئات وحدودها' },
   },
   'workflows.rule.set': { [WORKFLOW_RULE_CHANGE_MONEY_SCOPE]: { en: 'Money rules', ar: 'قواعد المال' } },
 });
@@ -537,7 +537,7 @@ export interface WorkflowField {
   key: string;
   label: WorkflowLocalized;
   kind: WorkflowFieldKind;
-  /** null when the field is new */
+  /** null when the field is new. `person`: an account id, or a list of them; `enum` and `list`: keys of enumLabels when given */
   before: unknown;
   /** null when the field is removed */
   after: unknown;
@@ -550,6 +550,13 @@ export const workflowSecretField = (key: string, label: WorkflowLocalized, hadVa
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 export const workflowFieldChanged = (f: WorkflowField) => f.kind === 'secret' || !same(f.before, f.after);
+/** Fields a short diff shows: what changes, and always the people the change is about. */
+export const workflowFieldShown = (f: WorkflowField) => f.kind === 'person' || workflowFieldChanged(f);
+/** The account ids in a diff's person fields, without repeats. */
+export function workflowFieldPeople(fields: readonly WorkflowField[], perValue = Infinity): string[] {
+  const ids = (v: unknown) => (Array.isArray(v) ? v.slice(0, perValue) : [v]).filter((x): x is string => typeof x === 'string' && x !== '');
+  return [...new Set(fields.filter((f) => f.kind === 'person').flatMap((f) => [...ids(f.before), ...ids(f.after)]))];
+}
 
 // ---------------------------------------------------------------------------------------------------
 // API shapes (§8)

@@ -34,11 +34,7 @@ import {
   type AdminVideoDetail,
   type AdminVideoRow,
   type LegacyRestorePlan,
-  MAX_BULK_CREATOR_TIER,
-  creatorTierOrigin,
   type CreatorTierAssignment,
-  type CreatorTierBulkResult,
-  cleanTrashReason,
   warningEscalation,
   type AccountEmailSettings,
   PROFILE_EMAILS_TARGET,
@@ -73,16 +69,16 @@ import {
 import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
 import { enqueueTierRequestMail, flagTierRequestFailure, tierRequestMailJob } from '../lib/tier-request-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
-import { dropAudit, readAudit, setAuditPrevious, setAuditSubject, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
+import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { apiError } from '../lib/api-error';
 import { proposeChange, ruleNeedsApproval, WorkflowError } from '../lib/workflows/engine';
-import { readTierOp, runTierOp, tierScope, TierOpError, DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID } from '../lib/workflows/tier-actions';
+import { planBulk, readTierOp, runTierOp, tierScope, TierOpError, DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID } from '../lib/workflows/tier-actions';
 import { workflowCtx } from './workflows.router';
 import { stepUpAnswer } from '../middleware/passkeys';
 import { logger } from '../lib/logger';
-import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
+import { inviteStatusByUser, pendingInvitesByTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
@@ -762,6 +758,11 @@ async function tierChange(c: C, raw: Record<string, unknown>, reason?: unknown) 
   if (c.env.SEARCH_DB) {
     const ctx = workflowCtx(c.env as never, { steppedUp: stepUpAnswer(c as never) === null });
     if (await ruleNeedsApproval(ctx, 'tiers.change', tierScope(op))) {
+      // Nobody in the selection would move: nothing to approve
+      if (op.op === 'bulk') {
+        const plan = await planBulk(c.env, actorOf(c), op);
+        if (!plan.changed.length) return ok(c, plan);
+      }
       const actor = await ctx.directory.actor(actorOf(c), auth(c)?.roles ?? []);
       const why = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 1000) : 'Tier change';
       const out = await proposeChange(ctx, actor, { type: 'tiers.change', payload: op, reason: why });
@@ -840,7 +841,7 @@ app.put('/creator-tiers/order', async (c) => {
 
 app.put('/creator-tiers/:id', async (c) => {
   const input = await body(c);
-  return tierChange(c, { op: 'edit', id: c.req.param('id'), input });
+  return tierChange(c, { op: 'edit', id: c.req.param('id'), input }, input.reason);
 });
 
 /** Soft delete: restorable for 30 days in Recently deleted (/api/trash), then purged by the hourly cleanup. */
@@ -911,7 +912,7 @@ app.get('/tier-requests/:id', async (c) => {
   ]);
   return ok(c, { ...current, audit });
 });
-app.post('/tier-requests/:id/approve', async (c) => tierChange(c, { op: 'approveRequest', requestId: c.req.param('id') }));
+app.post('/tier-requests/:id/approve', async (c) => tierChange(c, { op: 'approveRequest', requestId: c.req.param('id') }, (await body(c)).reason));
 app.post('/tier-requests/:id/decline', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
