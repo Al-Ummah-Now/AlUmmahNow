@@ -192,6 +192,7 @@ export * from './feature-registry';
 export * from './api-error';
 export * from './feature-switch-store';
 export * from './features-api';
+export * from './age-rules';
 export * from './feature-routes';
 export * from './bidi';
 export * from './workflows';

@@ -78,6 +78,7 @@ import { runErrorRetention } from './lib/errors-retention';
 import { purgeWorkflowHistory } from './lib/workflows/retention';
 import { purgeE2eReports } from './lib/report-stats';
 import { errorEnvelope } from './middleware/error-envelope';
+import ageRulesRouter from './routers/ageRules.router';
 import featuresRouter from './routers/features.router';
 import { applyFeatureGates } from './middleware/require-feature';
 import { apiError } from './lib/api-error';
@@ -312,6 +313,7 @@ app.route('/api/social', socialRouter);
 // Video categories (admin-managed list in the search D1): videos:categories to change, audited
 app.route('/api/video-categories', videoCategoriesRouter);
 app.route('/api/features', featuresRouter);
+app.route('/api/age-rules', ageRulesRouter);
 // Translate for staff-set en/ar fields (L10N rule; routers/translate.router.ts)
 app.route('/api/translate', translateRouter);
 // Settings › Emails: admin-edited system emails, versions, preview and test send (emails:manage; routers/emailTemplates.router.ts)
