@@ -161,8 +161,8 @@
         "ar": "عميل تطبيق الويب من Google Cloud الذي يسجّل صنّاع المحتوى الدخول إلى يوتيوب من خلاله. وهو ليس سرًّا."
       },
       "what": {
-        "en": "Created in Google Cloud → APIs & Services → Credentials, as an OAuth client ID of type Web application, with this environment’s redirect URI. It ends in .apps.googleusercontent.com. Each environment (QA, stage, production) has its own. Creators can only connect when the YouTube import switch on the Features page is on, a client ID is set and the client secret is present.",
-        "ar": "يُنشأ من Google Cloud ← APIs & Services ← Credentials بوصفه OAuth client ID من نوع Web application، مع رابط إعادة التوجيه الخاص بهذه البيئة. وينتهي بـ ‎.apps.googleusercontent.com‎. لكل بيئة (QA والتجريب والإنتاج) معرّفها الخاص. ولا يستطيع صنّاع المحتوى الربط إلا إذا كان مفتاح «النقل من يوتيوب» في صفحة الميزات مفعّلًا ومعرّف العميل مضبوطًا وسرّ العميل موجودًا."
+        "en": "Created in Google Cloud → APIs & Services → Credentials, as an OAuth client ID of type Web application, with this environment’s redirect URI. It ends in `.apps.googleusercontent.com`. Each environment (QA, stage, production) has its own. Creators can only connect when the YouTube import switch on the Features page is on, a client ID is set and the client secret is present.",
+        "ar": "يُنشأ من Google Cloud ← APIs & Services ← Credentials بوصفه OAuth client ID من نوع Web application، مع رابط إعادة التوجيه الخاص بهذه البيئة. وينتهي بـ `.apps.googleusercontent.com`. لكل بيئة (QA والتجريب والإنتاج) معرّفها الخاص. ولا يستطيع صنّاع المحتوى الربط إلا إذا كان مفتاح «النقل من يوتيوب» في صفحة الميزات مفعّلًا ومعرّف العميل مضبوطًا وسرّ العميل موجودًا."
       },
       "changes": {
         "en": "Used by the next creator who connects. Creators already connected keep their connection while the client is the same Google client; changing to a client from another Google project ends existing connections, and those creators connect again in Studio.",

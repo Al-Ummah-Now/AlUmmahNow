@@ -583,7 +583,8 @@ function OptionContent({ option, kind, current, showIds = true }: { option: Auto
   const s = option.suggestion;
   return (
     <>
-      <Thumb suggestion={s} />
+      {/* A setting in the admin guide has no picture */}
+      {s.kind !== 'help' && <Thumb suggestion={s} />}
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-fg" dir="auto">
