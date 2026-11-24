@@ -114,7 +114,8 @@ export default async function ApprovalPage({ params, searchParams }: { params: P
             title={title}
             status={request.status}
             can={can}
-            canRetry={request.status === 'failed'}
+            // admin-api sets can.retry (#1865) from the retry route's own check
+            canRetry={request.status === 'failed' && (request.can as { retry?: boolean } | undefined)?.retry === true}
             actions={{ approve: approveWorkflowRequest, reject: rejectWorkflowRequest, withdraw: withdrawWorkflowRequest, retry: retryWorkflowRequest, comment: commentOnWorkflowRequest }}
           />
         </section>
@@ -161,6 +162,12 @@ function BackLink({ label }: { label: string }) {
   );
 }
 
+/** One diff value: dates as local time with the zone (UTC on hover, the shared LocalTime); the rest as text. */
+function DiffValue({ field, value, t, locale, names }: { field: WorkflowField; value: unknown; t: Parameters<typeof workflowValue>[3]; locale: Parameters<typeof workflowValue>[2]; names: Record<string, string> }) {
+  if (field.kind === 'date' && (typeof value === 'string' || typeof value === 'number') && value !== '') return <LocalTime value={value} withTime />;
+  return <>{workflowValue(field, value, locale, t, names)}</>;
+}
+
 function DiffTable({ fields, t, locale, names }: { fields: WorkflowField[]; t: Parameters<typeof workflowValue>[3]; locale: Parameters<typeof workflowValue>[2]; names: Record<string, string> }) {
   return (
     <div className="mt-3 overflow-x-auto">
@@ -179,10 +186,10 @@ function DiffTable({ fields, t, locale, names }: { fields: WorkflowField[]; t: P
               <tr key={f.key} className="border-b border-border last:border-b-0 align-top" data-field={f.key} data-changed={changes ? '1' : '0'}>
                 <th scope="row" className="py-2 pe-3 text-start font-medium text-fg">{locale === 'ar' ? f.label.ar : f.label.en}</th>
                 <td className={`py-2 pe-3 ${changes ? 'text-fg-muted line-through decoration-1' : 'text-fg-muted'}`}>
-                  {workflowValue(f, f.before, locale, t, names)}
+                  <DiffValue field={f} value={f.before} t={t} locale={locale} names={names} />
                 </td>
                 <td className={`py-2 ${changes ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
-                  {workflowValue(f, f.after, locale, t, names)}
+                  <DiffValue field={f} value={f.after} t={t} locale={locale} names={names} />
                 </td>
               </tr>
             );

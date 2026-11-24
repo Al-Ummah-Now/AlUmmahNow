@@ -30,6 +30,8 @@ export interface WorkflowRuleInForce {
   version: number;
   config: WorkflowRuleConfig;
   floor: WorkflowFloor;
+  /** May the signed-in admin propose a change to this rule (admin-api's own check) */
+  canEdit?: boolean;
 }
 
 export interface WorkflowActionInfo {
