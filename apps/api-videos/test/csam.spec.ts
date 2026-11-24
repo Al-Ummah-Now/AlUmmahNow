@@ -27,6 +27,7 @@ import { CHUNK_BYTES, EvidenceKeyError, openChunk, parseEvidenceKeys, sealChunk 
 import { resolveCsamUrl } from '../src/lib/csam/resolve';
 import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../src/lib/csam/imageOwners';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
+import { AuthDb } from './auth-db';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const PLACEHOLDER = 'SYNTHETIC-PLACEHOLDER-NOT-AN-IMAGE';
@@ -425,6 +426,20 @@ describe('taking a video down', () => {
 		await t.drain();
 		assert.equal((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'succeeded');
 		assert.equal(t.env.videos.read('vid-synth-01'), null);
+	});
+});
+
+describe('the accounts behind the uploaders', () => {
+	it('reads them by user id, deleted ones that are not purged yet included and marked', async () => {
+		const t = setup();
+		const auth = new AuthDb({ usr_live: 'Live@Example.test' }).add('usr_deleted', 'deleted@example.test', { status: 'deleted', deletedAt: 1 });
+		(t.env as Record<string, unknown>).AUTH_DB = auth;
+		const res = await t.json('POST', '/accounts', { ids: ['usr_live', 'usr_deleted', 'usr_purged'] });
+		assert.deepEqual(res.body.result, { accounts: { usr_live: { email: 'live@example.test', deleted: false }, usr_deleted: { email: 'deleted@example.test', deleted: true } } });
+		assert.deepEqual(auth.plans().filter((p) => !/^SEARCH users USING INDEX sqlite_autoindex_users_1 \(id=\?\)/.test(p)), [], 'primary key only');
+		assert.equal((await t.json('POST', '/accounts', { ids: [] })).status, 400);
+		auth.fail = true;
+		assert.equal((await t.json('POST', '/accounts', { ids: ['usr_live'] })).status, 503);
 	});
 });
 

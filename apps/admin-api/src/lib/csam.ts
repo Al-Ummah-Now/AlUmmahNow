@@ -17,6 +17,7 @@ import {
   type AdminUserDetail,
   type AdminVideoDetail,
   type CsamAccessAction,
+  type CsamAccounts,
   type CsamAccessLogEntry,
   type CsamAuthRequestState,
   type CsamCaseDetail,
@@ -243,6 +244,23 @@ export async function listCases(env: CsamEnv, query: { status?: string; limit?: 
   return (results ?? []).map((r) => summaryOf(r, days));
 }
 
+/**
+ * The uploader's email as the report states it: their sign-in account's, read by user id, also when the
+ * account was deleted and is not purged yet. Never the profile's copy.
+ */
+async function uploaderAccount(env: CsamEnv, userId: string | null): Promise<Pick<CsamReportFacts['uploader'], 'email' | 'emailSource'>> {
+  if (!userId) return { email: null, emailSource: null };
+  try {
+    const { accounts } = await callVideos<CsamAccounts>(env, '/accounts', { ...csam, method: 'POST', json: { ids: [userId] } });
+    const account = accounts[userId];
+    if (!account) return { email: null, emailSource: 'none' };
+    return { email: account.email, emailSource: account.deleted ? 'deleted_account' : 'auth' };
+  } catch (error) {
+    logger.warn('[CSAM] Could not read the uploader account for the report facts', { error: error instanceof Error ? error.message : String(error) });
+    return { email: null, emailSource: 'unavailable' };
+  }
+}
+
 /** What the CyberTipline asks for, read from the records while they still exist. */
 async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string, r: CsamResolution | null): Promise<CsamReportFacts> {
   const quiet = async <T>(path: string): Promise<T | null> => {
@@ -256,6 +274,7 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
   const user = r?.uploaderId ? await quiet<AdminUserDetail>(`/users/${encodeURIComponent(r.uploaderId)}`) : null;
   const channel = r?.channelId ? await quiet<AdminChannelDetail>(`/channels/${encodeURIComponent(r.channelId)}`) : null;
   const video = r?.videoId ? await quiet<AdminVideoDetail>(`/videos/${encodeURIComponent(r.videoId)}`) : null;
+  const account = await uploaderAccount(env, r?.uploaderId ?? null);
   return {
     matchedUrl,
     detectedAt,
@@ -265,9 +284,7 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
     uploadedAt: video?.createdAt ?? null,
     uploader: {
       userId: r?.uploaderId ?? null,
-      // The sign-in account's, read by user id (api-videos userDetail); never the profile's copy
-      email: user?.emailSource === 'auth' ? user.email : null,
-      emailSource: user ? (user.emailSource ?? 'unavailable') : r?.uploaderId ? 'unavailable' : null,
+      ...account,
       displayName: user?.displayName ?? null,
       handle: user?.userName ?? null,
       channelId: r?.channelId ?? null,

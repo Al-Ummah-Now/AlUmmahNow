@@ -123,7 +123,7 @@ The case is flagged on the Errors page as `csam:<caseId>`, "Report to the NCMEC 
    - the matched URL;
    - when it was detected (UTC);
    - the item kind and id, and when it was uploaded;
-   - the uploader: account id, email, display name, handle, channel id and name.
+   - the uploader: account id, email, display name, handle, channel id and name. The email is the sign-in account's, read by user id, with its source (`auth`, `deleted_account` for an account deleted but not purged yet, `none`, `unavailable`).
    - The platform does not collect IP addresses, so that field says so for the reporter to state.
 3. **Files.** The evidence list (names, sizes, types). The reporter attaches the files the form asks for from the downloads (step-up, audited).
 4. **Confirm the report.** "Reported" asks for the CyberTipline report ID and the time it was sent. This sets the case to `reported`, starts the retention clock and resolves the `csam:<caseId>` flag.

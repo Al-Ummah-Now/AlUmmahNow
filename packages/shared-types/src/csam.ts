@@ -78,6 +78,11 @@ export interface CsamEvidenceManifest {
 }
 
 /** Facts the CyberTipline report asks for (§ 2258A(b)), pre-filled on the case checklist. */
+/** Accounts by user id for a case's report facts, deleted ones that are not purged yet included (POST /internal/csam/accounts). */
+export interface CsamAccounts {
+  accounts: Record<string, { email: string; deleted: boolean }>;
+}
+
 export interface CsamReportFacts {
   matchedUrl: string;
   detectedAt: string;
@@ -89,7 +94,7 @@ export interface CsamReportFacts {
     userId: string | null;
     /** The sign-in account's email, read by user id when the case was captured */
     email: string | null;
-    /** Where `email` is from; absent on older cases */
+    /** Where `email` is from (`deleted_account`: the account was deleted before the capture); absent on older cases */
     emailSource?: AccountEmailSource | null;
     displayName: string | null;
     handle: string | null;

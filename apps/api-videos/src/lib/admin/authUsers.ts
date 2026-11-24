@@ -26,6 +26,8 @@ export const AUTH_EMAIL_BY_ID_SQL = 'SELECT email FROM users WHERE id = ? AND de
 export const AUTH_USER_BY_EMAIL_SQL = 'SELECT id, email, name, status FROM users WHERE lower(email) = ? AND deleted_at IS NULL LIMIT 1';
 export const authEmailsByIdsSql = (n: number) => `SELECT id, email FROM users WHERE id IN (${Array(n).fill('?').join(', ')}) AND deleted_at IS NULL`;
 
+export const authAccountsByIdsSql = (n: number) => `SELECT id, email, deleted_at FROM users WHERE id IN (${Array(n).fill('?').join(', ')})`;
+
 /** Ids per batched lookup. */
 export const AUTH_IDS_PER_QUERY = 50;
 
@@ -58,6 +60,23 @@ export async function authEmails(env: object, userIds: string[]): Promise<Map<st
 		for (const row of await query<{ id: string; email: string | null }>(env, authEmailsByIdsSql(chunk.length), chunk)) {
 			const email = normalizeEmail(row.email);
 			if (email) out.set(row.id, email);
+		}
+	}
+	return out;
+}
+
+/**
+ * User id → account, deleted ones that are not purged yet (30 days) included. For the CSAM report facts
+ * only: they identify the uploader even after the account was deleted. Throws 503 when Auth cannot be read.
+ */
+export async function authAccountsWithDeleted(env: object, userIds: string[]): Promise<Map<string, { email: string; deleted: boolean }>> {
+	const ids = [...new Set(userIds.filter(Boolean))];
+	const out = new Map<string, { email: string; deleted: boolean }>();
+	for (let i = 0; i < ids.length; i += AUTH_IDS_PER_QUERY) {
+		const chunk = ids.slice(i, i + AUTH_IDS_PER_QUERY);
+		for (const row of await query<{ id: string; email: string | null; deleted_at: number | null }>(env, authAccountsByIdsSql(chunk.length), chunk)) {
+			const email = normalizeEmail(row.email);
+			if (email) out.set(row.id, { email, deleted: row.deleted_at !== null });
 		}
 	}
 	return out;
