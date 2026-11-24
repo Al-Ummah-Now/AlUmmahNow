@@ -17,6 +17,7 @@ import {
 import { toCommentListItems } from "../../lib/commentAuthors";
 import { reactorId } from "../../lib/reactions";
 import { commentSettingsOf } from "../../lib/contentFlags";
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 const CommentAuthorSchema = z.object({
 	userId: z.string(),
@@ -106,7 +107,7 @@ export class CommentList extends OptionalAuthRoute {
 		const repository = new R2Repository<VideoType>(c.env.videos);
 		const video = await repository.getObject(id);
 
-		if (!video || isVideoRemoved(video) || (isRestrictedVideo(video) && (!userId || video.userId !== userId))) {
+		if (!video || isVideoRemoved(video) || (await isClosedTo(c.env, video, userId))) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 

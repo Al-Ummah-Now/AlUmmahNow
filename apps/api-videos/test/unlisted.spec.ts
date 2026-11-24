@@ -28,7 +28,7 @@ describe('visibility helpers', () => {
 	it('keeps unlisted videos out of every list but open by link', () => {
 		const unlisted = videoFixture({ isPublic: false, isUnlisted: true });
 		assert.equal(isVideoPubliclyVisible(unlisted), false);
-		assert.equal(isVideoListedFor(unlisted, 'someone-else'), false);
+		assert.equal(isVideoListedFor(unlisted, false), false);
 		assert.equal(isRestrictedVideo(unlisted), false);
 		assert.equal(isRestrictedVideo(videoFixture({ isPublic: false })), true);
 		assert.equal(isRestrictedVideo(videoFixture({ isPublic: true })), false);

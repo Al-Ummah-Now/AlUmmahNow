@@ -14,9 +14,10 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
-import { canViewVideo, VideoType } from "../../lib/playlists";
+import type { VideoType } from "../../lib/playlists";
 import { isPostSaved, listLikedIds, listSavedPostIds, pruneLikes, savePost, toLibraryVideoViews, unsavePost } from "../../lib/library";
 import { ResponseError } from "../../lib/types";
+import { videoViewer } from '../../lib/videoViewer';
 
 const OptionalChannelHeader = z.object({ channelId: Str({ description: "Active channel ID" }).optional().nullable() });
 const PageQuery = z.object({
@@ -48,6 +49,7 @@ export class LikedVideosList extends AuthenticatedRoute {
 		const videoRepo = new R2Repository<VideoType>(c.env.videos);
 		const videos = await Promise.all(page.items.map((i) => videoRepo.getObject(i.videoId)));
 
+		const sees = videoViewer({ channels: c.env.channels }, userId);
 		const missing: string[] = [];
 		const visible: VideoType[] = [];
 		const likedAt = new Map<string, number>();
@@ -57,7 +59,7 @@ export class LikedVideosList extends AuthenticatedRoute {
 				missing.push(page.items[i].videoId);
 				continue;
 			}
-			if (!canViewVideo(video, userId)) continue;
+			if (!(await sees(video as never))) continue;
 			visible.push(video);
 			likedAt.set(video.id, page.items[i].likedAt);
 		}

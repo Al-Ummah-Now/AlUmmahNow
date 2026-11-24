@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { createTusRouter, clearTusSessionCache } from '../src/endpoints/video/tus/tusProxy';
 import { UploadResumeEndpoint } from '../src/endpoints/video/uploadResume';
 import { MessageType } from '../src/lib/queue';
+import { markUploadComplete } from '../src/lib/uploads/lifecycle';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
 const CHUNK = 1024;
@@ -270,6 +271,77 @@ describe('TUS proxy resilience', () => {
 		h.videos.store.delete('vid');
 		assert.equal((await h.post()).status, 404);
 		assert.equal(bunny.uploads, 0, 'Bunny never asked');
+	});
+
+	it('follows the channel of now: one that moved, or a role taken away, ends the upload at every step', async () => {
+		const h = harness();
+		const { patch, head } = h;
+		const channel = (value: unknown) => (h.env as any).channels.store.set('ch', JSON.stringify(value));
+		(h.env as any).channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+		const id = await created(h);
+		assert.equal((await patch(id, 0)).status, 204, 'the owner uploads');
+		const closed = async (name: string) => {
+			assert.equal((await head(id)).status, 404, `${name}: HEAD`);
+			assert.equal((await patch(id, CHUNK)).status, 404, `${name}: PATCH`);
+			assert.equal((await h.post()).status, 404, `${name}: POST`);
+		};
+		channel({ id: 'ch', userId: 'bob' });
+		await closed('moved');
+		channel({ id: 'ch', userId: 'bob', members: [{ userId: 'alice', role: 'moderator' }] });
+		await closed('a role that may not upload');
+		channel({ id: 'ch', userId: 'bob', members: [{ userId: 'alice', role: 'editor' }] });
+		assert.equal((await head(id)).status, 200, 'a role that may');
+		// Unreadable: retried, never "gone"
+		const get = (h.env as any).channels.get;
+		(h.env as any).channels.get = async () => { throw new Error('R2 down'); };
+		assert.equal((await head(id)).status, 423);
+		assert.equal((await patch(id, CHUNK)).status, 503);
+		assert.equal((await h.post()).status, 503);
+		(h.env as any).channels.get = get;
+		assert.equal((await patch(id, CHUNK)).status, 204);
+		// Moves with the last chunk on its way: stored by then, but the video never turns complete
+		assert.equal((await patch(id, 2 * CHUNK)).status, 204);
+		const bunny = globalThis.fetch;
+		globalThis.fetch = (async (url: any, init: any) => {
+			const res = await bunny(url, init);
+			if (init?.method === 'PATCH') channel({ id: 'ch', userId: 'bob' });
+			return res;
+		}) as typeof fetch;
+		assert.equal((await patch(id, 3 * CHUNK)).status, 404);
+		globalThis.fetch = bunny;
+		assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
+		assert.equal(h.queue.messages.length, 0, 'nothing is processed');
+	});
+
+	it('an admin\'s import needs no role on the channel, from before the mark too', async () => {
+		const h = harness('admin');
+		(h.env as any).channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+		const session = JSON.parse(h.kv.data.get('tus:session:s1')!);
+		h.kv.data.set('tus:session:s1', JSON.stringify({ ...session, userId: 'admin' }));
+		assert.equal((await h.post()).status, 404, 'not an import');
+		h.kv.data.set('tus:session:s1', JSON.stringify({ ...session, userId: 'admin', adminImport: true }));
+		const id = await created(h);
+		const head = () => h.head(id);
+		assert.equal((await head()).status, 200);
+		assert.equal(h.videos.read('vid').tusUpload.adminImport, true);
+		// An upload created before the mark: its initiate session says so
+		const key = `tus:upload:${id.split('.')[0]}`;
+		const { adminImport: _mark, ...old } = JSON.parse(h.kv.data.get(key)!);
+		h.kv.data.set(key, JSON.stringify(old));
+		clearTusSessionCache();
+		assert.equal((await head()).status, 200);
+	});
+
+	it('a removed or stopped upload is not brought back by late bytes', async () => {
+		for (const gone of [{ isDeleted: true }, { abandoned: { at: 'x', reason: 'r', by: 'b', bunnyDeleted: true } }]) {
+			const h = harness();
+			(h.env as any).channels = new MemoryBucket({ ch: { id: 'ch', userId: 'alice' } });
+			const id = await created(h);
+			h.videos.store.set('vid', JSON.stringify({ ...h.videos.read('vid'), ...gone }));
+			assert.equal((await h.head(id)).status, 404);
+			assert.equal(await markUploadComplete(h.env as never, { videoId: 'vid', userId: 'alice', fileSize: SIZE }), false);
+			assert.equal(h.videos.read('vid').uploadStatus, 'uploading');
+		}
 	});
 
 	it('an upload id of another video or another user is refused', async () => {

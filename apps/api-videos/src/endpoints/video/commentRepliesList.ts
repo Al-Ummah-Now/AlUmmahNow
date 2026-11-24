@@ -18,6 +18,7 @@ import {
 import { toCommentListItems } from "../../lib/commentAuthors";
 import { reactorId } from "../../lib/reactions";
 import { CommentListItemSchema } from "./commentList";
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 /**
  * GET /api/videos/:id/comments/:cid/replies
@@ -72,7 +73,7 @@ export class CommentRepliesList extends OptionalAuthRoute {
 
 		type VideoType = z.infer<typeof Video>;
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(id);
-		if (!video || isVideoRemoved(video) || (isRestrictedVideo(video) && (!userId || video.userId !== userId))) {
+		if (!video || isVideoRemoved(video) || (await isClosedTo(c.env, video, userId))) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 

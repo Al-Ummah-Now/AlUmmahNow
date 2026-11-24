@@ -409,7 +409,7 @@ describe('taking a video down', () => {
 			assert.deepEqual(env.playlists.read('pl1').videos, ['other'], `complete ${complete}`);
 			assert.deepEqual(env.channel_sections.read('chan-synth-01/s1.json').videoIds, ['other']);
 			const jobs = t.db.db.prepare("SELECT status, params FROM admin_jobs WHERE kind = 'video.purge'").all() as Array<{ status: string; params: string }>;
-			assert.deepEqual(jobs.map((j) => [j.status, JSON.parse(j.params).channelId]), complete ? [] : [['succeeded', 'chan-synth-01']]);
+			assert.deepEqual(jobs.map((j) => [j.status, JSON.parse(j.params).channelId, JSON.parse(j.params).referencesOnly]), complete ? [] : [['succeeded', 'chan-synth-01', true]], 'the media is gone by then: only the references');
 		}
 	});
 

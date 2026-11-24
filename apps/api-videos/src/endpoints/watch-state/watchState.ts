@@ -15,10 +15,11 @@ import type { AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
 import { logger } from '../../lib/logger';
-import { canViewVideo, type VideoType } from '../../lib/playlists';
+import type { VideoType } from '../../lib/playlists';
 import { isWatchHistoryPaused, queueWatchHistoryEvent, resolveVideoChannelName, withChannelNames } from '../../lib/watch-history';
 import { COMPLETED_PERCENT, applyWatchState, changesSince, isContinueWatching, toWatchState } from '../../lib/watch-state';
 import { listUserWatchHistory } from '../watch-history/user-entries';
+import { videoViewer } from '../../lib/videoViewer';
 
 const WatchStateSchema = z.object({
 	videoId: z.string(),
@@ -85,7 +86,7 @@ export class WatchStatePut extends AuthenticatedRoute {
 		if (existing && (await kidsVideo(c.env, videoId))) return c.json({ applied: false, paused: false, state: toWatchState(existing) });
 		if (!existing) {
 			const video = (await new R2Repository<VideoType>(c.env.videos).getObject(videoId)) as any;
-			if (!video || !canViewVideo(video, userId)) return c.json({ error: 'Video not found' }, 404);
+			if (!video || !(await videoViewer({ channels: c.env.channels }, userId)(video))) return c.json({ error: 'Video not found' }, 404);
 			if (await kidsRulesApply(c.env, video)) return c.json({ applied: false, paused: false, state: null });
 			initial = {
 				id,
@@ -238,13 +239,15 @@ export class ContinueWatchingList extends AuthenticatedRoute {
 
 		const videos = new R2Repository<VideoType>(c.env.videos);
 		const kept: Array<{ entry: WatchHistoryEntry; video: any }> = [];
+		const sees = videoViewer({ channels: c.env.channels }, userId);
 		// Read in small batches until the row is full
 		for (let i = 0; i < candidates.length && kept.length < query.limit; i += query.limit) {
 			const batch = candidates.slice(i, i + query.limit);
 			const found = await Promise.all(batch.map((e) => videos.getObject(e.videoId).catch(() => null)));
+			const shown = await Promise.all(found.map((video) => sees(video as never)));
 			batch.forEach((entry, j) => {
 				const video = found[j] as any;
-				if (video && canViewVideo(video, userId) && kept.length < query.limit) kept.push({ entry, video });
+				if (shown[j] && kept.length < query.limit) kept.push({ entry, video });
 			});
 		}
 

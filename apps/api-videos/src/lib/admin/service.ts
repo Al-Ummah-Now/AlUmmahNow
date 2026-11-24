@@ -17,6 +17,8 @@ import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
 import {
 	applySuspensionHold,
+	can,
+	channelRoleOf,
 	channelHold,
 	deletedChannelHold,
 	deletedUserHold,
@@ -54,6 +56,10 @@ import { bunnyClientForVideo, type LibraryHints } from '../bunny/libraries';
 import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsForUser, userCollectionName } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
+import { deleteOriginal } from '../media/originals';
+import { moveOutcomeOfRow } from '../channelMoveOutcome';
+import { releaseClaimFor } from '../uploads/initiateOnce';
+import { refundUploadSession } from '../../middleware/upload-limits';
 import { channelPlaylistIds, countChannelPlaylists } from '../channelPlaylists';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
@@ -1053,13 +1059,10 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 		for (const row of page) {
 			if (seen.has(row.target_id)) continue;
 			try {
-				const skipped = !!(row.result && (JSON.parse(row.result) as { skipped?: string }).skipped);
-				if (!skipped) seen.add(row.target_id);
 				const params = JSON.parse(row.params || '{}') as { newOwnerId: string; previousOwnerId: string | null };
 				const channel = await repo(env.channels).getObject(row.target_id);
-				// Stopped, or skipped before the owner changed: the move before it is still the channel's latest.
-				// One skipped after (a retry that found the channel deleted) did move it
-				if (skipped && channel?.userId !== params.newOwnerId) continue;
+				// One that did not take the channel (lib/channelMoveOutcome.ts): the move before it is still the channel's latest
+				if (moveOutcomeOfRow({ status: 'succeeded', params: row.params, result: row.result }, channel) !== 'moved') continue;
 				seen.add(row.target_id);
 				// Deleted, or no longer on this move's new owner (moved on, or back): nothing to check
 				if (!channel || channel.isDeleted || channel.userId !== params.newOwnerId || !params.previousOwnerId) continue;
@@ -1220,8 +1223,89 @@ async function endLeftSessions(env: AdminServiceEnv, channelId: string, to: stri
 	}
 }
 
-/** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
+/** An upload whose file has not arrived: started, or asked to be uploaded again. An admin's import is not the owner's upload. */
+function isUnfinishedUpload(v: Row): boolean {
+	if (v.isDeleted || v.abandoned || v.tusUpload?.adminImport) return false;
+	return v.uploadStatus === 'initiated' || v.uploadStatus === 'uploading' || (v.uploadStatus === 'failed' && v.processingIssue?.kind === 'needs_reupload');
+}
+
+/** The same end the upload reaper gives an upload nobody finishes (lib/uploads/reaper.ts): every upload path refuses it. */
+function stopUpload(v: Row, by: string): void {
+	const at = now();
+	v.abandoned = { at, reason: 'The channel moved to another account', by, bunnyDeleted: false };
+	v.isDeleted = true;
+	v.deletedAt = at;
+	v.uploadStatus = 'failed';
+	delete v.tusUpload;
+}
+
+/** What arrived of stopped uploads goes: our own parts, Bunny's copy, the file's claim. Marked done per video, so a retry does the rest. */
+async function discardUploads(env: AdminServiceEnv, ids: string[], uploaderId: string | null): Promise<{ done: number; failed: number }> {
+	let done = 0;
+	let failed = 0;
+	await eachLimited(ids, 4, async (id) => {
+		try {
+			const video = await repo(env.videos).getObject(id);
+			if (!video?.abandoned) return;
+			await deleteOriginal(env as never, id);
+			const ref = bunnyRef(video as never);
+			if (ref) {
+				const b = await bunny(env, video);
+				if (!b) throw new Error('Bunny Stream is unavailable');
+				try {
+					await b.client.deleteVideo(b.libraryId, ref);
+				} catch (error) {
+					// Already gone from Bunny
+					if (!/status: 404/.test(error instanceof Error ? error.message : String(error))) throw error;
+				}
+			}
+			if (video.uploadFingerprint && env.global_settings) await releaseClaimFor(env.global_settings as never, video.uploadFingerprint, id);
+			const marked = await repo(env.videos).updateObject(id, (fresh) => {
+				if (!fresh.abandoned || fresh.abandoned.bunnyDeleted === true) return false;
+				fresh.abandoned.bunnyDeleted = true;
+				return true;
+			});
+			// The stopped upload gives its session back to the account it was counted against
+			if (marked && uploaderId) await refundUploadSession(env.SEARCH_DB as D1Database | undefined, uploaderId, video.dateCreated, { source: 'sweep' }).catch(() => false);
+			done++;
+		} catch (error) {
+			failed++;
+			logger.warn('[Admin] A stopped upload could not be discarded yet', { videoId: id, error: error instanceof Error ? error.message : String(error) });
+		}
+	});
+	return { done, failed };
+}
+
+/** Whether a move took the channel to its new owner on any attempt, as far as this run knows (null: cannot say). */
+interface MoveState {
+	changedHands: boolean | null;
+}
+
+/**
+ * Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. Every exit says
+ * whether the channel changed hands (lib/channelMoveOutcome.ts): on the result, or, when a step fails,
+ * on the job's row, which a job that gives up keeps.
+ */
 async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	// What an earlier run of this job already knew
+	const state: MoveState = { changedHands: job.result?.changedHands === true ? true : null };
+	try {
+		const outcome = await transferSteps(env, job, state);
+		return 'params' in outcome ? outcome : { ...outcome, result: { ...outcome.result, changedHands: state.changedHands } };
+	} catch (error) {
+		// Best effort: a job without the field counts as one that may have moved
+		if (state.changedHands !== null)
+			await (env.SEARCH_DB as D1Database | undefined)
+				// A "no" never replaces what another delivery of this job wrote
+				?.prepare(state.changedHands ? 'UPDATE admin_jobs SET result = ? WHERE id = ?' : 'UPDATE admin_jobs SET result = ? WHERE id = ? AND result IS NULL')
+				.bind(JSON.stringify({ changedHands: state.changedHands }), job.id)
+				.run()
+				.catch((e: unknown) => logger.warn('[Admin] Could not note on a move whether it changed hands', { jobId: job.id, error: e instanceof Error ? e.message : String(e) }));
+		throw error;
+	}
+}
+
+async function transferSteps(env: AdminServiceEnv, job: AdminJob, state: MoveState): Promise<JobOutcome> {
 	const id = job.targetId;
 	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin, offerId } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean; offerId?: string };
 	let stopped = false;
@@ -1234,6 +1318,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		return { done: true, result: { skipped } };
 	};
 	const before = await repo(env.channels).getObject(id);
+	// Gone: an earlier run of this job may have moved it first
+	if (before && state.changedHands === null) state.changedHands = before.userId === newOwnerId;
 	// Before anything that can fail: a move with nothing to do never ends as a failed job
 	if (!before || before.isDeleted) return skip(before ? 'channel_deleted' : 'channel_not_found');
 	if (stops(before)) return skip('stopped');
@@ -1249,6 +1335,12 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (await channelIsLive(env, id)) throw new Error('channel_is_live: the move waits for the broadcast to end');
 		// Support set up after the request: support never moves with a channel unless an admin decides (CC-D10)
 		if (await channelHasSupport(env, id)) throw new Error('channel_has_support: support was set up after the move was requested');
+	}
+	// From here a failure cannot tell whether the write landed: unknown until it answers, and an earlier
+	// run's "no" goes first
+	if (state.changedHands === false) {
+		state.changedHands = null;
+		await (env.SEARCH_DB as D1Database | undefined)?.prepare('UPDATE admin_jobs SET result = NULL WHERE id = ?').bind(job.id).run();
 	}
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		stopped = false;
@@ -1277,6 +1369,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.dateModified = now();
 		return true;
 	});
+	if (saved && state.changedHands === null) state.changedHands = saved.userId === newOwnerId;
 	if (stopped) return skip('stopped');
 	if (!saved || saved.isDeleted) return skip(saved ? 'channel_deleted' : 'channel_not_found');
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
@@ -1295,15 +1388,30 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	// Only records on the previous owner move; any other owner is an anomaly, left and counted.
 	const videoIds = await idsOf(env, 'video', { channelId: id }, { includeDeleted: true });
 	let anomalies = 0;
+	// The previous owner's own unfinished uploads stop with the move, in the write that moves the record;
+	// one who stays on the team with the right to upload goes on as a member
+	const uploadsOn = !!previousOwnerId && can(channelRoleOf(saved as never, previousOwnerId), 'video.upload');
+	const stopMark = `channel-move:${job.id}`;
+	const stoppedUploads = new Set<string>();
 	const videos = await cascade(env.videos, videoIds, (v) => {
+		stoppedUploads.delete(v.id);
+		if (v.abandoned?.by === stopMark && v.abandoned.bunnyDeleted !== true) stoppedUploads.add(v.id);
 		if (v.userId === newOwnerId) return false;
 		if (previousOwnerId && v.userId !== previousOwnerId) {
 			anomalies++;
 			return false;
 		}
 		v.userId = newOwnerId;
+		if (previousOwnerId && !v.uploadedBy && isUnfinishedUpload(v)) {
+			if (uploadsOn) v.uploadedBy = previousOwnerId;
+			else {
+				stopUpload(v, stopMark);
+				stoppedUploads.add(v.id);
+			}
+		}
 		return true;
 	});
+	const discarded = await discardUploads(env, [...stoppedUploads], previousOwnerId);
 	const schedules = await moveScheduleEntries(env, videoIds, previousOwnerId, newOwnerId);
 	const live = await moveLiveStreams(env, id, previousOwnerId, newOwnerId);
 	const playlists = await cascade(env.playlists, await channelPlaylistIds(env, id), (p) => {
@@ -1316,8 +1424,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	// The new owner was erased meanwhile (their profile goes before the erasure's last look at their subscriptions)
 	if (subscriptions && !(await repo(env.profiles).getObject(newOwnerId))) await eraseUserSubscriptions(env.NOTIFICATIONS_DB as D1Database, newOwnerId);
 	const invitesCancelled = await cancelInvitesToNewOwner(env, id, newOwnerId, newOwnerEmail);
-	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
-	const result = { videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, subscriptions, invitesCancelled, anomalies, previousOwnerId };
+	const failed = videos.failed + discarded.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
+	const result = { videos: videos.changed, uploadsStopped: discarded.done, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, subscriptions, invitesCancelled, anomalies, previousOwnerId };
 	if (failed === 0) {
 		const problems = await verifyTransfer(env, id, previousOwnerId, newOwnerId, videoIds);
 		if (problems.length) throw new Error(`Channel move verify found records on the previous owner (${problems.join(', ')}); retrying`);
@@ -1426,7 +1534,7 @@ export async function purgeVideoForCsam(env: AdminServiceEnv, videoId: string, c
 		await dropVideoReferences(env as never, videoId, channel);
 	} catch (error) {
 		logger.warn('[Admin] References of a taken-down video are left to its purge job', { videoId, error: error instanceof Error ? error.message : String(error) });
-		await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: videoId, actorId: 'system', params: { userId: null, channelId: channel } });
+		await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: videoId, actorId: 'system', params: { userId: null, channelId: channel, referencesOnly: true } });
 	}
 }
 
@@ -1833,6 +1941,11 @@ export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Ro
 async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const video = await repo(env.videos).getObject(job.targetId);
 	if (video && video.isDeleted !== true) return { done: true, result: { skipped: 'video_not_deleted' } };
+	// What a takedown left (purgeVideoForCsam): the media is gone already, only the references remain
+	if (job.params.referencesOnly === true) {
+		await dropVideoReferences(env as never, job.targetId, (job.params.channelId as string | null) ?? null);
+		return { done: true };
+	}
 	await purgeVideo(env, job.targetId, { userId: job.params.userId, channelId: job.params.channelId }, undefined, { strict: true });
 	return { done: true };
 }

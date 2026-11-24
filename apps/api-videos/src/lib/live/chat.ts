@@ -20,7 +20,7 @@ import {
 	type LiveChatSettings,
 	type LiveStreamVisibility,
 } from '@al-ummah/shared-types';
-import { roleOnRecord, type ChannelAccessEnv } from '../channelAccess';
+import { ownerOfRecord, roleOnRecord, type ChannelAccessEnv } from '../channelAccess';
 import { cachedBan } from '../admin/bans';
 import { isBlocked } from '../channelComments/blocks';
 import { channelOwnerTier } from '../creatorTiers';
@@ -281,14 +281,16 @@ const tierMemo = new Map<string, { at: number; allowed: boolean }>();
 export const forgetChatTiers = () => tierMemo.clear();
 
 /** The channel owner's tier includes chat (remembered a minute per isolate). Fails closed. */
-export async function ownerTierHasChat(db: D1Database, stream: ChatStream, now = Date.now()): Promise<boolean> {
-	if (!stream.ownerId) return false;
-	const known = tierMemo.get(stream.ownerId);
+export async function ownerTierHasChat(env: ChannelAccessEnv & { SEARCH_DB?: unknown }, stream: ChatStream, now = Date.now()): Promise<boolean> {
+	const key = stream.channelId ? `channel:${stream.channelId}` : stream.ownerId;
+	if (!key) return false;
+	const known = tierMemo.get(key);
 	if (known && now - known.at < TIER_MEMO_MS) return known.allowed;
 	try {
-		const allowed = tierAllowsLiveCapability(await channelOwnerTier(db, stream.ownerId), 'liveChat');
+		const ownerId = await ownerOfRecord(env, { userId: stream.ownerId, channelId: stream.channelId });
+		const allowed = !!ownerId && tierAllowsLiveCapability(await channelOwnerTier(env.SEARCH_DB as D1Database, ownerId), 'liveChat');
 		if (tierMemo.size > 500) tierMemo.clear();
-		tierMemo.set(stream.ownerId, { at: now, allowed });
+		tierMemo.set(key, { at: now, allowed });
 		return allowed;
 	} catch (error) {
 		logger.warn('[LiveChat] Owner tier not read; chat closed for now', { streamId: stream.id, error: error instanceof Error ? error.message : String(error) });

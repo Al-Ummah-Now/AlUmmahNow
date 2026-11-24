@@ -12,6 +12,7 @@ import { normalizeEmbedOrigin } from "../../lib/embed-origin";
 import { countView } from "../../lib/view-counter";
 import { logger } from "../../lib/logger";
 import { rankExclusion, viewerKey } from "../../lib/ranking/viewer";
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 export class VideoView extends OptionalAuthRoute {
 	schema = {
@@ -123,7 +124,7 @@ export class VideoView extends OptionalAuthRoute {
 		}
 
 		// Check privacy permissions
-		if (isRestrictedVideo(video) && (!userId || video.userId !== userId)) {
+		if (await isClosedTo(c.env, video, userId)) {
 			return c.json({
 				success: false,
 				error: "Video not found", // Don't reveal that private video exists

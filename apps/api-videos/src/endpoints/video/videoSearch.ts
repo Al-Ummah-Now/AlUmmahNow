@@ -16,6 +16,7 @@ import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { channelNameFields } from '../../lib/channelName';
 import { publicCommentsCount } from '../../lib/comments';
+import { memoChannels, ownsRecord } from '../../lib/channelAccess';
 
 /** Videos loaded for a channel or owner search (one R2 get each, below the subrequest limit). */
 const INDEXED_CANDIDATES = 500;
@@ -172,7 +173,7 @@ export class VideoSearch extends OptionalAuthRoute {
 		const indexedIds = channelIdList.length > 0
 			? await channelsVideoIds(c.env as never, channelIdList, INDEXED_CANDIDATES)
 			: isOwner && userId
-				? await ownerContentIds(c.env as never, 'video', userId, undefined, INDEXED_CANDIDATES)
+				? await ownerContentIds(c.env as never, 'video', userId, INDEXED_CANDIDATES)
 				: await publicSearchCandidateIds(c.env, query);
 		let videos: { cursor: string; items: VideoType[] };
 		if (indexedIds) {
@@ -199,6 +200,13 @@ export class VideoSearch extends OptionalAuthRoute {
 		// Prepare for search scoring
 		const searchTerms = query ? query.toLowerCase().trim().split(/\s+/) : [];
 		const queryLower = query ? query.toLowerCase() : "";
+
+		// Whose private videos (and, with isOwner, whose videos at all) these are: the owner of the channel now
+		const channelsNow = memoChannels(c.env as never);
+		const theirs = new Set<string>();
+		await Promise.all((videos.items || []).map(async (video) => {
+			if ((isOwner || video.isPublic === false) && !isVideoRemoved(video) && await ownsRecord(channelsNow, video, userId)) theirs.add(video.id);
+		}));
 
 		// Filter and score videos
 		const scoredVideos = (videos.items || [])
@@ -248,9 +256,9 @@ export class VideoSearch extends OptionalAuthRoute {
 					}
 				}
 
-				// If video is private, only show if user owns it
-				if (video.isPublic === false) {
-					return userId && video.userId === userId;
+				// Private videos, and every video of an owner's own search, only to whom they belong
+				if (isOwner || video.isPublic === false) {
+					return theirs.has(video.id);
 				}
 
 				return true;

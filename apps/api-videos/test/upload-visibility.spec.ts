@@ -159,9 +159,8 @@ describe('one listing rule', () => {
 	it('helpers: visitors see public ready videos; the owner also sees their own not-ready ones', () => {
 		for (const v of [processing, uploading]) {
 			assert.equal(isVideoPubliclyVisible(v), false);
-			assert.equal(isVideoListedFor(v, null), false);
-			assert.equal(isVideoListedFor(v, 'someone-else'), false);
-			assert.equal(isVideoListedFor(v, OWNER), true);
+			assert.equal(isVideoListedFor(v, false), false);
+			assert.equal(isVideoListedFor(v, true), true);
 			assert.equal(isDiscoverable(v), false);
 		}
 		for (const v of [ready, legacy]) {
@@ -169,7 +168,7 @@ describe('one listing rule', () => {
 			assert.equal(isDiscoverable(v), true);
 		}
 		assert.equal(isVideoPubliclyVisible({ ...ready, scheduledPublishStatus: 'scheduled' }), false);
-		assert.equal(isVideoListedFor({ ...ready, isDeleted: true }, OWNER), false);
+		assert.equal(isVideoListedFor({ ...ready, isDeleted: true }, true), false);
 	});
 
 	it('views never carry a thumbnail URL that 404s, nor processing internals', () => {

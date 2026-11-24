@@ -161,7 +161,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
       if (words.length > 0) {
         // Search: the newest entries with their live titles and channel names, filtered, then paged
         const window = userEntries.slice(0, SEARCH_WINDOW);
-        const live = await withLiveVideoFields(c.env.videos, userId, await withChannelNames(c.env.channels, window));
+        const live = await withLiveVideoFields(c.env, userId, await withChannelNames(c.env.channels, window));
         const found = live.filter((entry) => matchesSearch(entry, words));
         const hasMore = endIndex < found.length;
         const response: WatchHistoryResponse & { searched: number } = {
@@ -176,7 +176,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
 
       // Apply pagination
       const paginatedEntries = await withLiveVideoFields(
-        c.env.videos,
+        c.env,
         userId,
         await withChannelNames(c.env.channels, userEntries.slice(startIndex, endIndex)),
       );

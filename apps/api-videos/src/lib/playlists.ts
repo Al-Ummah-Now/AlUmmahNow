@@ -1,4 +1,3 @@
-import { isVideoListedFor } from './visibility';
 import { playlistSortOf } from '@al-ummah/shared-types';
 /**
  * Playlist helpers shared by playlist endpoints.
@@ -89,15 +88,6 @@ export function canOpenPlaylist(playlist: PlaylistType, userId?: string | null):
 export function canViewPlaylist(playlist: PlaylistType, userId?: string | null): boolean {
     if (playlist.isDeleted || playlist.isHidden) return false;
     if (playlist.isPublic === false) return !!userId && playlist.userId === userId && (isPersonalPlaylist(playlist) || isWatchLaterRecord(playlist));
-    return true;
-}
-
-/**
- * Whether a video inside a playlist may be shown to the requesting user.
- * Deleted/hidden videos are never shown; private videos only to their owner.
- */
-export function canViewVideo(video: VideoType, userId?: string | null): boolean {
-    if (!isVideoListedFor(video, userId)) return false;
     return true;
 }
 

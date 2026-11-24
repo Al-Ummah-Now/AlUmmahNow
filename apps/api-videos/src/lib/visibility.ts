@@ -32,14 +32,13 @@ export type VisibilityFields = VideoVisibilityFields;
 export const isInternalRecord = isInternalVideoRecord;
 
 /**
- * Listing rule with the viewer: everyone sees publicly visible videos; the
- * owner also sees their own private, scheduled and not-yet-ready videos (shown
- * with their processing status). Removed videos are listed to no one.
+ * Listing rule: everyone sees publicly visible videos; whoever the video is theirs (`mine`: the owner of
+ * its channel now, lib/channelAccess.ts ownsRecord, never the record's own userId) also sees private,
+ * scheduled and not-yet-ready ones (shown with their processing status). Removed videos are listed to no one.
  */
-export function isVideoListedFor(video: VisibilityFields | null | undefined, viewerId: string | null | undefined): boolean {
+export function isVideoListedFor(video: VisibilityFields | null | undefined, mine: boolean): boolean {
 	if (!video || isVideoRemoved(video)) return false;
-	if (viewerId && video.userId === viewerId) return true;
-	return isVideoPubliclyVisible(video);
+	return mine || isVideoPubliclyVisible(video);
 }
 
 /**

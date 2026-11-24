@@ -1,3 +1,4 @@
+import { can, isInternalVideoKey } from '@al-ummah/shared-types';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -6,8 +7,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { rethrowBusy } from "../../lib/r2Repo";
 import { flagNeedsReupload } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
-import { canOnVideo, type AccessVideo } from '../../lib/channelAccess';
-import { isInternalVideoKey } from '@al-ummah/shared-types';
+import { roleOnRecord, type AccessVideo } from '../../lib/channelAccess';
 
 /**
  * The uploader's browser gave up on an upload it cannot finish (after every
@@ -51,16 +51,16 @@ export class UploadFailedEndpoint extends AuthenticatedRoute {
 		const videoId = request.params.videoId;
 		const reason = request.body?.reason?.trim() || 'The upload could not be completed. Upload the video file again.';
 		try {
-			// The owner, or the member who uploaded it (their uploads are owned
+			// The owner of its channel now, or the member who uploaded it (their uploads are owned
 			// by the channel owner, spec §8) while their role still uploads. Only
 			// the uploading browser reports its own failure: another member
 			// cannot flag someone else's upload.
 			const object = isInternalVideoKey(videoId) ? null : await c.env.videos.get(videoId);
 			if (!object) return c.json({ success: false, error: 'Video not found' }, 404);
 			const video = (await object.json()) as AccessVideo;
-			const isOwner = !!video.userId && video.userId === userId;
+			const role = await roleOnRecord(c.env as never, video, userId);
 			const isUploader = !!video.uploadedBy && video.uploadedBy === userId;
-			if (!isOwner && !(isUploader && await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
+			if (role !== 'owner' && !(isUploader && can(role, 'video.upload'))) {
 				return c.json({ success: false, error: 'Forbidden - not your video' }, 403);
 			}
 			const result = await flagNeedsReupload(c.env as never, videoId, { reason, source: 'client', ownerId: video.userId ?? userId });

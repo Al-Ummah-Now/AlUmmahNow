@@ -25,6 +25,21 @@ import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { canManageLiveStream, canManagePlaylist, canOnVideo, maySpeakAs, memoChannels, ownsRecord } from '../src/lib/channelAccess';
 import { CommentDelete } from '../src/endpoints/video/commentDelete';
 import { DeletePostComment } from '../src/endpoints/community/post-comment-delete';
+import { CommentList } from '../src/endpoints/video/commentList';
+import { CommentRepliesList } from '../src/endpoints/video/commentRepliesList';
+import { CommentCreate } from '../src/endpoints/video/commentCreate';
+import { CommentLikeCreate } from '../src/endpoints/video/commentLikeCreate';
+import { VideoView } from '../src/endpoints/video/videoView';
+import { VideoWatchTime } from '../src/endpoints/video/videoWatchTime';
+import { VideoRetention } from '../src/endpoints/video/videoRetention';
+import { VideosList } from '../src/endpoints/video/videoList';
+import { VideoSearch } from '../src/endpoints/video/videoSearch';
+import { VideoScheduleList } from '../src/endpoints/video/scheduleList';
+import { UploadFailedEndpoint } from '../src/endpoints/video/uploadFailed';
+import { chatRole, forgetChatTiers, ownerTierHasChat, type ChatStream } from '../src/lib/live/chat';
+import { withLiveVideoFields } from '../src/lib/watch-history';
+import { loadOwnedVideos } from '../src/lib/analytics';
+import { moveOutcome } from '../src/lib/channelMoveOutcome';
 import { resolvePlaylistCovers } from '../src/lib/playlistCovers';
 
 const BEFORE = 'usr_before';
@@ -237,10 +252,17 @@ describe('videos, streams, posts and comments of a channel that moved', () => {
 		const gone = (over: Record<string, unknown> = {}) => videoFixture({ id: 'v1', userId: NOW, channelId: 'ch1', comments: [commentFixture('c', { userId: BEFORE, channelId: 'gone', replies: [commentFixture('r', { userId: 'usr_x', channelId: null })], ...over })] });
 		const post = (channelId: string) => JSON.stringify({ id: 'pc1', postId: 'px', userId: BEFORE, channelId, content: 'x', createdAt: '2026-01-01T00:00:00.000Z' });
 		const px = JSON.stringify({ id: 'px', channelId: 'ch1', userId: NOW, type: 'text', content: 'p', status: 'published', createdAt: '2026-01-01T00:00:00.000Z' });
-		const job = (status: string, kind = 'channel.transfer') => ({ status, kind });
-		const cases: Array<[string, string, Array<{ status: string; kind: string }>, boolean]> = [
+		const job = (status: string, kind = 'channel.transfer', result: unknown = null) => ({ status, kind, result });
+		const move = (status: string, result?: unknown) => job(status, 'channel.transfer', result);
+		const cases: Array<[string, string, Array<{ status: string; kind: string; result: unknown }>, boolean]> = [
 			['gone, never moved', 'gone', [], true],
-			['gone, a move that never finished', 'gone', [job('failed'), job('cancelled')], true],
+			['gone, moves known not to have changed hands', 'gone', [move('failed', { changedHands: false }), move('succeeded', { skipped: 'stopped', changedHands: false }), move('succeeded', { skipped: 'channel_deleted', changedHands: false })], true],
+			['gone, a failed move that may have changed hands', 'gone', [move('failed')], false],
+			['gone, a failed move that did', 'gone', [move('failed', { changedHands: true })], false],
+			['gone, a cancelled move', 'gone', [move('cancelled')], false],
+			['gone, a move that found it deleted', 'gone', [move('succeeded', { skipped: 'channel_deleted' })], false],
+			['gone, a move that found it gone', 'gone', [move('succeeded', { skipped: 'channel_not_found', changedHands: null })], false],
+			['gone, one move of several did', 'gone', [move('failed', { changedHands: false }), move('succeeded', { videos: 1 })], false],
 			['gone, other jobs', 'gone', [job('succeeded', 'channel.purge')], true],
 			['gone after it moved to another account', 'gone', [job('failed'), job('succeeded')], false],
 			['another account\'s now', 'ch1', [], false],
@@ -249,7 +271,7 @@ describe('videos, streams, posts and comments of a channel that moved', () => {
 		];
 		for (const [name, channelId, jobs, allowed] of cases) {
 			const { b, env, call } = await setup(true);
-			jobs.forEach((j, i) => (env as any).SEARCH_DB.db.prepare("INSERT INTO admin_jobs (id, kind, target_kind, target_id, status, actor_id, created_at, updated_at) VALUES (?, ?, 'channel', ?, ?, 'a', 't', 't')").run(`j${i}`, j.kind, channelId, j.status));
+			jobs.forEach((j, i) => (env as any).SEARCH_DB.db.prepare("INSERT INTO admin_jobs (id, kind, target_kind, target_id, status, result, actor_id, created_at, updated_at) VALUES (?, ?, 'channel', ?, ?, ?, 'a', 't', 't')").run(`j${i}`, j.kind, channelId, j.status, j.result ? JSON.stringify(j.result) : null));
 			b.videos.store.set('v1', JSON.stringify(gone({ channelId })));
 			b.community_posts.store.set('posts/ch1/px.json', px);
 			b.community_posts.store.set('comments/px/top-level/pc1.json', post(channelId));
@@ -325,5 +347,163 @@ describe('private videos inside playlists', () => {
 		const memo = memoChannels({ channels: b.channels as never });
 		await Promise.all(Array.from({ length: 20 }, () => ownsRecord(memo, { channelId: 'ch1', userId: BEFORE }, NOW)));
 		assert.equal(reads, 1);
+	});
+});
+
+describe('what hangs on a private video follows its channel of now, a move finished or not', () => {
+	/** A private video of the moved channel that still names the owner before. */
+	async function open(indexed = false) {
+		const t = await setup(indexed);
+		const video = videoFixture({
+			id: 'vp', title: 'private lesson', userId: BEFORE, channelId: 'ch1', isPublic: false, duration: 100, uploadStatus: 'ready',
+			scheduledPublishStatus: 'scheduled', scheduledPublishDate: '2999-01-01T00:00:00.000Z',
+			commentSettings: 'held',
+			comments: [commentFixture('c1', { userId: NOW, channelId: null, text: 'hello', replies: [commentFixture('r1', { userId: NOW, channelId: null })] })],
+		});
+		t.b.videos.store.set('vp', JSON.stringify(video));
+		for (const id of ['s1', 's-own']) t.b.videos.store.delete(`livestream:${id}`);
+		t.b.videos.store.set('vo', JSON.stringify(videoFixture({ id: 'vo', title: 'private own', userId: BEFORE, channelId: 'own', isPublic: false, uploadStatus: 'ready' })));
+		if (indexed) await runOwnershipPass(t.env as never, 'video', { maxPages: 10, restart: true } as never);
+		const env = { ...t.env, watch_history: new MemoryBucket(), global_settings: new MemoryBucket() } as Record<string, any>;
+		const call = async (userId: string | null, method: string, path: string, body?: unknown) => {
+			const app = buildApp((r: any) => {
+				r.get('/api/videos', VideosList);
+				r.get('/api/videos/search', VideoSearch);
+				r.get('/api/videos/scheduled', VideoScheduleList);
+				r.get('/api/videos/:id/comments', CommentList);
+				r.get('/api/videos/:id/comments/:cid/replies', CommentRepliesList);
+				r.post('/api/videos/:id/comments', CommentCreate);
+				r.put('/api/videos/:id/comments/:cid', CommentUpdate);
+				r.post('/api/videos/:id/comments/:cid/likes', CommentLikeCreate);
+				r.post('/api/videos/:id/view', VideoView);
+				r.post('/api/videos/:id/watch-time', VideoWatchTime);
+				r.post('/api/videos/:id/retention', VideoRetention);
+				r.post('/api/videos/upload/failed/:videoId', UploadFailedEndpoint);
+			}, userId ? { userId } : null);
+			const res = await app.request(path, { method, headers: { 'content-type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }, env);
+			const text = await res.text();
+			let json: any = null;
+			try { json = JSON.parse(text); } catch { json = text; }
+			return { status: res.status, body: json };
+		};
+		return { ...t, env, call };
+	}
+
+	const READS: Array<[string, string, unknown, number]> = [
+		['GET', '/api/videos/vp/comments', undefined, 200],
+		['GET', '/api/videos/vp/comments/c1/replies', undefined, 200],
+		['POST', '/api/videos/vp/comments', { text: 'a comment' }, 200],
+		['POST', '/api/videos/vp/comments/c1/likes', {}, 200],
+		['POST', '/api/videos/vp/view', {}, 200],
+		['POST', '/api/videos/vp/watch-time', { seconds: 5, sessionId: 'session-1' }, 202],
+		['POST', '/api/videos/vp/retention', { buckets: [0], sessionId: 'session-1' }, 202],
+	];
+	for (const [method, path, body, ok] of READS) {
+		it(`${method} ${path}`, async () => {
+			for (const [who, status] of [[BEFORE, 404], ['usr_x', 404], [NOW, ok], [EDITOR, ok]] as const) {
+				const { call } = await open();
+				assert.equal((await call(who, method, path, body)).status, status, who);
+			}
+		});
+	}
+
+	it('the owner of today\'s comment is never held, the owner before\'s is, and the owner of today is told', async () => {
+		const { b, env, call } = await open();
+		b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), isPublic: true, scheduledPublishStatus: undefined, scheduledPublishDate: undefined }));
+		assert.equal((await call(NOW, 'POST', '/api/videos/vp/comments', { text: 'mine' })).status, 200);
+		assert.equal((await call(BEFORE, 'POST', '/api/videos/vp/comments', { text: 'theirs' })).status, 200);
+		const stored = b.videos.read('vp').comments.filter((c: any) => c.id !== 'c1');
+		assert.deepEqual(stored.map((c: any) => [c.userId, c.status ?? 'shown']), [[NOW, 'shown'], [BEFORE, 'held']]);
+		assert.ok(env);
+	});
+
+	it('a video that changes channel under a comment is judged by the one it is on', async () => {
+		const { b, call } = await open();
+		const get = b.videos.get.bind(b.videos);
+		let reads = 0;
+		(b.videos as any).get = async (key: string) => {
+			// After the first look the video is on a channel of the owner before
+			if (key === 'vp' && ++reads === 2) b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), channelId: 'own' }));
+			return get(key);
+		};
+		assert.equal((await call(NOW, 'POST', '/api/videos/vp/comments', { text: 'x' })).status, 404);
+		assert.equal(b.videos.read('vp').comments.length, 1);
+	});
+
+	for (const indexed of [true, false]) {
+		it(`lists and search (${indexed ? 'index' : 'scan'})`, async () => {
+			const { call } = await open(indexed);
+			const ids = (r: any) => (r.body.data ?? r.body.result?.data ?? r.body.results ?? []).map((v: any) => v.id).sort();
+			assert.deepEqual(ids(await call(BEFORE, 'GET', '/api/videos?limit=50')), ['v1', 'vo']);
+			assert.deepEqual(ids(await call(BEFORE, 'GET', '/api/videos?limit=50&channelId=ch1')), ['v1']);
+			assert.deepEqual(ids(await call(NOW, 'GET', '/api/videos?limit=50&channelId=ch1')), ['v1', 'vp']);
+			assert.deepEqual(ids(await call(null, 'GET', '/api/videos?limit=50&channelId=ch1')), ['v1']);
+			const search = async (who: string | null, q: string) => {
+				const r = await call(who, 'GET', `/api/videos/search?limit=50&${q}`);
+				assert.equal(r.status, 200, JSON.stringify(r.body));
+				return (JSON.stringify(r.body).match(/"id":"(v1|vp|vo)"/g) ?? []).map((m) => m.slice(6, 8)).sort();
+			};
+			assert.deepEqual(await search(BEFORE, 'isOwner=true'), ['vo'], 'not what is on the moved channel, public or not');
+			assert.deepEqual(await search(NOW, 'isOwner=true&channelIds=ch1'), ['v1', 'vp']);
+			assert.deepEqual(await search(BEFORE, 'channelIds=ch1'), ['v1']);
+		});
+
+		it(`scheduled videos (${indexed ? 'index' : 'scan'})`, async () => {
+			const { call } = await open(indexed);
+			const scheduled = await call(BEFORE, 'GET', '/api/videos/scheduled');
+			assert.equal(scheduled.status, 200);
+			assert.ok(!JSON.stringify(scheduled.body).includes('"vp"'));
+		});
+	}
+
+	it('an upload is reported failed by the owner of today, or its uploader while they may upload', async () => {
+		for (const [who, status] of [[BEFORE, 403], [NOW, 200], [EDITOR, 403]] as const) {
+			const { b, call } = await open();
+			b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), uploadStatus: 'uploading' }));
+			assert.equal((await call(who, 'POST', '/api/videos/upload/failed/vp', {})).status, status, who);
+		}
+		const { b, call } = await open();
+		b.videos.store.set('vp', JSON.stringify({ ...b.videos.read('vp'), uploadStatus: 'uploading', channelId: 'broken' }));
+		assert.equal((await call(NOW, 'POST', '/api/videos/upload/failed/vp', {})).status, 503, 'a channel that cannot be read: try again');
+	});
+
+	it('watch history shows a private video\'s title of now only to who may open it', async () => {
+		const { env } = await open();
+		const entries = [{ videoId: 'vp', videoTitle: 'as it was' }];
+		for (const [who, title] of [[BEFORE, 'as it was'], [NOW, 'private lesson']] as const) assert.equal((await withLiveVideoFields(env as never, who, entries))[0].videoTitle, title, who);
+	});
+
+	it('analytics count what is on the channels, whoever the records name', async () => {
+		const { env } = await open(true);
+		const of = async (who: string, channel: string) => (await loadOwnedVideos(env.videos, who, new Set([channel]), undefined, { env } as never)).map((v) => v.id).sort();
+		assert.deepEqual(await of(NOW, 'ch1'), ['v1', 'vp']);
+		assert.deepEqual(await of(BEFORE, 'own'), ['vo']);
+	});
+
+	it('live chat answers to the channel of now', async () => {
+		const { env } = await open(true);
+		const stream = { id: 's1', channelId: 'ch1', ownerId: BEFORE } as ChatStream;
+		assert.deepEqual(await chatRole(env as never, stream, BEFORE), { isOwner: false, moderates: false, manages: false });
+		assert.deepEqual(await chatRole(env as never, stream, NOW), { isOwner: true, moderates: true, manages: true });
+		assert.deepEqual(await chatRole(env as never, { ...stream, channelId: null }, BEFORE), { isOwner: true, moderates: true, manages: true });
+		assert.deepEqual(await chatRole(env as never, { ...stream, channelId: 'broken' }, BEFORE), { isOwner: false, moderates: false, manages: false });
+		forgetChatTiers();
+		assert.equal(await ownerTierHasChat({ channels: env.channels, SEARCH_DB: env.SEARCH_DB } as never, { ...stream, channelId: 'broken' }), false);
+	});
+
+	it('whether a move took the channel', () => {
+		const job = (status: string, result: unknown = null) => ({ status, params: { newOwnerId: NOW }, result: result as never });
+		assert.equal(moveOutcome(job('succeeded')), 'moved');
+		assert.equal(moveOutcome(job('failed')), 'unknown');
+		assert.equal(moveOutcome(job('failed'), { userId: NOW }), 'moved');
+		assert.equal(moveOutcome(job('failed'), { userId: BEFORE }), 'unknown');
+		assert.equal(moveOutcome(job('succeeded', { skipped: 'stopped', changedHands: false })), 'not_moved');
+		assert.equal(moveOutcome(job('succeeded', { skipped: 'stopped' })), 'unknown', 'only the field says it did not');
+		for (const skipped of ['channel_deleted', 'channel_not_found']) assert.equal(moveOutcome(job('succeeded', { skipped })), 'unknown');
+		assert.equal(moveOutcome(job('succeeded', { skipped: 'channel_deleted' }), { userId: NOW }), 'moved');
+		for (const status of ['failed', 'succeeded', 'cancelled']) {
+			assert.equal(moveOutcome(job(status, { changedHands: true })), 'moved');
+			assert.equal(moveOutcome(job(status, { changedHands: false })), 'not_moved');
+		}
 	});
 });

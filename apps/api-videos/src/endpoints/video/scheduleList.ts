@@ -8,6 +8,7 @@ import type { VideoObject, ScheduledVideoInfo } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { ownerScheduledVideoIds } from '../../lib/search/ownership';
 import { FALLBACK_SCAN_OBJECTS } from '../../lib/scanBudget';
+import { memoChannels, ownsRecord } from '../../lib/channelAccess';
 
 const ScheduledVideoInfoSchema = z.object({
   videoId: Str(),
@@ -109,9 +110,6 @@ export class VideoScheduleList extends OptionalAuthRoute {
 
       // Filter videos
       let scheduledVideos: VideoObject[] = candidates.filter((video) => {
-        // Must belong to user
-        if (video.userId !== userId) return false;
-
         // Must have scheduling info
         if (!video.scheduledPublishStatus || !video.scheduledPublishDate) return false;
 
@@ -138,6 +136,11 @@ export class VideoScheduleList extends OptionalAuthRoute {
 
         return true;
       });
+
+      // Must belong to the user: the owner of its channel now
+      const channels = memoChannels(c.env as never);
+      const mine = await Promise.all(scheduledVideos.map((video) => ownsRecord(channels, video, userId)));
+      scheduledVideos = scheduledVideos.filter((_, i) => mine[i]);
 
       // Sort by scheduled date (earliest first)
       scheduledVideos.sort((a, b) => {

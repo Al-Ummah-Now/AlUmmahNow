@@ -13,6 +13,6 @@ export async function reportableChatMessage(env: ChannelAccessEnv & { SEARCH_DB?
 	const stored = await readMessage(env.SEARCH_DB, null, messageId);
 	if (!stored || stored.status !== 'published') return null;
 	const stream = await readChatStream(env.SEARCH_DB, stored.streamId);
-	if (!stream || !(await mayRead(env, stream, userId)) || !(await ownerTierHasChat(env.SEARCH_DB, stream))) return null;
+	if (!stream || !(await mayRead(env, stream, userId)) || !(await ownerTierHasChat(env as never, stream))) return null;
 	return { text: stored.message.text.replace(/\s+/g, ' ').trim(), parentId: stored.streamId, channelId: stream.channelId, ownerId: stored.userId };
 }

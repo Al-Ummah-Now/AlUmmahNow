@@ -8,6 +8,7 @@ import { logger } from "../../lib/logger";
 import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import { PUBLIC_DISLIKES_COUNT, ReactorHeaders, reactorId } from "../../lib/reactions";
 import { applyCommentReaction, findStoredComment, isCommentVisible, StoredComment } from "../../lib/comments";
+import { isClosedTo } from '../../lib/videoReadAccess';
 
 export type CommentReactionKind = 'like' | 'dislike';
 export type CommentReactionAction = 'add' | 'remove';
@@ -98,12 +99,16 @@ export async function handleCommentReaction(
 	let ownChanged = false;
 	let clearedDislike: { id?: string } | null = null;
 	let comment = undefined as StoredComment | undefined;
-	const { data: video, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
+	// A private video: whoever may open it on the channel it is on (checked outside the write, for that channel)
+	let mayOpen: { channelId: unknown; userId: unknown } | null = null;
+	const closed = (fresh: VideoType) => isRestrictedVideo(fresh) && !(mayOpen && mayOpen.channelId === fresh.channelId && mayOpen.userId === fresh.userId);
+	const react = () => repository.updateObjectOrReject<true | { check: VideoType }>(id, (fresh) => {
 		changed = false;
 		ownChanged = false;
 		clearedDislike = null;
 		comment = undefined;
-		if (isVideoRemoved(fresh) || (isRestrictedVideo(fresh) && fresh.userId !== userId)) return { reject: true };
+		if (isVideoRemoved(fresh)) return { reject: true };
+		if (closed(fresh)) return { reject: { check: fresh } };
 		// Top-level comments and replies can be reacted to; held comments cannot
 		const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid)?.comment;
 		if (!target || !isCommentVisible(target) || target.status === 'held') return { reject: true };
@@ -116,6 +121,11 @@ export async function handleCommentReaction(
 		ownChanged = ((reaction === 'like' ? target.likes : target.dislikes) || []).length !== ownBefore;
 		return changed;
 	});
+	let { data: video, rejected } = await react();
+	if (rejected && rejected !== true && !(await isClosedTo(c.env, rejected.check, userId))) {
+		mayOpen = { channelId: rejected.check.channelId, userId: rejected.check.userId };
+		({ data: video, rejected } = await react());
+	}
 
 	if (!video || rejected || !comment) {
 		return c.json({ success: false, error: "Object not found" }, 404);
