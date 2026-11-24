@@ -48,6 +48,10 @@ export interface AppConfigVersionPolicy {
   minimumVersion: string;
   latestVersion?: string;
   storeUrl?: string;
+  /** Release notes for one version only, in English and Arabic (wiki AUN-APP-UPDATES §3.4) */
+  notesOverrides?: Record<string, { en: string; ar: string }>;
+  /** Shown on the forced-update screen, in English and Arabic */
+  message?: { en: string; ar: string };
 }
 
 export type AppConfigVersionsDocument = Record<string, AppConfigVersionPolicy>;

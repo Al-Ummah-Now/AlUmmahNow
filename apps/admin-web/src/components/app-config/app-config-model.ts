@@ -37,6 +37,20 @@ export interface VersionDraft {
   minimumVersion: string;
   latestVersion: string;
   storeUrl: string;
+  /** '' for every channel, 'beta' for TestFlight, Play testing and preview builds (`<app>/<platform>#beta`) */
+  channel: '' | 'beta';
+  /** The forced-screen message (both languages or neither) */
+  messageEn: string;
+  messageAr: string;
+  /** Release notes for one version only */
+  notesOverrides: NotesOverrideDraft[];
+}
+
+export interface NotesOverrideDraft {
+  id: string;
+  version: string;
+  en: string;
+  ar: string;
 }
 
 /** Why a field cannot be saved; the editor shows `appConfig.problems.<code>` next to it. */
@@ -52,6 +66,9 @@ export type ProblemCode =
   | 'urlFormat'
   | 'duplicateTarget'
   | 'tooMany'
+  | 'tooManyNotes'
+  | 'bothLanguages'
+  | 'textTooLong'
   /** api-videos refused it; `detail` holds its words */
   | 'server';
 
@@ -179,20 +196,32 @@ export function moveItem<T>(list: T[], index: number, by: -1 | 1): T[] {
 export function versionsToDrafts(value: unknown): VersionDraft[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   return Object.entries(value as Record<string, AppConfigVersionPolicy>).flatMap(([target, policy]) => {
-    const [app = '', platform = ''] = target.split('/');
+    const [app = '', rest = ''] = target.split('/');
     if (!isAppConfigApp(app)) return [];
+    const [platform = '', channel = ''] = rest.split('#');
     return [{
       id: draftId('ver'),
       app,
       platform,
+      channel: channel === 'beta' ? 'beta' : '',
       minimumVersion: policy?.minimumVersion ?? '',
       latestVersion: policy?.latestVersion ?? '',
       storeUrl: policy?.storeUrl ?? '',
+      messageEn: policy?.message?.en ?? '',
+      messageAr: policy?.message?.ar ?? '',
+      notesOverrides: Object.entries(policy?.notesOverrides ?? {}).map(([version, n]) => ({ id: draftId('notes'), version, en: n?.en ?? '', ar: n?.ar ?? '' })),
     }];
   });
 }
 
-export const newVersion = (): VersionDraft => ({ id: draftId('ver'), app: 'viewer', platform: '*', minimumVersion: '', latestVersion: '', storeUrl: '' });
+export const newVersion = (): VersionDraft => ({ id: draftId('ver'), app: 'viewer', platform: '*', channel: '', minimumVersion: '', latestVersion: '', storeUrl: '', messageEn: '', messageAr: '', notesOverrides: [] });
+
+export const newNotesOverride = (): NotesOverrideDraft => ({ id: draftId('notes'), version: '', en: '', ar: '' });
+
+/** Release notes and messages are at most this long, as the server requires */
+export const APP_TEXT_MAX = 1500;
+/** Notes overrides per entry */
+export const NOTES_OVERRIDES_MAX = 5;
 
 function isHttpsUrl(text: string): boolean {
   try {
@@ -209,7 +238,7 @@ export function versionsToDocument(drafts: VersionDraft[]): { value: AppConfigVe
   const seen = new Set<string>();
   for (const d of drafts) {
     const add = (field: string, code: ProblemCode) => problems.push({ id: d.id, field, code });
-    const target = `${d.app}/${d.platform}`;
+    const target = `${d.app}/${d.platform}${d.channel === 'beta' ? '#beta' : ''}`;
     if (seen.has(target)) add('platform', 'duplicateTarget');
     seen.add(target);
     const min = d.minimumVersion.trim();
@@ -222,6 +251,27 @@ export function versionsToDocument(drafts: VersionDraft[]): { value: AppConfigVe
     const policy: AppConfigVersionPolicy = { minimumVersion: min };
     if (latest) policy.latestVersion = latest;
     if (url) policy.storeUrl = url;
+    // The forced-screen message: both languages or neither (localized fields rule)
+    const en = d.messageEn.trim();
+    const ar = d.messageAr.trim();
+    if (!!en !== !!ar) add(en ? 'messageAr' : 'messageEn', 'bothLanguages');
+    if (en.length > APP_TEXT_MAX) add('messageEn', 'textTooLong');
+    if (ar.length > APP_TEXT_MAX) add('messageAr', 'textTooLong');
+    if (en && ar) policy.message = { en, ar };
+    if (d.notesOverrides.length > NOTES_OVERRIDES_MAX) add('notesOverrides', 'tooManyNotes');
+    const overrides: Record<string, { en: string; ar: string }> = {};
+    for (const o of d.notesOverrides) {
+      const v = o.version.trim();
+      const oe = o.en.trim();
+      const oa = o.ar.trim();
+      if (!APP_CONFIG_SEMVER.test(v)) add(`notes.${o.id}.version`, 'versionFormat');
+      else if (v in overrides) add(`notes.${o.id}.version`, 'duplicateTarget');
+      if (!oe || !oa) add(`notes.${o.id}.${oe ? 'ar' : 'en'}`, 'bothLanguages');
+      if (oe.length > APP_TEXT_MAX) add(`notes.${o.id}.en`, 'textTooLong');
+      if (oa.length > APP_TEXT_MAX) add(`notes.${o.id}.ar`, 'textTooLong');
+      if (v && oe && oa) overrides[v] = { en: oe, ar: oa };
+    }
+    if (Object.keys(overrides).length) policy.notesOverrides = overrides;
     doc[target] = policy;
   }
   return problems.length ? { value: null, problems } : { value: doc, problems };
@@ -240,7 +290,7 @@ export function serverProblems(problems: { problem: string; detail?: string }[] 
   return (problems ?? []).map(({ problem, detail }) => {
     const [head, field = ''] = problem.split(/\.(.*)/s);
     if (kind === 'versions') {
-      const d = versionDrafts.find((v) => `${v.app}/${v.platform}` === head);
+      const d = versionDrafts.find((v) => `${v.app}/${v.platform}${v.channel === 'beta' ? '#beta' : ''}` === head);
       return { id: d?.id ?? '', field: d ? field : '', code: 'server' as const, detail };
     }
     const index = /^\d+$/.test(head) ? Number(head) : -1;
