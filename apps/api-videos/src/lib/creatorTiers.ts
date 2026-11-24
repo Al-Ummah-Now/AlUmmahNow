@@ -174,7 +174,7 @@ function toTier(row: TierRow): CreatorTier {
 		...liveCapabilityFields(row),
 		// Rows from before migration 0079 have no offline columns: the shipped tier's defaults
 		...offlineFields(row),
-		// Rows from before migration 0082 have no notes column: the shipped tier's limit, else 1000
+		// Rows from before migration 0095 have no notes column: the shipped tier's limit, else 1000
 		notesMax: row.notes_max === undefined ? (shipped ? shipped.notesMax ?? null : 1000) : row.notes_max === null ? null : Number(row.notes_max),
 		updatedAt: row.updated_at ?? null,
 		updatedBy: row.updated_by ?? null,

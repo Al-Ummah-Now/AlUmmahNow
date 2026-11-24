@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NoteCreate, NoteDelete, NoteUpdate, NotesDeleteAll, NotesExport, NotesList } from '../src/endpoints/library/notes';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
-import { arabicDigits, checkNote, escapeMarkdown, formatTimestamp, notesMarkdown, writeTime } from '../src/lib/notes';
+import { checkNote, escapeMarkdown, notesMarkdown, writeTime } from '../src/lib/notes';
 import { collectUserData, eraseUserData } from '../src/lib/privacy/user-data';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -112,12 +112,24 @@ describe('private video notes', () => {
 		const removed = await call(e, 'u1', 'DELETE', '/api/library/notes/note-abc-1');
 		assert.equal(removed.body.deleted, true);
 		assert.equal((await call(e, 'u1', 'DELETE', '/api/library/notes/note-abc-1')).body.deleted, false);
-		const feed = await call(e, 'u1', 'GET', '/api/library/notes?since=2026-11-01T00:00:00.000Z');
+		const feed = await call(e, 'u1', 'GET', '/api/library/notes?since=2026-11-01T00:00:00Z');
 		assert.equal(feed.body.data.items.length, 1);
 		assert.equal(feed.body.data.items[0].deleted, true);
 		assert.equal(feed.body.data.items[0].body, '', 'a tombstone keeps no text');
 		assert.deepEqual((await call(e, 'u1', 'GET', '/api/library/notes?videoId=v1')).body.data.items, []);
 		assert.equal((await call(e, 'u1', 'PUT', '/api/library/notes/note-abc-1', { startMs: 1, body: 'revive' })).body.applied, false);
+	});
+
+	it('a since without milliseconds still returns a change made later in that second', async () => {
+		const e = await env();
+		await call(e, 'u1', 'POST', '/api/library/notes', { id: 'note-same-sec', videoId: 'v1', startMs: 1, body: 'a', updatedAt: '2026-11-20T12:00:00.500Z' });
+		const feed = await call(e, 'u1', 'GET', '/api/library/notes?since=2026-11-20T12:00:00Z');
+		assert.deepEqual(feed.body.data.items.map((n: any) => n.id), ['note-same-sec']);
+		// The same instant is included (a client may see a change twice, never miss one); later is not
+		const same = await call(e, 'u1', 'GET', '/api/library/notes?since=2026-11-20T12:00:00.500Z');
+		assert.deepEqual(same.body.data.items.map((n: any) => n.id), ['note-same-sec']);
+		const after = await call(e, 'u1', 'GET', '/api/library/notes?since=2026-11-20T12:00:00.501Z');
+		assert.deepEqual(after.body.data.items, []);
 	});
 
 	it('a client time in the future is clamped to now', () => {
@@ -136,6 +148,13 @@ describe('private video notes', () => {
 		assert.equal(full.status, 409);
 		assert.equal(full.body.code, 'notes_limit');
 		assert.equal(full.body.limit, 2);
+		// An offline retry of a note it already has still applies at the limit; another video's id is refused
+		const retry = await call(e, 'u1', 'POST', '/api/library/notes', { id: second.body.data.id, videoId: 'v1', startMs: 2, body: 'b2', updatedAt: new Date(Date.now() + 1000).toISOString() });
+		assert.equal(retry.status, 201);
+		assert.equal(retry.body.data.body, 'b2');
+		const moved = await call(e, 'u1', 'POST', '/api/library/notes', { id: second.body.data.id, videoId: 'v2', startMs: 2, body: 'x' });
+		assert.equal(moved.status, 409);
+		assert.equal(moved.body.error, 'note_on_other_video');
 		await call(e, 'u1', 'DELETE', `/api/library/notes/${second.body.data.id}`);
 		assert.equal((await call(e, 'u1', 'POST', '/api/library/notes', { videoId: 'v1', startMs: 3, body: 'c' })).status, 201);
 	});
@@ -176,8 +195,8 @@ describe('private video notes', () => {
 		);
 		assert.match(md, /## Unavailable video/);
 		assert.match(md, /- 0:05 kept/);
-		assert.equal(formatTimestamp(3_600_000), '1:00:00');
-		assert.equal(arabicDigits('12:05'), '١٢:٠٥');
+		const twoLines = notesMarkdown([{ id: 'n', videoId: 'v', startMs: 0, endMs: null, body: '', createdAt: 'x', updatedAt: 'x', deleted: false }], new Map([['v', { id: 'v', title: 'Line one\nLine two' }]]), 'https://x.test');
+		assert.match(twoLines, /## \[Line one Line two\]\(https:\/\/x\.test\/video\/v\)/);
 		assert.equal(escapeMarkdown('a_b'), 'a\\_b');
 	});
 
