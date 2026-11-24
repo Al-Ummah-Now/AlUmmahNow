@@ -16,7 +16,10 @@
  * admin Errors page with Replay (messageProcessor.processPushDispatch).
  */
 import {
+  isInQuietWindow,
+  isOptionalNotificationCategory,
   MessageType,
+  normaliseNotificationQuietHours,
   NOTIFICATION_KEY_CATEGORY,
   PUSH_DISPATCH_BATCH,
   type NotificationKey,
@@ -134,17 +137,67 @@ async function loadDevices(db: D1Database, payload: PushDispatchPayload): Promis
   return (results || []).map((row) => ({ row, notificationId: notificationFor.get(row.user_id)! }));
 }
 
-export async function dispatchPush(db: D1Database, payload: PushDispatchPayload, providers: PushProviders): Promise<DispatchSummary> {
+interface QuietHoursRow {
+  user_id: string;
+  enabled: number;
+  timezone: string;
+  start_minute: number;
+  end_minute: number;
+  prayer_quiet_enabled: number;
+  prayer_windows_json: string;
+  prayer_windows_updated_at: number | null;
+}
+
+const QUIET_QUERY_CHUNK = 90;
+
+/** Users currently inside their daily quiet window or prayer-time quiet window (E22-D6). */
+async function loadQuietUsers(db: D1Database, userIds: string[], nowMs: number): Promise<Set<string>> {
+  const quiet = new Set<string>();
+  if (userIds.length === 0) return quiet;
+  const unique = [...new Set(userIds)];
+  for (let i = 0; i < unique.length; i += QUIET_QUERY_CHUNK) {
+    const chunk = unique.slice(i, i + QUIET_QUERY_CHUNK);
+    const { results } = await db
+      .prepare(
+        `SELECT user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at
+         FROM notification_quiet_hours
+         WHERE user_id IN (${chunk.map(() => '?').join(', ')})
+           AND (enabled = 1 OR prayer_quiet_enabled = 1)`,
+      )
+      .bind(...chunk)
+      .all<QuietHoursRow>();
+    for (const row of results || []) {
+      if (isInQuietWindow(normaliseNotificationQuietHours(row), nowMs)) {
+        quiet.add(row.user_id);
+      }
+    }
+  }
+  return quiet;
+}
+
+export async function dispatchPush(
+  db: D1Database,
+  payload: PushDispatchPayload,
+  providers: PushProviders,
+  nowMs = Date.now(),
+  options: { quietHoursEnabled?: boolean } = {},
+): Promise<DispatchSummary> {
   const summary: DispatchSummary = { devices: 0, sent: 0, skipped: 0, failed: 0, pruned: 0, retry: [], retryErrors: {} };
   const category = NOTIFICATION_KEY_CATEGORY[payload.notificationKey];
   const devices = await loadDevices(db, payload);
   summary.devices = devices.length;
   if (devices.length === 0) return summary;
 
+  // Fail closed when the quietHours switch is off or omitted; account notices always push through.
+  const quietHoursEnabled = options.quietHoursEnabled ?? false;
+  const quietUsers = quietHoursEnabled && isOptionalNotificationCategory(category)
+    ? await loadQuietUsers(db, devices.map((d) => d.row.user_id), nowMs)
+    : new Set<string>();
+
   const invalid: DeviceRow[] = [];
   await Promise.all(
     devices.map(async ({ row, notificationId }) => {
-      if (!deviceWants(row.categories, category)) {
+      if (quietUsers.has(row.user_id) || !deviceWants(row.categories, category)) {
         summary.skipped++;
         return;
       }

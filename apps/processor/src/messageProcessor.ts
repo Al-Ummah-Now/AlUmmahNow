@@ -31,7 +31,7 @@ import { eraseReportedOwner, reportSubjectFor } from './erasure/reports';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, ReportSubject, SocialEventPayload } from '@al-ummah/shared-types';
-import { PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
+import { featureGate, PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
 import { socialEventMessage } from './social/consumer';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
@@ -683,7 +683,13 @@ export class MessageProcessor {
       return;
     }
     const providers = this.injectedPushProviders ?? (this.envPushProviders ??= resolvePushProviders(env));
-    const { retry, retryErrors, ...summary } = await dispatchPush(env.NOTIFICATIONS_DB, payload, providers);
+    const quietHoursEnabled = await featureGate(env, 'quietHours')
+      .then((gate) => gate.on)
+      .catch((error) => {
+        this.logger.warn('quietHours feature gate read failed; treating as off', { error: String(error) });
+        return false;
+      });
+    const { retry, retryErrors, ...summary } = await dispatchPush(env.NOTIFICATIONS_DB, payload, providers, Date.now(), { quietHoursEnabled });
     this.logger.debug('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, attempt: payload.attempt ?? 0, retry: retry.length, ...summary });
     if (retry.length > 0) await this.retryPush(message, payload, retry, retryErrors, env);
   }

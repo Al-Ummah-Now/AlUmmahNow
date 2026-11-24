@@ -29,8 +29,16 @@ import {
 	type NotificationSettings,
 	type NotificationCounts,
 	type NotificationPlatformSettings,
+	type NotificationQuietHours,
+	type NotificationQuietHoursUpdate,
 	DEFAULT_NOTIFICATION_PLATFORM_SETTINGS,
+	defaultNotificationQuietHours,
+	isMinuteOfDay,
+	isValidIanaTimeZone,
+	isValidPrayerQuietWindow,
+	MAX_PRAYER_QUIET_WINDOWS,
 	normaliseNotificationPlatformSettings,
+	normaliseNotificationQuietHours,
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
@@ -399,6 +407,100 @@ export async function updateEmailSettings(
 			 ON CONFLICT(user_id) DO UPDATE SET account_email = excluded.account_email, email_locale = excluded.email_locale, updated_at = excluded.updated_at`,
 		)
 		.bind(userId, next.account ? 1 : 0, next.locale, now)
+		.run();
+	return next;
+}
+
+interface QuietHoursRow {
+	enabled: number;
+	timezone: string;
+	start_minute: number;
+	end_minute: number;
+	prayer_quiet_enabled: number;
+	prayer_windows_json: string;
+	prayer_windows_updated_at: number | null;
+}
+
+async function readSavedUserTimezone(profiles: R2Bucket | undefined, userId: string): Promise<string | null> {
+	if (!profiles) return null;
+	try {
+		const obj = await profiles.get(userId);
+		if (!obj) return null;
+		const parsed = (await obj.json()) as { timezone?: unknown } | null;
+		return typeof parsed?.timezone === 'string' && isValidIanaTimeZone(parsed.timezone)
+			? parsed.timezone.trim()
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+/** The user's quiet hours & prayer-time quiet windows (missing row = defaults with saved profile timezone when present, disabled). */
+export async function getQuietHours(db: D1Database, userId: string, profiles?: R2Bucket): Promise<NotificationQuietHours> {
+	const row = await db
+		.prepare(
+			'SELECT enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at FROM notification_quiet_hours WHERE user_id = ?',
+		)
+		.bind(userId)
+		.first<QuietHoursRow>();
+	if (row) return normaliseNotificationQuietHours(row);
+	const savedTz = await readSavedUserTimezone(profiles, userId);
+	const defaults = defaultNotificationQuietHours();
+	return savedTz ? { ...defaults, timezone: savedTz } : defaults;
+}
+
+/** Saves partial quiet-hours updates and returns the full normalized settings. */
+export async function updateQuietHours(
+	db: D1Database,
+	userId: string,
+	changes: NotificationQuietHoursUpdate,
+	now = Date.now(),
+	profiles?: R2Bucket,
+): Promise<NotificationQuietHours> {
+	const current = await getQuietHours(db, userId, profiles);
+	const nextWindows = Array.isArray(changes.prayerWindows)
+		? changes.prayerWindows
+				.filter(isValidPrayerQuietWindow)
+				.slice(0, MAX_PRAYER_QUIET_WINDOWS)
+				.map((w) => ({ startMinute: w.startMinute, endMinute: w.endMinute }))
+		: current.prayerWindows;
+	const nextPrayerWindowsUpdatedAt = Array.isArray(changes.prayerWindows)
+		? (nextWindows.length > 0 ? now : null)
+		: (current.prayerWindowsUpdatedAt ?? null);
+	const next: NotificationQuietHours = {
+		enabled: typeof changes.enabled === 'boolean' ? changes.enabled : current.enabled,
+		timezone: isValidIanaTimeZone(changes.timezone) ? changes.timezone.trim() : current.timezone,
+		startMinute: isMinuteOfDay(changes.startMinute) ? changes.startMinute : current.startMinute,
+		endMinute: isMinuteOfDay(changes.endMinute) ? changes.endMinute : current.endMinute,
+		prayerQuietEnabled: typeof changes.prayerQuietEnabled === 'boolean' ? changes.prayerQuietEnabled : current.prayerQuietEnabled,
+		prayerWindows: nextWindows,
+		prayerWindowsUpdatedAt: nextPrayerWindowsUpdatedAt,
+	};
+	await db
+		.prepare(
+			`INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, prayer_windows_updated_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(user_id) DO UPDATE SET
+			   enabled = excluded.enabled,
+			   timezone = excluded.timezone,
+			   start_minute = excluded.start_minute,
+			   end_minute = excluded.end_minute,
+			   prayer_quiet_enabled = excluded.prayer_quiet_enabled,
+			   prayer_windows_json = excluded.prayer_windows_json,
+			   prayer_windows_updated_at = excluded.prayer_windows_updated_at,
+			   updated_at = excluded.updated_at`,
+		)
+		.bind(
+			userId,
+			next.enabled ? 1 : 0,
+			next.timezone,
+			next.startMinute,
+			next.endMinute,
+			next.prayerQuietEnabled ? 1 : 0,
+			JSON.stringify(next.prayerWindows),
+			next.prayerWindowsUpdatedAt ?? null,
+			now,
+		)
 		.run();
 	return next;
 }

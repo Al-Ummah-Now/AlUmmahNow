@@ -34,7 +34,7 @@
 
 import { eraseTierHistory } from '../tierChanges';
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
-import { getEmailSettings, getSeenAt, getSettings } from '../notifications';
+import { getEmailSettings, getQuietHours, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { readAssets, readBrandKit, studioPrefix } from '../studio/brandKit';
 import { deleteVideoSideRecords } from '../videoSideRecords';
@@ -541,8 +541,13 @@ export async function collectUserData(
 				const ndb = env.NOTIFICATIONS_DB;
 				if (!ndb) return;
 				ctx.budget.spend();
-				const [seenAt, settings, email] = await Promise.all([getSeenAt(ndb, userId), getSettings(ndb, userId), getEmailSettings(ndb, userId)]);
-				out.notificationState.push({ menuSeenAt: seenAt === null ? null : new Date(seenAt).toISOString(), categories: settings, email });
+				const [seenAt, settings, email, quietHours] = await Promise.all([
+					getSeenAt(ndb, userId),
+					getSettings(ndb, userId),
+					getEmailSettings(ndb, userId),
+					getQuietHours(ndb, userId),
+				]);
+				out.notificationState.push({ menuSeenAt: seenAt === null ? null : new Date(seenAt).toISOString(), categories: settings, email, quietHours });
 			}),
 		// Live chat and reminders (wiki E17), a page at a time until done
 		(ctx) => exportPages(ctx, env.SEARCH_DB as D1Database | undefined, exportLiveChat, out.liveChatMessages),

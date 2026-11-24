@@ -65,6 +65,7 @@ type SecretLike = string | { get(): Promise<string> } | undefined | unknown;
 
 export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
 	SEARCH_DB?: D1Database;
+	NOTIFICATIONS_DB?: D1Database;
 	channels?: R2Bucket;
 	channel_sections?: unknown;
 	channel_tabs?: unknown;
@@ -439,6 +440,7 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 	features.offlineDownloads = !pending;
 	// Private notes (E21-D9): every signed-in account; the note limit is the tier's
 	features.studyNotes = !pending;
+	features.quietHours = !pending;
 	return features;
 }
 
@@ -524,6 +526,7 @@ export async function featureSwitchState(env: FeaturesEnv): Promise<FeatureState
 			intentionalViewing: true,
 			offlineDownloads: !!env.SEARCH_DB,
 			studyNotes: !!env.SEARCH_DB,
+			quietHours: !!env.NOTIFICATIONS_DB,
 		},
 	};
 }

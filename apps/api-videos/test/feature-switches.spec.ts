@@ -158,6 +158,14 @@ describe('/api/me/features', () => {
 		}
 	});
 
+	it('quietHours: off by default; stays off signed out, turns on signed in (E22-D6)', async () => {
+		const { env, set } = await setup();
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: [] })).quietHours, false);
+		await set('quietHours', true);
+		assert.equal((await computeFeatures(env, { userId: null })).quietHours, false);
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: [] })).quietHours, true);
+	});
+
 	it('has a body ETag: a match gets 304; signed out is public for 30 s', async () => {
 		const { env, set } = await setup();
 		const get = app(env, 'alice');

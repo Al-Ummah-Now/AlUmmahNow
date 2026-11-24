@@ -22,12 +22,16 @@
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { apiError } from "../../lib/api-error";
 import { isMemberSubscribedTo } from '../../lib/subscription-store';
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import {
 	ALWAYS_ON_NOTIFICATION_CATEGORIES,
 	CHANNEL_BELL_LEVELS,
+	featureGate,
+	isValidIanaTimeZone,
+	MAX_PRAYER_QUIET_WINDOWS,
 	NOTIFICATION_CATEGORIES,
 	NOTIFICATION_EMAIL_LOCALES,
 	OPTIONAL_NOTIFICATION_CATEGORIES,
@@ -35,6 +39,7 @@ import {
 	type NotificationStateEvent,
 	type NotificationSeenResult,
 } from "@al-ummah/shared-types";
+import { featureOff } from "../../lib/features/off";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import {
 	countState,
@@ -44,8 +49,10 @@ import {
 	deleteNotification,
 	getBell,
 	getEmailSettings,
+	getQuietHours,
 	getSettings,
 	updateEmailSettings,
+	updateQuietHours,
 	listNotifications,
 	markAllRead,
 	markRead,
@@ -234,6 +241,10 @@ export class NotificationsDelete extends AuthenticatedRoute {
 	}
 }
 
+async function quietHoursAllowed(c: AppContext): Promise<boolean> {
+	return (await featureGate(c.env as never, "quietHours").catch(() => ({ on: false as const }))).on;
+}
+
 export class NotificationSettingsGet extends AuthenticatedRoute {
 	schema = {
 		tags: ["Notifications"],
@@ -246,14 +257,52 @@ export class NotificationSettingsGet extends AuthenticatedRoute {
 		const db = c.env.NOTIFICATIONS_DB;
 		if (!db) return storeUnavailable(c);
 		const userId = this.getUserId(c);
-		return { success: true, result: await settingsResult(db, userId) };
+		const includeQuietHours = await quietHoursAllowed(c);
+		return { success: true, result: await settingsResult(db, userId, includeQuietHours, c.env.profiles) };
 	}
 }
 
-async function settingsResult(db: D1Database, userId: string): Promise<NotificationSettingsResult> {
-	const [settings, email] = await Promise.all([getSettings(db, userId), getEmailSettings(db, userId)]);
-	return { settings, categories: NOTIFICATION_CATEGORIES, alwaysOn: ALWAYS_ON_NOTIFICATION_CATEGORIES, email };
+async function settingsResult(db: D1Database, userId: string, includeQuietHours: boolean, profiles?: R2Bucket): Promise<NotificationSettingsResult> {
+	const [settings, email, quietHours] = await Promise.all([
+		getSettings(db, userId),
+		getEmailSettings(db, userId),
+		includeQuietHours ? getQuietHours(db, userId, profiles) : Promise.resolve(undefined),
+	]);
+	return {
+		settings,
+		categories: NOTIFICATION_CATEGORIES,
+		alwaysOn: ALWAYS_ON_NOTIFICATION_CATEGORIES,
+		email,
+		...(quietHours !== undefined ? { quietHours } : {}),
+	};
 }
+
+const PrayerWindowSchema = z
+	.object({
+		startMinute: z.number().int().min(0).max(1439),
+		endMinute: z.number().int().min(0).max(1439),
+	})
+	.refine((w) => w.startMinute !== w.endMinute, { message: "Prayer quiet window start and end minutes must differ" });
+
+const QuietHoursBody = z
+	.object({
+		enabled: z.boolean().optional(),
+		timezone: z
+			.string()
+			.trim()
+			.min(1)
+			.max(64)
+			.refine((tz) => isValidIanaTimeZone(tz), { message: "Invalid IANA time zone" })
+			.optional(),
+		startMinute: z.number().int().min(0).max(1439).optional(),
+		endMinute: z.number().int().min(0).max(1439).optional(),
+		prayerQuietEnabled: z.boolean().optional(),
+		prayerWindows: z.array(PrayerWindowSchema).max(MAX_PRAYER_QUIET_WINDOWS).optional(),
+	})
+	.refine(
+		(q) => q.startMinute === undefined || q.endMinute === undefined || q.startMinute !== q.endMinute,
+		{ message: "Quiet hours start and end minutes must differ" },
+	);
 
 // Always-on categories (account notices) are not settable
 const SettingsBody = z.object({
@@ -266,6 +315,8 @@ const SettingsBody = z.object({
 			locale: z.enum(NOTIFICATION_EMAIL_LOCALES).optional().describe('Language of the emails'),
 		})
 		.optional(),
+	// Validated in handle() only while the quietHours switch is on; ignored completely while off.
+	quietHours: z.any().optional(),
 });
 
 export class NotificationSettingsUpdate extends AuthenticatedRoute {
@@ -281,11 +332,76 @@ export class NotificationSettingsUpdate extends AuthenticatedRoute {
 		if (!db) return storeUnavailable(c);
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
+		const quietOn = await quietHoursAllowed(c);
+
+		// Validate the whole request before writing anything so an invalid quietHours never half-applies settings or email.
+		// When quietHours is off, ignore quietHours completely (even if invalid) so other settings still save.
+		let validatedQuietHours: z.infer<typeof QuietHoursBody> | undefined;
+		if (quietOn && body.quietHours !== undefined) {
+			const parsed = QuietHoursBody.safeParse(body.quietHours);
+			if (!parsed.success) {
+				return apiError(c, 400, "invalid_request");
+			}
+			const current = await getQuietHours(db, userId, c.env.profiles);
+			const nextStart = parsed.data.startMinute ?? current.startMinute;
+			const nextEnd = parsed.data.endMinute ?? current.endMinute;
+			if (nextStart === nextEnd) {
+				return apiError(c, 400, "invalid_request");
+			}
+			validatedQuietHours = parsed.data;
+		}
+
 		if (body.settings) await updateSettings(db, userId, body.settings);
 		if (body.email) await updateEmailSettings(db, userId, body.email);
-		const result = await settingsResult(db, userId);
-		logger.debug("[Notifications] Settings updated", { userId, settings: result.settings, email: result.email });
+		if (validatedQuietHours !== undefined) {
+			await updateQuietHours(db, userId, validatedQuietHours, Date.now(), c.env.profiles);
+		}
+		const result = await settingsResult(db, userId, quietOn, c.env.profiles);
+		logger.debug("[Notifications] Settings updated", { userId, settings: result.settings, email: result.email, quietHours: result.quietHours });
 		return { success: true, result };
+	}
+}
+
+export class NotificationQuietHoursGet extends AuthenticatedRoute {
+	schema = {
+		tags: ["Notifications"],
+		summary: "Read my notification quiet hours",
+		request: { headers: OptionalChannelHeader },
+		responses: { "200": { description: "Quiet hours settings" }, ...unavailable },
+	};
+
+	async handle(c: AppContext) {
+		if (!(await featureGate(c.env as never, "quietHours")).on) return featureOff(c, "quietHours");
+		const db = c.env.NOTIFICATIONS_DB;
+		if (!db) return storeUnavailable(c);
+		const userId = this.getUserId(c);
+		return { success: true, result: await getQuietHours(db, userId, c.env.profiles) };
+	}
+}
+
+export class NotificationQuietHoursUpdateRoute extends AuthenticatedRoute {
+	schema = {
+		tags: ["Notifications"],
+		summary: "Update my notification quiet hours",
+		request: { body: { content: { "application/json": { schema: QuietHoursBody } } }, headers: OptionalChannelHeader },
+		responses: { "200": { description: "Updated quiet hours" }, ...unavailable },
+	};
+
+	async handle(c: AppContext) {
+		if (!(await featureGate(c.env as never, "quietHours")).on) return featureOff(c, "quietHours");
+		const db = c.env.NOTIFICATIONS_DB;
+		if (!db) return storeUnavailable(c);
+		const { body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const current = await getQuietHours(db, userId, c.env.profiles);
+		const nextStart = body.startMinute ?? current.startMinute;
+		const nextEnd = body.endMinute ?? current.endMinute;
+		if (nextStart === nextEnd) {
+			return apiError(c, 400, "invalid_request");
+		}
+		const updated = await updateQuietHours(db, userId, body, Date.now(), c.env.profiles);
+		logger.debug("[Notifications] Quiet hours updated", { userId, quietHours: updated });
+		return { success: true, result: updated };
 	}
 }
 

@@ -301,6 +301,7 @@ export async function eraseUserNotifications(db: D1Database, userId: string): Pr
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM notification_settings WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM notification_email_prefs WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM notification_quiet_hours WHERE user_id = ?').bind(userId),
     // When they last opened the notification menu (migration 0012)
     db.prepare('DELETE FROM notification_seen WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM channel_subscribers WHERE user_id = ?').bind(userId),

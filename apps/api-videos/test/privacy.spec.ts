@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { PrivacyConsentGet, PrivacyConsentPut, PrivacyErase, PrivacyExport, appendConsentRecord, CONSENT_HISTORY_LIMIT } from '../src/endpoints/privacy/privacy';
 import { collectUserData, eraseUserData, DELETED_USER_ID, EXPORT_LIST_FIELDS } from '../src/lib/privacy/user-data';
+import { createSqliteD1 } from './sqlite-d1';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import {
 	archiveKeyDate,
@@ -130,6 +131,27 @@ describe('collectUserData (export)', () => {
 		assert.deepEqual(data.uploadDefaults.map((t) => t.id), ['t1']);
 		assert.deepEqual(data.reportsFiled.map((r) => r.id), ['r1']);
 		assert.ok(data.notes.length > 0);
+	});
+
+	it('exports notificationState including quietHours when NOTIFICATIONS_DB is bound', async () => {
+		const ndb = createSqliteD1();
+		ndb.raw
+			.prepare(
+				`INSERT INTO notification_quiet_hours (user_id, enabled, timezone, start_minute, end_minute, prayer_quiet_enabled, prayer_windows_json, updated_at)
+				 VALUES (?, 1, 'Asia/Riyadh', 1320, 360, 1, '[{"startMinute":310,"endMinute":335}]', 100)`,
+			)
+			.run(ME);
+		const data = await collectUserData({ ...env, NOTIFICATIONS_DB: ndb as unknown as D1Database }, ME, new OperationBudget(10_000));
+		assert.equal(data.notificationState.length, 1);
+		assert.deepEqual(data.notificationState[0]?.quietHours, {
+			enabled: true,
+			timezone: 'Asia/Riyadh',
+			startMinute: 1320,
+			endMinute: 360,
+			prayerQuietEnabled: true,
+			prayerWindows: [{ startMinute: 310, endMinute: 335 }],
+			prayerWindowsUpdatedAt: null,
+		});
 	});
 
 	it('never includes another user\'s private data', async () => {
