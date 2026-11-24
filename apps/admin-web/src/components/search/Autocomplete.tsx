@@ -373,7 +373,7 @@ export function Autocomplete({
       {mode === 'pick' && name !== undefined && <input ref={hiddenRef} type="hidden" name={name} value={picked?.id ?? ''} />}
 
       {showChip && chosen === 'card' ? (
-        <PickedCard picked={picked} label={changeLabel ?? t('autocomplete.change')} buttonRef={changeRef} disabled={disabled} onChange={() => {
+        <PickedCard picked={picked} showIds={showIds} label={changeLabel ?? t('autocomplete.change')} buttonRef={changeRef} disabled={disabled} onChange={() => {
             flushSync(() => setEditing(true));
             inputRef.current?.focus();
           }} testId={testId} />
@@ -621,6 +621,7 @@ function PickedCard({
   disabled,
   onChange,
   testId,
+  showIds = true,
 }: {
   picked: { id: string; item: AutocompleteItem | null; missing: boolean };
   label: string;
@@ -628,6 +629,7 @@ function PickedCard({
   disabled: boolean;
   onChange: () => void;
   testId?: string;
+  showIds?: boolean;
 }) {
   const { t } = useLanguage();
   const { id, item, missing } = picked;
@@ -650,6 +652,11 @@ function PickedCard({
             <span className="text-xs text-fg-muted [overflow-wrap:anywhere]" dir="auto">
               {item.secondary}
             </span>
+          )}
+          {showIds && (
+            <bdi dir="ltr" className="font-mono text-xs text-fg-muted [overflow-wrap:anywhere]">
+              {id}
+            </bdi>
           )}
           {item?.meta && <span className="text-xs text-fg-subtle">{item.meta}</span>}
         </span>

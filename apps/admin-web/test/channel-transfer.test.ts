@@ -62,6 +62,7 @@ describe('transfer search results as Autocomplete items', () => {
   it('the transfer uses the shared Autocomplete: own source, no pasted ids, a card to choose again', () => {
     const file = readFileSync(new URL('../src/app/(protected)/channels/[id]/ChannelTransfer.tsx', import.meta.url), 'utf8');
     assert.match(file, /<Autocomplete[\s\S]*kind="user"[\s\S]*mode="pick"[\s\S]*source=\{source\}[\s\S]*allowIds=\{false\}[\s\S]*chosen="card"/);
+    assert.doesNotMatch(file, /showIds=\{false\}/, 'the user id is shown');
     assert.doesNotMatch(file, /UserPicker/);
   });
 });
@@ -71,8 +72,8 @@ describe('transfer text', () => {
     assert.equal(bidiIsolate('@nasheeds', 'ar'), '\u2068@nasheeds\u2069');
     assert.equal(bidiIsolate('@nasheeds', 'en'), '@nasheeds');
     assert.equal(bidiIsolate('', 'ar'), '');
-    const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds', 'ar'), email: bidiIsolate('a@b.c', 'ar') });
-    assert.ok(label.includes('\u2068@nasheeds\u2069') && label.includes('\u2068a@b.c\u2069'));
+    const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds', 'ar'), id: bidiIsolate('usr_1', 'ar') });
+    assert.ok(label.includes('\u2068@nasheeds\u2069') && label.includes('\u2068usr_1\u2069'));
   });
 
   it('shows channel count, role on the channel and bans', () => {
@@ -88,35 +89,36 @@ describe('transfer text', () => {
 });
 
 describe('transfer confirmation', () => {
-  it('accepts the channel @handle (with or without @) or the new owner email', () => {
-    const values = transferConfirmValues('nasheeds', 'Amina@Example.com');
+  it('accepts the channel @handle (with or without @) or the new owner user id, never an email', () => {
+    const values = transferConfirmValues('nasheeds', 'usr_amina');
     assert.equal(confirmMatches('@nasheeds', values), true);
     assert.equal(confirmMatches('nasheeds', values), true);
-    assert.equal(confirmMatches(' amina@example.com ', values), true, 'emails ignore case');
+    assert.equal(confirmMatches(' usr_amina ', values), true);
+    assert.equal(confirmMatches('amina@example.com', values), false);
+    assert.equal(confirmMatches('usr_Amina', values), false, 'ids are exact');
     assert.equal(confirmMatches('@Nasheeds', values), false, 'handles are exact');
     assert.equal(confirmMatches('', values), false);
     assert.equal(confirmMatches('amina', values), false);
-    assert.deepEqual(transferConfirmValues(null, 'a@b.c'), ['a@b.c']);
-    assert.deepEqual(transferConfirmValues(null, null), []);
+    assert.deepEqual(transferConfirmValues(null, 'usr_1'), ['usr_1']);
   });
 
   it('the confirm dialog names the user, is danger styled and asks for the typed value', () => {
     const html = render(
       el(ConfirmButton, {
         label: 'Transfer',
-        title: tEn('channels.transferConfirm', { name: 'Amina Yusuf', email: 'amina@example.com' }),
+        title: tEn('channels.transferConfirm', { name: 'Amina Yusuf', id: 'usr_amina' }),
         body: tEn('channels.transferBody', { channel: 'QA Nasheeds', name: 'Amina Yusuf', videos: 4, playlists: 1 }),
         confirmLabel: 'Transfer',
-        typeToConfirm: transferConfirmValues('nasheeds', 'amina@example.com'),
-        typeToConfirmLabel: tEn('channels.transferTypeToConfirm', { handle: '@nasheeds', email: 'amina@example.com' }),
+        typeToConfirm: transferConfirmValues('nasheeds', 'usr_amina'),
+        typeToConfirmLabel: tEn('channels.transferTypeToConfirm', { handle: '@nasheeds', id: 'usr_amina' }),
         danger: true,
         testId: 'channel-transfer-submit',
         onConfirm: () => undefined,
       }),
     );
-    assert.match(html, /Move this channel to Amina Yusuf \(amina@example\.com\)\?/);
+    assert.match(html, /Move this channel to Amina Yusuf \(usr_amina\)\?/);
     assert.match(html, /its 4 videos and 1 playlists/);
-    assert.match(html, /Type @nasheeds or amina@example\.com to confirm/);
+    assert.match(html, /Type @nasheeds or usr_amina to confirm/);
     assert.match(html, /<dialog[^>]*aria-labelledby=/);
     assert.match(html, /data-testid="channel-transfer-submit-confirm"[^>]*disabled=""|disabled=""[^>]*data-testid="channel-transfer-submit-confirm"/, 'confirm starts disabled');
     assert.match(html, /bg-danger-bg|danger/);
@@ -156,6 +158,7 @@ describe('the new owner field', () => {
     assert.match(html, /data-testid="p-selected" data-id="usr_1"/);
     assert.ok(html.includes('أمينة'));
     assert.ok(html.includes('usr_1@example.com'));
+    assert.match(html, /<bdi[^>]*>usr_1<\/bdi>/, 'the card shows the user id');
     assert.ok(html.includes(tAr('channels.pickerOwnsMany', { count: 2 })));
     assert.match(html, new RegExp(`data-testid="p-change"[^>]*>${tAr('channels.pickerChange')}<`));
     assert.ok(html.includes(tAr('autocomplete.selected', { name: 'أمينة' })), 'the choice is announced');

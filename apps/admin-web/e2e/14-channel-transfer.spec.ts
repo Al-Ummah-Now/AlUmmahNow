@@ -4,7 +4,7 @@
  *
  * As the super admin: the new-owner picker finds a creator by email, by name
  * and by @handle (and never offers the current owner); the
- * confirm dialog names the user and needs the channel @handle or their email
+ * confirm dialog names the user and needs the channel @handle or their user id
  * typed; the queued job is followed to "done" and the page shows the new
  * owner. The same flow by keyboard only, and in Arabic (right to left). An
  * admin without the super admin role sees no transfer section.
@@ -104,6 +104,7 @@ test.describe('channel transfer', () => {
     await search(page, creator.email!);
     await expect(option(page, creator.id)).toBeVisible();
     await expect(option(page, creator.id)).toContainText(creator.email!);
+    await expect(option(page, creator.id)).toContainText(creator.id);
     // The creator is this spec's own new user: it may own no channel yet
     await expect(option(page, creator.id)).toContainText(/Owns (no|\d+) channels?/);
     await expect(picker(page)).toHaveAttribute('aria-expanded', 'true');
@@ -139,7 +140,7 @@ test.describe('channel transfer', () => {
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(`Move this channel to ${creator.displayName} (${creator.email})?`);
+    await expect(dialog).toContainText(`Move this channel to ${creator.displayName} (${creator.id})?`);
     await expect(dialog).toContainText(/videos and \d+ playlists/);
     await expect(dialog).toContainText('The current owner stays on the team as channel admin.');
     await expect(dialog).toContainText('The public contact email is cleared.');
@@ -147,7 +148,7 @@ test.describe('channel transfer', () => {
     await expect(confirm).toBeDisabled();
     await page.getByTestId('channel-transfer-submit-typed').fill('not it');
     await expect(confirm).toBeDisabled();
-    await page.getByTestId('channel-transfer-submit-typed').fill(creator.email!);
+    await page.getByTestId('channel-transfer-submit-typed').fill(creator.id);
     // A reason of at least 10 characters is required
     await expect(confirm).toBeDisabled();
     await page.getByTestId('channel-transfer-submit-reason').fill('short');
@@ -201,7 +202,7 @@ test.describe('channel transfer', () => {
     await page.keyboard.type('Keyboard-only move (E2E)');
     const typed = page.getByTestId('channel-transfer-submit-typed');
     await typed.focus();
-    await page.keyboard.type(channel.handle ? `@${channel.handle}` : creator.email!);
+    await page.keyboard.type(channel.handle ? `@${channel.handle}` : creator.id);
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     await expectTransferred(page, creator);
@@ -218,13 +219,13 @@ test.describe('channel transfer', () => {
     await option(page, creator.id).click();
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
-    // In Arabic the name and email are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the
+    // In Arabic the name and id are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the
     // Latin text and its parentheses stay in place inside the right-to-left sentence
     const iso = (value: string) => `\u2068${value}\u2069`;
-    await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} (${iso(creator.email!)})؟`);
+    await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} (${iso(creator.id)})؟`);
     await expect(dialog).toContainText('يفقد المالك الحالي كل وصول إلى القناة.');
     await page.getByTestId('channel-transfer-submit-reason').fill('نقل بطلب صاحب القناة (اختبار)');
-    await page.getByTestId('channel-transfer-submit-typed').fill(creator.email!);
+    await page.getByTestId('channel-transfer-submit-typed').fill(creator.id);
     await page.getByTestId('channel-transfer-submit-confirm').click();
     await expect(page.getByTestId('channel-transfer-status')).toHaveAttribute('data-status', 'succeeded', { timeout: 60_000 });
     await expect(page.getByTestId('channel-transfer-status')).toContainText('أصبح');
