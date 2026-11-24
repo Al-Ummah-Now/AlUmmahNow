@@ -236,9 +236,9 @@ app.get('/pending', async (c) => {
   const actor = await needRead(c, ctx);
   const type = c.req.query('type');
   if (!type || !isWorkflowActionType(type)) return apiError(c, 404, 'not_found');
-  // Money requests are for people who can see money, whether they are open or not
-  const items = workflowFloorFor(type, '').money && !seesMoney(c, actor) ? {} : await openRequests(ctx, type, c.req.queries('target') ?? []);
-  return ok(c, { items });
+  const money = seesMoney(c, actor);
+  const open = await openRequests(ctx, type, c.req.queries('target') ?? []);
+  return ok(c, { items: Object.fromEntries(open.filter((r) => money || r.domain !== 'money').map((r) => [r.target, r.id])) });
 });
 
 /**
