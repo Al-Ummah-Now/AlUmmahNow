@@ -621,9 +621,10 @@ async function moveLiveStreams(env: AdminServiceEnv, channelId: string, from: st
 }
 
 /** The scheduler's entries of the moved videos that are still scheduled: publish notices follow the owner. */
-async function moveScheduleEntries(env: AdminServiceEnv, videoIds: string[], from: string | null, to: string): Promise<{ changed: number; failed: number }> {
-	const bucket = ((env as Record<string, unknown>).SCHEDULED_VIDEOS ?? (env as Record<string, unknown>)['scheduled-videos']) as R2Bucket | undefined;
-	if (!bucket) return { changed: 0, failed: 0 };
+const scheduleBucketOf = (env: AdminServiceEnv) => ((env as Record<string, unknown>).SCHEDULED_VIDEOS ?? (env as Record<string, unknown>)['scheduled-videos']) as R2Bucket | undefined;
+
+/** The scheduler's entry keys of the videos that are still scheduled. */
+async function scheduleKeysOf(env: AdminServiceEnv, videoIds: string[]): Promise<string[]> {
 	const videos = await readMany(env.videos, videoIds);
 	const keys: string[] = [];
 	for (const [id, video] of videos) {
@@ -631,6 +632,13 @@ async function moveScheduleEntries(env: AdminServiceEnv, videoIds: string[], fro
 		const date = new Date(video.scheduledPublishDate);
 		if (!Number.isNaN(date.getTime())) keys.push(scheduleKey(date, id));
 	}
+	return keys;
+}
+
+async function moveScheduleEntries(env: AdminServiceEnv, videoIds: string[], from: string | null, to: string): Promise<{ changed: number; failed: number }> {
+	const bucket = scheduleBucketOf(env);
+	if (!bucket) return { changed: 0, failed: 0 };
+	const keys = await scheduleKeysOf(env, videoIds);
 	return cascade(bucket, keys, (entry) => {
 		if (entry.userId === to || (from && entry.userId !== from)) return false;
 		entry.userId = to;
@@ -639,9 +647,10 @@ async function moveScheduleEntries(env: AdminServiceEnv, videoIds: string[], fro
 }
 
 /** The channel's community posts (`posts/{channelId}/{postId}.json`); `authorId` (who wrote it) is kept. */
-async function movePosts(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; failed: number }> {
-	const bucket = (env as Record<string, unknown>).community_posts as R2Bucket | undefined;
-	if (!bucket) return { changed: 0, failed: 0 };
+const postsBucketOf = (env: AdminServiceEnv) => (env as Record<string, unknown>).community_posts as R2Bucket | undefined;
+
+/** The channel's post object keys (`posts/{channelId}/{postId}.json`, not its index). */
+async function postKeysOf(bucket: R2Bucket, channelId: string): Promise<string[]> {
 	const keys: string[] = [];
 	let cursor: string | undefined;
 	do {
@@ -649,6 +658,13 @@ async function movePosts(env: AdminServiceEnv, channelId: string, from: string |
 		for (const o of page.objects) if (/^posts\/[^/]+\/[^/]+\.json$/.test(o.key) && !o.key.endsWith('/index.json')) keys.push(o.key);
 		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
 	} while (cursor);
+	return keys;
+}
+
+async function movePosts(env: AdminServiceEnv, channelId: string, from: string | null, to: string): Promise<{ changed: number; failed: number }> {
+	const bucket = postsBucketOf(env);
+	if (!bucket) return { changed: 0, failed: 0 };
+	const keys = await postKeysOf(bucket, channelId);
 	return cascade(bucket, keys, (post) => {
 		if (typeof post.id !== 'string' || post.userId === to || (from && post.userId !== from)) return false;
 		post.userId = to;
@@ -672,6 +688,9 @@ async function moveHandleEntry(env: AdminServiceEnv, channelId: string, handle: 
  * channel it subscribes to. The previous owner keeps their bell only where another of their
  * identities still subscribes. Read through the user index, never by subscriber_channel_id alone.
  */
+/** Subscriptions moved per D1 batch (3 statements each). */
+const SUBSCRIPTION_MOVE_CHUNK = 30;
+
 async function moveChannelSubscriptions(env: AdminServiceEnv, channelId: string, from: string | null, to: string, at = Date.now()): Promise<number> {
 	const db = env.NOTIFICATIONS_DB as D1Database | undefined;
 	if (!db || !from) return 0;
@@ -680,29 +699,30 @@ async function moveChannelSubscriptions(env: AdminServiceEnv, channelId: string,
 		.bind(from, channelId)
 		.all<{ channel_id: string }>();
 	const targets = (results ?? []).map((r) => r.channel_id);
-	if (!targets.length) return 0;
-	await db
-		.prepare('UPDATE channel_subscriptions SET user_id = ? WHERE user_id = ? AND subscriber_channel_id = ?')
-		.bind(to, from, channelId)
-		.run();
-	const steps: D1PreparedStatement[] = [];
-	for (const target of targets) {
-		steps.push(
-			db
-				.prepare(
-					`INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at)
-					 SELECT channel_id, ?, bell, ?, ? FROM channel_subscribers WHERE channel_id = ? AND user_id = ?`,
-				)
-				.bind(to, at, at, target, from),
-			db
-				.prepare(
-					`DELETE FROM channel_subscribers WHERE channel_id = ? AND user_id = ?
-					 AND NOT EXISTS (SELECT 1 FROM channel_subscriptions WHERE user_id = ? AND channel_id = ?)`,
-				)
-				.bind(target, from, from, target),
-		);
+	// Each subscription moves with its bell in one batch (a D1 transaction): a crash between batches
+	// leaves the rest on the previous owner, where the retry finds them again. Never the row first and
+	// the bell later, or a retry would find nothing left to move and drop the bell.
+	for (let i = 0; i < targets.length; i += SUBSCRIPTION_MOVE_CHUNK) {
+		const steps: D1PreparedStatement[] = [];
+		for (const target of targets.slice(i, i + SUBSCRIPTION_MOVE_CHUNK)) {
+			steps.push(
+				db
+					.prepare(
+						`INSERT OR IGNORE INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at)
+						 SELECT channel_id, ?, bell, ?, ? FROM channel_subscribers WHERE channel_id = ? AND user_id = ?`,
+					)
+					.bind(to, at, at, target, from),
+				db.prepare('UPDATE channel_subscriptions SET user_id = ? WHERE channel_id = ? AND subscriber_channel_id = ? AND user_id = ?').bind(to, target, channelId, from),
+				db
+					.prepare(
+						`DELETE FROM channel_subscribers WHERE channel_id = ? AND user_id = ?
+						 AND NOT EXISTS (SELECT 1 FROM channel_subscriptions WHERE user_id = ? AND channel_id = ?)`,
+					)
+					.bind(target, from, from, target),
+			);
+		}
+		await db.batch(steps);
 	}
-	await db.batch(steps);
 	return targets.length;
 }
 
@@ -741,6 +761,37 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 		const videos = await readMany(env.videos, videoIds);
 		const left = [...videos.values()].filter((v) => v.channelId === channelId && v.userId === from).length;
 		if (left) problems.push(`videos:${left}`);
+		const onFrom = (rows: Map<string, Row>) => [...rows.values()].filter((r) => r.userId === from).length;
+		const streams = onFrom(await readMany(env.videos, await channelStreamKeys(env, channelId)));
+		if (streams) problems.push(`live_streams:${streams}`);
+		const playlistIds = Array.isArray(channel?.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+		const playlists = [...(await readMany(env.playlists, playlistIds)).values()].filter((p) => p.channelId === channelId && p.userId === from).length;
+		if (playlists) problems.push(`playlists:${playlists}`);
+		const posts = postsBucketOf(env);
+		if (posts) {
+			const n = onFrom(await readMany(posts, await postKeysOf(posts, channelId)));
+			if (n) problems.push(`posts:${n}`);
+		}
+		const schedules = scheduleBucketOf(env);
+		if (schedules) {
+			const n = onFrom(await readMany(schedules, await scheduleKeysOf(env, videoIds)));
+			if (n) problems.push(`schedules:${n}`);
+		}
+		const subs = env.NOTIFICATIONS_DB as D1Database | undefined;
+		if (subs) {
+			const row = await subs.prepare('SELECT COUNT(*) AS n FROM channel_subscriptions WHERE user_id = ? AND subscriber_channel_id = ?').bind(from, channelId).first<{ n: number }>();
+			if (Number(row?.n)) problems.push(`subscriptions:${row!.n}`);
+		}
+	}
+	const invites = env.SEARCH_DB as D1Database | undefined;
+	if (invites) {
+		const newOwner = await repo(env.profiles).getObject(to);
+		const email = typeof newOwner?.email === 'string' ? newOwner.email.trim().toLowerCase() : '';
+		const row = await invites
+			.prepare(`SELECT COUNT(*) AS n FROM channel_invites WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`)
+			.bind(channelId, to, email)
+			.first<{ n: number }>();
+		if (Number(row?.n)) problems.push(`invites:${row!.n}`);
 	}
 	return problems;
 }
