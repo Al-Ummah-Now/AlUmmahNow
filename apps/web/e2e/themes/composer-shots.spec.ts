@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { applyTheme, LANGS, MODES, mockApi } from './harness';
+import { applyTheme, LANGS, localGet, MODES, mockApi } from './harness';
 import { consentCookie } from '../test-utils/consent';
 import type { BrowserContext } from '@playwright/test';
 
@@ -27,7 +27,7 @@ const ACCOUNTS: Record<Who, { userId: string; email: string; name: string; token
 async function signInAs(context: BrowserContext, baseURL: string, active: Who, channel: string | null, others: Who[] = []) {
   const entry = async (who: Who) => {
     const a = ACCOUNTS[who];
-    const res = await context.request.get(`${MOCK_API}/api/channels/access`, { headers: { Authorization: `Bearer ${a.token}`, Origin: baseURL } });
+    const res = await localGet(context.request, `${MOCK_API}/api/channels/access`, { headers: { Authorization: `Bearer ${a.token}`, Origin: baseURL } });
     const channels = ((await res.json()) as { data: unknown[] }).data;
     const first = (channels[0] as { id?: string } | undefined)?.id ?? null;
     return [a.userId, { userId: a.userId, email: a.email, displayName: a.name, accessToken: a.token, refreshToken: '', channels, activeChannelId: who === active ? channel : first, lastActivity: Date.now() }] as const;
@@ -46,7 +46,7 @@ async function signInAs(context: BrowserContext, baseURL: string, active: Who, c
 
 
 
-test.beforeEach(async ({ request }) => { await request.get(`${MOCK_API}/__fixtures/reset`); });
+test.beforeEach(async ({ request }) => { await localGet(request, `${MOCK_API}/__fixtures/reset`); });
 
 const CASES: { id: string; who: Who; channel: string | null }[] = [
   { id: 'composer-personal', who: 'aisha', channel: null },

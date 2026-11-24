@@ -1,4 +1,4 @@
-import { expect, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import { consentCookie } from '../test-utils/consent';
 
 /** Built-in site themes (packages/shared-types SITE_THEMES) and the modes each ships. */
@@ -83,6 +83,30 @@ export async function mockApi(page: Page) {
   await page.route(/^https?:\/\/127\.0\.0\.1:\d+\/api\/notifications(\?.*)?$/, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, result: { items: NOTIFICATIONS, nextCursor: null, unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } }) }));
   await page.route(/^wss?:/, (route) => route.abort());
+}
+
+/**
+ * GET through a Playwright APIRequestContext without pooling keep-alive sockets.
+ * Playwright shares one process-wide `http.Agent({ keepAlive: true })` across all
+ * APIRequestContext instances, while local Node servers (`next dev`, `mock-server.mjs`) close
+ * idle keep-alive sockets after 5 s (`keepAliveTimeout`). Sending `Connection: close` stops
+ * sockets from idling in the pool between steps; `maxRetries: 2` covers a transport-level
+ * `ECONNRESET` only and never retries HTTP 4xx/5xx responses or other errors.
+ */
+export function localGet(
+  request: APIRequestContext,
+  url: string,
+  options?: Parameters<APIRequestContext['get']>[1],
+) {
+  const headers = { ...options?.headers };
+  if (!Object.keys(headers).some((k) => k.toLowerCase() === 'connection')) {
+    headers.connection = 'close';
+  }
+  return request.get(url, {
+    ...options,
+    headers,
+    maxRetries: options?.maxRetries ?? 2,
+  });
 }
 
 /**
