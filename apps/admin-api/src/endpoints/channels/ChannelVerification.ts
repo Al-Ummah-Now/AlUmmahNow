@@ -1,4 +1,5 @@
 import { AdminRoute, AppContext } from "../../base";
+import { hasContentPermission } from "@al-ummah/shared-types";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -69,7 +70,10 @@ export class ChannelVerificationGet extends AdminRoute {
     const { params: { channelId } } = await this.getValidatedData<typeof this.schema>();
     const channel = await new R2Repository<ChannelRecord>(c.env.channels).getObject(channelId);
     if (!channel) return c.json({ success: false, error: 'Channel not found' }, 404);
-    return { success: true, result: state(channelId, channel, await history(c.env.REPORTS_DB, channelId)) };
+    // The reason is internal to admins who may change the label (channels:manage); moderators see the rest
+    const rows = await history(c.env.REPORTS_DB, channelId);
+    const mayReadReasons = hasContentPermission(this.getRoles(c), 'channels:manage');
+    return { success: true, result: state(channelId, channel, mayReadReasons ? rows : rows.map((r) => ({ ...r, note: null }))) };
   }
 }
 
