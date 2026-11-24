@@ -70,6 +70,7 @@
 --   apps/api-videos/migrations/search/0116_support_fee_schedules.sql
 --   apps/api-videos/migrations/search/0117_support_app_settings.sql
 --   apps/api-videos/migrations/search/0118_support_dormant_trolley.sql
+--   apps/api-videos/migrations/search/0119_prayer_provider_gate.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -143,6 +144,8 @@ CREATE TABLE media_r2_verified (video_id TEXT PRIMARY KEY, run_id TEXT NOT NULL,
 CREATE TABLE metadata_translations (video_id TEXT NOT NULL, lang TEXT NOT NULL, source_hash TEXT NOT NULL, title TEXT NOT NULL, description TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (video_id, lang)) WITHOUT ROWID;
 CREATE TABLE playback_fallback_daily (day TEXT NOT NULL, requested TEXT NOT NULL, actual TEXT NOT NULL, reason TEXT NOT NULL, server_fallbacks INTEGER NOT NULL DEFAULT 0, qoe_sessions INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, requested, actual, reason));
 CREATE TABLE playback_qoe_daily (day TEXT NOT NULL, provider TEXT NOT NULL, device TEXT NOT NULL, country TEXT NOT NULL, sessions INTEGER NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, startup_ms_sum INTEGER NOT NULL DEFAULT 0, rebuffers INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, kbps_watch_s REAL NOT NULL DEFAULT 0, peak_kbps_sum INTEGER NOT NULL DEFAULT 0, switches INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, fallbacks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, provider, device, country));
+CREATE TABLE prayer_fetch_leases (cache_key TEXT PRIMARY KEY, lease_id TEXT NOT NULL, expires_at_ms INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE prayer_provider_gate (provider TEXT PRIMARY KEY, window_start_ms INTEGER NOT NULL DEFAULT 0, window_count INTEGER NOT NULL DEFAULT 0, failures INTEGER NOT NULL DEFAULT 0, open_until_ms INTEGER NOT NULL DEFAULT 0, probe_until_ms INTEGER NOT NULL DEFAULT 0, next_allowed_ms INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE privacy_footprint_sigs (kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
 CREATE TABLE privacy_footprints (user_id TEXT NOT NULL, kind TEXT NOT NULL, target_id TEXT NOT NULL, PRIMARY KEY (user_id, kind, target_id)) WITHOUT ROWID;
 CREATE TABLE quran_translation_defaults (lang TEXT PRIMARY KEY, qf_translation_id INTEGER NOT NULL, name TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
@@ -359,6 +362,7 @@ CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);
 CREATE INDEX idx_media_provider_refs_video ON media_provider_refs (video_id);
 CREATE INDEX idx_media_r2_verified_library ON media_r2_verified (library_id, video_id);
+CREATE INDEX idx_prayer_fetch_leases_expires ON prayer_fetch_leases (expires_at_ms);
 CREATE INDEX idx_privacy_footprints_target ON privacy_footprints (kind, target_id);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
