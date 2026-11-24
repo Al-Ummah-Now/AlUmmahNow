@@ -2033,8 +2033,13 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 	// Started only by the cleanup: a user restored meanwhile is not erased
 	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
+	const previousErrors = Array.isArray(job.result?.errors) ? (job.result.errors as string[]) : [];
 	const summary = await eraseUserStep(env as AdminServiceEnv & Record<string, unknown>, job.targetId, job.params.resumeToken as string | undefined);
-	const result = { deletedVideos: previous + summary.deletedVideoIds.length };
+	const errors = [...new Set([...previousErrors, ...(summary.errors ?? [])])];
+	const result: Record<string, unknown> = {
+		deletedVideos: previous + summary.deletedVideoIds.length,
+		...(errors.length ? { errors } : {}),
+	};
 	if (!summary.complete) return { done: false, params: { resumeToken: summary.resumeToken }, result };
 	return { done: true, result };
 }
@@ -2043,6 +2048,7 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
+	const previousErrors = Array.isArray(job.result?.errors) ? (job.result.errors as string[]) : [];
 	const step = await eraseRunUserData(
 		env as never,
 		job.targetId,
@@ -2076,7 +2082,11 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 	// Upload markers and TUS sessions that name the user (#1059), as the full erasure does
 	await eraseUploadTraces(env as never, job.targetId, step.deletedVideoIds);
 	for (const videoId of step.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId: job.targetId, reason: 'admin-erasure' });
-	const result = { deletedVideos: previous + step.deletedVideoIds.length };
+	const errors = [...new Set([...previousErrors, ...(step.errors ?? [])])];
+	const result: Record<string, unknown> = {
+		deletedVideos: previous + step.deletedVideoIds.length,
+		...(errors.length ? { errors } : {}),
+	};
 	if (!step.complete) return { done: false, params: { step: step.step }, result };
 	// Monthly support stops at the collector before the erasure (wiki AUN-MEMBERS §9.8)
 	await stopSupportBeforeErasure(env as never, job.targetId, (mode) => vendorContext(env as never, mode));

@@ -43,7 +43,8 @@ import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
-import { eraseLegacyRestoreBackups } from '../admin/legacy-restore';
+import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin/legacy-restore';
+import { logger } from '../logger';
 
 type Json = Record<string, any>;
 
@@ -60,6 +61,8 @@ export interface RunUserEraseResult {
 	step: number;
 	deletedVideoIds: string[];
 	deleted: Record<string, number>;
+	/** Non-fatal gaps recorded when a required binding was absent (e.g. ADMIN_BACKUPS unbound). */
+	errors?: string[];
 }
 
 export class OwnershipIndexIncomplete extends Error {
@@ -254,6 +257,9 @@ export async function eraseRunUserData(
 				const backups = asBucket(env.ADMIN_BACKUPS);
 				bump('profileEmailReports', await eraseProfileEmailReports(backups, userId, budget));
 				bump('legacyRestoreBackups', await eraseLegacyRestoreBackups(backups, userId, budget));
+			} else {
+				logger.warn('[Privacy] ADMIN_BACKUPS is not bound; skipped legacy-restore backup erasure', { userId });
+				result.errors = [...(result.errors ?? []), ADMIN_BACKUPS_UNBOUND_ERROR];
 			}
 			// Who uploaded which image (lib/csam/imageOwners.ts); CSAM evidence is never erased here
 			budget.spend();

@@ -12,15 +12,19 @@ import adminRouter from '../src/routers/admin.router';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import {
+	ADMIN_BACKUPS_UNBOUND_ERROR,
 	LEGACY_RESTORE_POINTERS_PREFIX,
 	approvedFromPlan,
 	backupKey,
+	backupKeyFromPointer,
 	backupPointerKey,
 	eraseLegacyRestoreBackups,
 	planLegacyRestore,
 	runLegacyRestore,
 	type AuthUsersDb,
 } from '../src/lib/admin/legacy-restore';
+import { recordDeletion } from '../src/lib/admin/deletions';
+import { logger } from '../src/lib/logger';
 import { eraseUserData } from '../src/lib/privacy/user-data';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { MemoryBucket } from './helpers';
@@ -454,5 +458,144 @@ describe('restore legacy profile fields: account erasure', () => {
 		const out = await runLegacyRestore(env as never, job);
 		assert.deepEqual(out, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is pending deletion' }] } });
 		assert.equal(env.ADMIN_BACKUPS.store.size, 0);
+	});
+
+	it('cleans up backup and pointer in catch when profiles.put throws after erasure', async () => {
+		const { env } = setup();
+		env.profiles.put = (async () => {
+			// Erasure completes between backup write and profiles.put, then profiles.put throws
+			await eraseUserData(erasureBuckets(env.profiles, env.ADMIN_BACKUPS), USR, new OperationBudget(10_000));
+			throw new Error('R2 write failed');
+		}) as never;
+
+		const job = { id: 'job-throw', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		await assert.rejects(runLegacyRestore(env as never, job), /R2 write failed/);
+		assert.equal(env.profiles.store.has(USR), false);
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'catch removed uncommitted backup and pointer');
+	});
+
+	it('cleans up the pointer in catch when the backup copy put throws', async () => {
+		const { env } = setup();
+		const realPut = env.ADMIN_BACKUPS.put.bind(env.ADMIN_BACKUPS);
+		env.ADMIN_BACKUPS.put = (async (key: string, value: string, options?: any) => {
+			if (!key.startsWith(LEGACY_RESTORE_POINTERS_PREFIX)) throw new Error('R2 backup put failed');
+			return realPut(key, value, options);
+		}) as never;
+
+		const job = { id: 'job-bthrow', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		await assert.rejects(runLegacyRestore(env as never, job), /R2 backup put failed/);
+		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'pointer written before failed backup put is removed');
+	});
+
+	it('a retry after a crash sweeps leftover backups on gone and pending-deletion exits', async () => {
+		const { env } = setup();
+		// Simulate a prior crashed attempt that left a backup + pointer after the profile disappeared
+		await env.profiles.delete(USR);
+		await env.ADMIN_BACKUPS.put(backupPointerKey(USR, 'job-crash', 'v0'), '');
+		await env.ADMIN_BACKUPS.put(backupKey('job-crash', USR, 'v0'), JSON.stringify(currentProfile));
+		await env.ADMIN_BACKUPS.put(backupPointerKey(INTRUDER, 'job-crash', 'v0'), '');
+		await env.ADMIN_BACKUPS.put(backupKey('job-crash', INTRUDER, 'v0'), JSON.stringify({ id: INTRUDER }));
+
+		const job = { id: 'job-crash', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		const out = await runLegacyRestore(env as never, job);
+		assert.deepEqual(out, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is gone' }] } });
+		assert.deepEqual(
+			[...env.ADMIN_BACKUPS.store.keys()].sort(),
+			[backupPointerKey(INTRUDER, 'job-crash', 'v0'), backupKey('job-crash', INTRUDER, 'v0')].sort(),
+			'erased user leftovers swept on retry; other user untouched',
+		);
+
+		// Same sweep on pending-deletion exit
+		await env.profiles.put(USR, JSON.stringify({ ...currentProfile, adminDeletion: { at: '2026-11-20T00:00:00.000Z', by: 'usr_admin' } }));
+		await env.ADMIN_BACKUPS.put(backupPointerKey(USR, 'job-soft-retry', 'v1'), '');
+		await env.ADMIN_BACKUPS.put(backupKey('job-soft-retry', USR, 'v1'), JSON.stringify(currentProfile));
+		const softOut = await runLegacyRestore(env as never, { ...job, id: 'job-soft-retry' });
+		assert.deepEqual(softOut, { done: true, result: { written: [], skipped: [{ id: USR, reason: 'profile is pending deletion' }] } });
+		assert.equal([...env.ADMIN_BACKUPS.store.keys()].some((k) => k.includes(USR)), false);
+	});
+
+	it('eraseLegacyRestoreBackups flushes > 500 pointers across multiple list pages without listing the whole prefix', async () => {
+		const backups = new MemoryBucket();
+		const total = 1050;
+		for (let i = 0; i < total; i++) {
+			const jobId = `job-${String(i).padStart(4, '0')}`;
+			backups.store.set(backupPointerKey(USR, jobId, 'v1'), '');
+			backups.store.set(backupKey(jobId, USR, 'v1'), JSON.stringify({ id: USR }));
+		}
+		backups.store.set(backupPointerKey(INTRUDER, 'job-keep', 'v1'), '');
+		backups.store.set(backupKey('job-keep', INTRUDER, 'v1'), JSON.stringify({ id: INTRUDER }));
+
+		const listCalls: Array<{ prefix?: string; cursor?: string }> = [];
+		const realList = backups.list.bind(backups);
+		backups.list = (async (opts: { prefix?: string; cursor?: string; limit?: number } = {}) => {
+			listCalls.push({ prefix: opts.prefix, cursor: opts.cursor });
+			return realList(opts as never);
+		}) as never;
+
+		const deleted = await eraseLegacyRestoreBackups(backups as never, USR, new OperationBudget(100));
+		assert.equal(deleted, total);
+		assert.ok(listCalls.length >= 2, 'paged across multiple list responses');
+		assert.ok(listCalls.every((c) => c.prefix === `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/`), 'every list call stayed under the user pointer prefix');
+		assert.deepEqual(
+			[...backups.store.keys()].sort(),
+			[backupPointerKey(INTRUDER, 'job-keep', 'v1'), backupKey('job-keep', INTRUDER, 'v1')].sort(),
+		);
+	});
+
+	it('backupKeyFromPointer rejects malformed keys and eraseLegacyRestoreBackups skips them safely', async () => {
+		assert.equal(backupKeyFromPointer(USR, backupPointerKey(USR, 'job-1', 'v1')), backupKey('job-1', USR, 'v1'));
+		assert.equal(backupKeyFromPointer(USR, `legacy-restore/other/${USR}/job-1/v1`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/no-slash`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}//v1`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/by-user/v1`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/a/b/v1`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/job-1/`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/job-1/..`), null);
+		assert.equal(backupKeyFromPointer(USR, `${LEGACY_RESTORE_POINTERS_PREFIX}${INTRUDER}/job-1/v1`), null);
+		assert.equal(backupKeyFromPointer('bad/id', `${LEGACY_RESTORE_POINTERS_PREFIX}bad/id/job-1/v1`), null);
+
+		const backups = new MemoryBucket();
+		await backups.put(`${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/malformed-no-etag`, '');
+		await backups.put(backupPointerKey(USR, 'job-ok', 'v2'), '');
+		await backups.put(backupKey('job-ok', USR, 'v2'), JSON.stringify(currentProfile));
+		await backups.put('unrelated/object.json', JSON.stringify({ keep: true }));
+
+		const deleted = await eraseLegacyRestoreBackups(backups as never, USR, new OperationBudget(20));
+		assert.equal(deleted, 1);
+		assert.deepEqual([...backups.store.keys()], ['unrelated/object.json']);
+	});
+
+	it('logs a warning and reports an error in erasure summary and user.delete-data job result when ADMIN_BACKUPS is unbound', async () => {
+		const warnings: unknown[][] = [];
+		const realWarn = logger.warn.bind(logger);
+		logger.warn = ((...args: unknown[]) => {
+			warnings.push(args);
+		}) as never;
+		try {
+			const { env } = setup();
+			const unbound = erasureBuckets(env.profiles, env.ADMIN_BACKUPS);
+			delete (unbound as { ADMIN_BACKUPS?: unknown }).ADMIN_BACKUPS;
+			const summary = await eraseUserData(unbound, USR, new OperationBudget(10_000));
+			assert.equal(summary.complete, true);
+			assert.deepEqual(summary.errors, [ADMIN_BACKUPS_UNBOUND_ERROR]);
+			assert.ok(warnings.some((args) => String(args[0]).includes('ADMIN_BACKUPS is not bound')));
+
+			// Admin job user.delete-data propagates the error into the job result
+			const jobEnv = { ...erasureBuckets(new MemoryBucket({ [USR]: currentProfile }), new MemoryBucket()), SEARCH_DB: new SqliteD1() };
+			delete (jobEnv as { ADMIN_BACKUPS?: unknown }).ADMIN_BACKUPS;
+			await recordDeletion(jobEnv.SEARCH_DB as never, { kind: 'user', id: USR, title: USR, ownerId: USR, deletedBy: 'usr_admin', deletedAt: '2026-11-20T00:00:00.000Z' });
+			const outcome = await ADMIN_JOB_HANDLERS['user.delete-data'](jobEnv as never, {
+				id: 'job-del',
+				kind: 'user.delete-data',
+				targetKind: 'user',
+				targetId: USR,
+				params: {},
+				result: null,
+			} as never);
+			assert.equal(outcome.done, true);
+			assert.deepEqual(outcome.result?.errors, [ADMIN_BACKUPS_UNBOUND_ERROR]);
+		} finally {
+			logger.warn = realWarn;
+		}
 	});
 });

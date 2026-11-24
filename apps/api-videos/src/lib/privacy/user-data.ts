@@ -54,7 +54,7 @@ import { eraseLiveSessionOwner } from '../live/store';
 import { LIVE_DELETE_BATCH, eraseLiveChat, eraseLiveReminders, exportLiveChat, exportLiveReminders, isMissingTable } from '../live/metadata';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
-import { eraseLegacyRestoreBackups } from '../admin/legacy-restore';
+import { ADMIN_BACKUPS_UNBOUND_ERROR, eraseLegacyRestoreBackups } from '../admin/legacy-restore';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
@@ -583,6 +583,8 @@ export interface ErasureSummary {
 	 * recomputed by the processor from the remaining records on the next like/vote.
 	 */
 	affectedPosts: string[];
+	/** Non-fatal gaps recorded when a required binding was absent (e.g. ADMIN_BACKUPS unbound). */
+	errors?: string[];
 }
 
 export interface ErasureHooks {
@@ -1262,6 +1264,9 @@ export async function eraseUserData(
 				bump(summary.deleted, 'profileEmailReports', await eraseProfileEmailReports(backups, userId, ctx.budget));
 				const removed = await eraseLegacyRestoreBackups(backups, userId, ctx.budget);
 				if (removed > 0) bump(summary.deleted, 'legacyRestoreBackups', removed);
+			} else {
+				logger.warn('[Privacy] ADMIN_BACKUPS is not bound; skipped legacy-restore backup erasure', { userId });
+				summary.errors = [...(summary.errors ?? []), ADMIN_BACKUPS_UNBOUND_ERROR];
 			}
 			// Who uploaded which image (lib/csam/imageOwners.ts). CSAM evidence is not here: it
 			// lives in its own bucket that no erasure touches (docs/specs/CSAM-RESPONSE.md §4)
