@@ -91,7 +91,8 @@ async function channelsOf(env: ProfileEmailsEnv, owners: Map<string, Row>): Prom
 
 interface PagePlan {
 	scanned: number;
-	matching: number;
+	/** User ids whose stored email is the account's */
+	matching: string[];
 	missing: number;
 	unreadable: number;
 	entries: ProfileEmailEntry[];
@@ -107,7 +108,7 @@ async function planPage(env: ProfileEmailsEnv, startAfter: string | undefined): 
 	const keys = page.objects.map((o) => o.key).filter((k) => !k.includes('/') && !k.includes(':'));
 	const { rows, unreadable } = await readAll(env.profiles, keys);
 	const accounts = await authEmails(env, [...rows.keys()]);
-	const plan: PagePlan = { scanned: rows.size, matching: 0, missing: 0, unreadable: unreadable.length, entries: [], noAccount: [], next: page.truncated && last ? last : null };
+	const plan: PagePlan = { scanned: rows.size, matching: [], missing: 0, unreadable: unreadable.length, entries: [], noAccount: [], next: page.truncated && last ? last : null };
 	const owners = new Map<string, Row>();
 	for (const [userId, profile] of rows) {
 		const account = accounts.get(userId);
@@ -117,7 +118,7 @@ async function planPage(env: ProfileEmailsEnv, startAfter: string | undefined): 
 			continue;
 		}
 		owners.set(userId, profile);
-		if (stored === account) plan.matching++;
+		if (stored === account) plan.matching.push(userId);
 		else {
 			if (!stored) plan.missing++;
 			plan.entries.push({ kind: 'profile', id: userId, userId, stored, account });
@@ -208,7 +209,8 @@ export async function runProfileEmails(env: ProfileEmailsEnv, job: AdminJob): Pr
 	const result: ProfileEmailsResult = {
 		mode,
 		scanned: n('scanned') + plan.scanned,
-		matching: n('matching') + (plan.scanned - profiles.length - plan.noAccount.length),
+		// A retried repair finds its own earlier writes matching: they stay counted as differing
+		matching: n('matching') + plan.matching.filter((userId) => !records.get(userId)?.entries.some((e) => e.kind === 'profile')).length,
 		differs: n('differs') + profiles.length - missing,
 		missing: n('missing') + missing,
 		channels: n('channels') + channels.length,

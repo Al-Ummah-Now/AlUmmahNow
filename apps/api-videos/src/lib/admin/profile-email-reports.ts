@@ -6,7 +6,7 @@
  *   profile-emails/by-user/{userId}/{day}/{jobId}/{page}        its pointer (empty)
  *
  * Records are deleted after 30 days (daily cron, sweepProfileEmailReports: keys sort by day, so it reads
- * only expired ones) and with the account (eraseProfileEmailReports: the user's own pointers). An email is
+ * only expired ones; sweepProfileEmailPointers removes a pointer left alone) and with the account (eraseProfileEmailReports: the user's own pointers). An email is
  * written only after its pointer exists, and a record of a profile erased meanwhile is removed again.
  */
 import type { AdminJob, ProfileEmailEntry } from '@al-ummah/shared-types';
@@ -93,9 +93,12 @@ export async function eraseProfileEmailReports(bucket: BucketLike, userId: strin
 	return deleted;
 }
 
+/** The first day whose reports are kept. */
+const keptFrom = (now: Date) => new Date(now.getTime() - REPORT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
 /** Daily: deletes the records older than 30 days with their pointers. Keys sort by day, so it stops at the first one to keep. */
 export async function sweepProfileEmailReports(bucket: BucketLike, now: Date, budget: OperationBudget): Promise<number> {
-	const keepFrom = new Date(now.getTime() - REPORT_DAYS * 86_400_000).toISOString().slice(0, 10);
+	const keepFrom = keptFrom(now);
 	let deleted = 0;
 	const expired: string[] = [];
 	const flush = async () => {
@@ -115,5 +118,24 @@ export async function sweepProfileEmailReports(bucket: BucketLike, now: Date, bu
 		if (expired.length >= 500) await flush();
 	}
 	if (expired.length) await flush();
+	return deleted;
+}
+
+/**
+ * Daily, after the records: deletes expired pointers whose record is gone already (a crash while the
+ * account was being erased). Pointers are empty and sort by user, so it lists the pointer prefix, which
+ * holds about 30 days of them.
+ */
+export async function sweepProfileEmailPointers(bucket: BucketLike, now: Date, budget: OperationBudget): Promise<number> {
+	const keepFrom = keptFrom(now);
+	const expired: string[] = [];
+	let deleted = 0;
+	for await (const { key } of listKeys(bucket, budget, POINTERS)) {
+		const day = key.slice(POINTERS.length).split('/')[1] ?? '';
+		if (day >= keepFrom) continue;
+		expired.push(key);
+		if (expired.length >= 1000) deleted += await deleteKeys(bucket, expired.splice(0), budget);
+	}
+	if (expired.length) deleted += await deleteKeys(bucket, expired, budget);
 	return deleted;
 }
