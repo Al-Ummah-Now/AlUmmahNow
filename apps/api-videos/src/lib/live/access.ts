@@ -18,7 +18,6 @@
  */
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
-import { logger } from '../logger';
 import { purgeCdn } from '../media/r2-delivery';
 import type { LiveEnv } from './providers';
 
