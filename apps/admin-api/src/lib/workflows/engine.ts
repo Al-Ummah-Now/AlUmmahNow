@@ -130,6 +130,12 @@ export async function ruleNeedsApproval(ctx: WorkflowCtx, type: WorkflowActionTy
   return enforceFloor(type, scope, inForce.config, 0).approvalsNeeded > 0;
 }
 
+/** The rule a new request of this type and scope would get (the rule in force with its floor applied). */
+export async function ruleForProposal(ctx: WorkflowCtx, type: WorkflowActionType, scope: string): Promise<WorkflowRuleConfig> {
+  const inForce = await ruleInForce(ctx, type, scope);
+  return enforceFloor(type, scope, inForce.config, 0);
+}
+
 /** The rule with its floor applied: a stored rule can never be weaker than the floor (§4.3). */
 function enforceFloor(type: WorkflowActionType, scope: string, rule: WorkflowRuleConfig, minApprovals: number): WorkflowRuleConfig {
   const floor = floorFor(type, scope);

@@ -24,6 +24,7 @@ import {
   workflowFloorFor,
   hasContentPermission,
   isWorkflowActionType,
+  isFeatureKey,
   type WorkflowActionType,
   type WorkflowActor,
   type WorkflowStatus,
@@ -37,6 +38,8 @@ import { stepUpAnswer } from '../middleware/passkeys';
 import {
   WorkflowError,
   approveRequest,
+  ruleForProposal,
+  ruleNeedsApproval,
   hasWorkflowExecutor,
   commentOnRequest,
   getRequestView,
@@ -305,6 +308,26 @@ app.post('/requests/:id/retry', async (c) => {
   if (!allowed) throw new Refused(403, 'forbidden');
   return ok(c, await retryRequest(ctx, actor, c.req.param('id')));
 });
+
+/**
+ * Step-up `when` for PUT /api/features/:key: only when the change would become a request whose rule
+ * asks for a step-up to propose (switching a money-floored feature off is immediate and needs none).
+ */
+export async function featureProposalNeedsStepUp(c: Context): Promise<boolean> {
+  const key = c.req.param('key');
+  const env = c.env as AdminBindings;
+  if (!key || !isFeatureKey(key) || !env.SEARCH_DB) return false;
+  let enabled: unknown;
+  try {
+    enabled = ((await c.req.raw.clone().json()) as { enabled?: unknown }).enabled;
+  } catch {
+    return false;
+  }
+  if (workflowFloorFor('features.set', key).money && enabled === false) return false;
+  const ctx = workflowCtx(env as never);
+  if (!(await ruleNeedsApproval(ctx, 'features.set', key))) return false;
+  return (await ruleForProposal(ctx, 'features.set', key)).stepUp === 'propose_and_approve';
+}
 
 /** Step-up `when` for approve and reject: only when the request's rule asks for it. */
 export async function requestNeedsStepUp(c: Context): Promise<boolean> {

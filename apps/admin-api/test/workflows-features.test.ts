@@ -13,6 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { WORKFLOW_ACTIONS, forgetFeatureSwitches, type FeatureStateReport } from '@al-ummah/shared-types';
 import { createFeaturesRouter } from '../src/routers/features.router';
+import { registerStepUpRoutes } from '../src/middleware/step-up-routes';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import { approveRequest, ruleVersionStatement } from '../src/lib/workflows/engine';
 import { workflowCtx } from '../src/routers/workflows.router';
@@ -67,13 +68,14 @@ async function setup() {
     INTERNAL_API_KEY: 'k',
     VIDEOS: { fetch: async () => Response.json({ success: true, result: STATE }) },
   };
-  const as = (userId: string, roles: string[]) => {
+  const as = (userId: string, roles: string[], fresh = true) => {
     const app = new Hono();
     app.use('*', errorEnvelope);
     app.use('*', async (c, next) => {
-      c.set('auth' as never, { userId, roles, payload: { auth_time: Math.floor(Date.now() / 1000) } } as never);
+      c.set('auth' as never, { userId, roles, payload: fresh ? { auth_time: Math.floor(Date.now() / 1000) } : {} } as never);
       await next();
     });
+    registerStepUpRoutes(app as never);
     app.route('/api/features', createFeaturesRouter({ creatorSupport: async () => ({ ok: true as const }) }));
     return async (key: string, json: unknown) => {
       const res = await app.request(`/api/features/${key}`, { method: 'PUT', body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } }, env as never);
@@ -95,6 +97,14 @@ describe('features.set on the approval workflow', () => {
     assert.equal(res.body.result.request.domain, 'money');
     assert.equal(t.enabled('creatorSupport'), null, 'nothing changes before approval');
     const id = res.body.result.request.id as string;
+    const list = async () => {
+      const app = new Hono();
+      app.use('*', async (c, next) => { c.set('auth' as never, { userId: 'sa1', roles: ['super_admin'] } as never); await next(); });
+      app.route('/api/features', createFeaturesRouter({ creatorSupport: async () => ({ ok: true as const }) }));
+      const r = await app.request('/api/features', {}, t.env as never);
+      return ((await r.json()) as { result: { items: { key: string; pending: unknown }[] } }).result.items.find((i) => i.key === 'creatorSupport')!.pending;
+    };
+    assert.deepEqual(await list(), { requestId: id, enabled: true }, 'the Features page sees the waiting change');
 
     const ctx = workflowCtx(t.env as never, { steppedUp: true });
     await assert.rejects(approveRequest(ctx, await ctx.directory.actor('owner', ['super_admin']), id, {}), /approval_not_allowed/);
@@ -102,6 +112,7 @@ describe('features.set on the approval workflow', () => {
     const done = await approveRequest(ctx, await ctx.directory.actor('fin1', []), id, {});
     assert.equal(done.status, 'applied');
     assert.equal(t.enabled('creatorSupport'), 1);
+    assert.equal(await list(), null, 'and it clears once applied');
     const change = { ...(t.search.raw.prepare('SELECT id, actor_id FROM feature_switch_changes WHERE key = ?').get('creatorSupport') as { id: string; actor_id: string }) };
     assert.deepEqual(change, { id, actor_id: 'sa1' }, 'one change row, keyed by the request, by the person who asked');
   });
@@ -133,5 +144,28 @@ describe('features.set on the approval workflow', () => {
     const again = await t.as('sa2', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'r' });
     assert.equal(again.status, 409);
     assert.equal(again.body.code, 'change_pending');
+  });
+
+  it('a stale version is refused with 409 before anything is proposed', async () => {
+    const t = await setup();
+    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 7, reason: 'r' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.code, 'feature_changed');
+    assert.equal(t.search.raw.prepare('SELECT COUNT(*) AS n FROM workflow_requests').get()!.n, 0);
+  });
+
+  it('a rule that needs a step-up to propose asks for a fresh sign-in, not propose_not_allowed', async () => {
+    const t = await setup();
+    const config = { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }], stepUp: 'propose_and_approve' };
+    const ctx = workflowCtx(t.env as never, { steppedUp: true });
+    await ruleVersionStatement(ctx, { type: 'features.set', scope: 'live', version: 1, config, requestId: null, by: 'seed' }).run();
+    const row = t.search.raw.prepare('SELECT version FROM feature_switches WHERE key = ?').get('live') as { version: number } | undefined;
+    const stale = await t.as('sa1', ['super_admin'], false)('live', { enabled: false, expectedVersion: row?.version ?? 0, reason: 'r' });
+    assert.equal(stale.status, 401, JSON.stringify(stale.body));
+    assert.equal(stale.body.code, 'step_up_required');
+    // a direct switch never asks
+    assert.equal((await t.as('sa1', ['super_admin'], false)('newsletter', { enabled: true, expectedVersion: 0 })).status, 200);
+    // switching creatorSupport off never asks either (it only takes money ability away)
+    assert.equal((await t.as('sa1', ['super_admin'], false)('creatorSupport', { enabled: false, expectedVersion: 0 })).status, 200);
   });
 });

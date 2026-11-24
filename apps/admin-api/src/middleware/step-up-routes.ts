@@ -11,7 +11,7 @@
  */
 import type { Context, Hono } from 'hono';
 import { stepUp } from './passkeys';
-import { requestNeedsStepUp } from '../routers/workflows.router';
+import { featureProposalNeedsStepUp, requestNeedsStepUp } from '../routers/workflows.router';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -75,6 +75,7 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/workflows/requests/:id/approve', what: 'Approve a change request (when its rule asks for a step-up)', when: requestNeedsStepUp },
   { method: 'POST', path: '/api/workflows/requests/:id/reject', what: 'Reject a change request (when its rule asks for a step-up)', when: requestNeedsStepUp },
   { method: 'POST', path: '/api/workflows/rules/:type', what: 'Propose a change to an approval rule' },
+  { method: 'PUT', path: '/api/features/:key', what: 'Switch a feature whose approval rule asks for a step-up to propose', when: featureProposalNeedsStepUp },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {
