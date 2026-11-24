@@ -22,13 +22,13 @@ export default async function MoveChannelPage({ params }: { params: Promise<{ lo
   const authTime = decodeJwtPayload(auth?.accessToken)?.auth_time;
 
   return (
-    <div className="min-h-screen">
+    <main className="min-h-screen">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         <ChannelSettingsBreadcrumb channelId={id} channelName={channel ? channel.nameLocalized?.[locale] || channel.name : undefined} channelHandle={channel?.handle} locale={locale} currentPage="move" className="mb-6" />
         <h1 className="text-2xl font-bold text-[var(--fanous-color-text-primary)]">{m.title}</h1>
         <p className="mb-6 mt-1 text-[var(--fanous-color-text-secondary)]">{m.description}</p>
         <MoveChannel channelId={id} handle={channel?.handle || id} locale={locale} authTime={typeof authTime === 'number' ? authTime : null} signedIn={!!auth} />
       </div>
-    </div>
+    </main>
   );
 }

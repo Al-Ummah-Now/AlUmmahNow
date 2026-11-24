@@ -187,7 +187,7 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
   const find = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
     const people = await searchMoveReceivers(channelId, q, signal);
     if (!q.trim()) setNoAdmins(people.length === 0);
-    return people.map((p) => ({ id: p.userId, label: p.name, subtitle: p.userName ? `@${p.userName}` : undefined, keywords: [p.userName], thumbnailUrl: p.avatarUrl ?? undefined, thumbnailShape: 'round' as const, value: p }));
+    return people.map((p) => ({ id: p.userId, label: p.name, subtitle: p.userName ? `@${p.userName}` : undefined, keywords: [p.userName], thumbnailUrl: p.avatarUrl ?? undefined, thumbnailShape: 'round' as const, icon: <Avatar src={null} name={p.name} size="h-8 w-8 text-sm" />, value: p }));
   }, [channelId]);
 
   const matches = typed.trim().replace(/^@/, '').toLowerCase() === handle.toLowerCase();
@@ -233,7 +233,8 @@ function MoveForm({ channelId, handle, locale, onSent, onNotYours }: { channelId
         {receiver ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--fanous-c-form-input-border)] px-3 py-2" data-testid="move-receiver-chosen">
             <Avatar src={receiver.avatarUrl} name={receiver.name} size="h-10 w-10 text-base" />
-            <div className="min-w-0 flex-1">
+            {/* Wide enough for a name: on a phone the button goes to its own line instead of squeezing it */}
+            <div className="min-w-[9rem] flex-1">
               <p className={`break-words text-sm font-semibold ${TEXT}`}><bdi>{receiver.name}</bdi></p>
               {receiver.userName && <p className={`text-xs ${SOFT}`}><bdi dir="ltr">@{receiver.userName}</bdi></p>}
             </div>

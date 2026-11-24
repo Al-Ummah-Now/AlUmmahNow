@@ -68,7 +68,7 @@ export default function OfferPage({ offerId }: { offerId: string }) {
   };
 
   return (
-    <div className="min-h-screen">
+    <main className="min-h-screen">
       <div className="container mx-auto max-w-3xl space-y-6 px-4 py-8" data-testid="move-offer-page">
         <p><Link href={`/${lang}/channel-moves`} className="text-sm text-[var(--fanous-c-link-text)] underline">{m.offers.title}</Link></p>
         <Message message={message} />
@@ -108,6 +108,6 @@ export default function OfferPage({ offerId }: { offerId: string }) {
         )}
         {dialog}
       </div>
-    </div>
+    </main>
   );
 }
