@@ -428,7 +428,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     contactEmail: 'البريد الإلكتروني للتواصل',
     contactEmailHelp: 'يظهر للجميع في تبويب «حول». اتركه فارغًا لإخفائه.',
     defaultAllowDownloads: 'السماح بالتنزيل دون اتصال افتراضيًا',
-    defaultAllowDownloadsHelp: 'يمكن للمشاهدين في الفئات المؤهلة حفظ المرئيات الجديدة من هذه القناة للتشغيل المشفّر دون اتصال. ويمكنك تغيير ذلك لكل مرئي على حدة.',
+    defaultAllowDownloadsHelp: 'يمكن للمشاهدين المسجّلين حفظ المرئيات الجديدة من هذه القناة للتشغيل دون اتصال أو تنزيلها. ويمكنك تغيير ذلك لكل مرئي على حدة.',
     invalidEmail: 'أدخل بريدًا إلكترونيًا صالحًا',
     location: 'الموقع',
     locationPlaceholder: 'مثال: القاهرة، مصر',
