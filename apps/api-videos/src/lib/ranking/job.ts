@@ -21,6 +21,7 @@ import { reportNeedsAction, resolveNeedsAction, type AdminJob, type ErrorReporte
 import { createJob, listJobs, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
 import { SALT_KEY_PREFIX } from './viewer';
+import { purgeViewerDays, rollupViewerDays } from './viewer-rollup';
 import {
 	DAY_MS,
 	POPULAR_PARAMS,
@@ -201,6 +202,13 @@ export async function loadEngagement(env: DiscoveryEnv, now: number): Promise<Ma
 			.bind(sinceDay)
 			.all<{ video_id: string; day: string; n: number }>();
 		for (const r of viewers.results ?? []) bump(r.video_id, ageOf(r.day, now), 'viewers', r.n);
+		// Closed days moved into counts (D1-3a): added to whatever raw rows are left for the day
+		const moved = await notif
+			.prepare('SELECT video_id, day, viewers AS n FROM discovery_viewer_days WHERE day >= ?')
+			.bind(sinceDay)
+			.all<{ video_id: string; day: string; n: number }>()
+			.catch(() => ({ results: [] as { video_id: string; day: string; n: number }[] })); // before notifications migration 0022
+		for (const r of moved.results ?? []) bump(r.video_id, ageOf(r.day, now), 'viewers', r.n);
 		const likes = await notif
 			.prepare(`SELECT video_id, date(liked_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM liked_videos WHERE liked_at >= ? GROUP BY video_id, day`)
 			.bind(since)
@@ -373,6 +381,8 @@ export interface RunSummary {
 	removed: number;
 	/** Mode of the main home rails right now (cold start shows 'new' / 'featured') */
 	modes: Record<string, string>;
+	/** Closed days of raw viewer rows moved into counts this run (D1-3a) */
+	viewerRollup?: { days: number; videos: number; timedOut: boolean };
 	ms: number;
 }
 
@@ -381,6 +391,14 @@ export async function runDiscoveryRank(env: DiscoveryEnv, now = Date.now()): Pro
 	const database = db(env);
 	if (!database) throw new Error('SEARCH_DB is not bound');
 	const started = Date.now();
+	// Closed days of raw viewer rows become counts first (D1-3a); time-boxed, the rest waits for the next run
+	const notifDb = counters(env);
+	const rollup = notifDb
+		? await rollupViewerDays(notifDb as unknown as D1Database, now).catch((error) => {
+				logger.warn('[Discovery] Viewer rollup failed; raw rows are still counted', { error: error instanceof Error ? error.message : String(error) });
+				return null;
+			})
+		: null;
 	const [videos, engagement, pins] = await Promise.all([loadRankVideos(database), loadEngagement(env, now), loadPins(database, now)]);
 	const featuredChannels = new Set(pins.filter((p) => p.kind === 'channel').map((p) => p.target_id));
 	const inputs: RankInputs = { videos, engagement, ctx: { now, featuredChannels } };
@@ -391,6 +409,7 @@ export async function runDiscoveryRank(env: DiscoveryEnv, now = Date.now()): Pro
 	const notif = counters(env);
 	if (notif) {
 		await notif.prepare('DELETE FROM discovery_viewers WHERE day < ?').bind(utcDay(now - (POPULAR_PARAMS.days + 1) * DAY_MS)).run();
+		await purgeViewerDays(notif as unknown as D1Database, now).catch(() => undefined); // before notifications migration 0022
 	}
 	// Yesterday's salt is kept for views that straddle midnight; older ones go, so no old hash can be rebuilt
 	await database
@@ -409,6 +428,7 @@ export async function runDiscoveryRank(env: DiscoveryEnv, now = Date.now()): Pro
 		rails: rails.length,
 		...result,
 		modes,
+		...(rollup ? { viewerRollup: rollup } : {}),
 		ms: Date.now() - started,
 	};
 	await database

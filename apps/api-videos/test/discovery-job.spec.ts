@@ -15,6 +15,7 @@ import { TrendingVideosSection } from '../src/endpoints/sections/trending';
 import { PopularVideosSection } from '../src/endpoints/sections/popular';
 import { TrendingGet } from '../src/endpoints/discovery/discovery';
 import { SALT_KEY_PREFIX } from '../src/lib/ranking/viewer';
+import { ROLLUP_SQL, ROLLUP_TIME_BOX_MS, ROLLUP_VIDEOS_PER_BATCH, rollupViewerDays } from '../src/lib/ranking/viewer-rollup';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { createSqliteD1 } from './sqlite-d1';
@@ -155,6 +156,85 @@ describe('discovery ranking job', () => {
 		assert.deepEqual(days, ['2026-11-20']);
 		const salts = (search.db.prepare("SELECT key FROM search_meta WHERE key LIKE 'discovery:salt:%' ORDER BY key").all() as Array<{ key: string }>).map((r) => r.key);
 		assert.deepEqual(salts, [`${SALT_KEY_PREFIX}2026-11-20`, `${SALT_KEY_PREFIX}2026-11-21`]);
+	});
+});
+
+describe('Popular viewer counts (D1-3a)', () => {
+	const dayOf = (back: number) => new Date(NOW - back * DAY).toISOString().slice(0, 10);
+	// Viewers for six videos over the last 40 days, the same every way the job is run
+	async function seedViewers(notifications: ReturnType<typeof createSqliteD1>) {
+		const insert = notifications.raw.prepare('INSERT OR IGNORE INTO discovery_viewers (day, video_id, viewer) VALUES (?, ?, ?)');
+		for (let back = 0; back < 40; back++) {
+			for (let i = 10; i < 16; i++) {
+				const n = ((i * 7 + back * 3) % 11) + (i - 9) * 2;
+				for (let k = 0; k < n; k++) insert.run(dayOf(back), `v0${i}`, `a:${String(back * 100 + k).padStart(16, '0')}`);
+			}
+		}
+	}
+	const railItems = (search: SqliteD1) =>
+		search.db.prepare("SELECT rail, video_id, position, reason FROM discovery_rail_items WHERE scope = '' AND rail LIKE 'popular%' ORDER BY rail, position").all();
+
+	it('Popular is the same before and after the closed days are moved into counts', async () => {
+		const before = await library(30);
+		await seedViewers(before.notifications);
+		// The old behaviour: count raw rows only (no counts table yet)
+		before.notifications.raw.exec('DROP TABLE discovery_viewer_days');
+		await runDiscoveryRank(before.env, NOW);
+		const expected = railItems(before.search);
+
+		const after = await library(30);
+		await seedViewers(after.notifications);
+		const summary = await runDiscoveryRank(after.env, NOW);
+		assert.deepEqual(railItems(after.search), expected);
+		assert.equal(summary.viewerRollup?.timedOut, false);
+		assert.ok((summary.viewerRollup?.days ?? 0) >= 38);
+		// Only today and yesterday keep raw rows; everything older is one count per video and day
+		const rawDays = (after.notifications.raw.prepare('SELECT DISTINCT day FROM discovery_viewers ORDER BY day').all() as { day: string }[]).map((r) => r.day);
+		assert.deepEqual(rawDays, [dayOf(1), dayOf(0)]);
+		const counts = after.notifications.raw.prepare('SELECT COUNT(*) AS n FROM discovery_viewer_days').get() as { n: number };
+		assert.equal(counts.n, 38 * 6);
+	});
+
+	it('is idempotent, and a late view for a moved day is added by the next run', async () => {
+		const { notifications } = await library(1);
+		const d = dayOf(5);
+		const insert = notifications.raw.prepare('INSERT OR IGNORE INTO discovery_viewers (day, video_id, viewer) VALUES (?, ?, ?)');
+		for (let k = 0; k < 7; k++) insert.run(d, 'v001', `a:${String(k).padStart(16, '0')}`);
+		await rollupViewerDays(notifications as never, NOW);
+		await rollupViewerDays(notifications as never, NOW);
+		const count = () => (notifications.raw.prepare('SELECT viewers FROM discovery_viewer_days WHERE day = ? AND video_id = ?').get(d, 'v001') as { viewers: number }).viewers;
+		assert.equal(count(), 7);
+		insert.run(d, 'v001', 'a:9999999999999999');
+		await rollupViewerDays(notifications as never, NOW);
+		assert.equal(count(), 8);
+		assert.equal((notifications.raw.prepare('SELECT COUNT(*) AS n FROM discovery_viewers').get() as { n: number }).n, 0);
+	});
+
+	it('stops at its time box with every finished move kept; the next run goes on', async () => {
+		const { notifications } = await library(1);
+		const insert = notifications.raw.prepare('INSERT OR IGNORE INTO discovery_viewers (day, video_id, viewer) VALUES (?, ?, ?)');
+		for (let v = 0; v < ROLLUP_VIDEOS_PER_BATCH * 3; v++) insert.run(dayOf(10), `v${String(v).padStart(4, '0')}`, 'a:0000000000000001');
+		let t = 0;
+		// Two batches inside the box, then out of time
+		const clock = () => (t += ROLLUP_TIME_BOX_MS / 2.5);
+		const first = await rollupViewerDays(notifications as never, NOW, clock);
+		assert.equal(first.timedOut, true);
+		const moved = (notifications.raw.prepare('SELECT COUNT(*) AS n FROM discovery_viewer_days').get() as { n: number }).n;
+		const left = (notifications.raw.prepare('SELECT COUNT(*) AS n FROM discovery_viewers').get() as { n: number }).n;
+		assert.equal(moved + left, ROLLUP_VIDEOS_PER_BATCH * 3, 'nothing lost or counted twice mid-way');
+		assert.ok(moved > 0 && left > 0);
+		const second = await rollupViewerDays(notifications as never, NOW);
+		assert.equal(second.timedOut, false);
+		assert.equal((notifications.raw.prepare('SELECT COUNT(*) AS n FROM discovery_viewers').get() as { n: number }).n, 0);
+	});
+
+	it('every rollup query seeks the primary key, never scans', () => {
+		const notifications = createSqliteD1();
+		for (const sql of Object.values(ROLLUP_SQL)) {
+			const params = Math.max(0, ...[...sql.matchAll(/\?(\d)/g)].map((m) => Number(m[1])));
+			const plan = (notifications.raw.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(['2026-11-01', 'v', 50].slice(0, params) as never[])) as { detail: string }[]).map((r) => r.detail);
+			for (const step of plan) assert.doesNotMatch(step, /^SCAN discovery_viewer(s|_days)$/, `${sql} → ${plan.join(' | ')}`);
+		}
 	});
 });
 
