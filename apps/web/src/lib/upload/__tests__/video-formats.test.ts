@@ -114,7 +114,7 @@ describe('upload copy', () => {
 
   it('fills the supported formats into the guidelines, the batch limit and both errors, in English and Arabic', () => {
     for (const [lang, t] of [['en', EN_TRANSLATIONS], ['ar', AR_TRANSLATIONS]] as const) {
-      for (const text of [t.upload.guidelineFormats, t.batch.fileLimit, t.batch.errors.invalidFileType, t.upload.invalidType.replace('{types}', '{formats}')]) {
+      for (const text of [t.upload.guidelineFormats, t.batch.fileLimit, t.batch.errors.invalidFileType, t.upload.invalidType]) {
         expect(text).toContain('{formats}');
         expect(fillTemplate(lang, text, { formats: formats(lang), filename: 'a.txt' })).toContain(formats(lang));
       }

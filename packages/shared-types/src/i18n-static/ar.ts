@@ -953,7 +953,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     closeForm: 'إغلاق',
     privateUntilScheduled: 'سيبقى المرئي خاصًا حتى موعد النشر المجدول',
     // Errors
-    invalidType: 'يرجى رفع ملف مرئي صالح ({types})',
+    invalidType: 'يرجى رفع ملف مرئي صالح ({formats})',
     authRequired: 'يجب تسجيل الدخول لرفع المرئيات.',
     sessionMissing: 'تعذر إنشاء جلسة الرفع. يرجى المحاولة مرة أخرى.',
     reconnecting: 'جارٍ إعادة الاتصال… سيُستأنف الرفع من حيث توقف',

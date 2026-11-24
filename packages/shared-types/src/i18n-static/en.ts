@@ -955,7 +955,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     closeForm: 'Close',
     privateUntilScheduled: 'Video will be private until scheduled publish date',
     // Errors
-    invalidType: 'Please upload a valid video file ({types})',
+    invalidType: 'Please upload a valid video file ({formats})',
     authRequired: 'Authentication required. Please log in to upload videos.',
     sessionMissing: 'The upload session could not be created. Please try again.',
     reconnecting: 'Reconnecting… your upload will continue where it left off',

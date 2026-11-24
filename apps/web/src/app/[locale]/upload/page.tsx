@@ -406,9 +406,7 @@ const UploadPage: React.FC = () => {
     const invalidFiles = selectedFiles.filter(file => !isAcceptedVideoFile(file));
     if (invalidFiles.length > 0) {
       setUploadError(
-        t.batch.errors.invalidFileType
-          .replace('{filename}', invalidFiles[0].name)
-          .replace('{formats}', videoFormatsText(lang))
+        fillTemplate(lang, t.batch.errors.invalidFileType, { filename: invalidFiles[0].name, formats: videoFormatsText(lang) })
       );
       return;
     }

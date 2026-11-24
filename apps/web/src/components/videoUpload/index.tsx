@@ -1,5 +1,5 @@
 'use client';
-import { formatBytes, formatPercent } from '@al-ummah/shared-types';
+import { fillTemplate, formatBytes, formatPercent } from '@al-ummah/shared-types';
 import { hasAnyLanguage, primaryText } from '@/lib/localized-input';
 import { logger } from '@/lib/logger-client';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
@@ -196,8 +196,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   // File validation
   const validateFile = (file: File): string | null => {
     if (!isAcceptedVideoFile(file)) {
-      return (t.upload.invalidType || VIDEO_UPLOAD_ERRORS.INVALID_TYPE)
-        .replace('{types}', videoFormatsText(lang));
+      return fillTemplate(lang, t.upload.invalidType || VIDEO_UPLOAD_ERRORS.INVALID_TYPE, { formats: videoFormatsText(lang) });
     }
 
     if (file.size > VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE) {
