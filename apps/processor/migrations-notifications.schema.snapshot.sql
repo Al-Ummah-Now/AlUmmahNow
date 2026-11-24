@@ -21,6 +21,7 @@
 --   apps/processor/migrations-notifications/0019_live_reminders.sql
 --   apps/processor/migrations-notifications/0020_notification_quiet_hours.sql
 --   apps/processor/migrations-notifications/0021_notification_inbox_retention.sql
+--   apps/processor/migrations-notifications/0022_discovery_viewer_days.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -32,6 +33,7 @@ CREATE TABLE channel_subscription_import_state (id INTEGER PRIMARY KEY CHECK (id
 CREATE TABLE channel_subscription_imports (channel_id TEXT PRIMARY KEY, legacy_count INTEGER NOT NULL, imported_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_subscriptions (channel_id TEXT NOT NULL, subscriber_channel_id TEXT NOT NULL, user_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (channel_id, subscriber_channel_id)) WITHOUT ROWID;
 CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type INTEGER, type_name TEXT NOT NULL, source TEXT NOT NULL, dlq TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 1, failure_reason TEXT, body_json TEXT NOT NULL, body_truncated INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, replayed_at INTEGER, ids_hashed INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE discovery_viewer_days (day TEXT NOT NULL, video_id TEXT NOT NULL, viewers INTEGER NOT NULL, PRIMARY KEY (day, video_id)) WITHOUT ROWID;
 CREATE TABLE discovery_viewers (day TEXT NOT NULL, video_id TEXT NOT NULL, viewer TEXT NOT NULL, PRIMARY KEY (day, video_id, viewer)) WITHOUT ROWID;
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));
 CREATE TABLE live_reminders (stream_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (stream_id, user_id)) WITHOUT ROWID;
