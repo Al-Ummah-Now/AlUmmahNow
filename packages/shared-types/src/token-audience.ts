@@ -66,7 +66,10 @@ export const FIRST_PARTY_CLIENT_IDS: Record<AuthEnvironment, Record<FirstPartyCl
     www: 'ecda6f18-89cb-415c-b746-7e77184d75a2',
     sites: '0abd9eac-e47e-4a1a-90bd-18cffec0303c',
     cms: '0e613f49-674b-490a-93e5-97a35d586da1',
-    authProfile: '209a1087-6626-40f7-8a7f-7f42f83f4f30',
+    // Auth's profile app hard-codes 109a1087-... in every environment (AlUmmahNowAuth apps/profile/src/index.ts,
+    // wrangler.qa.json PROFILE_CLIENT_ID, migrations-qa/0007_fix_profile_redirect_uris.sql); issuer verification
+    // still separates QA and production tokens.
+    authProfile: '109a1087-6626-40f7-8a7f-7f42f83f4f30',
     authAdmin: '2448ed27-39a6-417d-b4c8-07f881e81269',
     viewerMobile: '31389afb-d4f8-4c26-9492-4c77f4d07e65',
     viewerTv: '9c3a81c8-3f9c-4873-abb1-a51e4f1d9543',

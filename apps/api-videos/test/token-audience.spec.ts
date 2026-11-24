@@ -18,8 +18,10 @@ import {
 import { authMiddleware } from '../src/middleware/auth';
 import { __resetClientForTests } from '../src/lib/openauth-client';
 import { logger } from '../src/lib/logger';
+import { privacyRouter } from '../src/routers/privacy.router';
 
 const QA_ISSUER = 'https://auth.qa.alummahnow.net';
+const PROD_ISSUER = 'https://auth.alummahnow.net';
 const QA = FIRST_PARTY_CLIENT_IDS.qa;
 const PROD = FIRST_PARTY_CLIENT_IDS.production;
 
@@ -33,13 +35,20 @@ describe('the first-party registry', () => {
 		assert.equal(authEnvironmentOf(undefined), null);
 	});
 
-	it('has no duplicate ids within an environment, and QA never reuses a production id', () => {
+	it('has no duplicate ids within an environment, and QA never reuses a production id (except authProfile)', () => {
 		for (const env of ['production', 'qa'] as const) {
 			const ids = Object.values(FIRST_PARTY_CLIENT_IDS[env]);
 			assert.equal(new Set(ids).size, ids.length, env);
 		}
+		// Auth's profile app hard-codes 109a1087-... in every environment; issuer signature verification
+		// still separates QA and production tokens.
+		const sharedAcrossEnvs = new Set(['authProfile']);
+		assert.equal(QA.authProfile, PROD.authProfile);
 		const prod = new Set(Object.values(PROD));
-		for (const id of Object.values(QA)) assert.ok(!prod.has(id), id);
+		for (const [name, id] of Object.entries(QA)) {
+			if (sharedAcrossEnvs.has(name)) continue;
+			assert.ok(!prod.has(id), `${name}: ${id}`);
+		}
 	});
 
 	it('each service takes the clients that call it, and never the CMS or Auth\'s own apps', () => {
@@ -72,7 +81,7 @@ describe('the first-party registry', () => {
 
 describe('authMiddleware audience check', () => {
 	let realFetch: typeof fetch;
-	let sign: (aud: string) => Promise<string>;
+	let sign: (aud: string, issuer?: string) => Promise<string>;
 	let warns: Array<{ message: unknown; fields: unknown }>;
 
 	beforeEach(async () => {
@@ -81,10 +90,10 @@ describe('authMiddleware audience check', () => {
 		mock.method(logger, 'warn', (message: unknown, fields: unknown) => warns.push({ message, fields }));
 		const { publicKey, privateKey } = await generateKeyPair('ES256');
 		const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
-		sign = (aud) =>
+		sign = (aud, issuer = QA_ISSUER) =>
 			new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_a', email: 'a@example.com' } })
 				.setProtectedHeader({ alg: 'ES256', kid: 'k1' })
-				.setIssuer(QA_ISSUER)
+				.setIssuer(issuer)
 				.setAudience(aud)
 				.setSubject('user:abc')
 				.setIssuedAt()
@@ -93,8 +102,9 @@ describe('authMiddleware audience check', () => {
 		realFetch = globalThis.fetch;
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+			const origin = url.origin;
 			if (url.pathname === '/.well-known/oauth-authorization-server') {
-				return Response.json({ issuer: QA_ISSUER, jwks_uri: `${QA_ISSUER}/.well-known/jwks.json` });
+				return Response.json({ issuer: origin, jwks_uri: `${origin}/.well-known/jwks.json` });
 			}
 			if (url.pathname === '/.well-known/jwks.json') return Response.json({ keys: [jwk] });
 			return new Response('not found', { status: 404 });
@@ -139,14 +149,87 @@ describe('authMiddleware audience check', () => {
 
 	it('enforce mode: authProfile is allowed only on DELETE /api/privacy/data (AlUmmahNowAuth#532)', async () => {
 		const app = new Hono();
-		app.use('/api/privacy/data', authMiddleware);
-		app.delete('/api/privacy/data', (c) => c.json({ ok: true }));
-		const env = { Issuer: QA_ISSUER, ClientId: QA.web, ENVIRONMENT: 'qa', AUD_MODE: 'enforce' };
-		const res = await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}` } }, env);
-		assert.equal(res.status, 200);
-		const prodRes = await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(PROD.authProfile)}` } }, env);
-		assert.equal(prodRes.status, 401, 'production authProfile token still rejected on QA');
-		assert.equal(mismatches().length, 1);
+		app.use('/api/*', authMiddleware);
+		app.route('/api/privacy', privacyRouter as never);
+		const qaEnv = { Issuer: QA_ISSUER, ClientId: QA.web, ENVIRONMENT: 'qa', AUD_MODE: 'enforce' };
+		const prodEnv = { Issuer: PROD_ISSUER, ClientId: PROD.web, ENVIRONMENT: 'production', AUD_MODE: 'enforce' };
+
+		// QA authProfile passes auth on DELETE /api/privacy/data and reaches PrivacyErase (400 confirmation_required)
+		const qaErase = await app.request(
+			'/api/privacy/data',
+			{ method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}`, 'Content-Type': 'application/json' }, body: '{}' },
+			qaEnv,
+		);
+		assert.equal(qaErase.status, 400);
+		assert.equal(((await qaErase.json()) as { code?: string }).code, 'confirmation_required');
+
+		// web remains allowed on DELETE /api/privacy/data
+		const webErase = await app.request(
+			'/api/privacy/data',
+			{ method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.web)}`, 'Content-Type': 'application/json' }, body: '{}' },
+			qaEnv,
+		);
+		assert.equal(webErase.status, 400);
+
+		// cms and authAdmin remain refused on DELETE /api/privacy/data
+		assert.equal(
+			(await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.cms)}` } }, qaEnv)).status,
+			401,
+			'cms refused on DELETE /api/privacy/data',
+		);
+		assert.equal(
+			(await app.request('/api/privacy/data', { method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.authAdmin)}` } }, qaEnv)).status,
+			401,
+			'authAdmin refused on DELETE /api/privacy/data',
+		);
+
+		// authProfile is refused on every other privacy route (export, consent)
+		assert.equal(
+			(await app.request('/api/privacy/export', { method: 'GET', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}` } }, qaEnv)).status,
+			401,
+			'authProfile refused on GET /api/privacy/export',
+		);
+		assert.equal(
+			(
+				await app.request(
+					'/api/privacy/consent',
+					{ method: 'PUT', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}`, 'Content-Type': 'application/json' }, body: '{}' },
+					qaEnv,
+				)
+			).status,
+			401,
+			'authProfile refused on PUT /api/privacy/consent',
+		);
+		assert.equal(mismatches().length, 4);
+
+		// Production issuer with PROD.authProfile is allowed on DELETE /api/privacy/data and refused on export
+		__resetClientForTests();
+		const prodErase = await app.request(
+			'/api/privacy/data',
+			{
+				method: 'DELETE',
+				headers: { Authorization: `Bearer ${await sign(PROD.authProfile, PROD_ISSUER)}`, 'Content-Type': 'application/json' },
+				body: '{}',
+			},
+			prodEnv,
+		);
+		assert.equal(prodErase.status, 400);
+		assert.equal(
+			(await app.request('/api/privacy/export', { method: 'GET', headers: { Authorization: `Bearer ${await sign(PROD.authProfile, PROD_ISSUER)}` } }, prodEnv)).status,
+			401,
+			'prod authProfile refused on GET /api/privacy/export',
+		);
+
+		// log mode: authProfile on DELETE /api/privacy/data passes with no aud_mismatch warning
+		__resetClientForTests();
+		warns = [];
+		const logErase = await app.request(
+			'/api/privacy/data',
+			{ method: 'DELETE', headers: { Authorization: `Bearer ${await sign(QA.authProfile)}`, 'Content-Type': 'application/json' }, body: '{}' },
+			{ Issuer: QA_ISSUER, ClientId: QA.web, ENVIRONMENT: 'qa', AUD_MODE: 'log' },
+		);
+		assert.equal(logErase.status, 400);
+		assert.equal(mismatches().length, 0, 'no aud_mismatch logged for authProfile on DELETE /api/privacy/data');
 	});
 
 	it('off: no check, no log', async () => {
