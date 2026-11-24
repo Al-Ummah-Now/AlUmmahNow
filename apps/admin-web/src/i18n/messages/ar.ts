@@ -1023,6 +1023,7 @@ const ar: Messages = {
       playlistAddVideos: 'إضافة مرئيات إلى قائمة تشغيل',
       importAttach: 'إضافة الترجمات النصية والفصول والصورة المصغّرة لملف مستورد',
       csamContain: 'إزالة مواد استغلال جنسي للأطفال',
+      downloadsRevoke: 'إلغاء التنزيلات دون اتصال',
       imagesIndexOwners: 'فهرسة رافعي الصور',
       mediaTranscodeRetry: 'إعادة محاولة تحويل R2 الآن',
       mediaTranscodeCancel: 'إلغاء تحويل R2',

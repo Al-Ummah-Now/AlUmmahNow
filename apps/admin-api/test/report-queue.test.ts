@@ -39,7 +39,7 @@ const USERS: Record<string, any> = {
   usr_mod: { displayName: 'Maryam Moderator', isBanned: false },
 };
 
-interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean }; hold?: { status?: number; found?: boolean; changed?: boolean }; deleteStatus?: number; lookupDown?: boolean }
+interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean }; hold?: { status?: number; found?: boolean; changed?: boolean }; deleteStatus?: number; lookupDown?: boolean; revokeStatus?: number }
 
 function fakeVideos(opts: FakeOptions = {}) {
   const calls: VideosCall[] = [];
@@ -75,6 +75,10 @@ function fakeVideos(opts: FakeOptions = {}) {
       if (call.path === '/live-moderation') {
         const { status, found = true, changed = true } = opts.live ?? {};
         return status ? json(status, { success: false, code: 'boom', error: 'refused' }) : json(200, { success: true, result: { found, changed } });
+      }
+      if (/^\/videos\/[^/]+\/revoke-downloads$/.test(call.path)) {
+        if (opts.revokeStatus) return json(opts.revokeStatus, { success: false, code: 'revoke_failed', error: 'failed' });
+        return json(200, { success: true, result: { status: 'revoked', eventId: call.body?.eventId, videoId: call.path.split('/')[2], seq: 1, inserted: true, renditionsDeleted: 0 } });
       }
       return json(404, { success: false, code: 'not_found', error: 'no route' });
     },
@@ -485,11 +489,38 @@ describe('reports queue: decisions', () => {
 
   it('`deleted` removes permanently; an item without open reports answers 409; bad input 400', async () => {
     const t = setup(BASE);
-    assert.equal((await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted' } })).status, 200);
+    assert.equal((await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted', notes: 'urgent takedown' } })).status, 200);
     assert.equal(t.videos.read('v_1').isDeleted, true);
+    const revokeCalls = t.calls.filter((c) => c.path === '/videos/v_1/revoke-downloads');
+    assert.equal(revokeCalls.length, 1, 'video deleted must trigger revoke-downloads');
+    assert.equal(revokeCalls[0]!.actor, 'usr_mod');
+    assert.match(revokeCalls[0]!.body.eventId, /^admin:report-[0-9a-f]{32}$/);
     assert.equal((await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted' } })).status, 409);
     assert.equal((await t.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'nuke' } })).status, 400);
     assert.equal((await t.call('/api/moderation/queue/items/tweet/v_1')).status, 400);
+  });
+
+  it('download revocation hook (E14-S11a) fires only for video deleted, reopens on failure, and keeps deterministic eventId on retry', async () => {
+    // 1) Non-deleted actions and non-video entities must NOT call /revoke-downloads.
+    const tOther = setup(BASE);
+    assert.equal((await tOther.call('/api/moderation/reports/r1/action', { method: 'POST', json: { action: 'removed' } })).status, 200);
+    assert.equal((await tOther.call('/api/moderation/reports/r2/action', { method: 'POST', json: { action: 'warning' } })).status, 200);
+    assert.equal((await tOther.call('/api/moderation/reports/r4/action', { method: 'POST', json: { action: 'deleted' } })).status, 200);
+    assert.equal(tOther.calls.filter((c) => c.path.endsWith('/revoke-downloads')).length, 0);
+
+    // 2) If /revoke-downloads fails, decide() returns 503 and reopens the reports; retrying the
+    //    same decision reuses the exact same deterministic eventId.
+    const tFail = setup(BASE, { revokeStatus: 500 });
+    const first = await tFail.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted' } });
+    assert.equal(first.status, 503);
+    assert.equal(first.body.code, 'not_applied');
+    assert.equal((await tFail.rows("SELECT COUNT(*) AS n FROM reports WHERE entity_id = 'v_1' AND status IN ('pending', 'reviewing')"))[0].n, 3);
+
+    const second = await tFail.call('/api/moderation/queue/items/video/v_1/action', { method: 'POST', json: { action: 'deleted' } });
+    assert.equal(second.status, 503);
+    const revokeCalls = tFail.calls.filter((c) => c.path === '/videos/v_1/revoke-downloads');
+    assert.equal(revokeCalls.length, 2);
+    assert.equal(revokeCalls[0]!.body.eventId, revokeCalls[1]!.body.eventId, 'retry on same reopened reports must reuse eventId');
   });
 
   it('the per-report action keeps its values and takes the same ban path and permission', async () => {

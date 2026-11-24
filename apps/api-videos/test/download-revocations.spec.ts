@@ -448,5 +448,197 @@ describe('E14-S11a download revocations feed & takedown hooks', () => {
 		assert.equal(rows.results?.length, 1);
 		assert.equal(rows.results![0]!.event_id, 'csam:case-999');
 		assert.equal(rows.results![0]!.video_id, vid);
+
+		// A second CSAM case on the same video receives a new higher seq, while retrying the same
+		// case id is idempotent.
+		const outcome2 = await runContainStep(env as ContainEnv, {
+			id: 'job-csam-2',
+			kind: 'csam.contain',
+			targetKind: 'video',
+			targetId: vid,
+			params: {
+				caseId: 'case-1000',
+				matchedUrl: `https://media.alummahnow.net/pub/${vid}/rev1/video.mp4`,
+				resolution: { kind: 'video', videoId: vid },
+				phase: 'purge-public',
+				createdAt: '2026-11-23T00:00:00Z',
+			},
+			status: 'running',
+			attempts: 1,
+			maxAttempts: 4,
+			nextRunAt: null,
+			lastError: null,
+			result: null,
+			actorId: 'admin-1',
+			createdAt: '2026-11-23T00:00:00Z',
+			updatedAt: '2026-11-23T00:00:00Z',
+			finishedAt: null,
+		});
+		assert.equal(outcome2.done, false);
+		const rows2 = await d1
+			.prepare('SELECT seq, event_id, video_id FROM download_revocations ORDER BY seq ASC')
+			.all<{ seq: number; event_id: string; video_id: string }>();
+		assert.equal(rows2.results?.length, 2);
+		assert.ok(rows2.results![1]!.seq > rows2.results![0]!.seq);
+		assert.equal(rows2.results![1]!.event_id, 'csam:case-1000');
+	});
+
+	it('revokeVideoDownloads fails loudly and queues retry/alert when env.videos is unbound or metadata block R2 write fails', async () => {
+		const d1 = new SqliteD1() as unknown as D1Database;
+		const adminJobsQueue = new MemoryQueue();
+		const o26Alerts: Array<Record<string, unknown>> = [];
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === 'https://admin.example.test/internal/errors') {
+				o26Alerts.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+				return new Response(JSON.stringify({ ok: true }), { status: 200 });
+			}
+			return new Response('ok', { status: 200 });
+		}) as typeof fetch;
+
+		// 1) Unbound env.videos with queue available -> queues downloads.revoke retry job and writes NO revocation row.
+		const queued = await revokeVideoDownloads(
+			{
+				SEARCH_DB: d1,
+				ADMIN_JOBS_QUEUE: adminJobsQueue,
+			} as never,
+			{ videoId: 'vid-no-bucket', eventId: 'admin:unbound-1', actorId: 'mod-1' },
+		);
+		assert.equal(queued.status, 'queued');
+		assert.equal(adminJobsQueue.messages.length, 1);
+		assert.equal((await d1.prepare('SELECT * FROM download_revocations').all()).results?.length ?? 0, 0);
+
+		// 2) R2 error during metadata block with no queue -> fires O26 reportNeedsAction and rethrows.
+		const brokenVideos = {
+			get: async () => {
+				throw new Error('simulated R2 read failure');
+			},
+			put: async () => {
+				throw new Error('simulated R2 write failure');
+			},
+		};
+		await assert.rejects(
+			() =>
+				revokeVideoDownloads(
+					{
+						SEARCH_DB: d1,
+						videos: brokenVideos as never,
+						ERRORS_INGEST_URL: 'https://admin.example.test/internal/errors',
+						INTERNAL_API_KEY: 'test-internal-key',
+					} as never,
+					{ videoId: 'vid-r2-err', eventId: 'admin:r2-err-1', actorId: 'mod-1' },
+				),
+			/simulated R2/,
+		);
+		await new Promise((r) => setTimeout(r, 20));
+		assert.ok(o26Alerts.length >= 1, 'metadata-block R2 failure without queue must raise an O26 alert');
+		assert.equal((await d1.prepare('SELECT * FROM download_revocations').all()).results?.length ?? 0, 0);
+	});
+
+	it('CSAM failure-order: failed CDN purge writes no revocation row, and failed copy-public stops before purge-public and raises O26', async () => {
+		const d1 = new SqliteD1() as unknown as D1Database;
+		const videos = new MemoryBucket();
+		const media = new MemoryBucket();
+		const vid = 'vid-csam-order';
+		const o26Alerts: Array<Record<string, unknown>> = [];
+
+		await videos.put(vid, JSON.stringify({ id: vid, isHidden: true, isPublic: false }));
+		await media.put(`pub/${vid}/rev1/video.mp4`, 'protected-evidence-bytes');
+
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.includes('/purge_cache')) {
+				return new Response(JSON.stringify({ success: false }), { status: 500 });
+			}
+			if (url === 'https://admin.example.test/internal/errors') {
+				o26Alerts.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+				return new Response(JSON.stringify({ ok: true }), { status: 200 });
+			}
+			return new Response(JSON.stringify({ ok: true }), { status: 200 });
+		}) as typeof fetch;
+
+		const env: Partial<ContainEnv> = {
+			SEARCH_DB: d1,
+			videos: videos as never,
+			MEDIA: media as never,
+			MEDIA_PUBLIC_HOST: 'media.alummahnow.net',
+			MEDIA_CDN_API_TOKEN: 'test-cf-token',
+			ERRORS_INGEST_URL: 'https://admin.example.test/internal/errors',
+			INTERNAL_API_KEY: 'test-internal-key',
+		};
+
+		// 1) Failing copy-public (missing evidence keys/bucket) MUST stop before purge-public:
+		//    pub/ object stays intact, no download_revocations row, and exhausted retries fire O26!
+		await assert.rejects(() =>
+			runContainStep(env as ContainEnv, {
+				id: 'job-csam-copy-fail',
+				kind: 'csam.contain',
+				targetKind: 'video',
+				targetId: vid,
+				params: {
+					caseId: 'case-copy-fail',
+					matchedUrl: `https://media.alummahnow.net/pub/${vid}/rev1/video.mp4`,
+					resolution: { kind: 'video', videoId: vid },
+					phase: 'copy-public',
+					createdAt: '2026-11-23T00:00:00Z',
+					files: [
+						{
+							name: 'video.mp4',
+							stage: 'public',
+							source: { type: 'r2', bucket: 'MEDIA', key: `pub/${vid}/rev1/video.mp4` },
+						},
+					],
+				},
+				status: 'running',
+				attempts: ADMIN_JOB_MAX_RETRIES + 1,
+				maxAttempts: ADMIN_JOB_MAX_RETRIES + 1,
+				nextRunAt: null,
+				lastError: null,
+				result: null,
+				actorId: 'admin-1',
+				createdAt: '2026-11-23T00:00:00Z',
+				updatedAt: '2026-11-23T00:00:00Z',
+				finishedAt: null,
+			}),
+		);
+		await new Promise((r) => setTimeout(r, 20));
+		assert.notEqual(
+			await media.get(`pub/${vid}/rev1/video.mp4`),
+			null,
+			'failed copy-public must stop before deleting pub/ renditions',
+		);
+		assert.equal((await d1.prepare('SELECT * FROM download_revocations').all()).results?.length ?? 0, 0);
+		assert.ok(o26Alerts.length >= 1, 'exhausted copy-public failure must raise O26 alert');
+
+		// 2) Failing CDN purge inside purge-public MUST NOT write a download_revocations row!
+		await assert.rejects(() =>
+			runContainStep(env as ContainEnv, {
+				id: 'job-csam-cdn-fail',
+				kind: 'csam.contain',
+				targetKind: 'video',
+				targetId: vid,
+				params: {
+					caseId: 'case-cdn-fail',
+					matchedUrl: `https://media.alummahnow.net/pub/${vid}/rev1/video.mp4`,
+					resolution: { kind: 'video', videoId: vid },
+					phase: 'purge-public',
+					createdAt: '2026-11-23T00:00:00Z',
+				},
+				status: 'running',
+				attempts: 1,
+				maxAttempts: 4,
+				nextRunAt: null,
+				lastError: null,
+				result: null,
+				actorId: 'admin-1',
+				createdAt: '2026-11-23T00:00:00Z',
+				updatedAt: '2026-11-23T00:00:00Z',
+				finishedAt: null,
+			}),
+		);
+		assert.equal(
+			(await d1.prepare('SELECT * FROM download_revocations').all()).results?.length ?? 0,
+			0,
+			'failed CDN purge in CSAM purge-public must leave no download_revocations row',
+		);
 	});
 });
