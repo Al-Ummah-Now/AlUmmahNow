@@ -66,13 +66,27 @@ export async function discoverResources(token: string, accountId: string, envs: 
   return out;
 }
 
+/** Safety stop for the account listing: 100,000 databases at 100 a page. */
+export const ACCOUNT_LISTING_MAX_PAGES = 1000;
+
 /**
  * The size of every D1 database on the account (D1-1 account total). Other projects share the
  * account and count toward its storage limit, so nothing is filtered, but only the sum and the
  * count leave this function: no name is returned or stored.
  */
 export async function accountD1Storage(token: string, accountId: string, fetchImpl: typeof fetch = fetch): Promise<{ bytes: number; databases: number }> {
-  const rows = await list(token, `/accounts/${accountId}/d1/database`, fetchImpl);
+  // Every page, never a partial total (the shared list() stops at 20 pages): a total that cannot be
+  // completed throws, so the run records the failure and stores nothing for the hour.
+  const rows: Json[] = [];
+  for (let page = 1; ; page++) {
+    if (page > ACCOUNT_LISTING_MAX_PAGES) throw new Error(`D1 listing has more than ${ACCOUNT_LISTING_MAX_PAGES} pages; the account total is not stored`);
+    const res = await fetchImpl(`${CF_API}/accounts/${accountId}/d1/database?page=${page}&per_page=100`, { headers: { Authorization: `Bearer ${token}` } });
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; result?: unknown; result_info?: { total_pages?: number } };
+    if (!res.ok || body.success === false || !Array.isArray(body.result)) throw new Error(`GET /d1/database answered HTTP ${res.status} on page ${page}`);
+    rows.push(...(body.result as Json[]));
+    const total = body.result_info?.total_pages;
+    if (typeof total === 'number' ? page >= total : body.result.length < 100) break;
+  }
   let bytes = 0;
   for (const d of rows) {
     const n = Number(d.file_size);
