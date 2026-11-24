@@ -986,9 +986,10 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			const bucket = (rawEnv as unknown as { ADMIN_BACKUPS?: R2Bucket }).ADMIN_BACKUPS;
 			if (!bucket) return;
 			try {
-				const deleted = await sweepProfileEmailReports(bucket as never, new Date(), new OperationBudget(100));
-				const pointers = await sweepProfileEmailPointers(bucket as never, new Date(), new OperationBudget(100));
-				if (deleted || pointers) logger.info('[ProfileEmails] Expired reports deleted', { deleted, pointers });
+				const now = new Date();
+				const records = await sweepProfileEmailReports(bucket as never, now, new OperationBudget(100));
+				const pointers = await sweepProfileEmailPointers(bucket as never, now, new OperationBudget(300));
+				if (records.deleted || pointers.deleted || records.paused || pointers.paused) logger.info('[ProfileEmails] Expired reports swept', { records, pointers });
 			} catch (error) {
 				logger.error('[ProfileEmails] Report sweep failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'profile-email-reports', error);

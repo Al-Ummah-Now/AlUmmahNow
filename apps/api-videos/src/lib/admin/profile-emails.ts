@@ -181,6 +181,9 @@ export async function runProfileEmails(env: ProfileEmailsEnv, job: AdminJob): Pr
 	}
 	for (const { userId, stored } of plan.noAccount) recordOf(userId).noAccount = { stored };
 
+	// Before anyone is dropped for an erasure: a retried step's own earlier writes are among them
+	const differed = new Set([...records].filter(([, r]) => r.entries.some((e) => e.kind === 'profile')).map(([userId]) => userId));
+
 	await inParallel([...records], async ([userId, record]) => {
 		const etag = await storeRecord(env, step, userId, record, before.get(userId)?.etag);
 		if (!etag) {
@@ -210,7 +213,7 @@ export async function runProfileEmails(env: ProfileEmailsEnv, job: AdminJob): Pr
 		mode,
 		scanned: n('scanned') + plan.scanned,
 		// A retried repair finds its own earlier writes matching: they stay counted as differing
-		matching: n('matching') + plan.matching.filter((userId) => !records.get(userId)?.entries.some((e) => e.kind === 'profile')).length,
+		matching: n('matching') + plan.matching.filter((userId) => !differed.has(userId)).length,
 		differs: n('differs') + profiles.length - missing,
 		missing: n('missing') + missing,
 		channels: n('channels') + channels.length,

@@ -10,7 +10,7 @@
  * written only after its pointer exists, and a record of a profile erased meanwhile is removed again.
  */
 import type { AdminJob, ProfileEmailEntry } from '@al-ummah/shared-types';
-import { deleteKeys, listKeys, type BucketLike, type OperationBudget } from '../privacy/scan';
+import { deleteKeys, listKeys, readJson, writeJson, type BucketLike, type OperationBudget } from '../privacy/scan';
 import { CREATE_ONLY } from '../r2Repo';
 
 export const REPORT_PREFIX = 'profile-emails/';
@@ -96,46 +96,135 @@ export async function eraseProfileEmailReports(bucket: BucketLike, userId: strin
 /** The first day whose reports are kept. */
 const keptFrom = (now: Date) => new Date(now.getTime() - REPORT_DAYS * 86_400_000).toISOString().slice(0, 10);
 
-/** Daily: deletes the records older than 30 days with their pointers. Keys sort by day, so it stops at the first one to keep. */
-export async function sweepProfileEmailReports(bucket: BucketLike, now: Date, budget: OperationBudget): Promise<number> {
-	const keepFrom = keptFrom(now);
-	let deleted = 0;
-	const expired: string[] = [];
-	const flush = async () => {
-		const records = expired.splice(0);
-		const pointers = records.map((key) => {
-			const path = key.slice(RECORDS.length, -'.json'.length);
-			const cut = path.lastIndexOf('/');
-			return pointerKey(path.slice(cut + 1), path.slice(0, cut));
-		});
-		// One delete call: the pointers never outlive their records
-		await deleteKeys(bucket, [...records, ...pointers], budget);
-		deleted += records.length;
-	};
-	for await (const { key } of listKeys(bucket, budget, RECORDS)) {
-		if (key.slice(RECORDS.length, RECORDS.length + 10) >= keepFrom) break;
-		expired.push(key);
-		if (expired.length >= 500) await flush();
-	}
-	if (expired.length) await flush();
-	return deleted;
+const DAY = String.raw`(\d{4}-\d{2}-\d{2})`;
+const RECORD_KEY = new RegExp(`^${RECORDS}${DAY}/([^/]+)/(\\d{6})/([^/]+)\\.json$`);
+const POINTER_KEY = new RegExp(`^${POINTERS}([^/]+)/${DAY}/([^/]+)/(\\d{6})$`);
+
+interface ReportKey {
+	userId: string;
+	day: string;
+	/** `{day}/{jobId}/{page}` */
+	step: string;
 }
 
+/** The parts of a record or pointer key; null for a key that is not exactly one (never deleted). */
+export function parseReportKey(key: string): ReportKey | null {
+	const record = RECORD_KEY.exec(key);
+	const [day, jobId, page, userId] = record ? record.slice(1) : (([, u, d, j, n]) => [d, j, n, u])(POINTER_KEY.exec(key) ?? []);
+	if (!day || !jobId || !page || !userId || Number.isNaN(Date.parse(day))) return null;
+	return { userId, day, step: `${day}/${jobId}/${page}` };
+}
+
+/** What the sweeps need of the bucket (R2Bucket, the test MemoryBucket). */
+export interface SweepBucket extends BucketLike {
+	head(key: string): Promise<unknown>;
+	list(options?: { prefix?: string; cursor?: string; limit?: number; startAfter?: string }): ReturnType<BucketLike['list']>;
+}
+
+export interface SweepResult {
+	deleted: number;
+	/** The operation limit was reached; the next run goes on from there */
+	paused: boolean;
+}
+
+/** Records (and as many pointers) per page and delete call. */
+const SWEEP_PAGE = 500;
+
 /**
- * Daily, after the records: deletes expired pointers whose record is gone already (a crash while the
- * account was being erased). Pointers are empty and sort by user, so it lists the pointer prefix, which
- * holds about 30 days of them.
+ * Daily: deletes the records older than 30 days with their pointers. Keys sort by day, so it stops at the
+ * first one to keep, and a paused run goes on by itself: what it deleted is gone.
  */
-export async function sweepProfileEmailPointers(bucket: BucketLike, now: Date, budget: OperationBudget): Promise<number> {
+export async function sweepProfileEmailReports(bucket: SweepBucket, now: Date, budget: OperationBudget): Promise<SweepResult> {
 	const keepFrom = keptFrom(now);
-	const expired: string[] = [];
 	let deleted = 0;
-	for await (const { key } of listKeys(bucket, budget, POINTERS)) {
-		const day = key.slice(POINTERS.length).split('/')[1] ?? '';
-		if (day >= keepFrom) continue;
-		expired.push(key);
-		if (expired.length >= 1000) deleted += await deleteKeys(bucket, expired.splice(0), budget);
+	let startAfter: string | undefined;
+	for (;;) {
+		// One page: the list and the delete of what it found
+		if (budget.remaining < 2) return { deleted, paused: true };
+		budget.spend();
+		const page = await bucket.list({ prefix: RECORDS, limit: SWEEP_PAGE, ...(startAfter ? { startAfter } : {}) });
+		const keys: string[] = [];
+		let records = 0;
+		let reachedKept = false;
+		for (const { key } of page.objects) {
+			const parsed = parseReportKey(key);
+			if (!parsed) continue;
+			if (parsed.day >= keepFrom) {
+				reachedKept = true;
+				break;
+			}
+			// One delete call: the pointers never outlive their records
+			keys.push(key, pointerKey(parsed.userId, parsed.step));
+			records++;
+		}
+		if (keys.length) await deleteKeys(bucket, keys, budget);
+		deleted += records;
+		startAfter = page.objects[page.objects.length - 1]?.key;
+		if (reachedKept || !page.truncated || !startAfter) return { deleted, paused: false };
 	}
-	if (expired.length) deleted += await deleteKeys(bucket, expired, budget);
-	return deleted;
+}
+
+/** Where a paused pointer sweep goes on (a key, no email). */
+export const SWEEP_CURSOR_KEY = `${REPORT_PREFIX}pointer-sweep.json`;
+const HEADS = 8;
+/** Kept back for the last delete and the cursor. */
+const RESERVE = 2;
+
+/**
+ * Daily, after the records: deletes expired pointers whose record is gone (a crash while the account was
+ * being erased). A pointer whose record is still there stays, or an erasure could not find the record.
+ * Pointers are empty and sort by user, so it lists the pointer prefix (about 30 days of them) and, when
+ * its operation limit is reached, stores where the next run goes on.
+ */
+export async function sweepProfileEmailPointers(bucket: SweepBucket, now: Date, budget: OperationBudget): Promise<SweepResult> {
+	const keepFrom = keptFrom(now);
+	const stored = await readJson<{ after?: string }>(bucket, SWEEP_CURSOR_KEY, budget);
+	let after = typeof stored?.after === 'string' && stored.after.startsWith(POINTERS) ? stored.after : undefined;
+	const orphans: string[] = [];
+	let deleted = 0;
+	const flush = async () => {
+		if (orphans.length) deleted += await deleteKeys(bucket, orphans.splice(0), budget);
+	};
+	let paused = false;
+	for (let more = true; more && !paused; ) {
+		if (budget.remaining <= RESERVE) {
+			paused = true;
+			break;
+		}
+		budget.spend();
+		const page = await bucket.list({ prefix: POINTERS, limit: 1000, ...(after ? { startAfter: after } : {}) });
+		const keys = page.objects.map((o) => o.key);
+		for (let i = 0; i < keys.length; ) {
+			const parsed = parseReportKey(keys[i]);
+			if (!parsed || parsed.day >= keepFrom) {
+				after = keys[i++];
+				continue;
+			}
+			// The next few expired pointers, each with its record's HEAD
+			const batch: { key: string; record: string }[] = [];
+			const room = Math.min(HEADS, budget.remaining - RESERVE - (orphans.length + HEADS > 1000 ? 1 : 0));
+			if (room <= 0) {
+				paused = true;
+				break;
+			}
+			for (; i < keys.length && batch.length < room; i++) {
+				const next = parseReportKey(keys[i]);
+				if (!next || next.day >= keepFrom) break;
+				batch.push({ key: keys[i], record: recordKey(next.step, next.userId) });
+			}
+			if (orphans.length + batch.length > 1000) await flush();
+			budget.spend(batch.length);
+			const found = await Promise.all(batch.map((b) => bucket.head(b.record)));
+			batch.forEach((b, n) => {
+				if (!found[n]) orphans.push(b.key);
+			});
+			after = batch[batch.length - 1].key;
+		}
+		more = page.truncated && keys.length > 0;
+	}
+	await flush();
+	// A run that reached the end starts over next time
+	if (paused && after) await writeJson(bucket, SWEEP_CURSOR_KEY, { after }, budget);
+	else if (stored) await deleteKeys(bucket, [SWEEP_CURSOR_KEY], budget);
+	return { deleted, paused };
 }
