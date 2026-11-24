@@ -26,6 +26,7 @@ that product/legal should confirm.
 | `videos/{videoId}` | Owner `userId`; embedded `comments[]`, `likes[]`, `dislikes[]` with user ids and comment text | Contract (b) | Until erasure / video deletion |
 | `watch_history/{userId}:{videoId}` | What a user watched, when, how far | Contract (b): history and resume feature, user-controlled (clear/remove in Watch History) | **18 months after last watched** (enforced daily) |
 | `admin-backups`: `profile-emails/` (admin check of profile emails, lib/admin/profile-email-reports.ts) | Email stored on a profile or channel and the account's, by user id; super admins only | Legitimate interest (f): correct account data | **30 days** (enforced daily); deleted with the account |
+| `admin-backups`: `legacy-restore/{jobId}/{userId}/{etag}.json` (pointer index `legacy-restore/by-user/{userId}/...`, `lib/admin/legacy-restore.ts`) | Pre-change copy of a profile written before the legacy profile restore job fills empty fields | Legitimate interest (f): safe rollback of admin data repairs | Deleted with the account (**Decision needed:** confirm bucket lifecycle expiry) |
 | `community_posts/posts/...`, `comments/...`, `likes/{postId}/{userId}.json`, `votes/{postId}/{userId}.json`, `comment-likes/...` | Posts, comments, likes, poll votes | Contract (b) | Until erasure / content deletion |
 | `playlists/{playlistId}` | Owner `userId` | Contract (b) | Until erasure |
 | `upload-defaults/{userId}/...` | Upload templates | Contract (b) | Until erasure |

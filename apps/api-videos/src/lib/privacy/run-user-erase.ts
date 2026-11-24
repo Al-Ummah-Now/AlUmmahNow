@@ -43,6 +43,7 @@ import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
+import { eraseLegacyRestoreBackups } from '../admin/legacy-restore';
 
 type Json = Record<string, any>;
 
@@ -248,8 +249,12 @@ export async function eraseRunUserData(
 				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, storedProfile);
 				bump('profile', await deleteKeys(profiles, [userId], budget));
 			}
-			// Profile email reports that name the account, as the full erasure does (after the profile)
-			if (env.ADMIN_BACKUPS) bump('profileEmailReports', await eraseProfileEmailReports(asBucket(env.ADMIN_BACKUPS), userId, budget));
+			// Profile email reports and legacy profile restore copies, as the full erasure does (after the profile)
+			if (env.ADMIN_BACKUPS) {
+				const backups = asBucket(env.ADMIN_BACKUPS);
+				bump('profileEmailReports', await eraseProfileEmailReports(backups, userId, budget));
+				bump('legacyRestoreBackups', await eraseLegacyRestoreBackups(backups, userId, budget));
+			}
 			// Who uploaded which image (lib/csam/imageOwners.ts); CSAM evidence is never erased here
 			budget.spend();
 			await eraseImageOwners(db, userId);

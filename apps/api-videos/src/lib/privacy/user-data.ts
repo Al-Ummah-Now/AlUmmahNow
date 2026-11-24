@@ -29,6 +29,7 @@
  *   playlists/{playlistId}                             playlist (owner: userId)
  *   upload-defaults/{userId}/...                       upload templates
  *   MEDIA_PRIVATE studio/{userId}/...                  Studio brand kit and shared assets (institution mode)
+ *   ADMIN_BACKUPS legacy-restore/by-user/{userId}/...  pointers to pre-change profile copies (legacy-restore/{jobId}/{userId}/{etag}.json)
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
@@ -53,6 +54,7 @@ import { eraseLiveSessionOwner } from '../live/store';
 import { LIVE_DELETE_BATCH, eraseLiveChat, eraseLiveReminders, exportLiveChat, exportLiveReminders, isMissingTable } from '../live/metadata';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseProfileEmailReports } from '../admin/profile-email-reports';
+import { eraseLegacyRestoreBackups } from '../admin/legacy-restore';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
 import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
@@ -86,7 +88,7 @@ export interface PrivacyBuckets {
 	'scheduled-videos'?: unknown;
 	/** Channel subscriptions (lib/subscription-store.ts) */
 	NOTIFICATIONS_DB?: D1Database;
-	/** Profile email reports (lib/admin/profile-emails.ts) */
+	/** Profile email reports (lib/admin/profile-emails.ts) and legacy profile restore copies (lib/admin/legacy-restore.ts) */
 	ADMIN_BACKUPS?: unknown;
 	/** Ownership index and privacy footprints: the erase reads them instead of scanning (#1073) */
 	SEARCH_DB?: unknown;
@@ -1253,9 +1255,14 @@ export async function eraseUserData(
 				await deleteKeys(profiles, [userId], ctx.budget);
 				bump(summary.deleted, 'profile');
 			}
-			// Profile email reports that name the user, found by their own key prefix. After the profile: a
-			// check running now either sees the profile gone or has its pointer here
-			if (env.ADMIN_BACKUPS) bump(summary.deleted, 'profileEmailReports', await eraseProfileEmailReports(asBucket(env.ADMIN_BACKUPS), userId, ctx.budget));
+			// Profile email reports and legacy profile restore copies, found by their own per-user pointer
+			// prefixes. After the profile: a job running now either sees the profile gone or has its pointer here.
+			if (env.ADMIN_BACKUPS) {
+				const backups = asBucket(env.ADMIN_BACKUPS);
+				bump(summary.deleted, 'profileEmailReports', await eraseProfileEmailReports(backups, userId, ctx.budget));
+				const removed = await eraseLegacyRestoreBackups(backups, userId, ctx.budget);
+				if (removed > 0) bump(summary.deleted, 'legacyRestoreBackups', removed);
+			}
 			// Who uploaded which image (lib/csam/imageOwners.ts). CSAM evidence is not here: it
 			// lives in its own bucket that no erasure touches (docs/specs/CSAM-RESPONSE.md §4)
 			if (db) {

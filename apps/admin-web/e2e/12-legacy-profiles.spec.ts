@@ -101,7 +101,11 @@ test.describe('restore legacy profile fields', () => {
         expect((await r2('PUT', PROFILES, state.profileId, profile)).ok, 'restore the viewer profile').toBe(true);
       }
     }
-    for (const key of state.backupKeys) await r2('DELETE', BACKUPS, key);
+    for (const key of state.backupKeys) {
+      await r2('DELETE', BACKUPS, key);
+      const match = /^legacy-restore\/([^/]+)\/([^/]+)\/([^/]+)\.json$/.exec(key);
+      if (match) await r2('DELETE', BACKUPS, `legacy-restore/by-user/${match[2]}/${match[1]}/${match[3]}`);
+    }
     expect(await r2Json(PROFILES, LEGACY_ID)).toBeNull();
   });
 

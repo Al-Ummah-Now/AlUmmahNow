@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
 import { PrivacyConsentGet, PrivacyConsentPut, PrivacyErase, PrivacyExport, appendConsentRecord, CONSENT_HISTORY_LIMIT } from '../src/endpoints/privacy/privacy';
 import { collectUserData, eraseUserData, DELETED_USER_ID, EXPORT_LIST_FIELDS } from '../src/lib/privacy/user-data';
+import { backupKey, backupPointerKey } from '../src/lib/admin/legacy-restore';
 import { createSqliteD1 } from './sqlite-d1';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import {
@@ -83,6 +84,12 @@ function seed() {
 			[`report:v-mine:r2:${OTHER}`]: { id: 'r2', reporterId: OTHER, entityId: 'v-mine', reason: 'spam' },
 		}),
 		subtitles: new MemoryBucket({ 'v-mine/original/en.vtt': { x: 1 }, 'v-other/original/en.vtt': { x: 1 } }),
+		ADMIN_BACKUPS: new MemoryBucket({
+			[backupKey('job-1', ME, 'v1')]: { id: ME, email: 'me@test.local', firstName: 'Me' },
+			[backupPointerKey(ME, 'job-1', 'v1')]: '',
+			[backupKey('job-1', OTHER, 'v1')]: { id: OTHER, email: 'other@test.local' },
+			[backupPointerKey(OTHER, 'job-1', 'v1')]: '',
+		}),
 		queue: new MemoryQueue(),
 	};
 }
@@ -221,6 +228,8 @@ describe('eraseUserData (erasure)', () => {
 		assert.equal(env.community_posts.read(`likes/p-other/${ME}.json`), null);
 		assert.equal(env.community_posts.read(`votes/p-other/${ME}.json`), null);
 		assert.equal(env.community_posts.read(`comment-likes/p-other/pc-x/${ME}.json`), null);
+		assert.equal(env.ADMIN_BACKUPS.read(backupKey('job-1', ME, 'v1')), null);
+		assert.equal(env.ADMIN_BACKUPS.store.has(backupPointerKey(ME, 'job-1', 'v1')), false);
 
 		// Subscriptions and reactions removed from other people's objects
 		const otherChannel = env.channels.read('ch-other');
@@ -253,6 +262,8 @@ describe('eraseUserData (erasure)', () => {
 		assert.ok(env.community_posts.read('posts/ch-other/p-other.json'));
 		assert.ok(env.reports.read(`report:v-mine:r2:${OTHER}`));
 		assert.ok(env.subtitles.read('v-other/original/en.vtt'));
+		assert.ok(env.ADMIN_BACKUPS.read(backupKey('job-1', OTHER, 'v1')));
+		assert.equal(env.ADMIN_BACKUPS.store.has(backupPointerKey(OTHER, 'job-1', 'v1')), true);
 		assert.ok(env.videos.read('index:recent-videos'));
 
 		// Nothing identifying the user is left

@@ -33,6 +33,7 @@ import {
 } from '@al-ummah/shared-types';
 import { CREATE_ONLY } from '../r2Repo';
 import { logger } from '../logger';
+import { deleteKeys, listKeys, type BucketLike, type OperationBudget } from '../privacy/scan';
 
 /** The auth service's D1 (read only: `SELECT id, email FROM users`). */
 export interface AuthUsersDb {
@@ -121,7 +122,8 @@ export async function planLegacyRestore(env: LegacyRestoreEnv): Promise<LegacyRe
 	const emails = [...new Set(legacy.map((p) => norm(p.email)).filter(Boolean))];
 	const authEmails = emails.length ? await authUsers(db, { emails }) : new Map<string, string>();
 	const usrIds = [...authEmails.keys()].filter(isUsrId);
-	const current = await readProfiles(env.profiles, usrIds);
+	// Soft-deleted profiles (pending 30-day purge) are never restored or backed up
+	const current = (await readProfiles(env.profiles, usrIds)).filter((p) => !p.adminDeletion);
 
 	const { pairs, unmatched, ambiguous } = pairProfiles([...legacy, ...current], authEmails);
 	const items: LegacyRestoreItem[] = [];
@@ -163,8 +165,57 @@ export function approvedFromPlan(plan: LegacyRestorePlan, requested: ApprovedRes
 	return out;
 }
 
+export const LEGACY_RESTORE_PREFIX = 'legacy-restore/';
+/** Per-user pointer index so account erasure finds a user's copies without listing legacy-restore/. */
+export const LEGACY_RESTORE_POINTERS_PREFIX = `${LEGACY_RESTORE_PREFIX}by-user/`;
+const JSON_META = { httpMetadata: { contentType: 'application/json' } };
+const cleanEtag = (etag: string) => etag.replace(/[^A-Za-z0-9_-]/g, '');
+
 /** Backup key of the copy a write replaces: one per job, profile and stored version. */
-export const backupKey = (jobId: string, profileId: string, etag: string) => `legacy-restore/${jobId}/${profileId}/${etag.replace(/[^A-Za-z0-9_-]/g, '')}.json`;
+export const backupKey = (jobId: string, profileId: string, etag: string) =>
+	`${LEGACY_RESTORE_PREFIX}${jobId}/${profileId}/${cleanEtag(etag)}.json`;
+
+/** Per-user pointer to a backup copy: legacy-restore/by-user/{profileId}/{jobId}/{etag}. */
+export const backupPointerKey = (profileId: string, jobId: string, etag: string) =>
+	`${LEGACY_RESTORE_POINTERS_PREFIX}${profileId}/${jobId}/${cleanEtag(etag)}`;
+
+/** Derive the backup object key from one of a user's pointer keys; null if malformed. */
+export function backupKeyFromPointer(userId: string, pointerKey: string): string | null {
+	const prefix = `${LEGACY_RESTORE_POINTERS_PREFIX}${userId}/`;
+	if (!pointerKey.startsWith(prefix)) return null;
+	const rest = pointerKey.slice(prefix.length);
+	const cut = rest.lastIndexOf('/');
+	if (cut <= 0) return null;
+	const jobId = rest.slice(0, cut);
+	const etag = rest.slice(cut + 1);
+	return `${LEGACY_RESTORE_PREFIX}${jobId}/${userId}/${etag}.json`;
+}
+
+/**
+ * Account erasure: deletes every legacy-restore profile backup belonging to `userId`,
+ * found strictly through the user's own pointer prefix (never lists legacy-restore/).
+ * Deletes backup copies before pointers so a budget cutoff or retry never orphans a copy.
+ */
+export async function eraseLegacyRestoreBackups(bucket: BucketLike, userId: string, budget: OperationBudget): Promise<number> {
+	if (!userId || userId.includes('/')) return 0;
+	const prefix = `${LEGACY_RESTORE_POINTERS_PREFIX}${userId}/`;
+	let deleted = 0;
+	const pending: string[] = [];
+	const flush = async () => {
+		const pointers = pending.splice(0);
+		const backups = pointers
+			.map((key) => backupKeyFromPointer(userId, key))
+			.filter((key): key is string => key !== null);
+		deleted += await deleteKeys(bucket, backups, budget);
+		await deleteKeys(bucket, pointers, budget);
+	};
+	for await (const { key } of listKeys(bucket, budget, prefix)) {
+		pending.push(key);
+		if (pending.length >= 500) await flush();
+	}
+	if (pending.length) await flush();
+	return deleted;
+}
 
 /** Fills one approved profile. Returns what it wrote, or why it skipped. */
 async function restoreOne(env: LegacyRestoreEnv, job: AdminJob, item: ApprovedRestore): Promise<LegacyRestoreResult['written'][number] | { id: string; reason: string }> {
@@ -177,31 +228,58 @@ async function restoreOne(env: LegacyRestoreEnv, job: AdminJob, item: ApprovedRe
 	if (!norm(legacy.email) || norm(auth.get(item.id)) !== norm(legacy.email)) return { id: item.id, reason: 'verified email no longer matches the legacy record' };
 
 	const only = new Set(item.fields);
+	const created: Array<{ key: string; pointer: string }> = [];
+	const cleanupBackups = async () => {
+		if (!created.length) return;
+		const batch = created.splice(0);
+		await backups.delete(batch.map((b) => b.key));
+		await backups.delete(batch.map((b) => b.pointer));
+	};
+
 	for (let attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
 		const object = await env.profiles.get(item.id);
-		if (!object) return { id: item.id, reason: 'profile is gone' };
+		if (!object) {
+			await cleanupBackups();
+			return { id: item.id, reason: 'profile is gone' };
+		}
 		const raw = await object.text();
 		const stored = JSON.parse(raw) as StoredProfile;
+		if (stored.adminDeletion) {
+			await cleanupBackups();
+			return { id: item.id, reason: 'profile is pending deletion' };
+		}
 		const plan = planProfile({ ...stored, id: item.id }, legacy, { only });
 		if (!plan.changes.length) return { id: item.id, reason: 'nothing left to fill' };
 
-		// Pre-change copy first (create-only: a retry never overwrites the original)
+		// Per-user pointer first (so a concurrent erasure always finds the copy), then the
+		// pre-change copy (create-only: a retry never overwrites the original).
 		const key = backupKey(job.id, item.id, object.etag);
+		const pointer = backupPointerKey(item.id, job.id, object.etag);
+		await backups.put(pointer, '', JSON_META);
 		await backups.put(key, raw, {
 			onlyIf: CREATE_ONLY,
-			httpMetadata: { contentType: 'application/json' },
+			...JSON_META,
 			customMetadata: { jobId: job.id, profileId: item.id, legacyId: item.legacyId, actorId: job.actorId },
 		});
+		created.push({ key, pointer });
+
 		const next: Record<string, unknown> = { ...plan.next };
 		if (!('id' in stored)) delete next.id;
 		const written = await env.profiles.put(item.id, JSON.stringify(next), {
-			httpMetadata: { contentType: 'application/json' },
+			...JSON_META,
 			onlyIf: { etagMatches: object.etag },
 		});
 		if (written) {
 			const fields = plan.changes.map((c) => c.field);
 			logger.info('[LegacyRestore] Filled profile fields', { jobId: job.id, profileId: item.id, legacyId: item.legacyId, fields, backupKey: key });
 			return { id: item.id, legacyId: item.legacyId, fields, backupKey: key };
+		}
+		// Conditional put failed: either another writer updated the profile, or an erasure removed it.
+		// If the profile is gone or erasure already removed our pointer, remove any copies we wrote
+		// and stop so neither the profile nor its backup survives erasure.
+		if (!(await env.profiles.head(item.id)) || !(await backups.head(pointer))) {
+			await cleanupBackups();
+			return { id: item.id, reason: 'profile is gone' };
 		}
 		logger.warn('[LegacyRestore] Profile changed meanwhile; re-planning', { jobId: job.id, profileId: item.id, attempt });
 	}
