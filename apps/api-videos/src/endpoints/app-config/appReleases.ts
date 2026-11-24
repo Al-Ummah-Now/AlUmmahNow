@@ -25,7 +25,9 @@ export class AppReleasesGet extends PublicRoute {
 
 	async handle(c: AppContext) {
 		const doc = await readReleases(c.env.APP_CONFIG);
-		return c.json({ success: true, result: doc });
+		// The admin's TestFlight and Amazon Available marks, for the Releases tab
+		const availability = ((await c.env.APP_CONFIG?.get(AVAILABILITY_KEY, { type: 'json' })) ?? {}) as AvailabilityDocument;
+		return c.json({ success: true, result: { ...doc, availability } });
 	}
 }
 

@@ -48,3 +48,51 @@ export async function saveAppConfigDocument(key: AppConfigDocumentKey, value: un
 export async function evaluateAppConfig(context: AppConfigContext, documents: Partial<Record<AppConfigDocumentKey, unknown>>): Promise<ActionResult<AppConfigResult>> {
   return action(() => fetchAdmin<AppConfigResult>('/api/app-config/evaluate', { method: 'POST', body: JSON.stringify({ context, documents }) }));
 }
+
+// ---------------------------------------------------------------------------
+// App releases (wiki AUN-APP-UPDATES §4.2)
+// ---------------------------------------------------------------------------
+
+export interface AppReleaseNotes {
+  en: string;
+  ar: string;
+}
+
+export interface AppReleaseEntry {
+  app: string;
+  platform: string;
+  channel: 'stable' | 'beta';
+  repo: string;
+  version: string;
+  tag: string;
+  publishedAt: string;
+  notes: AppReleaseNotes;
+  signed: boolean;
+  private: boolean;
+  url: string | null;
+  stores: string[];
+}
+
+export interface AppReleasesView {
+  updatedAt: string;
+  entries: Record<string, AppReleaseEntry>;
+  appStore: Record<string, { version: string; url: string; checkedAt: string }>;
+  keys: Record<string, { serial: number; acceptedAt: string }>;
+  quarantined: { source: string; repo: string; tag: string; reason: string; at: string }[];
+  availability?: Record<string, string>;
+}
+
+/** The release index (admins read it; null when api-videos has none yet). */
+export async function getAppReleases(): Promise<AppReleasesView | null> {
+  return (await fetchAdmin<AppReleasesView | null>('/api/app-config/releases')) ?? null;
+}
+
+/** Runs the release index now (429 while one is running). */
+export async function refreshAppReleases(): Promise<ActionResult<{ releases: AppReleasesView }>> {
+  return action(() => fetchAdmin<{ releases: AppReleasesView }>('/api/app-config/releases/refresh', { method: 'POST', body: '{}' }));
+}
+
+/** Marks (or, with null, unmarks) a TestFlight or Amazon upload available. Super admins; audited. */
+export async function markStoreAvailable(app: string, platform: string, source: 'testflight' | 'amazon', version: string | null): Promise<ActionResult<Record<string, string>>> {
+  return action(() => fetchAdmin<Record<string, string>>('/api/app-config/releases/available', { method: 'PUT', body: JSON.stringify({ app, platform, source, version }) }));
+}

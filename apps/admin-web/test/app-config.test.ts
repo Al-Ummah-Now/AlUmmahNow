@@ -111,6 +111,34 @@ describe('app config versions', () => {
     assert.deepEqual(codes(doc.problems.filter((p) => p.id === b.id)), ['minimumVersion:versionFormat', 'platform:duplicateTarget', 'storeUrl:urlFormat']);
     assert.deepEqual(codes(doc.problems.filter((p) => p.id === c.id)), ['latestVersion:versionOrder']);
   });
+
+  it('round-trips beta entries, the forced-screen message and version notes (AUN-APP-UPDATES §3.4)', () => {
+    const stored = {
+      'viewer/ios#beta': { minimumVersion: '1.2.0.0' },
+      'tools/windows': {
+        minimumVersion: '2026.11.22',
+        message: { en: 'Sign-in changed.', ar: 'تغيّر تسجيل الدخول.' },
+        notesOverrides: { '2026.11.23': { en: 'Faster scans.', ar: 'فحص أسرع.' } },
+      },
+    };
+    const drafts = versionsToDrafts(stored);
+    assert.equal(drafts[0].channel, 'beta');
+    assert.equal(drafts[0].platform, 'ios');
+    const back = versionsToDocument(drafts);
+    assert.deepEqual(back.problems, []);
+    assert.ok(sameAppConfigDocument(back.value, stored));
+  });
+
+  it('a message or a notes override needs both languages; at most five overrides', () => {
+    const d = { ...newVersion(), minimumVersion: '1.0.0', messageEn: 'Only English', notesOverrides: [{ id: 'n1', version: '1.1', en: 'x', ar: '' }] };
+    const doc = versionsToDocument([d]);
+    assert.deepEqual(codes(doc.problems).sort(), ['messageAr:bothLanguages', 'notes.n1.ar:bothLanguages', 'notes.n1.version:versionFormat'].sort());
+    const many = { ...newVersion(), minimumVersion: '1.0.0', notesOverrides: Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, version: `1.0.${i}`, en: 'e', ar: 'ع' })) };
+    assert.deepEqual(codes(versionsToDocument([many]).problems), ['notesOverrides:tooManyNotes']);
+    const stable = { ...newVersion(), app: 'viewer', platform: 'ios', minimumVersion: '1.0.0' };
+    const beta = { ...stable, id: 'b', channel: 'beta' as const };
+    assert.deepEqual(versionsToDocument([stable, beta]).problems, [], 'a stable and a beta entry for one pair are two targets');
+  });
 });
 
 describe("api-videos' problems", () => {
@@ -147,7 +175,7 @@ describe('app config strings and access', () => {
 
   it('every problem code the model can raise has words', () => {
     const problems = (en as unknown as { appConfig: { problems: Record<string, string> } }).appConfig.problems;
-    for (const code of ['keyRequired', 'keyFormat', 'versionFormat', 'versionOrder', 'rolloutRange', 'valueJson', 'valueRequired', 'localeFormat', 'urlFormat', 'duplicateTarget', 'tooMany', 'server']) {
+    for (const code of ['keyRequired', 'keyFormat', 'versionFormat', 'versionOrder', 'rolloutRange', 'valueJson', 'valueRequired', 'localeFormat', 'urlFormat', 'duplicateTarget', 'tooMany', 'tooManyNotes', 'bothLanguages', 'textTooLong', 'server']) {
       assert.ok(problems[code], code);
     }
   });

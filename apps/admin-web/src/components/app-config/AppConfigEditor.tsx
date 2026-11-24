@@ -10,7 +10,7 @@
  */
 import { useCallback, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sameAppConfigDocument as sameDocument, type AppConfigDocumentKey } from '@al-ummah/shared-types';
+import { sameAppConfigDocument as sameDocument, type AppConfigDocumentKey, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 import { getAppConfigDocument, saveAppConfigDocument, type AppConfigHistoryEntry } from '@/lib/api/appConfig';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -30,23 +30,32 @@ import { RuleList } from './RuleList';
 import { PriorityTabs } from '@/components/PriorityTabs';
 import { VersionList } from './VersionList';
 import { DryRun } from './DryRun';
+import { ReleasesPanel } from './ReleasesPanel';
+import type { AppReleasesView } from '@/lib/api/appConfig';
 
 import { LocalTime } from '@/components/LocalTime';
 import { fillNodes } from '@/components/audit/fill';
 const KEYS: AppConfigDocumentKey[] = ['flags', 'config', 'versions'];
+/** The Releases tab comes first (wiki AUN-APP-UPDATES §4.2); it edits no document */
+type Tab = AppConfigDocumentKey | 'releases';
 
 interface Props {
   initial: Record<AppConfigDocumentKey, unknown>;
   history: Record<AppConfigDocumentKey, AppConfigHistoryEntry[]>;
+  /** The release index; null when it couldn't be loaded */
+  releases: AppReleasesView | null;
+  releasesFailed?: boolean;
+  /** Super admins (app_versions:manage) edit the versions document; admins see it read-only */
+  canEditVersions: boolean;
 }
 
 type Notice = { tone: 'ok' | 'error' | 'conflict'; text: string } | null;
 
-export function AppConfigEditor({ initial, history }: Props) {
+export function AppConfigEditor({ initial, history, releases, releasesFailed, canEditVersions }: Props) {
   const { t } = useLanguage();
   const router = useRouter();
   const ids = useId();
-  const [tab, setTab] = useState<AppConfigDocumentKey>('flags');
+  const [tab, setTab] = useState<Tab>('releases');
   const [baseline, setBaseline] = useState(initial);
   const [rules, setRules] = useState<Record<'flags' | 'config', RuleDraft[]>>(() => ({ flags: rulesToDrafts(initial.flags), config: rulesToDrafts(initial.config) }));
   const [versions, setVersions] = useState<VersionDraft[]>(() => versionsToDrafts(initial.versions));
@@ -147,9 +156,12 @@ export function AppConfigEditor({ initial, history }: Props) {
     return { flags: built.flags.value, config: built.config.value, versions: built.versions.value };
   }, [built]);
 
-  const preview = built[tab].value;
-  const n = notice[tab];
-  const problems = shownProblems(tab);
+  // The Releases tab previews the versions document it shows the minimums of
+  const doc: AppConfigDocumentKey = tab === 'releases' ? 'versions' : tab;
+  const preview = built[doc].value;
+  const n = notice[doc];
+  const problems = shownProblems(doc);
+  const readOnly = doc === 'versions' && !canEditVersions;
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -164,18 +176,26 @@ export function AppConfigEditor({ initial, history }: Props) {
           currentClassName="border-accent text-fg"
           idleClassName="border-transparent text-fg-muted hover:text-fg"
           tabTestIdPrefix="app-config-tab-"
-          onSelect={(id) => setTab(id as AppConfigDocumentKey)}
-          tabs={KEYS.map((key) => ({
+          onSelect={(id) => setTab(id as Tab)}
+          tabs={[{ id: 'releases', label: t('appConfig.tabs.releases'), current: tab === 'releases', extra: undefined as React.ReactNode }, ...KEYS.map((key) => ({
             id: key,
             label: t(`appConfig.tabs.${key}`),
             current: tab === key,
             extra: dirty(key) ? <span className="ms-2 inline-block h-2 w-2 rounded-full bg-accent align-middle" aria-label={t('appConfig.unsaved')} role="img" /> : undefined,
-          }))}
+          }))]}
         />
 
         <div role="region" id={`${ids}-panel`} aria-label={t(`appConfig.tabs.${tab}`)} className="space-y-4" data-testid="app-config-panel" data-document={tab}>
-          <p className="max-w-3xl text-sm text-fg-muted">{t(`appConfig.intro.${tab}`)}</p>
-          {tab === 'versions' ? (
+          <p className="max-w-3xl text-sm text-fg-muted">{tab === 'releases' ? t('appConfig.releasesIntro') : t(`appConfig.intro.${tab}`)}</p>
+          {tab === 'releases' ? (
+            releasesFailed ? (
+              <p className="text-sm text-danger-fg" data-testid="app-releases-error">{t('appConfig.releases.loadFailed')}</p>
+            ) : (
+              <ReleasesPanel initial={releases} versions={(baseline.versions ?? {}) as AppConfigVersionsDocument} canEdit={canEditVersions} />
+            )
+          ) : tab === 'versions' ? (
+            <>
+            {readOnly && <p className="rounded border border-border bg-surface-2 p-3 text-sm text-fg-muted" data-testid="app-config-versions-readonly">{t('appConfig.readOnlyVersions')}</p>}
             <VersionList
               drafts={versions}
               onChange={(d) => {
@@ -183,8 +203,9 @@ export function AppConfigEditor({ initial, history }: Props) {
                 clearServer('versions');
               }}
               problems={problems}
-              disabled={busy === 'versions'}
+              disabled={busy === 'versions' || readOnly}
             />
+            </>
           ) : (
             <RuleList
               key={tab}
@@ -199,12 +220,13 @@ export function AppConfigEditor({ initial, history }: Props) {
             />
           )}
 
+          {tab !== 'releases' && !readOnly && (
           <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 -mx-1 flex md:bottom-0 flex-wrap items-center gap-3 rounded-lg border border-border bg-surface/95 p-3 shadow-sm backdrop-blur" data-testid="app-config-save-bar">
-            <button type="button" className={primaryButtonClass} onClick={() => save(tab)} disabled={busy !== null} data-testid="app-config-save">
-              {busy === tab ? t('appConfig.saving') : t('appConfig.save')}
+            <button type="button" className={primaryButtonClass} onClick={() => save(doc)} disabled={busy !== null} data-testid="app-config-save">
+              {busy === doc ? t('appConfig.saving') : t('appConfig.save')}
             </button>
-            {dirty(tab) && (
-              <button type="button" className={secondaryButtonClass} onClick={() => discard(tab)} disabled={busy !== null} data-testid="app-config-discard">
+            {dirty(doc) && (
+              <button type="button" className={secondaryButtonClass} onClick={() => discard(doc)} disabled={busy !== null} data-testid="app-config-discard">
                 {t('appConfig.discard')}
               </button>
             )}
@@ -216,21 +238,23 @@ export function AppConfigEditor({ initial, history }: Props) {
               )}
             </span>
             {n?.tone === 'conflict' && (
-              <button type="button" className={secondaryButtonClass} onClick={() => loadLatest(tab)} disabled={busy !== null} data-testid="app-config-load-latest">
+              <button type="button" className={secondaryButtonClass} onClick={() => loadLatest(doc)} disabled={busy !== null} data-testid="app-config-load-latest">
                 {t('appConfig.loadLatest')}
               </button>
             )}
           </div>
+          )}
 
+          {tab !== 'releases' && (
           <section aria-labelledby={`${ids}-history`} className="space-y-1" data-testid="app-config-history">
             <h2 id={`${ids}-history`} className="text-sm font-semibold text-fg">
               {t('appConfig.historyTitle')}
             </h2>
-            {history[tab].length === 0 ? (
+            {history[doc].length === 0 ? (
               <p className="text-sm text-fg-muted">{t('appConfig.historyEmpty')}</p>
             ) : (
               <ul className="space-y-0.5 text-sm text-fg-muted">
-                {history[tab].map((h) => (
+                {history[doc].map((h) => (
                   <li key={h.id} data-testid="app-config-history-entry">
                     {fillNodes(t('appConfig.historyEntry'), {
                       date: <LocalTime value={h.createdAt} withTime />,
@@ -245,6 +269,7 @@ export function AppConfigEditor({ initial, history }: Props) {
               </ul>
             )}
           </section>
+          )}
         </div>
       </div>
 
