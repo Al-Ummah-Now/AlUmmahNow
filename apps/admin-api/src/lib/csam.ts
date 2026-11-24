@@ -23,6 +23,7 @@ import {
   type CsamCaseDetail,
   type CsamCaseStatus,
   type CsamCaseSummary,
+  type CsamEmailCheckPage,
   type CsamEvidenceManifest,
   type CsamFreezeState,
   type CsamReportFacts,
@@ -293,6 +294,34 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
     },
     evidenceFiles: [],
   };
+}
+
+const EMAIL_CHECK_PAGE = 50;
+
+/**
+ * The cases (one page, by id) whose captured email is not their uploader's account email: an email
+ * captured before its source was kept may be the profile's copy. Reads only; the captured facts stay
+ * as they are. Each page read is logged. Here and not in an admin job: the link between an account and
+ * a case lives only in csam_cases.
+ */
+export async function checkCaseEmails(env: CsamEnv, after: string | undefined, actorId: string): Promise<CsamEmailCheckPage> {
+  if (after !== undefined && !CASE_ID.test(after)) throw new CsamError(400, 'invalid_request');
+  const { results } = await env.REPORTS_DB
+    .prepare('SELECT id, uploader_id, facts FROM csam_cases WHERE id > ? ORDER BY id LIMIT ?')
+    .bind(after ?? '', EMAIL_CHECK_PAGE)
+    .all<{ id: string; uploader_id: string | null; facts: string | null }>();
+  const rows = results ?? [];
+  const users = rows.flatMap((r) => (r.uploader_id ? [r.uploader_id] : []));
+  // The same lookup the capture uses: deleted accounts that are not purged yet included
+  const accounts = users.length ? (await callVideos<CsamAccounts>(env, '/accounts', { ...csam, method: 'POST', json: { ids: [...new Set(users)] } })).accounts : {};
+  const items = rows.flatMap((r) => {
+    if (!r.uploader_id) return [];
+    const captured = json<CsamReportFacts>(r.facts)?.uploader?.email?.trim().toLowerCase() || null;
+    const account = accounts[r.uploader_id]?.email ?? null;
+    return captured && captured !== account ? [{ caseId: r.id, userId: r.uploader_id, captured, account }] : [];
+  });
+  await logAccess(env.REPORTS_DB, { caseId: null, actorId, action: 'cases.email_checked', detail: { checked: rows.length, found: items.length } });
+  return { checked: rows.length, items, next: rows.length === EMAIL_CHECK_PAGE ? rows[rows.length - 1].id : null };
 }
 
 /** Bans on videos at once, and asks Auth to sign the account out everywhere and suspend it. */

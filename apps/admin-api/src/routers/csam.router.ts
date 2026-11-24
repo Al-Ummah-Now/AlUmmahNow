@@ -24,6 +24,7 @@ import type { AuthContext } from '../base/types';
 import { VideosError } from '../lib/content/videosClient';
 import { logger } from '../lib/logger';
 import {
+  checkCaseEmails,
   accessLog,
   caseDetail,
   CsamError,
@@ -82,6 +83,7 @@ app.post('/intake', async (c) => {
 app.get('/settings', async (c) => ok(c, await readSettings(c.env)));
 app.put('/settings', async (c) => ok(c, await setRetentionDays(c.env, (await body(c)).retentionDays, actorOf(c))));
 app.post('/settings/webhook-secret', async (c) => ok(c, await generateWebhookSecret(c.env, actorOf(c))));
+app.get('/email-check', async (c) => ok(c, await checkCaseEmails(c.env, c.req.query('after'), actorOf(c))));
 app.get('/log', async (c) => ok(c, { items: await accessLog(c.env.REPORTS_DB, null) }));
 
 app.get('/:id', async (c) => ok(c, await caseDetail(c.env, c.req.param('id'), actorOf(c))));

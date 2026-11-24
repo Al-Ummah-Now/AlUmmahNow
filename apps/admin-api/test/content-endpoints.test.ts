@@ -103,6 +103,29 @@ function appFor(env: Record<string, unknown>) {
 
 const channelDetail = { id: 'ch_1', name: 'Old name', handle: 'old', description: 'd', ownerId: 'usr_owner', channels: [] };
 
+describe('profile emails', () => {
+  it('super admins only; a start is audited and passed on, the report is read by page', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({
+      'GET /profile-emails/jobs': () => ({ body: { success: true, result: { items: [] } } }),
+      'POST /profile-emails/jobs': () => ({ body: { success: true, result: { job: { id: 'job_1' } } } }),
+      'GET /profile-emails/jobs/job_1/report': () => ({ body: { success: true, result: { entries: [], noAccount: [] } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const paths: [string, string, unknown?][] = [
+      ['GET', '/api/content/profile-emails/jobs'],
+      ['POST', '/api/content/profile-emails/jobs', { mode: 'repair', checkJobId: 'job_0' }],
+      ['GET', '/api/content/profile-emails/jobs/job_1/report?page=2'],
+    ];
+    for (const roles of ['admin', 'moderator']) for (const [method, path, json] of paths) assert.equal((await call(path, { method, roles, json })).status, 403, `${roles} ${method} ${path}`);
+    assert.equal(calls.length, 0);
+    for (const [method, path, json] of paths) assert.equal((await call(path, { method, roles: 'super_admin', json })).status, 200, path);
+    const start = calls.find((c) => c.method === 'POST')!;
+    assert.deepEqual(start.body, { mode: 'repair', checkJobId: 'job_0' });
+    assert.equal(log.length, 1, 'one audit row');
+  });
+});
+
 describe('content endpoints: permissions', () => {
   const changes: [string, string, unknown?][] = [
     ['PATCH', '/api/content/channels/ch_1', { name: 'New' }],

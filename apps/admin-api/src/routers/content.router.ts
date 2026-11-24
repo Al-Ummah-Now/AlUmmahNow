@@ -41,6 +41,8 @@ import {
   cleanTrashReason,
   warningEscalation,
   type AccountEmailSettings,
+  PROFILE_EMAILS_TARGET,
+  type ProfileEmailsReportPage,
   type AccountNoticeRequest,
   type AccountNoticeResult,
   type IssueUserWarningRequest,
@@ -663,6 +665,29 @@ app.post('/deletions/:kind/:id/purge', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Profile emails (api-videos lib/admin/profile-emails.ts): a check compares the
+// stored emails with the sign-in accounts, a repair (after a check) writes the
+// accounts'. The report names emails, so everything here is super admins only.
+// ---------------------------------------------------------------------------
+
+const superOnly = (c: C) => (isSuperAdmin(c.get('auth')?.roles) ? null : apiError(c, 403, 'forbidden', { error: 'Super admins only' }));
+
+app.get('/profile-emails/jobs', async (c) => superOnly(c) ?? ok(c, await videos<{ items: AdminJob[] }>(c, '/profile-emails/jobs')));
+
+app.post('/profile-emails/jobs', async (c) => {
+  const refused = superOnly(c);
+  if (refused) return refused;
+  const input = await body(c);
+  const mode = input.mode === 'repair' ? 'repair' : 'check';
+  const checkJobId = typeof input.checkJobId === 'string' ? input.checkJobId : undefined;
+  return ok(c, await audited(c, { kind: PROFILE_EMAILS_TARGET.kind, id: PROFILE_EMAILS_TARGET.id, action: mode === 'repair' ? 'profile-emails-repair' : 'profile-emails-check', details: checkJobId ? { checkJobId } : {} }, () =>
+    videos<{ job: AdminJob }>(c, '/profile-emails/jobs', { method: 'POST', json: { mode, ...(checkJobId ? { checkJobId } : {}) } })));
+});
+
+app.get('/profile-emails/jobs/:id/report', async (c) =>
+  superOnly(c) ?? ok(c, await videos<ProfileEmailsReportPage>(c, `/profile-emails/jobs/${encodeURIComponent(c.req.param('id'))}/report`, { query: { page: c.req.query('page') ?? '0' } })));
+
+// ---------------------------------------------------------------------------
 // Restore legacy profile fields: fills empty fields of usr_ profiles from the
 // user's pre-SSO profile (api-videos lib/admin/legacy-restore.ts). The dry run
 // writes nothing; Run audits every profile it will change (with the planned
@@ -1080,10 +1105,10 @@ app.post('/creators/tier', async (c) => {
 /** A CSAM takedown job names the case and the matched URL: only super admins see its details. */
 const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
 /**
- * Kinds only a super admin may run again: CSAM takedowns, and social import syncs (their sources are
+ * Kinds only a super admin may run again: CSAM takedowns, profile email checks and repairs, and social import syncs (their sources are
  * managed with import_sources:manage, a super admin permission; wiki TOOLS-ADMIN TA-9).
  */
-const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync', 'import.takeout-match']);
+const SUPER_ADMIN_JOB_KINDS = new Set<string>([...CSAM_JOB_KINDS, 'import.source-sync', 'import.takeout-match', 'profiles.repair-emails']);
 function redactJob(c: C, job: AdminJob): AdminJob {
   if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
   return {
