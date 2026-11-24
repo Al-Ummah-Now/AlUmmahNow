@@ -339,7 +339,11 @@ describe('restore legacy profile fields: account erasure', () => {
 		assert.equal(summary.complete, true);
 		assert.equal(summary.deleted.legacyRestoreBackups, 2);
 		assert.equal(env.profiles.store.has(USR), false);
-		assert.deepEqual(listPrefixes, [`${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/`], 'only the user pointer prefix is listed, never legacy-restore/');
+		assert.ok(listPrefixes.includes(`${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/`), 'listed the user legacy-restore pointer prefix');
+		assert.ok(
+			listPrefixes.every((p) => p === `${LEGACY_RESTORE_POINTERS_PREFIX}${USR}/` || p === `profile-emails/by-user/${USR}/`),
+			`only per-user pointer prefixes may be listed (got ${JSON.stringify(listPrefixes)})`,
+		);
 
 		const remainingKeys = [...env.ADMIN_BACKUPS.store.keys()];
 		assert.equal(remainingKeys.some((k) => k.includes(USR)), false, 'no backup or pointer remains for the erased user');
@@ -472,6 +476,22 @@ describe('restore legacy profile fields: account erasure', () => {
 		await assert.rejects(runLegacyRestore(env as never, job), /R2 write failed/);
 		assert.equal(env.profiles.store.has(USR), false);
 		assert.equal(env.ADMIN_BACKUPS.store.size, 0, 'catch removed uncommitted backup and pointer');
+	});
+
+	it('keeps pre-change backup in catch when profiles.put committed before throwing', async () => {
+		const { env } = setup();
+		const realPut = env.profiles.put.bind(env.profiles);
+		const etagBefore = env.profiles.etag(USR);
+		env.profiles.put = (async (key: string, value: string, options?: any) => {
+			await realPut(key, value, options);
+			throw new Error('ambiguous network timeout after commit');
+		}) as never;
+
+		const job = { id: 'job-commit-throw', kind: 'profiles.restore-legacy', actorId: 'a', params: { approved: [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }] }, result: null } as any;
+		await assert.rejects(runLegacyRestore(env as never, job), /ambiguous network timeout/);
+		assert.equal(stored(env, USR).firstNameLocalized.ar, 'محمود', 'profile write committed');
+		assert.equal(env.ADMIN_BACKUPS.store.has(backupKey(job.id, USR, etagBefore)), true, 'pre-change backup kept when profile etag changed');
+		assert.equal(env.ADMIN_BACKUPS.store.has(backupPointerKey(USR, job.id, etagBefore)), true, 'pointer kept so future erasure removes it');
 	});
 
 	it('cleans up the pointer in catch when the backup copy put throws', async () => {
