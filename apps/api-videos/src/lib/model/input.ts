@@ -27,6 +27,7 @@ export const VideoInput = z.object({
     isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
     visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
+    allowDownloads: z.boolean().optional().describe("Allow viewers to download this video offline (defaults to channel default / true)"),
     category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
     tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
@@ -71,6 +72,7 @@ export const ChannelInput = z.object({
     isMain: Bool().optional(),
     avatarUrl: imageUrlInput("Channel avatar URL"),
     coverUrl: imageUrlInput("Channel cover image URL"),
+    defaultAllowDownloads: z.boolean().optional().describe("Default allowDownloads value for new videos on this channel (defaults to true)"),
 });
 
 // Update operations (for PATCH endpoints) - defined explicitly to preserve OpenAPI metadata
@@ -88,6 +90,7 @@ export const VideoUpdateInput = z.object({
     isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
     visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
+    allowDownloads: z.boolean().optional().describe("Allow viewers to download this video offline (defaults to channel default / true)"),
     category: z.string().regex(CATEGORY_SLUG_PATTERN).nullable().optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"),
     tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
@@ -148,6 +151,7 @@ export const ChannelUpdateInput = z.object({
     links: z.array(ChannelLinkInput).max(MAX_CHANNEL_LINKS).optional().describe("About links (replaces the list)"),
     contactEmail: z.union([z.literal(''), z.string().trim().email().max(254)]).optional().describe("Public contact email; empty string clears it"),
     location: z.string().trim().max(100).optional().describe("Location shown on the About tab; empty string clears it"),
+    defaultAllowDownloads: z.boolean().optional().describe("Default allowDownloads value for new videos on this channel (defaults to true)"),
 });
 
 export const CommentUpdateInput = z.object({

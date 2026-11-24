@@ -188,11 +188,15 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Update the video with new values (applied to the fresh copy on every
 		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
-		const { category, tags, format, visibility, ageRestricted: _ageRestricted, madeForKids: _madeForKids, ...restInput } = videoUpdateInput;
+		const {
+			category, tags, format, visibility, allowDownloads,
+			ageRestricted: _ageRestricted, madeForKids: _madeForKids, ...restInput
+		} = videoUpdateInput;
 		const applyUpdate = (base: VideoType): VideoType => {
 			const next: VideoType = {
 			...base,
 			...restInput,
+			...(allowDownloads !== undefined ? { allowDownloads } : base.allowDownloads !== undefined ? { allowDownloads: base.allowDownloads } : {}),
 			dateModified: new Date().toISOString(),
 			// Preserve localized fields if provided
 			titleLocalized: videoUpdateInput.titleLocalized ?? base.titleLocalized,

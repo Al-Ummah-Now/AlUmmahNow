@@ -2981,6 +2981,10 @@
                       "null"
                     ],
                     "description": "Channel cover image URL. Null or an empty string clears it"
+                  },
+                  "defaultAllowDownloads": {
+                    "type": "boolean",
+                    "description": "Default allowDownloads value for new videos on this channel (defaults to true)"
                   }
                 },
                 "required": [
@@ -3060,6 +3064,10 @@
                             },
                             "location": {
                               "type": "string"
+                            },
+                            "defaultAllowDownloads": {
+                              "type": "boolean",
+                              "description": "Default allowDownloads value for new videos on this channel (omitted = true)"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -6158,6 +6166,10 @@
                     "type": "string",
                     "maxLength": 100,
                     "description": "Location shown on the About tab; empty string clears it"
+                  },
+                  "defaultAllowDownloads": {
+                    "type": "boolean",
+                    "description": "Default allowDownloads value for new videos on this channel (defaults to true)"
                   }
                 }
               }
@@ -6234,6 +6246,10 @@
                             },
                             "location": {
                               "type": "string"
+                            },
+                            "defaultAllowDownloads": {
+                              "type": "boolean",
+                              "description": "Default allowDownloads value for new videos on this channel (omitted = true)"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -9434,6 +9450,10 @@
                               "isLive": {
                                 "type": "boolean"
                               },
+                              "allowDownloads": {
+                                "type": "boolean",
+                                "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
+                              },
                               "titleLocalized": {
                                 "type": "object",
                                 "additionalProperties": {
@@ -10544,6 +10564,10 @@
                           },
                           "isLive": {
                             "type": "boolean"
+                          },
+                          "allowDownloads": {
+                            "type": "boolean",
+                            "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                           },
                           "titleLocalized": {
                             "type": "object",
@@ -12119,6 +12143,10 @@
                     "location": {
                       "type": "string"
                     },
+                    "defaultAllowDownloads": {
+                      "type": "boolean",
+                      "description": "Default allowDownloads value for new videos on this channel (omitted = true)"
+                    },
                     "dateCreated": {
                       "type": "string",
                       "format": "date-time"
@@ -12803,6 +12831,10 @@
                           },
                           "isLive": {
                             "type": "boolean"
+                          },
+                          "allowDownloads": {
+                            "type": "boolean",
+                            "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                           },
                           "titleLocalized": {
                             "type": "object",
@@ -14367,6 +14399,10 @@
                           },
                           "isLive": {
                             "type": "boolean"
+                          },
+                          "allowDownloads": {
+                            "type": "boolean",
+                            "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                           },
                           "titleLocalized": {
                             "type": "object",
@@ -40016,6 +40052,10 @@
                           "isLive": {
                             "type": "boolean"
                           },
+                          "allowDownloads": {
+                            "type": "boolean",
+                            "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
+                          },
                           "titleLocalized": {
                             "type": "object",
                             "additionalProperties": {
@@ -40471,6 +40511,10 @@
                   "isLive": {
                     "type": "boolean"
                   },
+                  "allowDownloads": {
+                    "type": "boolean",
+                    "description": "Allow viewers to download this video offline (defaults to channel default / true)"
+                  },
                   "category": {
                     "type": "string",
                     "pattern": "^[a-z][a-z0-9_]{1,39}$",
@@ -40686,6 +40730,10 @@
                             },
                             "isLive": {
                               "type": "boolean"
+                            },
+                            "allowDownloads": {
+                              "type": "boolean",
+                              "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                             },
                             "titleLocalized": {
                               "type": "object",
@@ -43591,6 +43639,10 @@
                           },
                           "isLive": {
                             "type": "boolean"
+                          },
+                          "allowDownloads": {
+                            "type": "boolean",
+                            "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                           },
                           "titleLocalized": {
                             "type": "object",
@@ -47513,6 +47565,10 @@
                     "isLive": {
                       "type": "boolean"
                     },
+                    "allowDownloads": {
+                      "type": "boolean",
+                      "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
+                    },
                     "titleLocalized": {
                       "type": "object",
                       "additionalProperties": {
@@ -47970,6 +48026,10 @@
                   "isLive": {
                     "type": "boolean"
                   },
+                  "allowDownloads": {
+                    "type": "boolean",
+                    "description": "Allow viewers to download this video offline (defaults to channel default / true)"
+                  },
                   "category": {
                     "type": [
                       "string",
@@ -48205,6 +48265,10 @@
                             },
                             "isLive": {
                               "type": "boolean"
+                            },
+                            "allowDownloads": {
+                              "type": "boolean",
+                              "description": "Whether viewers may download this video offline (omitted = inherit channel default / true)"
                             },
                             "titleLocalized": {
                               "type": "object",
@@ -48836,6 +48900,146 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{id}/audio": {
+      "get": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Get audio-first HLS playback URL for Listen mode",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication (gated by `listenMode`). Reuses existing HLS streaming assets (demuxed `a/<trackId>/index.m3u8` for multi-audio videos, or the existing HLS `master.m3u8` stream). For private or unlisted videos the caller can view, returns a short-lived signed URL that must never be persisted.",
+        "operationId": "get_VideoAudio",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "description": "Optional multi-audio track ID (e.g. `orig` or `t...`)"
+            },
+            "required": false,
+            "description": "Optional multi-audio track ID (e.g. `orig` or `t...`)",
+            "name": "trackId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audio-first HLS playback info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "hls"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "contentType": {
+                      "type": "string",
+                      "enum": [
+                        "application/vnd.apple.mpegurl"
+                      ]
+                    },
+                    "trackId": {
+                      "type": "string"
+                    },
+                    "tracks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "language": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "original",
+                              "dub",
+                              "commentary",
+                              "description"
+                            ]
+                          },
+                          "isDefault": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "language",
+                          "label",
+                          "kind",
+                          "isDefault"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "videoId",
+                    "format",
+                    "url",
+                    "contentType",
+                    "tracks"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid trackId parameter"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or audio track not found, or feature off"
+          },
+          "409": {
+            "description": "No playable HLS stream ready yet"
           }
         }
       }

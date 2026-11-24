@@ -1,6 +1,7 @@
 import { AudioTrackComplete, AudioTrackCreate, AudioTrackDelete, AudioTrackRetry, AudioTrackUpdate, AudioTracksDetect, AudioTracksList } from '../endpoints/audio/audioTracks';
 import { VideoQoe } from "../endpoints/video/videoQoe";
 import { VideoPlayback } from "../endpoints/video/videoPlayback";
+import { VideoAudio } from "../endpoints/video/videoAudio";
 import { VideoDownloadCreate } from "../endpoints/downloads/downloads";
 import { VideoPublicPlay } from "../endpoints/video/publicPlay";
 import { Hono } from 'hono';
@@ -314,6 +315,8 @@ videoRouter.post('/:id/watch-time', VideoWatchTime);
 videoRouter.post('/:id/qoe', VideoQoe);
 // The player's fallback when the source the API chose fails: Bunny's URL, reason logged
 videoRouter.get('/:id/playback', VideoPlayback);
+// Listen mode audio-first HLS playback (Epic 14, E14-S3b)
+videoRouter.get('/:id/audio', VideoAudio);
 // Offline & Web plain progressive R2 MP4 download URL (Epic 14, E14-S3a)
 videoRouter.post('/:id/downloads', VideoDownloadCreate);
 // Signed MP4/HLS of a public video for other sites' players (the www timeline; lib/media/public-play.ts)

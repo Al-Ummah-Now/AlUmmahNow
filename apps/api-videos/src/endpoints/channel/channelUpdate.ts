@@ -129,7 +129,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
         const invalidImage = await invalidImageField(c.env, userId, channelUpdateInput, existingChannel);
         if (invalidImage) return apiError(c, 400, 'invalid_request', { field: invalidImage });
 
-        const { handle: requestedHandle, contactEmail, location, isMain: requestedIsMain, ...restInput } = channelUpdateInput;
+        const { handle: requestedHandle, contactEmail, location, isMain: requestedIsMain, defaultAllowDownloads, ...restInput } = channelUpdateInput;
         // The @handle and which channel is the owner's main one are the owner's alone
         const changesHandle = requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '');
         if ((changesHandle && !can(role, 'channel.handle')) || (requestedIsMain !== undefined && role !== 'owner' && requestedIsMain !== (existingChannel.isMain === true))) {
@@ -173,6 +173,11 @@ export class ChannelUpdate extends AuthenticatedRoute {
             // Empty strings clear optional About fields
             contactEmail: contactEmail === undefined ? fresh.contactEmail : (contactEmail || undefined),
             location: location === undefined ? fresh.location : (location || undefined),
+            ...(defaultAllowDownloads !== undefined
+                ? { defaultAllowDownloads }
+                : fresh.defaultAllowDownloads !== undefined
+                    ? { defaultAllowDownloads: fresh.defaultAllowDownloads }
+                    : {}),
             dateModified: new Date().toISOString(),
             // Preserve localized fields if provided
             nameLocalized: channelUpdateInput.nameLocalized ?? fresh.nameLocalized,
