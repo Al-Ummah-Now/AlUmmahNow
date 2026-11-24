@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { WORKFLOW_ACTIONS, WORKFLOW_STATUSES, type WorkflowField } from '@al-ummah/shared-types';
 import { createTranslator } from '../src/i18n/translate';
-import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, permissionLabel, ruleSummary, scopeName, statusLabel, workflowValue } from '../src/lib/workflows';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, permissionLabel, ruleSummary, scopeName, statusLabel, workflowPeople, workflowValue } from '../src/lib/workflows';
 
 const en = createTranslator('en');
 const ar = createTranslator('ar');
@@ -32,7 +32,9 @@ describe('diff values', () => {
     assert.equal(workflowValue(field('bool'), true, 'ar', ar, {}), 'نعم');
     assert.equal(workflowValue(field('person'), 'usr_1', 'en', en, { usr_1: 'Aisha Rahman' }), 'Aisha Rahman');
     assert.equal(workflowValue(field('person'), 'usr_2', 'en', en, {}), 'A team member', 'never the id');
-    assert.equal(workflowValue(field('person'), ['usr_1', 'usr_2'], 'ar', ar, { usr_1: 'عائشة', usr_2: 'يوسف' }), 'عائشة، يوسف', 'a bulk change names everyone');
+    assert.equal(workflowValue(field('person'), ['usr_1', 'usr_2'], 'ar', ar, { usr_1: 'عائشة', usr_2: 'Yusuf Rahman' }), '\u2068عائشة\u2069، \u2068Yusuf Rahman\u2069', 'mixed directions on one line: each name isolated');
+    assert.equal(workflowValue(field('person'), ['usr_1', 'usr_9'], 'en', en, { usr_1: 'Aisha Rahman' }), '\u2068Aisha Rahman\u2069, \u2068A team member\u2069');
+    assert.deepEqual(workflowPeople(['usr_1', 'usr_2', 'usr_9'], ar, { usr_1: 'عائشة', usr_2: 'Yusuf Rahman' }), ['عائشة', 'Yusuf Rahman', ar('workflows.someone')], 'one per line on the request page');
     assert.equal(workflowValue(field('secret'), 'replaced', 'en', en, {}), 'Replaced');
     assert.equal(workflowValue(field('text'), null, 'en', en, {}), '—');
     assert.doesNotMatch(workflowValue(field('date'), '2026-11-30T00:00:00Z', 'ar', ar, {}), /[0-9]/, 'dates use the shared formatter');

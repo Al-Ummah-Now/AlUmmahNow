@@ -9,7 +9,7 @@ import { formatNumber, translateDynamic, type MessageKey } from '@/i18n/translat
 import { getNames } from '@/lib/api/audit';
 import { approveWorkflowRequest, commentOnWorkflowRequest, getWorkflowRequest, rejectWorkflowRequest, retryWorkflowRequest, withdrawWorkflowRequest } from '@/lib/api/workflows';
 import { logger } from '@/lib/logger';
-import { WORKFLOW_STATUS_CHIP, fieldChanges, statusLabel, workflowValue } from '@/lib/workflows';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, statusLabel, workflowPeople, workflowValue } from '@/lib/workflows';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,9 +168,9 @@ function DiffValue({ field, value, t, locale, names }: { field: WorkflowField; v
   if (field.kind === 'person' && Array.isArray(value)) {
     return (
       <ul className="min-w-32 list-disc space-y-0.5 ps-4">
-        {value.map((id) => (
-          <li key={String(id)}>
-            <bdi>{workflowValue(field, id, locale, t, names)}</bdi>
+        {workflowPeople(value, t, names).map((name, i) => (
+          <li key={String(value[i])}>
+            <bdi>{name}</bdi>
           </li>
         ))}
       </ul>

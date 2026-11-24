@@ -81,7 +81,7 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'PUT', path: '/api/features/:key', what: 'Switch a feature whose approval rule asks for a step-up to propose', when: featureProposalNeedsStepUp },
   { method: 'POST', path: '/api/support/fees', what: 'Change a creator-support fee setting' },
   // Tier changes (WF-10) whose approval rule asks for a step-up to propose
-  { method: 'PUT', path: '/api/content/users/:id/creator-tier', what: 'Change a creator tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
+  { method: 'PUT', path: '/api/content/users/:id/creator-tier', what: 'Change a creator\'s tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
   { method: 'POST', path: '/api/content/creators/tier', what: 'Change several creators\' tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
   { method: 'POST', path: '/api/content/tier-requests/:id/approve', what: 'Approve a tier request (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('assign') },
   { method: 'POST', path: '/api/content/creator-tiers', what: 'Add a tier (when its approval rule asks for a step-up)', when: tierProposalNeedsStepUp('tiers') },
