@@ -182,6 +182,8 @@ export const Video = z.object({
     // Not public but open to anyone with the link: never listed, noindex (@al-ummah/shared-types video-visibility)
     isUnlisted: z.boolean().optional(),
     isLive: z.boolean().default(false),
+    // Per-video offline download opt-out (Epic 14, E14-D1; defaults to true when omitted)
+    allowDownloads: z.boolean().optional(),
     // Per-video comment settings (Story 29.2): on | held (for review) | off
     commentSettings: z.enum(['on', 'held', 'off']).optional(),
     // Content flags (@al-ummah/shared-types content-flags): signed-in 18+ only; made for kids
