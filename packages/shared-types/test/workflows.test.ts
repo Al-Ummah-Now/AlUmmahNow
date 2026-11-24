@@ -211,3 +211,13 @@ test('the finance list and tech-staff marks are people actions decided by super 
     assert.deepEqual(def.defaultRule.approvers, [{ kind: 'role', role: 'super_admin' }]);
   }
 });
+
+test('a short diff shows what changes and the people it is about, whose ids are listed once', () => {
+  const f = (kind: 'person' | 'count', before: unknown, after: unknown) => ({ key: 'k', label: { en: 'K', ar: 'ك' }, kind, before, after });
+  assert.ok(w.workflowFieldShown(f('person', 'u1', 'u1')));
+  assert.ok(!w.workflowFieldShown(f('count', 1, 1)));
+  assert.ok(w.workflowFieldShown(f('count', 1, 2)));
+  const fields = [f('person', 'u1', 'u1'), f('person', null, ['u1', 'u2', 'u3']), f('count', 'x', 'y')];
+  assert.deepEqual(w.workflowFieldPeople(fields), ['u1', 'u2', 'u3']);
+  assert.deepEqual(w.workflowFieldPeople(fields, 2), ['u1', 'u2']);
+});

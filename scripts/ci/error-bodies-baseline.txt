@@ -25,7 +25,7 @@ apps/admin-api/src/routers/adminImport.router.ts 15
 apps/admin-api/src/routers/appConfig.router.ts 10
 apps/admin-api/src/routers/audit.router.ts 3
 apps/admin-api/src/routers/billing.router.ts 5
-apps/admin-api/src/routers/content.router.ts 22
+apps/admin-api/src/routers/content.router.ts 15
 apps/admin-api/src/routers/costs.router.ts 9
 apps/admin-api/src/routers/csam.router.ts 4
 apps/admin-api/src/routers/emailTemplates.router.ts 8

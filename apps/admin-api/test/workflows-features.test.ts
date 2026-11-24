@@ -158,7 +158,10 @@ describe('features.set on the approval workflow', () => {
     const stale = await t.as('sa1', ['super_admin'], false)('live', { enabled: false, expectedVersion: row?.version ?? 0, reason: 'r' });
     assert.equal(stale.status, 401, JSON.stringify(stale.body));
     assert.equal(stale.body.code, 'step_up_required');
-    // a direct switch never asks
+    // a direct switch whose rule asks for a step-up to propose asks too
+    await ruleVersionStatement(ctx, { type: 'features.set', scope: 'bulkSchedule', version: 1, config: { ...config, approvalsNeeded: 0 }, requestId: null, by: 'seed' }).run();
+    assert.equal((await t.as('sa1', ['super_admin'], false)('bulkSchedule', { enabled: true, expectedVersion: 0 })).status, 401);
+    // any other direct switch never asks
     assert.equal((await t.as('sa1', ['super_admin'], false)('newsletter', { enabled: true, expectedVersion: 0 })).status, 200);
     // creatorSupport is direct like any switch: no step-up
     assert.equal((await t.as('sa1', ['super_admin'], false)('creatorSupport', { enabled: false, expectedVersion: 0 })).status, 200);

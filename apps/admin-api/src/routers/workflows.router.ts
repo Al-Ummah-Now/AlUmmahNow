@@ -40,7 +40,6 @@ import {
   WorkflowError,
   approveRequest,
   ruleForProposal,
-  ruleNeedsApproval,
   hasWorkflowExecutor,
   commentOnRequest,
   getRequestView,
@@ -313,17 +312,25 @@ app.post('/requests/:id/retry', async (c) => {
   return ok(c, await retryRequest(ctx, actor, c.req.param('id')));
 });
 
-/**
- * Step-up `when` for PUT /api/features/:key: only when the change would become a request whose rule
- * asks for a step-up to propose (switching a money-floored feature off is immediate and needs none).
- */
+/** Whether the rule in force asks for a step-up to propose (a direct rule can too: its change is proposed and applied at once). */
+async function proposalNeedsStepUp(env: AdminBindings, type: WorkflowActionType, scope: string): Promise<boolean> {
+  if (!env.SEARCH_DB) return false;
+  return (await ruleForProposal(workflowCtx(env as never), type, scope)).stepUp === 'propose_and_approve';
+}
+
+/** Step-up `when` for PUT /api/features/:key: only when the switch's rule asks for a step-up to propose. */
 export async function featureProposalNeedsStepUp(c: Context): Promise<boolean> {
   const key = c.req.param('key');
-  const env = c.env as AdminBindings;
-  if (!key || !isFeatureKey(key) || !env.SEARCH_DB) return false;
-  const ctx = workflowCtx(env as never);
-  if (!(await ruleNeedsApproval(ctx, 'features.set', key))) return false;
-  return (await ruleForProposal(ctx, 'features.set', key)).stepUp === 'propose_and_approve';
+  return !!key && isFeatureKey(key) && proposalNeedsStepUp(c.env as AdminBindings, 'features.set', key);
+}
+
+/**
+ * Step-up `when` for the tier routes (WF-10): only when the scope's rule asks for a step-up to propose.
+ * `scopeOf` names the route's scope (tiers.change: assign, default, tiers), or reads it from the route
+ * (PUT /creator-tiers/:id is also /creator-tiers/default and /creator-tiers/order).
+ */
+export function tierProposalNeedsStepUp(scopeOf: string | ((c: Context) => string)) {
+  return (c: Context): Promise<boolean> => proposalNeedsStepUp(c.env as AdminBindings, 'tiers.change', typeof scopeOf === 'string' ? scopeOf : scopeOf(c));
 }
 
 /** Step-up `when` for approve and reject: only when the request's rule asks for it. */
@@ -341,19 +348,3 @@ export async function requestNeedsStepUp(c: Context): Promise<boolean> {
 }
 
 export default app;
-
-/**
- * Step-up `when` for the tier routes (WF-10): only when the change would become a request whose rule asks
- * for a step-up to propose. `scopeOf` names the route's scope (tiers.change: assign, default, tiers), or reads it
- * from the route (PUT /creator-tiers/:id also matches /creator-tiers/default).
- */
-export function tierProposalNeedsStepUp(scopeOf: string | ((c: Context) => string)) {
-  return async (c: Context): Promise<boolean> => {
-    const scope = typeof scopeOf === 'string' ? scopeOf : scopeOf(c);
-    const env = c.env as AdminBindings;
-    if (!env.SEARCH_DB) return false;
-    const ctx = workflowCtx(env as never);
-    if (!(await ruleNeedsApproval(ctx, 'tiers.change', scope))) return false;
-    return (await ruleForProposal(ctx, 'tiers.change', scope)).stepUp === 'propose_and_approve';
-  };
-}

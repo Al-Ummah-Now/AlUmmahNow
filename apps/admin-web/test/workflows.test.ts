@@ -32,6 +32,7 @@ describe('diff values', () => {
     assert.equal(workflowValue(field('bool'), true, 'ar', ar, {}), 'نعم');
     assert.equal(workflowValue(field('person'), 'usr_1', 'en', en, { usr_1: 'Aisha Rahman' }), 'Aisha Rahman');
     assert.equal(workflowValue(field('person'), 'usr_2', 'en', en, {}), 'A team member', 'never the id');
+    assert.equal(workflowValue(field('person'), ['usr_1', 'usr_2'], 'ar', ar, { usr_1: 'عائشة', usr_2: 'يوسف' }), 'عائشة، يوسف', 'a bulk change names everyone');
     assert.equal(workflowValue(field('secret'), 'replaced', 'en', en, {}), 'Replaced');
     assert.equal(workflowValue(field('text'), null, 'en', en, {}), '—');
     assert.doesNotMatch(workflowValue(field('date'), '2026-11-30T00:00:00Z', 'ar', ar, {}), /[0-9]/, 'dates use the shared formatter');
@@ -76,7 +77,7 @@ describe('statuses and views', () => {
 describe('rule scope names (rules page)', () => {
   it('names tier scopes and feature switches in the page language; the default scope has none', () => {
     assert.deepEqual(scopeName('tiers.change', 'default', 'en'), { text: 'The default tier', named: true });
-    assert.deepEqual(scopeName('tiers.change', 'assign', 'ar'), { text: 'مستوى صانع محتوى', named: true });
+    assert.deepEqual(scopeName('tiers.change', 'assign', 'ar'), { text: 'فئة صانع محتوى', named: true });
     assert.equal(scopeName('features.set', 'creatorSupport', 'en')?.text, 'Creator support');
     assert.equal(scopeName('workflows.rule.set', 'money', 'ar')?.text, 'قواعد المال');
     assert.deepEqual(scopeName('features.set', 'somethingElse', 'en'), { text: 'somethingElse', named: false });

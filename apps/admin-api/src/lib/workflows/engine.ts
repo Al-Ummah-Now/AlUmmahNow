@@ -226,6 +226,8 @@ const stored = (r: RequestRow, steps: StepRow[]): WorkflowStoredRequest => ({
   approvedBy: steps.filter((s) => s.kind === 'approve').map((s) => s.actor),
   status: r.status,
   version: r.version,
+  proposedAt: r.proposed_at,
+  failedAttempts: steps.filter((s) => s.kind === 'fail').length,
 });
 
 /**
@@ -270,13 +272,13 @@ function cleanText(v: unknown, max: number, required: boolean): string | null {
 // ---------------------------------------------------------------------------------------------------
 
 /** Accounts that may approve this request right now (for the inbox and notices), excluding the proposer. */
-async function eligibleApprovers(ctx: WorkflowCtx, floor: WorkflowFloor, rule: WorkflowRuleConfig, proposedBy: string, subject: string | null, decidedBy: string[], approvedBy: string[]): Promise<string[]> {
+async function eligibleApprovers(ctx: WorkflowCtx, extraBlocks: (userId: string) => Promise<string[]>, floor: WorkflowFloor, rule: WorkflowRuleConfig, proposedBy: string, subject: string | null, decidedBy: string[], approvedBy: string[]): Promise<string[]> {
   const ids = await ctx.directory.candidates(rule.approvers);
   const out: string[] = [];
   for (const id of ids) {
     if (id === proposedBy || id === subject) continue;
     const facts = await ctx.directory.facts(id);
-    if (!workflowApprovalBlocks(rule, floor, { proposedBy, subjectUserId: subject, decidedBy, approvedBy }, facts).length) out.push(id);
+    if (!workflowApprovalBlocks(rule, floor, { proposedBy, subjectUserId: subject, decidedBy, approvedBy }, facts).length && !(await extraBlocks(id)).length) out.push(id);
   }
   return out;
 }
@@ -354,7 +356,7 @@ export async function proposeChange(ctx: WorkflowCtx, actor: WorkflowActor, inpu
       rule.approvalsNeeded,
       at,
     );
-  const approvers = direct ? [] : await eligibleApprovers(ctx, floor, rule, actor.userId, subject, [actor.userId], []);
+  const approvers = direct ? [] : await eligibleApprovers(ctx, async (u) => (await executor.approverBlocks?.(ctx, payload, u)) ?? [], floor, rule, actor.userId, subject, [actor.userId], []);
   const inbox = approvers.map((u) => ctx.db.prepare('INSERT OR IGNORE INTO workflow_inbox (user_id, request_id, created_at) VALUES (?, ?, ?)').bind(u, id, at));
   try {
     await ctx.db.batch([insert, stepStatement(ctx, id, null, actor.userId, 'propose', null, at), ...inbox]);
@@ -523,11 +525,15 @@ async function runApply(ctx: WorkflowCtx, row: RequestRow): Promise<{ status: 'a
     return [current.proposed_by, ...steps.filter((s) => s.kind === 'approve').map((s) => s.actor)];
   };
   try {
-    if (await isStale(ctx, current)) {
-      await markStale(ctx, current);
-      return { status: 'stale' };
-    }
     const executor = executorFor(current.action_type);
+    if (await isStale(ctx, current)) {
+      // A retry: the earlier attempt may be what changed the target (the request never learned it succeeded)
+      const request = row.status === 'failed' && executor.alreadyApplied ? stored(current, await loadSteps(ctx, current.id)) : null;
+      if (!request || !(await executor.alreadyApplied!(ctx, JSON.parse(current.payload), request))) {
+        await markStale(ctx, current);
+        return { status: 'stale' };
+      }
+    }
     const finish = (result: unknown) =>
       ctx.db
         .prepare("UPDATE workflow_requests SET status = 'applied', open_key = NULL, applied_at = ?, result = ?, error = NULL, version = version + 1, updated_at = ? WHERE id = ? AND version = ? AND status = 'applying'")
