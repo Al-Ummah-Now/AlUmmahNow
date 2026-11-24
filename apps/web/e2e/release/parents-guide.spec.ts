@@ -11,6 +11,8 @@ import { onLocalStack, test } from './builders';
 import { target } from './targets';
 import { gotoSettled } from './web-session';
 
+test.use({ trace: 'off' });
+
 const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
 async function setGuide(on: boolean): Promise<void> {
   const at = new Date().toISOString();
