@@ -16,6 +16,9 @@
  */
 import {
   WORKFLOW_ACTIONS,
+  WORKFLOW_FLOOR_SUPERSEDED,
+  WORKFLOW_RULE_CHANGE_MONEY_SCOPE,
+  isMoneyRule,
   WORKFLOW_DECIDING_STEPS,
   WORKFLOW_LIMITS,
   checkWorkflowFloor,
@@ -92,17 +95,25 @@ export interface RuleInForce {
   config: WorkflowRuleConfig;
 }
 
-/** The default for a scope that has no row: some scopes have their own seeds (WF-D9, money rule changes). */
+/** The default for a scope that has no row: money rule changes have their own seed. */
 export function defaultRuleFor(type: WorkflowActionType, scope: string): WorkflowRuleConfig {
   return workflowDefaultRuleFor(type, scope);
 }
 
-/** The rule in force: the newest version for the scope, else the newest for the default scope, else the seed. */
+/**
+ * The rule in force: the newest version for the scope, else the newest for the default scope, else the
+ * seed. A version approved through a money rule change ('money' scope) no longer applies once its scope
+ * isn't a money rule (WORKFLOW_FLOOR_SUPERSEDED: creatorSupport, owner 2026-11-24): it was written
+ * under a floor that is gone.
+ */
 export async function ruleInForce(ctx: WorkflowCtx, type: WorkflowActionType, scope: string): Promise<RuleInForce> {
   const read = (s: string) =>
     ctx.db
-      .prepare('SELECT id, version, config FROM workflow_rules WHERE action_type = ? AND scope = ? ORDER BY version DESC LIMIT 1')
-      .bind(type, s)
+      .prepare(
+        `SELECT r.id, r.version, r.config FROM workflow_rules r LEFT JOIN workflow_requests q ON q.id = r.request_id
+         WHERE r.action_type = ? AND r.scope = ? AND (? = 1 OR q.scope IS NULL OR q.scope <> ?) ORDER BY r.version DESC LIMIT 1`,
+      )
+      .bind(type, s, isMoneyRule(type, s) ? 1 : 0, WORKFLOW_RULE_CHANGE_MONEY_SCOPE)
       .first<{ id: string; version: number; config: string }>();
   const scoped = await read(scope);
   if (scoped) return { id: scoped.id, version: scoped.version, scope, config: JSON.parse(scoped.config) as WorkflowRuleConfig };
@@ -571,9 +582,30 @@ export async function retryRequest(ctx: WorkflowCtx, actor: WorkflowActor, id: s
 // Cron: expiry
 // ---------------------------------------------------------------------------------------------------
 
-export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; errors: number }> {
+export async function runDueWorkflows(ctx: WorkflowCtx, limit = 50): Promise<{ expired: number; errors: number; superseded: number }> {
   const now = ctx.now().toISOString();
-  const out = { expired: 0, errors: 0 };
+  const out = { expired: 0, errors: 0, superseded: 0 };
+  // Requests opened under a money floor that no longer applies (WORKFLOW_FLOOR_SUPERSEDED): withdrawn by
+  // the system with the reason. Idempotent: only open ones still stored as money are read.
+  for (const gone of WORKFLOW_FLOOR_SUPERSEDED) {
+    const open = await ctx.db
+      .prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE action_type = ? AND status IN ('pending', 'failed') AND scope = ? AND domain = 'money' ORDER BY proposed_at LIMIT ?`)
+      .bind(gone.type, gone.scope, limit)
+      .all<RequestRow>();
+    for (const row of open.results ?? []) {
+      try {
+        const recipients = (await ctx.db.prepare('SELECT user_id FROM workflow_inbox WHERE request_id = ?').bind(row.id).all<{ user_id: string }>()).results?.map((r) => r.user_id) ?? [];
+        if (await close(ctx, row, 'system', 'withdraw', 'withdrawn', `${gone.note.en}\n${gone.note.ar}`)) {
+          out.superseded++;
+          logger.info('[Workflows] Closed a request whose money floor is gone', { requestId: row.id, type: row.action_type, scope: row.scope });
+          await emit(ctx, { kind: 'withdrawn', requestId: row.id, type: row.action_type, actor: 'system', recipients: [row.proposed_by, ...recipients] });
+        }
+      } catch (error) {
+        out.errors++;
+        logger.error('[Workflows] Closing a superseded request failed', { requestId: row.id, error: String(error) });
+      }
+    }
+  }
   const expiring = await ctx.db.prepare(`SELECT ${REQUEST_COLUMNS} FROM workflow_requests WHERE status = 'pending' AND expires_at <= ? ORDER BY expires_at LIMIT ?`).bind(now, limit).all<RequestRow>();
   for (const row of expiring.results ?? []) {
     try {

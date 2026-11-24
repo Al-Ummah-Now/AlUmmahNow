@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import {
   FEATURE_REGISTRY,
+  WORKFLOW_ACTIONS,
   forgetFeatureSwitches,
   readFeatureHistory,
   readFeatureList,
@@ -22,6 +23,8 @@ import {
 import { createFeaturesRouter } from '../src/routers/features.router';
 import { errorEnvelope } from '../src/middleware/error-envelope';
 import type { FeaturePrecondition } from '../src/lib/feature-preconditions';
+import { ruleVersionStatement } from '../src/lib/workflows/engine';
+import { workflowCtx } from '../src/routers/workflows.router';
 import { sqliteD1 } from './d1-sqlite';
 
 function searchD1() {
@@ -81,7 +84,13 @@ function setup(checks: Record<string, FeaturePrecondition>) {
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   };
   const put = (key: string, json: unknown) => call(`/${key}`, { method: 'PUT', body: JSON.stringify(json) });
-  return { call, put };
+  /** Gives a switch approvers (the rules page's change; every switch is direct by default) */
+  const needApprover = (scope: string) =>
+    ruleVersionStatement(workflowCtx(env as never), {
+      type: 'features.set', scope, version: 1, requestId: null, by: 'seed',
+      config: { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] },
+    }).run();
+  return { call, put, needApprover };
 }
 
 beforeEach(() => forgetFeatureSwitches());
@@ -136,6 +145,7 @@ describe('admin-web reads /api/features as admin-api answers it', () => {
 
   it('202 pending_approval: the request id, and the list then shows the change waiting', async () => {
     const t = setup({ creatorSupport: async () => ({ ok: true }) });
+    await t.needApprover('creatorSupport');
     const res = await t.put('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'The organization is formed' });
     assert.equal(res.status, 202, JSON.stringify(res.body));
     const out = readFeatureWrite(res.body, { enabled: true, expectedVersion: 0 });

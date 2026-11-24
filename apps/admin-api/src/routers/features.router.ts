@@ -28,7 +28,6 @@ import {
   type FeatureDefinition,
   type FeatureKey,
   type FeatureStateReport,
-  workflowFloorFor,
 } from '@al-ummah/shared-types';
 import { hasPermission, type Permission } from '../lib/roles';
 import { logger } from '../lib/logger';
@@ -191,13 +190,12 @@ export function createFeaturesRouter(checks: Partial<Record<FeatureKey, FeatureP
       }
     }
 
-    // Approval workflows (wiki AUN-WORKFLOWS WF-9): a switch whose rule asks for approvers (the
-    // creatorSupport switch always: money floor, WF-D9) becomes a change request and moves on approval
+    // Approval workflows (wiki AUN-WORKFLOWS WF-9): every switch is direct (creatorSupport too, owner
+    // 2026-11-24; its readiness is the precondition above). A switch whose rule an admin gave approvers
+    // becomes a change request and moves on approval
     if (c.env.SEARCH_DB) {
       const ctx = workflowCtx(c.env as never, { steppedUp: stepUpAnswer(c as never) === null });
-      // Switching a money-floored feature off only takes money ability away: immediate (WF-D1)
-      const onlyTakesAway = workflowFloorFor('features.set', key).money && input.enabled === false;
-      if (!onlyTakesAway && (await ruleNeedsApproval(ctx, 'features.set', key))) {
+      if (await ruleNeedsApproval(ctx, 'features.set', key)) {
         // A stale version is refused now, as a direct write would be, never as a request that can
         // only fail when it is approved
         const seen = rows.get(key)?.version ?? 0;

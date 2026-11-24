@@ -10,6 +10,7 @@
  *   conflict      the next write finds that someone else changed the feature first
  *   loadError     the list can't be read
  *   slow          the list takes 20 s (the loading skeleton)
+ *   approval      Live streaming has a change waiting; switching Newsletter off is sent for approval
  */
 import { cookies } from 'next/headers';
 import { FEATURE_REGISTRY, apiErrorBody, apiErrorMessage, blockedBy, isFeatureKey, withDefaults, type FeatureHistoryEntry, type FeatureItem, type FeatureKey } from '@al-ummah/shared-types';
@@ -82,7 +83,8 @@ function seed(scenario: Scenario): StubState {
     rows.get('youtubeImport')!.parked = 3;
     rows.get('audioTracks')!.parked = 0;
   }
-  // approval: another admin's change to Live streaming already waits; switching creatorSupport on becomes a request
+  // approval: another admin's change to Live streaming already waits; switching Newsletter off (a rule an admin
+  // gave approvers) becomes a request. Creator support is direct like every switch (owner 2026-11-24)
   const pending = new Map<FeatureKey, { requestId: string; enabled: boolean }>();
   if (scenario === 'approval') pending.set('live', { requestId: 'wfr_live_off', enabled: false });
   return { rows, history, conflictPending: scenario === 'conflict', pending };
@@ -186,10 +188,10 @@ async function stubSet(key: FeatureKey, enabled: boolean, expectedVersion: numbe
     return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
   }
   if (row.version !== expectedVersion) return refuse(409, 'feature_changed', { error: 'feature_changed', current: { enabled: row.enabled, version: row.version } });
-  if (key === 'creatorSupport' && enabled && state.pending !== undefined && (await current()).scenario === 'approval') {
-    // admin-api's 202: the workflow's answer, the change waiting for a finance approver
-    state.pending.set(key, { requestId: 'wfr_creator_support_on', enabled });
-    return { status: 'pending_approval', request: { id: 'wfr_creator_support_on', type: 'features.set', status: 'pending' } };
+  if (key === 'newsletter' && !enabled && state.pending !== undefined && (await current()).scenario === 'approval') {
+    // admin-api's 202: the workflow's answer, the change waiting for the approvers its rule names
+    state.pending.set(key, { requestId: 'wfr_newsletter_off', enabled });
+    return { status: 'pending_approval', request: { id: 'wfr_newsletter_off', type: 'features.set', status: 'pending' } };
   }
   if (key === 'creatorSupport' && enabled) {
     return refuse(409, 'feature_precondition', {

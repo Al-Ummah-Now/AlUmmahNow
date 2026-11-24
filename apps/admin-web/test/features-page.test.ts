@@ -256,9 +256,9 @@ describe('a switch change sent for approval (AUN-WORKFLOWS WF-9)', () => {
 describe('a decided change clears its notice (AUN-WORKFLOWS WF-9)', () => {
   it('drops a "Sent for approval" notice once its row has no change waiting, and keeps everything else', () => {
     type M = { kind: string };
-    const messages: Partial<Record<FeatureKey, M>> = { creatorSupport: { kind: 'pending' }, live: { kind: 'pending' }, upload: { kind: 'error' } };
+    const messages: Partial<Record<FeatureKey, M>> = { newsletter: { kind: 'pending' }, live: { kind: 'pending' }, upload: { kind: 'error' } };
     const items = [
-      { key: 'creatorSupport' as FeatureKey, pending: null },
+      { key: 'newsletter' as FeatureKey, pending: null },
       { key: 'live' as FeatureKey, pending: { requestId: 'wfr_1', enabled: false } },
       { key: 'upload' as FeatureKey, pending: null },
     ];

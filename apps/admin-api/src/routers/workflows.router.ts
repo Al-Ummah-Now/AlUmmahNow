@@ -165,7 +165,7 @@ app.get('/actions', async (c) => {
       .prepare('SELECT scope, MAX(version) AS version FROM workflow_rules WHERE action_type = ? GROUP BY scope LIMIT 100')
       .bind(type)
       .all<{ scope: string; version: number }>();
-    // The default scope, the seeded scopes (WF-D9's creatorSupport switch, money rule changes) and any edited one
+    // The default scope, the seeded scopes (money rule changes) and any edited one
     const scopes = [...new Set(['', ...(WORKFLOW_SEEDED_SCOPES[type] ?? []), ...(results ?? []).map((r) => r.scope)])];
     const rules = [];
     for (const scope of scopes) {
@@ -317,13 +317,6 @@ export async function featureProposalNeedsStepUp(c: Context): Promise<boolean> {
   const key = c.req.param('key');
   const env = c.env as AdminBindings;
   if (!key || !isFeatureKey(key) || !env.SEARCH_DB) return false;
-  let enabled: unknown;
-  try {
-    enabled = ((await c.req.raw.clone().json()) as { enabled?: unknown }).enabled;
-  } catch {
-    return false;
-  }
-  if (workflowFloorFor('features.set', key).money && enabled === false) return false;
   const ctx = workflowCtx(env as never);
   if (!(await ruleNeedsApproval(ctx, 'features.set', key))) return false;
   return (await ruleForProposal(ctx, 'features.set', key)).stepUp === 'propose_and_approve';

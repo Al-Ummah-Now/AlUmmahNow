@@ -1,8 +1,9 @@
 /**
- * `features.set` on the approval workflow (wiki AUN-WORKFLOWS WF-9, owner WF-D1/WF-D9): a switch whose
- * rule asks for approvers (the creatorSupport switch always does: money floor) is a change request; the
- * Features page answers 202 and the switch moves only once it is approved. Switches whose rule is
- * direct keep the Features page's own write (routers/features.router.ts).
+ * `features.set` on the approval workflow (wiki AUN-WORKFLOWS WF-9): every switch is direct by default,
+ * creatorSupport included (owner 2026-11-24, WF-D9 superseded: switching a feature is not handling
+ * money). A switch whose rule an admin gave approvers is a change request; the Features page answers
+ * 202 and the switch moves only once it is approved. Direct switches keep the Features page's own
+ * write (routers/features.router.ts).
  *
  * The apply step re-checks the switch's precondition (creatorSupport: the organization exists and a
  * finance approver does) and writes through the shared store with the request id as the change id, so a
