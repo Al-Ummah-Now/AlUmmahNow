@@ -350,6 +350,8 @@ export class WebSocketManager {
       : undefined;
     if (errorCode === 'AUTH_EXPIRED') {
       this.authenticated = false;
+      // The server put this socket out of its chats with it; a new token joins them again
+      [...this.joined].forEach((channel) => this.setJoined(channel, false));
       void this.authenticate();
       return;
     }

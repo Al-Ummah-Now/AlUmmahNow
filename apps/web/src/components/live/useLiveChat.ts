@@ -19,7 +19,7 @@ export const CHAT_POLL_JITTER_MS = 2_000;
 export const CHAT_POLL_MAX_MS = 60_000;
 /** The server's shared latest page lives 2 seconds; a little more for the way. */
 const SNAPSHOT_AGE_MS = 5_000;
-/** Messages kept on the page; older ones can be read again. */
+/** Messages kept on the page, and more while the reader has asked for earlier ones. */
 export const CHAT_KEPT = 500;
 
 export type ChatStatus = 'loading' | 'ready' | 'failed' | 'closed';
@@ -28,13 +28,13 @@ export type ChatStatus = 'loading' | 'ready' | 'failed' | 'closed';
 export const byTime = (a: LiveChatMessage, b: LiveChatMessage): number => Date.parse(a.createdAt) - Date.parse(b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /** One more message, or the new version of one, in its place. */
-export function withMessage(list: LiveChatMessage[], message: LiveChatMessage): LiveChatMessage[] {
+export function withMessage(list: LiveChatMessage[], message: LiveChatMessage, kept = CHAT_KEPT): LiveChatMessage[] {
   const next = [...list.filter((m) => m.id !== message.id), message].sort(byTime);
-  return next.length > CHAT_KEPT ? next.slice(-CHAT_KEPT) : next;
+  return next.length > kept ? next.slice(-kept) : next;
 }
 
 /** The server's latest page over what is shown: older messages stay, everything the page covers is the page's, and what is `fresh` stays after it. */
-export function withLatest(list: LiveChatMessage[], page: LiveChatMessage[], fresh: (id: string) => boolean = () => false): LiveChatMessage[] {
+export function withLatest(list: LiveChatMessage[], page: LiveChatMessage[], fresh: (id: string) => boolean = () => false, kept = CHAT_KEPT): LiveChatMessage[] {
   const first = page[0];
   const last = page.at(-1);
   const ids = new Set(page.map((m) => m.id));
@@ -42,7 +42,7 @@ export function withLatest(list: LiveChatMessage[], page: LiveChatMessage[], fre
   const newer = list.filter((m) => !ids.has(m.id) && fresh(m.id) && (!last || byTime(m, last) > 0));
   // Older ones stay only while nothing can be missing between them and the page
   const joins = list.some((m) => ids.has(m.id));
-  return [...(first && joins ? list.filter((m) => byTime(m, first) < 0) : []), ...page, ...newer].slice(-CHAT_KEPT);
+  return [...(first && joins ? list.filter((m) => byTime(m, first) < 0) : []), ...page, ...newer].slice(-kept);
 }
 
 export function pollDelay(mode: 'live' | 'soon', failures: number, random = Math.random()): number {
@@ -76,6 +76,9 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
   // Frames that arrive while a page is being read are newer than it: kept and put back on top
   const reading = useRef(0);
   const during = useRef<Array<(list: LiveChatMessage[]) => LiveChatMessage[]>>([]);
+  const kept = useRef(CHAT_KEPT);
+  // A pin frame that came during a read is newer than the page's
+  const pinnedDuring = useRef(false);
   const addedAt = useRef(new Map<string, number>());
   const fresh = useCallback((id: string) => Date.now() - (addedAt.current.get(id) ?? 0) < SNAPSHOT_AGE_MS, []);
   const change = useCallback((apply: (list: LiveChatMessage[]) => LiveChatMessage[]) => {
@@ -89,8 +92,8 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
       const page = await readChat(streamId, { limit: CHAT_PAGE }, signal);
       if (signal?.aborted) return;
       const late = during.current;
-      setMessages((list) => late.reduce((l, apply) => apply(l), withLatest(list, page.messages, fresh)));
-      setPinned(page.pinned);
+      setMessages((list) => late.reduce((l, apply) => apply(l), withLatest(list, page.messages, fresh, kept.current)));
+      if (!pinnedDuring.current) setPinned(page.pinned);
       setHasMore((had) => had || page.hasMore);
       setStatus('ready');
       setFailures(0);
@@ -104,7 +107,10 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
       setStatus((s) => (s === 'ready' ? s : 'failed'));
       setFailures((n) => n + 1);
     } finally {
-      if (--reading.current === 0) during.current = [];
+      if (--reading.current === 0) {
+        during.current = [];
+        pinnedDuring.current = false;
+      }
     }
   }, [streamId, fresh]);
 
@@ -114,6 +120,7 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
     setMessages([]);
     setPinned(null);
     setHasMore(false);
+    kept.current = CHAT_KEPT;
     void read(controller.signal);
     return () => controller.abort();
   }, [read]);
@@ -133,15 +140,20 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
         const message = frame.message;
         if (message) {
           addedAt.current.set(message.id, Date.now());
-          change((list) => withMessage(list, message));
+          change((list) => withMessage(list, message, kept.current));
         }
         break;
       }
       case 'live_chat_removed':
         change((list) => list.filter((m) => m.id !== frame.messageId && (!frame.userId || m.userId !== frame.userId)));
-        setPinned((p) => (p && (p.id === frame.messageId || (frame.userId && p.userId === frame.userId)) ? null : p));
+        setPinned((p) => {
+          const gone = !!p && (p.id === frame.messageId || (!!frame.userId && p.userId === frame.userId));
+          if (gone && reading.current > 0) pinnedDuring.current = true;
+          return gone ? null : p;
+        });
         break;
       case 'live_chat_pinned':
+        pinnedDuring.current = reading.current > 0;
         setPinned(frame.message ?? null);
         break;
       case 'live_chat_settings':
@@ -182,6 +194,7 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
     if (!first) return;
     try {
       const page = await readChat(streamId, { before: first.id, limit: 50 });
+      kept.current += page.messages.length;
       setMessages((list) => [...page.messages.filter((m) => !list.some((x) => x.id === m.id)), ...list].sort(byTime));
       setHasMore(page.hasMore);
     } catch (error) {
@@ -192,7 +205,7 @@ export function useLiveChat(streamId: string, mode: 'live' | 'soon', on: { setti
   const reload = useCallback(() => void read(), [read]);
   const add = useCallback((message: LiveChatMessage) => {
     addedAt.current.set(message.id, Date.now());
-    change((list) => withMessage(list, message));
+    change((list) => withMessage(list, message, kept.current));
   }, [change]);
   const drop = useCallback((messageId: string, userId?: string) => {
     change((list) => list.filter((m) => m.id !== messageId && (!userId || m.userId !== userId)));

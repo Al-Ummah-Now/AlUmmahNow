@@ -192,6 +192,23 @@ describe('WebSocketManager subscriptions', () => {
       expect(subscribes(sent).map((m) => m.channel).slice(3)).toEqual(['live:s1', 'live:s2']);
     });
 
+    it('an expired token leaves every chat until the new one joins them again', async () => {
+      const manager = make({ getAuthToken: async () => null });
+      const sent = attachSocket(manager);
+      deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+      const onFrame = jest.fn();
+      manager.subscribe('live:s1', onFrame);
+      deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+      deliver(manager, { type: 'error', error: 'Token expired', code: 'AUTH_EXPIRED' });
+      await new Promise((r) => setTimeout(r, 0));
+      // No new token: it stays left, so the page polls
+      expect(onFrame.mock.calls.map(([f]) => f.type)).toEqual(['realtime_joined', 'realtime_left']);
+      deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+      deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+      expect(onFrame.mock.calls.map(([f]) => f.type)).toEqual(['realtime_joined', 'realtime_left', 'realtime_joined']);
+      expect(subscribes(sent)).toHaveLength(2);
+    });
+
     it('a dropped socket leaves every chat; the next one confirms again', () => {
       const manager = make();
       const sockets: Array<{ onopen: () => void; onclose: (e: object) => void; readyState: number; send: () => void }> = [];
