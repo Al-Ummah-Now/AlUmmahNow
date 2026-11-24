@@ -252,32 +252,43 @@ export const WORKFLOW_ACTIONS: Readonly<Record<WorkflowActionType, WorkflowActio
 export const WORKFLOW_RULE_CHANGE_MONEY_SCOPE = 'money';
 export const WORKFLOW_MONEY_RULE_CHANGE_DEFAULT: WorkflowRuleConfig = moneyRule(1, undefined);
 
-/** WF-D9: switching creator support on is a money action; its features.set scope is seeded with this rule. */
-export const WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE: WorkflowRuleConfig = moneyRule(1, undefined, { stepUp: 'approve' });
-
 /** Scopes with their own seeded rule and floor (shown on the rules page even before anyone edits them). */
 export const WORKFLOW_SEEDED_SCOPES: Readonly<Partial<Record<WorkflowActionType, readonly string[]>>> = Object.freeze({
-  'features.set': ['creatorSupport'],
   'workflows.rule.set': [WORKFLOW_RULE_CHANGE_MONEY_SCOPE],
 });
 
 /**
- * The floor for an action in a scope. Two scopes carry the money floor although their action doesn't:
- * the creatorSupport switch (turning it on starts taking money, WF-D9) and changes to money rules
- * (rule-change scope 'money'), so neither can be lowered or approved by tech staff or the owner.
+ * The floor for an action in a scope. One scope carries the money floor although its action doesn't:
+ * changes to money rules (rule-change scope 'money'), so they can't be lowered or approved by tech
+ * staff or the owner. Feature switches have none, creatorSupport included (owner 2026-11-24: switching
+ * a feature is not handling money; WF-D9 superseded): its readiness checks stay as preconditions.
  */
 export function workflowFloorFor(type: WorkflowActionType, scope: string): WorkflowFloor {
-  if (type === 'features.set' && scope === 'creatorSupport') return MONEY_FLOOR(1);
   if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return MONEY_FLOOR(1);
   return WORKFLOW_ACTIONS[type].floor;
 }
 
 /** The default rule for a scope with no stored version. */
 export function workflowDefaultRuleFor(type: WorkflowActionType, scope: string): WorkflowRuleConfig {
-  if (type === 'features.set' && scope === 'creatorSupport') return WORKFLOW_CREATOR_SUPPORT_SWITCH_RULE;
   if (type === 'workflows.rule.set' && scope === WORKFLOW_RULE_CHANGE_MONEY_SCOPE) return WORKFLOW_MONEY_RULE_CHANGE_DEFAULT;
   return WORKFLOW_ACTIONS[type].defaultRule;
 }
+
+/**
+ * Scopes that carried the money floor and no longer do (owner 2026-11-24: switching creatorSupport is not
+ * handling money; WF-D9 superseded). Their open requests stored as money are closed by the system with
+ * this note, and rule versions approved through a money rule change no longer apply.
+ */
+export const WORKFLOW_FLOOR_SUPERSEDED: readonly { type: WorkflowActionType; scope: string; note: WorkflowLocalized }[] = Object.freeze([
+  {
+    type: 'features.set',
+    scope: 'creatorSupport',
+    note: {
+      en: 'Closed by the system: feature switches no longer need approval (owner decision, 2026-11-24). Switch it on the Features page.',
+      ar: 'أغلقه النظام: لم تعد مفاتيح الميزات تحتاج إلى موافقة (قرار المالك، ٢٤ نوفمبر ٢٠٢٦). غيّره من صفحة الميزات.',
+    },
+  },
+]);
 
 /** Whether a rule (action + scope) is a money rule: changes to it are approved by the finance list. */
 export const isMoneyRule = (type: WorkflowActionType, scope: string) => workflowFloorFor(type, scope).money;

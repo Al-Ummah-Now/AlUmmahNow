@@ -188,20 +188,18 @@ test('finance approver sets name only real money permissions, the same list as s
   assert.ok(!res.ok && res.problems.includes('approvers_invalid'), 'support:read is not a money permission');
 });
 
-test('WF-D9: the creatorSupport switch and money rule changes carry the money floor', () => {
-  assert.ok(w.workflowFloorFor('features.set', 'creatorSupport').money);
+test('creatorSupport is a feature switch like any other: direct, no money floor (owner 2026-11-24, WF-D9 superseded); money rule changes keep theirs', () => {
+  assert.ok(!w.workflowFloorFor('features.set', 'creatorSupport').money);
+  assert.equal(w.workflowFloorFor('features.set', 'creatorSupport').minApprovals, 0);
+  assert.equal(w.workflowDefaultRuleFor('features.set', 'creatorSupport').approvalsNeeded, 0);
+  assert.deepEqual(w.workflowDefaultRuleFor('features.set', 'creatorSupport'), w.WORKFLOW_ACTIONS['features.set'].defaultRule);
+  assert.equal(w.WORKFLOW_SEEDED_SCOPES['features.set'], undefined);
+  // admins may still give it approvers, like any switch
+  const supers = { ...clone(w.workflowDefaultRuleFor('features.set', 'creatorSupport')), approvalsNeeded: 1, approvers: [{ kind: 'role' as const, role: 'super_admin' as const }] };
+  assert.ok(w.validateWorkflowRule('features.set', supers, { scope: 'creatorSupport' }).ok);
   assert.ok(w.workflowFloorFor('workflows.rule.set', w.WORKFLOW_RULE_CHANGE_MONEY_SCOPE).money);
-  assert.ok(!w.workflowFloorFor('features.set', 'uploads').money);
   assert.ok(w.isMoneyRule('support.fees.set', ''));
-  const lowered = clone(w.workflowDefaultRuleFor('features.set', 'creatorSupport'));
-  lowered.approvalsNeeded = 0;
-  const res = w.validateWorkflowRule('features.set', lowered, { scope: 'creatorSupport' });
-  assert.ok(!res.ok && res.problems.includes('below_floor_approvals'));
-  assert.ok(w.validateWorkflowRule('features.set', w.workflowDefaultRuleFor('features.set', 'creatorSupport'), { scope: 'creatorSupport' }).ok);
-  const supers = { ...clone(w.workflowDefaultRuleFor('features.set', 'creatorSupport')), approvers: [{ kind: 'role' as const, role: 'super_admin' as const }] };
-  const res2 = w.validateWorkflowRule('features.set', supers, { scope: 'creatorSupport' });
-  assert.ok(!res2.ok && res2.problems.includes('below_floor_money_approvers'));
-  assert.deepEqual(w.WORKFLOW_SEEDED_SCOPES['features.set'], ['creatorSupport']);
+  assert.ok(!w.isMoneyRule('features.set', 'creatorSupport'));
 });
 
 test('the finance list and tech-staff marks are people actions decided by super admins, with their own floor', () => {

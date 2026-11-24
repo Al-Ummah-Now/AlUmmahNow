@@ -180,7 +180,7 @@ describe('direct rules', () => {
     const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'banner', value: 'eid' }, reason: 'Eid' });
     assert.equal(out.status, 'applied');
     assert.equal(value('banner'), 'eid');
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, errors: 0 });
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 0, errors: 0, superseded: 0 });
   });
 });
 
@@ -331,7 +331,7 @@ describe('money', () => {
 describe('rules and storage', () => {
   it('the rule in force is the newest version for the scope, then the default scope, then the seed', async () => {
     assert.equal((await ruleInForce(ctx(), 'features.set', 'x')).config.approvalsNeeded, 0);
-    assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 1, 'WF-D9 seed');
+    assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 0, 'direct like every switch (WF-D9 superseded)');
     await setRule('features.set', '', { approvalsNeeded: 1 });
     assert.equal((await ruleInForce(ctx(), 'features.set', 'x')).config.approvalsNeeded, 1);
     await setRule('features.set', 'x', { approvalsNeeded: 2 }, 1);
@@ -409,7 +409,7 @@ describe('review fixes (#1825)', () => {
     await setRule('features.set', '', { approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] });
     for (const k of ['a', 'b']) await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: k, value: '1' }, reason: 'r' });
     clock = new Date(T0.getTime() + 8 * 24 * 3600_000);
-    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 2, errors: 0 });
+    assert.deepEqual(await runDueWorkflows(ctx()), { expired: 2, errors: 0, superseded: 0 });
   });
 
   it('a failed direct change says failed, not pending_approval', async () => {
@@ -441,12 +441,55 @@ describe('review fixes (#1825)', () => {
     assert.equal((await listRequests(ctx(), 'u-sa1', { view: 'open', type: 'features.set' })).items.length, 1);
   });
 
-  it('the creatorSupport switch rule carries the money floor: finance approvers, the owner excluded', async () => {
+  it('the creatorSupport switch is direct like every switch: proposing it applies it (owner 2026-11-24, WF-D9 superseded)', async () => {
     const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'features.set', payload: { key: 'creatorSupport', value: 'on' }, reason: 'Launch' });
-    const id = out.status === 'pending_approval' ? out.request.id : '';
-    assert.ok(id, 'needs an approver');
-    await rejects(approveRequest(ctx(), await actor('owner', ['super_admin']), id, {}), 'approval_not_allowed');
-    await rejects(approveRequest(ctx(), await actor('u-sa2', ['super_admin']), id, {}), 'approval_not_allowed');
-    assert.equal((await approveRequest(ctx(), await actor('u-fin2'), id, {})).status, 'applied');
+    assert.equal(out.status, 'applied');
+  });
+});
+
+describe('creatorSupport no longer under the money floor (owner 2026-11-24, WF-D9 superseded)', () => {
+  const DIFF = JSON.stringify({ title: { en: 't', ar: 't' }, fields: [] });
+  const ruleRow = (id: string, version: number, approvalsNeeded: number, requestId: string | null) =>
+    search.raw
+      .prepare("INSERT INTO workflow_rules (id, action_type, scope, version, config, request_id, created_by, created_at) VALUES (?, 'features.set', 'creatorSupport', ?, ?, ?, 'x', '2026-11-23T00:00:00Z')")
+      .run(id, version, JSON.stringify({ ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded, approvers: [{ kind: 'finance' }] }), requestId);
+  const ruleChange = (id: string, scope: string) =>
+    search.raw
+      .prepare("INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, approvals_count, version, applied_at, updated_at) VALUES (?, 'workflows.rule.set', ?, ?, '{}', 'rule', 'features.set:creatorSupport', '{}', ?, '0', 'r', 'u-fin1', '2026-11-23T00:00:00Z', '2026-11-30T00:00:00Z', 'applied', 1, 1, 3, '2026-11-23T01:00:00Z', '2026-11-23T01:00:00Z')")
+      .run(id, scope, scope === 'money' ? 'money' : 'governance', DIFF);
+  const openSwitchRequest = (id: string, domain: string) => {
+    search.raw
+      .prepare("INSERT INTO workflow_requests (id, action_type, scope, domain, rule, target_kind, target_id, open_key, payload, diff, base_version, reason, proposed_by, proposed_at, expires_at, status, approvals_needed, approvals_count, version, updated_at) VALUES (?, 'features.set', 'creatorSupport', ?, '{}', 'feature', 'creatorSupport', ?, '{}', ?, '0', 'Launch', 'u-sa1', '2026-11-23T00:00:00Z', '2099-01-01T00:00:00Z', 'pending', 1, 0, 1, '2026-11-23T00:00:00Z')")
+      .run(id, domain, `features.set:feature:creatorSupport:${id}`, DIFF);
+    search.raw.prepare("INSERT INTO workflow_steps (request_id, seq, actor, kind, note, step_up, origin, at) VALUES (?, 1, 'u-sa1', 'propose', NULL, 1, NULL, '2026-11-23T00:00:00Z')").run(id);
+    search.raw.prepare("INSERT INTO workflow_inbox (user_id, request_id, created_at) VALUES ('u-fin1', ?, '2026-11-23T00:00:00Z')").run(id);
+  };
+
+  it('a stored creatorSupport rule approved through a money rule change no longer applies; one made since does', async () => {
+    ruleChange('wfq-old', 'money');
+    ruleRow('rule-old', 1, 1, 'wfq-old');
+    assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 0, 'direct, like every switch');
+    ruleChange('wfq-new', '');
+    ruleRow('rule-new', 2, 1, 'wfq-new');
+    assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 1, 'an admin may still give it approvers');
+  });
+
+  it('the cron closes open creatorSupport requests opened under the money floor, once, with the reason; newer ones stay', async () => {
+    openSwitchRequest('wfq-money', 'money');
+    openSwitchRequest('wfq-platform', 'platform');
+    const events: WorkflowEvent[] = [];
+    const out = await runDueWorkflows(ctx({ onEvent: async (e) => { events.push(e); } }));
+    assert.equal(out.superseded, 1);
+    const row = search.raw.prepare('SELECT status, open_key FROM workflow_requests WHERE id = ?').get('wfq-money') as { status: string; open_key: string | null };
+    assert.deepEqual({ ...row }, { status: 'withdrawn', open_key: null });
+    const step = search.raw.prepare("SELECT actor, kind, note FROM workflow_steps WHERE request_id = ? AND seq = 2").get('wfq-money') as { actor: string; kind: string; note: string };
+    assert.equal(step.actor, 'system');
+    assert.equal(step.kind, 'withdraw');
+    assert.match(step.note, /feature switches no longer need approval/);
+    assert.match(step.note, /مفاتيح الميزات/);
+    assert.equal(search.raw.prepare('SELECT COUNT(*) AS n FROM workflow_inbox WHERE request_id = ?').get('wfq-money')!.n, 0);
+    assert.deepEqual(events.map((e) => [e.kind, e.requestId, e.recipients.sort()]), [['withdrawn', 'wfq-money', ['u-fin1', 'u-sa1']]]);
+    assert.equal((search.raw.prepare('SELECT status FROM workflow_requests WHERE id = ?').get('wfq-platform') as { status: string }).status, 'pending');
+    assert.equal((await runDueWorkflows(ctx())).superseded, 0, 'idempotent');
   });
 });

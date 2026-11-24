@@ -40,7 +40,7 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
   const names: Record<string, string> = {};
   for (const [uid, u] of Object.entries(lookup?.users ?? {})) if (u.name) names[uid] = u.name;
 
-  // Rows are grouped by the rule's own floor: a money scope (the creatorSupport switch) sits with money
+  // Rows are grouped by the rule's own floor: a money scope (money rule changes) sits with money
   const byDomain = new Map<WorkflowDomain, { action: WorkflowActionInfo; rule: WorkflowActionInfo['rules'][number] }[]>();
   for (const action of actions ?? []) {
     for (const rule of action.rules) {

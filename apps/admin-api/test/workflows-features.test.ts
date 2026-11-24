@@ -1,9 +1,8 @@
 /**
- * Feature switches on the approval workflow (wiki AUN-WORKFLOWS WF-9, owner WF-D1/WF-D9): turning
- * creatorSupport on is a change request that the finance list approves (never a super admin role alone,
- * never the owner); the switch moves only on approval, with the request id as its change id; turning it
- * off stays immediate; a switch whose rule is direct keeps the Features page's own write; a switch
- * given approvers on the rules page waits for them.
+ * Feature switches on the approval workflow (wiki AUN-WORKFLOWS WF-9): every switch is direct,
+ * creatorSupport included (owner 2026-11-24, WF-D9 superseded: switching a feature is not handling
+ * money; its readiness stays a precondition). A switch given approvers on the rules page waits for them
+ * and moves only on approval, with the request id as its change id.
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -89,39 +88,31 @@ async function setup() {
 beforeEach(() => forgetFeatureSwitches());
 
 describe('features.set on the approval workflow', () => {
-  it('turning creatorSupport on waits for a finance approver; the owner and a plain super admin cannot approve', async () => {
+  it('turning creatorSupport on is direct once its precondition holds: no request, nobody to approve', async () => {
     const t = await setup();
-    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'The organization is formed' });
-    assert.equal(res.status, 202, JSON.stringify(res.body));
-    assert.equal(res.body.result.status, 'pending_approval');
-    assert.equal(res.body.result.request.domain, 'money');
-    assert.equal(t.enabled('creatorSupport'), null, 'nothing changes before approval');
-    const id = res.body.result.request.id as string;
-    const list = async () => {
-      const app = new Hono();
-      app.use('*', async (c, next) => { c.set('auth' as never, { userId: 'sa1', roles: ['super_admin'] } as never); await next(); });
-      app.route('/api/features', createFeaturesRouter({ creatorSupport: async () => ({ ok: true as const }) }));
-      const r = await app.request('/api/features', {}, t.env as never);
-      return ((await r.json()) as { result: { items: { key: string; pending: unknown }[] } }).result.items.find((i) => i.key === 'creatorSupport')!.pending;
-    };
-    assert.deepEqual(await list(), { requestId: id, enabled: true }, 'the Features page sees the waiting change');
-
-    const ctx = workflowCtx(t.env as never, { steppedUp: true });
-    await assert.rejects(approveRequest(ctx, await ctx.directory.actor('owner', ['super_admin']), id, {}), /approval_not_allowed/);
-    await assert.rejects(approveRequest(ctx, await ctx.directory.actor('sa2', ['super_admin']), id, {}), /approval_not_allowed/);
-    const done = await approveRequest(ctx, await ctx.directory.actor('fin1', []), id, {});
-    assert.equal(done.status, 'applied');
+    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0 });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(t.enabled('creatorSupport'), 1);
-    assert.equal(await list(), null, 'and it clears once applied');
-    const change = { ...(t.search.raw.prepare('SELECT id, actor_id FROM feature_switch_changes WHERE key = ?').get('creatorSupport') as { id: string; actor_id: string }) };
-    assert.deepEqual(change, { id, actor_id: 'sa1' }, 'one change row, keyed by the request, by the person who asked');
+    assert.equal(t.search.raw.prepare('SELECT COUNT(*) AS n FROM workflow_requests').get()!.n, 0);
+    assert.equal((await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: false, expectedVersion: 1 })).status, 200, 'and off again, at once');
+    assert.equal(t.enabled('creatorSupport'), 0);
   });
 
-  it('turning creatorSupport off is immediate (it only takes money ability away)', async () => {
+  it('creatorSupport given approvers waits like any switch: any approver the rule names, the change keyed by the request', async () => {
     const t = await setup();
-    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: false, expectedVersion: 0 });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(t.enabled('creatorSupport'), 0);
+    const config = { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] };
+    const ctx = workflowCtx(t.env as never, { steppedUp: true });
+    await ruleVersionStatement(ctx, { type: 'features.set', scope: 'creatorSupport', version: 1, config, requestId: null, by: 'seed' }).run();
+    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'Launch' });
+    assert.equal(res.status, 202, JSON.stringify(res.body));
+    assert.equal(res.body.result.request.domain, 'platform', 'not money');
+    assert.equal(t.enabled('creatorSupport'), null, 'nothing changes before approval');
+    const id = res.body.result.request.id as string;
+    const done = await approveRequest(ctx, await ctx.directory.actor('sa2', ['super_admin']), id, {});
+    assert.equal(done.status, 'applied');
+    assert.equal(t.enabled('creatorSupport'), 1);
+    const change = { ...(t.search.raw.prepare('SELECT id, actor_id FROM feature_switch_changes WHERE key = ?').get('creatorSupport') as { id: string; actor_id: string }) };
+    assert.deepEqual(change, { id, actor_id: 'sa1' }, 'one change row, keyed by the request, by the person who asked');
   });
 
   it('a direct switch keeps the Features page write; one given approvers waits', async () => {
@@ -140,15 +131,19 @@ describe('features.set on the approval workflow', () => {
 
   it('a second change while one waits is refused', async () => {
     const t = await setup();
-    await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'r' });
-    const again = await t.as('sa2', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 0, reason: 'r' });
+    const config = { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] };
+    await ruleVersionStatement(workflowCtx(t.env as never, { steppedUp: true }), { type: 'features.set', scope: 'newsletter', version: 1, config, requestId: null, by: 'seed' }).run();
+    await t.as('sa1', ['super_admin'])('newsletter', { enabled: false, expectedVersion: 0, reason: 'r' });
+    const again = await t.as('sa2', ['super_admin'])('newsletter', { enabled: false, expectedVersion: 0, reason: 'r' });
     assert.equal(again.status, 409);
     assert.equal(again.body.code, 'change_pending');
   });
 
   it('a stale version is refused with 409 before anything is proposed', async () => {
     const t = await setup();
-    const res = await t.as('sa1', ['super_admin'])('creatorSupport', { enabled: true, expectedVersion: 7, reason: 'r' });
+    const config = { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] };
+    await ruleVersionStatement(workflowCtx(t.env as never, { steppedUp: true }), { type: 'features.set', scope: 'newsletter', version: 1, config, requestId: null, by: 'seed' }).run();
+    const res = await t.as('sa1', ['super_admin'])('newsletter', { enabled: false, expectedVersion: 7, reason: 'r' });
     assert.equal(res.status, 409);
     assert.equal(res.body.code, 'feature_changed');
     assert.equal(t.search.raw.prepare('SELECT COUNT(*) AS n FROM workflow_requests').get()!.n, 0);
@@ -165,7 +160,7 @@ describe('features.set on the approval workflow', () => {
     assert.equal(stale.body.code, 'step_up_required');
     // a direct switch never asks
     assert.equal((await t.as('sa1', ['super_admin'], false)('newsletter', { enabled: true, expectedVersion: 0 })).status, 200);
-    // switching creatorSupport off never asks either (it only takes money ability away)
+    // creatorSupport is direct like any switch: no step-up
     assert.equal((await t.as('sa1', ['super_admin'], false)('creatorSupport', { enabled: false, expectedVersion: 0 })).status, 200);
   });
 });

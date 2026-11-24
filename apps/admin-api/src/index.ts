@@ -378,10 +378,11 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
   // Approval workflows (wiki AUN-WORKFLOWS §5): expire pending requests (every 5 minutes; approved changes apply at once, WF-D6)
+  // and close requests opened under a money floor that is gone (creatorSupport, owner 2026-11-24)
   if (env.SEARCH_DB) {
     ctx.waitUntil(
       runDueWorkflows(workflowCtx(env as never))
-        .then((r) => { if (r.expired || r.errors) logger.info('[Workflows] Expired requests', r); })
+        .then((r) => { if (r.expired || r.errors || r.superseded) logger.info('[Workflows] Expired requests', r); })
         .catch((error) => logger.error('[Workflows] Due requests failed', { error: String(error) })),
     );
   }

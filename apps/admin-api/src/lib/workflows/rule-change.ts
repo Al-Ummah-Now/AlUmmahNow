@@ -49,7 +49,7 @@ function ruleFields(before: WorkflowRuleConfig, after: WorkflowRuleConfig): Work
 
 export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: number }> = {
   type: 'workflows.rule.set',
-  // A rule whose floor is money (money actions, the creatorSupport switch, the money rule-change rule):
+  // A rule whose floor is money (money actions, the money rule-change rule):
   // its change is scoped 'money', so the finance list decides it under the money floor.
   scope: (p) => (isMoneyRule(p.type, p.scope) ? WORKFLOW_RULE_CHANGE_MONEY_SCOPE : ''),
   target: (p) => ({ kind: 'workflow-rule', id: `${p.type}:${p.scope}` }),
