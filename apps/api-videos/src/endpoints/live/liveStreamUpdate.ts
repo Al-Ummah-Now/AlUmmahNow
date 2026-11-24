@@ -195,7 +195,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			// Went live: tell subscribers (Story 29.10; processor de-duplicates per stream)
 			if (updatedStream.status === 'live' && previousStatus !== 'live') {
 				inBackground(c, 'live-started', () =>
-					announceLiveStarted(c.env, { id, channelId: updatedStream.channelId || channelId, userId, title: updatedStream.title }),
+					announceLiveStarted(c.env, { id, channelId: updatedStream.channelId || channelId, userId, title: updatedStream.title, madeForKids: (updatedStream as { madeForKids?: boolean }).madeForKids }),
 				);
 			}
 

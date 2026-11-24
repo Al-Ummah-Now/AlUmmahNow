@@ -18,7 +18,7 @@ import { subscriptionFeedIds } from '../feedIndex';
 import { logger } from '../logger';
 import { diversify } from './rank';
 import { RAIL_LIMIT } from './job';
-import type { SearchDb } from '@al-ummah/shared-types';
+import { isMadeForKids, type SearchDb } from '@al-ummah/shared-types';
 
 /** Most personal list kept (pages are read from it) */
 export const PERSONAL_LIMIT = 200;
@@ -99,7 +99,7 @@ export async function personalOrder(env: PersonalEnv, userId: string, topIds: re
 	const seedMap = await indexed(db, history.seedIds);
 	// A video made for kids never shapes what is suggested, even one watched before it was marked (wiki E20 §5.5)
 	const kidsRules = await ageRulesOn(env).catch(() => true);
-	const seeds = history.seedIds.map((id) => seedMap.get(id)).filter((v): v is DiscoveryVideo => !!v && !(kidsRules && v.madeForKids === true));
+	const seeds = history.seedIds.map((id) => seedMap.get(id)).filter((v): v is DiscoveryVideo => !!v && !(kidsRules && isMadeForKids(v)));
 	const fromSubscriptions = subscribed.length ? ((await subscriptionFeedIds(env, subscribed, SUBSCRIPTION_CANDIDATES, 0))?.ids ?? []) : [];
 	const [similar, byId] = await Promise.all([
 		seeds.length ? indexedCandidates(db, seeds) : Promise.resolve([] as DiscoveryVideo[]),

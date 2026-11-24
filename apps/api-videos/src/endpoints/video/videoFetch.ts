@@ -1,4 +1,4 @@
-import { commentSettingsOf } from '../../lib/contentFlags';
+import { kidsRulesApply } from '../../lib/contentFlags';
 import { withPlayback } from '../../lib/media/playback';
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
@@ -176,8 +176,8 @@ export class VideoFetch extends OptionalAuthRoute {
 			? Object.assign(transformVideoToView(video, channel), { delivery: { source: 'bunny' as const } })
 			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
 
-		// The watch page shows no composer on a video made for kids (wiki E20 §5.5); the editor keeps the stored choice
-		if (!forEdit) videoView.commentSettings = await commentSettingsOf(c.env, video);
+		// The watch page shows no comments or composer on a video made for kids (wiki E20 §5.5); the editor keeps the stored choice
+		if (!forEdit && (await kidsRulesApply(c.env, video))) Object.assign(videoView, { commentSettings: 'off' as const, comments: [], commentsCount: 0 });
 
 		// No queue message: a fetch is not a view (POST /videos/:id/view records views),
 		// and per-read messages only cost queue operations and processor invocations.

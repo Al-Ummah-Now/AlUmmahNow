@@ -43320,7 +43320,7 @@
                         },
                         "ageRestricted": {
                           "type": "boolean",
-                          "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                          "description": "Signed-in viewers of 18 or over only. Not available yet: 404 feature_off"
                         },
                         "madeForKids": {
                           "type": "boolean",
@@ -44064,7 +44064,7 @@
                   },
                   "ageRestricted": {
                     "type": "boolean",
-                    "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                    "description": "Signed-in viewers of 18 or over only. Not available yet: 404 feature_off"
                   },
                   "madeForKids": {
                     "type": "boolean",
@@ -45358,7 +45358,7 @@
                   },
                   "ageRestricted": {
                     "type": "boolean",
-                    "description": "Signed-in viewers of 18 or over only (switch ageRules)"
+                    "description": "Signed-in viewers of 18 or over only. Not available yet: 404 feature_off"
                   },
                   "madeForKids": {
                     "type": "boolean",

@@ -15,6 +15,7 @@ import { VideoUpdate } from '../src/endpoints/video/videoUpdate';
 import { RecommendationsGet } from '../src/endpoints/discovery/discovery';
 import { WatchHistoryAdd } from '../src/endpoints/profile/watchHistoryAdd';
 import { RecordWatchHistory } from '../src/endpoints/watch-history/record';
+import { UpdateWatchProgress } from '../src/endpoints/watch-history/update-progress';
 import { WatchStatePut } from '../src/endpoints/watch-state/watchState';
 import { personalOrder } from '../src/lib/ranking/personal';
 import { poolSeeds } from '../src/lib/recommendations';
@@ -97,6 +98,7 @@ async function setup(state: Switch, videos: Json[] = []) {
 			r.post('/api/videos/:id/comments', CommentCreate);
 			r.post('/api/watch-history', RecordWatchHistory);
 			r.put('/api/watch-state/:videoId', WatchStatePut);
+			r.post('/api/watch-history/:videoId/progress', UpdateWatchProgress);
 			r.post('/api/profiles/watch-history', WatchHistoryAdd);
 			r.get('/api/recommendations', RecommendationsGet);
 		}, userId ? { userId } : null);
@@ -111,19 +113,38 @@ const stored = (env: Json, id: string) => env.videos.read(id) as Json;
 describe('setting the flags', () => {
 	it('the editor stores the owner’s choice while the switch is on', async () => {
 		const t = await setup('on', [{ id: 'v1' }]);
-		assert.equal((await t.call('owner', 'PUT', '/api/videos/v1', { ageRestricted: true })).status, 200);
-		assert.equal(stored(t.env, 'v1').ageRestricted, true);
-		assert.equal(stored(t.env, 'v1').ageRestrictedBy, 'creator');
-		assert.equal((await t.call('owner', 'PUT', '/api/videos/v1', { ageRestricted: false, madeForKids: true })).status, 200);
-		const v = stored(t.env, 'v1');
-		assert.deepEqual([v.ageRestricted, v.ageRestrictedBy, v.madeForKids], [undefined, undefined, true]);
+		assert.equal((await t.call('owner', 'PUT', '/api/videos/v1', { madeForKids: true })).status, 200);
+		assert.equal(stored(t.env, 'v1').madeForKids, true);
+		assert.equal((await t.call('owner', 'PUT', '/api/videos/v1', { madeForKids: false })).status, 200);
+		assert.equal(stored(t.env, 'v1').madeForKids, false);
+	});
+
+	it('nobody can set ageRestricted before E20-B4 enforces it, whatever the switch says', async () => {
+		for (const state of ['on', 'off'] as const) {
+			forgetFeatureSwitches();
+			const t = await setup(state, [{ id: 'v1' }]);
+			for (const ageRestricted of [true, false]) {
+				for (const [method, path, body] of [
+					['PUT', '/api/videos/v1', { ageRestricted }],
+					['PUT', '/api/videos/v1', { title: 'New', ageRestricted, madeForKids: false }],
+					['POST', '/api/videos/upload/initiate', { title: 'Up', fileSize: 10, mimeType: 'video/mp4', ageRestricted }],
+					['POST', '/api/videos/upload/batch/initiate', { videos: [{ title: 'Up', fileSize: 10, mimeType: 'video/mp4', ageRestricted }] }],
+				] as const) {
+					const r = await t.call('owner', method, path, body, { channelId: 'owner-ch' });
+					assert.deepEqual([r.status, r.body.code], [404, 'feature_off'], path);
+				}
+			}
+			assert.equal(t.env.videos.store.size, 1);
+			const v = stored(t.env, 'v1');
+			assert.ok(!('ageRestricted' in v) && !('madeForKids' in v) && v.title === 'Lecture v1');
+		}
 	});
 
 	it('off: 404 feature_off; unreadable: 503; nothing is stored, and other edits go on', async () => {
 		for (const [state, status, code] of [['off', 404, 'feature_off'], ['unreadable', 503, 'service_unavailable']] as const) {
 			forgetFeatureSwitches();
 			const t = await setup(state, [{ id: 'v1' }]);
-			for (const body of [{ ageRestricted: true }, { madeForKids: false }, { title: 'New', madeForKids: true }]) {
+			for (const body of [{ madeForKids: true }, { madeForKids: false }, { title: 'New', madeForKids: true }]) {
 				const r = await t.call('owner', 'PUT', '/api/videos/v1', body);
 				assert.equal(r.status, status, JSON.stringify(r.body));
 				assert.equal(r.body.code, code);
@@ -135,28 +156,26 @@ describe('setting the flags', () => {
 		}
 	});
 
-	it('never both, and a restriction staff set stays', async () => {
-		const t = await setup('on', [{ id: 'v1', madeForKids: true }, { id: 'v2', ageRestricted: true, ageRestrictedBy: 'staff' }]);
-		const both = await t.call('owner', 'PUT', '/api/videos/v1', { ageRestricted: true });
+	it('never both', async () => {
+		const t = await setup('on', [{ id: 'v2', ageRestricted: true, ageRestrictedBy: 'staff' }]);
+		const both = await t.call('owner', 'PUT', '/api/videos/v2', { madeForKids: true });
 		assert.deepEqual([both.status, both.body.code], [400, 'content_flags_conflict']);
-		const locked = await t.call('owner', 'PUT', '/api/videos/v2', { ageRestricted: false });
-		assert.deepEqual([locked.status, locked.body.code], [403, 'age_restricted_locked']);
-		assert.equal(stored(t.env, 'v2').ageRestrictedBy, 'staff');
+		assert.ok(!('madeForKids' in stored(t.env, 'v2')));
 	});
 
-	it('staff lock the video while the owner’s edit is on its way: the edit is refused', async () => {
-		const t = await setup('on', [{ id: 'v1', ageRestricted: true, ageRestrictedBy: 'creator' }]);
+	it('staff restrict the video while the owner’s edit is on its way: the edit is refused', async () => {
+		const t = await setup('on', [{ id: 'v1' }]);
 		const get = t.env.videos.get.bind(t.env.videos);
 		let reads = 0;
 		t.env.videos.get = async (key: string) => {
 			const before = await get(key);
-			if (key === 'v1' && ++reads === 1) await t.env.videos.put('v1', JSON.stringify({ ...stored(t.env, 'v1'), ageRestrictedBy: 'staff' }));
+			if (key === 'v1' && ++reads === 1) await t.env.videos.put('v1', JSON.stringify({ ...stored(t.env, 'v1'), ageRestricted: true, ageRestrictedBy: 'staff' }));
 			return before;
 		};
-		const r = await t.call('owner', 'PUT', '/api/videos/v1', { ageRestricted: false, title: 'Lost' });
-		assert.deepEqual([r.status, r.body.code], [403, 'age_restricted_locked']);
+		const r = await t.call('owner', 'PUT', '/api/videos/v1', { madeForKids: true, title: 'Lost' });
+		assert.deepEqual([r.status, r.body.code], [400, 'content_flags_conflict']);
 		const v = stored(t.env, 'v1');
-		assert.deepEqual([v.ageRestricted, v.ageRestrictedBy, v.title], [true, 'staff', 'Lecture v1']);
+		assert.deepEqual([v.ageRestricted, v.ageRestrictedBy, v.madeForKids, v.title], [true, 'staff', undefined, 'Lecture v1']);
 	});
 
 	it('someone else can’t set them', async () => {
@@ -171,8 +190,7 @@ describe('setting the flags', () => {
 		const bulk = (t: Awaited<ReturnType<typeof setup>>, flags: object) => t.call('owner', 'POST', '/api/videos/upload/batch/initiate', { videos: [{ ...file, title: 'Plain' }, { ...file, ...flags }] }, { channelId: 'owner-ch' });
 		for (const [state, flags, status, code] of [
 			['off', { madeForKids: true }, 404, 'feature_off'],
-			['unreadable', { ageRestricted: true }, 503, 'service_unavailable'],
-			['on', { ageRestricted: true, madeForKids: true }, 400, 'content_flags_conflict'],
+			['unreadable', { madeForKids: true }, 503, 'service_unavailable'],
 		] as const) {
 			forgetFeatureSwitches();
 			const t = await setup(state);
@@ -185,9 +203,9 @@ describe('setting the flags', () => {
 		forgetFeatureSwitches();
 		const t = await setup('on');
 		assert.equal((await single(t, { madeForKids: true })).status, 200);
-		assert.equal((await bulk(t, { ageRestricted: true })).status, 200);
+		assert.equal((await bulk(t, { madeForKids: false })).status, 200);
 		const records = [...t.env.videos.store.values()].map((v: string) => JSON.parse(v));
-		assert.deepEqual(records.map((r: Json) => [r.madeForKids, r.ageRestricted, r.ageRestrictedBy]).sort(), [[true, undefined, undefined], [undefined, undefined, undefined], [undefined, true, 'creator']].sort());
+		assert.deepEqual(records.map((r: Json) => String(r.madeForKids)).sort(), ['false', 'true', 'undefined']);
 	});
 });
 
@@ -210,6 +228,10 @@ describe('made for kids', () => {
 			const view = watch.body.video ?? watch.body.result?.video ?? watch.body.result ?? watch.body;
 			assert.equal(view.commentSettings, 'off');
 			assert.equal(view.madeForKids, true);
+			assert.deepEqual([view.comments, view.commentsCount], [[], 0]);
+			const edit = await t.call('owner', 'GET', '/api/videos/k1?for=edit');
+			const form = edit.body.video ?? edit.body.result?.video ?? edit.body.result ?? edit.body;
+			assert.deepEqual([form.commentSettings, form.commentsCount], ['on', 1]);
 			assert.equal((await t.call('viewer', 'POST', '/api/videos/v1/comments', { content: 'Hello' })).status < 300, true);
 			assert.ok(JSON.stringify((await t.call(null, 'GET', '/api/videos/v1/comments')).body).includes('Salam'));
 		}
@@ -240,6 +262,21 @@ describe('made for kids', () => {
 			assert.equal(JSON.stringify(t.env.profiles.read('viewer')).includes('k1'), kept, state);
 			assert.equal((await t.call('viewer', 'POST', '/api/watch-history', { videoId: 'v1', progress: 10, duration: 100 })).status, 201);
 			assert.ok(t.env.watch_history.store.has('viewer:v1'));
+		}
+	});
+
+	it('an entry from before the video was marked stays as it is', async () => {
+		for (const [state, moves] of [['on', false], ['unreadable', false], ['off', true]] as const) {
+			forgetFeatureSwitches();
+			const t = await setup(state, [{ id: 'k1' }]);
+			const started = await t.call('viewer', 'POST', '/api/watch-history', { videoId: 'k1', progress: 10, duration: 100 });
+			assert.equal(started.status, 201);
+			await t.env.videos.put('k1', JSON.stringify({ ...stored(t.env, 'k1'), madeForKids: true }));
+			const put = await t.call('viewer', 'PUT', '/api/watch-state/k1', { position: 50, duration: 100, clientUpdatedAt: new Date(Date.now() + 1000).toISOString() });
+			assert.deepEqual([put.status, put.body.applied, put.body.state.position], [200, moves, moves ? 50 : 10], state);
+			const progress = await t.call('viewer', 'POST', '/api/watch-history/k1/progress', { progress: 60, duration: 100 });
+			assert.equal(progress.status, 200);
+			assert.equal(t.env.watch_history.read('viewer:k1').progress, moves ? 60 : 10, state);
 		}
 	});
 

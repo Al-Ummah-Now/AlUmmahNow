@@ -143,7 +143,7 @@ export async function markStreamLive(env: StreamsEnv, streamId: string, now = Da
 		return true;
 	});
 	if (became && updated) {
-		await announceLiveStarted(env as never, { id: streamId, channelId: updated.channelId ?? undefined, userId: updated.userId, title: updated.title }).catch((e) =>
+		await announceLiveStarted(env as never, { id: streamId, channelId: updated.channelId ?? undefined, userId: updated.userId, title: updated.title, madeForKids: (updated as { madeForKids?: boolean }).madeForKids }).catch((e) =>
 			logger.warn('[Live] Live-started announcement failed', { streamId, error: String(e) }),
 		);
 	}

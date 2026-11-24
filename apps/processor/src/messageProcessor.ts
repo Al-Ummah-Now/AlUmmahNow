@@ -627,10 +627,11 @@ export class MessageProcessor {
       params: payload.params,
       actionUrl: payload.actionUrl,
     };
+    // Made for kids: nobody is notified, social still hears about it (wiki E20 §5.5). An unreadable switch retries, before anything went out
+    const quiet = payload.madeForKids === true && (await featureGate(env as never, 'ageRules')).on;
     // The first page also tells social (auto-posts, webhooks): once per event, whatever the subscriber count
     if (!payload.afterUserId && !reminders) await this.announceToSocial(env, { channelId: payload.channelId, event: payload.kind === 'live_started' ? 'live' : payload.isHighlight ? 'video' : 'short', entityId: payload.entityId });
-    // Made for kids: social still hears about it, nobody is notified (wiki E20 §5.5); an unreadable switch retries
-    if (payload.madeForKids && (await featureGate(env as never, 'ageRules')).on) {
+    if (quiet) {
       this.logger.debug('Made for kids; subscribers not notified', { entityId: payload.entityId });
       return;
     }

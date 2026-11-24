@@ -48,7 +48,8 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
     return {
         ...rest,
         ...(Array.isArray(rest.dislikes) ? { dislikes: [] } : {}),
-        ...(Array.isArray(rest.comments) ? { comments: (rest.comments as StoredComment[]).map(withoutDislikes) } : {}),
+        // A video made for kids never carries its comments along; the comment routes decide (wiki E20 §5.5)
+        ...(Array.isArray(rest.comments) ? { comments: isMadeForKids(video) ? [] : (rest.comments as StoredComment[]).map(withoutDislikes) } : {}),
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         ...(review ? { review } : {}),
         ...(audioTracks.length ? { audioTracks } : {}),
@@ -94,7 +95,7 @@ export function transformVideoToView(
     return {
         ...publicVideoFields(video),
         // Stored comments as they are (minus hidden ones and dislikes), as before zod 4 typed them precisely
-        comments: publicComments as unknown as z.infer<typeof VideoView>['comments'],
+        comments: (isMadeForKids(video) ? [] : publicComments) as unknown as z.infer<typeof VideoView>['comments'],
         commentSettings: getCommentSettings(video),
         ...(isMadeForKids(video) ? { madeForKids: true } : {}),
         ...channelNameFields(channel),
