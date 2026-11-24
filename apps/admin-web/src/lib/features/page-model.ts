@@ -139,17 +139,6 @@ export function offCount(items: readonly FeatureItem[]): number {
   return items.filter((i) => !i.effective).length;
 }
 
-/**
- * A 409 feature_precondition body: the check's reason in both languages (the owning epic words it,
- * wiki AUN-FEATURES §5.3) and its stable code. The server's bare `message` is never shown, so the
- * page can't end up with one language inside the other.
- */
-export function preconditionOf(body: Record<string, unknown> | undefined): { reason: FeatureText | null; reasonKey: string | null } {
-  const r = body?.reason as Partial<FeatureText> | undefined;
-  const reason = r && typeof r.en === 'string' && r.en.trim() && typeof r.ar === 'string' && r.ar.trim() ? { en: r.en, ar: r.ar } : null;
-  return { reason, reasonKey: typeof body?.reasonKey === 'string' && body.reasonKey ? body.reasonKey : null };
-}
-
 /** The sentence under the switch, in the page's language; `fallback` (a message key's text) when no reason came. */
 export function preconditionText(reason: FeatureText | null, locale: Locale, fallback: string): string {
   return reason?.[locale]?.trim() || fallback;
