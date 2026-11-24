@@ -29,6 +29,7 @@ import {
   WorkflowError,
 } from '../src/lib/workflows/engine';
 import { createWorkflowDirectory } from '../src/lib/workflows/directory';
+import { ruleChangeExecutor } from '../src/lib/workflows/rule-change';
 import type { WorkflowCtx, WorkflowEvent } from '../src/lib/workflows/types';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -465,13 +466,22 @@ describe('creatorSupport no longer under the money floor (owner 2026-11-24, WF-D
     search.raw.prepare("INSERT INTO workflow_inbox (user_id, request_id, created_at) VALUES ('u-fin1', ?, '2026-11-23T00:00:00Z')").run(id);
   };
 
-  it('a stored creatorSupport rule approved through a money rule change no longer applies; one made since does', async () => {
+  it('a stored creatorSupport rule approved through a money rule change no longer applies; a real rule change made since does, as the next version', async () => {
     ruleChange('wfq-old', 'money');
     ruleRow('rule-old', 1, 1, 'wfq-old');
     assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 0, 'direct, like every switch');
-    ruleChange('wfq-new', '');
-    ruleRow('rule-new', 2, 1, 'wfq-new');
-    assert.equal((await ruleInForce(ctx(), 'features.set', 'creatorSupport')).config.approvalsNeeded, 1, 'an admin may still give it approvers');
+    // An admin gives it approvers through the rules page: workflows.rule.set, proposed and approved
+    registerWorkflowExecutor(ruleChangeExecutor);
+    const config = { ...JSON.parse(JSON.stringify(WORKFLOW_ACTIONS['features.set'].defaultRule)), approvalsNeeded: 1, approvers: [{ kind: 'role', role: 'super_admin' }] };
+    const out = await proposeChange(ctx(), await actor('u-sa1', ['super_admin']), { type: 'workflows.rule.set', payload: { type: 'features.set', scope: 'creatorSupport', config }, reason: 'Two people for this one' });
+    assert.equal(out.status, 'pending_approval');
+    const id = out.status === 'pending_approval' ? out.request.id : '';
+    assert.equal((await approveRequest(ctx({ steppedUp: true }), await actor('u-sa2', ['super_admin']), id, {})).status, 'applied', 'never stuck on the version index');
+    const rows = search.raw.prepare("SELECT version, request_id FROM workflow_rules WHERE action_type = 'features.set' AND scope = 'creatorSupport' ORDER BY version").all() as { version: number; request_id: string }[];
+    assert.deepEqual(rows.map((r) => ({ ...r })), [{ version: 1, request_id: 'wfq-old' }, { version: 2, request_id: id }]);
+    const inForce = await ruleInForce(ctx(), 'features.set', 'creatorSupport');
+    assert.equal(inForce.version, 2);
+    assert.equal(inForce.config.approvalsNeeded, 1, 'an admin may still give it approvers');
   });
 
   it('the cron closes open creatorSupport requests opened under the money floor, once, with the reason; newer ones stay', async () => {
