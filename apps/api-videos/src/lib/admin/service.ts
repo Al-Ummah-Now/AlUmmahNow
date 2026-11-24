@@ -68,6 +68,7 @@ import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/own
 import { runDiscoveryRankJob, type DiscoveryEnv } from '../ranking/job';
 import { runIndexRepairStep, type RepairJobEnv } from '../search/repairs';
 import { runLivePurgeStep, type LivePurgeEnv } from '../live/metadata';
+import { accessChangedFor } from '../websocket-notify';
 import { runSearchReconcileStep, type SearchReconcileEnv } from '../search/backfill';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import { runImportAttach, type AttachEnv } from './importAttach';
@@ -1620,6 +1621,8 @@ export async function updateUser(env: AdminServiceEnv, userId: string, edit: Use
 export async function banUser(env: AdminServiceEnv, userId: string, actorId: string, reason?: string): Promise<{ ban: VideosBan; job: AdminJob }> {
 	const ban: VideosBan = { userId, reason: reason?.trim() || null, bannedBy: actorId, bannedAt: now() };
 	await writeBan(env.SEARCH_DB!, ban);
+	// Open sockets leave the live chats they may no longer read (wiki E17 §5.3)
+	await accessChangedFor(env as never, userId);
 	return { ban, job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
 }
 

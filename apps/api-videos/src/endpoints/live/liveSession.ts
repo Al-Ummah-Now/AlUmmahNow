@@ -30,7 +30,9 @@ import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/liv
 import type { SessionTier } from '../../lib/live/service';
 import { featureOff } from '../../lib/features/off';
 import { openTransferJob } from '../../lib/admin/service';
-import { LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-types';
+import { LIVE_TIER_ERROR_CODES, featureGate } from '@al-ummah/shared-types';
+import { readChatStream } from '../../lib/live/chat';
+import { chatState } from './liveChat';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -161,11 +163,15 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		// People watching now (AlUmmahNow#30), only while live: Studio polls this every 5 s
 		const live = state.status === 'live' || state.sessionStatus === 'live';
 		const viewers = live ? await countLiveViewers(c.env as never, stream.id) : null;
+		// Live chat (wiki E17): what this caller may do, nothing at all while it is off
+		const appDb = env(c).SEARCH_DB;
+		const chatOn = appDb ? (await featureGate(c.env as never, 'liveChat').catch(() => ({ on: false as const }))).on : false;
+		const chat = await chatState(c, chatOn ? await readChatStream(appDb as never, stream.id).catch(() => null) : null, this.getUserId(c), chatOn);
 		c.header('cache-control', 'no-store');
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now() },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...chat },
 		};
 	}
 }

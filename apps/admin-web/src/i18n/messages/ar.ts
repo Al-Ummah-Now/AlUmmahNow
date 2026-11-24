@@ -586,6 +586,7 @@ const ar: Messages = {
     video_comment: 'تعليق على مرئي',
     community_post: 'منشور مجتمع',
     post_comment: 'تعليق منشور',
+    live_chat: 'محادثة البث المباشر',
     video_metadata: 'عنوان/وصف المرئي',
   },
   aiLanguage: {

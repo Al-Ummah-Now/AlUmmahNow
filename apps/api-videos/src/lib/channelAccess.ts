@@ -203,6 +203,10 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST'], path: /^\/api\/live-streams\/?$/, capability: 'live.manage' },
 	{ methods: ['PATCH', 'DELETE'], path: /^\/api\/live-streams\/[^/]+\/?$/, capability: 'live.manage' },
 	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/(?:start|end)\/?$/, capability: 'live.manage' },
+	// Live chat (wiki E17): posting as the channel, moderating, its settings (the endpoints decide)
+	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/chat\/?$/, capability: 'channel.speak' },
+	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/chat\/[^/]+\/moderate\/?$/, capability: 'channel.speak' },
+	{ methods: ['PATCH'], path: /^\/api\/live-streams\/[^/]+\/chat\/settings\/?$/, capability: 'live.moderate' },
 	// The channel's playlists: create, edit, delete, add, remove and reorder videos,
 	// queue adds for new uploads
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/playlists(?:\/|$)/, capability: 'playlist.manage' },

@@ -116,5 +116,5 @@ test('user channels are private; publishing into them is forbidden', () => {
   assert.equal(canSubscribe('u1', 'user:u1x'), false);
   assert.equal(canSubscribe('u1', 'video:v1'), true);
   assert.equal(canPublish('user:u2'), false);
-  assert.equal(canPublish('live:s1'), true);
+  assert.equal(canPublish('live:s1'), false);
 });

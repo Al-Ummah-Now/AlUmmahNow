@@ -135,3 +135,80 @@ export function checkLiveChatText(raw: string, options: { mayLink?: boolean } = 
   if (hasBlockedWord(text)) return { text, problem: 'blocked_word' };
   return { text, problem: null };
 }
+
+// ---------------------------------------------------------------------------
+// Chat: who may read, and what travels
+// ---------------------------------------------------------------------------
+
+/** The stored facts that decide whether a stream's chat can be read. */
+export interface LiveChatGate {
+  visibility: LiveStreamVisibility;
+  status: LiveStreamStatus;
+  madeForKids: boolean;
+  /** Its recording is held by review (VR9): the stream is its team's only */
+  recordingWithheld: boolean;
+  allowChat: boolean;
+  chatReplay: boolean;
+}
+
+/** Whether the stream has chat to read at all: for its team too (nobody, when it is off or the stream is made for kids). */
+export function liveChatReadable(gate: LiveChatGate): boolean {
+  if (gate.madeForKids || gate.visibility === 'deleted' || gate.status === 'cancelled') return false;
+  return gate.status === 'ended' ? gate.chatReplay : gate.allowChat;
+}
+
+/** Whether anyone may read it: the same rule over HTTP, on the socket and when a record changes. */
+export function liveChatOpenToAnyone(gate: LiveChatGate): boolean {
+  return gate.visibility === 'public' && !gate.recordingWithheld && liveChatReadable(gate);
+}
+
+/** A live_stream_metadata row's gate. */
+export function liveChatGateOf(row: { visibility: string; status: string; made_for_kids: number; recording_withheld: number; allow_chat: number; chat_replay: number }): LiveChatGate {
+  return {
+    visibility: (LIVE_STREAM_VISIBILITIES as readonly string[]).includes(row.visibility) ? (row.visibility as LiveStreamVisibility) : 'private',
+    status: isLiveStreamStatus(row.status) ? row.status : 'cancelled',
+    madeForKids: row.made_for_kids !== 0,
+    recordingWithheld: row.recording_withheld !== 0,
+    allowChat: row.allow_chat === 1,
+    chatReplay: row.chat_replay === 1,
+  };
+}
+
+export const LIVE_CHAT_ACTIONS = ['remove', 'restore', 'pin', 'unpin', 'block_author'] as const;
+export type LiveChatAction = (typeof LIVE_CHAT_ACTIONS)[number];
+
+/** A message as every client gets it. */
+export interface LiveChatMessage {
+  id: string;
+  streamId: string;
+  userId: string;
+  authorName: string;
+  authorHandle: string | null;
+  authorAvatar: string | null;
+  authorRole: 'owner' | 'moderator' | null;
+  text: string;
+  offsetMs: number;
+  isPinned: boolean;
+  createdAt: string;
+}
+
+export interface LiveChatSettings {
+  allowChat: boolean;
+  chatReplay: boolean;
+  slowModeSeconds: LiveChatSlowMode;
+  subscribersOnly: boolean;
+}
+
+/** Pre-show chat opens this long before the scheduled start. */
+export const LIVE_CHAT_PRESHOW_MS = 30 * 60_000;
+
+/** Realtime channel of a stream's chat. Fed by the server only. */
+export const liveChatChannel = (streamId: string): string => `live:${streamId}`;
+/**
+ * On `user:<id>`: what this person may see changed (a ban, a channel role taken away). Their sockets leave
+ * every live chat; those they may still read, they join again.
+ */
+export const ACCESS_CHANGED_EVENT = 'access_changed';
+/** Frame types on it; `live_chat_closed` also ends every subscription to the channel. */
+export const LIVE_CHAT_EVENTS = ['live_chat_message', 'live_chat_removed', 'live_chat_pinned', 'live_chat_settings', 'live_chat_closed'] as const;
+export type LiveChatEvent = (typeof LIVE_CHAT_EVENTS)[number];

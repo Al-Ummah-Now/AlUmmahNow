@@ -587,6 +587,7 @@ const en = {
     video_comment: 'Video comment',
     community_post: 'Community post',
     post_comment: 'Post comment',
+    live_chat: 'Live chat',
     video_metadata: 'Video title/description',
   },
   aiLanguage: {

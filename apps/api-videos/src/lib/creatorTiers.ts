@@ -391,6 +391,21 @@ export async function resolveCreator(
 }
 
 /**
+ * The tier of a channel's owner, for what visitors meet on the channel (its live chat). Read only: unlike
+ * resolveCreator with the owner as the caller, it never drops a super admin's automatic tier. A super
+ * admin's own channel has everything.
+ */
+export async function channelOwnerTier(db: D1Database, ownerId: string): Promise<CreatorTier | null> {
+	const assignment = await readAssignment(db, ownerId);
+	if (assignment?.assignedBy === SUPER_ADMIN_ASSIGNER) return { ...DEFAULT_UNLIMITED_TIER, updatedAt: null, updatedBy: null };
+	if (assignment) {
+		const tier = await readTier(db, assignment.tierId);
+		if (tier) return tier;
+	}
+	return (await resolveUnassigned(db, ownerId)).tier;
+}
+
+/**
  * Assigns a user's tier (every account keeps one: there is no "remove"; null
  * is refused). Returns the previous assignment.
  */

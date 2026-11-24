@@ -21,7 +21,7 @@ import {
   type D1Like,
   type R2Like,
 } from '../../lib/aiModeration';
-import { AI_QUEUE_OUTCOMES, AI_QUEUE_SORTS, MODERATION_EXTENSION_CATEGORIES, LLAMA_GUARD_CATEGORIES } from '@al-ummah/shared-types';
+import { AI_QUEUE_OUTCOMES, AI_QUEUE_SORTS, MODERATION_EXTENSION_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_SURFACES } from '@al-ummah/shared-types';
 import { listAiQueue } from '../../lib/queue/ai-queue';
 import { queueQuery, toFilters } from '../../lib/queue/schema';
 
@@ -38,7 +38,7 @@ export class AiSignalsList extends AdminRoute {
       query: z.object({
         review_status: z.enum(['pending', 'agreed', 'disagreed', 'n/a']).optional(),
         decision: z.enum(['none', 'would_flag', 'would_hide', 'flag', 'hide', 'skipped']).optional(),
-        surface: z.enum(['video_comment', 'community_post', 'post_comment', 'video_metadata']).optional(),
+        surface: z.enum(MODERATION_SURFACES).optional(),
         language: z.enum(['ar', 'en', 'other']).optional(),
         category: Str({ required: false }),
         limit: Num({ required: false }),
@@ -64,7 +64,7 @@ export class AiQueueList extends AdminRoute {
       'tab=action: flags awaiting review, oldest first. tab=history: reviewed flags (agree, disagree, hide, restore) with who and when, newest first. q searches the flagged item\'s title or text, its author and channel names (search index) and the category; type = surface, category = signal category, outcome = what the reviewer did, actor = who (id or me). Rows carry names and a link target. counts holds both tabs under the same filters.',
     request: {
       query: queueQuery(AI_QUEUE_SORTS, AI_QUEUE_OUTCOMES).extend({
-        type: z.enum(['video_comment', 'community_post', 'post_comment', 'video_metadata']).optional(),
+        type: z.enum(MODERATION_SURFACES).optional(),
         category: z.enum(AI_CATEGORIES).optional(),
       }),
     },

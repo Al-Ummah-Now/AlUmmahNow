@@ -52,7 +52,9 @@ export type LimiterName =
 	| 'UPLOAD_INITIATE_LIMITER'
 	| 'SEARCH_LIMITER'
 	| 'ATTEST_LIMITER'
-	| 'LIVE_VIEWER_LIMITER';
+	| 'LIVE_VIEWER_LIMITER'
+	| 'LIVE_CHAT_LIMITER'
+	| 'LIVE_CHAT_IP_LIMITER';
 
 export type BotEnv = TurnstileEnv & AttestationEnv & { [K in LimiterName]?: RateLimit } & {
 	HUMAN_VERIFIED?: KVNamespace;
@@ -148,6 +150,24 @@ export function edgeRateLimit(binding: LimiterName, endpoint: string, methods: s
 		logger.warn('[SECURITY] Edge rate limit exceeded', { binding, endpoint, signedIn: key.startsWith('u:') });
 		return apiError(c, 429, 'rate_limited', { error: 'Too many requests. Please wait a minute and try again.', retryAfter: RATE_LIMIT_RETRY_SECONDS }, { 'Retry-After': String(RATE_LIMIT_RETRY_SECONDS) });
 	};
+}
+
+/**
+ * Live chat messages from one address (edgeRateLimit counts a signed-in caller by account, so this is
+ * a limit of its own). Loose on purpose: a mosque or a conference may share one. Fails open.
+ */
+export async function allowLiveChatAddress(c: Context): Promise<boolean> {
+	const env = c.env as BotEnv;
+	const ip = clientIp(c);
+	if (!env.LIVE_CHAT_IP_LIMITER || ip === 'unknown' || isCloudflareEgress(ip)) return true;
+	try {
+		if ((await env.LIVE_CHAT_IP_LIMITER.limit({ key: `live-chat:${ip}` })).success) return true;
+	} catch (error) {
+		logger.error('Rate limiter failed', { binding: 'LIVE_CHAT_IP_LIMITER', error: error instanceof Error ? error.message : String(error) });
+		return true;
+	}
+	recordAbuse(env, 'videos.live_chat', 'rate_limited');
+	return false;
 }
 
 /** Production with Turnstile enforced: writes from command-line clients answer 403 forbidden_client. */

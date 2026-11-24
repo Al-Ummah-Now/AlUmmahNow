@@ -4,10 +4,16 @@ import assert from 'node:assert/strict';
 import { CHANNEL_FEATURES, channelFeatureOff } from '../src/lib/feature-gate';
 
 describe('channelFeatureOff', () => {
-  it('version 1 maps no channel and reads nothing', async () => {
-    assert.deepEqual(CHANNEL_FEATURES, []);
+  it('maps live chat only; other channels read nothing', async () => {
+    assert.deepEqual(CHANNEL_FEATURES.map((m) => m.prefix), ['live:']);
     const db = { prepare() { throw new Error('must not read'); } };
-    assert.equal(await channelFeatureOff({ SEARCH_DB: db }, 'live:abc'), null);
+    assert.equal(await channelFeatureOff({ SEARCH_DB: db }, 'video:abc'), null);
+  });
+
+  it('live chat is refused while its switch is off, or cannot be read', async () => {
+    assert.equal(await channelFeatureOff({}, 'live:abc'), 'liveChat');
+    const db = { prepare() { throw new Error('D1 down'); } };
+    assert.equal(await channelFeatureOff({ SEARCH_DB: db }, 'live:abc'), 'liveChat');
   });
 
   it('names a mapped feature that is off, and lets an on one through', async () => {

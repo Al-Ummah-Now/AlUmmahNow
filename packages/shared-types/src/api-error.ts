@@ -88,6 +88,15 @@ export const API_ERROR_CATALOGUE: Readonly<Record<string, CatalogueEntry>> = Obj
   app_update_required: { action: 'update_app', en: 'Please update the app to continue.', ar: 'يُرجى تحديث التطبيق للمتابعة.' },
   // Feature switches (the message comes from the registry entry; this is the fallback)
   feature_off: { action: 'none', en: 'This feature isn’t available right now.', ar: 'هذه الميزة غير متاحة الآن.' },
+  // Live chat (wiki E17)
+  live_chat_empty: { action: 'none', en: 'Write a message first.', ar: 'اكتب رسالة أولًا.' },
+  live_chat_too_long: { action: 'none', en: 'This message is too long.', ar: 'هذه الرسالة طويلة جدًا.' },
+  live_chat_link: { action: 'none', en: 'Links can’t be sent in this chat.', ar: 'لا يمكن إرسال الروابط في هذه المحادثة.' },
+  live_chat_blocked_word: { action: 'none', en: 'This message can’t be sent. Please change the wording.', ar: 'لا يمكن إرسال هذه الرسالة. يُرجى تغيير الصياغة.' },
+  live_chat_subscribers_only: { action: 'none', en: 'Only the channel’s subscribers can write here.', ar: 'الكتابة هنا للمشتركين في القناة فقط.' },
+  live_chat_slow_mode: { action: 'retry', en: 'Please wait a moment before your next message.', ar: 'يُرجى الانتظار قليلًا قبل رسالتك التالية.' },
+  live_chat_duplicate: { action: 'none', en: 'You just sent this message.', ar: 'أرسلت هذه الرسالة قبل قليل.' },
+  live_chat_cannot_block: { action: 'none', en: 'This person can’t be blocked here.', ar: 'لا يمكن حظر هذا الشخص هنا.' },
   // Creator support (wiki AUN-MEMBERS): Studio › Support payout setup
   support_invalid_country: { action: 'none', en: 'Choose the country your bank account or wallet is in.', ar: 'اختر الدولة التي يوجد فيها حسابك المصرفي أو محفظتك.' },
   support_decision_open: { action: 'none', en: 'Payouts can’t be set up yet.', ar: 'لا يمكن إعداد استلام الدفعات بعد.' },

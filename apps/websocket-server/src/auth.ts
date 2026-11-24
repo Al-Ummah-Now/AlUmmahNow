@@ -238,14 +238,25 @@ export function canSubscribe(userId: string, channel: string): boolean {
 }
 
 /**
- * Channels an unauthenticated socket may join. Only per-video feeds, whose
- * events (new comments, counters) are already public on the watch page.
+ * Channels an unauthenticated socket may join: per-video feeds, whose events (new comments,
+ * counters) are already public on the watch page, and live chats (`live:`), which are then checked
+ * against the stream itself (lib/live-chat.ts).
  */
 export function canSubscribeAnonymously(channel: string): boolean {
+  return isPublicFeed(channel) || isLiveChat(channel);
+}
+
+/** Channels whose every event is public: a socket keeps them when its sign-in expires. */
+export function isPublicFeed(channel: string): boolean {
   return channel.startsWith('video:');
 }
 
-/** Clients may not publish into `user:<id>` or `admin:<topic>` channels (server-fed via /broadcast). */
+/** A live stream's chat (wiki E17): what it shows depends on the stream, and only the server writes to it. */
+export function isLiveChat(channel: string): boolean {
+  return channel.startsWith('live:');
+}
+
+/** Clients may not publish into `user:<id>`, `live:<id>` or `admin:<topic>` channels (server-fed via /broadcast). */
 export function canPublish(channel: string): boolean {
-  return !channel.startsWith('user:') && !isAdminLiveChannel(channel);
+  return !channel.startsWith('user:') && !isLiveChat(channel) && !isAdminLiveChannel(channel);
 }

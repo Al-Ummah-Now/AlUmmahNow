@@ -15,6 +15,8 @@ import { AI_HIDEABLE_CATEGORIES } from '@al-ummah/shared-types';
 
 export const PROMPT_VERSION = 'mod-v1';
 export const DEFAULT_DAILY_NEURON_CAP = 10_000;
+/** Most of the daily cap live chat may use (wiki E17-D4); remote key `live_chat_share`, 0 to 1 */
+export const DEFAULT_LIVE_CHAT_SHARE = 0.25;
 
 const flag = (threshold: number): ModerationCategoryPolicy => ({ mode: 'shadow', threshold, action: 'flag', enabled: true });
 
@@ -79,9 +81,13 @@ export async function loadConfig(env: ModerationEnv): Promise<AiModerationConfig
     policies[category as ModerationCategory] = sanitizePolicy(category, policy, base);
   }
 
+  const remoteShare = parseJson<number>(map.get('live_chat_share'));
+  const liveChatShare = typeof remoteShare === 'number' && remoteShare >= 0 && remoteShare <= 1 ? remoteShare : DEFAULT_LIVE_CHAT_SHARE;
+
   return {
     enabled: envOn && remoteOn,
     dailyNeuronCap,
+    liveChatShare,
     extensionsEnabled: parseJson<boolean>(map.get('extensions_enabled')) === true,
     policies,
   };

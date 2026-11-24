@@ -1,16 +1,18 @@
 // AI-assisted moderation (Epic 28). See docs/specs/EPIC-28-PLAN.md.
 
 /** Where the scanned text was written. */
-export type ModerationSurface = 'video_comment' | 'community_post' | 'post_comment' | 'video_metadata';
+export const MODERATION_SURFACES = ['video_comment', 'community_post', 'post_comment', 'video_metadata', 'live_chat'] as const;
+export type ModerationSurface = (typeof MODERATION_SURFACES)[number];
 
 /** What a signal points at (never a copy of the content). */
-export type ModerationSubjectType = 'comment' | 'post' | 'post_comment' | 'video';
+export type ModerationSubjectType = 'comment' | 'post' | 'post_comment' | 'video' | 'live_chat';
 
 export const MODERATION_SURFACE_SUBJECT: Record<ModerationSurface, ModerationSubjectType> = {
   video_comment: 'comment',
   community_post: 'post',
   post_comment: 'post_comment',
   video_metadata: 'video',
+  live_chat: 'live_chat',
 };
 
 /**
@@ -20,7 +22,7 @@ export const MODERATION_SURFACE_SUBJECT: Record<ModerationSurface, ModerationSub
 export interface ModerationScanPayload {
   surface: ModerationSurface;
   subjectId: string;
-  /** Video id for video comments, post id for post comments. */
+  /** Video id for video comments, post id for post comments, stream id for live chat. */
   parentId?: string;
   authorId?: string;
   channelId?: string;
@@ -92,6 +94,8 @@ export interface ModerationCategoryPolicy {
 export interface AiModerationConfig {
   enabled: boolean;
   dailyNeuronCap: number | null;
+  /** Share of the daily cap live chat may use (0 to 1; default 0.25) */
+  liveChatShare?: number;
   extensionsEnabled: boolean;
   policies: Partial<Record<ModerationCategory, ModerationCategoryPolicy>>;
 }
