@@ -6,6 +6,8 @@
  * ignored, a channel @handle finds the channel's owner, exact matches rank
  * first, the excluded users (the current owner) are left out, and each user
  * carries their owned-channel count and their role on the channel in question.
+ * Emails shown and ranked are the sign-in accounts' (lib/admin/authUsers.ts):
+ * a profile whose copy differs is never ranked as that email's user.
  */
 import {
 	ADMIN_USER_SEARCH_MAX_RESULTS,
@@ -15,6 +17,7 @@ import {
 	type AdminUserSearchItem,
 	type AdminUserSearchQuery,
 } from '@al-ummah/shared-types';
+import { authEmails, authUserByEmail } from './authUsers';
 import { likeTerm, userRows, type AdminEnv } from './directory';
 
 type Row = Record<string, unknown>;
@@ -52,13 +55,26 @@ export function searchTerm(q: string | undefined): string {
 	return (q ?? '').trim().replace(/^@+/, '').trim();
 }
 
-/** 0 = exact id/email/handle, 1 = starts with the term, 2 = contains it. */
+/** 0 = exact id/email/handle, 1 = starts with the term, 2 = contains it, 3 = only its profile's copy of the email does. */
 function rank(user: AdminUserRow, term: string, ownsHandle: boolean): number {
 	const t = term.toLowerCase();
 	const fields = [user.email, user.userName, user.displayName].map((f) => (f ?? '').toLowerCase());
 	if (user.id === term || fields.includes(t) || ownsHandle) return 0;
 	if (fields.some((f) => f.startsWith(t) || f.split(/\s+/).some((w) => w.startsWith(t)))) return 1;
-	return 2;
+	return fields.some((f) => f.includes(t)) || !t.includes('@') ? 2 : 3;
+}
+
+/** Looks like a whole email address (an account lookup is worth it). */
+const isWholeEmail = (term: string) => {
+	const at = term.indexOf('@');
+	return at > 0 && term.indexOf('.', at + 2) > 0 && !/\s/.test(term);
+};
+
+/** userRows with the sign-in accounts' emails: null when the user has no account, or while Auth cannot be read. */
+async function accountRows(env: AdminEnv, ids: string[]): Promise<Map<string, AdminUserRow>> {
+	const [rows, emails] = await Promise.all([userRows(env, ids), ids.length ? authEmails(env, ids).catch(() => new Map<string, string>()) : new Map<string, string>()]);
+	for (const row of rows.values()) row.email = emails.get(row.id) ?? null;
+	return rows;
 }
 
 export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): Promise<{ items: AdminUserSearchItem[] }> {
@@ -76,7 +92,7 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 	// search (a COUNT and an ordered page over every profile, plus a scan of every channel handle,
 	// ~200 ms of D1 time) queued into 500s under parallel load (TRANSFER-01, 2026-11-12).
 	const lower = term.toLowerCase();
-	const [matched, handleOwners] = await Promise.all([
+	const [matched, handleOwners, account] = await Promise.all([
 		profileMatches(db, term, limit + exclude.size + 10),
 		db
 			.prepare(
@@ -84,7 +100,13 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 			)
 			.bind(lower, limit)
 			.all<{ owner_id: string }>(),
+		// A whole email address: the account it belongs to
+		isWholeEmail(term) ? authUserByEmail(env, term).catch(() => null) : null,
 	]);
+	if (account && !matched.includes(account.id)) {
+		const { results } = await db.prepare(LIVE_PROFILE_IDS_SQL).bind(JSON.stringify([account.id])).all<{ id: string }>();
+		for (const r of results ?? []) matched.unshift(r.id);
+	}
 	const exactHandleOwners = new Set<string>();
 	const ownerIds = (handleOwners.results ?? []).map((r) => r.owner_id);
 	if (ownerIds.length) {
@@ -94,10 +116,10 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 			.all<{ owner_id: string }>();
 		for (const r of results ?? []) exactHandleOwners.add(r.owner_id);
 	}
-	const page = { items: [...(await userRows(env, matched)).values()] };
+	const page = { items: [...(await accountRows(env, matched)).values()] };
 
 	const missing = ownerIds.filter((id) => !page.items.some((u) => u.id === id));
-	const owners = missing.length ? await userRows(env, missing) : new Map<string, AdminUserRow>();
+	const owners = missing.length ? await accountRows(env, missing) : new Map<string, AdminUserRow>();
 	return withCountsAndRoles(env, db, query.channelId, rankedUsers(page.items, ownerIds, exactHandleOwners, owners, exclude, term, limit));
 }
 
@@ -134,7 +156,7 @@ async function channelTeam(env: AdminEnv, channelId: string, exclude: Set<string
 		.bind(channelId, limit + exclude.size)
 		.all<{ id: string }>();
 	const ids = (results ?? []).map((r) => r.id).filter((id) => !exclude.has(id));
-	const rows = await userRows(env, ids);
+	const rows = await accountRows(env, ids);
 	const users = ids.map((id) => rows.get(id)).filter((u): u is AdminUserRow => !!u && !u.profileDeleted).slice(0, limit);
 	return withCountsAndRoles(env, db, channelId, users);
 }

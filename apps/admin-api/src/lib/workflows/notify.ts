@@ -8,6 +8,9 @@
  * from the email (WF-D5). Resend gets an Idempotency-Key per request, event and recipient, so a retry
  * after a partial failure sends nobody a second copy.
  *
+ * The address is the sign-in account's (GET /users/:id/account-email): someone without an account gets
+ * no email, and the job retries while accounts cannot be read.
+ *
  * Recipients: those the engine names (the proposer and the eligible approvers), plus the rule's extra
  * notify list. Email is skipped when the rule turns email off; the in-app count still shows it.
  */

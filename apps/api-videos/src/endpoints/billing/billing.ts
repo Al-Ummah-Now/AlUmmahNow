@@ -13,6 +13,7 @@
  */
 import type { Context } from 'hono';
 import { BILLING_ERRORS, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { tokenEmail } from '../../lib/account-email';
 import { logger } from '../../lib/logger';
 import { BillingError } from '../../lib/billing/config';
 import { abandonCheckout, billingPlans, paymentReceipt, cancelOwnSubscription, myCheckout, completeFakeCheckout, fakeAvailable, myBilling, portalUrl, receiveWebhook, safeReturnPath, startCheckout, type ServiceEnv } from '../../lib/billing/service';
@@ -49,19 +50,19 @@ export async function handleMyBilling(c: Context) {
 
 /**
  * The name and email the provider's checkout form starts with (the user can change them there):
- * the videos profile by the display-name rule (display name → first + last), its email, then the
- * sign-in's; never asks the user again for what the profile already has.
+ * the videos profile's name by the display-name rule (display name → first + last), else the
+ * sign-in's; the email is always the sign-in's.
  */
 export async function checkoutContact(c: Context, userId: string): Promise<{ email: string | null; name: string | null }> {
 	const auth = c.get('auth') as AuthCtx;
-	let profile: (NameFields & { email?: string | null }) | null = null;
+	let profile: NameFields | null = null;
 	try {
 		const bucket = (c.env as { profiles?: R2Bucket }).profiles;
-		profile = bucket ? await new R2Repository<NameFields & { email?: string | null }>(bucket).getObject(userId) : null;
+		profile = bucket ? await new R2Repository<NameFields>(bucket).getObject(userId) : null;
 	} catch (error) {
 		logger.warn('[Billing] Profile not read for the checkout name; the sign-in name is used', { userId, error: error instanceof Error ? error.message : String(error) });
 	}
-	const email = profile?.email || auth?.email || auth?.payload?.email || null;
+	const email = tokenEmail(auth) ?? tokenEmail(auth?.payload);
 	const name = resolveDisplayName(profile) || auth?.payload?.name || null;
 	return { email, name };
 }

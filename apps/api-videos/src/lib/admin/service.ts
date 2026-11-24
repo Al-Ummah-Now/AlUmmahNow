@@ -64,6 +64,7 @@ import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jo
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
+import { accountEmailForDisplay, authEmail, normalizeEmail } from './authUsers';
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
@@ -105,14 +106,14 @@ export interface AdminServiceEnv extends AdminEnv {
 	BUNNY_LEGACY_STREAM_KEY?: unknown;
 	/** The admin-jobs queue (heavy actions run from it; lib/admin/jobs.ts). */
 	ADMIN_JOBS_QUEUE?: JobQueue;
-	/** Auth service D1, read only (verified emails for the legacy profile restore). */
+	/** Auth service D1, read only (account emails: lib/admin/authUsers.ts, legacy-restore.ts). */
 	AUTH_DB?: AuthUsersDb;
 	/** Private bucket for pre-change copies written by admin jobs. */
 	ADMIN_BACKUPS?: R2Bucket;
 }
 
 export class AdminError extends Error {
-	constructor(public status: 400 | 403 | 404 | 409 | 422, public code: string, message?: string) {
+	constructor(public status: 400 | 403 | 404 | 409 | 422 | 503, public code: string, message?: string) {
 		super(message ?? code);
 	}
 }
@@ -750,8 +751,8 @@ async function moveChannelSubscriptions(env: AdminServiceEnv, channelId: string,
 	return targets.length;
 }
 
-/** Invitations to the channel addressed to the new owner close: an owner holds no member role. */
-async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, to: string, email: unknown): Promise<number> {
+/** Invitations to the channel addressed to the new owner (by account, or their account's email) close: an owner holds no member role. */
+async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, to: string, email: string | null): Promise<number> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return 0;
 	const at = new Date().toISOString();
@@ -760,8 +761,7 @@ async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, 
 			`UPDATE channel_invites SET status = 'cancelled', responded_at = ?, invitee_email = NULL
 			 WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`,
 		)
-		// No email on the profile: null, so it can never match a stored address
-		.bind(at, channelId, to, typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null)
+		.bind(at, channelId, to, email)
 		.run();
 	return Number(res.meta?.changes ?? 0);
 }
@@ -810,8 +810,7 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 	}
 	const invites = env.SEARCH_DB as D1Database | undefined;
 	if (invites) {
-		const newOwner = await repo(env.profiles).getObject(to);
-		const email = typeof newOwner?.email === 'string' && newOwner.email.trim() ? newOwner.email.trim().toLowerCase() : null;
+		const email = await authEmail(env, to);
 		const row = await invites
 			.prepare(`SELECT COUNT(*) AS n FROM channel_invites WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`)
 			.bind(channelId, to, email)
@@ -860,7 +859,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean };
 	const keepAsAdmin = keepPreviousOwnerAsAdmin === true && !!previousOwnerId && previousOwnerId !== newOwnerId;
 	let keptAsAdmin = false;
-	const newOwner = await repo(env.profiles).getObject(newOwnerId);
+	// The sign-in account's email (null: no account yet, e.g. an invite on its way). Auth unreadable: the job retries
+	const newOwnerEmail = await authEmail(env, newOwnerId);
 	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
 	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
 	const before = await repo(env.channels).getObject(id);
@@ -875,7 +875,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.userId = newOwnerId;
 		fresh.isMain = makeMain;
 		// The previous owner's addresses: the account email follows the owner, the public contact is cleared
-		if (typeof newOwner?.email === 'string' && newOwner.email) fresh.email = newOwner.email;
+		if (newOwnerEmail) fresh.email = newOwnerEmail;
 		else delete fresh.email;
 		if (!keepContactEmail) delete fresh.contactEmail;
 		fresh.transferredAt = now();
@@ -929,7 +929,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	});
 	const posts = await movePosts(env, id, previousOwnerId, newOwnerId);
 	const subscriptions = await moveChannelSubscriptions(env, id, previousOwnerId, newOwnerId);
-	const invitesCancelled = await cancelInvitesToNewOwner(env, id, newOwnerId, newOwner?.email);
+	const invitesCancelled = await cancelInvitesToNewOwner(env, id, newOwnerId, newOwnerEmail);
 	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
 	const result = { videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, subscriptions, invitesCancelled, anomalies, previousOwnerId };
 	if (failed === 0) {
@@ -1774,9 +1774,13 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 		subscribedChannelIds(env.NOTIFICATIONS_DB, userId, profile?.subscribedTo ?? []).then((ids) => ids.length).catch(() => 0),
 		db.prepare('SELECT COUNT(*) AS n FROM admin_comments WHERE user_id = ?').bind(userId).first<{ n: number }>().then((r) => Number(r?.n) || 0),
 	]);
-	const creatorTier = await readAssignment(db as unknown as D1Database, userId).catch(() => null);
+	const [creatorTier, account] = await Promise.all([readAssignment(db as unknown as D1Database, userId).catch(() => null), accountEmailForDisplay(env, userId)]);
+	const row = toUserRow(userId, profile, !!ban);
+	const profileEmail = normalizeEmail(row.email);
 	return {
-		...toUserRow(userId, profile, !!ban),
+		...row,
+		...account,
+		...(profileEmail && profileEmail !== account.email ? { profileEmail } : {}),
 		creatorTier,
 		bio: profile?.bio ?? '',
 		timezone: profile?.timezone ?? null,

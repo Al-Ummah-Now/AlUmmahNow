@@ -8,6 +8,8 @@
  * 2026-11-14: configurable longer, never shorter; a legal hold never expires).
  */
 
+import type { AccountEmailSource } from './admin-content';
+
 /** Evidence is kept at least this long after the report (§ 2258A(h)(1) since Pub. L. 118-59). */
 export const CSAM_RETENTION_MIN_DAYS = 365;
 export const CSAM_RETENTION_MAX_DAYS = 3650;
@@ -85,7 +87,10 @@ export interface CsamReportFacts {
   uploadedAt: string | null;
   uploader: {
     userId: string | null;
+    /** The sign-in account's email, read by user id when the case was captured */
     email: string | null;
+    /** Where `email` is from; absent on older cases */
+    emailSource?: AccountEmailSource | null;
     displayName: string | null;
     handle: string | null;
     channelId: string | null;

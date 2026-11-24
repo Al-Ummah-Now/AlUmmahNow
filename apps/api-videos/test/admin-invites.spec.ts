@@ -13,6 +13,7 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { MemoryBucket, MemoryQueue } from './helpers';
+import { AuthDb } from './auth-db';
 import { SqliteD1 } from './search-sqlite-d1';
 import { readAssignment } from '../src/lib/creatorTiers';
 
@@ -39,11 +40,7 @@ async function setup(authUsers: Array<{ id: string; email: string; name: string 
 	const queue = new MemoryQueue();
 	const raw = {
 		SEARCH_DB: db,
-		AUTH_DB: {
-			prepare: () => ({
-				bind: (email: string) => ({ all: async () => ({ results: authUsers.filter((u) => u.email === email) }) }),
-			}),
-		},
+		AUTH_DB: authUsers.reduce((db, u) => db.add(u.id, u.email, { name: u.name, status: u.status }), new AuthDb()),
 		profiles: new MemoryBucket({ [OWNER]: { id: OWNER, email: 'owner@example.com', displayName: 'Owner', channels: ['ch1'] } }),
 		channels: new MemoryBucket({
 			ch1: { id: 'ch1', userId: OWNER, email: 'owner@example.com', name: 'Existing', handle: 'existing', isMain: true, dateCreated: '2026-01-01T00:00:00.000Z', playlists: [], subscribers: [] },
@@ -123,6 +120,14 @@ describe('invited users in videos', () => {
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'Other', handle: 'tafsir-daily' })).body.code, 'handle_taken');
 	});
 
+	it("a channel made for a user carries their account's email, never the profile's copy", async () => {
+		const { call } = await setup([{ id: OWNER, email: 'account@example.com', name: null, status: 'active' }]);
+		assert.equal((await call('POST', `/users/${OWNER}/channels`, { name: 'Second' })).body.result.channel.email, 'account@example.com');
+		// Not in Auth yet (the invite is on its way): none
+		await call('POST', '/users/provision', { userId: INVITED, email: 'new@example.com' });
+		assert.equal('email' in (await call('POST', `/users/${INVITED}/channels`, { name: 'First' })).body.result.channel, false);
+	});
+
 	it('needs the profile first', async () => {
 		const { call } = await setup();
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'X' })).body.code, 'user_not_found');
@@ -140,14 +145,26 @@ describe('invited users in videos', () => {
 		assert.equal(ch.body.result.ownerId, INVITED);
 	});
 
-	it('looks an email up in Auth (read-only) and in videos profiles', async () => {
-		const { call } = await setup([{ id: 'usr_member', email: 'member@example.com', name: 'M', status: 'active' }]);
+	it('looks an email up in Auth (read-only); a profile that carries it is only a warning', async () => {
+		const { call, raw } = await setup([{ id: 'usr_member', email: 'member@example.com', name: 'M', status: 'active' }]);
 		const known = await call('GET', '/accounts?email=%20Member%40Example.com');
 		assert.deepEqual(known.body.result.authUser, { id: 'usr_member', email: 'member@example.com', name: 'M', status: 'active' });
 		const owner = await call('GET', '/accounts?email=owner%40example.com');
 		assert.equal(owner.body.result.authUser, null);
-		assert.equal(owner.body.result.profile.id, OWNER);
+		assert.equal(owner.body.result.profile.id, OWNER, 'a profile match names no account');
+		// The same email as an account and on another user's profile: the account, with the profile as a warning
+		raw.AUTH_DB.add('usr_real', 'Owner@Example.com');
+		const both = await call('GET', '/accounts?email=owner%40example.com');
+		assert.deepEqual([both.body.result.authUser.id, both.body.result.profile.id], ['usr_real', OWNER]);
+		// The account's own profile is not a warning
+		raw.AUTH_DB.raw.exec("UPDATE users SET id = 'usr_owner' WHERE id = 'usr_real'");
+		const own = await call('GET', '/accounts?email=owner%40example.com');
+		assert.deepEqual([own.body.result.authUser.id, own.body.result.profile], [OWNER, null]);
+		assert.deepEqual(raw.AUTH_DB.plans().filter((p) => !p.includes('idx_users_email_lower')), []);
 		const none = await call('GET', '/accounts?email=nobody%40example.com');
 		assert.deepEqual(none.body.result, { authUser: null, profile: null });
+		// Auth unreadable is an error, never "no account"
+		raw.AUTH_DB.fail = true;
+		assert.equal((await call('GET', '/accounts?email=nobody%40example.com')).status, 503);
 	});
 });

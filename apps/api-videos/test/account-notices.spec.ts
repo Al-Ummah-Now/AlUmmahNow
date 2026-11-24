@@ -9,11 +9,18 @@ import { MessageType } from '@al-ummah/shared-types';
 import adminRouter from '../src/routers/admin.router';
 import { accountNoticePayload } from '../src/lib/notifications';
 import { MemoryBucket, MemoryQueue } from './helpers';
+import { AuthDb } from './auth-db';
 import { createSqliteD1 } from './sqlite-d1';
 
 function setup() {
 	const env = {
-		profiles: new MemoryBucket({ usr_1: { id: 'usr_1', displayName: 'Amina', email: 'amina@example.com' }, usr_noemail: { id: 'usr_noemail', displayName: 'No mail' } }),
+		profiles: new MemoryBucket({
+			usr_1: { id: 'usr_1', displayName: 'Amina', email: 'amina@example.com' },
+			usr_noacct: { id: 'usr_noacct', displayName: 'No account', email: 'copy@example.com' },
+			usr_differs: { id: 'usr_differs', displayName: 'Differs', email: 'copy@example.com' },
+			usr_deleted: { id: 'usr_deleted', displayName: 'Deleted', email: 'deleted@example.com' },
+		}),
+		AUTH_DB: new AuthDb({ usr_1: 'Amina@Example.com', usr_differs: 'account@example.com' }).add('usr_deleted', 'deleted@example.com', { deletedAt: 1 }),
 		queue: new MemoryQueue(),
 		NOTIFICATIONS_DB: createSqliteD1(),
 	} as any;
@@ -76,7 +83,22 @@ describe('account notices (warn-user)', () => {
 		assert.equal(changed.accountEmail, false);
 		assert.equal(changed.locale, 'ar');
 		assert.equal(changed.savedLocale, 'ar');
-		assert.equal((await call('GET', '/users/usr_noemail/account-email')).body.result.email, null);
+		assert.deepEqual(env.AUTH_DB.plans().filter((p: string) => !/SEARCH users USING INDEX sqlite_autoindex_users_1 \(id=\?\)/.test(p)), [], 'account lookups use the primary key');
 		assert.equal((await call('GET', '/users/usr_gone/account-email')).status, 404);
+	});
+
+	it("mails the sign-in account's address only: never the profile's copy, and nobody without an account", async () => {
+		const { env, call } = setup();
+		const email = async (id: string) => (await call('GET', `/users/${id}/account-email`)).body.result.email;
+		assert.equal(await email('usr_differs'), 'account@example.com');
+		assert.equal(await email('usr_noacct'), null);
+		assert.equal(await email('usr_deleted'), null);
+		// Auth unreadable: an error the mail job retries, not an address
+		env.AUTH_DB.fail = true;
+		const down = await call('GET', '/users/usr_1/account-email');
+		assert.equal(down.status, 503);
+		assert.equal(down.body.code, 'auth_unavailable');
+		delete env.AUTH_DB;
+		assert.equal((await call('GET', '/users/usr_1/account-email')).status, 503);
 	});
 });

@@ -493,7 +493,17 @@ export interface VideosBan {
   bannedAt: string;
 }
 
+/**
+ * Where a shown account email is from: `auth` the sign-in account; `none` the user id has no account
+ * (email is null); `unavailable` the account could not be read (email is null; ask again).
+ */
+export type AccountEmailSource = 'auth' | 'none' | 'unavailable';
+
+/** `email` is the sign-in account's, read by user id; never the profile's copy. */
 export interface AdminUserDetail extends AdminUserRow {
+  emailSource?: AccountEmailSource;
+  /** The profile's copy of the email, when it differs from the account's (unverified; shown, never used). */
+  profileEmail?: string | null;
   bio: string;
   timezone: string | null;
   updatedAt: string | null;
