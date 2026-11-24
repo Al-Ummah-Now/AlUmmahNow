@@ -3630,6 +3630,70 @@
         }
       }
     },
+    "/api/v1/channels/{channelId}/events.ics": {
+      "get": {
+        "tags": [
+          "Channels",
+          "Events"
+        ],
+        "summary": "RFC 5545 iCalendar (.ics) feed of upcoming online events for one channel",
+        "operationId": "get_ChannelEventsCalendarIcs",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ]
+            },
+            "required": false,
+            "name": "lang",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/calendar (.ics) feed"
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{channelId}/quran-translations": {
       "get": {
         "tags": [
@@ -19568,6 +19632,294 @@
           },
           "503": {
             "description": "Rate-limit store unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List upcoming and live online events",
+        "operationId": "get_EventsCalendarList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to one channel"
+            },
+            "required": false,
+            "description": "Filter to one channel",
+            "name": "channelId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jumuah",
+                "taraweeh",
+                "conference",
+                "halqa"
+              ]
+            },
+            "required": false,
+            "name": "eventType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "premiere"
+              ]
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Filter to up to 90 most recently subscribed channels"
+            },
+            "required": false,
+            "description": "Filter to up to 90 most recently subscribed channels",
+            "name": "subscribedOnly",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 lower bound for scheduledStartAt"
+            },
+            "required": false,
+            "description": "ISO-8601 lower bound for scheduledStartAt",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 upper bound for scheduledStartAt"
+            },
+            "required": false,
+            "description": "ISO-8601 upper bound for scheduledStartAt",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ]
+            },
+            "required": false,
+            "name": "lang",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor"
+            },
+            "required": false,
+            "description": "Pagination cursor",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Upcoming and live online events"
+          },
+          "400": {
+            "description": "Invalid filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events.ics": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "RFC 5545 iCalendar (.ics) feed of upcoming online events",
+        "operationId": "get_EventsCalendarIcs",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to one channel"
+            },
+            "required": false,
+            "description": "Filter to one channel",
+            "name": "channelId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jumuah",
+                "taraweeh",
+                "conference",
+                "halqa"
+              ]
+            },
+            "required": false,
+            "name": "eventType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "premiere"
+              ]
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Filter to up to 90 most recently subscribed channels"
+            },
+            "required": false,
+            "description": "Filter to up to 90 most recently subscribed channels",
+            "name": "subscribedOnly",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 lower bound for scheduledStartAt"
+            },
+            "required": false,
+            "description": "ISO-8601 lower bound for scheduledStartAt",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO-8601 upper bound for scheduledStartAt"
+            },
+            "required": false,
+            "description": "ISO-8601 upper bound for scheduledStartAt",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en",
+                "ar"
+              ]
+            },
+            "required": false,
+            "name": "lang",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor"
+            },
+            "required": false,
+            "description": "Pagination cursor",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/calendar (.ics) feed"
+          },
+          "400": {
+            "description": "Invalid filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }

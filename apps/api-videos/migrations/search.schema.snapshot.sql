@@ -87,6 +87,7 @@
 --   apps/api-videos/migrations/search/0133_age_rules.sql
 --   apps/api-videos/migrations/search/0134_account_events.sql
 --   apps/api-videos/migrations/search/0135_processing_list_indexes.sql
+--   apps/api-videos/migrations/search/0136_content_ownership_stream_status_idx.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
 CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -351,6 +352,7 @@ CREATE INDEX idx_content_ownership_email_lower ON content_ownership (kind, lower
 CREATE INDEX idx_content_ownership_handle_lower ON content_ownership (kind, lower(handle));
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_kind_created ON content_ownership (kind, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_kind_status_created ON content_ownership (kind, status, is_public, is_deleted, is_hidden, created_at DESC);
 CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);

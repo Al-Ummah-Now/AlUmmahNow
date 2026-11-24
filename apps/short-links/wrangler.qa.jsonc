@@ -20,6 +20,7 @@
     "WWW_ORIGIN": "https://www.qa.alummahnow.net",
     "API_ORIGIN": "https://videos.api.qa.alummahnow.net",
     "SHORTS_PATH": "video",
+    "ADMIN_API_ORIGIN": "https://admin.api.qa.alummahnow.net",
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors"
   }
 }

@@ -302,6 +302,7 @@ export const WORKERS: StackWorker[] = [
       // www (AlUmmahNowUI) is booted only by the suites that need it, on this port (e2e targets.ts)
       WWW_ORIGIN: 'http://localhost:3401',
       API_ORIGIN: url('api-videos'),
+      ADMIN_API_ORIGIN: url('admin-api'),
     },
   },
   {

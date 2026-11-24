@@ -147,6 +147,10 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   // Offline downloads & Listen mode (Epic 14, E14-S3a / E14-S3b)
   r('api-videos', 'POST', '/api/videos/:id/downloads', 'offlineDownloads'),
   r('api-videos', 'GET', '/api/videos/:id/audio', 'listenMode'),
+  // Unified online Event Calendar & .ics feeds (Epic 22, E22-D7)
+  r('api-videos', 'GET', '/api/events', 'eventCalendar'),
+  r('api-videos', 'GET', '/api/events.ics', 'eventCalendar'),
+  r('api-videos', 'GET', '/api/channels/:channelId/events.ics', 'eventCalendar'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -182,6 +186,8 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
   { app: 'api-videos', prefix: '/api/move-offers', key: 'channelMove' },
   { app: 'api-videos', prefix: '/api/downloads', key: 'offlineDownloads' },
+  { app: 'api-videos', prefix: '/api/events', key: 'eventCalendar' },
+  { app: 'api-videos', prefix: '/api/channels/:channelId/events.ics', key: 'eventCalendar' },
 ]);
 
 const FINISH = 'finishes work already started';
@@ -299,7 +305,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportDormantTransfer: 'no route: the monthly support.dormant job reads it',
-  eventCalendar: 'E22-S3 adds its routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',
   parentsGuide: 'the Help topic page of apps/web reads GET /api/me/features and is a 404 while off (E20-S1)',
