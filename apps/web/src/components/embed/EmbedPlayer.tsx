@@ -354,7 +354,12 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
           )}
 
           {params.showTitle && !activated && (
-            <div className="pointer-events-none absolute top-0 inset-x-0 p-3 pe-48 flex items-start gap-2 bg-gradient-to-b from-black/60 to-transparent">
+            <div
+              className={`embed-title-bar pointer-events-none absolute top-0 inset-x-0 p-3 flex items-start gap-2 bg-gradient-to-b from-black/60 to-transparent ${
+                compactLink ? (playlist && videos.length > 1 ? 'pe-28' : 'pe-12') : 'pe-48'
+              }`}
+              data-has-playlist={playlist && videos.length > 1 ? '1' : undefined}
+            >
               <div className="min-w-0 flex-1">
                 <a
                   href={watchHref(0)}

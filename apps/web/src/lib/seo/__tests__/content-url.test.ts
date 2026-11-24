@@ -42,8 +42,18 @@ describe('contentUrl from the API to the VideoObject', () => {
     expect(toEmbedVideo(api({ isPublic: false, contentUrl: MP4 }))).toBeNull();
   });
 
-  it('only an absolute https URL is passed on', () => {
-    for (const bad of ['http://media.alummahnow.net/a.mp4', '/pub/a.mp4', 'javascript:alert(1)', '', 42]) {
+  it('only an absolute unsigned https /pub/ MP4 URL is passed on', () => {
+    for (const bad of [
+      'http://media.alummahnow.net/pub/v1/a.mp4',
+      '/pub/v1/a.mp4',
+      'https://media.alummahnow.net/priv/1794535200.sig/v1/rev/video.mp4',
+      'https://media.alummahnow.net/pub/v1/rev/video.mp4?token=t&expires=1794535200',
+      'https://vz.b-cdn.net/bcdn_token=t&expires=1794535200/v1/play_480p.mp4',
+      'https://videos.alummahnow.net/embed/v/v1',
+      'javascript:alert(1)',
+      '',
+      42,
+    ]) {
       expect(toEmbedVideo(api({ contentUrl: bad }))).not.toHaveProperty('contentUrl');
     }
   });

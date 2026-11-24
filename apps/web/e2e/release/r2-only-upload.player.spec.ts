@@ -66,7 +66,7 @@ test.describe('Media providers: an R2-only upload', () => {
       expect(transcoded.ok, `fake transcode: ${await transcoded.text()}`).toBe(true);
 
       // Ready and published, playable from R2, with R2's own frame
-      let view: { uploadStatus?: string; playUrl?: string; thumbnailUrl?: string; delivery?: { source?: string }; sources?: Array<{ provider: string; src: string }> } = {};
+      let view: { uploadStatus?: string; playUrl?: string; thumbnailUrl?: string; contentUrl?: string; delivery?: { source?: string }; sources?: Array<{ provider: string; src: string }> } = {};
       await expect
         .poll(async () => {
           const res = await fetch(`${target().api}/api/videos/${videoId}`);
@@ -79,8 +79,19 @@ test.describe('Media providers: an R2-only upload', () => {
       expect(view.sources?.map((s) => s.provider)).toEqual(['r2']);
       expect(new URL(view.playUrl!).host).toBe(MEDIA_HOST);
       expect(new URL(view.thumbnailUrl!).host).toBe(MEDIA_HOST);
+      expect(view.contentUrl, 'public R2 video exposes progressive MP4 contentUrl').toMatch(new RegExp(`^https://${MEDIA_HOST.replace(/\./g, '\\.')}/pub/${videoId}/[^/]+/video\\.mp4$`));
       // Our API only: no provider internals in the view
       for (const field of ['r2', 'media', 'bunnyLibraryId', 'tusUpload']) expect(view, field).not.toHaveProperty(field);
+
+      // Watch page SSR HTML emits X player card with direct MP4 twitter:player:stream + content_type=video/mp4
+      const watchHtml = await (await fetch(watchUrl(videoId), { cache: 'no-store' })).text();
+      const webOrigin = new URL(target().web).origin;
+      expect(watchHtml).toContain('<meta name="twitter:card" content="player"');
+      expect(watchHtml).toContain(`<meta name="twitter:player" content="${webOrigin}/embed/v/${videoId}"`);
+      expect(watchHtml).toContain(`<meta name="twitter:player:stream" content="${view.contentUrl}"`);
+      expect(watchHtml).toContain('<meta name="twitter:player:stream:content_type" content="video/mp4"');
+      expect(watchHtml).toMatch(/<meta name="twitter:player:width" content="[1-9]\d*"/);
+      expect(watchHtml).toMatch(/<meta name="twitter:player:height" content="[1-9]\d*"/);
 
       await page.goto(watchUrl(videoId));
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 30000 });

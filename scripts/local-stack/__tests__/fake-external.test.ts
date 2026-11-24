@@ -136,6 +136,14 @@ describe('fake media pipeline (R2 transcode + media host)', () => {
     assert.equal(master.status, 200);
     assert.match(await master.text(), /#EXTM3U/);
     assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/thumb.jpg`)).headers.get('content-type'), 'image/jpeg');
+    const mp4Head = await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/video.mp4`, { method: 'HEAD' });
+    assert.equal(mp4Head.status, 200);
+    assert.equal(mp4Head.headers.get('content-type'), 'video/mp4');
+    assert.equal(mp4Head.headers.get('accept-ranges'), 'bytes');
+    const mp4Range = await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/video.mp4`, { headers: { range: 'bytes=0-15' } });
+    assert.equal(mp4Range.status, 206);
+    assert.equal(mp4Range.headers.get('content-type'), 'video/mp4');
+    assert.equal((await mp4Range.arrayBuffer()).byteLength, 16);
     // Another rev, or the private path of a public rendition: not served
     assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/zzzzzzzzzzzzzzzz/master.m3u8`)).status, 404);
     assert.equal((await call(`https://${FAKE_MEDIA_HOST}/priv/1800000000.${'a'.repeat(32)}/${VID}/${REV}/master.m3u8`)).status, 404);
