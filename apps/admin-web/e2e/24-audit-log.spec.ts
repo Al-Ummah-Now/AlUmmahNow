@@ -124,7 +124,7 @@ test.describe('audit log', () => {
     // No raw id anywhere in the row's visible text (the detail is closed)
     expect(await row.innerText()).not.toContain('usr_');
     const detail = actor.getByTestId('unknown-user-id');
-    await detail.locator('summary').click();
+    await detail.getByTestId('unknown-user-id-toggle').click();
     await expect(detail.getByTestId('unknown-user-id-value')).toHaveText(ghostId);
     await expect(detail.getByTestId('unknown-user-id-copy')).toHaveAccessibleName('Copy the user id');
   });
