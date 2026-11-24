@@ -26,6 +26,7 @@ interface Props {
 }
 
 const STEP_UPS: WorkflowStepUp[] = ['none', 'approve', 'propose_and_approve'];
+const PROBLEMS = ['approvals_out_of_range', 'approvers_empty', 'approvers_invalid', 'expiry_out_of_range', 'below_floor_approvals', 'below_floor_step_up', 'below_floor_money_approvers', 'below_floor_money_exclusions', 'below_floor_subject', 'invalid_shape', 'not_connected'];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 /**
@@ -79,7 +80,9 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
       } else {
         const problem = result.problems?.[0]?.problem;
         if (result.status >= 500) logger.error('[approval-rules] Propose failed', { type, scope, status: result.status, code: result.code });
-        setMessage({ tone: 'error', text: result.status < 500 && result.error ? result.error : problem ? t(`workflows.rules.problems.${problem}` as MessageKey, problemParams(problem)) : t('workflows.failed') });
+        // A known problem reads best in the page's words; otherwise admin-api's own sentence (already in the admin's language)
+        const known = problem && PROBLEMS.includes(problem);
+        setMessage({ tone: 'error', text: known ? t(`workflows.rules.problems.${problem}` as MessageKey, problemParams(problem)) : result.status < 500 && result.error ? result.error : t('workflows.failed') });
       }
     } catch (e) {
       logger.error('[approval-rules] Propose request failed', { type, scope, error: e instanceof Error ? e.message : String(e) });
@@ -260,6 +263,11 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
             <span className="text-xs text-fg-subtle">{t('workflows.rules.reasonHint')}</span>
           </div>
 
+          {draft.approvers.length === 0 && (
+            <p className="text-sm text-danger-fg" data-testid="approval-rule-no-approvers">
+              {t('workflows.rules.problems.approvers_empty')}
+            </p>
+          )}
           {message && open && (
             <p role="alert" className="text-sm text-danger-fg" data-testid="approval-rule-error">
               {message.text}
@@ -269,7 +277,7 @@ export function RuleEditor({ type, scope, actionName, rule, floor, propose, name
             <button type="button" className={`${secondaryButtonClass} min-h-11 sm:min-h-0`} onClick={() => setOpen(false)} data-testid="approval-rule-cancel">
               {t('workflows.rules.cancel')}
             </button>
-            <button type="submit" className={`${primaryButtonClass} min-h-11 sm:min-h-0`} disabled={busy || !reason.trim()} data-testid="approval-rule-submit">
+            <button type="submit" className={`${primaryButtonClass} min-h-11 sm:min-h-0`} disabled={busy || !reason.trim() || draft.approvers.length === 0} data-testid="approval-rule-submit">
               {t('workflows.rules.submit')}
             </button>
           </div>

@@ -6,9 +6,13 @@
 import { headers as getHeaders } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/auth';
+import { getLocale } from '@/i18n/server';
 import { logger } from '@/lib/logger';
 import { pathOfPageUrl, passkeyRedirectFor } from '@/lib/passkeys';
 import { AdminApiError, type ActionResult } from './errors';
+import { envelopeError, problemsOf } from './envelope';
+
+export { envelopeError, problemsOf };
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
 
@@ -20,8 +24,14 @@ export type ApiEnvelope = {
   [key: string]: unknown;
 };
 
-function envelopeError(body: ApiEnvelope, fallback: string): string {
-  return body.error || body.errors?.[0]?.message || fallback;
+/** The admin's language for admin-api's error messages (its error envelope reads X-App-Locale). */
+async function localeHeader(): Promise<Record<string, string>> {
+  try {
+    return { 'X-App-Locale': await getLocale() };
+  } catch {
+    // outside a request (tests): admin-api answers in English
+    return {};
+  }
 }
 
 /**
@@ -71,6 +81,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
         ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${session.accessToken}`,
         ...(await originHints()),
+        ...(await localeHeader()),
         ...options.headers,
       },
     });
@@ -104,16 +115,6 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
   }
 
   return body;
-}
-
-/** A refused change's problems, kept only when they look like { problem, detail? } (at most 20). */
-export function problemsOf(value: unknown): { problem: string; detail?: string }[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const out = value
-    .filter((p): p is { problem: string; detail?: unknown } => !!p && typeof p === 'object' && typeof (p as { problem?: unknown }).problem === 'string')
-    .slice(0, 20)
-    .map((p) => ({ problem: p.problem, ...(typeof p.detail === 'string' ? { detail: p.detail } : {}) }));
-  return out.length ? out : undefined;
 }
 
 /** Per-field error codes from admin-api (string values only). */
@@ -160,7 +161,7 @@ export async function toResult<T>(run: () => Promise<T>): Promise<ActionResult<T
     return { ok: true, data: await run() };
   } catch (error) {
     await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}) };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.problems ? { problems: error.problems } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }

@@ -28,7 +28,8 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
   } catch (error) {
     logger.error('[approval-rules] Failed to load', { error: error instanceof Error ? error.message : String(error) });
   }
-  const [historyType, historyScope = ''] = history ? (decodeURIComponent(history).split('|') as [WorkflowActionType, string?]) : [];
+  // Next.js has already decoded the query value
+  const [historyType, historyScope = ''] = history ? (history.split('|') as [WorkflowActionType, string?]) : [];
   let versions: WorkflowRuleVersion[] | null = null;
   if (historyType) versions = await getWorkflowRuleHistory(historyType, historyScope).catch(() => null);
   const perm = permissionLabel(t);
@@ -96,7 +97,7 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
                       </Link>
                       {action.connected === false ? (
                         <span className="self-center text-xs text-fg-subtle" data-testid="approval-rule-not-connected">{t('workflows.rules.notConnected')}</span>
-                      ) : (
+                      ) : rule.canEdit !== true ? null : (
                         <RuleEditor type={action.type} scope={rule.scope} actionName={name} rule={rule.config} floor={rule.floor} propose={proposeWorkflowRule} names={names} />
                       )}
                     </div>
@@ -109,6 +110,7 @@ export default async function ApprovalRulesPage({ searchParams }: { searchParams
         {historyType && (
           <section id="history" className={cardClass} aria-labelledby="rules-history" data-testid="approval-rule-versions">
             <h2 id="rules-history" className="text-lg font-semibold text-fg">{t('workflows.rules.historyTitle')}</h2>
+            {!versions && <p className="mt-2 text-sm text-fg-muted" data-testid="approval-rule-versions-error">{t('workflows.rules.loadFailed')}</p>}
             {versions && versions.length === 0 && <p className="mt-2 text-sm text-fg-muted">{t('workflows.rules.historyEmpty')}</p>}
             {versions && versions.length > 0 && (
               <ol className="mt-3 space-y-3">
