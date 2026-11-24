@@ -91,6 +91,7 @@ describe('GET/PUT /api/profile/islamic', () => {
 			{ version: 0, adjustmentsMinutes: { fajr: 61 } },
 			{ version: 0, calculationMethod: 'mwl' },
 			{ version: 0, asrMethod: 'shafii' },
+			{ version: 0, adjustmentsMinutes: { fajr: 1, tahajjud: 2 } },
 		]) {
 			assert.equal((await call(e, 'u1', 'PUT', '/api/profile/islamic', body)).status, 400, JSON.stringify(body));
 		}
