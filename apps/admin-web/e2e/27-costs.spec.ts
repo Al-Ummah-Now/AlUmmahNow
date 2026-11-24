@@ -232,17 +232,43 @@ test.describe('costs (super admin)', () => {
     await skipUnlessReady();
     await page.goto('/costs');
     await expect(page.getByTestId('costs-header')).toBeVisible();
-    // Force Fawanees + dark + fanous-street to verify the header card excludes street plates even
-    // when the active site theme is not Fawanees on this target.
-    await page.evaluate(() => {
+    // Force Fawanees + dark + --fanous-street-on: 1 so startStreet's MutationObserver keeps
+    // html.fanous-street active even when the target environment is not on Fawanees.
+    await page.evaluate(async () => {
       const html = document.documentElement;
+      html.style.setProperty('--fanous-street-on', '1');
       html.dataset.theme = 'fawanees';
       html.classList.add('dark', 'fanous-street');
+      await new Promise((r) => requestAnimationFrame(r));
     });
     const issues = await page.evaluate(() => {
-      const header = document.querySelector('[data-testid="costs-header"]');
-      if (!header) return ['costs-header missing'];
+      const html = document.documentElement;
       const problems: string[] = [];
+      if (!html.classList.contains('fanous-street')) {
+        problems.push('html.fanous-street was stripped before measurement');
+      }
+      const main = document.getElementById('main-content');
+      if (!main) {
+        problems.push('#main-content missing');
+      } else {
+        // Control heading directly under #main-content (outside .cost-hero) proves the admin
+        // street-plate rule is live, so the assertion below cannot pass vacuously.
+        const probe = document.createElement('h1');
+        probe.textContent = 'Street plate probe';
+        main.appendChild(probe);
+        try {
+          const probeHost = getComputedStyle(probe);
+          const probeBefore = getComputedStyle(probe, '::before');
+          if (probeHost.boxShadow !== 'none') problems.push(`control h1 host has box-shadow: ${probeHost.boxShadow}`);
+          if (probeBefore.zIndex !== '-1' || probeBefore.boxShadow === 'none') {
+            problems.push(`control h1::before missing street plate (zIndex=${probeBefore.zIndex}, boxShadow=${probeBefore.boxShadow})`);
+          }
+        } finally {
+          probe.remove();
+        }
+      }
+      const header = document.querySelector('[data-testid="costs-header"]');
+      if (!header) return [...problems, 'costs-header missing'];
       for (const el of header.querySelectorAll('h1, p, span')) {
         const cs = getComputedStyle(el);
         const before = getComputedStyle(el, '::before');
