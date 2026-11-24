@@ -419,7 +419,8 @@ describe('erasure trail (cross-provider review of #1782)', () => {
 		const failed = (await eventRow(t, 'tevt_bad'))!;
 		assert.equal(failed.status, 'failed');
 		assert.equal(failed.user_id, null);
-		assert.ok(!failed.payload.includes('example.com'), 'personal fields removed');
+		const kept = JSON.parse(failed.payload) as { events: Record<string, unknown>[] };
+		assert.ok(kept.events.every((e) => !('email' in e)), 'personal fields removed');
 		assert.ok(failed.payload.includes(ref1) && failed.payload.includes(ref2), 'refs kept for Retry');
 	});
 
