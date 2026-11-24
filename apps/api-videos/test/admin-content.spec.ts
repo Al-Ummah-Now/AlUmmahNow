@@ -134,7 +134,7 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 		'bunny-stream-key': 'test-key',
 		bunny_stream_library_id: '7',
 	};
-	for (const kind of ['video', 'channel', 'profile'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
+	for (const kind of ['video', 'channel', 'profile', 'playlist'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
 	// Every seeded account may own channels (a move refuses a receiver with no room, CC-D12)
 	for (const id of raw.profiles.store.keys()) {
 		db.db.prepare(`INSERT OR IGNORE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'unlimited', 'admin', 'test', '2026-01-01T00:00:00.000Z')`).run(id);
@@ -423,6 +423,41 @@ describe('channel actions', () => {
 		assert.equal((await call('PATCH', '/channels/ch1', { isVerified: true })).status, 400, 'unknown fields are refused');
 	});
 
+	it('moves every playlist of the channel, found by channel id; counts them the same way', async () => {
+		const pl = (id: string, overrides: Record<string, unknown> = {}) => ({ id, title: id, userId: OWNER, channelId: 'ch1', videos: [], ...overrides });
+		const { raw, db, call, jobOf } = await setup({
+			playlists: {
+				'pl-public': pl('pl-public'),
+				'pl-private': pl('pl-private', { isPublic: false }),
+				'pl-deleted': pl('pl-deleted', { isDeleted: true }),
+				'pl-elsewhere': pl('pl-elsewhere', { channelId: 'ch9' }),
+				'pl-personal': pl('pl-personal', { channelId: '' }),
+				'watch-later-x': pl('watch-later-x', { systemType: 'watch_later' }),
+			},
+		});
+		assert.equal((await call('GET', '/channels/ch1')).body.result.stats.playlists, 2);
+		assert.equal((await call('GET', `/users/${OWNER}`)).body.result.counts.playlists, 2);
+		const job = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(job.status, 'succeeded', JSON.stringify(job));
+		assert.equal(job.result.playlists, 3);
+		const owner = (id: string) => JSON.parse(raw.playlists.store.get(id)!).userId;
+		for (const id of ['pl-public', 'pl-private', 'pl-deleted']) assert.equal(owner(id), OTHER, id);
+		for (const id of ['pl-elsewhere', 'pl-personal', 'watch-later-x']) assert.equal(owner(id), OWNER, id);
+		assert.equal((await call('GET', `/users/${OTHER}`)).body.result.counts.playlists, 2);
+		assert.equal(Number((db.db.prepare('SELECT COUNT(*) AS n FROM channel_transfer_locks').get() as { n: number }).n), 0);
+	});
+
+	it('a move waits for a rebuilding playlist index, which heals by itself, and misses nothing', async () => {
+		const { raw, db, env, call, jobs, jobOf } = await setup({ playlists: { pl1: { id: 'pl1', title: 'x', userId: OWNER, channelId: 'ch1', videos: [] } } });
+		db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true });
+		await assert.rejects(Promise.resolve(ADMIN_JOB_HANDLERS['channel.transfer']!(env as never, res.body.result.job)), /index is being rebuilt/);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER, 'nothing moved yet');
+		await jobs.drain(env);
+		assert.equal((await jobOf(res)).status, 'succeeded', 'the rebuild was queued, and the retry went through');
+		assert.equal(JSON.parse(raw.playlists.store.get('pl1')!).userId, OTHER);
+	});
+
 	it('transfers a channel with its videos to another videos user', async () => {
 		const { raw, call, jobOf } = await setup();
 		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
@@ -698,6 +733,26 @@ describe('channel actions', () => {
 			const plan = (db.db.prepare(`EXPLAIN QUERY PLAN ${REVERIFY_SQL}`).all('2026', cursor, cursor, cursor, cursor && 'job', 100) as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
 			assert.match(plan, /SEARCH admin_jobs USING INDEX idx_admin_jobs_status \(status=\? AND updated_at>\?\)/, plan);
 		}
+	});
+
+	it("the re-verify repair finds the channel's playlists by channel id and leaves others alone (CC-1c)", async () => {
+		const pl = (id: string, overrides: Record<string, unknown> = {}) => ({ id, title: id, userId: OWNER, channelId: 'ch1', videos: [], ...overrides });
+		const { raw, env, db, call, jobOf, flush } = await setup({ playlists: { pl1: pl('pl1'), pl2: pl('pl2', { isPublic: false }), mine: pl('mine', { channelId: '' }), elsewhere: pl('elsewhere', { channelId: 'ch9' }) } });
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		// A late write puts two of them back; the channel record lists none
+		for (const id of ['pl1', 'pl2']) raw.playlists.store.set(id, JSON.stringify(pl(id, { isPublic: id === 'pl1' })));
+		raw.playlists.store.set('theirs', JSON.stringify(pl('theirs', { userId: 'usr_third' })));
+		await runOwnershipPass(raw as never, 'playlist', { maxPages: 10 });
+		assert.deepEqual(JSON.parse(raw.channels.store.get('ch1')!).playlists, []);
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		await flush();
+		const owner = (id: string) => JSON.parse(raw.playlists.store.get(id)!).userId;
+		assert.deepEqual(['pl1', 'pl2', 'theirs', 'mine', 'elsewhere'].map(owner), [OTHER, OTHER, 'usr_third', OWNER, OWNER]);
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
+		// While the index is rebuilt it reports instead of passing a channel it could not check
+		db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 1 });
+		assert.equal(Number((db.db.prepare('SELECT COUNT(*) AS n FROM channel_transfer_locks').get() as { n: number }).n), 0);
 	});
 
 	it("the re-verify repair moves only records back on the previous owner and leaves the new owner's changes alone (CC-1c)", async () => {
@@ -2164,7 +2219,7 @@ describe('soft deletes (Recently deleted, restore, cleanup)', () => {
 
 	it('channels: restore puts it back on the profile as main, with its videos and playlists visible', async () => {
 		const { env, raw, call } = await setup({
-			channels: { ch1: channel('ch1', { playlists: ['pl1'] }) },
+			channels: { ch1: channel('ch1') },
 			playlists: { pl1: { id: 'pl1', title: 'Lessons', userId: OWNER, channelId: 'ch1', videos: [] } },
 		});
 		const visitor = publicApp(env, null);

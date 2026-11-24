@@ -289,7 +289,10 @@ async function purgeItem(env: ContainEnv, p: ContainParams): Promise<ContainPara
 	const r = p.resolution;
 	const purge: Record<string, string | number> = { ...(p.purge ?? {}) };
 	if (r.videoId) {
-		await purgeVideoForCsam(env, r.videoId);
+		// The channel is kept in the job before the record goes, so a retry still finds what lists the video
+		const video = (await (await env.videos.get(r.videoId))?.json()) as Row | null | undefined;
+		if (video?.channelId && video.channelId !== r.channelId) return { ...p, resolution: { ...r, channelId: video.channelId } };
+		await purgeVideoForCsam(env, r.videoId, r.channelId ?? null);
 		purge.originals = await deleteOriginal(env as never, r.videoId);
 		purge.video = 'deleted';
 	}

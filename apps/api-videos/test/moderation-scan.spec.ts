@@ -58,7 +58,7 @@ describe('comment endpoints send ModerationScan', () => {
 	}
 	function env(moderation: { send(m: unknown): Promise<unknown> } | undefined) {
 		return {
-			videos: new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('mine', { userId: 'viewer', text: 'old text' })] }) }),
+			videos: new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('mine', { userId: 'viewer', channelId: null, text: 'old text' })] }) }),
 			channels: new MemoryBucket(),
 			profiles: new MemoryBucket(),
 			queue: new MemoryQueue(),

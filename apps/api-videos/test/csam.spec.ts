@@ -22,7 +22,8 @@ import {
 } from '@al-ummah/shared-types';
 import csamRouter from '../src/routers/csam.router';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { purgeVideoForCsam, ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { runOwnershipPass } from '../src/lib/search/ownership';
 import { CHUNK_BYTES, EvidenceKeyError, openChunk, parseEvidenceKeys, sealChunk } from '../src/lib/csam/crypto';
 import { resolveCsamUrl } from '../src/lib/csam/resolve';
 import { backfillImageOwnersStep, lookupImageOwner, recordImageOwner } from '../src/lib/csam/imageOwners';
@@ -389,6 +390,37 @@ describe('taking a video down', () => {
 		// Banned on videos
 		const ban = await t.db.prepare('SELECT user_id FROM videos_bans WHERE user_id = ?').bind(OWNER).first();
 		assert.ok(ban);
+	});
+
+	it('leaves nothing listing the video, also while the playlist index is rebuilt, and never waits for it', async () => {
+		for (const complete of [true, false]) {
+			const t = setup();
+			const env = t.env as Record<string, any>;
+			env.channel_sections = new MemoryBucket({ 'chan-synth-01/s1.json': { id: 's1', videoIds: ['vid-synth-01', 'other'] } });
+			env.playlists = new MemoryBucket({ pl1: { id: 'pl1', userId: OWNER, channelId: 'chan-synth-01', videos: ['other', 'vid-synth-01'] } });
+			// The case named the channel the video was on before it moved to this one
+			const resolution = { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-before', uploaderId: OWNER };
+			if (complete) await runOwnershipPass(env as never, 'playlist', { maxPages: 10 });
+			await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg', resolution });
+			await t.drain();
+			assert.equal((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'succeeded');
+			assert.ok(await t.db.prepare('SELECT user_id FROM videos_bans WHERE user_id = ?').bind(OWNER).first());
+			assert.equal(t.env.videos.read('vid-synth-01'), null);
+			assert.deepEqual(env.playlists.read('pl1').videos, ['other'], `complete ${complete}`);
+			assert.deepEqual(env.channel_sections.read('chan-synth-01/s1.json').videoIds, ['other']);
+			const jobs = t.db.db.prepare("SELECT status, params FROM admin_jobs WHERE kind = 'video.purge'").all() as Array<{ status: string; params: string }>;
+			assert.deepEqual(jobs.map((j) => [j.status, JSON.parse(j.params).channelId]), complete ? [] : [['succeeded', 'chan-synth-01']]);
+		}
+	});
+
+	it('a takedown that stopped after the record was gone still cleans what lists the video', async () => {
+		const t = setup();
+		const env = t.env as Record<string, any>;
+		env.playlists = new MemoryBucket({ pl1: { id: 'pl1', userId: OWNER, channelId: 'chan-synth-01', videos: ['vid-synth-01'] } });
+		await runOwnershipPass(env as never, 'playlist', { maxPages: 10 });
+		t.env.videos.store.delete('vid-synth-01');
+		await purgeVideoForCsam(env as never, 'vid-synth-01', 'chan-synth-01');
+		assert.deepEqual(env.playlists.read('pl1').videos, []);
 	});
 
 	it('a tampered evidence chunk fails its check instead of streaming', async () => {

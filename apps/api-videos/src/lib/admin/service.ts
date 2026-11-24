@@ -54,6 +54,7 @@ import { bunnyClientForVideo, type LibraryHints } from '../bunny/libraries';
 import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsForUser, userCollectionName } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
+import { channelPlaylistIds, countChannelPlaylists } from '../channelPlaylists';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords, scheduleKey } from '../videoSideRecords';
 import { endSession, ensureProviderStopped } from '../live/service';
@@ -256,11 +257,12 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel) throw new AdminError(404, 'channel_not_found');
 	const db = env.SEARCH_DB!;
-	const [stats, counts, ownerProfile, bans] = await Promise.all([
+	const [stats, counts, ownerProfile, bans, playlists] = await Promise.all([
 		channelVideoStats(db, id),
 		subscriberCounts(env.NOTIFICATIONS_DB, [channel as never]).catch(() => new Map<string, number>()),
 		channel.userId ? repo(env.profiles).getObject(channel.userId) : Promise.resolve(null),
 		bansFor(db, channel.userId ? [channel.userId] : []),
+		countChannelPlaylists(db, [id]),
 	]);
 	const [row] = await hydrateChannels(env, [
 		{
@@ -288,7 +290,7 @@ export async function channelDetail(env: AdminServiceEnv, id: string): Promise<A
 			videos: stats.videos,
 			subscribers: counts.get(id) ?? 0,
 			views: stats.views,
-			playlists: Array.isArray(channel.playlists) ? channel.playlists.length : 0,
+			playlists,
 		},
 		owner: channel.userId ? toUserRow(channel.userId, ownerProfile, bans.has(channel.userId)) : null,
 	};
@@ -488,8 +490,7 @@ async function syncChannelHolds(env: AdminServiceEnv, job: AdminJob): Promise<Jo
 		}
 	}
 	// A soft-deleted channel's playlists are hidden with it (restored with it)
-	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
-	const playlists = await cascade(env.playlists, playlistIds, (r) => (r.channelId === id ? follow(r, deletedHold, deleted) : false));
+	const playlists = await cascade(env.playlists, await channelPlaylistIds(env, id), (r) => (r.channelId === id ? follow(r, deletedHold, deleted) : false));
 	return finish(
 		{ suspended, deleted, videos: videos.changed, liveStreams: live.changed, playlists: playlists.changed },
 		videos.failed + live.failed + playlists.failed,
@@ -887,8 +888,7 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 		const onFrom = (rows: Map<string, Row>) => [...rows.values()].filter((r) => r.userId === from).length;
 		const streams = onFrom(await readMany(env.videos, await channelStreamKeys(env, channelId)));
 		if (streams) problems.push(`live_streams:${streams}`);
-		const playlistIds = Array.isArray(channel?.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
-		const playlists = [...(await readMany(env.playlists, playlistIds)).values()].filter((p) => p.channelId === channelId && p.userId === from).length;
+		const playlists = [...(await readMany(env.playlists, await channelPlaylistIds(env, channelId))).values()].filter((p) => p.channelId === channelId && p.userId === from).length;
 		if (playlists) problems.push(`playlists:${playlists}`);
 		const posts = postsBucketOf(env);
 		if (posts) {
@@ -1071,7 +1071,7 @@ async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, t
 		if (!channel || channel.isDeleted || channel.userId !== to) throw new RepairSuperseded();
 		return channel;
 	};
-	const channel = await current();
+	await current();
 	// Read under the lock, as it was when the checks ran may be old by now
 	const videoIds = await idsOf(env, 'video', { channelId: id }, { includeDeleted: true });
 	await current();
@@ -1100,7 +1100,7 @@ async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, t
 		return true;
 	});
 	const sessionsFailed = await endLeftSessions(env, id, to, new Set(onFrom.map((key) => key.replace(/^livestream:/, ''))), current);
-	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+	const playlistIds = await channelPlaylistIds(env, id);
 	await current();
 	const playlists = await cascade(env.playlists, playlistIds, (p) => {
 		if (p.channelId !== id || p.userId !== from) return false;
@@ -1169,6 +1169,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	const newOwnerEmail = await authEmail(env, newOwnerId);
 	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
 	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
+	// Every playlist must be findable before the flip: a rebuilding index makes the job retry, not stop half-way
+	await channelPlaylistIds(env, id);
 	const before = await repo(env.channels).getObject(id);
 	if (before && !before.isDeleted && before.userId !== newOwnerId) {
 		if (await channelIsLive(env, id)) throw new Error('channel_is_live: the move waits for the broadcast to end');
@@ -1226,8 +1228,7 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	});
 	const schedules = await moveScheduleEntries(env, videoIds, previousOwnerId, newOwnerId);
 	const live = await moveLiveStreams(env, id, previousOwnerId, newOwnerId);
-	const playlistIds = Array.isArray(saved.playlists) ? (saved.playlists as string[]).filter((p) => typeof p === 'string') : [];
-	const playlists = await cascade(env.playlists, playlistIds, (p) => {
+	const playlists = await cascade(env.playlists, await channelPlaylistIds(env, id), (p) => {
 		if (p.channelId !== id || p.userId === newOwnerId) return false;
 		p.userId = newOwnerId;
 		return true;
@@ -1280,19 +1281,11 @@ async function purgeVideo(
 		logger.warn('[Admin] Video side records delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		if (opts.strict) throw error;
 	}
-	// Caption jobs and the id in its channel's sections and playlists (lib/admin/purgeCopies.ts
-	// lists where every copy lives); strict jobs retry when one fails
-	for (const [step, run] of [
-		['caption jobs', () => eraseCaptionJobs(env as never, videoId)],
-		// A channel purge deletes the sections and playlists themselves (keepReferences)
-		['references', () => (opts.keepReferences ? Promise.resolve(0) : dropVideoReferences(env as never, videoId, (record?.channelId as string | undefined) ?? null))],
-	] as const) {
-		try {
-			await run();
-		} catch (error) {
-			logger.warn(`[Admin] Video ${step} erase failed`, { videoId, error: error instanceof Error ? error.message : String(error) });
-			if (opts.strict) throw error;
-		}
+	try {
+		await eraseCaptionJobs(env as never, videoId);
+	} catch (error) {
+		logger.warn('[Admin] Video caption jobs erase failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
 	}
 	// R2 renditions (epic #687), both buckets; strict jobs retry when it fails
 	try {
@@ -1329,12 +1322,32 @@ async function purgeVideo(
 		}
 	}
 	await send(env, MessageType.VideoDelete, { videoId, userId: video?.userId, channelId: video?.channelId, reason: 'admin' });
+	// Last (a rebuilding playlist index must not hold up the rest): the id in its channel's sections
+	// and playlists (lib/admin/purgeCopies.ts lists where every copy lives). A channel purge deletes
+	// those themselves (keepReferences)
+	if (opts.keepReferences) return;
+	try {
+		await dropVideoReferences(env as never, videoId, (record?.channelId as string | undefined) ?? null);
+	} catch (error) {
+		logger.warn('[Admin] Video references erase failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
+	}
 }
 
 /** The CSAM takedown's final purge (lib/csam/contain.ts): strict, after the evidence copy. */
-export async function purgeVideoForCsam(env: AdminServiceEnv, videoId: string): Promise<void> {
+export async function purgeVideoForCsam(env: AdminServiceEnv, videoId: string, channelId: string | null): Promise<void> {
 	const stored = (await repo(env.videos).getObject(videoId).catch(() => null)) as Row | null;
-	await purgeVideo(env, videoId, stored, undefined, { strict: true });
+	await purgeVideo(env, videoId, stored ?? { channelId }, undefined, { strict: true, keepReferences: true });
+	// The id in its channel's sections and playlists. Not now (a rebuilding index): its own purge job does
+	// it, so the takedown and its ban never wait. On a retry the record is gone and the case says whose it was
+	const channel = (stored?.channelId as string | undefined) ?? channelId;
+	if (!channel) return;
+	try {
+		await dropVideoReferences(env as never, videoId, channel);
+	} catch (error) {
+		logger.warn('[Admin] References of a taken-down video are left to its purge job', { videoId, error: error instanceof Error ? error.message : String(error) });
+		await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: videoId, actorId: 'system', params: { userId: null, channelId: channel } });
+	}
 }
 
 /** What a soft delete changed on the record, so a restore can put it back. */
@@ -2072,8 +2085,8 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 				).results ?? [],
 			)
 		: [];
-	const channels = [...(await readMany(env.channels, channelIds)).values()];
-	const [videos, watchHistory, subscriptions, comments] = await Promise.all([
+	const [playlists, videos, watchHistory, subscriptions, comments] = await Promise.all([
+		countChannelPlaylists(db, channelIds),
 		indexedIdsOf(env, 'video', { ownerId: userId }).then((ids) => ids.length),
 		countPrefix(env.watch_history, `${userId}:`),
 		subscribedChannelIds(env.NOTIFICATIONS_DB, userId, profile?.subscribedTo ?? []).then((ids) => ids.length).catch(() => 0),
@@ -2094,7 +2107,7 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 		channels: channelRows,
 		counts: {
 			videos,
-			playlists: channels.reduce((n, ch) => n + (Array.isArray(ch.playlists) ? ch.playlists.length : 0), 0),
+			playlists,
 			watchHistory,
 			subscriptions,
 			comments,

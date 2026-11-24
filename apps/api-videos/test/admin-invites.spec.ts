@@ -55,7 +55,7 @@ async function setup(authUsers: Array<{ id: string; email: string; name: string 
 		queue,
 		ADMIN_JOBS_QUEUE: new JobsQueue(),
 	};
-	for (const kind of ['video', 'channel', 'profile'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
+	for (const kind of ['video', 'channel', 'profile', 'playlist'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => void pending.push(p) });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter);

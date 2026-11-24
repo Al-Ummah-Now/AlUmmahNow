@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { captionWorkPrefix } from '@al-ummah/shared-types';
+import { captionWorkPrefix, ownershipCompleteKey } from '@al-ummah/shared-types';
 import { ADMIN_JOB_HANDLERS, deleteVideo, purgeDeletion, restorePost, restoreVideo, deleteChannel, restoreChannel } from '../src/lib/admin/service';
 import { getDeletion } from '../src/lib/admin/deletions';
 import { dropVideoReferences, eraseCaptionJobs, ownedPostImagePaths, ownedVideoImagePaths } from '../src/lib/admin/purgeCopies';
@@ -136,7 +136,7 @@ describe('video purge erases every copy (#700, #814)', () => {
 		});
 		const env = baseEnv({
 			videos: { v1: video, v2: videoFixture({ id: 'v2', userId: 'owner', channelId: 'ch1' }) },
-			channels: { ch1: { id: 'ch1', userId: 'owner', playlists: ['pl1', 'pl2'] } },
+			channels: { ch1: { id: 'ch1', userId: 'owner', playlists: [] } },
 			playlists: { pl1: { id: 'pl1', channelId: 'ch1', videos: ['v2', 'v1'], videosCount: 2 }, pl2: { id: 'pl2', channelId: 'ch1', videos: ['v2'] } },
 			sections: {
 				'ch1/s1.json': { id: 's1', type: 'videos', videoIds: ['v1', 'v2'] },
@@ -161,6 +161,8 @@ describe('video purge erases every copy (#700, #814)', () => {
 		await env.MEDIA_PRIVATE.put(`${captionWorkPrefix('j2')}audio.m4a`, 'x');
 		await env.MEDIA_PRIVATE.put(`${captionWorkPrefix('j3')}audio.m4a`, 'x');
 		await env.SEARCH_DB.db.prepare("INSERT INTO image_owners (path, kind, owner_id, channel_id, created_at) VALUES ('/thumbnails/v1/one.jpg', 'video_thumbnail', 'owner', 'ch1', '2026-11-01')").run();
+		// Found by channel id in the index, whatever the channel record lists
+		await runOwnershipPass(env, 'playlist', { maxPages: 10 });
 		return env;
 	}
 
@@ -200,9 +202,22 @@ describe('video purge erases every copy (#700, #814)', () => {
 
 	it('reference and caption steps are no-ops with nothing to do', async () => {
 		const env = baseEnv();
+		await runOwnershipPass(env, 'playlist', { maxPages: 10 });
 		assert.equal(await dropVideoReferences(env, 'v9', null), 0);
 		assert.equal(await dropVideoReferences(env, 'v9', 'missing'), 0);
 		assert.equal(await eraseCaptionJobs(env, 'v9'), 0);
+	});
+
+	it('a rebuilding playlist index fails the job after everything else is gone, and the retry finishes', async () => {
+		const env = await purgedVideoEnv();
+		env.SEARCH_DB.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey('playlist'));
+		const run = () => ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
+		await assert.rejects(run, /index is being rebuilt/);
+		assert.equal(env.videos.store.has('v1'), false);
+		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg'], 'the files went first');
+		await runOwnershipPass(env, 'playlist', { maxPages: 10 });
+		await run();
+		assert.deepEqual(env.playlists.read('pl1').videos, ['v2']);
 	});
 });
 
@@ -294,7 +309,7 @@ describe('notifications of soft-deleted content (#702)', () => {
 				v2: videoFixture({ id: 'v2', userId: 'owner', channelId: 'ch1' }),
 			},
 		});
-		for (const kind of ['video', 'channel'] as const) await runOwnershipPass(env, kind, { maxPages: 10 });
+		for (const kind of ['video', 'channel', 'playlist'] as const) await runOwnershipPass(env, kind, { maxPages: 10 });
 		notification(env, 'n1', 'v1');
 		notification(env, 'n2', 'v2');
 		notification(env, 'n3', 'ch1');

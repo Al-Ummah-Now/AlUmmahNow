@@ -1,4 +1,4 @@
-import { canOnVideo } from "../../lib/channelAccess";
+import { mayDeleteOwn, canOnVideo } from "../../lib/channelAccess";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -93,9 +93,12 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 404);
 		}
 
-		// The comment author, or the video's owner or a channel admin or moderator (comment.moderate)
+		// The comment author (one written as a channel is the channel's: only while they may speak as it, or
+		// it is gone and was never anyone else's), or the video's owner or a channel admin or moderator
+		// (comment.moderate)
+		const own = comment.userId === userId && (await mayDeleteOwn(c.env as never, comment.channelId, userId));
 		const moderates = await canOnVideo(c.env as never, video, userId, 'comment.moderate');
-		if (comment.userId !== userId && !moderates) {
+		if (!own && !moderates) {
 			return c.json({
 				success: false,
 				error: "Forbidden",
@@ -104,7 +107,7 @@ export class CommentDelete extends AuthenticatedRoute {
 
 		// A moderator removing someone else's comment: a soft removal the channel
 		// can restore for 90 days (lib/channelComments/moderation.ts, #771)
-		if (comment.userId !== userId) {
+		if (!own) {
 			const outcome = await moderateVideoComment(c as never, id, cid, 'remove', userId);
 			if (outcome.ok === false) return c.json({ success: false, error: outcome.error }, moderationStatus(outcome.error));
 			logger.info('[CommentDelete] Removed by the channel', { videoId: id, commentId: cid, actorUserId: userId, changed: outcome.changed });

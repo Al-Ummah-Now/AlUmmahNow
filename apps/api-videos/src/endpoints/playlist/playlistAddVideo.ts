@@ -8,7 +8,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canManagePlaylist } from "../../lib/channelAccess";
 import { persistAutoOrder } from "../../lib/playlistOrder";
-import { isVideoListedFor, isVideoRemoved } from "../../lib/visibility";
+import { videoViewer } from "../../lib/videoViewer";
+import { isVideoRemoved } from "../../lib/visibility";
 import { PLAYLIST_MAX_VIDEOS } from "@al-ummah/shared-types";
 
 export class PlaylistAddVideo extends AuthenticatedRoute {
@@ -117,7 +118,7 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
         // never another channel's private, processing or removed video
         const addable = !!video && !isVideoRemoved(video)
             // (a personal playlist, channelId '', takes any video the caller may watch)
-            && ((!!playlist.channelId && video.channelId === playlist.channelId) || isVideoListedFor(video, userId));
+            && ((!!playlist.channelId && video.channelId === playlist.channelId) || await videoViewer({ channels: c.env.channels }, userId)(video as never));
         if (!video || !addable) {
             return c.json({
                 success: false,

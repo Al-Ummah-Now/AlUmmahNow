@@ -554,7 +554,7 @@ export interface PlaylistListQuery {
   after?: KeysetPosition | null;
   /** Legacy offset cursor (first read only) */
   offset?: number;
-  /** Private playlists: `true` every one (the channel's managers), a user id only theirs, null none. */
+  /** Private playlists: `true` every one (the channel's managers), a user id theirs and those on their channels, null none. */
   privateFor: boolean | string | null;
 }
 
@@ -568,8 +568,9 @@ export function playlistListIds(env: OwnershipEnv, query: PlaylistListQuery): Pr
       params.push(query.channelId);
     }
     if (typeof query.privateFor === 'string') {
-      where.push('(is_public = 1 OR owner_id = ?)');
-      params.push(query.privateFor);
+      // Theirs by the record, or on a channel of theirs (the reader checks the live channel)
+      where.push(`(is_public = 1 OR owner_id = ? OR channel_id IN (SELECT own.id FROM ${OWNERSHIP_TABLE} own WHERE own.kind = 'channel' AND own.owner_id = ?))`);
+      params.push(query.privateFor, query.privateFor);
     } else if (!query.privateFor) {
       where.push('is_public = 1');
     }
@@ -618,8 +619,8 @@ export function streamListIds(env: OwnershipEnv, query: StreamListQuery): Promis
     if (query.manageChannel && query.channelId) {
       // A channel manager (docs/specs/CHANNEL-ROLES.md) sees the channel's streams as the owner does
     } else if (query.viewerId) {
-      where.push('((is_public = 1 AND is_hidden = 0) OR owner_id = ?)');
-      params.push(query.viewerId);
+      where.push(`((is_public = 1 AND is_hidden = 0) OR owner_id = ? OR channel_id IN (SELECT own.id FROM ${OWNERSHIP_TABLE} own WHERE own.kind = 'channel' AND own.owner_id = ?))`);
+      params.push(query.viewerId, query.viewerId);
     } else {
       where.push('is_public = 1', 'is_hidden = 0');
     }

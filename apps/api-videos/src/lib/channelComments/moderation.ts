@@ -17,6 +17,7 @@
  * Callers check the capability (`comment.moderate` through the channel role)
  * first; each change records who did it (`moderation`) for the audit trail.
  */
+import { mayDeleteOwn } from '../channelAccess';
 import type { CommentModerationRecord, CommunityPost, PostComment, StudioCommentAction } from '@al-ummah/shared-types';
 import { STUDIO_REMOVED_RETENTION_DAYS } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
@@ -71,7 +72,8 @@ type VideoRecord = { id?: string; userId?: string | null; channelId?: string | n
 /**
  * Runs `action` on a video comment. `actorUserId` must already be allowed to
  * moderate the video's comments. `remove` by the comment's author is a real
- * deletion (as the DELETE route does for anyone deleting their own comment).
+ * deletion (as the DELETE route does for anyone deleting their own comment);
+ * one written as a channel they no longer speak for is removed like anyone else's.
  */
 export async function moderateVideoComment(c: ModerationContext, videoId: string, commentId: string, action: StudioCommentAction, actorUserId: string, now = new Date()): Promise<ModerationOutcome> {
 	const repository = new R2Repository<VideoRecord>(c.env.videos);
@@ -81,6 +83,8 @@ export async function moderateVideoComment(c: ModerationContext, videoId: string
 	let parentId: string | null = null;
 	let after: StoredComment | null = null;
 	let wasVisible = false;
+	const stored = action === 'remove' ? findStoredComment(((await repository.getObject(videoId))?.comments ?? []) as StoredComment[], commentId)?.comment : undefined;
+	const own = stored?.userId === actorUserId && (await mayDeleteOwn(c.env as never, stored.channelId, actorUserId));
 
 	const { data, rejected } = await repository.updateObjectOrReject<ModerationError>(videoId, (fresh) => {
 		changed = false;
@@ -116,7 +120,7 @@ export async function moderateVideoComment(c: ModerationContext, videoId: string
 			case 'remove': {
 				if (removedByChannel) return false;
 				if (heldByPlatform(comment)) return { reject: 'held_by_moderation' };
-				if (comment.userId === actorUserId) {
+				if (own && comment.userId === actorUserId) {
 					fresh.comments = removeStoredComment(comments, commentId).comments;
 					hardDeleted = true;
 					changed = true;
@@ -251,6 +255,7 @@ export async function moderatePostComment(c: ModerationContext, postChannelId: s
 	}
 
 	// Counted before the write: the replies that leave (or come back to) the count with a top-level comment
+	const own = action === 'remove' && located.comment.userId === actorUserId && (await mayDeleteOwn(c.env as never, located.comment.channelId, actorUserId));
 	const repliesLive = action === 'remove' && !isReply ? await liveReplies(bucket, postId, commentId) : 0;
 	let countDelta = 0;
 	let hardDeleted = false;
@@ -285,7 +290,7 @@ export async function moderatePostComment(c: ModerationContext, postChannelId: s
 				if (removedByChannel) return false;
 				if (heldByPlatform(fresh)) return { reject: 'held_by_moderation' };
 				const counted = isLive(fresh) ? 1 + repliesLive : 0;
-				if (fresh.userId === actorUserId) {
+				if (own && fresh.userId === actorUserId) {
 					// The author's own comment: deleted as the DELETE route deletes it
 					fresh.deletedAt = at;
 					countDelta = -counted;

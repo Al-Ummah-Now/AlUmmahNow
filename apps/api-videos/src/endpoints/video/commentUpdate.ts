@@ -2,6 +2,7 @@ import { Str } from "../../lib/chanfana-params";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { maySpeakAs } from "../../lib/channelAccess";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentText, withoutDislikes } from "../../lib/comments";
@@ -109,8 +110,8 @@ export class CommentUpdate extends AuthenticatedRoute {
 			}, 404);
 		}
 
-		// Only the comment author may edit it
-		if (found.comment.userId !== userId) {
+		// Only the comment author may edit it, while they may still speak as the channel it shows
+		if (found.comment.userId !== userId || !(await maySpeakAs(c.env as never, found.comment.channelId, userId))) {
 			return c.json({
 				success: false,
 				error: "Forbidden",

@@ -24,6 +24,7 @@
  * (`/thumbnails/{videoId}/`, `/community-posts/{channelId}/`). A record can name another account's file (a pasted URL) or a shared legacy image, and
  * that file is not ours to delete. Every step is idempotent: a file or row already gone is done.
  */
+import { channelPlaylistIds } from '../channelPlaylists';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { cancelJob, clearJobWork, CaptionJobHttpError, type CaptionJobsEnv } from '../captions/jobs';
@@ -122,7 +123,7 @@ export async function eraseCaptionJobs(env: CaptionJobsEnv, videoId: string): Pr
 	return rows.length;
 }
 
-type ReferenceEnv = { channels?: R2Bucket; playlists?: R2Bucket; channel_sections?: R2Bucket };
+type ReferenceEnv = { playlists?: R2Bucket; channel_sections?: R2Bucket; SEARCH_DB?: unknown };
 
 /** Removes `videoId` from one stored object; true when it changed. */
 function dropFrom(record: Row, videoId: string): boolean {
@@ -169,11 +170,9 @@ export async function dropVideoReferences(env: ReferenceEnv, videoId: string, ch
 			cursor = page.truncated ? page.cursor : undefined;
 		} while (cursor);
 	}
-	const channel = env.channels ? await new R2Repository<Row>(env.channels).getObject(channelId).catch(() => null) : null;
-	const playlistIds = Array.isArray(channel?.playlists) ? (channel!.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
-	if (env.playlists && playlistIds.length) {
+	if (env.playlists && env.SEARCH_DB) {
 		const playlists = new R2Repository<Row>(env.playlists);
-		for (const id of playlistIds) {
+		for (const id of await channelPlaylistIds(env, channelId)) {
 			let did = false;
 			await playlists.updateObject(id, (record) => (did = dropFrom(record, videoId)));
 			if (did) changed++;

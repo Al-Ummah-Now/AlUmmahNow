@@ -1,5 +1,5 @@
 import { Num, Str } from "../../lib/chanfana-params";
-import { canManagePlaylist } from "../../lib/channelAccess";
+import { canManagePlaylist, memoChannels, ownedChannelIds, ownsRecord } from "../../lib/channelAccess";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -125,7 +125,7 @@ export class PlaylistsList extends OptionalAuthRoute {
                     sort: 'updated',
                     limit,
                     fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, {
-                        channelId: channelFilter, sort: 'updated', limit: pageLimit, after, offset, privateFor: manages ? true : (userId || null),
+                        channelId: channelFilter, sort: 'updated', limit: pageLimit, after, offset, privateFor: manages,
                     }),
                     load: (id) => repository.getObject(id),
                     isListed: listedForChannel,
@@ -166,14 +166,25 @@ export class PlaylistsList extends OptionalAuthRoute {
         }
 
         // System playlists (Watch later) are listed in the Library, not with user playlists
-        const listed = (playlist: PlaylistType | null): playlist is PlaylistType => Boolean(playlist) && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist);
+        // The private playlists of the channels the viewer owns now (checked on load; the index names candidates)
+        const managed = new Set<string>();
+        const channels = memoChannels({ channels: c.env.channels });
+        const owned = await ownedChannelIds(c.env as never, userId);
+        const load = async (id: string): Promise<PlaylistType | null> => {
+            const playlist = await repository.getObject(id);
+            if (playlist && playlist.isPublic === false && !playlist.isDeleted && !playlist.isHidden && userId && !isPersonalPlaylist(playlist)
+                && (!owned || owned.has(playlist.channelId) || playlist.userId === userId) && await ownsRecord(channels, playlist, userId)) managed.add(playlist.id ?? id);
+            return playlist;
+        };
+        const listed = (playlist: PlaylistType | null): playlist is PlaylistType =>
+            Boolean(playlist) && (canViewPlaylist(playlist, userId) || managed.has(playlist.id)) && !isSystemPlaylist(playlist);
         // Newest first, one keyset page of the ownership index (kind 'playlist')
         const indexed = await pageFromIndex<PlaylistType>({
             cursor,
             sort: 'latest',
             limit,
             fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, { channelId: null, sort: 'latest', limit: pageLimit, after, offset, privateFor: userId || null }),
-            load: (id) => repository.getObject(id),
+            load,
             isListed: listed,
         });
         if (indexed) {
@@ -188,7 +199,7 @@ export class PlaylistsList extends OptionalAuthRoute {
             // An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
             cursor: isIndexPageCursor(cursor) ? null : cursor,
             limit,
-            load: key => repository.getObject(key),
+            load,
             isListed: listed,
             label: 'PlaylistsList',
         });
