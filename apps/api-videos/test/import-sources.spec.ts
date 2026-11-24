@@ -399,6 +399,34 @@ describe('syncing a source', () => {
 		assert.equal(await queueDueSources(env as never), 1, 're-queued when uploads are back on');
 	});
 
+	it('a sync in its post phase skips quietly if uploads are switched off mid-post, leaving pending items pending', async () => {
+		const { env, posts, job } = harness();
+		const source = await insertSource(env, { channelId: 'ch1', network: 'rss', address: FEED, label: 'Blog', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'hourly', createdBy: ADMIN });
+		const started = await startSourceSync(env as never, source, ADMIN, 'post');
+		for (const id of ['p1', 'p2']) {
+			await env.SEARCH_DB.prepare(
+				`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at)
+				 VALUES (?, ?, 'text', 'pending', ?, ?, ?, NULL, 1, 1)`,
+			)
+				.bind(source.id, id, JSON.stringify({ itemId: id, url: `https://example.org/${id}`, postedAt: Date.parse('2026-11-10T09:00:00Z'), title: `Post ${id}`, text: `Body ${id}`, images: [], link: null, video: null }), `https://example.org/${id}`, Date.parse('2026-11-10T09:00:00Z'))
+				.run();
+		}
+		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
+		const out = await runSourceSync(off as never, { ...job({ sourceId: source.id, phase: 'post', fetched: 2, posted: 0, skipped: 0 }), id: started.id });
+		assert.deepEqual([out.done, (out as { result: { skipped?: string } }).result.skipped], [true, 'uploads_off']);
+		assert.equal(posts().length, 0);
+		assert.deepEqual((await listItems(env, source.id)).map((i) => i.state), ['pending', 'pending']);
+		const after = (await readSource(env, source.id))!;
+		assert.equal(after.sync_job_id, null);
+		assert.equal(after.last_sync_at, null);
+		assert.equal(after.last_error, null);
+
+		// Once uploads return, the pending items post cleanly
+		const resumed = await runSourceSync(env as never, { ...job({ sourceId: source.id, phase: 'post', fetched: 2, posted: 0, skipped: 0 }), id: started.id });
+		assert.equal(resumed.done, true);
+		assert.equal(posts().length, 2);
+	});
+
 	it('the sync’s lookups on shared tables use indexes, never a scan', async () => {
 		const { env } = harness();
 		const plan = async (sql: string, ...args: unknown[]) =>
@@ -817,6 +845,141 @@ describe('YouTube Takeout files', () => {
 		assert.deepEqual(report.counts, { new: 1 });
 		assert.equal(report.files[0].state, 'new');
 		assert.equal(report.files[0].itemId, null);
+	});
+
+	it('a Takeout job cancelled during matchStep stops before posting uploaded files', async () => {
+		const { env, posts, job } = harness();
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const call = async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const source = await insertSource(env, { channelId: 'ch1', network: 'youtube', address: 'UCcccccccccccccccccccccc', label: 'YT', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const waitItem = async (itemId: string, title: string) =>
+			env.SEARCH_DB.prepare(`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at) VALUES (?, ?, NULL, 'awaiting_file', ?, ?, ?, 'takeout_file', 1, 1)`)
+				.bind(source.id, itemId, JSON.stringify({ itemId, url: `https://www.youtube.com/watch?v=${itemId}`, postedAt: Date.parse('2026-11-01T10:00:00Z'), title, text: `${title} desc`, images: [], link: null, video: null, awaiting: 'takeout_file' }), `https://www.youtube.com/watch?v=${itemId}`, Date.parse('2026-11-01T10:00:00Z'))
+				.run();
+		await waitItem('AAAAAAAAAAA', 'Lesson 1');
+		await waitItem('BBBBBBBBBBB', 'Lesson 2');
+
+		// List & match Lesson 2, open its upload, finish its video, and mark it uploaded
+		await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files: [{ name: 'Lesson 2.mp4', size: 2000, videoId: 'BBBBBBBBBBB', title: 'Lesson 2' }] }) });
+		await drainJobs(env as never);
+		const file2Id = (await call(`/s/${source.id}/takeout`)).body.result.files[0].id as string;
+		const opened = await call(`/s/${source.id}/takeout/files/${file2Id}/upload`, { method: 'POST' });
+		const videoId = opened.body.result.upload.videoId as string;
+		for (const [key, raw] of env.videos.store) if (key.includes(videoId)) env.videos.store.set(key, JSON.stringify({ ...JSON.parse(raw), uploadStatus: 'processing' }));
+		await env.SEARCH_DB.prepare("UPDATE import_takeout_files SET state = 'uploaded' WHERE id = ?").bind(file2Id).run();
+
+		// List Lesson 1 ('new'), creating a new Takeout match job
+		const listed = await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files: [{ name: 'Lesson 1.mp4', size: 3000, videoId: 'AAAAAAAAAAA', title: 'Lesson 1' }] }) });
+		const jobId = listed.body.result.jobId as string;
+
+		// Cancel lands right as matchStep updates Lesson 1
+		let cancelledMidMatch = false;
+		const origPrepare = env.SEARCH_DB.prepare.bind(env.SEARCH_DB);
+		env.SEARCH_DB.prepare = ((sql: string) => {
+			const stmt = origPrepare(sql);
+			if (!cancelledMidMatch && sql.startsWith('UPDATE import_takeout_files SET')) {
+				const origBind = stmt.bind.bind(stmt);
+				stmt.bind = (...args: unknown[]) => {
+					const bound = origBind(...args);
+					const origRun = bound.run.bind(bound);
+					bound.run = async () => {
+						const res = await origRun();
+						if (!cancelledMidMatch) {
+							cancelledMidMatch = true;
+							await cancelJob(env as never, jobId, { id: ADMIN, name: 'Amina Staff' });
+						}
+						return res;
+					};
+					return bound;
+				};
+			}
+			return stmt;
+		}) as typeof env.SEARCH_DB.prepare;
+
+		const out = await runTakeoutJob(env as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		env.SEARCH_DB.prepare = origPrepare;
+		assert.deepEqual(
+			[out.done, (out as { result: { cancelled?: boolean; matched?: number; attached?: number } }).result.cancelled, (out as { result: { matched?: number } }).result.matched, (out as { result: { attached?: number } }).result.attached],
+			[true, true, 1, 0],
+		);
+		assert.equal(posts().length, 0, 'uploaded file not posted after cancel');
+		const report = (await call(`/s/${source.id}/takeout`)).body.result;
+		const byName = Object.fromEntries(report.files.map((f: any) => [f.name, f]));
+		assert.equal(byName['Lesson 1.mp4'].state, 'matched');
+		assert.equal(byName['Lesson 2.mp4'].state, 'uploaded', 'untouched after cancel');
+	});
+
+	it('a Takeout job skips posting already-uploaded files quietly while uploads are off, including mid-post', async () => {
+		const { env, posts, job } = harness();
+		const app = new Hono();
+		app.route('/s', importSourcesRouter as never);
+		const call = async (path: string, init: RequestInit = {}) => {
+			const res = await app.request(path, { ...init, headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': ADMIN } }, env as never);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const source = await insertSource(env, { channelId: 'ch1', network: 'youtube', address: 'UCdddddddddddddddddddddd', label: 'YT', auth: 'recorded', socialAccountId: null, ytImportId: null, permission: recorded, schedule: 'manual', createdBy: ADMIN });
+		const waitItem = async (itemId: string, title: string) =>
+			env.SEARCH_DB.prepare(`INSERT INTO import_source_items (source_id, item_id, kind, state, payload, original_url, original_at, note, created_at, updated_at) VALUES (?, ?, NULL, 'awaiting_file', ?, ?, ?, 'takeout_file', 1, 1)`)
+				.bind(source.id, itemId, JSON.stringify({ itemId, url: `https://www.youtube.com/watch?v=${itemId}`, postedAt: Date.parse('2026-11-01T10:00:00Z'), title, text: `${title} desc`, images: [], link: null, video: null, awaiting: 'takeout_file' }), `https://www.youtube.com/watch?v=${itemId}`, Date.parse('2026-11-01T10:00:00Z'))
+				.run();
+		await waitItem('AAAAAAAAAAA', 'Talk A');
+		await waitItem('BBBBBBBBBBB', 'Talk B');
+		await waitItem('CCCCCCCCCCC', 'Talk C');
+
+		// Match A and B, open uploads, complete their R2 videos, and leave both in 'uploaded'
+		await call(`/s/${source.id}/takeout/files`, {
+			method: 'POST',
+			body: JSON.stringify({
+				files: [
+					{ name: 'Talk A.mp4', size: 2000, videoId: 'AAAAAAAAAAA', title: 'Talk A' },
+					{ name: 'Talk B.mp4', size: 2500, videoId: 'BBBBBBBBBBB', title: 'Talk B' },
+				],
+			}),
+		});
+		await drainJobs(env as never);
+		const existing = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.id as string]));
+		for (const fileId of [existing['Talk A.mp4']!, existing['Talk B.mp4']!]) {
+			const opened = await call(`/s/${source.id}/takeout/files/${fileId}/upload`, { method: 'POST' });
+			const vid = opened.body.result.upload.videoId as string;
+			for (const [key, raw] of env.videos.store) if (key.includes(vid)) env.videos.store.set(key, JSON.stringify({ ...JSON.parse(raw), uploadStatus: 'processing' }));
+			await env.SEARCH_DB.prepare("UPDATE import_takeout_files SET state = 'uploaded' WHERE id = ?").bind(fileId).run();
+		}
+
+		// List Talk C ('new') while uploads are off: matching still runs, posting already-uploaded files skips quietly
+		const listed = await call(`/s/${source.id}/takeout/files`, { method: 'POST', body: JSON.stringify({ files: [{ name: 'Talk C.mp4', size: 3000, videoId: 'CCCCCCCCCCC', title: 'Talk C' }] }) });
+		const jobId = listed.body.result.jobId as string;
+		const off = { ...env, FEATURES_FORCE_OFF: 'upload' };
+		const outOff = await runTakeoutJob(off as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		assert.deepEqual(
+			[outOff.done, (outOff as { result: { skipped?: string; matched?: number; attached?: number } }).result.skipped, (outOff as { result: { matched?: number } }).result.matched, (outOff as { result: { attached?: number } }).result.attached],
+			[true, 'uploads_off', 1, 0],
+		);
+		assert.equal(posts().length, 0);
+		assert.equal((await readSource(env, source.id))!.takeout_job_id, null, 'takeout_job_id released');
+		const afterOff = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.state]));
+		assert.deepEqual(afterOff, { 'Talk A.mp4': 'uploaded', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched' });
+
+		// Mid-post switch-off: Talk A posts while uploads are on, then uploads switch off before Talk B
+		let checks = 0;
+		const flipMidPost = Object.create(env, {
+			FEATURES_FORCE_OFF: {
+				get() {
+					return ++checks >= 2 ? 'upload' : undefined;
+				},
+			},
+		});
+		const outMid = await runTakeoutJob(flipMidPost as never, { ...job({ sourceId: source.id }), id: jobId, kind: 'import.takeout-match' });
+		assert.deepEqual(
+			[outMid.done, (outMid as { result: { skipped?: string; attached?: number } }).result.skipped, (outMid as { result: { attached?: number } }).result.attached],
+			[true, 'uploads_off', 1],
+		);
+		assert.equal(posts().length, 1);
+		const afterMid = Object.fromEntries((await call(`/s/${source.id}/takeout`)).body.result.files.map((f: any) => [f.name, f.state]));
+		assert.deepEqual(afterMid, { 'Talk A.mp4': 'attached', 'Talk B.mp4': 'uploaded', 'Talk C.mp4': 'matched' });
 	});
 });
 
