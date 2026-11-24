@@ -118,7 +118,16 @@ describe('LiveWatch', () => {
       expect(await screen.findByTestId('live-watch-notice')).toHaveTextContent(mockText.premiereEnded);
     });
 
-    it('is said to be cancelled', async () => {
+    it('another stream on the same page starts over', async () => {
+      getState.mockResolvedValue(premiere({ status: 'ended', premiereVideoId: 'v1' }));
+      const { rerender } = render(<LiveWatch streamId="s1" />);
+      fireEvent.click(await screen.findByTestId('premiere'));
+      expect(await screen.findByTestId('live-watch-notice')).toBeInTheDocument();
+      rerender(<LiveWatch streamId="s2" />);
+      expect(await screen.findByTestId('premiere')).toHaveAttribute('data-video', 'v1');
+    });
+
+    it('is said to be canceled', async () => {
       getState.mockResolvedValue(premiere({ status: 'cancelled', reminder: { enabled: false, count: 0, set: false } }));
       render(<LiveWatch streamId="s1" />);
       expect(await screen.findByTestId('live-watch-notice')).toHaveTextContent(mockText.premiereCancelled);

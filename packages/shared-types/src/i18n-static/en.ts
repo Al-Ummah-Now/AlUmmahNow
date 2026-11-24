@@ -1697,7 +1697,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
       liveStartedMessage: '{channelName} is live: {streamTitle}',
       liveSoonTitle: 'Starting soon',
       liveSoonMessage: '{channelName}: {streamTitle} starts soon',
-      premiereCancelledTitle: 'Your premiere was cancelled',
+      premiereCancelledTitle: 'Your premiere was canceled',
       premiereCancelledMessage: '“{streamTitle}” couldn’t be shown. The video is unchanged.',
       commentReplyTitle: 'New reply',
       commentReplyMessage: '{actorName} replied to your comment',

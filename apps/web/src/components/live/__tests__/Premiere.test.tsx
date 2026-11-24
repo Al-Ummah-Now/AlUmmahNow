@@ -140,6 +140,25 @@ describe('following it', () => {
     expect(f.s.rate).toBe(1);
   });
 
+  it('a viewer who catches up past the moment between two ticks is brought back to it, at normal speed', () => {
+    const f = start();
+    f.s.paused = false;
+    f.emit('playing');
+    f.s.at = 90;
+    f.emit('seeking');
+    expect(f.hook.result.current.behind).toBe(true);
+    f.s.rate = 2;
+    // A background tab: one tick after 20 s. Behind by 10 s before it, ahead by 10 s after it
+    act(() => void jest.setSystemTime(Date.now() + 19_000));
+    f.s.at += 39;
+    play(f, 1_000);
+    expect(f.s.at).toBe(120);
+    expect(f.s.rate).toBe(1);
+    expect(f.hook.result.current.behind).toBe(false);
+    play(f, 3_000);
+    expect(f.s.at).toBe(123);
+  });
+
   it('a pause is the viewer’s too, but not the one before it has played', () => {
     const f = start();
     f.emit('pause');

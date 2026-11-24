@@ -83,6 +83,9 @@ export function LiveWatch({ streamId }: { streamId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Another stream on the same page starts over
+    setDue(false);
+    setGone(false);
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
