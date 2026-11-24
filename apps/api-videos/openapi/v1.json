@@ -11478,7 +11478,7 @@
             }
           },
           "403": {
-            "description": "not_owner or reauth_required",
+            "description": "move_not_owner or reauth_required",
             "content": {
               "application/json": {
                 "schema": {
@@ -11528,7 +11528,32 @@
             }
           },
           "409": {
-            "description": "receiver_not_channel_admin, official_handle, channel_suspended, channel_under_review, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open",
+            "description": "receiver_not_channel_admin, official_handle, move_channel_suspended, channel_under_review, owner_changed, move_in_progress, move_channel_live, move_channel_has_support, move_receiver_not_allowed, move_receiver_channel_limit, moved_recently, offer_open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "move_check_unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -11648,7 +11673,7 @@
             }
           },
           "403": {
-            "description": "not_owner or reauth_required",
+            "description": "move_not_owner or reauth_required",
             "content": {
               "application/json": {
                 "schema": {
@@ -11698,7 +11723,32 @@
             }
           },
           "409": {
-            "description": "receiver_not_channel_admin, official_handle, channel_suspended, channel_under_review, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open",
+            "description": "receiver_not_channel_admin, official_handle, move_channel_suspended, channel_under_review, owner_changed, move_in_progress, move_channel_live, move_channel_has_support, move_receiver_not_allowed, move_receiver_channel_limit, moved_recently, offer_open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "move_check_unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -25229,7 +25279,7 @@
             }
           },
           "403": {
-            "description": "not_owner or reauth_required",
+            "description": "move_not_owner or reauth_required",
             "content": {
               "application/json": {
                 "schema": {
@@ -25279,7 +25329,32 @@
             }
           },
           "409": {
-            "description": "receiver_not_channel_admin, official_handle, channel_suspended, channel_under_review, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open",
+            "description": "receiver_not_channel_admin, official_handle, move_channel_suspended, channel_under_review, owner_changed, move_in_progress, move_channel_live, move_channel_has_support, move_receiver_not_allowed, move_receiver_channel_limit, moved_recently, offer_open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "move_check_unavailable",
             "content": {
               "application/json": {
                 "schema": {

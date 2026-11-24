@@ -14,20 +14,42 @@ const ChannelParams = z.object({ id: z.string().min(1).max(200).describe('Channe
 const OfferParams = z.object({ id: z.string().min(1).max(200).describe('Offer id') });
 const Offer = z.object({ id: z.string(), channelId: z.string(), fromUserId: z.string(), toUserId: z.string(), status: z.string(), createdAt: z.string(), expiresAt: z.string() });
 const errors = {
-	'403': { description: 'not_owner or reauth_required', content: { 'application/json': { schema: ResponseError } } },
+	'403': { description: 'move_not_owner or reauth_required', content: { 'application/json': { schema: ResponseError } } },
 	'404': { description: 'channel_not_found or offer_not_found', content: { 'application/json': { schema: ResponseError } } },
 	'409': {
-		description: 'receiver_not_channel_admin, official_handle, channel_suspended, channel_under_review, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open',
+		description: 'receiver_not_channel_admin, official_handle, move_channel_suspended, channel_under_review, owner_changed, move_in_progress, move_channel_live, move_channel_has_support, move_receiver_not_allowed, move_receiver_channel_limit, moved_recently, offer_open',
 		content: { 'application/json': { schema: ResponseError } },
 	},
+	'503': { description: 'move_check_unavailable', content: { 'application/json': { schema: ResponseError } } },
 };
 
 const view = (o: MoveOfferRow) => ({ id: o.id, channelId: o.channel_id, fromUserId: o.from_user_id, toUserId: o.to_user_id, status: o.status, createdAt: o.created_at, expiresAt: o.expires_at });
 
+/**
+ * The codes these routes answer where the move's own code also belongs to other routes (Go live,
+ * handle edits, scholar posts, admin transfers, invites): the catalogue texts here are about an
+ * owner's move, and those routes keep theirs.
+ */
+export const MOVE_ROUTE_CODES: Readonly<Record<string, string>> = {
+	not_owner: 'move_not_owner',
+	already_owner: 'move_already_owner',
+	confirm_mismatch: 'move_confirm_mismatch',
+	transfer_in_progress: 'move_in_progress',
+	transfer_unfinished: 'move_in_progress',
+	channel_is_live: 'move_channel_live',
+	channel_has_support: 'move_channel_has_support',
+	channel_suspended: 'move_channel_suspended',
+	new_owner_banned: 'move_receiver_not_allowed',
+	new_owner_not_found: 'move_receiver_not_allowed',
+	new_owner_channel_limit: 'move_receiver_channel_limit',
+	unavailable: 'service_unavailable',
+};
+
 function refused(c: AppContext, error: unknown) {
 	if (error instanceof MoveError) {
-		const code = error.code === 'unavailable' ? 'service_unavailable' : error.code;
-		return apiError(c, error.status, code, { error: error.message }, NO_STORE);
+		const code = MOVE_ROUTE_CODES[error.code] ?? error.code;
+		// A MoveError without its own words carries its code as the message
+		return apiError(c, error.status, code, { error: error.message === error.code ? code : error.message }, NO_STORE);
 	}
 	throw error;
 }

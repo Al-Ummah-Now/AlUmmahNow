@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import { API_ERROR_CATALOGUE, applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { canViewPlaylist } from '../src/lib/playlists';
 import { ownershipCompleteKey } from '@al-ummah/shared-types';
 import { CHANNEL_HANDLE_PREFIX_SQL, LIVE_PROFILE_IDS_SQL, PROFILE_BY_EMAIL_SQL, PROFILE_BY_HANDLE_SQL, PROFILE_BY_ID_SQL } from '../src/lib/admin/userSearch';
@@ -29,8 +29,13 @@ import { ProfileCreate } from '../src/endpoints/profile/profileCreate';
 import { ProfileCurrentFetch } from '../src/endpoints/profile/profileCurrentFetch';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { errorHandler } from '../src/middleware/error-handler';
-import { ChannelMoveOfferCreate, ChannelMoveReceivers, MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MyMoveOffers } from '../src/endpoints/channel/channelMoveOffers';
-import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
+import { ChannelMoveOfferCreate, ChannelMoveReceivers, MOVE_ROUTE_CODES, MoveOfferAccept, MoveOfferCancel, MoveOfferDecline, MyMoveOffers } from '../src/endpoints/channel/channelMoveOffers';
+import { authMiddleware, channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
+import { errorEnvelope } from '../src/middleware/error-envelope';
+import { __resetClientForTests } from '../src/lib/openauth-client';
+import { clearRevocationCache } from '../src/lib/token-revocation';
+import scholarsInternal from '../src/routers/scholars-internal.router';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
@@ -1430,7 +1435,7 @@ describe('channel actions', () => {
 		const stale = await as(OWNER, 1)('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
 		assert.deepEqual([stale.status, stale.body.code], [403, 'reauth_required']);
 		const notOwner = await admin('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
-		assert.deepEqual([notOwner.status, notOwner.body.code], [403, 'not_owner']);
+		assert.deepEqual([notOwner.status, notOwner.body.code], [403, 'move_not_owner']);
 		const made = await owner('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
 		assert.equal(made.status, 200, JSON.stringify(made.body));
 		const again = await owner('POST', '/api/channels/ch1/move-offers', { toUserId: OTHER, confirm: '@ch1' });
@@ -1526,7 +1531,7 @@ describe('channel actions', () => {
 			await refused(make(), 'channel_under_review', 409);
 			assert.deepEqual(asked, [['https://admin.test/internal/channel-reports/ch1', 'k']]);
 			answer = () => new Response('down', { status: 502 });
-			await refused(make(), 'unavailable', 503);
+			await refused(make(), 'move_check_unavailable', 503);
 			answer = () => Response.json({ success: true, result: { underReview: false } });
 			const offer = await make();
 			answer = () => Response.json({ success: true, result: { underReview: true } });
@@ -1556,6 +1561,121 @@ describe('channel actions', () => {
 		assert.deepEqual(rows, [{ from_user_id: OWNER, to_user_id: 'deleted', status: 'cancelled' }, { from_user_id: OWNER, to_user_id: 'deleted', status: 'declined' }]);
 		assert.equal(await eraseMoveOffers(sdb, OWNER, 'deleted'), 0);
 		assert.equal((db.db.prepare('SELECT COUNT(*) AS n FROM channel_move_offers WHERE from_user_id = ?').get(OWNER) as { n: number }).n, 0);
+	});
+
+	it('making an offer needs a fresh sign-in: auth_time counts, a refresh does not, and no auth_time is refused (CC-6 review)', async () => {
+		const { env } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+		});
+		const ISSUER = 'https://auth.test.example';
+		const { publicKey, privateKey } = await generateKeyPair('ES256');
+		const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+		const realFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const { pathname } = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+			if (pathname === '/.well-known/oauth-authorization-server') return Response.json({ issuer: ISSUER, jwks_uri: `${ISSUER}/.well-known/jwks.json` });
+			if (pathname === '/.well-known/jwks.json') return Response.json({ keys: [jwk] });
+			return new Response('not found', { status: 404 });
+		}) as typeof fetch;
+		__resetClientForTests();
+		clearRevocationCache();
+		try {
+			const app = new Hono();
+			app.onError(errorHandler);
+			app.use('*', errorEnvelope);
+			app.use('*', authMiddleware as never);
+			fromHono(app).post('/api/channels/:id/move-offers', ChannelMoveOfferCreate);
+			Object.assign(env as Record<string, unknown>, { Issuer: ISSUER, ClientId: 'client-1', ENVIRONMENT: 'production' });
+			const now = Math.floor(Date.now() / 1000);
+			// Every token is issued now (a refresh renews iat); only auth_time says when the person signed in
+			const offer = async (authTime: number | undefined, lang = 'en') => {
+				const token = await new SignJWT({ mode: 'access', type: 'user', properties: { id: OWNER, email: 'o@example.com' }, ...(authTime === undefined ? {} : { auth_time: authTime }) })
+					.setProtectedHeader({ alg: 'ES256', kid: 'k1' }).setIssuer(ISSUER).setAudience('client-1').setSubject('user:o').setIssuedAt().setExpirationTime('15m').sign(privateKey);
+				const res = await app.request('/api/channels/ch1/move-offers', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-App-Locale': lang }, body: JSON.stringify({ toUserId: OTHER, confirm: '@ch1' }) }, env as never);
+				return { status: res.status, body: (await res.json()) as any };
+			};
+			for (const stale of [now - 3600, now - 601 - 5, undefined]) {
+				for (const [lang, text] of [['en', 'Sign in again to continue.'], ['ar', 'سجّل الدخول مرة أخرى للمتابعة.']]) {
+					const { status, body } = await offer(stale, lang);
+					assert.deepEqual([status, body.code, body.action, body.message], [403, 'reauth_required', 'sign_in', text], `auth_time ${stale}`);
+				}
+			}
+			const fresh = await offer(now - 60);
+			assert.equal(fresh.status, 200, JSON.stringify(fresh.body));
+		} finally {
+			globalThis.fetch = realFetch;
+			__resetClientForTests();
+			clearRevocationCache();
+		}
+	});
+
+	it('the move routes answer their own texts and the other routes keep theirs, in both languages (CC-6 review)', async () => {
+		const { raw, env, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { members: [{ userId: OTHER, role: 'admin', addedBy: OWNER, addedAt: '2026' }] }) },
+			videos: { 'livestream:go': { id: 'go', title: 'Friday', userId: OWNER, channelId: 'ch1', status: 'scheduled' } },
+		});
+		const as = (userId: string) => {
+			const app = new Hono();
+			app.onError(errorHandler);
+			app.use('*', errorEnvelope);
+			app.use('*', async (c, next) => {
+				c.set('auth' as never, { userId, email: null, payload: { authTime: Math.floor(Date.now() / 1000) } } as never);
+				c.set('userId' as never, userId as never);
+				await next();
+			});
+			app.use('/api/videos/*', channelIdMiddleware as never);
+			app.post('/api/videos/upload', (c) => c.json({ ok: true }));
+			app.route('/internal/scholars', scholarsInternal as never);
+			const router = fromHono(app);
+			router.post('/api/channels/:id/move-offers', ChannelMoveOfferCreate);
+			router.post('/api/live-streams/:id/start', LiveStreamStart);
+			return async (path: string, lang: string, body?: unknown, headers: Record<string, string> = {}, method = 'POST') => {
+				const res = await app.request(path, { method, headers: { 'Content-Type': 'application/json', 'X-App-Locale': lang, ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
+				return { status: res.status, body: (await res.json()) as any };
+			};
+		};
+		const edit = (change: Record<string, unknown>) => raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), ...change }));
+		const move = async (code: string, texts: Record<'en' | 'ar', string>, opts: { userId?: string; confirm?: string; toUserId?: string } = {}) => {
+			for (const lang of ['en', 'ar'] as const) {
+				const { body } = await as(opts.userId ?? OWNER)('/api/channels/ch1/move-offers', lang, { toUserId: opts.toUserId ?? OTHER, confirm: opts.confirm ?? '@ch1' });
+				assert.deepEqual([body.code, body.message, body.lang], [code, texts[lang], lang]);
+			}
+		};
+		const other = async (what: string, run: (lang: string) => Promise<{ status: number; body: any }>, code: string, error: string, texts: Record<'en' | 'ar', string>) => {
+			for (const lang of ['en', 'ar'] as const) {
+				const { body } = await run(lang);
+				assert.deepEqual([body.code, body.error, body.message], [code, error, texts[lang]], `${what} ${lang}`);
+			}
+		};
+		const FORBIDDEN = { en: 'You don’t have permission to do this.', ar: 'ليست لديك صلاحية للقيام بهذا.' };
+		const CONFLICT = { en: 'This changed while you were working on it. Reload and try again.', ar: 'تغيّر هذا أثناء عملك عليه. أعد التحميل وحاول مرة أخرى.' };
+
+		await move('move_not_owner', { en: 'Only the channel owner can move it.', ar: 'لا ينقل القناة إلا مالكها.' }, { userId: OTHER });
+		await move('move_confirm_mismatch', { en: 'Type the channel’s @handle to confirm.', ar: 'اكتب معرّف القناة لتأكيد النقل.' }, { confirm: '@nope' });
+		await move('move_already_owner', { en: 'That account already owns this channel.', ar: 'هذا الحساب يملك القناة بالفعل.' }, { toUserId: OWNER });
+
+		// Suspended: the move says so; uploading as the channel keeps its own answer
+		edit({ isSuspended: true });
+		await move('move_channel_suspended', { en: 'This channel is suspended, so it can’t be moved.', ar: 'هذه القناة موقوفة، فلا يمكن نقلها.' });
+		await other('upload', (lang) => as(OWNER)('/api/videos/upload', lang, {}, { channelId: 'ch1' }), 'channel_suspended', 'This channel is suspended on Al Ummah Now videos', FORBIDDEN);
+		edit({ isSuspended: false });
+
+		// Being moved: Go live keeps its own answer
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		await move('move_in_progress', { en: 'This channel is already being moved. Try again once that finishes.', ar: 'يجري نقل هذه القناة بالفعل. حاول مرة أخرى بعد انتهائه.' });
+		await other('go live', (lang) => as(OWNER)('/api/live-streams/go/start', lang), 'transfer_in_progress', 'This channel is being moved to another account. Try again shortly.', CONFLICT);
+		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
+
+		// Scholar posts keep not_owner
+		await other('scholar post', (lang) => as(OWNER)(`/internal/scholars/${OTHER}/articles/cms-1`, lang, { channelId: 'ch1', title: 'T', url: 'https://www.test/en/articles/t/', locale: 'en' }, {}, 'PUT'), 'not_owner', 'not_owner', FORBIDDEN);
+
+		// A code other routes use never gets a catalogue text because of moves
+		for (const [code, routeCode] of Object.entries(MOVE_ROUTE_CODES)) {
+			assert.ok(!(code in API_ERROR_CATALOGUE), `${code} belongs to other routes`);
+			assert.ok(routeCode in API_ERROR_CATALOGUE, routeCode);
+		}
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
