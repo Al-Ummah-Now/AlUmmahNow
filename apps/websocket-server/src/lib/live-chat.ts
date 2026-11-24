@@ -1,9 +1,6 @@
 /**
  * Who may join a live stream's chat channel, `live:<streamId>` (wiki E17 §5.3): the same rule the
  * chat's HTTP reads use, from indexed reads. Anything unreadable refuses.
- *
- * TODO(E20, AlUmmahNow#1801): once Auth issues `kids:viewer` tokens, authenticateToken (../auth.ts) refuses
- * them on connect (wiki E20 §4.2) and live-chat.test.ts checks it. No Kids session exists on main today.
  */
 import { LIVE_METADATA_TABLE, can, liveChatGateOf, liveChatOpenToAnyone, liveChatReadable, type ChannelRole } from '@al-ummah/shared-types';
 import { logger } from './logger';
