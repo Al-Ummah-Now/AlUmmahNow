@@ -46,6 +46,89 @@ test.describe('axe - signed in pages', () => {
       await expectNoAxeViolations(page, `report ${variant.locale}/${variant.theme}`);
     });
   }
+
+  for (const theme of ['dark', 'light'] as const) {
+    test(`A11Y-05 BackLink keeps contrast and is never covered by heading plates under Fawanees [${theme}]`, async ({ page }) => {
+      await setPreferences(page, { locale: 'en', theme });
+      await page.goto('/users/invites/new');
+      await expect(page.locator('#main-content a.street-plate').first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator('#main-content h1').first()).toBeVisible();
+
+      await page.evaluate(async (mode) => {
+        const html = document.documentElement;
+        html.style.setProperty('--fanous-street-on', '1');
+        html.dataset.theme = 'fawanees';
+        html.classList.toggle('dark', mode === 'dark');
+        html.classList.toggle('light', mode === 'light');
+        html.classList.add('fanous-street');
+        await new Promise((r) => requestAnimationFrame(r));
+      }, theme);
+
+      const check = await page.evaluate(() => {
+        const problems: string[] = [];
+        const html = document.documentElement;
+        if (!html.classList.contains('fanous-street')) {
+          problems.push('html.fanous-street was stripped before measurement');
+        }
+        const backLink = document.querySelector<HTMLElement>('#main-content a.street-plate');
+        const heading = document.querySelector<HTMLElement>('#main-content h1');
+        if (!backLink) return { problems: ['BackLink (.street-plate) not found'], ratio: 0 };
+        if (!heading) return { problems: ['page h1 not found'], ratio: 0 };
+
+        // Heading plate must paint on ::before at z-index: -1, never on the host element over BackLink
+        const h1Cs = getComputedStyle(heading);
+        const h1Before = getComputedStyle(heading, '::before');
+        if (h1Cs.boxShadow !== 'none') problems.push(`h1 host paints box-shadow: ${h1Cs.boxShadow}`);
+        if (h1Cs.zIndex !== 'auto') problems.push(`h1 host creates stacking context: z-index ${h1Cs.zIndex}`);
+        if (h1Before.zIndex !== '-1' || h1Before.boxShadow === 'none') {
+          problems.push(`h1::before missing street plate (zIndex=${h1Before.zIndex}, boxShadow=${h1Before.boxShadow})`);
+        }
+
+        // BackLink plate paints on ::before at z-index: -1 behind its own text
+        const linkCs = getComputedStyle(backLink);
+        const linkBefore = getComputedStyle(backLink, '::before');
+        if (linkCs.boxShadow !== 'none') problems.push(`BackLink host paints box-shadow: ${linkCs.boxShadow}`);
+        if (linkCs.zIndex !== 'auto') problems.push(`BackLink host creates stacking context: z-index ${linkCs.zIndex}`);
+        if (linkBefore.zIndex !== '-1' || linkBefore.boxShadow === 'none') {
+          problems.push(`BackLink::before missing street plate (zIndex=${linkBefore.zIndex}, boxShadow=${linkBefore.boxShadow})`);
+        }
+
+        // BackLink center must not be covered by another element
+        const rect = backLink.getBoundingClientRect();
+        const topEl = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        if (!topEl || (topEl !== backLink && !backLink.contains(topEl))) {
+          problems.push(`BackLink center covered by ${topEl?.tagName ?? 'null'}`);
+        }
+
+        // Resolve computed link foreground and plate background via a 1x1 canvas (handles rgb/oklch/color-mix)
+        const toRgb = (cssColor: string): [number, number, number] => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d')!;
+          ctx.fillStyle = cssColor;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          return [r, g, b];
+        };
+        const lum = ([r, g, b]: [number, number, number]) => {
+          const lin = [r, g, b].map((c) => {
+            const s = c / 255;
+            return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+          });
+          return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+        };
+        const l1 = lum(toRgb(linkCs.color));
+        const l2 = lum(toRgb(linkBefore.backgroundColor));
+        const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+
+        return { problems, ratio };
+      });
+
+      expect(check.problems, check.problems.join('; ')).toEqual([]);
+      expect(check.ratio, `BackLink WCAG contrast ratio under Fawanees ${theme}`).toBeGreaterThanOrEqual(4.5);
+    });
+  }
 });
 
 test.describe('axe - public pages', () => {
