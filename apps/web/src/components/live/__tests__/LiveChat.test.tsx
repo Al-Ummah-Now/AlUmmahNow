@@ -1,9 +1,9 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LIVE_WATCH_AR, LIVE_WATCH_EN, type LiveChatMessage } from '@al-ummah/shared-types';
 import { LiveApiError, type LiveChatView } from '@/lib/live/api';
 import { LiveChatPanel, LiveChatReplay } from '../LiveChatPanel';
-import { byTime, pollDelay, withLatest, withMessage } from '../useLiveChat';
+import { byTime, pollDelay, useLiveChat, withLatest, withMessage } from '../useLiveChat';
 import { readWindow } from '../useChatReplay';
 
 const readChat = jest.fn();
@@ -27,6 +27,14 @@ jest.mock('@/lib/websocket/WebSocketProvider', () => ({
     mockChannel = channel;
     mockFrame = callback;
     return true;
+  },
+}));
+// Counts row renders: each row draws its author's avatar once
+const rowRenders = jest.fn();
+jest.mock('@/components/comments-shared/ComposerAvatar', () => ({
+  ComposerAvatar: ({ name, testId }: { name: string; testId?: string }) => {
+    if (testId === 'live-chat-avatar') rowRenders(name);
+    return <span data-testid={testId}>{name[0]}</span>;
   },
 }));
 const confirm = jest.fn(async (..._a: unknown[]) => true);
@@ -173,15 +181,24 @@ describe('the chat', () => {
   });
 
   it('earlier messages the reader asked for stay when new ones come', async () => {
-    const many = Array.from({ length: 100 }, (_, i) => msg(1000 + i));
-    readChat.mockResolvedValueOnce(page(many, { hasMore: true }));
+    readChat.mockResolvedValueOnce(page(Array.from({ length: 100 }, (_, i) => msg(1000 + i)), { hasMore: true }));
     for (let n = 0; n < 9; n++) readChat.mockResolvedValueOnce(page(Array.from({ length: 50 }, (_, i) => msg(950 - n * 50 + i)), { hasMore: true }));
-    await show();
-    for (let n = 0; n < 9; n++) await act(async () => { fireEvent.click(screen.getByTestId('live-chat-older')); });
-    expect(texts()).toHaveLength(550);
+    const { result } = renderHook(() => useLiveChat('s1', 'live'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(100));
+    for (let n = 0; n < 9; n++) await act(async () => { await result.current.loadOlder(); });
+    expect(result.current.messages).toHaveLength(550);
     await frame({ type: 'live_chat_message', message: msg(2000) });
-    expect(texts()).toHaveLength(551);
-    expect(texts()[0]).toBe('message 550');
+    expect(result.current.messages).toHaveLength(551);
+    expect(result.current.messages[0].text).toBe('message 550');
+  });
+
+  it('a new message does not draw the others again', async () => {
+    await show();
+    const before = screen.getAllByTestId('live-chat-message');
+    rowRenders.mockClear();
+    await frame({ type: 'live_chat_message', message: msg(3) });
+    expect(screen.getAllByTestId('live-chat-message')[0]).toBe(before[0]);
+    expect(rowRenders.mock.calls.map(([name]) => name)).toEqual(['Person 3']);
   });
 
   it('says that it is closed, and shows no way to write', async () => {

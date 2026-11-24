@@ -120,6 +120,11 @@ export function LiveChatPanel({ streamId, mode, chat, canModerate, onChanged }: 
     }
   }, [confirm, drop, pin, reload, streamId, text, userId]);
 
+  // One function for the rows, whatever this render made
+  const actRef = useRef(act);
+  actRef.current = act;
+  const onRowAction = useCallback((action: ChatRowAction, message: LiveChatMessage) => void actRef.current(action, message), []);
+
   const undo = useCallback(async (message: LiveChatMessage) => {
     setNotice(null);
     try {
@@ -151,7 +156,7 @@ export function LiveChatPanel({ streamId, mode, chat, canModerate, onChanged }: 
           {messages.length > 0 ? (
             <div role="log" aria-label={text.chat} aria-live="polite" aria-relevant="additions">
               <ol>
-                {messages.map((m) => <LiveChatMessageRow key={m.id} message={m} userId={userId} canModerate={canModerate} pinned={pinned?.id === m.id} onAction={(action, message) => void act(action, message)} />)}
+                {messages.map((m) => <LiveChatMessageRow key={m.id} message={m} userId={userId} canModerate={canModerate} pinned={pinned?.id === m.id} onAction={onRowAction} />)}
               </ol>
             </div>
           ) : (

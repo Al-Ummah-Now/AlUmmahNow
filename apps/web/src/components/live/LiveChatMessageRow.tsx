@@ -1,6 +1,7 @@
 'use client';
 
 /** One live chat message (wiki E17 §5.2): who, what, and what the viewer may do about it. */
+import { memo } from 'react';
 import { formatClock, type LiveChatMessage } from '@al-ummah/shared-types';
 import { Ban, Flag, MoreVertical, Pin, PinOff, Trash2 } from 'lucide-react';
 import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
@@ -22,7 +23,8 @@ export interface LiveChatMessageRowProps {
   onAction?: (action: ChatRowAction, message: LiveChatMessage) => void;
 }
 
-export function LiveChatMessageRow({ message, userId, canModerate, pinned, showTime = false, onAction }: LiveChatMessageRowProps) {
+/** Drawn again only when it changed: a busy chat adds a message every second, over hundreds of rows. */
+export const LiveChatMessageRow = memo(function LiveChatMessageRow({ message, userId, canModerate, pinned, showTime = false, onAction }: LiveChatMessageRowProps) {
   const { t, lang } = useLanguage();
   const text = t.liveWatch;
   const own = !!userId && message.userId === userId;
@@ -70,4 +72,4 @@ export function LiveChatMessageRow({ message, userId, canModerate, pinned, showT
       )}
     </li>
   );
-}
+});
