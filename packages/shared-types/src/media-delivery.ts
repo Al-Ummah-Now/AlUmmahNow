@@ -668,6 +668,14 @@ function stripUnsafeFilenameChars(input: string): string {
 
 const PATH_TRAVERSAL_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
 
+function trimDotsAndSpaces(input: string): string {
+	let start = 0;
+	let end = input.length;
+	while (start < end && (input[start] === '.' || /\s/.test(input[start]!))) start++;
+	while (end > start && (input[end - 1] === '.' || /\s/.test(input[end - 1]!))) end--;
+	return input.slice(start, end);
+}
+
 /**
  * Derive a safe UTF-8 `<stem>.mp4` filename from a video title or decoded URL segment (Epic 14, E14-D6).
  * Strips control chars (`0x00–0x1F`, `0x7F`), Unicode bidi/format overrides, `"`, `\`, `/`, `;`,
@@ -687,10 +695,10 @@ export function sanitizeDownloadFilename(raw: string | null | undefined, videoId
 		return fallback;
 	}
 	// Collapse any run of 2+ dots (e.g. ellipsis "Part 1... Intro") so no `..` survives while keeping the title.
-	stem = stem.replace(/\.{2,}/g, '.').replace(/^[.\s]+|[.\s]+$/g, '');
+	stem = trimDotsAndSpaces(stem.replace(/\.{2,}/g, '.'));
 	if (!stem) return fallback;
 	const chars = Array.from(stem);
-	const clamped = chars.slice(0, DOWNLOAD_FILENAME_MAX_STEM).join('').replace(/^[.\s]+|[.\s]+$/g, '');
+	const clamped = trimDotsAndSpaces(chars.slice(0, DOWNLOAD_FILENAME_MAX_STEM).join(''));
 	return clamped ? `${clamped}.mp4` : fallback;
 }
 
@@ -729,10 +737,11 @@ export function parseDownloadPath(pathname: string): { videoId: string; rev: str
 export function buildContentDispositionAttachment(sanitizedFilename: string, videoId: string): string {
 	const safe = sanitizeDownloadFilename(sanitizedFilename, videoId, true);
 	const stem = safe.slice(0, -4);
-	const asciiStem = stem
-		.replace(/[^A-Za-z0-9._ -]/g, '')
-		.replace(/\s+/g, ' ')
-		.replace(/^[.\s]+|[.\s]+$/g, '');
+	const asciiStem = trimDotsAndSpaces(
+		stem
+			.replace(/[^A-Za-z0-9._ -]/g, '')
+			.replace(/\s+/g, ' '),
+	);
 	const asciiAlnumCount = (asciiStem.match(/[A-Za-z0-9]/g) ?? []).length;
 	const asciiFilename = asciiAlnumCount >= 3 ? `${asciiStem}.mp4` : `${videoId}.mp4`;
 	const rfc5987 = encodeURIComponent(safe).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
