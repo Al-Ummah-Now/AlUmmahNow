@@ -7,7 +7,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { can, type PostComment, type CommunityPost } from '@al-ummah/shared-types';
-import { roleOnChannel } from '../../lib/channelAccess';
+import { mayDeleteOwn, roleOnChannel } from '../../lib/channelAccess';
 import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
 import { moderatePostComment, moderationStatus } from '../../lib/channelComments/moderation';
 import { logger } from '../../lib/logger';
@@ -107,11 +107,13 @@ export class DeletePostComment extends AuthenticatedRoute {
     }
 
     // 3. Authorization: the author deletes their own comment (a hard delete,
-    // shown as [deleted] while it has replies). Anyone else needs
+    // shown as [deleted] while it has replies). One written as a channel is the
+    // channel's: only while they may speak as it, or it is gone and was never
+    // anyone else's. Anyone else needs
     // `comment.moderate` on the post's channel (channel roles, never site
     // roles), and their delete is the channel's soft removal (#771): restorable
     // from Studio for 90 days, its replies hidden with it.
-    const isCommentAuthor = comment.userId === userId;
+    const isCommentAuthor = comment.userId === userId && (await mayDeleteOwn(c.env as never, comment.channelId, userId));
     if (!isCommentAuthor) {
       const role = await roleOnChannel(c.env as never, post.channelId || postChannelId, userId).catch(() => null);
       if (!can(role, 'comment.moderate')) {

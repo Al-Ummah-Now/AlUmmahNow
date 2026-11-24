@@ -14,7 +14,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { ResponseError } from "../../lib/types";
 import { canOpenPlaylist, type PlaylistType } from "../../lib/playlists";
-import { canManageChannelPlaylists } from "../../lib/playlistBulk";
+import { canManagePlaylist } from "../../lib/playlistBulk";
 import { isSystemPlaylist, listAllLikedIds, watchLaterId } from "../../lib/library";
 import { orderedPlaylist } from "../../lib/playlistOrder";
 import { LIST_ALIASES, QUEUE_PAGE_MAX, listAliasOf, queueItems, queueWindow, visibleEntries, type QueueKind } from "../../lib/playlistQueue";
@@ -31,7 +31,7 @@ export async function canPlayPlaylist(env: unknown, playlist: PlaylistType, user
 	// Listed, link-only (unlisted) or the caller's own
 	if (canOpenPlaylist(playlist, userId)) return true;
 	return !playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false
-		&& await canManageChannelPlaylists(env as never, playlist.channelId, userId);
+		&& await canManagePlaylist(env as never, playlist, userId);
 }
 
 export class PlaylistQueue extends OptionalAuthRoute {

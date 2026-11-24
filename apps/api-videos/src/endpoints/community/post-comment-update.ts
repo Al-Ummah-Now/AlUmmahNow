@@ -1,4 +1,5 @@
 import { findPostComment } from './post-comment-helpers';
+import { maySpeakAs } from '../../lib/channelAccess';
 import { patchComment } from '../../lib/community-comments';
 import { Str } from '../../lib/chanfana-params';
 import { z } from 'zod';
@@ -106,8 +107,8 @@ export class UpdatePostComment extends AuthenticatedRoute {
       );
     }
 
-    // 2. Check authorization (only comment author can update)
-    if (comment.userId !== userId) {
+    // 2. Check authorization (only the comment author can update, while they may still speak as the channel it shows)
+    if (comment.userId !== userId || !(await maySpeakAs(c.env as never, comment.channelId, userId))) {
       return c.json(
         {
           success: false,

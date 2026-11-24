@@ -305,7 +305,7 @@ describe('comment endpoints (replies, sort, settings)', () => {
 	const post = (body: unknown, channelId = 'viewer-ch') => ({ method: 'POST', headers: { 'Content-Type': 'application/json', channelId }, body: JSON.stringify(body) });
 
 	it('creates one-level replies, lists them oldest first and supports edit/like/delete on replies', async () => {
-		const e = env({ videos: new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('top')] }) }) });
+		const e = env({ videos: new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('top')] }) }), channels: new MemoryBucket({ 'viewer-ch': { id: 'viewer-ch', userId: 'viewer' } }) });
 		const viewer = buildApp(routes, { userId: 'viewer' });
 
 		const r1 = await (await viewer.request('/api/videos/v1/comments', post({ text: 'first reply', parentCommentId: 'top' }), e)).json() as any;

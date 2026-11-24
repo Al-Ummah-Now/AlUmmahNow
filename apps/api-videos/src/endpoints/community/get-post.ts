@@ -59,7 +59,7 @@ export class GetCommunityPost extends OptionalAuthRoute {
       // A scheduled post waits for its time; only its author sees it before then (#1218)
       // Channel members with post.manage see them too (docs/specs/CHANNEL-ROLES.md)
       const viewerId = this.getUserId(c);
-      const manager = !!viewerId && (post.userId === viewerId || await managesChannelPosts(c.env.channels, postChannelId, viewerId));
+      const manager = !!viewerId && (await managesChannelPosts(c.env.channels, postChannelId, viewerId));
       if (post.status === PostStatus.DELETED || ((isUpcoming(post) || isPostHeldByReview(post as never)) && !manager) || (await isChannelDeleted(c.env.channels, postChannelId))) {
         return c.json({ error: 'Post not found' }, 404);
       }

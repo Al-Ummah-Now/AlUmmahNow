@@ -21,7 +21,9 @@
 import { SEARCH_TABLES, type SearchDb } from "@al-ummah/shared-types";
 import R2Repository from "./r2Repo";
 import { logger } from "./logger";
-import { canViewVideo, type VideoType } from "./playlists";
+import type { VideoType } from "./playlists";
+import { canManagePlaylist, memoChannels } from "./channelAccess";
+import { videoViewer } from "./videoViewer";
 
 export interface PlaylistCover {
     videoId: string;
@@ -31,6 +33,8 @@ export interface PlaylistCover {
 export interface PlaylistCoverSource {
     id?: string;
     userId?: string;
+    channelId?: string | null;
+    systemType?: unknown;
     thumbnailUrl?: string;
     videos?: string[];
     /** The managers' chosen cover video: tried first, while it is in the playlist */
@@ -39,6 +43,8 @@ export interface PlaylistCoverSource {
 
 export interface PlaylistCoverEnv {
     videos: R2Bucket;
+    /** Who manages a channel's playlists and sees its private videos (signed-in viewers) */
+    channels?: R2Bucket;
     SEARCH_DB?: unknown;
 }
 
@@ -111,14 +117,17 @@ export async function resolvePlaylistCovers(
         [...new Set(pending.flatMap(candidatesOf))],
     );
 
-    // Only the owner can see a private video placed ahead of the first public
-    // one; every other viewer stops at the first indexed video.
+    // Only those who manage the playlist can see a private video placed ahead of
+    // the first public one; every other viewer stops at the first indexed video.
+    const channels = memoChannels({ channels: env.channels });
+    const sees = videoViewer(channels, userId);
     const toRead = new Set<string>();
     for (const playlist of pending) {
         const candidates = candidatesOf(playlist);
         const firstIndexed = candidates.findIndex((id) => indexed.has(id));
-        const isOwner = !!userId && playlist.userId === userId;
-        const missing = firstIndexed === -1 ? candidates : isOwner ? candidates.slice(0, firstIndexed) : [];
+        // Asked only when a video sits ahead of the first public one
+        const manages = firstIndexed > 0 && !!userId && await canManagePlaylist(channels, playlist, userId);
+        const missing = firstIndexed === -1 ? candidates : manages ? candidates.slice(0, firstIndexed) : [];
         for (const id of missing) toRead.add(id);
     }
     const stored = await readVideos(env.videos, [...toRead].slice(0, MAX_COVER_R2_READS));
@@ -127,7 +136,7 @@ export async function resolvePlaylistCovers(
         for (const id of candidatesOf(playlist)) {
             const video = stored.get(id);
             const thumbnailUrl = stored.has(id)
-                ? (video && canViewVideo(video, userId) ? video.thumbnailUrl : undefined)
+                ? (video && await sees(video as never) ? video.thumbnailUrl : undefined)
                 : indexed.get(id);
             if (thumbnailUrl) {
                 covers.set(playlist.id as string, { videoId: id, thumbnailUrl });

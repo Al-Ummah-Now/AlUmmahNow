@@ -13,7 +13,8 @@
  * viewer may not see are dropped from each page (`exact: false`).
  */
 import { isShort } from '@al-ummah/shared-types';
-import { canViewVideo, type VideoType } from './playlists';
+import type { VideoType } from './playlists';
+import { videoViewer, visibleVideos } from './videoViewer';
 import { loadPlaylistVideos } from './playlistOrder';
 import { publicVideoFields } from './transformations';
 import { withPlayback } from './media/playback';
@@ -130,7 +131,7 @@ export function queueWindow(
  * (`known` saves re-reading videos an automatic sort already loaded).
  */
 export async function visibleEntries(
-	env: { videos: R2Bucket },
+	env: { videos: R2Bucket; channels?: R2Bucket },
 	ids: readonly string[],
 	userId: string | undefined,
 	known?: ReadonlyMap<string, VideoType>,
@@ -140,10 +141,7 @@ export async function visibleEntries(
 	const missing = ids.filter((id) => !known?.has(id));
 	const videos = new Map(known ?? []);
 	for (const [id, video] of await loadPlaylistVideos(env, missing)) videos.set(id, video);
-	const entries = all.filter((e) => {
-		const video = videos.get(e.id);
-		return !!video && canViewVideo(video, userId);
-	});
+	const entries = await visibleVideos(all, (e) => videos.get(e.id) as never, videoViewer({ channels: env.channels }, userId));
 	return { entries, exact: true, videos };
 }
 
@@ -157,9 +155,11 @@ export async function queueItems(
 ): Promise<QueueItem[]> {
 	const missing = window.entries.map((e) => e.id).filter((id) => !known.has(id));
 	for (const [id, video] of await loadPlaylistVideos(env, missing)) known.set(id, video);
-	const visible = window.entries
-		.map((entry, i) => ({ entry, position: window.offset + i, video: known.get(entry.id) }))
-		.filter((x): x is { entry: QueueEntry; position: number; video: VideoType } => !!x.video && canViewVideo(x.video, userId));
+	const visible = (await visibleVideos(
+		window.entries.map((entry, i) => ({ entry, position: window.offset + i, video: known.get(entry.id) })),
+		(x) => x.video as never,
+		videoViewer({ channels: env.channels }, userId),
+	)) as Array<{ entry: QueueEntry; position: number; video: VideoType }>;
 	const names = await channelNames([...new Set(visible.map((x) => x.video.channelId).filter(Boolean) as string[])]);
 	return Promise.all(visible.map(async ({ entry, position, video }) => {
 		// The public fields hide a thumbnail that is not ready yet; the API picks the playback

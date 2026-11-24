@@ -5,10 +5,11 @@ import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/t
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { transformVideoToView } from "../../lib/transformations";
-import { toPlaylistResponse, canOpenPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
+import { toPlaylistResponse, canOpenPlaylist, PlaylistType, VideoType } from "../../lib/playlists";
 import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
-import { canManageChannelPlaylists } from "../../lib/playlistBulk";
+import { canManagePlaylist } from "../../lib/playlistBulk";
+import { videoViewer, visibleVideos } from "../../lib/videoViewer";
 import { isSystemPlaylist } from "../../lib/library";
 import { orderedPlaylist, refreshStoredOrder } from "../../lib/playlistOrder";
 import { waitUntilOf } from "../../lib/search/ownership";
@@ -125,7 +126,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // A private channel playlist is also shown to the channel's playlist
         // managers (owner, admins, editors: playlist.manage).
         const visible = !!playlist && (canOpenPlaylist(playlist, userId)
-            || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && !isSystemPlaylist(playlist) && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
+            || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && !isSystemPlaylist(playlist) && await canManagePlaylist(c.env as never, playlist, userId)));
         if (!playlist || !visible) {
             // Purged (deleted, then removed for good): 410 (lib/gone.ts)
             if (!playlist && await isPurged(c.env as never, 'playlist', id)) return c.json(GONE_BODY, 410);
@@ -177,8 +178,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
             const entry: ExpandedEntry = {
                 version,
                 body: response,
-                items: videos
-                    .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
+                items: (await visibleVideos(videos, (video) => video as never, videoViewer({ channels: c.env.channels }, userId)))
                     .map((video) => ({ view: transformVideoToView(video), video: playbackFields(video) })),
                 // The expanded list is already filtered for this viewer
                 hasOwnThumbnail: !!playlist.thumbnailUrl,

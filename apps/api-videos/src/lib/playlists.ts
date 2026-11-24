@@ -72,7 +72,8 @@ export function isPersonalPlaylist(playlist: { channelId?: string | null }): boo
 
 /**
  * Whether the playlist opens for this viewer by its link (page, queue, embed,
- * share): listed ones, an unlisted one for anyone, a private one for its owner.
+ * share): listed ones and an unlisted one for anyone, a private personal one for its owner. A channel's
+ * private playlist opens for those who manage its playlists now (lib/channelAccess.ts canManagePlaylist).
  * Lists use canViewPlaylist, which never shows another user's unlisted playlist.
  */
 export function canOpenPlaylist(playlist: PlaylistType, userId?: string | null): boolean {
@@ -82,11 +83,12 @@ export function canOpenPlaylist(playlist: PlaylistType, userId?: string | null):
 
 /**
  * Whether a playlist is visible to the (optional) requesting user in lists:
- * public ones, and the user's own private or unlisted ones.
+ * public ones, and the user's own private or unlisted personal ones. A channel's private
+ * playlists are the channel's, whoever the record names (lib/channelAccess.ts canManagePlaylist).
  */
 export function canViewPlaylist(playlist: PlaylistType, userId?: string | null): boolean {
     if (playlist.isDeleted || playlist.isHidden) return false;
-    if (playlist.isPublic === false) return !!userId && playlist.userId === userId;
+    if (playlist.isPublic === false) return !!userId && playlist.userId === userId && (isPersonalPlaylist(playlist) || isWatchLaterRecord(playlist));
     return true;
 }
 

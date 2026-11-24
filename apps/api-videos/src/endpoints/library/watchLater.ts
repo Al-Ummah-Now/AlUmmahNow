@@ -13,7 +13,8 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
-import { canViewVideo, isSameVideoSet, VideoType } from "../../lib/playlists";
+import { videoViewer, visibleVideos } from "../../lib/videoViewer";
+import { isSameVideoSet, VideoType } from "../../lib/playlists";
 import {
 	addToWatchLater,
 	clearWatchLaterChannel,
@@ -68,7 +69,7 @@ export class WatchLaterList extends AuthenticatedRoute {
 		const videos = await Promise.all(page.ids.map((id) => videoRepo.getObject(id)));
 		const items = await toLibraryVideoViews(
 			c.env.channels,
-			videos.filter((v): v is VideoType => !!v && canViewVideo(v, userId)),
+			(await visibleVideos(videos, (v) => v as never, videoViewer({ channels: c.env.channels }, userId))) as VideoType[],
 		);
 
 		logger.debug("[WatchLater] Listed", { userId, total: ids.length, returned: items.length });
@@ -119,7 +120,7 @@ export class WatchLaterAdd extends AuthenticatedRoute {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(body.videoId);
-		if (!video || !canViewVideo(video, userId)) {
+		if (!video || !(await videoViewer({ channels: c.env.channels }, userId)(video as never))) {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
 

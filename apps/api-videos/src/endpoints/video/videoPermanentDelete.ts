@@ -2,6 +2,7 @@ import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Video as BusinessVideo } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
+import { ownsRecord } from "../../lib/channelAccess";
 import { purgeVideoNow, TrashError, trashErrorBody } from "../../lib/videoTrash";
 import { errorResponse } from "./videoTrashSchemas";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -46,7 +47,7 @@ export class VideoPermanentDelete extends AuthenticatedRoute {
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(videoId);
 		if (!video) return c.json({ success: false, error: "Video not found", code: "video_not_found" }, 404);
-		if (!userId || video.userId !== userId) {
+		if (!userId || !(await ownsRecord(c.env as never, video, userId))) {
 			return c.json({ success: false, error: "Forbidden - only the owner can delete a video permanently", code: "forbidden" }, 403);
 		}
 		try {

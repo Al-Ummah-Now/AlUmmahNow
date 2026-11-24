@@ -115,9 +115,9 @@ export class ListCommunityPosts extends OptionalAuthRoute {
             continue;
           }
 
-          // A scheduled post waits for its time; only its author sees it before then (#1218)
-          // Held by pre-publication review too (VR16): only its author sees it until it clears
-          if ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== viewerId && !manager) {
+          // A scheduled post waits for its time; only those who manage the channel's posts see it before then (#1218)
+          // Held by pre-publication review too (VR16): only they see it until it clears
+          if ((isUpcoming(post) || isPostHeldByReview(post as never)) && !manager) {
             continue;
           }
 

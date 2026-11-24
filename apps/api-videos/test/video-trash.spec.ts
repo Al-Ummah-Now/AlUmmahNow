@@ -105,7 +105,7 @@ async function setup(videos?: Record<string, unknown>) {
 		'bunny-stream-key': 'test-key',
 		bunny_stream_library_id: '7',
 	};
-	for (const kind of ['video', 'channel'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
+	for (const kind of ['video', 'channel', 'playlist'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
 	const flush = async () => {
 		while (pending.length) await Promise.allSettled(pending.splice(0));

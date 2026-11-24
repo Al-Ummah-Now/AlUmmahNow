@@ -12,7 +12,7 @@ import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/sea
 import { isIndexPageCursor, pageFromIndex } from '../../lib/search/indexPage';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { LIVE_EVENT_TYPES, LIVE_STREAM_KINDS, can } from "@al-ummah/shared-types";
-import { roleOnChannel } from "../../lib/channelAccess";
+import { memoChannels, ownedChannelIds, ownsRecord, roleOnChannel } from "../../lib/channelAccess";
 import { featureOff } from '../../lib/features/off';
 import { reminderCounts, shownEventType, switchOn } from '../../lib/live/events';
 
@@ -93,8 +93,22 @@ export class LiveStreamsList extends OptionalAuthRoute {
 					logger.warn('[LiveStreamsList] Channel read failed; listed as a visitor', { channelId, error: error instanceof Error ? error.message : String(error) });
 				}
 			}
-			const managesStream = (stream: { userId?: string; channelId?: string | null }) =>
-				!!auth && (stream.userId === auth.userId || (channelManager && stream.channelId === channelId));
+			// The streams of the channels the viewer owns now (checked on load; the index names candidates)
+			const own = new Set<string>();
+			const channels = memoChannels({ channels: c.env.channels });
+			const owned = await ownedChannelIds(c.env as never, auth?.userId);
+			const loadStream = async (key: string): Promise<LiveStreamType | null> => {
+				try {
+					const stream = await repository.getObject(key);
+					if (stream && auth?.userId && (!owned || owned.has(stream.channelId) || stream.userId === auth.userId) && (await ownsRecord(channels, stream, auth.userId))) own.add(stream.id);
+					return stream;
+				} catch (error) {
+					logger.error(`Error loading stream ${key}:`, error);
+					return null;
+				}
+			};
+			const managesStream = (stream: { id: string; channelId?: string | null }) =>
+				!!auth && (own.has(stream.id) || (channelManager && stream.channelId === channelId));
 			// A scheduled premiere is its team's only while premieres are off (wiki E17 §3.1)
 			const premieresOn = await switchOn(c, 'livePremieres');
 			const isListed = (stream: LiveStreamType | null): stream is LiveStreamType => {
@@ -123,14 +137,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 					channelId: channelId || null, status, kind, eventType, limit: pageLimit, after, offset,
 					viewerId: auth?.userId ?? null, manageChannel: channelManager,
 				}),
-				load: async id => {
-					try {
-						return await repository.getObject(`livestream:${id}`);
-					} catch (error) {
-						logger.error(`Error loading stream ${id}:`, error);
-						return null;
-					}
-				},
+				load: (id) => loadStream(`livestream:${id}`),
 				isListed,
 			});
 			let streams: LiveStreamType[];
@@ -147,14 +154,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 					cursor: isIndexPageCursor(cursor) ? null : cursor,
 					limit,
 					prefix: "livestream:",
-					load: async key => {
-						try {
-							return await repository.getObject(key);
-						} catch (error) {
-							logger.error(`Error loading stream ${key}:`, error);
-							return null;
-						}
-					},
+					load: loadStream,
 					isListed,
 					label: 'LiveStreamsList',
 				});

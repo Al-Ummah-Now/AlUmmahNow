@@ -15,6 +15,8 @@ import {
 	type ChannelCapability,
 	type ChannelRole,
 	type ChannelRoleSource,
+	OWNERSHIP_TABLE,
+	type SearchDb,
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isSystemPlaylist } from './library';
@@ -39,6 +41,111 @@ export async function roleOnChannel(env: ChannelAccessEnv, channelId: string, us
 	return channelRoleOf(await loadChannelRecord(env, channelId), userId);
 }
 
+/**
+ * The caller's role on a record of a channel (video, playlist, stream): their role on its live
+ * channel. A record's own `userId` decides only where there is no channel (a personal playlist, a
+ * video without one, a channel that is gone): a channel can move to another account, and what is on
+ * it moves at once, whichever records still name the previous owner. Throws when the channel cannot
+ * be read (callers refuse).
+ */
+async function roleOnRecord(env: ChannelAccessEnv, record: { userId?: string | null; channelId?: string | null }, userId: string): Promise<ChannelRole | null> {
+	if (record.channelId && env.channels) {
+		const object = await env.channels.get(record.channelId);
+		if (object) {
+			const channel = (await object.json()) as AccessChannel | null;
+			if (!channel || typeof channel !== 'object') throw new Error('Unreadable channel record');
+			return channelRoleOf(channel, userId);
+		}
+	}
+	return record.userId && record.userId === userId ? 'owner' : null;
+}
+
+/** Whether the caller owns the record now: its live channel's owner (see roleOnRecord). False when the channel cannot be read. */
+export async function ownsRecord(env: ChannelAccessEnv, record: { userId?: string | null; channelId?: string | null }, userId: string | null | undefined): Promise<boolean> {
+	if (!userId) return false;
+	try {
+		return (await roleOnRecord(env, record, userId)) === 'owner';
+	} catch (error) {
+		logger.warn('[ChannelAccess] Channel read failed; ownership refused', { channelId: record.channelId, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
+/**
+ * One request's channel reads: each channel is read once, however many of its records a list checks.
+ * Only for checks within one request; a write re-reads what it depends on.
+ */
+export function memoChannels(env: ChannelAccessEnv): ChannelAccessEnv {
+	const bucket = env.channels;
+	if (!bucket) return {};
+	const reads = new Map<string, Promise<{ json(): Promise<unknown> } | null>>();
+	const get = (id: string) => {
+		let read = reads.get(id);
+		if (!read) {
+			read = (async () => {
+				const object = await bucket.get(id);
+				if (!object) return null;
+				const value = await object.json();
+				return { json: async () => value };
+			})();
+			reads.set(id, read);
+		}
+		return read;
+	};
+	return { channels: { get } as unknown as R2Bucket };
+}
+
+/** Channels the ownership index gives to the user (a list's candidates: the live record decides). Null when it cannot say. */
+export async function ownedChannelIds(env: { SEARCH_DB?: unknown }, userId: string | null | undefined): Promise<Set<string> | null> {
+	const db = env.SEARCH_DB as SearchDb | undefined;
+	if (!db || !userId) return null;
+	try {
+		const { results } = await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ?`).bind(userId).all<{ id: string }>();
+		return new Set((results ?? []).map((r) => r.id));
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Whether `userId` may still speak as the channel a comment was written as: no channel (their own
+ * name), or a role on the live channel that grants `channel.speak`. A channel that is gone or cannot
+ * be read speaks for nobody.
+ */
+export async function maySpeakAs(env: ChannelAccessEnv, channelId: string | null | undefined, userId: string): Promise<boolean> {
+	if (!channelId || channelId === userId) return true;
+	try {
+		return can(await roleOnChannel(env, channelId, userId), 'channel.speak');
+	} catch (error) {
+		logger.warn('[ChannelAccess] Channel read failed; refused', { channelId, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
+/**
+ * Whether `userId` may delete a comment they wrote, by the channel it was written as: as maySpeakAs,
+ * and their own words once that channel is gone and nobody else ever owned it (its owner deleted it).
+ * A channel that moved to another account (its finished move, idx_admin_jobs_target) or cannot be
+ * read refuses.
+ */
+export async function mayDeleteOwn(env: ChannelAccessEnv, channelId: string | null | undefined, userId: string): Promise<boolean> {
+	if (!channelId || channelId === userId) return true;
+	if (!env.channels) return false;
+	try {
+		if (await env.channels.head(channelId)) return maySpeakAs(env, channelId, userId);
+		const db = env.SEARCH_DB as SearchDb | undefined;
+		if (!db) return true;
+		const moved = await db
+			.prepare(`SELECT 1 AS n FROM admin_jobs WHERE target_kind = 'channel' AND target_id = ? AND kind = 'channel.transfer' AND status = 'succeeded' LIMIT 1`)
+			.bind(channelId)
+			.first();
+		return !moved;
+	} catch (error) {
+		logger.warn('[ChannelAccess] Channel read failed; refused', { channelId, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
 /** The fields of a video record a content check reads. */
 export interface AccessVideo {
 	userId?: string | null;
@@ -47,23 +154,22 @@ export interface AccessVideo {
 }
 
 /**
- * Whether `userId` may do `capability` on a video. The video's owner (its
- * channel's owner, or the uploader of a legacy video without a channel) may
- * do everything, as before. Anyone else needs a role on the video's channel
- * that grants it; an editor deletes only their own uploads.
+ * Whether `userId` may do `capability` on a video. The owner of its channel
+ * now (or the uploader of a video without a channel) may do everything.
+ * Anyone else needs a role on the channel that grants it; an editor deletes
+ * only their own uploads.
  */
 export async function canOnVideo(env: ChannelAccessEnv, video: AccessVideo, userId: string | null | undefined, capability: ChannelCapability): Promise<boolean> {
 	if (!userId) return false;
-	if (video.userId && video.userId === userId) return true;
-	if (!video.channelId) return false;
 	let role: ChannelRole | null;
 	try {
-		role = await roleOnChannel(env, video.channelId, userId);
+		role = await roleOnRecord(env, video, userId);
 	} catch (error) {
 		// Fail closed: no role is granted when the channel cannot be read
 		logger.warn('[ChannelAccess] Channel read failed; access refused', { channelId: video.channelId, capability, error: error instanceof Error ? error.message : String(error) });
 		return false;
 	}
+	if (role === 'owner') return true;
 	if (capability === 'video.delete') return canDeleteVideo(role, video, userId);
 	return can(role, capability);
 }
@@ -77,18 +183,17 @@ export interface AccessPlaylist {
 }
 
 /**
- * Whether `userId` may change a playlist (add or remove videos). Its owner
- * may, as before; anyone else needs a role on the playlist's channel that
- * grants `playlist.manage` (owner, admin, editor), except on a system
- * playlist. Fails closed when the channel cannot be read.
+ * Whether `userId` may change a playlist (add or remove videos), and see it
+ * while private: a channel's playlist needs a role on that channel now that
+ * grants `playlist.manage` (owner, admin, editor); a personal or system one is
+ * its owner's alone. Fails closed when the channel cannot be read.
  */
 export async function canManagePlaylist(env: ChannelAccessEnv, playlist: AccessPlaylist, userId: string | null | undefined): Promise<boolean> {
 	if (!userId) return false;
-	if (playlist.userId && playlist.userId === userId) return true;
 	// A system playlist (Watch later) is personal: only its owner
-	if (!playlist.channelId || isSystemPlaylist(playlist)) return false;
+	if (isSystemPlaylist(playlist)) return !!playlist.userId && playlist.userId === userId;
 	try {
-		return can(await roleOnChannel(env, playlist.channelId, userId), 'playlist.manage');
+		return can(await roleOnRecord(env, playlist, userId), 'playlist.manage');
 	} catch (error) {
 		logger.warn('[ChannelAccess] Channel read failed; playlist access refused', { channelId: playlist.channelId, error: error instanceof Error ? error.message : String(error) });
 		return false;
@@ -103,16 +208,14 @@ export interface AccessLiveStream {
 
 /**
  * Whether `userId` may manage a live stream (edit, see its stream key, start,
- * end, delete, see it while private). Its owner may, as before; anyone else
- * needs `live.manage` on the stream's channel. Fails closed when the channel
- * cannot be read.
+ * end, delete, see it while private): `live.manage` on the stream's channel
+ * now; a stream without a channel is its creator's. Fails closed when the
+ * channel cannot be read.
  */
 export async function canManageLiveStream(env: ChannelAccessEnv, stream: AccessLiveStream, userId: string | null | undefined): Promise<boolean> {
 	if (!userId) return false;
-	if (stream.userId && stream.userId === userId) return true;
-	if (!stream.channelId) return false;
 	try {
-		return can(await roleOnChannel(env, stream.channelId, userId), 'live.manage');
+		return can(await roleOnRecord(env, stream, userId), 'live.manage');
 	} catch (error) {
 		logger.warn('[ChannelAccess] Channel read failed; live stream access refused', { channelId: stream.channelId, error: error instanceof Error ? error.message : String(error) });
 		return false;

@@ -3,7 +3,7 @@ import { categoryRefusal } from "../../lib/categories";
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { Bool, Str } from "../../lib/chanfana-params";
 import { z } from "zod";
-import { can, type ChannelRole, VIDEO_VISIBILITIES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
+import { VIDEO_VISIBILITIES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
@@ -12,7 +12,7 @@ import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
-import { canManagePlaylist, roleOnChannel } from "../../lib/channelAccess";
+import { canManagePlaylist, canOnVideo } from "../../lib/channelAccess";
 import { addVideosNow, removeVideos } from "../../lib/playlistBulk";
 import {
 	applyBulkChanges,
@@ -106,24 +106,17 @@ function summarize(results: Outcome[], operationId?: string) {
 }
 
 /**
- * Whether the caller may edit a video: its owner, or a role on its channel
- * that grants `video.edit` (lib/channelAccess.ts). Roles are read once per
- * channel per request.
+ * Whether the caller may edit a video: a role on its channel now that grants
+ * `video.edit` (lib/channelAccess.ts canOnVideo). Checked once per channel
+ * and owner per request.
  */
 function editChecker(env: AppContext['env'], userId: string) {
-	const roles = new Map<string, Promise<ChannelRole | null>>();
-	return async (video: Pick<VideoType, 'userId' | 'channelId'>): Promise<boolean> => {
-		if (video.userId && video.userId === userId) return true;
-		if (!video.channelId) return false;
-		let role = roles.get(video.channelId);
-		if (!role) {
-			role = roleOnChannel(env as never, video.channelId, userId).catch((error) => {
-				logger.warn('[VideoBulkUpdate] Channel read failed; access refused', { channelId: video.channelId, error: error instanceof Error ? error.message : String(error) });
-				return null;
-			});
-			roles.set(video.channelId, role);
-		}
-		return can(await role, 'video.edit');
+	const checked = new Map<string, Promise<boolean>>();
+	return (video: Pick<VideoType, 'userId' | 'channelId'>): Promise<boolean> => {
+		const key = `${video.channelId ?? ''}|${video.userId === userId ? 'own' : ''}`;
+		let allowed = checked.get(key);
+		if (!allowed) checked.set(key, (allowed = canOnVideo(env as never, video, userId, 'video.edit')));
+		return allowed;
 	};
 }
 

@@ -128,7 +128,7 @@ describe('video JSON: parallel writers never drop each other’s change', () => 
 	});
 
 	it('parallel edits and deletes of different comments all land', async () => {
-		const comments = Array.from({ length: 30 }, (_, i) => commentFixture(`c${i}`, { userId: `author-${i}` }));
+		const comments = Array.from({ length: 30 }, (_, i) => commentFixture(`c${i}`, { userId: `author-${i}`, channelId: null }));
 		const videos = new SlowBucket({ v1: videoFixture({ comments }) });
 		const e = env(videos);
 		const statuses = await Promise.all(comments.map((c, i) =>
