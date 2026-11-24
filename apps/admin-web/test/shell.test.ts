@@ -22,7 +22,7 @@ describe('nav model', () => {
   it('hides from moderators what the old nav hid, apart from Delivery (read only)', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
     // Delivery opens for moderators too, read only (the live transcodes)
-    assert.deepEqual(hidden, ['/audit', '/backfill', '/contact', '/costs', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
+    assert.deepEqual(hidden, ['/audit', '/backfill', '/contact', '/costs', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config', '/age-rules'].sort());
   });
 
   it('shows Remote config only with settings:manage (#413)', () => {
