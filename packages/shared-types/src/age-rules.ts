@@ -1,6 +1,6 @@
 /**
  * The age rules' numbers (wiki E20 §5.1, §5.2): how old an account must be for each thing. One row in the search
- * D1 (`age_rules`, api-videos migration 0121) next to `feature_switches`: admin-api writes it, api-videos reads it
+ * D1 (`age_rules`, api-videos migration 0133) next to `feature_switches`: admin-api writes it, api-videos reads it
  * through the same 30-second memo. Videos never knows an age, only the band in the account's token, so a number is
  * one a band can answer: 13, 16 or 18. Only the three limits of E20-D3 are numbers; comments, posts, uploads and
  * channels need the account minimum (ACCOUNT_MINIMUM_AGE, Auth's own), which is never a setting.
