@@ -17,7 +17,7 @@ const errors = {
 	'403': { description: 'not_owner or reauth_required', content: { 'application/json': { schema: ResponseError } } },
 	'404': { description: 'channel_not_found or offer_not_found', content: { 'application/json': { schema: ResponseError } } },
 	'409': {
-		description: 'receiver_not_channel_admin, official_handle, channel_suspended, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open',
+		description: 'receiver_not_channel_admin, official_handle, channel_suspended, channel_under_review, owner_changed, transfer_in_progress, channel_is_live, channel_has_support, new_owner_banned, new_owner_channel_limit, moved_recently, offer_open',
 		content: { 'application/json': { schema: ResponseError } },
 	},
 };
