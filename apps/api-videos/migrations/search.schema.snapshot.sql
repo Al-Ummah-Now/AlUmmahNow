@@ -85,8 +85,11 @@
 --   apps/api-videos/migrations/search/0131_content_ownership_public_views.sql
 --   apps/api-videos/migrations/search/0132_download_revocations.sql
 --   apps/api-videos/migrations/search/0133_age_rules.sql
+--   apps/api-videos/migrations/search/0134_account_events.sql
 
 CREATE TABLE account_event_status (id INTEGER PRIMARY KEY CHECK (id = 1), last_valid_at INTEGER NOT NULL);
+CREATE TABLE account_event_users (user_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, jti TEXT NOT NULL, type TEXT NOT NULL, purged INTEGER NOT NULL DEFAULT 0, lease TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE account_events_received (jti TEXT PRIMARY KEY, seq INTEGER NOT NULL, type TEXT NOT NULL, user_id TEXT NOT NULL DEFAULT '', reason TEXT, status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'applied', 'ignored', 'failed')), progress TEXT, error TEXT, received_at INTEGER NOT NULL, queued_at INTEGER, settled_at INTEGER) WITHOUT ROWID;
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
@@ -261,6 +264,8 @@ CREATE TABLE yt_import_items (id TEXT PRIMARY KEY, import_id TEXT NOT NULL, chan
 CREATE TABLE yt_import_playlists (import_id TEXT NOT NULL, yt_playlist_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', yt_visibility TEXT NOT NULL, video_ids_json TEXT NOT NULL DEFAULT '[]', selected INTEGER NOT NULL DEFAULT 0, playlist_id TEXT, state TEXT NOT NULL DEFAULT 'none', PRIMARY KEY (import_id, yt_playlist_id));
 CREATE TABLE yt_imports (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, owner_id TEXT NOT NULL, status TEXT NOT NULL, yt_channel_json TEXT, captions INTEGER NOT NULL DEFAULT 0, visibility_mode TEXT NOT NULL DEFAULT 'keep', refresh_token_enc TEXT, token_iv TEXT, scopes TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, snapshot_purged_at TEXT);
 CREATE TABLE yt_oauth_states (state TEXT PRIMARY KEY, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, owner_id TEXT NOT NULL, locale TEXT NOT NULL, captions INTEGER NOT NULL DEFAULT 0, verifier TEXT NOT NULL, code TEXT, connect_hash TEXT, expires_at TEXT NOT NULL);
+CREATE INDEX idx_account_events_received_open ON account_events_received (queued_at) WHERE status = 'received';
+CREATE INDEX idx_account_events_received_settled ON account_events_received (status, settled_at);
 CREATE INDEX idx_admin_comments_comment ON admin_comments (comment_id);
 CREATE INDEX idx_admin_comments_created ON admin_comments (created_at);
 CREATE INDEX idx_admin_comments_user ON admin_comments (user_id, created_at);

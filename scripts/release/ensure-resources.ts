@@ -74,8 +74,9 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		// R2 video delivery (apps/media): transcode jobs and their dead letters (DLQ name ends in the env, see queue-consumers)
 		// Status page subscriptions (apps/admin-api lib/status-notify.ts; producers admin-api and apps/status)
 		// Move from YouTube jobs (apps/api-videos lib/youtube-import/jobs.ts; dead letters go to the shared al-ummah-now-dlq)
+		// Account events from Auth (apps/api-videos lib/account-events/jobs.ts; dead letters go to the shared al-ummah-now-dlq)
 		// Cost monitor jobs (apps/cost-monitor src/jobs.ts, COST-1): collection and product pulls, and their dead letters
-		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`, `al-ummah-now-yt-import${s}`, `al-ummah-now-status-notify${s}`, `al-ummah-cost-jobs${s}`, `al-ummah-cost-jobs-dlq${s}`],
+		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`, `al-ummah-now-yt-import${s}`, `al-ummah-now-account-events${s}`, `al-ummah-now-status-notify${s}`, `al-ummah-cost-jobs${s}`, `al-ummah-cost-jobs-dlq${s}`],
 		// Private source maps of the web apps (apps/admin-api lib/sourcemaps.ts; upload-sourcemaps.ts)
 		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
 		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)

@@ -249,6 +249,14 @@
 				"max_retries": 5,
 				"retry_delay": 60,
 				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				// Account events from Auth (lib/account-events/jobs.ts): one per invocation; a give-up flags the admin Errors page
+				"queue": "al-ummah-now-account-events",
+				"max_batch_size": 1,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "al-ummah-now-dlq"
 			}
 		],
 		"producers": [
@@ -273,6 +281,10 @@
 			{
 				"queue": "al-ummah-now-yt-import",
 				"binding": "YT_IMPORT_QUEUE"
+			},
+			{
+				"queue": "al-ummah-now-account-events",
+				"binding": "ACCOUNT_EVENTS_QUEUE"
 			},
 			{
 				// R2 transcodes (apps/media consumes)
@@ -658,6 +670,14 @@
 						"max_retries": 5,
 						"retry_delay": 60,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						// Account events from Auth (lib/account-events/jobs.ts): one per invocation; a give-up flags the admin Errors page
+						"queue": "al-ummah-now-account-events-stage",
+						"max_batch_size": 1,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					}
 				],
 				"producers": [
@@ -682,6 +702,10 @@
 					{
 						"queue": "al-ummah-now-yt-import-stage",
 						"binding": "YT_IMPORT_QUEUE"
+					},
+					{
+						"queue": "al-ummah-now-account-events-stage",
+						"binding": "ACCOUNT_EVENTS_QUEUE"
 					},
 					{
 						"queue": "al-ummah-now-transcode-stage",

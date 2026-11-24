@@ -103,6 +103,7 @@ test('defaults keep today’s behaviour (the live app features, creator terms ga
     'offlineDownloads',
     'appUpdates',
     'ageRules',
+    'accountEvents',
     'parentsGuide',
     'channelMove',
   ]);
@@ -111,7 +112,7 @@ test('defaults keep today’s behaviour (the live app features, creator terms ga
 test('super-admin-only switches are the ones the specs name', () => {
   assert.deepEqual(
     r.FEATURE_REGISTRY.filter((d) => d.toggle === 'superAdmin').map((d) => d.key),
-    ['upload', 'createChannel', 'creatorTerms', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'recitationTools', 'ageRules'],
+    ['upload', 'createChannel', 'creatorTerms', 'live', 'liveChat', 'livePremieres', 'liveReminders', 'liveEvents', 'viewerCaptionDownload', 'creatorSupport', 'charityDonations', 'supportDormantTransfer', 'recitationTools', 'ageRules', 'accountEvents'],
   );
 });
 

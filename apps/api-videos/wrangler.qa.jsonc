@@ -205,6 +205,14 @@
         "max_retries": 5,
         "retry_delay": 60,
         "dead_letter_queue": "al-ummah-now-dlq-qa"
+      },
+      {
+        // Account events from Auth (lib/account-events/jobs.ts): one per invocation; a give-up flags the admin Errors page
+        "queue": "al-ummah-now-account-events-qa",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
       }
     ],
     "producers": [
@@ -229,6 +237,10 @@
       {
         "queue": "al-ummah-now-yt-import-qa",
         "binding": "YT_IMPORT_QUEUE"
+      },
+      {
+        "queue": "al-ummah-now-account-events-qa",
+        "binding": "ACCOUNT_EVENTS_QUEUE"
       },
       {
         "queue": "al-ummah-now-run-erase-qa",

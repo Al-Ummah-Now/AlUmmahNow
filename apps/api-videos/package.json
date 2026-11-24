@@ -28,6 +28,7 @@
     "@al-ummah-now/openauth": "1.0.15",
     "chanfana": "^3.7.0",
     "hono": "^4.13.19",
+    "jose": "5.9.6",
     "sanitize-html": "^2.18.2",
     "tus-js-client": "^4.3.1",
     "zod": "^4.6.7",

@@ -67531,6 +67531,7 @@
               "offlineDownloads",
               "appUpdates",
               "ageRules",
+              "accountEvents",
               "parentsGuide",
               "channelMove"
             ],

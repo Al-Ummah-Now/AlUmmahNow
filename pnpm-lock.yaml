@@ -208,6 +208,9 @@ importers:
       hono:
         specifier: ^4.13.19
         version: 4.13.19
+      jose:
+        specifier: 5.9.6
+        version: 5.9.6
       sanitize-html:
         specifier: ^2.18.2
         version: 2.18.2

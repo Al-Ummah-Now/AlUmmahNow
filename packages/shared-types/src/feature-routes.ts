@@ -46,6 +46,8 @@ const closed = (route: FeatureRoute): FeatureRoute => ({ ...route, failClosed: t
 const x = (app: FeatureApp, method: FeatureRouteMethod, path: string, reason: string): FeatureRouteExemption => ({ app, method, path, reason });
 
 export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
+  // Account events from Auth (AlUmmahNowAuth#507)
+  closed(r('api-videos', 'POST', '/webhooks/auth/account-events', 'accountEvents')),
   // Uploads: new uploads only; uploads already started finish
   r('api-videos', 'POST', '/api/videos/upload/initiate', 'upload'),
   r('api-videos', 'POST', '/api/videos/upload/batch/initiate', 'upload'),
@@ -148,6 +150,7 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
+  { app: 'api-videos', prefix: '/webhooks/auth', key: 'accountEvents' },
   { app: 'api-videos', prefix: '/api/videos/upload', key: 'upload' },
   { app: 'api-videos', prefix: '/api/videos/tus', key: 'upload' },
   { app: 'admin-api', prefix: '/api/admin/import', key: 'upload' },
