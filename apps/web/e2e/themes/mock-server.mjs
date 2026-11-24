@@ -129,6 +129,7 @@ function answer(path) {
   if (/^\/api\/videos\/[^/]+$/.test(path)) return { ...VIDEOS[0], id: path.split('/').pop() };
   if (path === '/api/watch-history/settings') return { paused: false };
   if (path === '/api/watch-history') return { entries: HISTORY, total: HISTORY.length, hasMore: false };
+  if (path === '/api/explore') return { seasonal: [], categories: [], newChannels: [CHANNEL] };
   if (/^\/api\/library\/(watch-later|liked)$/.test(path)) return { success: true, result: { items: VIDEOS.slice(0, 8), nextCursor: null, total: 8, videoIds: VIDEOS.slice(0, 8).map((v) => v.id) } };
   if (/videos|search|history|feed|library|watch-later|liked|trending|explore|recommend/.test(path)) return { cursor: '', limit: 12, data: VIDEOS, items: VIDEOS, videos: VIDEOS, success: true, result: { items: VIDEOS, videos: VIDEOS, nextCursor: null } };
   if (/channels/.test(path)) return { success: true, data: [], result: [], items: [], channels: [] };

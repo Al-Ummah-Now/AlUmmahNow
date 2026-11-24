@@ -199,13 +199,9 @@ test('street plates paint on ::before at z-index -1, never on the host element',
   test.setTimeout(180_000);
   await signIn(context, baseURL!);
   await mockApi(page);
-  for (const [path, ready] of [
-    ['/en', 'home-rail'],
-    ['/en/library', 'library-page'],
-    ['/en/explore', 'explore-page'],
-  ] as const) {
+  for (const path of ['/en', '/en/library', '/en/explore'] as const) {
     await open(page, path);
-    await expect(page.getByTestId(ready).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.street-plate').first()).toBeVisible({ timeout: 30_000 });
     await applyTheme(page, 'fawanees', 'dark');
     await settle(page);
     const bad = await page.evaluate(() => {
