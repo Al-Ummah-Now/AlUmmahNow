@@ -142,8 +142,9 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'POST', '/api/move-offers/:id/accept', 'channelMove'),
   r('api-videos', 'POST', '/api/move-offers/:id/decline', 'channelMove'),
   r('api-videos', 'DELETE', '/api/move-offers/:id', 'channelMove'),
-  // Offline downloads (Epic 14, E14-S3a)
+  // Offline downloads & Listen mode (Epic 14, E14-S3a / E14-S3b)
   r('api-videos', 'POST', '/api/videos/:id/downloads', 'offlineDownloads'),
+  r('api-videos', 'GET', '/api/videos/:id/audio', 'listenMode'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -294,7 +295,6 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportDormantTransfer: 'no route: the monthly support.dormant job reads it',
-  listenMode: 'E14-S3b adds the audio playback route and maps it here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',

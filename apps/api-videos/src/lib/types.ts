@@ -292,6 +292,8 @@ export const Channel = z.object({
     links: z.array(z.object({ title: Str(), url: Str() })).optional(),
     contactEmail: Str().optional(),
     location: Str().optional(),
+    // Default offline download setting for new videos on this channel (Epic 14, E14-D1; defaults to true when omitted)
+    defaultAllowDownloads: z.boolean().optional(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     playlists: z.array(Str()).default([]), // Array of playlist IDs
