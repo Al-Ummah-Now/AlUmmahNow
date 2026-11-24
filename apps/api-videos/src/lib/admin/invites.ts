@@ -15,7 +15,7 @@ import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import { claimDefaultHandle, claimHandle, validateHandleFormat } from '../channelHandles';
 import { createEntityDefaults } from '../transformations';
-import { authEmail, authUserByEmail } from './authUsers';
+import { authUserByEmail } from './authUsers';
 import { AdminError, type AdminServiceEnv } from './service';
 
 type Row = Record<string, unknown>;
@@ -103,7 +103,6 @@ export async function createChannelFor(
 	const name = String(input.name ?? '').trim();
 	if (!name || name.length > 100) throw new AdminError(400, 'invalid_request', 'name is required (at most 100 characters)');
 	const profile = await new R2Repository<Row>(env.profiles).getObject(userId);
-	const email = profile ? await authEmail(env, userId) : null;
 	if (!profile) throw new AdminError(404, 'user_not_found', 'The user has no videos profile');
 	if (input.handle) {
 		const problem = validateHandleFormat(input.handle);
@@ -125,7 +124,6 @@ export async function createChannelFor(
 	const channel: Row = {
 		...createEntityDefaults(),
 		userId,
-		...(email ? { email } : {}),
 		name,
 		...(input.description?.trim() ? { description: input.description.trim() } : {}),
 		isMain: owned.every((ch) => !ch || ch.isDeleted),

@@ -59,7 +59,6 @@ const mockGetChannelTabConfig = getChannelTabConfig as jest.MockedFunction<typeo
 const createMockChannel = (overrides?: Partial<Channel>): Channel => ({
   id: 'test-channel-id',
   userId: 'test-user-id',
-  email: 'test@example.com',
   name: 'Test Channel',
   nameLocalized: { en: 'Test Channel', ar: 'قناة اختبار' },
   description: 'Test channel description',

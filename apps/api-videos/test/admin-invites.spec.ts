@@ -120,12 +120,11 @@ describe('invited users in videos', () => {
 		assert.equal((await call('POST', `/users/${INVITED}/channels`, { name: 'Other', handle: 'tafsir-daily' })).body.code, 'handle_taken');
 	});
 
-	it("a channel made for a user carries their account's email, never the profile's copy", async () => {
-		const { call } = await setup([{ id: OWNER, email: 'account@example.com', name: null, status: 'active' }]);
-		assert.equal((await call('POST', `/users/${OWNER}/channels`, { name: 'Second' })).body.result.channel.email, 'account@example.com');
-		// Not in Auth yet (the invite is on its way): none
-		await call('POST', '/users/provision', { userId: INVITED, email: 'new@example.com' });
-		assert.equal('email' in (await call('POST', `/users/${INVITED}/channels`, { name: 'First' })).body.result.channel, false);
+	it('a channel made for a user carries no copy of their email', async () => {
+		const { call } = await setup();
+		const res = await call('POST', `/users/${OWNER}/channels`, { name: 'Second' });
+		assert.equal(res.status, 200);
+		assert.equal('email' in res.body.result.channel, false);
 	});
 
 	it('needs the profile first', async () => {

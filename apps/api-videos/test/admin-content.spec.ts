@@ -469,7 +469,7 @@ describe('channel actions', () => {
 		assert.equal(job.status, 'succeeded', JSON.stringify(job));
 		const read = (bucket: MemoryBucket, key: string) => JSON.parse(bucket.store.get(key)!);
 		const moved = read(raw.channels, 'ch1');
-		assert.equal(moved.email, `${OTHER}@example.com`, 'the account email follows the owner');
+		assert.equal('email' in moved, false, "the previous owner's email goes, and no other is copied");
 		assert.equal(moved.contactEmail, undefined, "the previous owner's public contact is cleared");
 		assert.ok(moved.transferredAt);
 		assert.equal(read(raw.videos, 'gone').userId, OTHER, 'a soft-deleted video moves too');
@@ -983,8 +983,8 @@ describe('channel actions', () => {
 		assert.deepEqual(await detail('usr_same'), { email: null, emailSource: 'unavailable', profileEmail: 'same@example.com' });
 	});
 
-	it("a move uses the new owner's account email: the channel's email and the invitations it closes", async () => {
-		const { call, raw, db } = await setup({
+	it("a move closes the invitations to the new owner's account email", async () => {
+		const { call, db } = await setup({
 			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER, { email: 'third@example.com' }) },
 			auth: { [OTHER]: 'other@example.com' },
 		});
@@ -995,13 +995,12 @@ describe('channel actions', () => {
 		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
 		const job = (await call('GET', `/jobs/${res.body.result.job.id}`)).body.result;
 		assert.equal(job.status, 'succeeded', JSON.stringify(job));
-		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).email, 'other@example.com');
 		const status = (id: string) => (db.db.prepare('SELECT status FROM channel_invites WHERE id = ?').get(id) as { status: string }).status;
 		assert.equal(status('account'), 'cancelled');
 		assert.equal(status('copy'), 'pending', "someone else's invitation stays open");
 	});
 
-	it('a move waits (retries) while Auth cannot be read, and a new owner with no account yet gets no channel email', async () => {
+	it('a move waits (retries) while Auth cannot be read, and a new owner with no account yet is fine', async () => {
 		const down = await setup();
 		down.raw.AUTH_DB.fail = true;
 		const refused = await down.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
@@ -1011,7 +1010,6 @@ describe('channel actions', () => {
 		const none = await setup({ auth: {} });
 		const res = await none.call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
 		assert.equal((await none.call('GET', `/jobs/${res.body.result.job.id}`)).body.result.status, 'succeeded');
-		assert.equal('email' in JSON.parse(none.raw.channels.store.get('ch1')!), false);
 	});
 
 	it('delete soft-deletes the channel (hidden, restorable); the purge erases its videos and frees the handle', async () => {

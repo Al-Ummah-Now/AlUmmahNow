@@ -223,7 +223,7 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 	const binds: unknown[] = [];
 	if (query.q?.trim()) {
 		const term = likeTerm(query.q);
-		where.push(`(lower(c.admin_title) LIKE ?1 ESCAPE '\\' OR lower(c.handle) LIKE ?1 ESCAPE '\\' OR lower(c.email) LIKE ?1 ESCAPE '\\' OR c.id = ?2 OR c.owner_id = ?2
+		where.push(`(lower(c.admin_title) LIKE ?1 ESCAPE '\\' OR lower(c.handle) LIKE ?1 ESCAPE '\\' OR c.id = ?2 OR c.owner_id = ?2
 			OR c.owner_id IN (SELECT p.id FROM ${OWNERSHIP_TABLE} p WHERE p.kind = 'profile' AND lower(p.email) LIKE ?1 ESCAPE '\\'))`);
 		binds.push(term, query.q.trim());
 	}
@@ -285,7 +285,7 @@ export async function hydrateChannels(env: AdminEnv, rows: Row[]): Promise<Admin
 			name: (ch.name as string) || r.admin_title || r.id,
 			handle: (ch.handle as string) || r.handle || null,
 			ownerId: r.owner_id ?? null,
-			ownerEmail: ownerEmail.get(r.owner_id) ?? r.email ?? null,
+			ownerEmail: ownerEmail.get(r.owner_id) ?? null,
 			avatarUrl: (ch.avatarUrl as string) || null,
 			isVerified: ch.isVerified === true || r.is_verified === 1,
 			isSuspended: ch.isSuspended === true || r.is_suspended === 1,

@@ -271,7 +271,7 @@ export const PublicChannelView = z.object({
 export const ChannelView = z.object({
     id: Str(),
     userId: Str(),
-    email: Str().email(),
+    email: Str().email().optional().describe("Not returned any more; the account's email is on the profile"),
     name: Str(),
     isMain: z.boolean(),
     isPrivate: z.boolean().optional(), // User-controlled privacy
