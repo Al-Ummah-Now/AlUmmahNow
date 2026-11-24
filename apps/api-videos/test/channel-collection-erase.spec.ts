@@ -108,18 +108,32 @@ describe('channel collections on erasure (#1085)', () => {
 	it('eraseUserData calls onChannelDeleted for each owned channel, once even across resumed passes', async () => {
 		const e = env();
 		const { calls, onChannelDeleted } = channelHook(e);
+		const offer = e.SEARCH_DB.db.prepare(`INSERT INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, created_at, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, '2026', '2030', '2026')`);
+		offer.run('sent', 'ch1', OWNER, 'other', 'offered');
+		offer.run('received', 'chX', 'other', OWNER, 'declined');
+		const status = (id: string) => (e.SEARCH_DB.db.prepare('SELECT status FROM channel_move_offers WHERE id = ?').get(id) as { status: string } | undefined)?.status;
+		const openAtDelete: unknown[] = [];
 		let token: string | undefined;
 		let complete = false;
 		let passes = 0;
 		while (!complete && passes < 100) {
-			const summary = await eraseUserData(e, OWNER, new OperationBudget(12), { onChannelDeleted }, { resumeToken: token, pageSize: 2 });
+			const summary = await eraseUserData(e, OWNER, new OperationBudget(12), { onChannelDeleted: async (id: string, record: never) => { openAtDelete.push(status('sent')); return onChannelDeleted(id, record); } }, { resumeToken: token, pageSize: 2 });
 			complete = summary.complete;
+			// Made while the run goes on
+			if (passes === 0) offer.run('late', 'chX', 'other', OWNER, 'offered');
 			token = summary.resumeToken;
 			passes++;
 		}
 		assert.equal(complete, true);
 		assert.ok(passes > 1, 'needed several passes');
 		assert.deepEqual(calls.map((c) => c.id).sort(), ['ch1', 'ch2']);
+		// Move offers close before any channel goes (nobody accepts one meanwhile) and no longer name the account, one made during the run too
+		assert.deepEqual(openAtDelete, ['cancelled', 'cancelled']);
+		assert.deepEqual(e.SEARCH_DB.db.prepare('SELECT id, from_user_id, to_user_id, status FROM channel_move_offers ORDER BY id').all().map((r) => ({ ...r })), [
+			{ id: 'late', from_user_id: 'other', to_user_id: 'deleted-user', status: 'cancelled' },
+			{ id: 'received', from_user_id: 'other', to_user_id: 'deleted-user', status: 'declined' },
+			{ id: 'sent', from_user_id: 'deleted-user', to_user_id: 'other', status: 'cancelled' },
+		]);
 		assert.ok(calls.every((c) => c.recordPresent));
 		assert.deepEqual([...e.channels.store.keys()], ['chX']);
 	});
