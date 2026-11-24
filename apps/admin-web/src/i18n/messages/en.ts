@@ -5765,7 +5765,7 @@ const en = {
     statusNotReady: 'The switch is off and can’t be turned on yet.',
     checkBirthDate: 'Date of birth in accounts',
     checkNumbers: 'Ages saved on this page',
-    checkAccountEvents: 'Account events from accounts',
+    checkAccountEvents: 'Account events',
     checkPassed: 'ready',
     checkFailed: 'not ready',
     agesTitle: 'Ages',

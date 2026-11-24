@@ -7,9 +7,10 @@ import type { ActionResult } from '@/lib/api/errors';
 import type { AgeRulesChange, AgeRulesView } from '@/lib/api/ageRules';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/translate';
-import { ErrorAlert, cardClass, primaryButtonClass } from '@/components/ui';
+import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { Select } from '@/components/select/Select';
-import { UserName } from '@/components/audit/UserName';
+import { PersonName } from '@/components/audit/Named';
+import { personView } from '@/components/audit/audit-model';
 import { fillNodes } from '@/components/audit/fill';
 import { LocalTime } from '@/components/LocalTime';
 import { logger } from '@/lib/logger-client';
@@ -41,6 +42,8 @@ export function AgeRulesForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // admin-api sends the names, so none is looked up again
+  const person = (id: string, name: string | null) => <PersonName person={personView(id, name ? { users: { [id]: { id, name, userName: null, email: null, found: true } }, items: {} } : null, t)} showEmail={false} />;
   const andOver = (age: number) => t('ageRules.andOver', { age: formatNumber(age, locale) });
   // Each group ends the year before the next one starts
   const [min, mid, max] = AGE_CHOICES;
@@ -87,10 +90,10 @@ export function AgeRulesForm({
       <form onSubmit={submit} noValidate>
         <ul className="divide-y divide-border">
           {AGE_RULE_KEYS.map((key) => (
-            <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <li key={key} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
               <span id={`${ids}-${key}`} className="text-sm text-fg font-medium">{t(LABELS[key])}</span>
               <Select
-                className="w-44"
+                className={`${fieldClass} w-full sm:w-44`}
                 value={String(numbers[key])}
                 disabled={!view.canEdit || busy}
                 aria-labelledby={`${ids}-${key}`}
@@ -108,11 +111,12 @@ export function AgeRulesForm({
             </li>
           ))}
         </ul>
-        <p className="text-sm text-fg-muted mt-4 mb-4" data-testid="age-rules-last-changed">
+        {/* A name can hold a disclosure, so never in a paragraph */}
+        <div className="text-sm text-fg-muted mt-4 mb-4" data-testid="age-rules-last-changed">
           {view.updatedAt && view.updatedBy
-            ? fillNodes(t('ageRules.lastChanged'), { date: <LocalTime value={view.updatedAt} withTime />, actor: <UserName id={view.updatedBy.id} showEmail={false} /> })
+            ? fillNodes(t('ageRules.lastChanged'), { date: <LocalTime value={view.updatedAt} withTime />, actor: person(view.updatedBy.id, view.updatedBy.name) })
             : t('ageRules.neverSaved')}
-        </p>
+        </div>
         {view.canEdit ? (
           <button type="submit" className={primaryButtonClass} disabled={busy || unchanged} data-testid="age-rules-save">
             {t(busy ? 'ageRules.saving' : 'ageRules.save')}
@@ -120,7 +124,7 @@ export function AgeRulesForm({
         ) : (
           <p className="text-sm text-fg-muted" data-testid="age-rules-read-only">{t('ageRules.readOnly')}</p>
         )}
-        {error && <ErrorAlert testId="age-rules-error">{error}</ErrorAlert>}
+        {error && <div className="mt-4"><ErrorAlert testId="age-rules-error">{error}</ErrorAlert></div>}
         <p role="status" className="text-sm text-fg mt-2" data-testid="age-rules-saved">{saved ? t('ageRules.saved') : ''}</p>
       </form>
       <h3 className="text-sm font-semibold text-fg mt-6 mb-2">{t('ageRules.historyTitle')}</h3>
@@ -132,7 +136,7 @@ export function AgeRulesForm({
         <ul className="space-y-2 text-sm text-fg-muted" data-testid="age-rules-history">
           {history.map((change) => (
             <li key={change.id}>
-              {fillNodes(t('ageRules.historyEntry', { changes: describe(change) }), { date: <LocalTime value={change.createdAt} withTime />, actor: <UserName id={change.actorId} showEmail={false} /> })}
+              {fillNodes(t('ageRules.historyEntry', { changes: describe(change) }), { date: <LocalTime value={change.createdAt} withTime />, actor: person(change.actorId, change.actorName) })}
             </li>
           ))}
         </ul>
