@@ -6,7 +6,7 @@
  * the legal hold, the retention setting and the webhook secret need a fresh sign-in: toResult
  * sends the browser through it and back to the page.
  */
-import type { CsamAccessLogEntry, CsamCaseDetail, CsamCaseSummary, CsamSettings } from '@al-ummah/shared-types';
+import type { CsamAccessLogEntry, CsamCaseDetail, CsamCaseSummary, CsamSettings, CsamRefusedUrl } from '@al-ummah/shared-types';
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
 
@@ -18,7 +18,7 @@ export interface CsamIntakeResult {
   /** Ids of open cases the pasted URLs already belong to */
   existing: string[];
   /** URLs that are not ours (other sites) */
-  notOurs: number;
+  refused: CsamRefusedUrl[];
 }
 
 export type CsamHandMapping =

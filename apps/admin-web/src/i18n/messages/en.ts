@@ -3600,8 +3600,15 @@ const en = {
       submit: 'Open cases and take down',
       opened: 'Cases opened: {count}',
       existing: 'Already open (no new case): {count}',
-      notOurs: 'URLs not on our sites (ignored): {count}',
-      none: 'No URLs on our sites were found in the text.',
+      refused: 'Opened no case: {count}',
+      refusals: {
+        not_a_url: 'not a web address',
+        other_site: 'not one of our sites',
+        console: 'an admin or status page: paste the page or file people see',
+        port: 'our sites have no address with a port',
+      },
+      shapes: 'Accepted: pages of a video, Short, live stream, post or comment (a comment’s link ends in ?comment= and its ID), short links, embeds, scholar sites, and image and media files. Other pages of ours open a case to map by hand.',
+      none: 'No case was opened.',
       unmapped: 'not matched to an item yet: map it on the case page',
     },
     settings: {

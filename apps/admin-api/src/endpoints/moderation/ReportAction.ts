@@ -57,7 +57,7 @@ export class ReportAction extends AdminRoute {
         },
       },
       "409": {
-        description: "Report already closed",
+        description: "Nothing was changed and the report is as it was: already closed, the item is not there any more (item_gone), or this kind of item has no such action (outcome_not_available)",
         content: {
           "application/json": {
             schema: ResponseError,

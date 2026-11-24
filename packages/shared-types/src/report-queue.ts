@@ -77,18 +77,23 @@ export interface ReportOutcomeOption {
 /** What one admin may decide about one reported item, and why the rest is not offered. */
 export function reportOutcomeOptions(input: {
   type: ReportableEntityType;
-  /** The item as api-videos finds it now; null when it could not be read. Only comments and posts need it. */
+  /** The item as api-videos finds it now; null when it could not be read. */
   item: Pick<AdminLookupItem, 'found' | 'parentType'> | null;
+  /** Who made it is known, from the item or from the copy on its reports: they can be banned though it is gone. */
+  ownerKnown?: boolean;
   may: (permission: 'users:manage' | 'content:delete') => boolean;
 }): ReportOutcomeOption[] {
-  const { type, item, may } = input;
+  const { type, item, may, ownerKnown = false } = input;
   const reasonFor = (action: ModerationAction): ReportOutcomeReason | null => {
     if (action === 'dismissed') return null;
     if (!(REPORT_OUTCOMES_BY_TYPE[type] ?? []).includes(action)) return 'not_for_type';
     if (type === 'comment' && action === 'deleted' && item?.parentType === 'post') return 'not_for_post_comment';
-    if (DELETES_THROUGH_ADMIN.has(type) && item?.found === false) return 'item_gone';
-    const permission = REPORT_OUTCOME_PERMISSION[action] ?? (action === 'deleted' && DELETES_THROUGH_ADMIN.has(type) ? 'content:delete' : null);
-    return permission && !may(permission) ? 'permission' : null;
+    if (item?.found === false && !(action === 'banned' && ownerKnown)) return 'item_gone';
+    const permissions: Array<'users:manage' | 'content:delete'> = [];
+    if (action === 'banned') permissions.push('users:manage');
+    // A post is hidden by its admin delete, so banning over one needs that too
+    if (DELETES_THROUGH_ADMIN.has(type) && (action === 'deleted' || (action === 'banned' && type === 'post' && item?.found !== false))) permissions.push('content:delete');
+    return permissions.every(may) ? null : 'permission';
   };
   return REPORT_OUTCOMES.map((action) => {
     const reason = reasonFor(action);

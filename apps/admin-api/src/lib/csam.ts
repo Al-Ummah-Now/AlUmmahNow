@@ -9,7 +9,8 @@ import {
   CSAM_RETENTION_MIN_DAYS,
   csamRetainUntil,
   csamUrlKey,
-  extractCsamUrls,
+  csamUrlRefusal,
+  scanCsamUrls,
   newErrorRef,
   scrubEvent,
   validCsamRetentionDays,
@@ -26,6 +27,7 @@ import {
   type CsamEmailCheckPage,
   type CsamEvidenceManifest,
   type CsamFreezeState,
+  type CsamRefusedUrl,
   type CsamReportFacts,
   type CsamResolution,
   type CsamSettings,
@@ -397,16 +399,20 @@ async function containCase(env: CsamEnv, row: CaseRow, resolution: CsamResolutio
  * Opens one case per matched URL in the text (a pasted email, a list, a webhook body). URLs with an
  * open case join it; a mapped URL is taken down at once; the rest wait for a hand mapping.
  */
-export async function openCases(env: CsamEnv, input: { text: string; source: 'paste' | 'webhook'; actorId: string }): Promise<{ cases: CsamCaseSummary[]; existing: string[]; notOurs: number }> {
-  const urls = extractCsamUrls(input.text.slice(0, 256 * 1024)).slice(0, MAX_URLS);
+export async function openCases(env: CsamEnv, input: { text: string; source: 'paste' | 'webhook'; actorId: string }): Promise<{ cases: CsamCaseSummary[]; existing: string[]; refused: CsamRefusedUrl[] }> {
+  const scanned = scanCsamUrls(input.text.slice(0, 256 * 1024));
+  const urls = scanned.urls.slice(0, MAX_URLS);
   const days = await retentionDays(env.REPORTS_DB);
   const cases: CsamCaseSummary[] = [];
   const existing: string[] = [];
-  let notOurs = 0;
+  // Said back to the person: what was left out, and why
+  const refused: CsamRefusedUrl[] = scanned.others.map((url) => ({ url, reason: csamUrlRefusal(url) ?? 'other_site' }));
+  const refuse = (url: string, reason: CsamRefusedUrl['reason']) => void (refused.length < 100 && refused.push({ url: url.slice(0, 500), reason }));
   for (const url of urls) {
+    const refusal = csamUrlRefusal(url);
     const key = csamUrlKey(url);
-    if (!key) {
-      notOurs++;
+    if (refusal || !key) {
+      refuse(url, refusal ?? 'not_a_url');
       continue;
     }
     const open = await env.REPORTS_DB.prepare("SELECT * FROM csam_cases WHERE url_key = ? AND status != 'closed'").bind(key).first<CaseRow>();
@@ -416,7 +422,7 @@ export async function openCases(env: CsamEnv, input: { text: string; source: 'pa
     }
     const resolved = await callVideos<{ ok: boolean; reason?: string; resolution?: CsamResolution }>(env, '/resolve', { ...csam, method: 'POST', json: { url } });
     if (!resolved.ok && resolved.reason === 'not_ours') {
-      notOurs++;
+      refuse(url, 'other_site');
       continue;
     }
     const at = nowIso();
@@ -453,7 +459,7 @@ export async function openCases(env: CsamEnv, input: { text: string; source: 'pa
     });
     cases.push(summaryOf(row, days));
   }
-  return { cases, existing, notOurs };
+  return { cases, existing, refused };
 }
 
 /** A super admin's mapping of an unmapped case (validated by api-videos against the stores). */

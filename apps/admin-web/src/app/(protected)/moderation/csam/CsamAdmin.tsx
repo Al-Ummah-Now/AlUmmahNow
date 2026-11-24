@@ -67,7 +67,8 @@ export function IntakeForm() {
   return (
     <section className={`${cardClass} mb-6 border-danger-border`} aria-labelledby={`${id}-title`} data-testid="csam-intake">
       <h2 id={`${id}-title`} className="text-lg font-semibold text-fg mb-1">{t('csamPage.intake.title')}</h2>
-      <p className="text-sm text-fg-muted mb-3">{t('csamPage.intake.note')}</p>
+      <p className="text-sm text-fg-muted mb-2">{t('csamPage.intake.note')}</p>
+      <p className="text-sm text-fg-muted mb-3" data-testid="csam-intake-shapes">{t('csamPage.intake.shapes')}</p>
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label htmlFor={`${id}-text`} className={labelClass}>{t('csamPage.intake.label')}</label>
@@ -95,7 +96,19 @@ export function IntakeForm() {
             </div>
           )}
           {result.existing.length > 0 && <p className="text-fg-muted">{t('csamPage.intake.existing', { count: result.existing.length })}</p>}
-          {result.notOurs > 0 && <p className="text-fg-muted">{t('csamPage.intake.notOurs', { count: result.notOurs })}</p>}
+          {result.refused.length > 0 && (
+            <div data-testid="csam-intake-refused">
+              <p className="text-fg font-medium">{t('csamPage.intake.refused', { count: result.refused.length })}</p>
+              <ul className="list-disc ms-5">
+                {result.refused.map((r) => (
+                  <li key={r.url} data-reason={r.reason}>
+                    <bdi dir="ltr" className="break-all">{r.url}</bdi>
+                    <span className="text-fg-muted"><Sep />{t(`csamPage.intake.refusals.${r.reason}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -39,7 +39,7 @@ export type CsamUrlTarget =
   /** A file of the live edge: the session's stream is looked up */
   | { kind: 'live_session'; sessionId: string }
   /** A scholar site page, on its alummahnow.org subdomain or its own domain (the host is looked up) */
-  | { kind: 'site'; host: string; ours: boolean; item: 'video' | 'post' | null; id: string | null }
+  | { kind: 'site'; host: string; ours: boolean; item: 'video' | 'post' | null; id: string | null; commentId?: string }
   /** Our host, but nothing on it is named: a list, a search, a file we do not know. A person maps it */
   | { kind: 'other'; host: string; path: string };
 
@@ -143,7 +143,7 @@ const OUR_HOST = /^(?:[a-z0-9-]+\.)*alummahnow\.(?:net|org|com|link|app)$/;
 const SCHOLAR_TEST_HOST = /^(?:[a-z0-9-]+\.)+(?:qa|stage)-sites\.alummahnow\.com$/;
 /** The consoles: they show no user content themselves, and their links turn up in pasted text */
 const CONSOLE_HOST = /^(?:admin|status)\.(?:api\.)?(?:(?:qa|stage)\.)?(?:api\.)?alummahnow\.net$/;
-const SITE_PAGE_PATH = /^\/(?:en|ar)\/(?:watch|posts)\/[A-Za-z0-9_-]{6,80}\/?$/;
+
 const BUNNY_HOST = /^vz-[a-z0-9-]+\.b-cdn\.net$/;
 
 /** Parses what a person pasted: a full URL, or a path Cloudflare's email lists (`host/path`). */
@@ -164,6 +164,8 @@ export function toCsamUrl(input: string): URL | null {
 export function unwrapImageUrl(url: URL): URL {
   let current = url;
   for (let i = 0; i < 3; i++) {
+    // Only our own hosts are opened, also behind one another
+    if (!OUR_HOST.test(hostOf(current)) || current.port) return current;
     if (current.pathname === '/_next/image' && current.searchParams.get('url')) {
       const inner = current.searchParams.get('url')!;
       try {
@@ -212,11 +214,27 @@ function segmentsOf(pathname: string): string[] | null {
   return parts.some((p) => p === '..' || p === '.' || p.includes('/') || p.includes('\\')) ? null : parts;
 }
 
-/** What a site URL says about a comment: its id, `true` when it points at comments without naming one, else null. */
-function commentSelector(url: URL): string | true | null {
-  for (const key of ['comment', 'commentId', 'lc']) {
-    const value = url.searchParams.get(key);
-    if (value !== null) return UUID_ISH.test(value) ? value : true;
+/** Query keys and fragments that point inside a page: at a comment, a reply or a chat message. */
+const PART_KEYS = ['comment', 'commentId', 'comment_id', 'lc', 'reply', 'replyId', 'message', 'messageId', 'chat'];
+const COMMENT_KEYS = new Set(['comment', 'commentId', 'comment_id', 'lc', 'reply', 'replyId']);
+const PART_HASH = /^(?:comment|reply|message|chat)/i;
+const NAMED_HASH = /^(?:comment|reply)s?(?:Id)?[-=:/_]([A-Za-z0-9_-]{6,80})$/i;
+
+/**
+ * The one place that decides whether a URL is about a part of a page: a comment, a reply or a chat message,
+ * whatever the host and path. Null: it is not. `{ commentId }`: exactly one comment is named. `{}`: it points
+ * at a part, but not at one comment (several ids, none, a chat message): nobody can tell which, so the URL
+ * maps to nothing, and least of all to the page it is on.
+ */
+export function csamUrlPart(url: URL): { commentId?: string } | null {
+  const ids = new Set<string>();
+  let points = false;
+  let unclear = false;
+  for (const [key, value] of url.searchParams) {
+    if (!PART_KEYS.some((k) => k.toLowerCase() === key.toLowerCase())) continue;
+    points = true;
+    if (![...COMMENT_KEYS].some((k) => k.toLowerCase() === key.toLowerCase()) || !UUID_ISH.test(value)) unclear = true;
+    else ids.add(value);
   }
   let hash = url.hash.replace(/^#/, '');
   try {
@@ -224,68 +242,70 @@ function commentSelector(url: URL): string | true | null {
   } catch {
     // kept as it is
   }
-  if (!/^(?:comment|reply)/i.test(hash)) return null;
-  const named = /^(?:comment|reply)(?:Id)?[-=:/_]([A-Za-z0-9_-]{6,80})$/i.exec(hash);
-  return named ? named[1]! : true;
+  if (PART_HASH.test(hash)) {
+    points = true;
+    const named = NAMED_HASH.exec(hash);
+    if (named) ids.add(named[1]!);
+    else unclear = true;
+  }
+  if (!points) return null;
+  return !unclear && ids.size === 1 ? { commentId: [...ids][0]! } : {};
 }
 
-type PageTarget = Extract<CsamUrlTarget, { kind: 'page' }>;
+
+const ok = (id: string | null | undefined): id is string => !!id && UUID_ISH.test(id);
+const isLocale = (segment: string | undefined) => /^(?:en|ar)$/i.test(segment ?? '');
+const withoutLocale = (parts: string[]) => (isLocale(parts[0]) ? parts.slice(1) : parts);
 
 /**
- * A page of the videos site (apps/web). The locale is optional, as the site redirects without it.
- * Anything on the host that names no single item is null (the caller opens it for a hand mapping).
+ * A page of the videos site (apps/web), without its comment part. The locale is optional, as the site redirects
+ * without it. Anything on the host that names no single item, or names two, is null (the caller opens it for a
+ * hand mapping).
  */
 function parseSitePage(url: URL, parts: string[]): CsamUrlTarget | null {
-  const p = parts[0] === 'en' || parts[0] === 'ar' ? parts.slice(1) : parts;
-  const ok = (id: string | null | undefined): id is string => !!id && UUID_ISH.test(id);
-  const comment = commentSelector(url);
-  /** A comment's URL is about that comment; one that names no comment is nobody's to act on. */
-  const item = (target: PageTarget | null): CsamUrlTarget | null => {
-    if (!target || comment === null) return target;
-    if (comment === true) return null;
-    if (target.page === 'post') return { kind: 'comment', on: 'post', parentId: target.postId, commentId: comment };
-    return target.page === 'channel' ? null : { kind: 'comment', on: 'video', parentId: target.id, commentId: comment };
-  };
+  const p = withoutLocale(parts);
   const post = url.searchParams.get('post');
+  const vid = url.searchParams.get('vid');
+  /** A video's page with another item's id in its query names two items. */
+  const video = (page: 'video' | 'shorts' | 'embed', id: string | null | undefined): CsamUrlTarget | null =>
+    ok(id) && (vid === null || vid === id) && post === null ? { kind: 'page', page, id } : null;
 
   switch (p[0]) {
     case 'video':
       // /video/<id>, /video/<id>/edit and the old /video?vid=<id>
-      return item(ok(p[1]) ? { kind: 'page', page: 'video', id: p[1] } : p.length === 1 && ok(url.searchParams.get('vid')) ? { kind: 'page', page: 'video', id: url.searchParams.get('vid')! } : null);
+      return video('video', p.length === 1 ? vid : p[1]);
     case 'shorts':
-      return item(ok(p[1]) ? { kind: 'page', page: 'shorts', id: p[1] } : null);
+      return video('shorts', p[1]);
     case 'embed':
-      // /embed/v/<id>; /embed/p and /embed/comments show several items
-      if (p[1] === 'comments') return typeof comment === 'string' && ok(p[2]) ? { kind: 'comment', on: 'video', parentId: p[2], commentId: comment } : null;
-      return item(p[1] === 'v' && ok(p[2]) ? { kind: 'page', page: 'embed', id: p[2] } : null);
+      // /embed/v/<id>; /embed/p shows several items, and /embed/comments/<id> is about its comments (parseCsamUrl)
+      return p[1] === 'v' ? video('embed', p[2]) : null;
     case 'live':
-      return ok(p[1]) && comment === null ? { kind: 'live_stream', streamId: p[1] } : null;
+      return ok(p[1]) ? { kind: 'live_stream', streamId: p[1] } : null;
     case 'post':
-      return item(ok(p[1]) ? { kind: 'page', page: 'post', id: null, postId: p[1] } : null);
+      return ok(p[1]) && (post === null || post === p[1]) ? { kind: 'page', page: 'post', id: null, postId: p[1] } : null;
     case 'channels':
       if (!ok(p[1])) return null;
-      return item(post === null ? { kind: 'page', page: 'channel', id: p[1] } : ok(post) ? { kind: 'page', page: 'post', id: p[1], postId: post } : null);
+      return post === null ? { kind: 'page', page: 'channel', id: p[1] } : ok(post) ? { kind: 'page', page: 'post', id: p[1], postId: post } : null;
     case 'thumb':
       return thumbTarget(p[1]);
     case 'og':
       // /og/v/<videoId>.jpg (unwrapImageUrl has already opened /og/i/<image>)
       return p[1] === 'v' ? thumbTarget(p[2]) : null;
     case 'analytics':
-      return p[1] === 'videos' && ok(p[2]) ? { kind: 'page', page: 'video', id: p[2] } : null;
+      return p[1] === 'videos' ? video('video', p[2]) : null;
     case 'studio':
-      if (p[1] === 'video' && ok(p[2])) return { kind: 'page', page: 'video', id: p[2] };
-      if (p[2] === 'content' && p[3] === 'videos' && ok(p[4])) return { kind: 'page', page: 'video', id: p[4] };
+      if (p[1] === 'video') return video('video', p[2]);
+      if (p[2] === 'content' && p[3] === 'videos') return video('video', p[4]);
       return p[2] === 'content' && p[3] === 'live' && ok(p[4]) ? { kind: 'live_stream', streamId: p[4] } : null;
     case 'studio-download': {
-      if (p[1] === 'captions' && ok(p[2])) return { kind: 'page', page: 'video', id: p[2] };
-      const clip = p[1] === 'clip' ? /^(.+)\.mp4$/.exec(p[3] ?? '')?.[1] : undefined;
-      return ok(clip) ? { kind: 'page', page: 'video', id: clip } : null;
+      if (p[1] === 'captions') return video('video', p[2]);
+      return p[1] === 'clip' ? video('video', /^(.+)\.mp4$/.exec(p[3] ?? '')?.[1]) : null;
     }
     default: {
       // /@handle?post=<id>, /c/<handle>?post=<id>: the post's own channel is checked against the handle
       const handle = p[0] === 'c' ? p[1] : p[0]?.startsWith('@') ? p[0].slice(1) : undefined;
       if (!handle || !HANDLE.test(handle) || !ok(post)) return null;
-      return item({ kind: 'page', page: 'post', id: null, postId: post, handle });
+      return { kind: 'page', page: 'post', id: null, postId: post, handle };
     }
   }
 }
@@ -300,12 +320,41 @@ function thumbTarget(file: string | undefined): CsamUrlTarget | null {
 /** alummahnow.link/<v|s|p|e>/<id>; the channel, handle and playlist links name several items. */
 function parseShortLink(parts: string[]): CsamUrlTarget | null {
   const [prefix, id] = parts;
-  if (parts.length !== 2 || !id || !UUID_ISH.test(id)) return null;
+  if (parts.length !== 2 || !ok(id)) return null;
   if (prefix === 'v') return { kind: 'page', page: 'video', id };
   if (prefix === 's') return { kind: 'page', page: 'shorts', id };
   if (prefix === 'p') return { kind: 'page', page: 'post', id: null, postId: id };
   if (prefix === 'e') return { kind: 'live_stream', streamId: id };
   return prefix === 'c' ? { kind: 'page', page: 'channel', id } : null;
+}
+
+/** /<lang>/watch/<id> or /<lang>/posts/<id> of a scholar site. */
+function sitePageOf(parts: string[]): { item: 'video' | 'post'; id: string } | null {
+  if (parts.length !== 3 || !isLocale(parts[0]) || !ok(parts[2])) return null;
+  return parts[1] === 'watch' ? { item: 'video', id: parts[2] } : parts[1] === 'posts' ? { item: 'post', id: parts[2] } : null;
+}
+
+/** The comment a page URL names, on that page's video or post. Null when the page has no comments of its own. */
+function commentOf(target: CsamUrlTarget | null, commentId: string): CsamUrlTarget | null {
+  if (target?.kind === 'page') {
+    if (target.page === 'post') return { kind: 'comment', on: 'post', parentId: target.postId, commentId };
+    if (target.page !== 'channel') return { kind: 'comment', on: 'video', parentId: target.id, commentId };
+  }
+  if (target?.kind === 'site' && target.item) return { ...target, commentId };
+  return null;
+}
+
+/** Why a URL opens no case at all. */
+export type CsamUrlRefusal = 'not_a_url' | 'other_site' | 'console' | 'port';
+
+export function csamUrlRefusal(input: string | URL): CsamUrlRefusal | null {
+  const raw = typeof input === 'string' ? toCsamUrl(input) : input;
+  if (!raw) return 'not_a_url';
+  const host = hostOf(raw);
+  if (CONSOLE_HOST.test(host)) return 'console';
+  const ours = OUR_HOST.test(host) || SCHOLAR_TEST_HOST.test(host) || BUNNY_HOST.test(host);
+  if (ours && raw.port) return 'port';
+  return parseCsamUrl(raw) ? null : 'other_site';
 }
 
 /**
@@ -315,25 +364,45 @@ function parseShortLink(parts: string[]): CsamUrlTarget | null {
 export function parseCsamUrl(input: string | URL): CsamUrlTarget | null {
   const raw = typeof input === 'string' ? toCsamUrl(input) : input;
   if (!raw) return null;
+  // Our sites answer on the default ports only, and only they unwrap (an optimizer on another site is not ours)
+  const rawHost = hostOf(raw);
+  if (CONSOLE_HOST.test(rawHost)) return null;
+  if (OUR_HOST.test(rawHost) || BUNNY_HOST.test(rawHost)) {
+    if (raw.port) return null;
+  } else {
+    return parseOwnDomain(raw);
+  }
   const url = unwrapImageUrl(raw);
+  const unwrapped = url !== raw;
   const host = hostOf(url);
-  const bunny = BUNNY_HOST.test(host);
-  const ours = OUR_HOST.test(host);
-  // Our sites answer on the default ports only
-  if ((ours || bunny) && url.port) return null;
-  const parts = segmentsOf(url.pathname);
-  if (!parts) return null;
-  const other: CsamUrlTarget = { kind: 'other', host, path: url.pathname };
+  const other: CsamUrlTarget = { kind: 'other', host: rawHost, path: raw.pathname };
+  if (unwrapped && (!(OUR_HOST.test(host) || BUNNY_HOST.test(host)) || CONSOLE_HOST.test(host) || url.port)) return other;
 
+  // A comment, a reply or a chat message: decided here, once, for every shape
+  const part = csamUrlPart(url) ?? (unwrapped ? csamUrlPart(raw) : null);
+  const parts = segmentsOf(url.pathname);
+  if (!parts) return other;
+  const aboutComments = SITE_HOST.test(host) && withoutLocale(parts)[0] === 'embed' && withoutLocale(parts)[1] === 'comments';
+  if (part || aboutComments) {
+    if (!part?.commentId) return other;
+    const id = withoutLocale(parts)[2];
+    if (aboutComments) return ok(id) ? { kind: 'comment', on: 'video', parentId: id, commentId: part.commentId } : other;
+    return commentOf(parseItem(url, host, parts), part.commentId) ?? other;
+  }
+  return parseItem(url, host, parts) ?? other;
+}
+
+/** The item a URL on our hosts names, ignoring any part of it. Null when it names none. */
+function parseItem(url: URL, host: string, parts: string[]): CsamUrlTarget | null {
   if (MEDIA_HOST.test(host)) {
     // /pub/<videoId>/<rev>/<file> and /priv/<token>/<videoId>/<rev>/<file>
     const at = parts[0] === 'pub' ? 1 : parts[0] === 'priv' ? 2 : -1;
     const videoId = at > 0 ? parts[at] : undefined;
-    if (!videoId || !UUID_ISH.test(videoId)) return other;
+    if (!ok(videoId)) return null;
     const file = parts.slice(at + 2).join('/');
     return /^thumb[^/]*\.(?:jpe?g|png|webp)$/i.test(file) ? { kind: 'video_thumbnail', videoId } : { kind: 'video', videoId, ...(file ? { file } : {}) };
   }
-  if (bunny) {
+  if (BUNNY_HOST.test(host)) {
     const videoId = parts.find((p) => UUID_ISH.test(p) && !p.startsWith('bcdn_token'));
     if (!videoId) return null;
     const file = parts.slice(parts.indexOf(videoId) + 1).join('/');
@@ -341,54 +410,70 @@ export function parseCsamUrl(input: string | URL): CsamUrlTarget | null {
   }
   if (IMAGE_HOST.test(host)) {
     const path = `/${parts.join('/')}`;
-    if (parts[0] === 'thumbnails' && parts[1] && UUID_ISH.test(parts[1])) return { kind: 'video_thumbnail', videoId: parts[1] };
-    if (parts[0] === 'community-posts' && parts[1] && UUID_ISH.test(parts[1])) return { kind: 'post_image', channelId: parts[1], path };
-    return parts.length ? { kind: 'image', path } : other;
+    if (parts[0] === 'thumbnails' && ok(parts[1])) return { kind: 'video_thumbnail', videoId: parts[1] };
+    if (parts[0] === 'community-posts' && ok(parts[1])) return { kind: 'post_image', channelId: parts[1], path };
+    return parts.length ? { kind: 'image', path } : null;
   }
-  if (LIVE_HOST.test(host)) {
-    return parts[0] === 'hls' && parts[1] && UUID_ISH.test(parts[1]) ? { kind: 'live_session', sessionId: parts[1] } : other;
+  if (LIVE_HOST.test(host)) return parts[0] === 'hls' && ok(parts[1]) ? { kind: 'live_session', sessionId: parts[1] } : null;
+  if (SHORT_LINK_HOST.test(host)) return parseShortLink(parts);
+  if (SITE_HOST.test(host)) return parseSitePage(url, parts);
+  if (SCHOLAR_HOST.test(host) || SCHOLAR_TEST_HOST.test(host)) {
+    const page = sitePageOf(parts);
+    return { kind: 'site', host, ours: true, item: page?.item ?? null, id: page?.id ?? null };
   }
-  if (SHORT_LINK_HOST.test(host)) return parseShortLink(parts) ?? other;
-  if (SITE_HOST.test(host)) return parseSitePage(url, parts) ?? other;
-  const sitePage = SITE_PAGE_PATH.test(url.pathname) ? { item: parts[1] === 'watch' ? ('video' as const) : ('post' as const), id: parts[2]! } : null;
-  if (SCHOLAR_HOST.test(host) || SCHOLAR_TEST_HOST.test(host)) return { kind: 'site', host, ours: true, item: sitePage?.item ?? null, id: sitePage?.id ?? null };
-  if (CONSOLE_HOST.test(host)) return null;
-  if (ours) return other;
-  // A scholar's own domain shows our videos and posts; only the host index knows which domains those are
-  return sitePage && !url.port ? { kind: 'site', host, ours: false, ...sitePage } : null;
+  return null;
 }
 
-const CSAM_URL_START = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*alummahnow\.(?:net|org|com|link|app)(?::443)?\/./i;
+/** A scholar's own domain shows our videos and posts; only the host index knows which domains those are. */
+function parseOwnDomain(url: URL): CsamUrlTarget | null {
+  const parts = segmentsOf(url.pathname);
+  const page = parts ? sitePageOf(parts) : null;
+  if (!page || url.port || !/^https?:$/.test(url.protocol)) return null;
+  const target = { kind: 'site', host: hostOf(url), ours: false, ...page } as const;
+  const part = csamUrlPart(url);
+  if (!part) return target;
+  return part.commentId ? { ...target, commentId: part.commentId } : { ...target, item: null, id: null };
+}
+
+const CSAM_URL_START = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*alummahnow\.(?:net|org|com|link|app)\.?(?::\d{1,5})?\/./i;
 const BUNNY_URL_START = /^https?:\/\/vz-[a-z0-9-]+\.b-cdn\.net\/./i;
-const SITE_URL_START = /^(?:https?:\/\/)?[a-z0-9.-]{1,253}\/(?:en|ar)\/(?:watch|posts)\/[a-z0-9_-]{6,80}\/?[.,;]*$/i;
+const SITE_URL_START = /^(?:https?:\/\/)?[a-z0-9.-]{1,253}\/+(?:en|ar)\/+(?:watch|posts)\/+[a-z0-9_-]{6,80}(?:[/?#.,;]|$)/i;
+const ANY_URL_START = /^(?:https?:\/\/[^/]|[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d{1,5})?\/.)/i;
 const TRAILING_PUNCTUATION = '.,;';
 
-/**
- * Every URL-looking string in a pasted email or a webhook body (deduplicated, at most 200). Scholar
- * sites' own domains can only be told from other people's by lookup, so pages shaped like theirs are
- * taken too and resolveCsamUrl refuses the rest. Linear in the input: split on delimiters, then
- * anchored tests per token (an unanchored pattern with nested quantifiers backtracks on long runs of
- * '-' or ',').
- */
-export function extractCsamUrls(text: string): string[] {
-  const found = new Set<string>();
-  for (const raw of text.slice(0, 1_000_000).split(/[\s"'<>)\]]+/)) {
-    const lower = raw.toLowerCase();
-    // A URL may follow other text in the same token ("URL:https://…", "(alummahnow.net/…"), and may
-    // carry another one in its query (an image optimizer's ?url=): the first one counts
-    let start = lower.search(/https?:\/\//);
-    let bare = lower.indexOf('alummahnow.');
-    if (bare > 0) while (bare > 0 && /[a-z0-9.-]/.test(lower[bare - 1]!)) bare--;
-    if (bare >= 0 && (start < 0 || bare < start)) start = bare;
-    const token = start >= 0 ? raw.slice(start) : raw.replace(/^[^a-z0-9]+/i, '');
-    if (!CSAM_URL_START.test(token) && !BUNNY_URL_START.test(token) && !SITE_URL_START.test(token)) continue;
-    let end = token.length;
-    while (end > 0 && TRAILING_PUNCTUATION.includes(token[end - 1]!)) end--;
-    found.add(token.slice(0, end));
-    if (found.size >= 200) break;
-  }
-  return [...found];
+/** The URL a token is, or null: only a token that starts with a real host counts, never a host named inside another URL. */
+function urlOfToken(raw: string): string | null {
+  // It starts after some punctuation and at most one label ("URL:"); a URL further in belongs to another one
+  const head = /^[^a-z0-9]{0,20}(?:[a-z]{1,20}:(?!\/\/|\d))?[^a-z0-9]{0,20}/i.exec(raw)!;
+  const start = head[0].length;
+  if (/[/?#@=&\\%]/.test(head[0])) return null;
+  let end = raw.length;
+  while (end > start && TRAILING_PUNCTUATION.includes(raw[end - 1]!)) end--;
+  const token = raw.slice(start, end);
+  return ANY_URL_START.test(token) ? token : null;
 }
+
+/**
+ * The URLs in a pasted email or a webhook body (deduplicated): `urls` are the ones that may be ours (at most
+ * 200), `others` the rest (at most 50, to tell the person what was left out). Scholar sites' own domains can
+ * only be told from other people's by lookup, so pages shaped like theirs are in `urls` and resolveCsamUrl
+ * refuses the rest. Linear in the input: split on delimiters, then anchored tests per token (an unanchored
+ * pattern with nested quantifiers backtracks on long runs of '-' or ',').
+ */
+export function scanCsamUrls(text: string): { urls: string[]; others: string[] } {
+  const urls = new Set<string>();
+  const others = new Set<string>();
+  for (const raw of text.slice(0, 1_000_000).split(/[\s"'<>)\]]+/)) {
+    const url = urlOfToken(raw);
+    if (!url) continue;
+    if (CSAM_URL_START.test(url) || BUNNY_URL_START.test(url) || SITE_URL_START.test(url)) urls.add(url);
+    else if (others.size < 50) others.add(url.slice(0, 500));
+    if (urls.size >= 200) break;
+  }
+  return { urls: [...urls], others: [...others] };
+}
+
+export const extractCsamUrls = (text: string): string[] => scanCsamUrls(text).urls;
 
 /** When evidence may be deleted: never before a report, never under a hold; else report + days. */
 export function csamRetainUntil(c: { reportedAt: string | null; legalHold: boolean }, retentionDays: number): string | null {
@@ -423,6 +508,12 @@ export const CSAM_ACCESS_ACTIONS = [
   'webhook.secret.generated',
 ] as const;
 export type CsamAccessAction = (typeof CSAM_ACCESS_ACTIONS)[number];
+
+/** A URL in the pasted text that opened no case, and why. */
+export interface CsamRefusedUrl {
+  url: string;
+  reason: CsamUrlRefusal;
+}
 
 export interface CsamFreezeState {
   ban?: 'banned' | 'already_banned' | 'no_uploader';
@@ -508,12 +599,10 @@ export function csamUrlKey(input: string): string | null {
   const query = new Map<string, string>();
   const post = inner.searchParams.get('post');
   if (post) query.set('post', post);
-  if (SITE_HOST.test(host)) {
-    const vid = inner.searchParams.get('vid');
-    if (vid) query.set('vid', vid);
-    const comment = commentSelector(inner);
-    if (comment !== null) query.set('comment', comment === true ? '' : comment);
-  }
+  const vid = SITE_HOST.test(host) ? inner.searchParams.get('vid') : null;
+  if (vid) query.set('vid', vid);
+  const part = csamUrlPart(inner);
+  if (part) query.set('comment', part.commentId ?? '');
   const tail = [...query].map(([k, v]) => `${k}=${v}`).join('&');
   return `${host}${path}${tail ? `?${tail}` : ''}`;
 }
