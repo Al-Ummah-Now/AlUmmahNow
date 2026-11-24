@@ -304,7 +304,7 @@ CREATE INDEX idx_channel_invites_inviter ON channel_invites (invited_by, created
 CREATE UNIQUE INDEX idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
 CREATE INDEX idx_channel_move_offers_channel ON channel_move_offers (channel_id, status, responded_at);
 CREATE INDEX idx_channel_move_offers_from ON channel_move_offers (from_user_id, status);
-CREATE UNIQUE INDEX idx_channel_move_offers_open ON channel_move_offers (channel_id) WHERE status = 'offered';
+CREATE UNIQUE INDEX idx_channel_move_offers_open ON channel_move_offers (channel_id) WHERE status IN ('offered', 'accepting');
 CREATE INDEX idx_channel_move_offers_to ON channel_move_offers (to_user_id, status);
 CREATE INDEX idx_channel_quran_translations_edition ON channel_quran_translations (lang, qf_translation_id, name);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
