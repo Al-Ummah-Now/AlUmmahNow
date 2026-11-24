@@ -12,7 +12,7 @@
  * with a compare-and-set first; only the winner applies. Search-D1 changes apply in one batch with the
  * `applied` status, so they happen exactly once.
  *
- * Every query uses an index from search migration 0082 (see the tests' EXPLAIN QUERY PLAN checks).
+ * Every query uses an index from search migration 0085 (see the tests' EXPLAIN QUERY PLAN checks).
  */
 import {
   WORKFLOW_ACTIONS,
