@@ -14,6 +14,12 @@ export interface PlayerOptions {
   /** Moved from YouTube (wiki AUN-YT-IMPORT): the watch page says when it first came out there */
   importedFrom?: { platform?: string; publishedAt?: string | null; postedAt?: string | null; url?: string | null } | null;
   isLive?: boolean;
+  isPublic?: boolean;
+  isUnlisted?: boolean;
+  /** Effective creator download permission from the playback API (E14-D1) */
+  allowDownloads?: boolean;
+  /** Public progressive R2 video.mp4 URL when ready (E14-D5/D6) */
+  contentUrl?: string;
   channelAvatar: string;
   /** Channel has the scholar/institution badge (Epic 6.1) */
   channelVerified?: boolean;

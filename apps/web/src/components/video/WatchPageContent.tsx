@@ -19,6 +19,7 @@ import { VideoMetricsDisplay } from "@/components/videoMetrics/VideoMetricsDispl
 import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 import { WatchLaterButton } from "@/components/library/WatchLaterButton";
+import { DownloadVideoButton, isWatchDownloadAvailable } from "@/components/video/DownloadVideoButton";
 import ShareDialog from "@/components/video/ShareDialog";
 import { MenuButton } from "@/components/common/MenuButton";
 import { useActionRowFit } from "@/hooks/useActionRowFit";
@@ -28,6 +29,7 @@ import { VideoProcessingState } from "@/components/video/VideoProcessingState";
 import { fetchVideoById } from "@/lib/api/videos";
 import { useRelatedVideos } from "@/hooks/useRelatedVideos";
 import { useAuth } from "@/components/AuthProvider/authContext";
+import { useFeatures } from "@/hooks/useFeatures";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
@@ -123,6 +125,8 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   routerRef.current = router;
   // Report lives in the action row's "more" menu; its dialog is opened from there or from the player's settings
   const [reportOpen, setReportOpen] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  useEffect(() => setDownloadError(null), [videoId]);
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const { theatre } = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
   useEffect(() => enableWatchPageFeatures(), []);
@@ -251,8 +255,13 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   // A processing video swaps in the player once its check sees it ready
   const handleProcessed = useCallback((fresh: PlayerOptions) => setState({ status: 'ready', video: fresh }), []);
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
+  const { features: watchFeatures } = useFeatures(videoDetails?.channelId ?? null);
+  const canShowDownload =
+    Boolean(user) &&
+    watchFeatures.offlineDownloads === true &&
+    isWatchDownloadAvailable(videoDetails);
   // One line of actions at every width: labels drop to icons, then the comment pill goes
-  useActionRowFit(actionsRef, [videoDetails?.id, !!user, isOwnVideo, lang]);
+  useActionRowFit(actionsRef, [videoDetails?.id, !!user, isOwnVideo, canShowDownload, lang]);
 
   if (state.status === 'notFound') {
     return (
@@ -325,6 +334,18 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   />
                   {user && <WatchLaterButton videoId={videoDetails.id} />}
                   {user && <SaveToPlaylistControl videoId={videoDetails.id} />}
+                  {user && (
+                    <DownloadVideoButton
+                      videoId={videoDetails.id}
+                      channelId={videoDetails.channelId}
+                      allowDownloads={videoDetails.allowDownloads}
+                      isPublic={videoDetails.isPublic}
+                      isUnlisted={videoDetails.isUnlisted}
+                      isLive={videoDetails.isLive}
+                      contentUrl={videoDetails.contentUrl}
+                      onError={setDownloadError}
+                    />
+                  )}
                   {isOwnVideo && (
                     <Link
                       href={`/${lang}/studio/video/${videoDetails.id}/edit`}
@@ -351,6 +372,15 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     </MenuButton>
                   )}
               </div>
+              {downloadError && (
+                <div
+                  role="alert"
+                  data-testid="watch-download-error"
+                  className="mt-2 w-full rounded-lg border border-s-4 border-destructive bg-card px-4 py-2.5 text-sm text-card-foreground"
+                >
+                  {downloadError}
+                </div>
+              )}
               {!isOwnVideo && (
                 <ReportContentButton
                   hideTrigger

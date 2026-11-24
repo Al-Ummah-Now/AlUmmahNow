@@ -11,6 +11,7 @@ jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 jest.mock('@/lib/api/videos', () => ({ fetchRelatedVideos: jest.fn(), fetchVideoById: jest.fn() }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ features: { offlineDownloads: false } }) }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { video: { relatedVideos: 'Related', relatedFailed: 'Could not load', relatedRetry: 'Retry shelf' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
 }));
