@@ -157,6 +157,17 @@ export async function mayRead(env: ChannelAccessEnv & { SEARCH_DB?: unknown }, s
 	}
 }
 
+/** Whether this person may see what is held for review: the stream's moderators, never while banned (or unknown), and nothing of a deleted stream. */
+export async function mayReview(env: ChannelAccessEnv & { SEARCH_DB?: unknown }, stream: ChatStream, userId: string): Promise<boolean> {
+	if (stream.gate.visibility === 'deleted' || !(await chatRole(env, stream, userId)).moderates) return false;
+	try {
+		return !(await cachedBan(env.SEARCH_DB as never, userId));
+	} catch (error) {
+		logger.warn('[LiveChat] Ban not read; held messages are refused', { streamId: stream.id, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------
