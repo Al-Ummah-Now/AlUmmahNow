@@ -91,7 +91,10 @@ for (const lang of LANGS) {
     const served = new Map<string, { status: number; type: string }>();
     page.on('response', (res) => {
       const { pathname } = new URL(res.url());
-      if (pathname.startsWith('/fanous/street/')) served.set(pathname, { status: res.status(), type: (res.headers()['content-type'] ?? '').split(';')[0] });
+      const status = res.status();
+      // A 304 (the page loaded again) is no answer of its own: the first full one counts, and a failure always
+      if (!pathname.startsWith('/fanous/street/') || status === 304) return;
+      if (status >= 400 || !served.has(pathname)) served.set(pathname, { status, type: (res.headers()['content-type'] ?? '').split(';')[0] });
     });
     await open(page, `/${lang}`);
     const problems: string[] = [];
@@ -126,6 +129,7 @@ for (const lang of LANGS) {
     }
     const variant = await page.locator('html').getAttribute('data-fanous-street-variant');
     expect([...fetched], 'only the picked variant downloads').toEqual([variant]);
+    expect([...served].filter(([, r]) => r.status >= 400), 'street files that failed').toEqual([]);
     expect(problems, problems.join('\n')).toEqual([]);
   });
 }
