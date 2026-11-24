@@ -21695,6 +21695,14 @@
                   "subscribersOnly": {
                     "type": "boolean"
                   },
+                  "aiHold": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "strict"
+                    ]
+                  },
                   "madeForKids": {
                     "type": "boolean"
                   },
@@ -22307,6 +22315,14 @@
                   },
                   "subscribersOnly": {
                     "type": "boolean"
+                  },
+                  "aiHold": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "strict"
+                    ]
                   },
                   "madeForKids": {
                     "type": "boolean"
@@ -23208,6 +23224,195 @@
         }
       }
     },
+    "/api/v1/live-streams/{id}/chat/held": {
+      "get": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Live chat messages held for review",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Newest first, at most 100: what the AI scan held (E17-D4). For the stream’s owner, live.manage, live.moderate or comment.moderate. `restore` shows one, `remove` removes it.",
+        "operationId": "get_LiveChatHeld",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Held messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "streamId": {
+                                "type": "string"
+                              },
+                              "userId": {
+                                "type": "string"
+                              },
+                              "authorName": {
+                                "type": "string"
+                              },
+                              "authorHandle": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "authorAvatar": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "authorRole": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "owner",
+                                  "moderator",
+                                  null
+                                ]
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "offsetMs": {
+                                "type": "integer"
+                              },
+                              "isPinned": {
+                                "type": "boolean"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "streamId",
+                              "userId",
+                              "authorName",
+                              "authorHandle",
+                              "authorAvatar",
+                              "authorRole",
+                              "text",
+                              "offsetMs",
+                              "isPinned",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "messages"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a moderator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/live-streams/{id}/chat/settings": {
       "patch": {
         "tags": [
@@ -23277,6 +23482,15 @@
                   },
                   "subscribersOnly": {
                     "type": "boolean"
+                  },
+                  "aiHold": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "strict"
+                    ],
+                    "description": "What the AI scan holds for the moderators: nothing, what it flags, or also what comes close"
                   }
                 }
               }
@@ -23319,10 +23533,19 @@
                             "slowModeSeconds",
                             "subscribersOnly"
                           ]
+                        },
+                        "aiHold": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "basic",
+                            "strict"
+                          ]
                         }
                       },
                       "required": [
-                        "settings"
+                        "settings",
+                        "aiHold"
                       ]
                     }
                   },
@@ -51393,6 +51616,15 @@
                   },
                   "subscribersOnly": {
                     "type": "boolean"
+                  },
+                  "aiHold": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "basic",
+                      "strict"
+                    ],
+                    "description": "What the AI scan holds for the moderators: nothing, what it flags, or also what comes close"
                   }
                 },
                 "required": [

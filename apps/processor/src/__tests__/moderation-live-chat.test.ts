@@ -76,3 +76,36 @@ test('a share of zero scans nothing', async () => {
   expect(((await handleModerationScan(scan(), { REPORTS_DB: db as never, AI: AI as never }, logger)) as { decision: string }).decision).toBe('skipped:budget');
   expect(guardCalls).toBe(0);
 });
+
+describe('holding what the AI flags (E17-D4)', () => {
+  const UNSAFE = { run: async () => ({ response: 'unsafe\nS10', usage: { prompt_tokens: 450, completion_tokens: 5 } }) };
+  const search = (over: { fail?: boolean } = {}) => {
+    const runs: unknown[][] = [];
+    return { runs, prepare: () => ({ bind: (...args: unknown[]) => ({ run: async () => { if (over.fail) throw new Error('D1 is down'); runs.push(args); return { meta: { changes: 1 } }; } }) }) };
+  };
+  const enforced = { enabled: true, daily_neuron_cap: 100000, policies: { S10: { mode: 'enforce', threshold: 0.5, action: 'flag', enabled: true } } };
+  const decisionOf = (db: ReturnType<typeof reportsDb>) => (db.raw.prepare('SELECT decision FROM moderation_signals').all() as Array<{ decision: string }>).map((r) => r.decision);
+
+  it('only for chat, only in an enforced category, and the signal is written first', async () => {
+    const db = reportsDb(enforced);
+    const s = search();
+    const run = (over = {}) => handleModerationScan(scan({ subjectId: 'm1', ...over }), { REPORTS_DB: db as never, AI: UNSAFE as never, SEARCH_DB: s }, logger, { lastAttempt: true });
+    await run();
+    expect(decisionOf(db)).toEqual(['flag']);
+    expect(s.runs).toHaveLength(1);
+    expect(s.runs[0].slice(1)).toEqual(['m1', 's1', 's1']);
+    await run({ surface: 'video_comment' });
+    expect(s.runs).toHaveLength(1);
+    const shadow = reportsDb({ enabled: true, daily_neuron_cap: 100000 });
+    await handleModerationScan(scan(), { REPORTS_DB: shadow as never, AI: UNSAFE as never, SEARCH_DB: s }, logger, { lastAttempt: true });
+    expect(decisionOf(shadow)).toEqual(['would_flag']);
+    expect(s.runs).toHaveLength(1);
+  });
+
+  it('a hold that fails keeps the signal and does not scan again', async () => {
+    const db = reportsDb(enforced);
+    const out = await handleModerationScan(scan(), { REPORTS_DB: db as never, AI: UNSAFE as never, SEARCH_DB: search({ fail: true }) }, logger, { lastAttempt: false });
+    expect(out).toMatchObject({ status: 'done', decision: 'flag' });
+    expect(decisionOf(db)).toEqual(['flag']);
+  });
+});

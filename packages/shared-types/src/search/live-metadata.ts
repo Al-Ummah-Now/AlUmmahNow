@@ -8,7 +8,7 @@
  * has a fallback, so no stored record can fail the batch that also writes its ownership row.
  * reminder_count, heads_up_for and purge_pending belong to D1 and are not touched here.
  */
-import { isLiveChatSlowMode, isLiveEventType, isLiveStreamKind, isLiveStreamStatus, type LiveEventType, type LiveStreamKind, type LiveStreamStatus, type LiveStreamVisibility } from '../live-apps';
+import { DEFAULT_LIVE_CHAT_AI_HOLD, isLiveChatAiHold, isLiveChatSlowMode, isLiveEventType, isLiveStreamKind, isLiveStreamStatus, type LiveChatAiHold, type LiveEventType, type LiveStreamKind, type LiveStreamStatus, type LiveStreamVisibility } from '../live-apps';
 import { liveRecordingWithheld } from '../video-review';
 import { ownershipTombstone } from './ownership';
 import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
@@ -30,6 +30,7 @@ export interface LiveMetadataRow {
   chatReplay: boolean;
   slowModeSeconds: number;
   subscribersOnly: boolean;
+  aiHold: LiveChatAiHold;
   durationSeconds: number | null;
   scheduledStartAt: number | null;
   startedAt: number | null;
@@ -71,6 +72,7 @@ export function projectLiveMetadata(id: string, raw: unknown): LiveMetadataRow |
     chatReplay: s.chatReplay !== false,
     slowModeSeconds: isLiveChatSlowMode(s.slowModeSeconds) ? s.slowModeSeconds : 0,
     subscribersOnly: s.subscribersOnly === true,
+    aiHold: isLiveChatAiHold(s.aiHold) ? s.aiHold : DEFAULT_LIVE_CHAT_AI_HOLD,
     durationSeconds: duration,
     scheduledStartAt: time(s.scheduledStartTime),
     startedAt: time(s.actualStartTime),
@@ -82,7 +84,7 @@ export function projectLiveMetadata(id: string, raw: unknown): LiveMetadataRow |
 
 const COLUMNS = [
   'channel_id', 'owner_id', 'kind', 'premiere_video_id', 'event_type', 'status', 'visibility', 'made_for_kids', 'recording_withheld', 'allow_chat', 'chat_replay',
-  'slow_mode_seconds', 'subscribers_only', 'duration_seconds', 'scheduled_start_at', 'started_at', 'ended_at', 'created_at', 'updated_at',
+  'slow_mode_seconds', 'subscribers_only', 'ai_hold', 'duration_seconds', 'scheduled_start_at', 'started_at', 'ended_at', 'created_at', 'updated_at',
 ] as const;
 
 /** Upsert, applied only when `version` (R2's upload time) is not older than the row's nor than the stream's last delete. */
@@ -100,7 +102,7 @@ export function liveMetadataUpsertStatement(db: SearchDb, row: LiveMetadataRow, 
     )
     .bind(
       row.streamId, row.channelId, row.ownerId, row.kind, row.premiereVideoId, row.eventType, row.status, row.visibility, n(row.madeForKids), n(row.recordingWithheld), n(row.allowChat), n(row.chatReplay),
-      row.slowModeSeconds, n(row.subscribersOnly), row.durationSeconds, row.scheduledStartAt, row.startedAt, row.endedAt, row.createdAt, row.updatedAt, version,
+      row.slowModeSeconds, n(row.subscribersOnly), row.aiHold, row.durationSeconds, row.scheduledStartAt, row.startedAt, row.endedAt, row.createdAt, row.updatedAt, version,
       ownershipTombstone('stream'), row.streamId, version,
     );
 }

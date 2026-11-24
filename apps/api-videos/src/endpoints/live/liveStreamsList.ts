@@ -170,6 +170,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				reminderCount: reminders.get(stream.id) ?? 0,
 				// Which video a premiere shows is its team's unless it is on or over (wiki E17)
 				...(!managesStream(stream) && stream.status !== 'live' && stream.status !== 'ended' ? { premiereVideoId: undefined } : {}),
+				...(managesStream(stream) ? {} : { aiHold: undefined }),
 				// Who created it (a channel member) is for those who manage the channel's live
 				...(managesStream(stream) && createdBy ? { createdBy } : {}),
 				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)

@@ -3,7 +3,7 @@ import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { forgetFeatureSwitches, middlewareFeatureRoutes } from '@al-ummah/shared-types';
 import { forgetCachedBan } from '../src/lib/admin/bans';
-import { LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../src/endpoints/live/liveChat';
+import { LiveChatHeld, LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../src/endpoints/live/liveChat';
 import { forgetChatTiers, latestPage, postMessage, readChatStream, readSnapshot, replayPage } from '../src/lib/live/chat';
 import { saveTier } from '../src/lib/creatorTiers';
 import { withSearchSync } from '../src/lib/search/sync';
@@ -44,6 +44,7 @@ async function setup(over: Json = {}) {
 	await put({ id: 's1', ...over });
 	const as = (userId: string | null) =>
 		buildApp((router) => {
+			router.get('/api/live-streams/:id/chat/held', LiveChatHeld);
 			router.get('/api/live-streams/:id/chat', LiveChatList);
 			router.post('/api/live-streams/:id/chat', LiveChatPost);
 			router.post('/api/live-streams/:id/chat/:messageId/moderate', LiveChatModerate);
@@ -392,7 +393,7 @@ describe('switch and query plans', () => {
 		const t = await setup();
 		const broken = { ...t.env, SEARCH_DB: { prepare: () => { throw new Error('D1 down'); } } };
 		const routes = middlewareFeatureRoutes('api-videos').filter((r) => r.key === 'liveChat');
-		assert.equal(routes.length, 4);
+		assert.equal(routes.length, 5);
 		const app = buildApp((router) => {
 			for (const r of routes) router.on(r.method, r.path, requireFeature(r.key, { failClosed: r.failClosed }));
 			router.get('/api/live-streams/:id/chat', LiveChatList);
@@ -427,5 +428,52 @@ describe('switch and query plans', () => {
 			const plan = t.db.plan(query).filter((d) => !/CONSTANT ROW/.test(d)).join(' ; ');
 			assert.ok(!/\bSCAN\b/.test(plan), `${query.sql}\n${plan}`);
 		}
+	});
+});
+
+describe('held for review (E17-D4)', () => {
+	const hold = (t: Awaited<ReturnType<typeof setup>>, text: string) => t.db.db.prepare("UPDATE live_chat_messages SET status = 'held', held_by = 'moderation' WHERE text = ?").run(text);
+
+	it('is listed for the team only, approved or removed, and nobody else sees it', async () => {
+		const t = await setup();
+		await t.post('ali', 'one');
+		await t.post('sara', 'two');
+		hold(t, 'one');
+		hold(t, 'two');
+		assert.deepEqual(t.texts(await t.read('ali')), []);
+		assert.equal((await t.call(null, 'GET', 's1/chat/held')).status, 401);
+		assert.equal((await t.call('ali', 'GET', 's1/chat/held')).status, 403);
+		assert.equal((await t.call('owner', 'GET', 'nope/chat/held')).status, 404);
+		const held = await t.call('mod', 'GET', 's1/chat/held');
+		assert.equal(held.headers.get('cache-control'), 'private, no-store');
+		assert.deepEqual(t.texts(held).sort(), ['one', 'two']);
+		const id = held.json.result.messages.find((m: Json) => m.text === 'one').id;
+		const other = held.json.result.messages.find((m: Json) => m.text === 'two').id;
+		assert.equal((await t.call('mod', 'POST', `s1/chat/${id}/moderate`, { action: 'restore' })).status, 200);
+		assert.equal((await t.call('mod', 'POST', `s1/chat/${other}/moderate`, { action: 'remove' })).status, 200);
+		assert.deepEqual(t.texts(await t.read('ali')), ['one']);
+		assert.deepEqual(t.texts(await t.call('owner', 'GET', 's1/chat/held')), []);
+		assert.ok(t.sent.some((e) => e.type === 'live_chat_message' && e.message.id === id));
+	});
+
+	it('a blocked person’s messages are not among them, and the list is an index seek', async () => {
+		const t = await setup();
+		await t.post('ali', 'one');
+		t.db.db.prepare("UPDATE live_chat_messages SET status = 'held', held_by = 'channel_block'").run();
+		t.db.trace = [];
+		assert.deepEqual(t.texts(await t.call('owner', 'GET', 's1/chat/held')), []);
+		for (const q of t.db.trace.filter((x: Json) => x.sql.includes("held_by = 'moderation'"))) assert.ok(!/SCAN/.test(t.db.plan(q).join(' ; ')), t.db.plan(q).join(' ; '));
+	});
+
+	it('the creator chooses how much; it is in the index and not shown to others', async () => {
+		const t = await setup();
+		const level = () => (t.db.db.prepare("SELECT ai_hold FROM live_stream_metadata WHERE stream_id = 's1'").get() as Json).ai_hold;
+		assert.equal(level(), 'basic');
+		const saved = await t.call('owner', 'PATCH', 's1/chat/settings', { aiHold: 'strict' });
+		assert.deepEqual([saved.status, saved.json.result.aiHold, level()], [200, 'strict', 'strict']);
+		assert.equal((await t.call('owner', 'PATCH', 's1/chat/settings', { aiHold: 'all' })).status, 400);
+		assert.ok(!JSON.stringify(t.sent).includes('aiHold'));
+		await t.put({ id: 's1', aiHold: 'nonsense' });
+		assert.equal(level(), 'basic');
 	});
 });

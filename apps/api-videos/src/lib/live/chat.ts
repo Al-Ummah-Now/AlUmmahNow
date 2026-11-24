@@ -245,6 +245,15 @@ export async function withOwnHeld(db: D1Database, stream: ChatStream, userId: st
 	return { ...page, messages: merged };
 }
 
+/** What the AI scan holds for the moderators (E17-D4), newest first; a blocked person's messages are not among them. */
+export async function heldForReview(db: D1Database, streamId: string): Promise<LiveChatMessage[]> {
+	const { results } = await db
+		.prepare(`SELECT ${COLUMNS} FROM live_chat_messages WHERE stream_id = ? AND status = 'held' AND held_by = 'moderation' ORDER BY created_at DESC, id DESC LIMIT ?`)
+		.bind(streamId, MAX_PAGE)
+		.all<MessageRow>();
+	return (results ?? []).map(toMessage);
+}
+
 // ---------------------------------------------------------------------------
 // Posting
 // ---------------------------------------------------------------------------

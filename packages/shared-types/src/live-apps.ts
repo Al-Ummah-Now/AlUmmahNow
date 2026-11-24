@@ -28,6 +28,14 @@ export const LIVE_EVENT_LABELS: Readonly<Record<LiveEventType, { en: string; ar:
 export const LIVE_CHAT_SLOW_MODES = [0, 5, 10, 30, 60] as const;
 export type LiveChatSlowMode = (typeof LIVE_CHAT_SLOW_MODES)[number];
 
+/**
+ * What the AI scan may hold for the moderators (wiki E17-D4): nothing, what it flags, or also what comes close.
+ * Only in categories an admin enforces (Epic 28); never the owner's and moderators' messages.
+ */
+export const LIVE_CHAT_AI_HOLDS = ['none', 'basic', 'strict'] as const;
+export type LiveChatAiHold = (typeof LIVE_CHAT_AI_HOLDS)[number];
+export const DEFAULT_LIVE_CHAT_AI_HOLD: LiveChatAiHold = 'basic';
+
 /** Longest message, in Unicode code points. */
 export const LIVE_CHAT_MAX_LENGTH = 500;
 export const LIVE_CHAT_COOLDOWN_MS = 2_000;
@@ -40,6 +48,7 @@ export const isLiveStreamKind = oneOf(LIVE_STREAM_KINDS);
 export const isLiveStreamStatus = oneOf(LIVE_STREAM_STATUSES);
 export const isLiveEventType = oneOf(LIVE_EVENT_TYPES);
 export const isLiveChatSlowMode = oneOf(LIVE_CHAT_SLOW_MODES);
+export const isLiveChatAiHold = oneOf(LIVE_CHAT_AI_HOLDS);
 
 // ---------------------------------------------------------------------------
 // Text
