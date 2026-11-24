@@ -136,6 +136,27 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal(JSON.stringify(rows).includes('run1'), false);
 	});
 
+	it('a channel a move brings while its profile goes starts the steps over (CC-6 review)', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		const remove = env.profiles.delete.bind(env.profiles);
+		env.profiles.delete = (async (key: string) => {
+			db.db.prepare(`INSERT OR IGNORE INTO admin_jobs (id, kind, target_kind, target_id, actor_id, status, params, created_at, updated_at) VALUES ('j1', 'channel.transfer', 'channel', 'chX', 'other', 'succeeded', '{}', '2026', '2026')`).run();
+			db.db.prepare(`INSERT OR IGNORE INTO channel_move_offers (id, channel_id, from_user_id, to_user_id, status, job_id, created_at, expires_at, updated_at) VALUES ('o-late', 'chX', 'other', 'run1', 'moved', 'j1', '2026', '2099', '2026')`).run();
+			env.channels.store.set('chX', JSON.stringify({ ...JSON.parse(env.channels.store.get('chX')!), userId: 'run1' }));
+			db.db.prepare(`UPDATE content_ownership SET owner_id = 'run1' WHERE kind = 'channel' AND id = 'chX'`).run();
+			return remove(key);
+		}) as typeof remove;
+		const first = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+		assert.deepEqual([first.complete, first.step], [false, 0]);
+		const second = await eraseRunUserData(full as never, 'run1', new OperationBudget(900), {}, first.step);
+		assert.equal(second.complete, true);
+		assert.equal(env.channels.store.has('chX'), false);
+		assert.equal(JSON.stringify(db.db.prepare('SELECT * FROM channel_move_offers').all()).includes('run1'), false);
+	});
+
 	it('clears it as the tier owner of its live sessions, not someone else\'s', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();

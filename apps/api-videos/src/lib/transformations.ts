@@ -7,6 +7,7 @@ import { Video as BusinessVideo, Channel as BusinessChannel, Profile as Business
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
 import { audibleAudioTracks, can, channelRoleOf, creatorReviewView, isMadeForKids, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
+import { withoutMoveMark } from './channelMoveData';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
 
@@ -118,7 +119,7 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
     // Bunny collection ids are internal too (lib/channelCollection.ts)
     // Images waiting for pre-publication review (VR16): never their URL, only that one is being checked
     // The owner's email belongs to their account, not to the channel (older records hold a copy)
-    const { email: _email, suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, memberChangedAt: _changed, bunnyCollectionId: _collection, bunnyCollections: _collections, pendingImages, ...rest } = channel as typeof channel & {
+    const { email: _email, suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, memberChangedAt: _changed, bunnyCollectionId: _collection, bunnyCollections: _collections, pendingImages, ...rest } = withoutMoveMark(channel) as typeof channel & {
         pendingImages?: Record<string, { status?: string }>;
         suspension?: { at?: string; reason?: string; by?: string };
         suspensionHolds?: unknown;

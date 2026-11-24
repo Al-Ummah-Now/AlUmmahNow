@@ -44,7 +44,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { claimDefaultHandle, claimHandle, dropHandleHistory, handleHistoryKey, handleKey, normalizeHandleInput, OFFICIAL_HANDLES, readHandleEntry, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
-import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
+import { eraseUserSubscriptions, subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
 import { flagResumeUnavailable, flagUnreadableChannel } from '../privacy/notices';
 import { OperationBudget } from '../privacy/scan';
@@ -555,7 +555,8 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	// Decided now, so a retried job does not re-decide from a half-moved state
 	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
 	// One move at a time, taken atomically; checks above are only cheap early answers
-	const refused = await takeTransferLock(env, id, now());
+	const lockedAt = now();
+	const refused = await takeTransferLock(env, id, lockedAt);
 	if (refused) throw new AdminError(409, refused);
 	let job: AdminJob;
 	try {
@@ -574,10 +575,11 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 			params: { newOwnerId, previousOwnerId: fresh.userId ?? null, wasMain: fresh.isMain === true, makeMain, keepPreviousOwnerAsAdmin: options.keepPreviousOwnerAsAdmin === true, keepContactEmail: options.keepContactEmail === true, ...(options.reason ? { reason: options.reason } : {}), ...(options.offerId ? { offerId: options.offerId } : {}) },
 		});
 	} catch (error) {
-		await releaseTransferLock(env, id, '');
+		await releaseTransferLock(env, id, '', lockedAt);
 		throw error;
 	}
-	await setTransferLockJob(env, id, job.id);
+	// The move is queued: a lock that doesn't name its job yet must not answer as if it weren't (the job releases it)
+	await setTransferLockJob(env, id, job.id, lockedAt).catch((error) => logger.error('[Admin] Could not name a move on its lock', { channelId: id, jobId: job.id, error: error instanceof Error ? error.message : String(error) }));
 	return { job };
 }
 
@@ -599,6 +601,13 @@ const REPAIR_LOCK_MS = 20 * 60 * 1000;
 /** A repair starts no write later than this, so it never writes once its lock is stale; the next day's run goes on. */
 const REPAIR_MAX_MS = 15 * 60 * 1000;
 
+/** A lock with its move job, and the offer that move carries out (primary keys only). */
+export const TRANSFER_LOCK_SQL = `SELECT l.job_id AS job_id, l.created_at AS created_at, j.status AS status, json_extract(j.params, '$.offerId') AS offer_id, o.status AS offer_status
+ FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id LEFT JOIN channel_move_offers o ON o.id = json_extract(j.params, '$.offerId') WHERE l.channel_id = ?`;
+
+/** An offer whose move may still change hands, or did. */
+const offerStands = (status: string | null | undefined): boolean => status === 'accepting' || status === 'moved';
+
 /**
  * The channel's move lock (channel_transfer_locks, wiki AUN-CHANNEL-CLAIM §3.3) with its job's
  * status. A lock whose job succeeded or no longer exists is stale.
@@ -607,10 +616,13 @@ async function readTransferLock(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, channel
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return null;
 	const row = await db
-		.prepare(`SELECT l.job_id AS job_id, l.created_at AS created_at, j.status AS status FROM channel_transfer_locks l LEFT JOIN admin_jobs j ON j.id = l.job_id WHERE l.channel_id = ?`)
+		.prepare(TRANSFER_LOCK_SQL)
 		.bind(channelId)
-		.first<{ job_id: string; created_at: string; status: string | null }>();
+		.first<{ job_id: string; created_at: string; status: string | null; offer_id: string | null; offer_status: string | null }>();
 	if (!row) return null;
+	// A move its offer no longer stands for: it stops before the owner changes (runTransfer), so it holds nothing.
+	// One that changed hands first has an offer that says moved
+	if (row.offer_id && !offerStands(row.offer_status)) return { jobId: row.job_id, status: 'missing' };
 	if (row.job_id.startsWith(REPAIR_LOCK_PREFIX)) return { jobId: row.job_id, status: Date.parse(row.created_at) > Date.now() - REPAIR_LOCK_MS ? 'repairing' : 'missing' };
 	return { jobId: row.job_id, status: row.status ?? (row.job_id ? 'missing' : 'starting') };
 }
@@ -636,12 +648,16 @@ async function takeTransferLock(env: AdminServiceEnv, channelId: string, at: str
 	return Number(inserted.meta?.changes ?? 0) === 1 ? null : 'transfer_in_progress';
 }
 
-async function setTransferLockJob(env: AdminServiceEnv, channelId: string, jobId: string): Promise<void> {
-	await (env.SEARCH_DB as D1Database | undefined)?.prepare(`UPDATE channel_transfer_locks SET job_id = ? WHERE channel_id = ? AND job_id = ''`).bind(jobId, channelId).run();
+async function setTransferLockJob(env: AdminServiceEnv, channelId: string, jobId: string, takenAt: string): Promise<void> {
+	await (env.SEARCH_DB as D1Database | undefined)?.prepare(`UPDATE channel_transfer_locks SET job_id = ? WHERE channel_id = ? AND job_id = '' AND created_at = ?`).bind(jobId, channelId, takenAt).run();
 }
 
-async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobId: string): Promise<void> {
-	await (env.SEARCH_DB as D1Database | undefined)?.prepare('DELETE FROM channel_transfer_locks WHERE channel_id = ? AND job_id IN (?, \'\')').bind(channelId, jobId).run();
+/** Releases the lock of job `jobId`, or the one it was started under (no job named yet) if taken by `takenBy`; never a later request's. */
+async function releaseTransferLock(env: AdminServiceEnv, channelId: string, jobId: string, takenBy: string): Promise<void> {
+	await (env.SEARCH_DB as D1Database | undefined)
+		?.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = ? AND (job_id = ? OR (job_id = '' AND created_at <= ?))`)
+		.bind(channelId, jobId || null, takenBy)
+		.run();
 }
 
 /** Whether the user's creator tier lets them own one more channel (the same rule as creating one). */
@@ -970,7 +986,7 @@ const REVERIFY_WINDOW_MS = 48 * 60 * 60 * 1000;
 const REVERIFY_PAGE = 100;
 
 /** One page of finished moves, newest first, after a cursor (since, updated_at x3, id, limit); through idx_admin_jobs_status. */
-export const REVERIFY_SQL = `SELECT id, target_id, params, updated_at FROM admin_jobs
+export const REVERIFY_SQL = `SELECT id, target_id, params, result, updated_at FROM admin_jobs
  WHERE status = 'succeeded' AND updated_at >= ? AND kind = 'channel.transfer'
    AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
  ORDER BY updated_at DESC, id DESC LIMIT ?`;
@@ -997,19 +1013,21 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 	// Newest first, so the first row seen for a channel is its latest move
 	let cursor: { updatedAt: string; id: string } | null = null;
 	for (;;) {
-		const page: Array<{ id: string; target_id: string; params: string; updated_at: string }> =
+		const page: Array<{ id: string; target_id: string; params: string; result: string | null; updated_at: string }> =
 			((
 				await db
 					.prepare(
 						REVERIFY_SQL,
 					)
 					.bind(since, cursor?.updatedAt ?? null, cursor?.updatedAt ?? null, cursor?.updatedAt ?? null, cursor?.id ?? null, REVERIFY_PAGE)
-					.all<{ id: string; target_id: string; params: string; updated_at: string }>()
+					.all<{ id: string; target_id: string; params: string; result: string | null; updated_at: string }>()
 			).results ?? []);
 		for (const row of page) {
 			if (seen.has(row.target_id)) continue;
-			seen.add(row.target_id);
 			try {
+				// Stopped or skipped before the owner changed: the move before it is still the channel's latest
+				if (row.result && (JSON.parse(row.result) as { skipped?: string }).skipped) continue;
+				seen.add(row.target_id);
 				const params = JSON.parse(row.params || '{}') as { newOwnerId: string; previousOwnerId: string | null };
 				const channel = await repo(env.channels).getObject(row.target_id);
 				// Deleted, or no longer on this move's new owner (moved on, or back): nothing to check
@@ -1176,18 +1194,27 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	const id = job.targetId;
 	const { newOwnerId, previousOwnerId, wasMain, makeMain, keepContactEmail, keepPreviousOwnerAsAdmin, offerId } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean; keepContactEmail?: boolean; keepPreviousOwnerAsAdmin?: boolean; offerId?: string };
 	let stopped = false;
-	// The mark of an offer stopped before a later one's took its place
-	const cancelled = offerId ? (await env.SEARCH_DB!.prepare('SELECT status FROM channel_move_offers WHERE id = ?').bind(offerId).first<{ status: string }>())?.status === 'cancelled' : false;
+	// An owner's move: whether its offer still stands, read before the channel. The mark covers what changes after
+	const stands = offerId ? offerStands((await env.SEARCH_DB!.prepare('SELECT status FROM channel_move_offers WHERE id = ?').bind(offerId).first<{ status: string }>())?.status) : true;
+	// Stopped (an erasure of one of its people, lib/channelMoveData.ts), or no longer the channel of the owner who offered it
+	const stops = (channel: Row) => !!offerId && channel.userId !== newOwnerId && (!stands || channel.moveStopped === offerId || channel.userId !== previousOwnerId);
+	const skip = async (skipped: string): Promise<JobOutcome> => {
+		await releaseTransferLock(env, id, job.id, job.createdAt);
+		return { done: true, result: { skipped } };
+	};
+	const before = await repo(env.channels).getObject(id);
+	// Before anything that can fail: a move with nothing to do never ends as a failed job
+	if (!before || before.isDeleted) return skip(before ? 'channel_deleted' : 'channel_not_found');
+	if (stops(before)) return skip('stopped');
 	const keepAsAdmin = keepPreviousOwnerAsAdmin === true && !!previousOwnerId && previousOwnerId !== newOwnerId;
 	let keptAsAdmin = false;
 	// The sign-in account's email (null: no account yet, e.g. an invite on its way). Auth unreadable: the job retries
 	const newOwnerEmail = await authEmail(env, newOwnerId);
-	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
-	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
 	// Every playlist must be findable before the flip: a rebuilding index makes the job retry, not stop half-way
 	await channelPlaylistIds(env, id);
-	const before = await repo(env.channels).getObject(id);
-	if (before && !before.isDeleted && before.userId !== newOwnerId) {
+	// A broadcast that started after the request: wait for it to end (the job retries with backoff).
+	// Only before the flip; once the channel is on the new owner the remaining steps must finish.
+	if (before.userId !== newOwnerId) {
 		if (await channelIsLive(env, id)) throw new Error('channel_is_live: the move waits for the broadcast to end');
 		// Support set up after the request: support never moves with a channel unless an admin decides (CC-D10)
 		if (await channelHasSupport(env, id)) throw new Error('channel_has_support: support was set up after the move was requested');
@@ -1196,9 +1223,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		stopped = false;
 		if (fresh.isDeleted) return false;
 		if (fresh.userId === newOwnerId) return false;
-		// One of its people is being erased: the move stops here (lib/channelMoveData.ts). The mark stays until
-		// another move, so this job run again (a retry, a second delivery) stops again
-		if (offerId && (cancelled || fresh.moveStopped === offerId)) {
+		// The mark stays until another move, so this job run again (a retry, a second delivery) stops again
+		if (stops(fresh)) {
 			stopped = true;
 			return false;
 		}
@@ -1220,14 +1246,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		fresh.dateModified = now();
 		return true;
 	});
-	if (stopped) {
-		await releaseTransferLock(env, id, job.id);
-		return { done: true, result: { skipped: 'stopped' } };
-	}
-	if (!saved || saved.isDeleted) {
-		await releaseTransferLock(env, id, job.id);
-		return { done: true, result: { skipped: saved ? 'channel_deleted' : 'channel_not_found' } };
-	}
+	if (stopped) return skip('stopped');
+	if (!saved || saved.isDeleted) return skip(saved ? 'channel_deleted' : 'channel_not_found');
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
 		const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];
 		if (list.includes(id)) return false;
@@ -1262,13 +1282,15 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 	});
 	const posts = await movePosts(env, id, previousOwnerId, newOwnerId);
 	const subscriptions = await moveChannelSubscriptions(env, id, previousOwnerId, newOwnerId);
+	// The new owner was erased meanwhile (their profile goes before the erasure's last look at their subscriptions)
+	if (subscriptions && !(await repo(env.profiles).getObject(newOwnerId))) await eraseUserSubscriptions(env.NOTIFICATIONS_DB as D1Database, newOwnerId);
 	const invitesCancelled = await cancelInvitesToNewOwner(env, id, newOwnerId, newOwnerEmail);
 	const failed = videos.failed + schedules.failed + live.failed + playlists.failed + posts.failed;
 	const result = { videos: videos.changed, schedules: schedules.changed, liveStreams: live.changed, liveSessionsEnded: live.rotated, playlists: playlists.changed, posts: posts.changed, subscriptions, invitesCancelled, anomalies, previousOwnerId };
 	if (failed === 0) {
 		const problems = await verifyTransfer(env, id, previousOwnerId, newOwnerId, videoIds);
 		if (problems.length) throw new Error(`Channel move verify found records on the previous owner (${problems.join(', ')}); retrying`);
-		await releaseTransferLock(env, id, job.id);
+		await releaseTransferLock(env, id, job.id, job.createdAt);
 		await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
 		await notifyMove(env, job, saved, previousOwnerId, newOwnerId);
 	}

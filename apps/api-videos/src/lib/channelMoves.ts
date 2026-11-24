@@ -258,8 +258,11 @@ export async function acceptMoveOffer(env: Env, id: string, userId: string, now 
 			keepContactEmail: options.keepContactEmail === true,
 			expectedOwnerId: offer.from_user_id,
 			offerId: id,
-			// An erasure of either person may have closed it since the claim
-			confirm: async () => (await readOffer(env, id))?.status === 'accepting',
+			// Under the lock: still this offer, between these two people. An erasure of either may have closed it since the claim
+			confirm: async () => {
+				const fresh = await readOffer(env, id);
+				return fresh?.status === 'accepting' && fresh.to_user_id === userId && fresh.from_user_id === offer.from_user_id;
+			},
 		});
 		jobId = job.id;
 	} catch (error) {
