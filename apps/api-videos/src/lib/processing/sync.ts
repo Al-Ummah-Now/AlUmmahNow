@@ -286,7 +286,14 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 	}
 
 	// encoding
-	if (video.uploadStatus !== 'processing' && video.uploadStatus !== 'ready') setStatus('processing');
+	if (video.uploadStatus === 'ready') {
+		clearIssue();
+		const stallAfter = opts.stallAfterMs ?? DEFAULT_STALL_AFTER_MS;
+		// Already watchable (e.g. ready from R2): stop checking after the stall limit without flagging it
+		if (now - loopStarted >= stallAfter) return finish('ready');
+		return finish('playable');
+	}
+	if (video.uploadStatus !== 'processing') setStatus('processing');
 	const stallAfter = opts.stallAfterMs ?? DEFAULT_STALL_AFTER_MS;
 	if (now - loopStarted >= stallAfter) {
 		const reason = `Still encoding at Bunny (status ${bunny?.status}, ${bunny?.encodeProgress ?? 0}%)`;

@@ -88,6 +88,11 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
       </form>
 
       {!data && <ErrorAlert testId="processing-error">{t('processing.loadFailed')}</ErrorAlert>}
+      {data?.truncated && (
+        <p role="status" data-testid="processing-partial" className="mb-4 rounded-lg border border-border border-s-4 border-s-warning-fg bg-surface-2 px-4 py-3 text-sm text-fg">
+          {t('processing.partialList')}
+        </p>
+      )}
       {data && data.items.length === 0 && (
         <div className={`${cardClass} text-center text-fg-muted`} data-testid="processing-empty">{t(typeof data.nextOffset === 'number' || offset > 0 ? 'processing.pageEmpty' : 'processing.empty')}</div>
       )}
