@@ -148,8 +148,13 @@ export function daysTo70(points: { day: string; bytes: number }[], limitBytes: n
   return Math.round(((target - latest) / slope) * 10) / 10;
 }
 
+/**
+ * Whether a value crosses its rule. The D1 capacity rules are inclusive (D1-1: "at 70%", "within 60
+ * days"), so a database exactly at the line alerts; the older ops rules keep their strict compare.
+ */
 export function crosses(rule: ThresholdRule, value: number | null): boolean {
   if (value === null) return false;
+  if (CAPACITY_METRICS.includes(rule.metric)) return rule.op === '>' ? value >= rule.value : value <= rule.value;
   return rule.op === '>' ? value > rule.value : value < rule.value;
 }
 
@@ -181,7 +186,8 @@ async function windowStats(db: D1Database, hours: number, end: Date): Promise<Wi
 
 /** days_to_70 per D1 resource from the last FORECAST_DAYS of ops_daily (indexed by env, kind, day). */
 async function forecasts(db: D1Database, end: Date, limits: D1Limits): Promise<Map<string, number | null>> {
-  const since = new Date(end.getTime() - FORECAST_DAYS * 86_400_000).toISOString().slice(0, 10);
+  // Exactly FORECAST_DAYS dates: the current UTC day and the 13 before it
+  const since = new Date(Date.parse(`${end.toISOString().slice(0, 10)}T00:00:00Z`) - (FORECAST_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
   const { results } = await db
     .prepare(
       `SELECT resource_id, day, stored_bytes FROM ops_daily

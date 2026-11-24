@@ -8,13 +8,14 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CF_API, accountD1Storage } from '../src/discover';
+import { ACCOUNT_LISTING_MAX_PAGES, CF_API, accountD1Storage } from '../src/discover';
 import { runHourly, type CollectorEnv } from '../src/collect';
 import { prune } from '../src/store';
 import {
   ACCOUNT_KIND,
   DEFAULT_D1_LIMITS,
   alertTitle,
+  crosses,
   daysTo70,
   evaluateThresholds,
   formatValue,
@@ -75,7 +76,38 @@ describe('account-wide D1 storage', () => {
   });
 });
 
+describe('account listing beyond 20 pages', () => {
+  const pagedFetch = (pages: number, opts: { totalPages?: boolean; failAt?: number } = {}) =>
+    (async (input: string | URL) => {
+      const page = Number(new URL(String(input)).searchParams.get('page'));
+      if (page === opts.failAt) return new Response(JSON.stringify({ success: false }), { status: 500 });
+      const result = page <= pages ? Array.from({ length: page < pages ? 100 : 7 }, (_, i) => ({ name: `db-${page}-${i}`, uuid: 'u', file_size: 1000 })) : [];
+      return new Response(JSON.stringify({ success: true, result, ...(opts.totalPages === false ? {} : { result_info: { total_pages: pages } }) }), { status: 200 });
+    }) as typeof fetch;
+
+  it('follows every page (25 here), with or without total_pages', async () => {
+    assert.deepEqual(await accountD1Storage('t', 'a', pagedFetch(25)), { bytes: (24 * 100 + 7) * 1000, databases: 24 * 100 + 7 });
+    assert.deepEqual(await accountD1Storage('t', 'a', pagedFetch(25, { totalPages: false })), { bytes: (24 * 100 + 7) * 1000, databases: 24 * 100 + 7 });
+  });
+
+  it('never returns a partial total: a failed page or the safety stop throws', async () => {
+    await assert.rejects(accountD1Storage('t', 'a', pagedFetch(25, { failAt: 22 })), /page 22/);
+    await assert.rejects(accountD1Storage('t', 'a', pagedFetch(ACCOUNT_LISTING_MAX_PAGES + 5)), /not stored/);
+  });
+});
+
 describe('capacity metrics', () => {
+  it('capacity rules are inclusive at their line; the older ops rules stay strict', () => {
+    assert.equal(crosses(rule({ value: 0.7 }), 0.7), true);
+    assert.equal(crosses(rule({ value: 0.9 }), 0.9), true);
+    assert.equal(crosses(rule({ value: 0.7 }), 0.6999), false);
+    assert.equal(crosses(rule({ metric: 'storage_days_to_70', op: '<', value: 60 }), 60), true);
+    assert.equal(crosses(rule({ metric: 'storage_days_to_70', op: '<', value: 60 }), 60.1), false);
+    assert.equal(crosses(rule({ metric: 'busy_pct', value: 0.7 }), 0.7), true);
+    assert.equal(crosses(rule({ kind: ACCOUNT_KIND, metric: 'account_storage_pct', value: 0.7 }), 0.7), true);
+    assert.equal(crosses(rule({ kind: 'worker', metric: 'error_rate', value: 0.02 }), 0.02), false);
+  });
+
   it('storage_pct and account_storage_pct are fractions of the limits, only on their own kind', () => {
     assert.equal(metricValue(rule({}), stats({ stored_bytes: 7.5 * GB })), 0.75);
     assert.equal(metricValue(rule({}), stats({ kind: 'r2', stored_bytes: 9 * GB })), null);
