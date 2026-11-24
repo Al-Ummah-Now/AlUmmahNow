@@ -44,6 +44,7 @@ import {
   commentOnRequest,
   getRequestView,
   listRequests,
+  openRequests,
   rejectRequest,
   retryRequest,
   ruleInForce,
@@ -227,6 +228,17 @@ app.get('/requests', async (c) => {
   });
   const money = seesMoney(c, actor);
   return ok(c, { items: money ? page.items : page.items.filter((i) => i.domain !== 'money'), next: page.next });
+});
+
+/** The open request of each `target` (kind:id, repeated), for the pages that change them: { items: { target: requestId } }. */
+app.get('/pending', async (c) => {
+  const ctx = ctxFor(c);
+  const actor = await needRead(c, ctx);
+  const type = c.req.query('type');
+  if (!type || !isWorkflowActionType(type)) return apiError(c, 404, 'not_found');
+  // Money requests are for people who can see money, whether they are open or not
+  const items = workflowFloorFor(type, '').money && !seesMoney(c, actor) ? {} : await openRequests(ctx, type, c.req.queries('target') ?? []);
+  return ok(c, { items });
 });
 
 /**

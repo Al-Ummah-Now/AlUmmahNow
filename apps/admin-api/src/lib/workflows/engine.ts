@@ -746,6 +746,24 @@ export async function listRequests(ctx: WorkflowCtx, userId: string, opts: { vie
   return { items, next: rows.length > limit && last ? `${last.proposed_at}|${last.id}` : null };
 }
 
+/** The most targets `openRequests` looks up at once (D1 binds at most 100 values). */
+export const MAX_OPEN_TARGETS = 100;
+
+/**
+ * The open request of each target (`kind:id`), for a feature's own pages: they show "Waiting for approval"
+ * in place of the control (§10). One read of idx_workflow_requests_open.
+ */
+export async function openRequests(ctx: Pick<WorkflowCtx, 'db'>, type: WorkflowActionType, targets: readonly string[]): Promise<Record<string, string>> {
+  const prefix = `${type}:`;
+  const keys = [...new Set(targets)].slice(0, MAX_OPEN_TARGETS).map((t) => prefix + t);
+  if (!keys.length) return {};
+  const { results } = await ctx.db
+    .prepare(`SELECT id, open_key FROM workflow_requests WHERE open_key IN (${keys.map(() => '?').join(', ')})`)
+    .bind(...keys)
+    .all<{ id: string; open_key: string }>();
+  return Object.fromEntries((results ?? []).map((r) => [r.open_key.slice(prefix.length), r.id]));
+}
+
 export async function waitingCount(ctx: WorkflowCtx, userId: string): Promise<number> {
   const r = await ctx.db.prepare('SELECT COUNT(*) AS n FROM workflow_inbox WHERE user_id = ?').bind(userId).first<{ n: number }>();
   return Number(r?.n ?? 0);

@@ -7,6 +7,7 @@ import type { Locale } from '@/i18n/config';
 import { approveTierRequest, declineTierRequest, getTierRequestSettings, listTierRequests, type TierRequestSettings } from '@/lib/api/tier-requests';
 import { UpgradePageMode } from '@/components/tier-requests/UpgradePageMode';
 import { featureStates, type FeatureStates } from '@/lib/features/states';
+import { openWorkflowRequests } from '@/lib/api/workflows';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { emailTone, parseTierRequestFilter, requesterName, tierRequestsHref, type EmailTone } from '@/lib/tier-requests';
@@ -56,6 +57,7 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
   let page: AdminTierRequestsPage | null = null;
   let settings: TierRequestSettings | null = null;
   let features: FeatureStates = {};
+  let pending: Record<string, string> = {};
   try {
     [page, settings, features] = await Promise.all([
       listTierRequests({ filter, cursor, pageSize: 25 }),
@@ -65,6 +67,7 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
       }),
       featureStates(),
     ]);
+    if (canDecide) pending = await openWorkflowRequests('tiers.change', page.items.filter((row) => row.status === 'pending').map((row) => `tier-request:${row.id}`));
   } catch (error) {
     logger.error('[tier-requests] Failed to load', { filter, error: error instanceof Error ? error.message : String(error) });
   }
@@ -108,7 +111,7 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
       {page && page.items.length > 0 && (
         <ul className="space-y-4" data-testid="tier-requests-list">
           {page.items.map((row) => (
-            <RequestCard key={row.id} row={row} t={t} locale={locale} canDecide={canDecide} />
+            <RequestCard key={row.id} row={row} t={t} locale={locale} canDecide={canDecide} pendingRequest={pending[`tier-request:${row.id}`]} />
           ))}
         </ul>
       )}
@@ -123,7 +126,7 @@ export default async function TierRequestsPage({ searchParams }: { searchParams:
   );
 }
 
-function RequestCard({ row, t, locale, canDecide }: { row: AdminTierRequestRow; t: Translator; locale: Locale; canDecide: boolean }) {
+function RequestCard({ row, t, locale, canDecide, pendingRequest }: { pendingRequest?: string; row: AdminTierRequestRow; t: Translator; locale: Locale; canDecide: boolean }) {
   const who = requesterName(row);
   const tone = emailTone(row.emailStatus);
   const headingId = `tier-request-${row.id}`;
@@ -203,7 +206,7 @@ function RequestCard({ row, t, locale, canDecide }: { row: AdminTierRequestRow; 
           ) : (
             <span />
           )}
-          {row.status === 'pending' && canDecide && <TierRequestActions id={row.id} name={who} tier={tierLabel({ name: row.tierName, nameAr: row.tierNameAr }, locale)} actions={{ approve: approveTierRequest, decline: declineTierRequest }} />}
+          {row.status === 'pending' && canDecide && <TierRequestActions id={row.id} name={who} tier={tierLabel({ name: row.tierName, nameAr: row.tierNameAr }, locale)} actions={{ approve: approveTierRequest, decline: declineTierRequest }} pendingRequest={pendingRequest} />}
         </div>
       )}
     </li>

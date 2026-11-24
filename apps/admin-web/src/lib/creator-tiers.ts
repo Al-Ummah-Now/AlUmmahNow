@@ -275,6 +275,7 @@ export const tiersHref = (tierId?: string) => (tierId ? `/tiers#tier-${encodeURI
 export function tierActionMessage(result: { status: number; code?: string }): MessageKey {
   if (result.status === 401) return 'errors.notAuthenticated';
   if (result.status === 403) return 'creators.errorForbidden';
+  if (result.code === 'change_pending') return 'creators.errorChangePending';
   if (result.code === 'super_admin_tier') return 'creators.errorSuperAdmin';
   if (result.code === 'tier_not_found') return 'creators.errorTierGone';
   if (result.code === 'tier_is_default') return 'creators.tierIsDefault';
@@ -286,6 +287,13 @@ export function tierActionMessage(result: { status: number; code?: string }): Me
   if (result.code === 'tier_name_not_english') return 'creators.errorNameNotEnglish';
   if (result.code === 'invalid_tier') return 'creators.errorInvalid';
   return 'creators.saveFailed';
+}
+
+/** A tier change that was sent for approval: thrown out of an undoable action, which has nothing to undo. */
+export class TierChangeSent extends Error {
+  constructor(readonly requestId: string) {
+    super('The tier change was sent for approval');
+  }
 }
 
 /** Failures worth an error report: the network or the server, not a refusal the admin can act on. */

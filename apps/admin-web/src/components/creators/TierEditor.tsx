@@ -3,8 +3,8 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, localizeDigits, parseDigits, type CreatorTier, type TierLiveCapability } from '@al-ummah/shared-types';
-import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel, arabicMissing } from '@/lib/creator-tiers';
+import type { ActionResult, GovernedResult } from '@/lib/api/errors';
+import { isUnexpectedFailure, tierActionMessage, TierChangeSent, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel, arabicMissing } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
 import Link from '@/components/AppLink';
@@ -15,6 +15,8 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog, confirmButtonClass } from './TierChangeDialog';
 import { DefaultTierButton, type SetDefaultTierAction } from './DefaultTierButton';
+import { useSentRequest } from '@/components/workflows/useSentRequest';
+import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { NumberField } from '@/components/forms/NumberField';
 
@@ -22,12 +24,12 @@ type Message = { kind: 'ok' | 'error'; text: string } | null;
 
 /** Server actions (lib/api/creators saveCreatorTier / deleteCreatorTier), passed down from the page. */
 export interface TierActions {
-  save: (tier: TierPayload, create: boolean) => Promise<ActionResult<unknown>>;
-  remove: (id: string) => Promise<ActionResult<unknown>>;
+  save: (tier: TierPayload, create: boolean) => Promise<GovernedResult<unknown>>;
+  remove: (id: string) => Promise<GovernedResult<unknown>>;
   /** Makes a tier (or 'none') the default, with Undo */
   setDefault?: SetDefaultTierAction;
   /** Reorders the tiers (rank), with Undo */
-  reorder?: (ids: string[], opts?: { undo?: boolean }) => Promise<ActionResult<{ previous: string[]; order: string[] }>>;
+  reorder?: (ids: string[], opts?: { undo?: boolean }) => Promise<GovernedResult<{ previous: string[]; order: string[] }>>;
 }
 type Pending = 'save' | 'delete' | null;
 
@@ -53,7 +55,7 @@ const HELP: Record<NumberField | 'maxChannels', MessageKey> = {
  * the stored tier with only `hidden` changed, so unsaved edits in the form are never saved with it. The
  * default tier cannot be hidden (the server refuses it too).
  */
-function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier: CreatorTier; canManage: boolean; isDefault: boolean; save: TierActions['save']; describedBy: string }) {
+function HiddenSwitch({ tier, canManage, isDefault, save, describedBy, onSent }: { tier: CreatorTier; canManage: boolean; isDefault: boolean; save: TierActions['save']; describedBy: string; onSent: (requestId: string) => void }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
@@ -63,6 +65,7 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
   const name = tierLabel(tier, locale);
   const send = async (value: boolean) => {
     const result = await save({ ...tierFormPayload(tierToForm(tier)), hidden: value }, false);
+    if (result.ok === 'sent') throw new TierChangeSent(result.requestId);
     if (!result.ok) throw new HiddenFailure(result);
     setHidden(value);
     router.refresh();
@@ -81,6 +84,11 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
         undoneMessage: t('creators.tierHiddenUndone'),
       });
     } catch (e) {
+      if (e instanceof TierChangeSent) {
+        setHidden(!next);
+        onSent(e.requestId);
+        return;
+      }
       const result: ActionFailure | { ok: false; status: number } = e instanceof HiddenFailure ? e.result : { ok: false, status: 0 };
       logger.warn('[creators] Tier hidden switch failed', { id: tier.id, status: result.status, code: 'code' in result ? result.code : undefined });
       if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
@@ -118,7 +126,7 @@ class HiddenFailure extends Error {
 }
 
 /** One tier's limits, editable by admins (creators:manage); saved through admin-api with an audit row. */
-function TierCard({ tier, users, invites = 0, canManage, actions, create = false, isDefault = false }: { tier?: CreatorTier; users: number; invites?: number; canManage: boolean; actions: TierActions; create?: boolean; isDefault?: boolean }) {
+function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, create = false, isDefault = false, pendingRequest }: { pendingRequest?: string; tier?: CreatorTier; users: number; invites?: number; canManage: boolean; actions: TierActions; create?: boolean; isDefault?: boolean }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
@@ -127,6 +135,9 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const [message, setMessage] = useState<Message>(null);
+  const [sent, setSent] = useSentRequest(pendingRequest);
+  // A change waiting for approval holds the tier: read only until it is decided
+  const canManage = mayManage && !pendingRequest;
   const key = create ? 'new' : tier?.id ?? '';
   const fixedUnlimited = tier?.id === CREATOR_TIER_IDS.unlimited;
   const errors = validateTierForm(form, { create });
@@ -134,17 +145,27 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
   const n = (value: number) => formatNumber(value, locale);
   const set = <K extends keyof TierFormValues>(field: K, value: TierFormValues[K]) => setForm((f) => ({ ...f, [field]: value }));
 
-  async function run(action: () => Promise<ActionResult<unknown>>, ok: string) {
+  function onSent(requestId: string) {
+    setSent(requestId);
+    // Nothing changed yet: the form goes back to the stored tier (a new one is kept in the request)
+    setForm(tierToForm(tier));
+    setTouched(false);
+    router.refresh();
+  }
+
+  async function run(action: () => Promise<GovernedResult<unknown>>, ok: string) {
     setPending(null);
     setBusy(true);
     setMessage(null);
-    let result: ActionResult<unknown>;
+    setSent(null);
+    let result: GovernedResult<unknown>;
     try {
       result = await action();
     } catch (error) {
       result = { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
     }
     setBusy(false);
+    if (result.ok === 'sent') return onSent(result.requestId);
     if (!result.ok) {
       logger.warn('[creators] Tier action failed', { id: key, status: result.status, code: result.code });
       if (isUnexpectedFailure(result)) reportError(new Error(`Creator tier action failed: ${result.status} ${result.code ?? ''}`.trim()), { kind: 'fetch', status: result.status, shown: true });
@@ -225,6 +246,8 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         else setPending('save');
       }}
     >
+      {/* Why the card is read only, before its fields */}
+      {mayManage && pendingRequest && !sent && <WaitingForApproval requestId={pendingRequest} testId={`tier-${key}-waiting`} />}
       {!create && saved && (
         <p className="text-sm text-fg-muted" data-testid={`tier-${key}-effect`}>{tierEffect(saved, t, locale)}</p>
       )}
@@ -297,7 +320,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         </div>
         {/* Hidden (owner, 2026-11-19): a new tier sets it with Create; an existing tier switches at once, with Undo */}
         <div className="flex flex-col gap-1 text-sm">
-          {create || !tier ? flag('hidden', t('creators.tierHidden'), false, `${ids}-hidden-help`) : <HiddenSwitch tier={tier} canManage={canManage} isDefault={isDefault} save={actions.save} describedBy={`${ids}-hidden-help`} />}
+          {create || !tier ? flag('hidden', t('creators.tierHidden'), false, `${ids}-hidden-help`) : <HiddenSwitch tier={tier} canManage={canManage} isDefault={isDefault} save={actions.save} describedBy={`${ids}-hidden-help`} onSent={onSent} />}
           <span id={`${ids}-hidden-help`} className="ps-6 text-xs text-fg-muted" data-testid={`tier-${key}-hidden-help`}>{t(isDefault ? 'creators.helpHiddenDefault' : 'creators.helpHidden')}</span>
         </div>
         {/* Rank is set by reordering the Rank list above (drag or move up/down), not typed here */}
@@ -443,6 +466,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
           )}
         </div>
       )}
+      {sent && <SentForApproval requestId={sent} testId={`tier-${key}-sent`} />}
       <p role="status" aria-live="polite" className="text-sm min-h-5" data-testid={`tier-${key}-status`}>
         {message && <span className={message.kind === 'ok' ? 'text-success-fg' : 'text-danger-fg'}>{message.text}</span>}
       </p>
@@ -467,7 +491,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
   );
 }
 
-export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canManage, actions }: { tiers: CreatorTier[]; counts: Record<string, number>; invites?: Record<string, number>; defaultTierId?: string; canManage: boolean; actions: TierActions }) {
+export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canManage, actions, pending = {} }: { /** Open change requests by target (creator-tier:<id>, creator-tiers:setDefault) */ pending?: Record<string, string>; tiers: CreatorTier[]; counts: Record<string, number>; invites?: Record<string, number>; defaultTierId?: string; canManage: boolean; actions: TierActions }) {
   const { t, locale } = useLanguage();
   return (
     <div className="flex flex-col gap-6">
@@ -489,11 +513,11 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
             ) : (
               // A hidden tier cannot be the default (every new account gets the default): show it first
               canManage && actions.setDefault && !tier.hidden && (
-                <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} />
+                <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} pendingRequest={pending['creator-tiers:setDefault']} />
               )
             )}
           </div>
-          <TierCard tier={tier} users={counts[tier.id] ?? 0} invites={invites[tier.id] ?? 0} canManage={canManage} actions={actions} isDefault={tier.id === defaultTierId} />
+          <TierCard tier={tier} users={counts[tier.id] ?? 0} invites={invites[tier.id] ?? 0} canManage={canManage} actions={actions} isDefault={tier.id === defaultTierId} pendingRequest={pending[`creator-tier:${tier.id}`]} />
         </section>
       ))}
       {canManage && (

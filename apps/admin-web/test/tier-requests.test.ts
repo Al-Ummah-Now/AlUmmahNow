@@ -44,6 +44,7 @@ describe('tier requests queue', () => {
 
   it('turns a refused decision into the right message', () => {
     assert.equal(decisionFailure({ status: 409, code: 'tier_request_not_pending' }), 'alreadyDecided');
+    assert.equal(decisionFailure({ status: 409, code: 'change_pending' }), 'changePending');
     assert.equal(decisionFailure({ status: 403 }), 'readOnly');
     assert.equal(decisionFailure({ status: 500 }), 'failed');
   });

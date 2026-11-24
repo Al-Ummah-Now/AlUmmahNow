@@ -1,5 +1,6 @@
 import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
 import { creatorTierAudit, deleteCreatorTier, listCreatorTiers, reorderCreatorTiers, saveCreatorTier, setDefaultCreatorTier } from '@/lib/api/creators';
+import { openWorkflowRequests } from '@/lib/api/workflows';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -18,14 +19,16 @@ export default async function CreatorTiersPage() {
   const canManage = canManageCreators(session?.user.role);
   let list: CreatorTiersList | null = null;
   let audit: AdminAuditEntry[] = [];
+  let pending: Record<string, string> = {};
   try {
     [list, audit] = await Promise.all([listCreatorTiers(), creatorTierAudit().catch(() => [])]);
+    if (canManage) pending = await openWorkflowRequests('tiers.change', ['creator-tiers:setDefault', 'creator-tiers:reorder', ...list.items.map((tier) => `creator-tier:${tier.id}`)]);
   } catch (e) {
     logger.error('[creators] Failed to load tiers', { error: e instanceof Error ? e.message : String(e) });
   }
   return (
     <>
-      <CreatorTiersView list={list} audit={audit} canManage={canManage} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier, setDefault: setDefaultCreatorTier, reorder: reorderCreatorTiers }} />
+      <CreatorTiersView list={list} audit={audit} canManage={canManage} pending={pending} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier, setDefault: setDefaultCreatorTier, reorder: reorderCreatorTiers }} />
       {canManage && (
         <p className="mt-6">
           <Link href={trashHref('creator-tier')} className={linkClass} data-testid="tiers-recently-deleted">

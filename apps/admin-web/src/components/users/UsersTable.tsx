@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import type { AdminUserRow, CreatorTier, CreatorTierBulkResult } from '@al-ummah/shared-types';
-import type { ActionResult } from '@/lib/api/errors';
+import type { GovernedResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type Translator } from '@/i18n/translate';
@@ -12,6 +12,7 @@ import { ErrorAlert, fieldClass, linkClass } from '@/components/ui';
 import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { CreatorTierControl, type SetTierAction } from '@/components/creators/CreatorTierControl';
+import { SentForApproval } from '@/components/workflows/SentForApproval';
 import { TierChangeDialog } from '@/components/creators/TierChangeDialog';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
@@ -32,7 +33,7 @@ function StatusChips({ user, t }: { user: AdminUserRow; t: Translator }) {
   );
 }
 
-export type BulkSetTierAction = (userIds: string[], tierId: string | null) => Promise<ActionResult<CreatorTierBulkResult>>;
+export type BulkSetTierAction = (userIds: string[], tierId: string | null) => Promise<GovernedResult<CreatorTierBulkResult>>;
 
 export interface UsersTableProps {
   items: AdminUserRow[];
@@ -43,6 +44,8 @@ export interface UsersTableProps {
   /** Server actions (lib/api/creators), passed down from the page */
   setTier: SetTierAction;
   bulkSetTier: BulkSetTierAction;
+  /** Tier changes waiting for approval, by target (user:<id>) */
+  pending?: Record<string, string>;
 }
 
 /**
@@ -52,7 +55,7 @@ export interface UsersTableProps {
  * selectable for a bulk tier change; super admins are not, since their
  * Unlimited is automatic. Every change is confirmed with its effect.
  */
-export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: UsersTableProps) {
+export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier, pending = {} }: UsersTableProps) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -61,6 +64,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
 
   const bulk = canManage && tiers !== null;
   const selectable = items.filter((u) => u.creator?.origin !== 'super_admin');
@@ -84,13 +88,21 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
     setBusy(true);
     setError(null);
     setNotice(null);
-    let result: ActionResult<CreatorTierBulkResult>;
+    setSent(null);
+    let result: GovernedResult<CreatorTierBulkResult>;
     try {
       result = await bulkSetTier(chosen.map((u) => u.id), bulkTier);
     } catch (e) {
       result = { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
     }
     setBusy(false);
+    if (result.ok === 'sent') {
+      setSent(result.requestId);
+      setSelected(new Set());
+      setBulkTier('');
+      router.refresh();
+      return;
+    }
     if (!result.ok) {
       logger.warn('[users] Bulk tier change failed', { status: result.status, code: result.code, users: chosen.length });
       if (isUnexpectedFailure(result)) reportError(new Error(`Bulk creator tier change failed: ${result.status} ${result.code ?? ''}`.trim()), { kind: 'fetch', status: result.status, shown: true });
@@ -134,6 +146,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
         </div>
       )}
       {error && <ErrorAlert testId="users-bulk-error">{error}</ErrorAlert>}
+      {sent && <SentForApproval requestId={sent} testId="users-bulk-sent" />}
       {notice && <p role="status" className="text-success-fg text-sm" data-testid="users-bulk-notice">{notice}</p>}
 
       <div className={tableWrapClass}>
@@ -221,6 +234,8 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         canManage={canManage}
                         needsTier={creator.needsTier}
                         setTier={setTier}
+                        pendingRequest={pending[`user:${u.id}`]}
+                        noticeClassName="max-w-36 sm:max-w-52"
                       />
                     ) : (
                       <span className="text-fg-muted">{t('content.none')}</span>

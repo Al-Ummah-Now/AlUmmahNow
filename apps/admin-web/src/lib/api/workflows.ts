@@ -8,6 +8,7 @@
  */
 import type { WorkflowActionType, WorkflowDomain, WorkflowFloor, WorkflowLocalized, WorkflowRequestView, WorkflowRuleConfig, WorkflowStatus } from '@al-ummah/shared-types';
 import type { ActionResult } from './errors';
+import { logger } from '@/lib/logger';
 import { requestAdmin, toResult } from './request';
 
 export type WorkflowView = 'waiting' | 'mine' | 'open' | 'history';
@@ -55,6 +56,23 @@ export interface WorkflowRuleVersion {
 }
 
 export type WorkflowProposeResult = { status: 'applied'; requestId: string; result: unknown } | { status: 'pending_approval' | 'failed'; request: WorkflowRequestView };
+
+/**
+ * The open change request of each target (`kind:id`), so a page shows "Waiting for approval" in place of the
+ * control (§10). A failure only hides the marks: a second change is refused by admin-api (change_pending).
+ */
+export async function openWorkflowRequests(type: WorkflowActionType, targets: string[]): Promise<Record<string, string>> {
+  if (!targets.length) return {};
+  const q = new URLSearchParams({ type });
+  for (const target of targets.slice(0, 100)) q.append('target', target);
+  try {
+    const body = await requestAdmin(`/api/workflows/pending?${q}`);
+    return (body.result as { items?: Record<string, string> } | undefined)?.items ?? {};
+  } catch (error) {
+    logger.warn('[approvals] Open requests unavailable', { type, error: error instanceof Error ? error.message : String(error) });
+    return {};
+  }
+}
 
 export async function listWorkflowRequests(params: { view: WorkflowView; status?: WorkflowStatus; type?: WorkflowActionType; cursor?: string }): Promise<{ items: WorkflowListItem[]; next: string | null }> {
   const q = new URLSearchParams({ view: params.view });

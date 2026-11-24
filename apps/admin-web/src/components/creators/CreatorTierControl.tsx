@@ -4,13 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CREATOR_TIER_IDS, creatorTierOrigin, type CreatorTier, type CreatorTierAssignment, type CreatorTierOrigin } from '@al-ummah/shared-types';
 import { defaultTierName, isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage, tierLabel } from '@/lib/creator-tiers';
-import type { ActionResult } from '@/lib/api/errors';
+import type { GovernedResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { type MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
+import { useSentRequest } from '@/components/workflows/useSentRequest';
+import { SentForApproval, WaitingForApproval } from '@/components/workflows/SentForApproval';
 import { TierChangeDialog } from './TierChangeDialog';
 import { useNames } from '@/components/audit/useNames';
 import { Select } from '@/components/select/Select';
@@ -25,7 +27,7 @@ export interface CurrentTier {
 }
 
 /** setUserCreatorTier (lib/api/creators), passed down from the server page. */
-export type SetTierAction = (userId: string, tierId: string | null, opts?: { confirmSuperAdmin?: boolean }) => Promise<ActionResult<unknown>>;
+export type SetTierAction = (userId: string, tierId: string | null, opts?: { confirmSuperAdmin?: boolean }) => Promise<GovernedResult<unknown>>;
 
 export interface CreatorTierControlProps {
   userId: string;
@@ -38,6 +40,10 @@ export interface CreatorTierControlProps {
   needsTier?: boolean;
   testId?: string;
   setTier: SetTierAction;
+  /** A change of this user's tier waiting for approval */
+  pendingRequest?: string;
+  /** How wide the approval notices may be (the Users table's phone column is narrow) */
+  noticeClassName?: string;
 }
 
 /** Fills a "{actor}, {date}" template with each value in its own <bdi>. */
@@ -67,12 +73,13 @@ type Status = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind
  * automatic Unlimited is locked, with the reason shown; "Change anyway"
  * unlocks it for a deliberate change (admin-api also refuses it otherwise).
  */
-export function CreatorTierControl({ userId, userName, current: serverCurrent, tiers, canManage, needsTier = false, testId = 'creator-tier', setTier }: CreatorTierControlProps) {
+export function CreatorTierControl({ userId, userName, current: serverCurrent, tiers, canManage, needsTier = false, testId = 'creator-tier', setTier, pendingRequest, noticeClassName }: CreatorTierControlProps) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   // undefined: no change pending; string: assign that tier (every account keeps a tier: no "remove")
   const [pending, setPending] = useState<string | undefined>(undefined);
   const [unlocked, setUnlocked] = useState(false);
+  const [sent, setSent] = useSentRequest(pendingRequest);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   // The tier just saved, shown at once: the page's refresh (router.refresh) re-reads the whole list
   // and can take seconds, and until it lands the row showed the old tier under "Saved". Dropped as
@@ -81,6 +88,8 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   const current = saved && saved.basis === (serverCurrent?.tierId ?? null) ? saved.tier : serverCurrent;
   const superAdmin = current?.origin === 'super_admin';
   const locked = superAdmin && !unlocked;
+  // A change waiting for approval holds the tier until it is decided
+  const changeable = canManage && !pendingRequest && !sent;
   const tierOf = (id: string | null | undefined) => (id ? tiers.find((tier) => tier.id === id) ?? null : null);
   const currentTier = tierOf(current?.tierId);
   // Every account has a stored tier; one not backfilled yet works as Free, so it is shown as Free
@@ -90,11 +99,18 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   async function apply(tierId: string) {
     setPending(undefined);
     setStatus({ kind: 'saving' });
-    let result: ActionResult<unknown>;
+    let result: GovernedResult<unknown>;
     try {
       result = await setTier(userId, tierId, { confirmSuperAdmin: superAdmin });
     } catch (error) {
       result = { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
+    }
+    if (result.ok === 'sent') {
+      setStatus({ kind: 'idle' });
+      setSent(result.requestId);
+      setUnlocked(false);
+      router.refresh();
+      return;
     }
     if (!result.ok) {
       logger.warn('[creators] Tier change failed', { userId, status: result.status, code: result.code });
@@ -145,7 +161,8 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
       )}
       {superAdmin && <p className="text-xs text-fg-muted max-w-xs" data-testid={`${testId}-super-admin`}>{t('creators.superAdminLocked')}</p>}
 
-      {canManage && !locked && (
+      {sent ? <SentForApproval requestId={sent} testId={`${testId}-sent`} className={noticeClassName} /> : canManage && pendingRequest ? <WaitingForApproval requestId={pendingRequest} testId={`${testId}-waiting`} className={noticeClassName} /> : null}
+      {changeable && !locked && (
         <div className="flex flex-wrap items-center gap-2">
           <Select
             aria-label={t('creators.changeTierFor', { name: userName })}
@@ -173,7 +190,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
           )}
         </div>
       )}
-      {canManage && locked && (
+      {changeable && locked && (
         <button type="button" className={`${smallButtonClass} self-start`} onClick={() => setUnlocked(true)} data-testid={`${testId}-unlock`}>
           {t('creators.changeAnyway')}
         </button>
