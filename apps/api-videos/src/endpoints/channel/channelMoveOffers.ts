@@ -32,7 +32,7 @@ export class ChannelMoveReceivers extends AuthenticatedRoute {
 	schema = {
 		tags: ['Channels'],
 		summary: 'Who the owner can move the channel to',
-		description: '🔒 Owner only. The channel’s current admins (channel roles), matched on name, @username or email. A channel moves only to one of its admins.',
+		description: '🔒 Owner only. The channel’s current admins (channel roles), matched on name or @username. A channel moves only to one of its admins, picked by user id.',
 		request: { params: ChannelParams, query: z.object({ q: z.string().max(200).default('') }) },
 		responses: {
 			'200': { description: 'The channel’s admins', content: { 'application/json': { schema: z.object({ success: z.boolean(), data: z.object({ items: z.array(z.object({ userId: z.string(), name: z.string(), userName: z.string().nullable(), avatarUrl: z.string().nullable() })) }) }) } } },
