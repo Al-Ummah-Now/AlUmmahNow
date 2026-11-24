@@ -47,13 +47,17 @@ export const statusLabel = (t: Translator, status: WorkflowStatus) => translateD
 /** Whether a field changes (secrets always count: their value is never shown). */
 export const fieldChanges = workflowFieldChanged;
 
+/** The names of the people in a diff value (never an id or an email), for a page that lists them one per line. */
+export const workflowPeople = (ids: readonly unknown[], t: Translator, names: Record<string, string>): string[] => ids.map((id) => names[String(id)] ?? t('workflows.someone'));
+
 /** One value of the diff as text, in the reader's language. People come from `names` (never an email). */
 export function workflowValue(f: WorkflowField, v: unknown, locale: Locale, t: Translator, names: Record<string, string>): string {
   if (v === null || v === undefined || v === '') return t('workflows.none');
   if (f.kind === 'secret') return v === 'replaced' ? t('workflows.replaced') : t('workflows.secretSet');
   if (f.kind === 'bool') return v ? t('workflows.yes') : t('workflows.no');
   const separator = locale === 'ar' ? '، ' : ', ';
-  if (f.kind === 'person') return (Array.isArray(v) ? v : [v]).map((id) => names[String(id)] ?? t('workflows.someone')).join(separator);
+  // Each name isolated (FSI…PDI), so a Latin name and the Arabic comma after it keep the list's direction on one line
+  if (f.kind === 'person') return Array.isArray(v) ? workflowPeople(v, t, names).map((name) => `\u2068${name}\u2069`).join(separator) : workflowPeople([v], t, names)[0];
   const label = (x: unknown) => f.enumLabels?.[String(x)]?.[locale === 'ar' ? 'ar' : 'en'] ?? String(x);
   if (Array.isArray(v)) return v.map(label).join(separator);
   if (f.kind === 'enum') return label(v);
