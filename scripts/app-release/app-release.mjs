@@ -32,7 +32,7 @@ import { pathToFileURL } from 'node:url';
 
 const { subtle } = webcrypto;
 export const REPOS = ['AlUmmahNowDesktop', 'AlUmmahNowTools', 'AlUmmahNowApple', 'AlUmmahNowAndroid'];
-const APPS = ['viewer', 'studio', 'kids', 'tools', 'admin'];
+const APPS = ['viewer', 'studio', 'tools', 'admin'];
 const PLATFORMS = ['ios', 'ipados', 'tvos', 'macos', 'android', 'androidtv', 'firetv', 'windows', 'linux', 'tizen', 'webos', 'web'];
 const KINDS = ['velopack-full', 'velopack-delta', 'sparkle-zip', 'msi', 'msix', 'zip', 'dmg', 'pkg', 'exe', 'deb', 'flatpak', 'tar', 'apk', 'appinstaller'];
 const SOURCES = ['appstore', 'testflight', 'play', 'amazon', 'msstore', 'direct', 'managed', 'samsung'];
