@@ -94,10 +94,10 @@ async function audited<T>(c: C, ids: string[], action: string, details: Record<s
 const body = async (c: C) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 const badIds = (c: C) => c.json({ success: false, code: 'bad_request', error: `ids must be 1-${MAX_IDS} video ids` }, 400);
 
-/** Stuck videos with Bunny's state next to ours, and the reconciler's last run. */
+/** Stuck videos with stored Bunny check state (or live Bunny when `?bunny=1`), and the reconciler's last run. */
 app.get('/videos', async (c) => {
   const result = await callProcessing<{ items?: { id: string }[] }>(c.env, '/videos', {
-    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), offset: c.req.query('offset'), bunny: c.req.query('bunny') ?? '1' },
+    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), offset: c.req.query('offset'), bunny: c.req.query('bunny') },
   });
   const items = await withoutHiddenVideos(c.env.REPORTS_DB, c.get('auth')?.roles, result.items ?? [], (v) => v.id);
   return c.json({ success: true, result: { ...result, items } });
@@ -168,7 +168,7 @@ app.post('/mark-failed', async (c) => {
 
 /** Thumbnail aspect repair runs (admin jobs in api-videos), newest first. */
 app.get('/thumbnails', async (c) => {
-  const result = await callProcessing(c.env, '/thumbnails');
+  const result = await callProcessing(c.env, '/thumbnails', { query: { limit: c.req.query('limit') } });
   return c.json({ success: true, result });
 });
 

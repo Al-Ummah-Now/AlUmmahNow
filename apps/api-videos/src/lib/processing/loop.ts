@@ -95,6 +95,8 @@ type LoopVideo = SyncableVideo & {
 		outcome?: string;
 		bunnyStatus?: number;
 		bunnyProgress?: number;
+		bunnyResolutions?: string | null;
+		bunnyMissing?: boolean;
 		restarts?: number;
 	};
 };
@@ -435,6 +437,8 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 			lastCheckedAt: now.toISOString(),
 			bunnyStatus: bunny?.status,
 			bunnyProgress: bunny?.encodeProgress,
+			bunnyResolutions: bunny?.availableResolutions ?? undefined,
+			bunnyMissing: loopBunnyId && bunny === null ? true : undefined,
 			nextCheckAt: decision.kind === 'again' ? new Date(now.getTime() + decision.delaySeconds * 1000).toISOString() : undefined,
 			finishedAt: decision.kind === 'done' ? now.toISOString() : undefined,
 			outcome: decision.kind === 'done' ? decision.outcome : undefined,
