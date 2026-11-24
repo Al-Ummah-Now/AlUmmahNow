@@ -5,8 +5,13 @@ import {
   WebSocketSubscription,
   WebSocketEventType
 } from '@/interfaces/websocket';
+import { ACCESS_CHANGED_EVENT } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { sanitizeEventPayload, validateStructure } from '@/lib/security/InputSanitizer';
+
+/** Frames a live chat's subscribers get from this client (never from the server). */
+export const REALTIME_JOINED = 'realtime_joined';
+export const REALTIME_LEFT = 'realtime_left';
 
 export class WebSocketManager {
   private ws: WebSocket | null = null;
@@ -20,6 +25,8 @@ export class WebSocketManager {
   private authenticated = false;
   /** Server acknowledged a socket that will never authenticate (signed-out viewer). */
   private anonymousReady = false;
+  /** Live chats the server confirmed on this socket (`live:<streamId>`, wiki E17 §5.3). */
+  private joined: Set<string> = new Set();
   private eventListeners: Map<string, Set<(data: WebSocketConnectionState) => void>> = new Map();
 
   /** Set the token sent in the authenticate message on (re)connect. */
@@ -111,6 +118,7 @@ export class WebSocketManager {
         this.ws.onclose = (event) => {
           this.authenticated = false;
           this.anonymousReady = false;
+          [...this.joined].forEach((channel) => this.setJoined(channel, false));
           logger.debug('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
@@ -187,7 +195,8 @@ export class WebSocketManager {
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
-            if (this.authenticated) {
+            this.joined.delete(channel);
+            if (this.canSendSubscribe(channel)) {
               this.sendChannelMessage('unsubscribe', channel);
             }
           }
@@ -218,9 +227,39 @@ export class WebSocketManager {
     }
   }
 
-  /** Signed-out sockets may join public video feeds only (see the server's canSubscribeAnonymously). */
+  /** Signed-out sockets may join public video feeds and public live chats only (see the server's canSubscribeAnonymously). */
   private canSendSubscribe(channel: string): boolean {
-    return this.authenticated || (this.anonymousReady && channel.startsWith('video:'));
+    return this.authenticated || (this.anonymousReady && (channel.startsWith('video:') || channel.startsWith('live:')));
+  }
+
+  /**
+   * A live chat's subscribers learn when the server confirms it and when it is gone, as frames of their own
+   * (REALTIME_JOINED, REALTIME_LEFT): they poll in between.
+   */
+  private setJoined(channel: string, joined: boolean): void {
+    if (joined === this.joined.has(channel) && !joined) return;
+    if (joined) this.joined.add(channel);
+    else this.joined.delete(channel);
+    this.deliver(channel, { type: joined ? REALTIME_JOINED : REALTIME_LEFT });
+  }
+
+  private deliver(channel: string, data: unknown): void {
+    [...(this.subscriptions.get(channel) ?? [])].forEach((sub) => {
+      try {
+        sub.callback(data);
+      } catch (error) {
+        logger.error('❌ Error in subscription callback:', error);
+      }
+    });
+  }
+
+  /** Asks again for the live chats: the server put this socket out of them, and answers those it may still read. */
+  private rejoinLiveChats(only?: string): void {
+    this.subscriptions.forEach((_subs, channel) => {
+      if (!channel.startsWith('live:') || (only && channel !== only)) return;
+      this.setJoined(channel, false);
+      if (this.canSendSubscribe(channel)) this.sendChannelMessage('subscribe', channel);
+    });
   }
 
   /** (Re)send every active subscription, e.g. after (re)authentication. */
@@ -321,6 +360,15 @@ export class WebSocketManager {
       return;
     }
 
+    if ((message.type as string) === 'subscribed') {
+      if (message.channel?.startsWith('live:') && this.subscriptions.has(message.channel)) this.setJoined(message.channel, true);
+      return;
+    }
+    // What this person may see changed (a ban, a channel role): every live chat is asked for again
+    if ((message.type as string) === ACCESS_CHANGED_EVENT) {
+      this.rejoinLiveChats();
+    }
+
     // Handle heartbeat
     if (message.type === 'heartbeat') {
       this.sendMessage('heartbeat', { timestamp: Date.now() });
@@ -336,16 +384,9 @@ export class WebSocketManager {
         ? message.channel
         : this.getChannelKeyFromMessage(message));
     if (channelKey) {
-      const subscribers = this.subscriptions.get(channelKey);
-      if (subscribers) {
-        subscribers.forEach(sub => {
-          try {
-            sub.callback(message.data);
-          } catch (error) {
-            logger.error('❌ Error in subscription callback:', error);
-          }
-        });
-      }
+      this.deliver(channelKey, message.data);
+      // The server ended every subscription to this chat with that frame
+      if ((message.type as string) === 'live_chat_closed') this.rejoinLiveChats(channelKey);
     }
 
     // Broadcast to all subscribers for certain message types

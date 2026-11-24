@@ -6,7 +6,7 @@
  * (Bunny Stream Live and self-hosted): Studio and the watch page never branch
  * on the provider except to read the ingest protocol's help text.
  */
-import { FEATURE_OFF_CODE, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
+import { FEATURE_OFF_CODE, type LiveChatAction, type LiveChatMessage, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 
@@ -34,6 +34,18 @@ export interface LiveStateView extends LiveStreamState {
   qoe: { sampleRate: number };
   /** Server clock (ms) when the state was read; newer servers only. */
   serverNow?: number;
+  scheduledStartTime?: string | null;
+  /** Live chat for this caller (wiki E17 §5.1); absent on older servers, all off while the feature is off. */
+  chat?: LiveChatView;
+  canModerate?: boolean;
+}
+
+export interface LiveChatView {
+  enabled: boolean;
+  replay: boolean;
+  slowModeSeconds: number;
+  subscribersOnly: boolean;
+  canPost: boolean;
 }
 
 /** A state read plus what the player needs to estimate the server clock offset. */
@@ -53,7 +65,7 @@ export interface IngestView {
 
 /** A refused or failed call; `code` is the API's code (live_capacity, feature_off, …) when it sent one. */
 export class LiveApiError extends Error {
-  constructor(readonly status: number, readonly code: string | null) {
+  constructor(readonly status: number, readonly code: string | null, readonly retryAfter: number | null = null) {
     super(`Live request failed (${status}${code ? ` ${code}` : ''})`);
     this.name = 'LiveApiError';
   }
@@ -78,8 +90,8 @@ async function request(path: string, init: RequestInit & { auth: Auth; channelId
 }
 
 async function json<T>(res: Response): Promise<T> {
-  const body = (await res.json().catch(() => null)) as { result?: T; code?: string } | null;
-  if (!res.ok || !body) throw new LiveApiError(res.status, body?.code ?? null);
+  const body = (await res.json().catch(() => null)) as { result?: T; code?: string; retryAfter?: number } | null;
+  if (!res.ok || !body) throw new LiveApiError(res.status, body?.code ?? null, typeof body?.retryAfter === 'number' ? body.retryAfter : null);
   return body.result as T;
 }
 
@@ -200,4 +212,48 @@ export function leaveViewer(id: string, viewerId: string): void {
     // fall through to a keepalive fetch
   }
   void fetch(url, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Live chat (wiki E17 §5.2)
+// ---------------------------------------------------------------------------
+
+export interface ChatPage {
+  messages: LiveChatMessage[];
+  pinned: LiveChatMessage | null;
+  hasMore: boolean;
+  truncated?: boolean;
+}
+
+export const CHAT_PAGE = 100;
+
+/** The latest messages; with `before`, those before it; with `fromMs`, the replay window. */
+export async function readChat(streamId: string, query: { before?: string; fromMs?: number; toMs?: number; limit?: number } = {}, signal?: AbortSignal): Promise<ChatPage> {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined) q.set(key, String(value));
+  const suffix = q.size ? `?${q}` : '';
+  return json<ChatPage>(await request(`${streamPath(streamId)}/chat${suffix}`, { auth: 'optional', signal }));
+}
+
+/** `channelId`: post as this channel. `humanToken`: the Turnstile token of an account's first message. */
+export async function postChat(streamId: string, text: string, opts: { channelId?: string | null; humanToken?: string } = {}): Promise<LiveChatMessage> {
+  const res = await request(`${streamPath(streamId)}/chat`, {
+    auth: 'required',
+    method: 'POST',
+    ...(opts.channelId ? { channelId: opts.channelId } : {}),
+    headers: { 'Content-Type': 'application/json', ...(opts.humanToken ? { 'X-Turnstile-Token': opts.humanToken } : {}) },
+    body: JSON.stringify({ text }),
+  });
+  return (await json<{ message: LiveChatMessage }>(res)).message;
+}
+
+export async function moderateChat(streamId: string, messageId: string, action: LiveChatAction): Promise<void> {
+  await json(
+    await request(`${streamPath(streamId)}/chat/${encodeURIComponent(messageId)}/moderate`, {
+      auth: 'required',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }),
+  );
 }

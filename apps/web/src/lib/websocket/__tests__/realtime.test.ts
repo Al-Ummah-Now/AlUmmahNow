@@ -152,6 +152,65 @@ describe('WebSocketManager subscriptions', () => {
     expect(subscribes(sent).map(m => m.channel)).toEqual(['channel:c1', 'channel:c1']);
   });
 
+  describe('live chats (wiki E17 §5.3)', () => {
+    const make = (config = {}) => new WebSocketManager({ url: 'wss://example/ws', reconnectInterval: 1000, maxReconnectAttempts: 1, heartbeatInterval: 30000, ...config });
+
+    it('signed-out sockets join and leave a public live chat, and its subscribers learn when it is confirmed', () => {
+      const manager = make();
+      const sent = attachSocket(manager);
+      const onFrame = jest.fn();
+      const onVideo = jest.fn();
+      const off = manager.subscribe('live:s1', onFrame);
+      manager.subscribe('video:v1', onVideo);
+      deliver(manager, { type: 'connection_acknowledged' });
+      expect(subscribes(sent).map((m) => m.channel)).toEqual(['live:s1', 'video:v1']);
+      expect(onFrame).not.toHaveBeenCalled();
+      deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+      deliver(manager, { type: 'subscribed', channel: 'video:v1' });
+      expect(onFrame.mock.calls).toEqual([[{ type: 'realtime_joined' }]]);
+      expect(onVideo).not.toHaveBeenCalled();
+      off();
+      expect(sent.filter((m) => m.type === 'unsubscribe').map((m) => m.channel)).toEqual(['live:s1']);
+    });
+
+    it('a closed chat and a change of what this person may see are asked for again', () => {
+      const manager = make();
+      const sent = attachSocket(manager);
+      deliver(manager, { type: 'authenticated', data: { userId: 'u1' } });
+      const onFrame = jest.fn();
+      const other = jest.fn();
+      manager.subscribe('live:s1', onFrame);
+      manager.subscribe('live:s2', other);
+      deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+      deliver(manager, { type: 'live_chat_closed', channel: 'live:s1', data: { type: 'live_chat_closed', streamId: 's1' } });
+      expect(onFrame.mock.calls.map(([f]) => f.type)).toEqual(['realtime_joined', 'live_chat_closed', 'realtime_left']);
+      expect(subscribes(sent).map((m) => m.channel)).toEqual(['live:s1', 'live:s2', 'live:s1']);
+      expect(other).not.toHaveBeenCalled();
+      deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+      deliver(manager, { type: 'access_changed', channel: 'user:u1', data: { type: 'access_changed' } });
+      expect(onFrame.mock.calls.map(([f]) => f.type).slice(3)).toEqual(['realtime_joined', 'realtime_left']);
+      expect(subscribes(sent).map((m) => m.channel).slice(3)).toEqual(['live:s1', 'live:s2']);
+    });
+
+    it('a dropped socket leaves every chat; the next one confirms again', () => {
+      const manager = make();
+      const sockets: Array<{ onopen: () => void; onclose: (e: object) => void; readyState: number; send: () => void }> = [];
+      const real = globalThis.WebSocket;
+      globalThis.WebSocket = class { static OPEN = 1; readyState = 1; onopen = () => undefined; onclose = () => undefined; send = () => undefined; constructor() { sockets.push(this as never); } } as never;
+      try {
+        void manager.connect();
+        sockets[0].onopen();
+        const onFrame = jest.fn();
+        manager.subscribe('live:s1', onFrame);
+        deliver(manager, { type: 'subscribed', channel: 'live:s1' });
+        sockets[0].onclose({ wasClean: true, code: 1006, reason: '' });
+        expect(onFrame.mock.calls.map(([f]) => f.type)).toEqual(['realtime_joined', 'realtime_left']);
+      } finally {
+        globalThis.WebSocket = real;
+      }
+    });
+  });
+
   describe('token expiry on an open socket (#437)', () => {
     function attachSocket(manager: WebSocketManager) {
       const sent: Array<Record<string, unknown>> = [];

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LIVE_WATCH_EN, type LiveStreamState } from '@al-ummah/shared-types';
 import { LiveWatch, watchMode } from '../LiveWatch';
 import type { TimedState } from '@/lib/live/api';
@@ -22,6 +22,10 @@ jest.mock('@/lib/live/api', () => {
   };
 });
 jest.mock('../LivePlayer', () => ({ LivePlayer: ({ src, testId }: { src: string; testId: string }) => <div data-testid={testId} data-src={src} /> }));
+jest.mock('../LiveChatPanel', () => ({
+  LiveChatPanel: (p: { mode: string; canModerate: boolean; onChanged: () => void }) => <button type="button" data-testid="chat" data-mode={p.mode} data-moderate={String(p.canModerate)} onClick={() => p.onChanged()} />,
+  LiveChatReplay: () => <div data-testid="chat-replay" />,
+}));
 jest.mock('../useLiveQoe', () => ({ useLiveQoe: jest.fn() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), debug: jest.fn() } }));
 
@@ -76,6 +80,51 @@ describe('LiveWatch', () => {
     getState.mockRejectedValue(new LiveApiError(404, 'not_found'));
     render(<LiveWatch streamId="s1" />);
     expect(await screen.findByTestId('live-watch-missing')).toHaveTextContent(mockText.notFound);
+  });
+
+  describe('the chat (wiki E17)', () => {
+    const CHAT = { enabled: true, replay: false, slowModeSeconds: 0, subscribersOnly: false, canPost: true };
+    const withChat = (over: Partial<LiveStreamState>, chat: object, more: object = {}) => {
+      const t = timed(over);
+      return { ...t, state: { ...t.state, chat: chat as typeof CHAT, ...more } };
+    };
+
+    it('is beside a live or coming stream when the server says so, and reads the state again when it changes', async () => {
+      getState.mockResolvedValue(withChat({ status: 'live', sessionStatus: 'live' }, CHAT, { canModerate: true }));
+      render(<LiveWatch streamId="s1" />);
+      const chat = await screen.findByTestId('chat');
+      expect(chat).toHaveAttribute('data-mode', 'live');
+      expect(chat).toHaveAttribute('data-moderate', 'true');
+      // It opens or closes without the player being made again
+      const player = screen.getByTestId('live-watch-player');
+      getState.mockResolvedValue(withChat({ status: 'live', sessionStatus: 'live' }, { ...CHAT, enabled: false }));
+      fireEvent.click(chat);
+      await waitFor(() => expect(screen.queryByTestId('chat')).toBeNull());
+      expect(screen.getByTestId('live-watch-player')).toBe(player);
+    });
+
+    it('replays beside the recording, when there is one', async () => {
+      getState.mockResolvedValue(withChat({ status: 'ended', sessionStatus: 'ended', vodUrl: 'https://vod' }, { ...CHAT, enabled: false, replay: true }));
+      const { unmount } = render(<LiveWatch streamId="s1" />);
+      expect(await screen.findByTestId('chat-replay')).toBeInTheDocument();
+      unmount();
+      // No recording yet: nothing to replay beside
+      getState.mockResolvedValue(withChat({ status: 'ended', sessionStatus: 'ended' }, { ...CHAT, enabled: false, replay: true }));
+      render(<LiveWatch streamId="s1" />);
+      await screen.findByTestId('live-watch-notice');
+      expect(screen.queryByTestId('chat-replay')).toBeNull();
+    });
+
+    it('is not on the page while off, and on a server without it', async () => {
+      for (const state of [timed({ status: 'live', sessionStatus: 'live' }), withChat({ status: 'live', sessionStatus: 'live' }, { ...CHAT, enabled: false, canPost: false }), withChat({ status: 'cancelled' }, CHAT)]) {
+        getState.mockResolvedValue(state);
+        const { unmount } = render(<LiveWatch streamId="s1" />);
+        await screen.findByTestId('live-watch');
+        expect(screen.queryByTestId('chat')).toBeNull();
+        expect(screen.queryByTestId('chat-replay')).toBeNull();
+        unmount();
+      }
+    });
   });
 
   describe('people watching now', () => {

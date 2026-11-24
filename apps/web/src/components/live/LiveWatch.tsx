@@ -19,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { channelPath } from '@/lib/channel-url';
 import { LiveApiError, getPublicChannel, getState, getStream, type LiveChannelView, type LiveStreamRow, type TimedState } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
+import { LiveChatPanel, LiveChatReplay } from './LiveChatPanel';
 import { LivePlayer } from './LivePlayer';
 import { useLiveQoe } from './useLiveQoe';
 import { useLiveViewers } from './useLiveViewers';
@@ -93,6 +94,11 @@ export function LiveWatch({ streamId }: { streamId: string }) {
     timing: timed,
   });
 
+  // The chat's settings changed, or it opened or closed: the state says what this viewer may do now
+  const refreshState = useCallback(() => {
+    getState(streamId).then(setTimed, (error) => logger.debug('[LiveWatch] State read failed', { streamId, error }));
+  }, [streamId]);
+
   const viewers = useLiveViewers(streamId, view === 'ready' && mode === 'live', state?.viewers);
 
   const timeFormat = dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
@@ -117,12 +123,19 @@ export function LiveWatch({ streamId }: { streamId: string }) {
   }
 
   const channelName = channel ? channel.nameLocalized?.[lang] || channel.name : null;
+  const chat = state?.chat;
+  const side = chat?.enabled && (mode === 'live' || mode === 'soon') ? (
+    <LiveChatPanel streamId={streamId} mode={mode} chat={chat} canModerate={state?.canModerate === true} onChanged={refreshState} />
+  ) : chat?.replay && mode === 'recording' ? (
+    <LiveChatReplay streamId={streamId} player={player.player} />
+  ) : null;
   return (
-    <div className="mx-auto max-w-5xl p-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid="live-watch" data-mode={mode} data-provider={state?.provider ?? ''}>
+    <div className={`mx-auto p-4 ${side ? 'max-w-7xl lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6' : 'max-w-5xl'}`} dir={isRTL ? 'rtl' : 'ltr'} data-testid="live-watch" data-mode={mode} data-provider={state?.provider ?? ''}>
+      <div className="min-w-0">
       {mode === 'live' && state?.playbackUrl ? (
         <LivePlayer src={state.playbackUrl} lang={lang} label={text.playerLabel} autoplay muted onPlayer={onPlayer} testId="live-watch-player" />
       ) : mode === 'recording' && state?.vodUrl ? (
-        <LivePlayer src={state.vodUrl} lang={lang} label={text.playerLabel} testId="live-watch-recording" />
+        <LivePlayer src={state.vodUrl} lang={lang} label={text.playerLabel} onPlayer={onPlayer} testId="live-watch-recording" />
       ) : (
         <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card p-6 text-center" data-testid="live-watch-notice">
           {mode === 'soon' && (
@@ -143,7 +156,7 @@ export function LiveWatch({ streamId }: { streamId: string }) {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {mode === 'live' && <Badge variant="destructive" data-testid="live-watch-badge">{text.live}</Badge>}
+        {mode === 'live' && <Badge variant="destructive" className="text-[var(--fanous-c-button-destructive-text)]" data-testid="live-watch-badge">{text.live}</Badge>}
         {mode === 'soon' && <Badge variant="secondary">{text.startingSoon}</Badge>}
         {mode === 'recording' && <Badge variant="secondary">{text.recording}</Badge>}
         <h1 className="text-xl font-semibold text-foreground" dir="auto" data-testid="live-watch-title">{stream?.title}</h1>
@@ -161,6 +174,8 @@ export function LiveWatch({ streamId }: { streamId: string }) {
       )}
       {mode === 'live' && state?.startedAt && <p className="mt-1 text-sm text-muted-foreground">{text.startedAt.replace('{time}', fmt(state.startedAt))}</p>}
       {stream?.description && <p className="mt-3 whitespace-pre-line text-sm text-foreground" dir="auto">{stream.description}</p>}
+      </div>
+      {side && <div className="mt-4 lg:sticky lg:top-20 lg:mt-0 lg:h-[min(40rem,calc(100dvh-7rem))]">{side}</div>}
     </div>
   );
 }
