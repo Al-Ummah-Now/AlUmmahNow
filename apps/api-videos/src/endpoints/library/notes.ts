@@ -30,6 +30,7 @@ import {
 	listRecentNotes,
 	listVideoNotes,
 	notesMarkdown,
+	readNote,
 	NOTE_BODY_MAX,
 	NOTES_PAGE_MAX,
 	underNoteLimit,
@@ -104,7 +105,8 @@ export class NotesList extends AuthenticatedRoute {
 		const page = query.videoId
 			? await listVideoNotes(db(c), userId, query.videoId, query.limit, query.cursor)
 			: query.since || query.sync === 'true'
-				? await listChangedNotes(db(c), userId, query.since, query.limit, query.cursor)
+				? // Stored times are toISOString() (milliseconds, Z): compare like with like
+					await listChangedNotes(db(c), userId, query.since ? new Date(query.since).toISOString() : undefined, query.limit, query.cursor)
 				: await listRecentNotes(db(c), userId, query.limit, query.cursor);
 		noStore(c);
 		return c.json({ success: true as const, data: page });
@@ -144,10 +146,15 @@ export class NoteCreate extends AuthenticatedRoute {
 		if ('error' in checked) return invalid(c, checked.error);
 		const video = await loadVideoRecord(c.env as never, body.videoId);
 		if (!(await videoReadAccess(c.env, video as never, userId))) return apiError(c, 404, 'video_not_found');
-		const roles = (this.getAuth(c) as { payload?: { roles?: string[] } }).payload?.roles ?? null;
-		const creator = await resolveCreator(db(c), { userId, roles });
-		const max = creator.via === 'super_admin' || creator.tier?.unlimited ? null : creator.tier?.notesMax === undefined ? 1000 : creator.tier.notesMax;
-		if (!(await underNoteLimit(db(c), userId, max))) return apiError(c, 409, 'notes_limit', { limit: max });
+		// A retry of a note this user already has (offline sync) is an edit: no limit check, same video only
+		const existing = body.id ? await readNote(db(c), userId, body.id) : null;
+		if (existing && existing.video_id !== body.videoId) return apiError(c, 409, 'conflict', { error: 'note_on_other_video' });
+		if (!existing) {
+			const roles = (this.getAuth(c) as { payload?: { roles?: string[] } }).payload?.roles ?? null;
+			const creator = await resolveCreator(db(c), { userId, roles });
+			const max = creator.via === 'super_admin' || creator.tier?.unlimited ? null : creator.tier?.notesMax === undefined ? 1000 : creator.tier.notesMax;
+			if (!(await underNoteLimit(db(c), userId, max))) return apiError(c, 409, 'notes_limit', { limit: max });
+		}
 		const note = await createNote(db(c), userId, {
 			id: body.id ?? crypto.randomUUID(),
 			videoId: body.videoId,

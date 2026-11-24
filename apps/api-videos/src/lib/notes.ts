@@ -4,12 +4,13 @@
  * A note is an exact-time bookmark on a video: `startMs`, an optional `endMs`, and plain text.
  * Notes belong to one signed-in user, are listed per video in time order, sync by id with
  * simple last write wins on `updatedAt`, and a delete is a tombstone (text cleared) so other
- * devices learn about it. They are erased with the account (processor erasure/user-traces.ts)
- * and included in the GDPR export (lib/privacy/user-data.ts).
+ * devices learn about it. They are erased with the account and included in the GDPR export
+ * (lib/privacy/user-data.ts).
  *
  * Every query names `user_id` first, so it runs on idx_video_notes_user_video or
- * idx_video_notes_user_updated (migration 0082); nothing scans the table.
+ * idx_video_notes_user_updated (migration 0095); nothing scans the table.
  */
+import { formatClock } from '@al-ummah/shared-types';
 
 export const NOTE_BODY_MAX = 2000;
 /** Longest video we accept a time in (24 h); a note past the video's end is the client's problem */
@@ -251,16 +252,6 @@ export async function exportNotes(db: D1Database, userId: string, max: number, v
 	return (results ?? []).map(toNote);
 }
 
-/** h:mm:ss or m:ss in ASCII digits; an Arabic export converts them with arabicDigits. */
-export function formatTimestamp(ms: number): string {
-	const total = Math.floor(ms / 1000);
-	const h = Math.floor(total / 3600);
-	const m = Math.floor((total % 3600) / 60);
-	const s = total % 60;
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
-
 /** Escapes Markdown control characters in text that is not meant as Markdown. */
 export function escapeMarkdown(text: string): string {
 	return text.replace(/([\\`*_{}[\]()#+\-.!|<>~])/g, '\\$1');
@@ -276,11 +267,6 @@ export interface ExportVideo {
  * with a seek link (`?t=` seconds) and its text. Videos the user can no longer see keep their
  * notes under "Unavailable video" without a title.
  */
-/** Western digits to ٠–٩ (an Arabic export shows times in Arabic digits; links keep ASCII). */
-export function arabicDigits(text: string): string {
-	return text.replace(/[0-9]/g, (d) => String.fromCharCode(0x0660 + Number(d)));
-}
-
 export function notesMarkdown(
 	notes: VideoNote[],
 	videos: Map<string, ExportVideo | null>,
@@ -289,7 +275,7 @@ export function notesMarkdown(
 	unavailable = 'Unavailable video',
 	language: 'en' | 'ar' = 'en',
 ): string {
-	const shown = (text: string) => (language === 'ar' ? arabicDigits(text) : text);
+	const clock = (ms: number) => formatClock(language, Math.floor(ms / 1000));
 	const base = siteUrl.replace(/\/+$/, '');
 	const lines: string[] = [`# ${escapeMarkdown(heading)}`, ''];
 	const byVideo = new Map<string, VideoNote[]>();
@@ -301,10 +287,12 @@ export function notesMarkdown(
 	for (const [videoId, list] of byVideo) {
 		const video = videos.get(videoId);
 		const url = `${base}/video/${encodeURIComponent(videoId)}`;
-		lines.push(video?.title ? `## [${escapeMarkdown(video.title)}](${url})` : `## ${escapeMarkdown(unavailable)}`, '');
+		// A newline in a title would break the heading and the link
+		const title = video?.title ? video.title.replace(/\s*\r?\n\s*/g, ' ').trim() : '';
+		lines.push(title ? `## [${escapeMarkdown(title)}](${url})` : `## ${escapeMarkdown(unavailable)}`, '');
 		for (const note of list.sort((a, b) => a.startMs - b.startMs || a.id.localeCompare(b.id))) {
-			const time = shown(note.endMs !== null ? `${formatTimestamp(note.startMs)}–${formatTimestamp(note.endMs)}` : formatTimestamp(note.startMs));
-			const at = video?.title ? `[${time}](${url}?t=${Math.floor(note.startMs / 1000)})` : time;
+			const time = note.endMs !== null ? `${clock(note.startMs)}–${clock(note.endMs)}` : clock(note.startMs);
+			const at = title ? `[${time}](${url}?t=${Math.floor(note.startMs / 1000)})` : time;
 			const text = note.body ? escapeMarkdown(note.body).split('\n').join('\n  ') : '';
 			lines.push(text ? `- ${at} ${text}` : `- ${at}`);
 		}

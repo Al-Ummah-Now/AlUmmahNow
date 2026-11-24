@@ -1224,7 +1224,7 @@ export async function eraseUserData(
 				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
 				// Their live sessions' tier owner (search migration 0060)
 				await eraseLiveSessionOwner(db as unknown as D1Database, userId);
-				// Private video notes, tombstones included (search migration 0082, wiki E21-D9)
+				// Private video notes, tombstones included (search migration 0095, wiki E21-D9)
 				ctx.budget.spend();
 				const notes = await (db as unknown as D1Database).prepare('DELETE FROM video_notes WHERE user_id = ?').bind(userId).run();
 				bump(summary.deleted, 'videoNotes', Number(notes.meta?.changes ?? 0));
