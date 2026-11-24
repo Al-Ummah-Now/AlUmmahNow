@@ -13,6 +13,7 @@ import { LiveRefusedError } from "../../lib/live/service";
 import { liveTierGate } from "./liveSession";
 import { logger } from '../../lib/logger';
 import { featureOff } from '../../lib/features/off';
+import { eventTagRefused } from '../../lib/live/events';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamCreate extends AuthenticatedRoute {
@@ -87,7 +88,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 
 		const { channelId } = request.headers;
         const userId = this.getUserId(c);
-		const inputStream = request.body;
+		const { eventType, ...inputStream } = request.body;
 
 		// The channel owner's creator tier must include live (lib/live/tier-gate.ts), before anything is stored
 		const tier = await liveTierGate(c, { id: 'new', channelId, userId, sessionId: null }, 'create', userId);
@@ -98,8 +99,11 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		// channel's owner and records the member in createdBy
 		// (docs/specs/CHANNEL-ROLES.md §7; channelIdMiddleware checked live.manage)
 		const { ownerId, uploadedBy: createdBy } = uploadIdentity(c, userId);
+		const tagRefused = await eventTagRefused(c, ownerId, eventType);
+		if (tagRefused) return tagRefused;
 		const liveStream = {
 			...inputStream,
+			...(eventType ? { eventType } : {}),
 			id: crypto.randomUUID(), // Generate a unique ID for the live stream
 			userId: ownerId,
 			...(createdBy ? { createdBy } : {}),

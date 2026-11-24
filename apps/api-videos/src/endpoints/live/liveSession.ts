@@ -30,9 +30,10 @@ import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/liv
 import type { SessionTier } from '../../lib/live/service';
 import { featureOff } from '../../lib/features/off';
 import { openTransferJob } from '../../lib/admin/service';
-import { LIVE_TIER_ERROR_CODES, featureGate, type FeatureKey } from '@al-ummah/shared-types';
+import { LIVE_TIER_ERROR_CODES, featureGate } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { readChatStream } from '../../lib/live/chat';
+import { reminderCounts, shownEventType, switchOn } from '../../lib/live/events';
 import { hasReminder, remindable } from '../../lib/live/reminders';
 import { cancelPremiere, endPremiere, isPremiere, startPremiere } from '../../lib/live/premieres';
 import { chatState } from './liveChat';
@@ -70,9 +71,6 @@ export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
 		...(isOwner && createdBy ? { createdBy } : {}),
 	};
 }
-
-/** The switch is on; off while it cannot be read. */
-export const switchOn = async (c: AppContext, key: FeatureKey): Promise<boolean> => (await featureGate(c.env as never, key).catch(() => ({ on: false as const }))).on;
 
 async function visibleStream(c: AppContext, id: string, userId: string | undefined): Promise<LiveStreamRecord | Response> {
 	const stream = await readStream(env(c), id);
@@ -160,7 +158,9 @@ export class LiveStreamGet extends OptionalAuthRoute {
 		const stream = await visibleStream(c, params.id, userId);
 		if (stream instanceof Response) return stream;
 		const view = publicStream(stream, await canManageLiveStream(c.env as never, stream, userId));
-		return { success: true, result: { stream: { ...view, vodUrl: await signVod(c, (view.vodUrl as string | null) ?? null) } } };
+		const eventType = shownEventType(stream, await switchOn(c, 'liveEvents'));
+		const reminderCount = (await reminderCounts(c, [stream.id])).get(stream.id) ?? 0;
+		return { success: true, result: { stream: { ...view, eventType, reminderCount, vodUrl: await signVod(c, (view.vodUrl as string | null) ?? null) } } };
 	}
 }
 
@@ -194,7 +194,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), ...chat, reminder },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), eventType: shownEventType(stream, await switchOn(c, 'liveEvents')), ...chat, reminder },
 		};
 	}
 }

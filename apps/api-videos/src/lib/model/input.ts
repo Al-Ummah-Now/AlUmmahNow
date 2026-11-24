@@ -1,4 +1,4 @@
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN, isLiveChatSlowMode } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN, LIVE_EVENT_TYPES, isLiveChatSlowMode } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
@@ -150,12 +150,16 @@ export const CommentUpdateInput = z.object({
 });
 
 // Phase 2: Live Streaming input schemas
+/** The event tag, one of the fixed list; null takes it off (switch `liveEvents`, wiki E17 §3.1) */
+export const LiveEventTypeInput = z.enum(LIVE_EVENT_TYPES).nullable().optional();
+
 /** Live in the apps (wiki E17): the chat's settings, and content made for kids (no chat, replay or reminders) */
 const LiveStreamAppFields = {
     chatReplay: z.boolean().optional(),
     slowModeSeconds: z.number().int().refine(isLiveChatSlowMode, '0, 5, 10, 30 or 60').optional(),
     subscribersOnly: z.boolean().optional(),
     madeForKids: z.boolean().optional(),
+    eventType: LiveEventTypeInput,
 };
 
 export const LiveStreamInput = z.object({

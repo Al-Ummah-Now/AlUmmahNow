@@ -1,4 +1,4 @@
-import { MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
+import { LIVE_EVENT_TYPES, LIVE_STREAM_KINDS, MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
 import { Bool, DateTime, Str } from "../chanfana-params";
 import { z } from "zod";
 
@@ -327,6 +327,9 @@ export const LiveStreamView = z.object({
     dislikesCount: z.number().describe("Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"),
     commentsCount: z.number(),
     duration: z.number().optional().describe("Stream duration in seconds"),
+    kind: z.enum(LIVE_STREAM_KINDS).optional().describe("A live stream unless it says premiere"),
+    eventType: z.enum(LIVE_EVENT_TYPES).nullable().optional().describe("Event tag; null while event tags are off"),
+    reminderCount: z.number().int().optional().describe("People who asked to be reminded; 0 while reminders are off"),
     ...SoftDeleteFields,
     ...ModerationFields,
 });
