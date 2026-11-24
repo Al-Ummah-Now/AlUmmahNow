@@ -124,6 +124,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/42-upload-templates.spec.ts': { placement: 'local', reason: 'upload templates UI for multi user' },
   'apps/web/e2e/43-video-edit-schedule.spec.ts': { placement: 'local', reason: 'schedule publish UI and API' },
   'apps/web/e2e/44-video-chapters-subtitles.spec.ts': { placement: 'local', reason: 'chapter/subtitle editors; needs video with 40 s duration' },
+  'apps/web/e2e/45-video-formats.spec.ts': { placement: 'local', reason: 'every accepted video format (MP4, M4V, MOV, WebM, MKV, AVI) through the single form, batch and drag and drop with the types browsers report; the fake Bunny stands in for the encode' },
   'apps/web/e2e/50-channels-directory.spec.ts': { placement: 'local', reason: 'channel directory, search, pagination, RTL' },
   'apps/web/e2e/51-channel-page.spec.ts': { placement: 'local', reason: 'channel page tabs, subscribe sign-in redirect' },
   'apps/web/e2e/52-channel-sections.spec.ts': { placement: 'local', reason: 'section manager and rendering per type' },

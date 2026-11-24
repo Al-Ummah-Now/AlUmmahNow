@@ -13,22 +13,17 @@
  * Each entry contains: [offset, signature bytes, mime type, description]
  */
 const VIDEO_SIGNATURES = [
-  // MP4 files (ISO Base Media File Format)
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70], mimeType: 'video/mp4', description: 'MP4/MPEG-4' },
+  // WebM and Matroska (MKV) share the EBML header; the DocType further in tells them apart (detectEbml)
+  { offset: 0, signature: [0x1A, 0x45, 0xDF, 0xA3], mimeType: 'video/webm', description: 'WebM/Matroska (EBML)' },
 
-  // WebM files
-  { offset: 0, signature: [0x1A, 0x45, 0xDF, 0xA3], mimeType: 'video/webm', description: 'WebM' },
-
-  // AVI files (RIFF)
-  { offset: 0, signature: [0x52, 0x49, 0x46, 0x46], mimeType: 'video/x-msvideo', description: 'AVI (RIFF container)' },
-
-  // QuickTime/MOV files (also uses ftyp like MP4, but different brand)
+  // QuickTime/MOV files: 'ftyp' then the 'qt  ' brand. Before the generic MP4 entry, which also matches 'ftyp'
   { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x71, 0x74], mimeType: 'video/quicktime', description: 'QuickTime MOV' },
 
-  // Additional MP4 variants
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D], mimeType: 'video/mp4', description: 'MP4 (isom)' },
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32], mimeType: 'video/mp4', description: 'MP4 (mp42)' },
-  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x4D, 0x53, 0x4E, 0x56], mimeType: 'video/mp4', description: 'MP4 (MSNV)' },
+  // M4V (iTunes video) is an MP4 with the 'M4V ' brand
+  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70, 0x4D, 0x34, 0x56], mimeType: 'video/x-m4v', description: 'M4V' },
+
+  // MP4 files (ISO Base Media File Format): 'ftyp' with any other brand (isom, mp42, MSNV, avc1, ...)
+  { offset: 4, signature: [0x66, 0x74, 0x79, 0x70], mimeType: 'video/mp4', description: 'MP4/MPEG-4' },
 ] as const;
 
 /**
@@ -82,10 +77,45 @@ function matchesSignature(
   return true;
 }
 
+/** Other names for a video type that browsers and tools send; they are the same format, not a mismatch */
+const VIDEO_TYPE_ALIASES: Record<string, string> = {
+  'video/mov': 'video/quicktime',
+  'video/avi': 'video/x-msvideo',
+  'video/msvideo': 'video/x-msvideo',
+  'video/vnd.avi': 'video/x-msvideo',
+  'video/m4v': 'video/x-m4v',
+  'video/matroska': 'video/x-matroska',
+};
+
+/** True when the EBML header (read from `buffer`) declares DocType "matroska"; "webm" or an unreadable one is WebM */
+function isMatroskaDocType(buffer: Uint8Array): boolean {
+  // DocType (0x4282) is a few bytes into the header; 'matroska' is 8 ASCII bytes
+  const text = String.fromCharCode(...buffer.subarray(0, Math.min(buffer.length, 64)));
+  return text.includes('matroska');
+}
+
+function result(detectedMimeType: string, detectedFormat: string, providedMimeType?: string): MagicByteValidationResult {
+  const provided = providedMimeType ? (VIDEO_TYPE_ALIASES[providedMimeType.toLowerCase()] ?? providedMimeType.toLowerCase()) : undefined;
+  // An empty or generic type from the browser says nothing, so it cannot disagree
+  const generic = !provided || provided === 'application/octet-stream';
+  return {
+    isValid: true,
+    detectedMimeType,
+    detectedFormat,
+    providedMimeType,
+    // MP4, M4V and MOV are one family (ISO base media): a mislabel between them is not worth a warning
+    mimeTypeMismatch: !generic && provided !== detectedMimeType && !(isIsoFamily(provided) && isIsoFamily(detectedMimeType)),
+  };
+}
+
+function isIsoFamily(type: string): boolean {
+  return type === 'video/mp4' || type === 'video/x-m4v' || type === 'video/quicktime';
+}
+
 /**
  * Validate video file by magic bytes
  *
- * @param fileData - First 12+ bytes of the file
+ * @param fileData - First 64 bytes of the file (12 are enough except to tell Matroska from WebM)
  * @param providedMimeType - MIME type from Content-Type header (optional)
  * @returns Validation result with detected format
  *
@@ -117,33 +147,19 @@ export function validateVideoMagicBytes(
     };
   }
 
+  // AVI: 'RIFF' <size> 'AVI '. Any other RIFF file (WAV, WebP) is not a video
+  if (matchesSignature(buffer, 0, [0x52, 0x49, 0x46, 0x46]) && matchesSignature(buffer, 8, [0x41, 0x56, 0x49, 0x20])) {
+    return result('video/x-msvideo', 'AVI', providedMimeType);
+  }
+
   // Check against all video signatures
   for (const sig of VIDEO_SIGNATURES) {
     if (matchesSignature(buffer, sig.offset, sig.signature)) {
-      const mimeTypeMismatch = providedMimeType
-        ? !providedMimeType.includes(sig.mimeType) && !sig.mimeType.includes(providedMimeType)
-        : false;
-
-      return {
-        isValid: true,
-        detectedMimeType: sig.mimeType,
-        detectedFormat: sig.description,
-        providedMimeType,
-        mimeTypeMismatch,
-      };
-    }
-  }
-
-  // Special check for AVI files (need to verify 'AVI ' after RIFF)
-  if (matchesSignature(buffer, 0, [0x52, 0x49, 0x46, 0x46]) && buffer.length >= 12) {
-    if (matchesSignature(buffer, 8, [0x41, 0x56, 0x49, 0x20])) { // 'AVI '
-      return {
-        isValid: true,
-        detectedMimeType: 'video/x-msvideo',
-        detectedFormat: 'AVI',
-        providedMimeType,
-        mimeTypeMismatch: providedMimeType ? !providedMimeType.includes('avi') : false,
-      };
+      if (sig.mimeType === 'video/webm') {
+        const matroska = isMatroskaDocType(buffer);
+        return result(matroska ? 'video/x-matroska' : 'video/webm', matroska ? 'Matroska (MKV)' : 'WebM', providedMimeType);
+      }
+      return result(sig.mimeType, sig.description, providedMimeType);
     }
   }
 

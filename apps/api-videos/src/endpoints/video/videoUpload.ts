@@ -126,7 +126,7 @@ export class VideoUpload extends AuthenticatedRoute {
             // SECURITY: Validate file type using magic bytes (file signatures)
             // This prevents attackers from uploading malicious files by spoofing Content-Type headers
             try {
-                const fileHeader = await readFileHeader(file, 12);
+                const fileHeader = await readFileHeader(file, 64);
                 const magicByteResult = validateVideoMagicBytes(fileHeader, file.type);
 
                 if (!magicByteResult.isValid) {

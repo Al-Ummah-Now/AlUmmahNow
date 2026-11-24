@@ -1,0 +1,85 @@
+/**
+ * The video files the upload forms accept, in one place (issue #1938).
+ *
+ * Browsers name a file's type from the operating system, and they disagree with
+ * the names people guess: MOV (every iPhone video) is `video/quicktime`, AVI is
+ * `video/x-msvideo`, MKV is `video/x-matroska`, and a system without the codec
+ * or file association gives an empty type. So a file is accepted by its MIME
+ * type, or by its extension when the type says nothing (empty or generic). A
+ * file whose type names another kind of file is refused whatever its extension.
+ *
+ * The list is what Desktop Studio takes and what Bunny and the transcoding
+ * pipeline (ffmpeg) read: MP4, M4V, MOV, WebM, MKV and AVI. The server
+ * (uploadInitiate, uploadBatchInitiate) accepts any `video/*`, so the type sent
+ * to it is the format's canonical type, whatever alias the browser used.
+ */
+
+import { isArabicLocale } from '@al-ummah/shared-types';
+
+export interface VideoFormat {
+  /** How the format is written in help text */
+  label: string;
+  /** Extensions without the dot */
+  extensions: readonly string[];
+  /** The type sent to the server */
+  mimeType: string;
+  /** Other names for the same format that browsers and tools use (lower case) */
+  aliases: readonly string[];
+}
+
+export const VIDEO_FORMATS: readonly VideoFormat[] = [
+  { label: 'MP4', extensions: ['mp4'], mimeType: 'video/mp4', aliases: [] },
+  { label: 'M4V', extensions: ['m4v'], mimeType: 'video/x-m4v', aliases: ['video/m4v'] },
+  { label: 'MOV', extensions: ['mov', 'qt'], mimeType: 'video/quicktime', aliases: ['video/mov'] },
+  { label: 'WebM', extensions: ['webm'], mimeType: 'video/webm', aliases: [] },
+  { label: 'MKV', extensions: ['mkv'], mimeType: 'video/x-matroska', aliases: ['video/matroska'] },
+  { label: 'AVI', extensions: ['avi'], mimeType: 'video/x-msvideo', aliases: ['video/avi', 'video/msvideo', 'video/vnd.avi'] },
+];
+
+/** Types that say nothing about the file: the extension decides */
+const GENERIC_TYPES: readonly string[] = ['', 'application/octet-stream', 'binary/octet-stream', 'application/x-unknown'];
+
+/** The part of a File the check needs (a Move from YouTube entry has no File) */
+export type VideoFileLike = Pick<File, 'name' | 'type'>;
+
+function extensionOf(name: string): string {
+  return /\.([a-z0-9]+)$/i.exec(name.trim())?.[1]?.toLowerCase() ?? '';
+}
+
+function baseType(type: string): string {
+  return type.split(';')[0]!.trim().toLowerCase();
+}
+
+/** The accepted format a file is, or null when the form must refuse it */
+export function videoFormatOf(file: VideoFileLike): VideoFormat | null {
+  const type = baseType(file.type ?? '');
+  if (GENERIC_TYPES.includes(type)) {
+    const ext = extensionOf(file.name);
+    return VIDEO_FORMATS.find((f) => f.extensions.includes(ext)) ?? null;
+  }
+  return VIDEO_FORMATS.find((f) => f.mimeType === type || f.aliases.includes(type)) ?? null;
+}
+
+export function isAcceptedVideoFile(file: VideoFileLike): boolean {
+  return videoFormatOf(file) !== null;
+}
+
+/**
+ * The type to send to the server (initiate, batch initiate, TUS metadata). An
+ * accepted file always has one; a file that is not accepted keeps its own.
+ */
+export function videoMimeTypeOf(file: VideoFileLike): string {
+  return videoFormatOf(file)?.mimeType ?? file.type;
+}
+
+/** The file picker's `accept`: the extensions and the types, so a file with no type still shows */
+export const VIDEO_PICKER_ACCEPT: string = [
+  ...VIDEO_FORMATS.flatMap((f) => f.extensions.map((e) => `.${e}`)),
+  ...VIDEO_FORMATS.flatMap((f) => [f.mimeType, ...f.aliases]),
+].join(',');
+
+/** «MP4, M4V, …» for help text; Arabic copy takes the Arabic comma «،» */
+export function videoFormatsText(lang: string): string {
+  const labels = VIDEO_FORMATS.map((f) => f.label);
+  return labels.join(isArabicLocale(lang) ? '، ' : ', ');
+}

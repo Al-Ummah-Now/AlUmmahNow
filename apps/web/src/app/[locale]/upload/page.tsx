@@ -11,7 +11,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import NotFoundPage from "@/components/NotFoundPage";
 import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
-import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
+import { VIDEO_PICKER_ACCEPT, isAcceptedVideoFile, videoFormatsText } from "@/lib/upload/video-formats";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
@@ -379,11 +379,7 @@ const UploadPage: React.FC = () => {
     }
   };
 
-  const handleBatchFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    // Reset now, so picking the same files again (after an error, or to see
-    // that they are already uploaded) still fires a change event
-    e.target.value = '';
+  const addBatchFiles = useCallback(async (selectedFiles: File[]) => {
     if (selectedFiles.length === 0) return;
     // A new pick replaces the message of the previous one
     setUploadError(null);
@@ -406,20 +402,39 @@ const UploadPage: React.FC = () => {
     }
 
     // Validate file types
-    const allowedTypes = VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES as readonly string[];
-    const invalidFiles = selectedFiles.filter(
-      file => !allowedTypes.includes(file.type)
-    );
+    const invalidFiles = selectedFiles.filter(file => !isAcceptedVideoFile(file));
     if (invalidFiles.length > 0) {
       setUploadError(
-        t.batch.errors.invalidFileType.replace('{filename}', invalidFiles[0].name)
+        t.batch.errors.invalidFileType
+          .replace('{filename}', invalidFiles[0].name)
+          .replace('{formats}', videoFormatsText(lang))
       );
       return;
     }
 
     // Add files to queue
     await addFiles(selectedFiles);
-  }, [addFiles, t]);
+  }, [addFiles, t, lang]);
+
+  const handleBatchFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    // Reset now, so picking the same files again (after an error, or to see
+    // that they are already uploaded) still fires a change event
+    e.target.value = '';
+    await addBatchFiles(selectedFiles);
+  }, [addBatchFiles]);
+
+  // The drop area says "drag and drop": files dropped on it take the same checks as picked ones
+  const handleBatchDragOver = useCallback((e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types ?? []).includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+  const handleBatchDrop = useCallback(async (e: React.DragEvent) => {
+    if (!Array.from(e.dataTransfer.types ?? []).includes('Files')) return;
+    e.preventDefault();
+    await addBatchFiles(Array.from(e.dataTransfer.files));
+  }, [addBatchFiles]);
 
   // Signed-out visitors get a sign-in prompt instead of the channel error
   if (!auth?.user) {
@@ -686,7 +701,7 @@ const UploadPage: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/*"
+              accept={VIDEO_PICKER_ACCEPT}
               multiple
               onChange={handleBatchFileSelect}
               className="hidden"
@@ -745,6 +760,8 @@ const UploadPage: React.FC = () => {
                     relative
                   "
                   onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleBatchDragOver}
+                  onDrop={handleBatchDrop}
                   data-testid="batch-dropzone"
                 >
                   <FileStack size={48} className="mx-auto mb-4 text-gray-400 dark:text-gray-500" />
@@ -755,7 +772,7 @@ const UploadPage: React.FC = () => {
                     {t.batch.clickToBrowse}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t.batch.fileLimit}
+                    {fillTemplate(lang, t.batch.fileLimit, { formats: videoFormatsText(lang) })}
                   </p>
                 </div>
               </div>
@@ -866,7 +883,7 @@ const UploadPage: React.FC = () => {
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>
-                <span>{t.upload.guidelineFormats || `Supported formats: ${VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY}`}</span>
+                <span data-testid="upload-guideline-formats">{fillTemplate(lang, t.upload.guidelineFormats, { formats: videoFormatsText(lang) })}</span>
               </li>
               <li className="flex items-start">
                 <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 me-3 flex-shrink-0"></span>

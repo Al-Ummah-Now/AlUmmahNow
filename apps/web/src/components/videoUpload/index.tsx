@@ -14,6 +14,7 @@ import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-to
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
+import { VIDEO_PICKER_ACCEPT, isAcceptedVideoFile, videoFormatsText, videoMimeTypeOf } from "@/lib/upload/video-formats";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, scheduleUploadedVideo } from "@/lib/api/upload-client";
 import { creatorRefusalMessage } from "@/lib/upload/friendly-error";
@@ -37,8 +38,6 @@ import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { getApiUrl } from "@/lib/runtime-config";
 import { formatPlayerTime } from '@/lib/video/player-time';
 
-/** The formats the drop zone names, in the order shown */
-const UPLOAD_FORMATS = ['MP4', 'MOV', 'AVI', 'WebM'] as const;
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -196,10 +195,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // File validation
   const validateFile = (file: File): string | null => {
-    type VideoMimeType = 'video/mp4' | 'video/mov' | 'video/avi' | 'video/webm';
-    if (!VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type as VideoMimeType)) {
+    if (!isAcceptedVideoFile(file)) {
       return (t.upload.invalidType || VIDEO_UPLOAD_ERRORS.INVALID_TYPE)
-        .replace('{types}', VIDEO_UPLOAD_CONFIG.ALLOWED_TYPES_DISPLAY);
+        .replace('{types}', videoFormatsText(lang));
     }
 
     if (file.size > VIDEO_UPLOAD_CONFIG.MAX_FILE_SIZE) {
@@ -410,7 +408,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             categorySuggestionKey: categoryDraftKey,
             format: metadata.format,
             fileSize: selectedFile.size,
-            mimeType: selectedFile.type,
+            mimeType: videoMimeTypeOf(selectedFile),
             thumbnail: selectedThumbnail ? {
               type: selectedThumbnail.type,
               data: selectedThumbnail.data,
@@ -474,7 +472,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         uploadUrl,
         metadata: {
           filename: selectedFile.name,
-          filetype: selectedFile.type,
+          filetype: videoMimeTypeOf(selectedFile),
         },
         getAuthorization: async (force) => {
           const token = await fetchClientAuthToken(force);
@@ -1181,7 +1179,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="video/*"
+          accept={VIDEO_PICKER_ACCEPT}
           onChange={handleFileInputChange}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           multiple={false}
@@ -1206,7 +1204,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               the old line read "Max No limit • Max No limit" in both languages */}
           <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="upload-supported-formats">
             {/* Arabic copy takes the Arabic comma «،», never the Latin one */}
-            {t.upload.supports} {UPLOAD_FORMATS.join(isArabicLocale(lang) ? '، ' : ', ')}
+            {t.upload.supports} {videoFormatsText(lang)}
           </p>
         </div>
       </div>
