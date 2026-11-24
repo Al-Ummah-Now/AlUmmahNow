@@ -496,6 +496,62 @@ describe('channel actions', () => {
 		assert.equal(job.result.invitesCancelled, 2);
 	});
 
+	it('subscriptions move with their bells in atomic chunks: a crash between batches loses nothing on the retry (Gemini review)', async () => {
+		const { env, call, jobOf, jobs } = await setup();
+		const notifications = createSqliteD1();
+		(env as Record<string, unknown>).NOTIFICATIONS_DB = notifications;
+		const n = notifications.raw;
+		// 35 channels the channel subscribes to: two batches of 30 and 5
+		for (let i = 0; i < 35; i++) {
+			n.prepare(`INSERT INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES (?, 'ch1', ?, ?, 1)`).run(`t${i}`, OWNER, `s${i}`);
+			n.prepare(`INSERT INTO channel_subscribers (channel_id, user_id, bell, created_at, updated_at) VALUES (?, ?, 'all', 1, 1)`).run(`t${i}`, OWNER);
+		}
+		const batch = notifications.batch.bind(notifications);
+		let calls = 0;
+		notifications.batch = (async (statements: unknown[]) => {
+			calls++;
+			if (calls === 2) throw new Error('worker restarted');
+			return batch(statements as never);
+		}) as typeof notifications.batch;
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		const count = (user: string) => (n.prepare(`SELECT COUNT(*) AS c FROM channel_subscriptions WHERE subscriber_channel_id = 'ch1' AND user_id = ?`).get(user) as { c: number }).c;
+		const bells = (user: string) => (n.prepare(`SELECT COUNT(*) AS c FROM channel_subscribers WHERE user_id = ?`).get(user) as { c: number }).c;
+		for (let i = 0; i < 10 && (await jobOf(res)).status !== 'succeeded'; i++) {
+			jobs.pending.forEach((p: any) => { delete p.delaySeconds; });
+			await jobs.drain(env);
+		}
+		assert.equal((await jobOf(res)).status, 'succeeded');
+		assert.ok(calls >= 3, 'the failed batch was retried');
+		assert.deepEqual([count(OTHER), count(OWNER)], [35, 0]);
+		assert.deepEqual([bells(OTHER), bells(OWNER)], [35, 0], 'every bell moved, none dropped by the crash');
+	});
+
+	it('verify re-reads every kind of record that moves: a post or stream write that did not land fails the job (Gemini review)', async () => {
+		const { raw, call, jobOf } = await setup({
+			videos: {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				'livestream:ls': { id: 'ls', title: 'Friday', userId: OWNER, channelId: 'ch1', status: 'ended' },
+			},
+		});
+		await raw.community_posts.put('posts/ch1/p1.json', JSON.stringify({ id: 'p1', channelId: 'ch1', userId: OWNER }));
+		// The post's write "succeeds" without storing anything (a lost write)
+		const put = raw.community_posts.put.bind(raw.community_posts);
+		let lost = true;
+		raw.community_posts.put = (async (key: string, value: unknown, opts?: unknown) => {
+			if (lost && key === 'posts/ch1/p1.json') return { key, etag: 'x', uploaded: new Date() } as never;
+			return put(key, value as never, opts as never);
+		}) as typeof raw.community_posts.put;
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		const job = await jobOf(res);
+		assert.notEqual(job.status, 'succeeded');
+		assert.match(String(job.lastError), /posts:1/);
+		lost = false;
+		await call('POST', `/jobs/${job.id}/retry`, {});
+		assert.equal((await jobOf(res)).status, 'succeeded');
+		assert.equal(JSON.parse(raw.community_posts.store.get('posts/ch1/p1.json')!).userId, OTHER);
+		assert.equal(JSON.parse(raw.videos.store.get('livestream:ls')!).userId, OTHER);
+	});
+
 	it('verify fails the move (so it retries) while a record still names the previous owner', async () => {
 		const { raw, call, jobOf } = await setup();
 		// An old-owner write that lands after the video step: the video comes back on OWNER once
