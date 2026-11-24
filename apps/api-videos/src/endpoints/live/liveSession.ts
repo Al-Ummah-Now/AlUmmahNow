@@ -23,6 +23,7 @@ import { deleteStream, readStream, streamEnd, streamIngest, streamIsRemoved, str
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
+import { liveSessionAccess, signLiveUrl } from '../../lib/live/access';
 import { canManageLiveStream } from '../../lib/channelAccess';
 import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
 import { isLiveVodWithheld, liveRecordingWithheld } from '@al-ummah/shared-types';
@@ -146,6 +147,15 @@ function providerFailure(c: AppContext, error: unknown, where: string) {
 /** Bunny recordings on a token-auth library need a signed playlist URL. */
 const signVod = (c: AppContext, url: string | null) => signLiveVodUrl(c.env as never, url);
 
+/** The session a self-hosted live URL belongs to (`https://<host>/hls/<session>/…`). */
+const sessionOfUrl = (url: string) => /\/hls\/([^/]+)\//.exec(url)?.[1] ?? '';
+
+/** What is not open to everyone plays for the stream's managers with a signed URL (lib/live/access.ts). */
+async function forManager(c: AppContext, stream: LiveStreamRecord, manages: boolean, url: string | null): Promise<string | null> {
+	if (!url || !manages || liveSessionAccess(stream, sessionOfUrl(url)) !== 'managers') return url;
+	return signLiveUrl(env(c), url);
+}
+
 export class LiveStreamGet extends OptionalAuthRoute {
 	schema = {
 		tags: ['Live Streams'],
@@ -158,10 +168,11 @@ export class LiveStreamGet extends OptionalAuthRoute {
 		const userId = this.getUserId(c);
 		const stream = await visibleStream(c, params.id, userId);
 		if (stream instanceof Response) return stream;
-		const view = publicStream(stream, await canManageLiveStream(c.env as never, stream, userId));
+		const manages = await canManageLiveStream(c.env as never, stream, userId);
+		const view = publicStream(stream, manages);
 		const eventType = shownEventType(stream, await switchOn(c, 'liveEvents'));
 		const reminderCount = (await reminderCounts(c, [stream.id])).get(stream.id) ?? 0;
-		return { success: true, result: { stream: { ...view, eventType, reminderCount, vodUrl: await signVod(c, (view.vodUrl as string | null) ?? null) } } };
+		return { success: true, result: { stream: { ...view, eventType, reminderCount, playbackUrl: await forManager(c, stream, manages, view.playbackUrl ?? null), vodUrl: await forManager(c, stream, manages, await signVod(c, (view.vodUrl as string | null) ?? null)) } } };
 	}
 }
 
@@ -195,7 +206,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), eventType: shownEventType(stream, await switchOn(c, 'liveEvents')), ...chat, reminder },
+			result: { ...state, playbackUrl: await forManager(c, stream, manages, state.playbackUrl), vodUrl: hideRecording ? null : await forManager(c, stream, manages, await signVod(c, state.vodUrl)), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), eventType: shownEventType(stream, await switchOn(c, 'liveEvents')), ...chat, reminder },
 		};
 	}
 }

@@ -5,7 +5,8 @@
  *   PUT  /ingest/{sessionId}/{key}/master.m3u8            encoder → R2
  *   PUT  /ingest/{sessionId}/{key}/{rendition}/index.m3u8 (indexes the segments)
  *   PUT  /ingest/{sessionId}/{key}/{rendition}/init.mp4 | seg_{n}.m4s
- *   GET  /hls/{sessionId}/...                              R2 → edge cache → players
+ *   GET  /hls/{sessionId}/[{token}/]...                    R2 → edge cache → players, while the stream's state
+ *                                                          allows it (lib/live/access.ts)
  *   GET  /time                                             server clock (latency harness)
  *
  * Keys are HMACs of the session id and key version (lib/live/providers.ts), so
@@ -17,6 +18,7 @@
  * write per request.
  */
 import { logger } from '../logger';
+import { isViewToken, sessionAccess, verifyViewToken } from './access';
 import { verifySelfHostedKey, type LiveEnv } from './providers';
 import { addSessionCounters, readSession, recordEvent, updateSession, type LiveSessionRow } from './store';
 
@@ -234,13 +236,26 @@ async function indexMediaPlaylist(env: LiveEnv, ctx: ExecutionContext, session: 
 
 async function deliver(request: Request, env: LiveEnv, ctx: ExecutionContext, parts: string[]): Promise<Response> {
 	if (request.method !== 'GET' && request.method !== 'HEAD') return text(405, 'Method not allowed');
-	const [sessionId, ...rest] = parts;
+	const [sessionId, ...tail] = parts;
+	const token = isViewToken(tail[0]) ? tail[0] : null;
+	const rest = token ? tail.slice(1) : tail;
 	if (!sessionId || !UUID.test(sessionId) || !rest.length || rest.length > 2) return text(404, 'Not found');
 	const file = rest[rest.length - 1];
 	if (rest.length === 2 && !RENDITION.test(rest[0])) return text(404, 'Not found');
 	if (!/\.(m3u8|m4s|mp4|ts)$/.test(file)) return text(404, 'Not found');
+	// The stream's state first, before anything kept at the edge
+	let access: Awaited<ReturnType<typeof sessionAccess>>;
+	try {
+		access = await sessionAccess(env, sessionId);
+	} catch (error) {
+		logger.error('[LiveEdge] The stream\'s state could not be read; refusing', { sessionId, error: error instanceof Error ? error.message : String(error) });
+		return new Response('Unavailable', { status: 503, headers: { ...CORS, 'cache-control': 'no-store', 'retry-after': '2' } });
+	}
+	const open = access === 'public' || (access === 'managers' && !!token && (await verifyViewToken(env, sessionId, token)));
+	if (!open) return new Response('Not found', { status: 404, headers: { ...CORS, 'cache-control': 'no-store' } });
 	const url = new URL(request.url);
-	const cacheKey = new Request(`${url.origin}${url.pathname}`, { method: 'GET' });
+	// One copy per file, whoever asks for it
+	const cacheKey = new Request(`${url.origin}/hls/${sessionId}/${rest.join('/')}`, { method: 'GET' });
 	const cache = (caches as unknown as { default: Cache }).default;
 	let response = await cache.match(cacheKey);
 	let hit = true;
@@ -264,5 +279,7 @@ async function deliver(request: Request, env: LiveEnv, ctx: ExecutionContext, pa
 	ctx.waitUntil(flushEdgeCounters(env.SEARCH_DB!).catch(() => undefined));
 	const out = new Response(request.method === 'HEAD' ? null : response.body, response);
 	out.headers.set('x-live-cache', hit ? 'HIT' : 'MISS');
+	// Not for everyone: no browser or proxy keeps it
+	if (access === 'managers') out.headers.set('cache-control', 'private, no-store');
 	return out;
 }
