@@ -11,7 +11,7 @@
  * Recipients: those the engine names (the proposer and the eligible approvers), plus the rule's extra
  * notify list. Email is skipped when the rule turns email off; the in-app count still shows it.
  */
-import { type AccountEmailContact, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
+import { currencyExponent, type AccountEmailContact, type WorkflowField, type WorkflowRequestView } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
 import { envTag, sendContactEmail } from '../contact-email';
@@ -129,16 +129,6 @@ const COPY = {
   },
 } as const;
 
-/** Decimal places of a currency's minor unit (ISO 4217 via Intl); 2 when unknown. */
-export function currencyExponent(currency: string | undefined): number {
-  if (!currency) return 2;
-  try {
-    return new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
-  } catch {
-    return 2;
-  }
-}
-
 /** Eastern Arabic digits, never grouped (O35, O38). */
 export function arDigits(v: number | string): string {
   return String(v).replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]);
@@ -161,7 +151,7 @@ export function fieldValue(f: WorkflowField, v: unknown, locale: EmailLocale, na
   if (f.kind === 'enum') return label(v);
   if (f.kind === 'money' && typeof v === 'number') {
     // Minor units with the currency's own exponent (JPY 0, USD 2, KWD 3)
-    const exp = currencyExponent(f.currency);
+    const exp = f.currency ? currencyExponent(f.currency) : 2;
     const s = `${(v / 10 ** exp).toFixed(exp)} ${f.currency ?? ''}`.trim();
     return locale === 'ar' ? arDigits(s.replace('.', '٫')) : s;
   }
