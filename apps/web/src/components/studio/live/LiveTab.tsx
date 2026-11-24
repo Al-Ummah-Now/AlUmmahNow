@@ -21,19 +21,28 @@ import { createStream, deleteStream, isLiveOff, listChannelStreams, liveErrorCod
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { useCreatorAccess } from '@/hooks/useCreatorAccess';
+import type { LiveOffers } from '@/lib/studio/nav';
+import { LiveKindBadges } from '@/components/live/LiveKindBadges';
+import { LiveOptionsFields, offeredOptions, optionsOf } from './LiveOptionsFields';
 import { LiveQuota } from './LiveQuota';
+import { PremiereForm } from './PremiereForm';
+import { NO_START, StartFields, readStart } from './StartFields';
+import { studioLiveHref } from './href';
 
 interface Props {
   locale: string;
   channelId: string;
   role: StudioRole;
+  /** What is on for the channel (lib/studio/nav liveOffers) */
+  offers?: LiveOffers;
 }
 
-export const studioLiveHref = (locale: string, channelId: string, streamId?: string) =>
-  `/${locale}/studio/${encodeURIComponent(channelId)}/content/live${streamId ? `/${encodeURIComponent(streamId)}` : ''}`;
+export { studioLiveHref };
 
-export function LiveTab({ locale, channelId, role }: Props) {
-  const { t } = useLanguage();
+const STREAMS_ONLY: LiveOffers = { streams: true, premieres: false, chat: false, events: false, schedule: false };
+
+export function LiveTab({ locale, channelId, role, offers = STREAMS_ONLY }: Props) {
+  const { t, lang } = useLanguage();
   const text = t.studio.live;
   const router = useRouter();
   const ids = useId();
@@ -53,6 +62,9 @@ export function LiveTab({ locale, channelId, role }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [start, setStart] = useState(NO_START);
+  const [options, setOptions] = useState(() => optionsOf());
+  const [kind, setKind] = useState<'live' | 'premiere'>(offers.streams ? 'live' : 'premiere');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
   const [formErrorCode, setFormErrorCode] = useState('');
@@ -84,11 +96,16 @@ export function LiveTab({ locale, channelId, role }: Props) {
       setFormError(text.form.titleRequired);
       return;
     }
+    const at = offers.schedule ? readStart(start) : 'empty';
+    if (at === 'incomplete' || at === 'past') {
+      setFormError(at === 'past' ? text.apps.timeTooSoon : text.apps.timeRequired);
+      return;
+    }
     setCreating(true);
     setFormError('');
     setFormErrorCode('');
     try {
-      const stream = await createStream(channelId, { title: title.trim(), description: description.trim(), isPrivate });
+      const stream = await createStream(channelId, { title: title.trim(), description: description.trim(), isPrivate, ...(typeof at === 'string' ? {} : { scheduledStartTime: at.iso }), ...offeredOptions(options, offers) });
       router.push(studioLiveHref(locale, channelId, stream.id));
     } catch (error) {
       // Live was switched off meanwhile: the page re-renders without it (not found)
@@ -118,14 +135,25 @@ export function LiveTab({ locale, channelId, role }: Props) {
     }
   };
 
+  const startFormat = dateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
   const dateFormat = dateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' });
 
   return (
     <div data-testid="studio-live">
       <h1 className="sr-only">{t.studio.tabs.live}</h1>
 
-      {canManage && tierLive && <LiveQuota locale={locale} live={tierLive} />}
-      {canManage && blocked ? null : canManage ? (
+      {canManage && offers.streams && tierLive && <LiveQuota locale={locale} live={tierLive} />}
+      {canManage && offers.streams && offers.premieres && (
+        <div role="group" aria-label={text.apps.kindLabel} className="mb-4 flex flex-wrap gap-2" data-testid="studio-live-kind">
+          {(['live', 'premiere'] as const).map((k) => (
+            <Button key={k} type="button" variant={kind === k ? 'default' : 'outline'} aria-pressed={kind === k} className="min-h-11" onClick={() => setKind(k)} data-testid={`studio-live-kind-${k}`}>
+              {k === 'live' ? text.newStream : text.apps.newPremiere}
+            </Button>
+          ))}
+        </div>
+      )}
+      {canManage && offers.premieres && kind === 'premiere' && <PremiereForm locale={locale} channelId={channelId} offers={offers} />}
+      {canManage && (blocked || !offers.streams || kind === 'premiere') ? null : canManage ? (
         <form onSubmit={(e) => void submit(e)} className="mb-6 grid gap-3 rounded-lg border border-border bg-card p-4" data-testid="studio-live-form" noValidate>
           <h2 className="text-base font-semibold text-foreground">{text.newStream}</h2>
           <div className="grid gap-1">
@@ -143,6 +171,8 @@ export function LiveTab({ locale, channelId, role }: Props) {
               <p id={`${ids}-private-hint`} className="text-xs text-muted-foreground">{text.form.privateHint}</p>
             </div>
           </div>
+          {offers.schedule && <StartFields value={start} onChange={setStart} legend={text.apps.startOptional} />}
+          <LiveOptionsFields value={options} onChange={setOptions} offers={offers} />
           {formError && (
             <p role="alert" className="text-sm text-destructive" data-testid="studio-live-error" data-code={formErrorCode}>
               {formError}
@@ -183,8 +213,9 @@ export function LiveTab({ locale, channelId, role }: Props) {
                 <p className="truncate font-medium text-foreground" dir="auto">{row.title}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <Badge variant={row.status === 'live' ? 'destructive' : 'secondary'} data-testid="studio-live-status">{text.status[row.status] ?? row.status}</Badge>
+                  <LiveKindBadges kind={row.kind} eventType={row.eventType} lang={lang === 'ar' ? 'ar' : 'en'} />
                   <p className="text-xs text-muted-foreground">
-                    {row.dateCreated ? text.created.replace('{date}', dateFormat.format(new Date(row.dateCreated))) : ''}
+                    {row.status === 'scheduled' && row.scheduledStartTime ? startFormat.format(new Date(row.scheduledStartTime)) : row.dateCreated ? text.created.replace('{date}', dateFormat.format(new Date(row.dateCreated))) : ''}
                   </p>
                 </div>
               </div>
@@ -192,7 +223,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
                 {canManage && (
                   <Button asChild variant="outline" className="min-h-11">
                     {/* With the month's hours used up a stream that isn't live can't start: no "Go live" offer, its details instead */}
-                    <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{row.status === 'live' ? text.manageLive : row.status === 'ended' || row.status === 'cancelled' || blocked ? text.details : text.manage}</Link>
+                    <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{row.kind === 'premiere' ? text.apps.premiereManage : row.status === 'live' ? text.manageLive : row.status === 'ended' || row.status === 'cancelled' || blocked ? text.details : text.manage}</Link>
                   </Button>
                 )}
                 <Button asChild variant="ghost" className="min-h-11">

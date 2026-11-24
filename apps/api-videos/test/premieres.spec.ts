@@ -14,7 +14,7 @@ import { VideoUpdate } from '../src/endpoints/video/videoUpdate';
 import { applyBulkChanges, revertFields } from '../src/lib/bulkEdit';
 import { updateVideo } from '../src/lib/admin/service';
 import { saveTier } from '../src/lib/creatorTiers';
-import { heldForPremiere, runPremieres, startPremiere, swapPremiere } from '../src/lib/live/premieres';
+import { heldForPremiere, premiereTimes, runPremieres, startPremiere, swapPremiere } from '../src/lib/live/premieres';
 import { desiredAccess } from '../src/lib/media/r2-delivery';
 import { scheduleRefusal } from '../src/lib/videoSchedule';
 import { withSearchSync } from '../src/lib/search/sync';
@@ -78,6 +78,18 @@ async function setup() {
 	const fanouts = () => raw.queue.messages.filter((m: Json) => m.payload?.kind === 'live_started' || m.payload?.kind === 'new_video').map((m: Json) => [m.payload.kind, m.payload.entityId]);
 	return { db, raw, env, settle, putVideo, video, stream, call, schedule, made, at, tick, fanouts, flip };
 }
+
+describe('its team’s lists', () => {
+	it('say when a held video’s premiere is, read by stream id, and say it is held when that cannot be read', async () => {
+		const t = await setup();
+		const s = await t.made();
+		const held = await t.video();
+		const list = [held, { id: 'v2' }, null] as never;
+		assert.deepEqual([...(await premiereTimes(t.env as never, list))], [['v1', { streamId: s.id, startsAt: new Date(s.scheduledStartTime).toISOString() }]]);
+		assert.deepEqual([...(await premiereTimes({}, list))], [['v1', { streamId: s.id, startsAt: null }]]);
+		assert.equal((await premiereTimes(t.env as never, [{ id: 'v2' }])).size, 0);
+	});
+});
 
 describe('scheduling', () => {
 	it('holds the video and nothing else about it changes', async () => {

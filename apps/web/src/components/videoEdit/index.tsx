@@ -27,6 +27,7 @@ import AudioTracksPanel from './audio/AudioTracksPanel';
 import SubtitleUploadSection from './SubtitleUploadSection';
 import ChapterEditor from './ChapterEditor';
 import ChapterUpload from './ChapterUpload';
+import { HeldForPremiere } from './HeldForPremiere';
 import ScheduleSection from './ScheduleSection';
 import { VideoFormatChoice, formatChoiceOf, type VideoFormatChoiceValue } from '@/components/videoFormat/VideoFormatChoice';
 
@@ -188,6 +189,9 @@ export default function VideoEdit({
     setSuccess(null);
   };
 
+  /** The premiere this video waits for (wiki E17 §5.4) */
+  const held = video.premiereHold?.streamId;
+
   /** Public, unlisted (link only, never listed) or private (D-SEO-5) */
   const setVisibility = (visibility: 'public' | 'unlisted' | 'private') => {
     setFormData((prev) => ({ ...prev, isPublic: visibility === 'public', isUnlisted: visibility === 'unlisted' }));
@@ -238,9 +242,12 @@ export default function VideoEdit({
           ar: formData.descriptionAr,
         },
         thumbnailUrl: formData.thumbnailUrl,
-        isPublic: formData.isPublic,
-        isUnlisted: !formData.isPublic && formData.isUnlisted,
-        visibility: formData.isPublic ? 'public' : formData.isUnlisted ? 'unlisted' : 'private',
+        // Waiting for its premiere: the server refuses any visibility with it
+        ...(held ? {} : {
+          isPublic: formData.isPublic,
+          isUnlisted: !formData.isPublic && formData.isUnlisted,
+          visibility: formData.isPublic ? 'public' : formData.isUnlisted ? 'unlisted' : 'private',
+        }),
         tags: formData.tags,
         // null clears a previously set category
         category: formData.category || null,
@@ -440,8 +447,8 @@ export default function VideoEdit({
           onConfirm={() => setCategoryState((prev) => pickCategory(prev.category))}
         />
 
-        {/* Privacy */}
-        <div>
+        {/* Privacy: a video waiting for its premiere is opened by it (wiki E17 §5.4) */}
+        {held ? <HeldForPremiere channelId={channelId} streamId={held} /> : <div>
           <label className="block text-sm font-medium mb-2 dark:text-white">
             {t.video.videoPrivacy}
           </label>
@@ -471,7 +478,7 @@ export default function VideoEdit({
               help={t.video.privateVideo}
             />
           </div>
-        </div>
+        </div>}
 
         {/* Comment settings (Story 29.2) */}
         <fieldset data-testid="video-edit-comment-settings">
@@ -506,7 +513,7 @@ export default function VideoEdit({
         />
 
         {/* Schedule Publication Section */}
-        <ScheduleSection
+        {!held && <ScheduleSection
           videoId={video.id}
           channelId={channelId}
           isPublic={formData.isPublic}
@@ -519,7 +526,7 @@ export default function VideoEdit({
               setSuccess(t.schedule?.scheduleCancelled ?? null);
             }
           }}
-        />
+        />}
 
         {/* Subtitles/Captions Section */}
         <SubtitleUploadSection

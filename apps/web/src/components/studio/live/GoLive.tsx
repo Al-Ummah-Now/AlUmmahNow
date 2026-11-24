@@ -20,10 +20,15 @@ import { LivePlayer } from '@/components/live/LivePlayer';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LIVE_TIER_CODES, LiveApiError, endStream, getIngest, getState, getStream, isLiveOff, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
-import { studioLiveHref } from './LiveTab';
+import type { LiveOffers } from '@/lib/studio/nav';
+import { HeldReview } from './HeldReview';
+import { LiveSettings } from './LiveSettings';
+import { PremiereManage } from './PremiereManage';
+import { studioLiveHref } from './href';
 
 import { metaSeparator } from '@/lib/i18n/meta-separator';
 export const STUDIO_POLL_MS = 5_000;
+const NO_OFFERS: LiveOffers = { streams: true, premieres: false, chat: false, events: false, schedule: false };
 
 export type GoLivePhase = 'ready' | 'waiting' | 'live' | 'ended';
 
@@ -43,7 +48,7 @@ export function maskKey(text: string, key: string): string {
 
 type Load = 'loading' | 'ready' | 'missing' | 'forbidden' | 'failed';
 
-export function GoLive({ locale, channelId, streamId }: { locale: string; channelId: string; streamId: string }) {
+export function GoLive({ locale, channelId, streamId, offers }: { locale: string; channelId: string; streamId: string; offers?: LiveOffers }) {
   const { t, lang } = useLanguage();
   const text = t.studio.live.goLive;
   const errors = t.studio.live.errors;
@@ -65,8 +70,19 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
 
   const fetchAll = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [row, settings] = await Promise.all([getStream(streamId, signal), getIngest(streamId, signal)]);
+      // Both at once; a premiere has no encoder settings (409 premiere_no_ingest) and its own page
+      const [row, settings] = await Promise.all([
+        getStream(streamId, signal),
+        getIngest(streamId, signal).catch((err: unknown) => {
+          if (err instanceof LiveApiError && err.code === 'premiere_no_ingest') return null;
+          throw err;
+        }),
+      ]);
       setStream(row);
+      if (!settings) {
+        setLoad('ready');
+        return;
+      }
       setIngest(settings.ingest);
       setState(settings.state);
       setLoad('ready');
@@ -96,14 +112,15 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
   }, [fetchAll]);
 
   // Every 5 s until the recording is known
+  const premiere = stream?.kind === 'premiere';
   const settled = phase === 'ended' && !!state?.vodUrl;
   useEffect(() => {
-    if (load !== 'ready' || settled) return;
+    if (load !== 'ready' || settled || premiere) return;
     const timer = setInterval(() => {
       getState(streamId).then(({ state: next }) => setState(next), (err) => logger.debug('[StudioGoLive] State poll failed', { streamId, error: err }));
     }, STUDIO_POLL_MS);
     return () => clearInterval(timer);
-  }, [load, settled, streamId]);
+  }, [load, settled, premiere, streamId]);
 
   const goLive = async () => {
     setBusy('start');
@@ -178,6 +195,15 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
           {message}
         </p>
         {load === 'failed' && <Button onClick={() => { setLoad('loading'); void fetchAll(); }}>{t.studio.live.retry}</Button>}
+      </div>
+    );
+  }
+
+  if (premiere && stream) {
+    return (
+      <div>
+        {back}
+        <PremiereManage locale={locale} channelId={channelId} stream={stream} offers={offers ?? NO_OFFERS} />
       </div>
     );
   }
@@ -292,6 +318,9 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
           <p role="status" aria-live="polite" className="sr-only" data-testid="studio-golive-copied">{copied}</p>
         </section>
       )}
+
+      {offers?.chat && phase !== 'ended' && <HeldReview streamId={streamId} />}
+      {offers && stream && <LiveSettings stream={stream} offers={offers} onSaved={() => void getStream(streamId).then(setStream, () => undefined)} />}
 
       <ConfirmDialog
         open={confirmEnd}

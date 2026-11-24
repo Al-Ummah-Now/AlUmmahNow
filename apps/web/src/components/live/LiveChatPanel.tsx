@@ -6,8 +6,8 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Player } from 'video.js';
-import { ArrowDown, Pin } from 'lucide-react';
-import type { LiveChatMessage, LiveChatSettings } from '@al-ummah/shared-types';
+import { ArrowDown, Pin, ShieldAlert } from 'lucide-react';
+import { fillTemplate, type LiveChatMessage, type LiveChatSettings } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import ReportContentButton from '@/components/moderation/ReportContentButton';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
 import { moderateChat, type LiveChatView } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
+import { HeldList, useHeldMessages } from './HeldMessages';
 import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageRow, type ChatRowAction } from './LiveChatMessageRow';
 import { useChatReplay } from './useChatReplay';
@@ -74,7 +75,7 @@ export interface LiveChatPanelProps {
 }
 
 export function LiveChatPanel({ streamId, mode, chat, canModerate, onChanged }: LiveChatPanelProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const text = t.liveWatch;
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -83,6 +84,15 @@ export function LiveChatPanel({ streamId, mode, chat, canModerate, onChanged }: 
   const { box, onScroll, behind, toEnd } = useFollow(messages.at(-1)?.id);
   const [notice, setNotice] = useState<{ text: string; undo?: LiveChatMessage } | null>(null);
   const [reporting, setReporting] = useState<LiveChatMessage | null>(null);
+  // What the AI scan held, for the moderators (E17-D4)
+  const held = useHeldMessages(streamId, canModerate);
+  const [reviewing, setReviewing] = useState(false);
+  const heldCount = held.messages?.length ?? 0;
+  const decideHeld = useCallback(async (message: LiveChatMessage, action: 'restore' | 'remove') => {
+    const done = await held.decide(message, action);
+    if (done && action === 'restore') add(message);
+    return done;
+  }, [held, add]);
   // Realtime starts a moment after the page: said only when it stays away
   const [late, setLate] = useState(false);
   useEffect(() => {
@@ -147,6 +157,15 @@ export function LiveChatPanel({ streamId, mode, chat, canModerate, onChanged }: 
             <span className="[overflow-wrap:anywhere]" dir="auto">{pinned.text}</span>
           </p>
           {canModerate && <Button variant="ghost" size="sm" onClick={() => void act('unpin', pinned)} data-testid="live-chat-unpin-banner">{text.chatUnpin}</Button>}
+        </div>
+      )}
+      {heldCount > 0 && (
+        <div className="border-b border-border px-3 py-1" data-testid="live-chat-held-bar">
+          <Button variant="ghost" size="sm" aria-expanded={reviewing} onClick={() => setReviewing((r) => !r)} data-testid="live-chat-held-toggle">
+            <ShieldAlert aria-hidden="true" />
+            {fillTemplate(lang, text.chatHeld, { count: heldCount })}
+          </Button>
+          {reviewing && <div className="max-h-48 overflow-y-auto" tabIndex={0} role="region" aria-label={text.chatHeldTitle}><HeldList messages={held.messages!} onDecide={decideHeld} /></div>}
         </div>
       )}
       <div className="relative min-h-0 flex-1">

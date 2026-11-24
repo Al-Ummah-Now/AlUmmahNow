@@ -32,6 +32,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import type { BulkSummary, StudioVideo } from '@/lib/api/studio-content';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { appealVideoReview, fetchContentCounts, fetchContentPage, resubmitVideoReview, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
+import { studioLiveHref } from '@/components/studio/live/href';
 import { rememberListUrl } from '@/lib/studio/list-return';
 import { BulkScheduleDialog } from './BulkDialogs';
 import { AppealDialog, ReviewLine } from './ReviewStatus';
@@ -484,7 +485,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true, uploadOn);
+                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true, uploadOn, !!video.premiere);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (
@@ -512,7 +513,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</span>
                           )}
                           <span className="mt-1 flex gap-1 text-xs text-muted-foreground">
-                            {video.isPublic === false && <span className="rounded bg-muted px-1" data-testid="studio-video-visibility">{video.isUnlisted ? text.badges.unlisted : text.badges.private}</span>}
+                            {video.premiere && <Link href={studioLiveHref(locale, channelId, video.premiere.streamId)} className="rounded bg-muted px-1 underline" data-testid="studio-video-premiere">{video.premiere.startsAt ? t.studio.live.apps.premiereOn.replace('{date}', dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(video.premiere.startsAt))) : t.studio.live.apps.premiere}</Link>}
+                            {!video.premiere && video.isPublic === false && <span className="rounded bg-muted px-1" data-testid="studio-video-visibility">{video.isUnlisted ? text.badges.unlisted : text.badges.private}</span>}
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
                             {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>

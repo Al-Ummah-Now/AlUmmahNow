@@ -377,3 +377,23 @@ export async function runPremieres(env: PremiereEnv, now = Date.now()): Promise<
 	}
 	return out;
 }
+
+/** The premiere each held video waits for, for its team's lists. Read by stream id; no time while unreadable. */
+export async function premiereTimes(env: { SEARCH_DB?: D1Database }, list: ReadonlyArray<{ id: string; premiereHold?: PremiereHold } | null>): Promise<Map<string, { streamId: string; startsAt: string | null }>> {
+	const held = list.flatMap((video) => (video?.premiereHold ? [{ id: video.id, streamId: video.premiereHold.streamId }] : []));
+	const times = new Map<string, number>();
+	if (env.SEARCH_DB && held.length) {
+		try {
+			for (let i = 0; i < held.length; i += 90) {
+				const part = held.slice(i, i + 90);
+				const { results } = await env.SEARCH_DB.prepare(`SELECT stream_id, scheduled_start_at FROM ${LIVE_METADATA_TABLE} WHERE stream_id IN (${part.map(() => '?').join(', ')})`)
+					.bind(...part.map((v) => v.streamId))
+					.all<{ stream_id: string; scheduled_start_at: number | null }>();
+				for (const row of results ?? []) if (row.scheduled_start_at !== null) times.set(row.stream_id, row.scheduled_start_at);
+			}
+		} catch (error) {
+			logger.warn('[Premiere] Times not read', { error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	return new Map(held.map(({ id, streamId }) => [id, { streamId, startsAt: times.has(streamId) ? new Date(times.get(streamId)!).toISOString() : null }]));
+}

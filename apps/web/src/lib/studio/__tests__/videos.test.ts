@@ -35,6 +35,11 @@ describe('videosQueryString', () => {
 });
 
 describe('rowActions', () => {
+  it('leaves a video waiting for its premiere to the premiere (wiki E17)', () => {
+    expect(rowActions('scheduled', 'owner')).toContain('publishNow');
+    expect(rowActions('scheduled', 'owner', false, null, false, true, true)).toEqual(['edit', 'delete']);
+  });
+
   it('offers a published video everything for the owner', () => {
     expect(rowActions('published', 'owner')).toEqual(['edit', 'view', 'analytics', 'copyLink', 'schedule', 'delete']);
   });

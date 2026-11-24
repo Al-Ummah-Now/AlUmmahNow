@@ -6,7 +6,7 @@
  * (Bunny Stream Live and self-hosted): Studio and the watch page never branch
  * on the provider except to read the ingest protocol's help text.
  */
-import { FEATURE_OFF_CODE, type LiveChatAction, type LiveChatMessage, type LiveEventType, type LiveStreamKind, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
+import { FEATURE_OFF_CODE, type LiveChatAction, type LiveChatAiHold, type LiveChatMessage, type LiveEventType, type LiveStreamKind, type LiveChatSettings, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 
@@ -27,6 +27,23 @@ export interface LiveStreamRow {
   playbackUrl?: string | null;
   vodUrl?: string | null;
   thumbnailUrl?: string | null;
+  kind?: LiveStreamKind;
+  premiereVideoId?: string | null;
+  eventType?: LiveEventType | null;
+  reminderCount?: number;
+  /** Chat settings, for the stream's team; absent = as a new stream has them */
+  allowChat?: boolean;
+  chatReplay?: boolean;
+  slowModeSeconds?: number;
+  subscribersOnly?: boolean;
+  aiHold?: LiveChatAiHold;
+}
+
+/** What its team sets on a stream or premiere (wiki E17). */
+export interface LiveOptions {
+  scheduledStartTime?: string;
+  eventType?: LiveEventType | null;
+  chat?: Partial<LiveChatSettings> & { aiHold?: LiveChatAiHold };
 }
 
 export interface LiveStateView extends LiveStreamState {
@@ -124,15 +141,40 @@ export async function listChannelStreams(channelId: string, cursor?: string | nu
   return { items: result.data ?? [], cursor: result.cursor || null };
 }
 
-export async function createStream(channelId: string, input: { title: string; description?: string; isPrivate: boolean }): Promise<LiveStreamRow> {
+const sendJson = (body: object) => ({ headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+export async function createStream(channelId: string, input: { title: string; description?: string; isPrivate: boolean } & LiveOptions): Promise<LiveStreamRow> {
+  const { chat, eventType, scheduledStartTime, description, ...rest } = input;
   const res = await request('/api/live-streams', {
     auth: 'required',
     channelId,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: input.title, ...(input.description ? { description: input.description } : {}), isPrivate: input.isPrivate }),
+    ...sendJson({ ...rest, ...(description ? { description } : {}), ...(eventType ? { eventType } : {}), ...(scheduledStartTime ? { scheduledStartTime } : {}), ...chat }),
   });
   return (await json<{ stream: LiveStreamRow }>(res)).stream;
+}
+
+export async function updateStream(id: string, patch: { title?: string; scheduledStartTime?: string; eventType?: LiveEventType | null; status?: 'cancelled' }): Promise<LiveStreamRow> {
+  return (await json<{ stream: LiveStreamRow }>(await request(streamPath(id), { auth: 'required', method: 'PATCH', ...sendJson(patch) }))).stream;
+}
+
+/** Applies at once: viewers' chats are told. */
+export async function saveChatSettings(id: string, settings: NonNullable<LiveOptions['chat']>): Promise<void> {
+  await json(await request(`${streamPath(id)}/chat/settings`, { auth: 'required', method: 'PATCH', ...sendJson(settings) }));
+}
+
+export async function heldChat(id: string, signal?: AbortSignal): Promise<LiveChatMessage[]> {
+  return (await json<{ messages: LiveChatMessage[] }>(await request(`${streamPath(id)}/chat/held`, { auth: 'required', signal }))).messages;
+}
+
+export async function schedulePremiere(videoId: string, input: { title?: string; scheduledStartTime: string } & Omit<LiveOptions, 'scheduledStartTime'>): Promise<LiveStreamRow> {
+  const { chat, eventType, ...rest } = input;
+  const res = await request(`/api/videos/${encodeURIComponent(videoId)}/premiere`, { auth: 'required', method: 'POST', ...sendJson({ ...rest, ...(eventType ? { eventType } : {}), ...chat }) });
+  return (await json<{ stream: LiveStreamRow }>(res)).stream;
+}
+
+export async function swapPremiere(id: string, videoId: string): Promise<LiveStreamRow> {
+  return (await json<{ stream: LiveStreamRow }>(await request(`${streamPath(id)}/premiere`, { auth: 'required', method: 'PATCH', ...sendJson({ videoId }) }))).stream;
 }
 
 export async function getStream(id: string, signal?: AbortSignal): Promise<LiveStreamRow> {
