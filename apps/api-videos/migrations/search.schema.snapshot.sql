@@ -57,12 +57,15 @@
 --   apps/api-videos/migrations/search/0078_support_tech_staff.sql
 --   apps/api-videos/migrations/search/0079_offline_downloads.sql
 --   apps/api-videos/migrations/search/0080_channel_quran_translations_index.sql
---   apps/api-videos/migrations/search/0081_recitation_metadata.sql
+--   apps/api-videos/migrations/search/0081_import_sources.sql
+--   apps/api-videos/migrations/search/0082_import_takeout.sql
+--   apps/api-videos/migrations/search/0085_approval_workflows.sql
+--   apps/api-videos/migrations/search/0086_recitation_metadata.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
-CREATE TABLE admin_job_log (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, at TEXT NOT NULL, event TEXT NOT NULL, attempt INTEGER, error TEXT, delay_seconds INTEGER, retried INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE admin_job_log (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, at TEXT NOT NULL, event TEXT NOT NULL, attempt INTEGER, error TEXT, delay_seconds INTEGER, retried INTEGER NOT NULL DEFAULT 0, actor_id TEXT, actor_name TEXT);
 CREATE TABLE admin_job_users (user_id TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY (user_id, job_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, next_run_at TEXT, run_id TEXT);
 CREATE TABLE billing_checkouts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, price_id TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'expired')), created_at TEXT NOT NULL, completed_at TEXT) WITHOUT ROWID;
@@ -105,6 +108,9 @@ CREATE TABLE download_licenses (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, devi
 CREATE TABLE feature_switch_changes (id TEXT PRIMARY KEY, key TEXT NOT NULL, version INTEGER NOT NULL, old_enabled INTEGER CHECK (old_enabled IS NULL OR old_enabled IN (0, 1)), new_enabled INTEGER NOT NULL CHECK (new_enabled IN (0, 1)), actor_id TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('features_page', 'undo', 'legacy_page', 'migration')), created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE feature_switches (key TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)), version INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE import_source_items (source_id TEXT NOT NULL, item_id TEXT NOT NULL, kind TEXT, state TEXT NOT NULL, payload TEXT, post_id TEXT, video_id TEXT, original_url TEXT, original_at INTEGER, note TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (source_id, item_id));
+CREATE TABLE import_sources (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', auth_kind TEXT NOT NULL, social_account_id TEXT, yt_import_id TEXT, permission_by TEXT, permission_note TEXT, permission_at INTEGER, schedule TEXT NOT NULL DEFAULT 'manual', enabled INTEGER NOT NULL DEFAULT 1, cursor TEXT, next_sync_at INTEGER, last_sync_at INTEGER, last_job_id TEXT, last_error TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, takeout_job_id TEXT, sync_job_id TEXT, UNIQUE (channel_id, network, address));
+CREATE TABLE import_takeout_files (id TEXT PRIMARY KEY, source_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, youtube_id TEXT, title TEXT, duration_ms INTEGER, mime_type TEXT, state TEXT NOT NULL, matched_by TEXT, note TEXT, item_id TEXT, candidates TEXT, video_id TEXT, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (source_id, name, size));
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
@@ -205,6 +211,10 @@ CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL,
 CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL, period TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (user_id, operation, period)) WITHOUT ROWID;
 CREATE TABLE video_categories (value TEXT PRIMARY KEY, label_en TEXT NOT NULL, label_ar TEXT NOT NULL, hint TEXT, position INTEGER NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE videos_bans (user_id TEXT PRIMARY KEY, reason TEXT, banned_by TEXT NOT NULL, banned_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE workflow_inbox (user_id TEXT NOT NULL, request_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (user_id, request_id)) WITHOUT ROWID;
+CREATE TABLE workflow_requests (id TEXT PRIMARY KEY, action_type TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL CHECK (domain IN ('money', 'platform', 'people', 'governance')), rule_id TEXT, rule TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, open_key TEXT, subject_user_id TEXT, payload TEXT NOT NULL, diff TEXT NOT NULL, base_version TEXT NOT NULL, reason TEXT NOT NULL, proposed_by TEXT NOT NULL, proposed_at TEXT NOT NULL, expires_at TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'applying', 'applied', 'failed', 'rejected', 'withdrawn', 'expired', 'stale')), approvals_needed INTEGER NOT NULL CHECK (approvals_needed >= 0), approvals_count INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, applied_at TEXT, result TEXT, error TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE workflow_rules (id TEXT PRIMARY KEY, action_type TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL CHECK (version >= 1), config TEXT NOT NULL, request_id TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE workflow_steps (request_id TEXT NOT NULL, seq INTEGER NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('propose', 'approve', 'reject', 'withdraw', 'comment', 'apply', 'fail', 'expire', 'stale', 'retry')), note TEXT, step_up INTEGER NOT NULL DEFAULT 0, origin TEXT, at TEXT NOT NULL, PRIMARY KEY (request_id, seq)) WITHOUT ROWID;
 CREATE TABLE yt_import_items (id TEXT PRIMARY KEY, import_id TEXT NOT NULL, channel_id TEXT NOT NULL, yt_video_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', title_localized TEXT, description_localized TEXT, tags TEXT, language TEXT, published_at TEXT, publish_at TEXT, duration_seconds INTEGER, yt_visibility TEXT NOT NULL, made_for_kids INTEGER NOT NULL DEFAULT 0, thumbnail_url TEXT, selected INTEGER NOT NULL DEFAULT 0, match_json TEXT, video_id TEXT, state TEXT NOT NULL DEFAULT 'available', thumbnail_state TEXT NOT NULL DEFAULT 'none', captions_state TEXT NOT NULL DEFAULT 'none', caption_languages TEXT, captions_attached TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, UNIQUE (import_id, yt_video_id));
 CREATE TABLE yt_import_playlists (import_id TEXT NOT NULL, yt_playlist_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', yt_visibility TEXT NOT NULL, video_ids_json TEXT NOT NULL DEFAULT '[]', selected INTEGER NOT NULL DEFAULT 0, playlist_id TEXT, state TEXT NOT NULL DEFAULT 'none', PRIMARY KEY (import_id, yt_playlist_id));
 CREATE TABLE yt_imports (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, channel_id TEXT NOT NULL, owner_id TEXT NOT NULL, status TEXT NOT NULL, yt_channel_json TEXT, captions INTEGER NOT NULL DEFAULT 0, visibility_mode TEXT NOT NULL DEFAULT 'keep', refresh_token_enc TEXT, token_iv TEXT, scopes TEXT, error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, snapshot_purged_at TEXT);
@@ -296,6 +306,15 @@ CREATE INDEX idx_download_licenses_user_status ON download_licenses (user_id, st
 CREATE INDEX idx_download_licenses_video_status ON download_licenses (video_id, status);
 CREATE UNIQUE INDEX feature_switch_changes_key ON feature_switch_changes (key, version);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
+CREATE INDEX idx_import_source_items_post ON import_source_items (post_id);
+CREATE INDEX idx_import_source_items_state ON import_source_items (source_id, state, original_at);
+CREATE INDEX idx_import_source_items_video ON import_source_items (video_id);
+CREATE INDEX idx_import_sources_created ON import_sources (created_at DESC);
+CREATE INDEX idx_import_sources_due ON import_sources (enabled, next_sync_at);
+CREATE INDEX idx_import_sources_network ON import_sources (network, address);
+CREATE UNIQUE INDEX idx_import_takeout_files_holding ON import_takeout_files (source_id, item_id) WHERE item_id IS NOT NULL AND state IN ('matched', 'uploading', 'uploaded', 'attached');
+CREATE INDEX idx_import_takeout_files_item ON import_takeout_files (source_id, item_id);
+CREATE INDEX idx_import_takeout_files_state ON import_takeout_files (source_id, state);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);
@@ -337,6 +356,7 @@ CREATE INDEX idx_search_videos_short ON search_videos (is_short, created_at);
 CREATE INDEX idx_social_accounts_channel ON social_accounts (channel_id);
 CREATE INDEX idx_social_audit_channel ON social_audit (channel_id, created_at DESC);
 CREATE INDEX idx_social_deliveries_channel ON social_deliveries (channel_id, created_at DESC);
+CREATE INDEX idx_social_deliveries_network_remote ON social_deliveries (network, remote_id) WHERE remote_id IS NOT NULL;
 CREATE INDEX idx_social_deliveries_status ON social_deliveries (status, updated_at);
 CREATE INDEX idx_social_pending_expires ON social_pending (expires_at);
 CREATE INDEX idx_social_webhook_deliveries_hook ON social_webhook_deliveries (webhook_id, created_at DESC);
@@ -350,6 +370,7 @@ CREATE UNIQUE INDEX idx_support_disputes_ref ON support_disputes (collector_disp
 CREATE UNIQUE INDEX idx_support_events_key ON support_events (vendor, mode, event_id);
 CREATE INDEX idx_support_events_status ON support_events (status, received_at);
 CREATE INDEX idx_support_events_user ON support_events (user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_support_finance_active ON support_finance_members (user_id) WHERE removed_at IS NULL AND approved_by IS NOT NULL;
 CREATE INDEX idx_support_ledger_account ON support_ledger (account, currency);
 CREATE INDEX idx_support_ledger_channel ON support_ledger (channel_id, seq) WHERE channel_id IS NOT NULL;
 CREATE INDEX idx_support_ledger_entry ON support_ledger (entry_id);
@@ -385,9 +406,22 @@ CREATE INDEX idx_upload_limit_hits_at ON upload_limit_hits (hit_at);
 CREATE INDEX idx_upload_limit_hits_user ON upload_limit_hits (user_id, hit_at);
 CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);
 CREATE INDEX idx_upload_rate_windows_start ON upload_rate_windows (window_start);
+CREATE INDEX idx_workflow_inbox_request ON workflow_inbox (request_id);
+CREATE INDEX idx_workflow_inbox_user ON workflow_inbox (user_id, created_at);
+CREATE INDEX idx_workflow_requests_action ON workflow_requests (action_type, proposed_at);
+CREATE INDEX idx_workflow_requests_expiry ON workflow_requests (status, expires_at);
+CREATE UNIQUE INDEX idx_workflow_requests_open ON workflow_requests (open_key) WHERE open_key IS NOT NULL;
+CREATE INDEX idx_workflow_requests_proposed ON workflow_requests (proposed_at);
+CREATE INDEX idx_workflow_requests_proposer ON workflow_requests (proposed_by, proposed_at);
+CREATE INDEX idx_workflow_requests_status ON workflow_requests (status, proposed_at);
+CREATE INDEX idx_workflow_requests_target ON workflow_requests (target_kind, target_id, proposed_at);
+CREATE UNIQUE INDEX idx_workflow_rules_version ON workflow_rules (action_type, scope, version);
+CREATE INDEX idx_workflow_steps_actor ON workflow_steps (actor, at);
+CREATE UNIQUE INDEX idx_workflow_steps_one_approval ON workflow_steps (request_id, actor) WHERE kind = 'approve';
 CREATE INDEX idx_yt_import_items_channel_video ON yt_import_items (channel_id, yt_video_id);
 CREATE INDEX idx_yt_import_items_import ON yt_import_items (import_id, published_at);
 CREATE INDEX idx_yt_import_items_video ON yt_import_items (video_id) WHERE video_id IS NOT NULL;
+CREATE INDEX idx_yt_imports_channel ON yt_imports (channel_id, created_at DESC);
 CREATE INDEX idx_yt_imports_status ON yt_imports (status, updated_at);
 CREATE INDEX idx_yt_imports_user_channel ON yt_imports (user_id, channel_id, created_at);
 CREATE UNIQUE INDEX idx_yt_oauth_states_connect ON yt_oauth_states (connect_hash);
@@ -399,3 +433,7 @@ CREATE TRIGGER support_ledger_no_delete BEFORE DELETE ON support_ledger BEGIN SE
 CREATE TRIGGER support_ledger_no_update BEFORE UPDATE ON support_ledger BEGIN SELECT RAISE(ABORT, 'support_ledger is append-only'); END;
 CREATE TRIGGER support_ledger_entries_no_delete BEFORE DELETE ON support_ledger_entries BEGIN SELECT RAISE(ABORT, 'support_ledger_entries is append-only'); END;
 CREATE TRIGGER support_ledger_entries_no_update BEFORE UPDATE ON support_ledger_entries BEGIN SELECT RAISE(ABORT, 'support_ledger_entries is append-only'); END;
+CREATE TRIGGER workflow_rules_no_delete BEFORE DELETE ON workflow_rules BEGIN SELECT RAISE(ABORT, 'workflow_rules is append-only'); END;
+CREATE TRIGGER workflow_rules_no_update BEFORE UPDATE ON workflow_rules BEGIN SELECT RAISE(ABORT, 'workflow_rules is append-only'); END;
+CREATE TRIGGER workflow_steps_no_delete BEFORE DELETE ON workflow_steps BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;
+CREATE TRIGGER workflow_steps_no_update BEFORE UPDATE ON workflow_steps BEGIN SELECT RAISE(ABORT, 'workflow_steps is append-only'); END;
