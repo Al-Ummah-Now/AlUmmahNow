@@ -346,7 +346,7 @@ app.post('/move-offers/:id/stop', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');
   const reason = await handleReason(c);
-  if (!reason) return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+  if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
   return ok(c, await audited(c, { kind: 'channel', id, action: 'move-offer-stop', details: { reason } }, () =>
     videos(c, `/move-offers/${encodeURIComponent(id)}/stop`, { method: 'POST' })));
 });
