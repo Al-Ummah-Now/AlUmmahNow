@@ -10,6 +10,7 @@ import type { RailTranslations } from './i18n-rails';
 import type { CaptionsTranslations } from './i18n-captions';
 import type { AudioTracksTranslations } from './i18n-audio-tracks';
 import type { BillingTranslations } from './i18n-billing';
+import type { ChannelMovesTranslations } from './i18n-channel-moves';
 import type { ChannelRolesTranslations } from './i18n-channel-roles';
 import type { ChannelSectionsTranslations } from './i18n-channel-sections';
 /**
@@ -311,6 +312,7 @@ export interface AppTranslations {
   communityGuidelines: CommunityGuidelinesTranslations;
   /** Per-channel roles: account menu groups, role badges, channel Team page */
   channelRoles: ChannelRolesTranslations;
+  channelMoves: ChannelMovesTranslations;
   /** Contact us page (/[locale]/contact) */
   contact: ContactTranslations;
   /** Bot protection: Turnstile check and rate-limit messages */

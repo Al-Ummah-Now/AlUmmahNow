@@ -23,6 +23,7 @@ import { CAPTIONS_AR } from '../i18n-captions';
 import { AUDIO_TRACKS_AR } from '../i18n-audio-tracks';
 import { BILLING_AR } from '../i18n-billing';
 import { CHANNEL_ROLES_AR } from '../i18n-channel-roles';
+import { CHANNEL_MOVES_AR } from '../i18n-channel-moves';
 import { CHANNEL_SECTIONS_AR } from '../i18n-channel-sections';
 
 export const AR_TRANSLATIONS: AppTranslations = {
@@ -151,6 +152,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   audioTracks: AUDIO_TRACKS_AR,
   billing: BILLING_AR,
   channelRoles: CHANNEL_ROLES_AR,
+  channelMoves: CHANNEL_MOVES_AR,
   channelSections: CHANNEL_SECTIONS_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
