@@ -81,11 +81,6 @@ html[data-theme='fawanees'].dark {
   --aun-glass-panel-surface: color-mix(in srgb, var(--aun-glass-base-dark) 94%, var(--fanous-color-background)) !important;
 }
 
-/* Text that sits on the page itself (a page's title and subtitle, section headings and their links,
-   empty-state lines, the Explore chips) gets its .street-plate from the shared street stylesheet
-   (packages/fanous-tokens/street/fanous-street.css), which paints the page-colour plate on ::before
-   at z-index: -1 so it blocks the street without ever painting over adjacent text, icons or cards. */
-
 /* Studio's video editor (components/videoEdit): the form panel and the cards inside it (published caption
    tracks, caption drafts) sit on solid surfaces blended over the page, so the street never shows through
    them (owner, 2026-11-22). Cards are a step lighter than the panel so they still read as cards. The

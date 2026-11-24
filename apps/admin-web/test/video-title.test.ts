@@ -79,7 +79,7 @@ describe('phone card meta lines and numbers', () => {
   });
   it('a wrapped line never leaves a separator dangling: each separator sits in a gutter the clipped line cuts off at a line edge', () => {
     const html = renderToStaticMarkup(React.createElement(MetaLine as never, { locale: 'en', parts: ['a', 'b'] } as never));
-    assert.match(html, /^<span class="overflow-hidden [^"]*"><span class="flex flex-wrap -ms-\[1em\]">/);
+    assert.match(html, /^<span class="[^"]*"><span class="block overflow-hidden"><span class="flex flex-wrap -ms-\[1em\]">/);
     assert.doesNotMatch(html, / • /);
   });
   it('durations are ٠–٩ in Arabic through the shared formatter', () => {
