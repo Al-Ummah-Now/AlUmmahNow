@@ -6,9 +6,11 @@
  */
 
 export const APP_CONFIG_PLATFORMS = ['ios', 'ipados', 'tvos', 'macos', 'android', 'androidtv', 'firetv', 'windows', 'linux', 'tizen', 'webos', 'web'] as const;
-export const APP_CONFIG_APPS = ['viewer', 'studio', 'kids', 'tools', 'admin'] as const;
+export const APP_CONFIG_APPS = ['viewer', 'studio', 'tools', 'admin'] as const;
 export type AppConfigPlatform = (typeof APP_CONFIG_PLATFORMS)[number];
 export type AppConfigApp = (typeof APP_CONFIG_APPS)[number];
+/** Whether a stored document's app name is one we still have (an app can be removed after it was written). */
+export const isAppConfigApp = (app: unknown): app is AppConfigApp => (APP_CONFIG_APPS as readonly unknown[]).includes(app);
 
 /** The documents in the APP_CONFIG namespace. */
 export const APP_CONFIG_DOCUMENT_KEYS = ['flags', 'config', 'versions'] as const;

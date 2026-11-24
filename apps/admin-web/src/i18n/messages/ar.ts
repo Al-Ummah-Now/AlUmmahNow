@@ -5196,7 +5196,6 @@ const ar: Messages = {
     appNames: {
       viewer: 'المشاهدة',
       studio: 'الاستوديو',
-      kids: 'الأطفال',
       tools: 'الأدوات',
       admin: 'الإدارة',
     },

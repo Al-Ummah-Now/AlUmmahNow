@@ -78,6 +78,15 @@ describe('app config rules', () => {
   });
 });
 
+describe('rules of apps we no longer have', () => {
+  it('drops the old app, and a rule for it alone instead of making it a rule for every app', () => {
+    const stored = [{ key: 'a', apps: ['kids', 'viewer'] }, { key: 'b', apps: ['kids'] }, { key: 'c' }];
+    const back = draftsToDocument(rulesToDrafts(stored), 'flags');
+    assert.deepEqual(back.problems, []);
+    assert.deepEqual(back.value, [{ key: 'a', enabled: true, apps: ['viewer'] }, { key: 'c', enabled: true }]);
+  });
+});
+
 describe('app config versions', () => {
   it('round-trips the versions document', () => {
     const stored = { 'viewer/ios': { minimumVersion: '1.0.0', latestVersion: '1.4.0', storeUrl: 'https://apps.apple.com/app/id1' }, 'studio/*': { minimumVersion: '0.9.0' } };
@@ -86,10 +95,16 @@ describe('app config versions', () => {
     assert.ok(sameAppConfigDocument(back.value, stored));
   });
 
+  it('ignores entries of apps we no longer have', () => {
+    const stored = { 'kids/ios': { minimumVersion: '1.0.0' }, 'kids/*': { minimumVersion: '1.0.0' }, 'viewer/ios': { minimumVersion: '1.2.0' } };
+    const back = versionsToDocument(versionsToDrafts(stored));
+    assert.deepEqual(back, { value: { 'viewer/ios': { minimumVersion: '1.2.0' } }, problems: [] });
+  });
+
   it('refuses a second entry for one app and platform, a bad version, a lower latest and a non-https link', () => {
     const a = { ...newVersion(), minimumVersion: '1.0.0' };
     const b = { ...newVersion(), minimumVersion: '1', latestVersion: '', storeUrl: 'http://example.com' };
-    const c = { ...newVersion(), app: 'kids', minimumVersion: '2.0.0', latestVersion: '1.0.0' };
+    const c = { ...newVersion(), app: 'tools', minimumVersion: '2.0.0', latestVersion: '1.0.0' };
     const doc = versionsToDocument([a, b, c]);
     assert.equal(doc.value, null);
     assert.deepEqual(codes(problemsFor(doc.problems, b.id, 'platform')), ['platform:duplicateTarget']);

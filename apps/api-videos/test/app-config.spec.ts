@@ -97,6 +97,14 @@ describe('GET /api/app-config', () => {
 		assert.equal((await call('platform=ios&app=viewer&version=1.2.3&source=sideload')).status, 400);
 	});
 
+	it('ignores entries of apps we no longer have', async () => {
+		const kv = new MemoryKV({ versions: { 'kids/ios': { minimumVersion: '9.0.0' }, 'kids/*': { minimumVersion: '9.0.0' }, 'viewer/ios': { minimumVersion: '1.3.0' } } });
+		const body: any = await (await call('platform=ios&app=viewer&version=1.2.9', { APP_CONFIG: kv, SEARCH_DB: await switchedOn() })).json();
+		assert.equal(body.update.status, 'required');
+		assert.equal((await call('platform=ios&app=kids&version=1.0.0', { APP_CONFIG: kv })).status, 400);
+		forgetFeatureSwitches();
+	});
+
 	it('ignores an invalid versions document', async () => {
 		const kv = new MemoryKV({ versions: { 'viewer/ios': { minimumVersion: 'nine', storeUrl: 'javascript:alert(1)' } } });
 		assert.equal((await loadVersionsDocument(kv as never)).doc, undefined);

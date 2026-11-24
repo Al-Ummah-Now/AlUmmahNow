@@ -23,7 +23,7 @@ creator studio) and deliberately do things differently where our audience needs 
 | Ads everywhere | **No ads by default**; optional creator support and premium later (Epic 24) |
 | Shorts (vertical, endless) | **Lamahat (لمحات, "glimpses")**: short reflections, finite daily stack, each linking to the full lecture |
 | YouTube Music | **Listen mode**: lectures, recitation and nasheeds as audio, background play, CarPlay/Android Auto |
-| YouTube Kids (separate app) | **Ummah Kids profiles** inside the main app, curated allow-list, parental controls |
+| YouTube Kids (separate app) | No kids app or Kids Mode: our apps support the **device's own parental controls** (Epic 20) |
 | Generic calendar-agnostic UX | **Islamic time awareness**: prayer-time reminders and optional auto-pause, Hijri dates, Ramadan mode |
 | Chapters | Chapters **plus study mode**: notes, bookmarks, A–B loop for memorisation, verse-synced recitation subtitles |
 | Verified badge (popularity) | **Scholar & institution verification** (credential-based, moderated) |
@@ -36,9 +36,8 @@ creator studio) and deliberately do things differently where our audience needs 
 
 | App | Who | Platforms | Reference |
 |---|---|---|---|
-| **Al Ummah Now** (viewer) | Everyone | iOS, iPadOS, Android (phone/tablet/foldable), Android TV / Google TV, Fire TV, Apple TV (tvOS), Samsung Tizen, LG webOS, Windows, macOS, Linux, Web (PWA), CarPlay & Android Auto (audio) | YouTube, YouTube Music, YouTube Kids |
+| **Al Ummah Now** (viewer) | Everyone | iOS, iPadOS, Android (phone/tablet/foldable), Android TV / Google TV, Fire TV, Apple TV (tvOS), Samsung Tizen, LG webOS, Windows, macOS, Linux, Web (PWA), CarPlay & Android Auto (audio) | YouTube, YouTube Music |
 | **Al Ummah Now Studio** | Creators, scholars, institutions, channel teams | iOS, iPadOS, Android, Windows, macOS, Linux, Web. **Desktop:** encoding, transcription, batch upload, video editing. **Mobile:** editing, live streaming | YouTube Studio, plus a lightweight editor (CapCut / DaVinci-style basics) |
-| **Ummah Kids** | Children (via parent) | A profile type inside the viewer app on every platform (no separate binary) | YouTube Kids |
 
 The **internal bulk importer** (AlUmmahNowTools, .NET Uno desktop) is folded into **Studio Desktop**
 (Epic 19) so creators and the content team use one tool.
@@ -173,7 +172,7 @@ App Intents, Top Shelf, Live Activities, Android TV channels).
 | 17 | Live in apps (watch, chat, premieres, reminders) | viewer | P1 | 5 wk | 13, D3 |
 | 18 | Studio mobile (iOS / iPadOS / Android): manage, upload, **edit, live stream** | studio | P1 | 10 wk | 9, 10, 11, 30, D3 |
 | 19 | Studio desktop (macOS, Windows, Linux): **encoding, transcription, batch upload, video editing**, bulk import | studio | P1 | 12 wk | 9, 11, 30 |
-| 20 | Ummah Kids profiles & parental controls | viewer | P2 | 4 wk | 12, 15 |
+| 20 | System parental controls | viewer, studio | P1 | see wiki | 9, 23 |
 | 21 | Islamic experience layer | viewer | P1 | 5 wk | 12 |
 | 22 | Notifications, sharing, study circles | viewer, studio | P1 | 4 wk | 9 |
 | 23 | Release engineering & store compliance | all | P0 | ongoing (3 wk setup) | — |
@@ -326,7 +325,7 @@ Platforms: **Apple TV (tvOS)** in Swift/SwiftUI; **Android TV / Google TV and Fi
 **Samsung Tizen** in C# (Tizen .NET, NUI); **LG webOS** as a web app (the only public option on webOS).
 
 - **15.1 Sign-in with device code** (9.2) plus QR; guest browsing.
-- **15.2 Profiles on TV** (multi-account, Ummah Kids profiles) with a PIN for adult profiles.
+- **15.2 Profiles on TV** (multi-account).
 - **15.3 10-foot home:** hero, rails, Continue watching, Live now, Ramadan rail (seasonal).
 - **15.4 Watch on TV:** full-screen player, chapters, subtitles, speed, Up next (off by default).
 - **15.5 Search:** on-screen keyboard (Arabic and Latin), voice (platform assistant).
@@ -423,18 +422,11 @@ media engine (Epic 30). The .NET Uno importer (AlUmmahNowTools) is retired once 
 - **19.9 Institution mode:** many channels under one organisation (masjid, university), shared
   assets, brand kit.
 
-### Epic 20: Ummah Kids profiles & parental controls
+### Epic 20: System parental controls
 
-- **20.1 Kids profile** creation by a parent (age bands 3–6, 7–12); simplified UI, big targets, no
-  comments, no community, no external links.
-- **20.2 Curated allow-list:** only "kids-approved" channels/videos (moderator workflow in admin;
-  creators can request review).
-- **20.3 Parental controls:** time limits, bedtime, prayer-time pauses, content level, PIN-protected
-  exit, activity view.
-- **20.4 Kids learning paths:** du'a, stories of the prophets, Arabic letters, nasheeds without
-  instruments filter (content tag).
-- **20.5 Compliance:** COPPA / GDPR-K: no tracking, no personalised recommendations, verifiable
-  parental consent flow.
+Owner decision 2026-11-24 (wiki O45): no Kids Mode, kids profiles, PIN, time limits, curated kids catalog or
+separate kids app. The apps do what Screen Time, Family Link, Family Safety and website limits need to work. The
+spec and stories are in the wiki: [E20](https://github.com/Al-Ummah-Now/AlUmmahNowWiki/blob/main/epics/E20-system-parental-controls.md).
 
 ### Epic 21: Islamic experience layer (the Al Ummah Now mix)
 
@@ -480,7 +472,7 @@ media engine (Epic 30). The .NET Uno importer (AlUmmahNowTools) is retired once 
 - **23.4 Staged rollouts** through each store (phased release, Play staged rollout, Store flighting) plus
   remote config and kill switches (9.5). Native apps don't hot-patch code.
 - **23.5 Store listings** in Arabic and English (screenshots per locale), privacy labels / data safety,
-  content ratings, kids category rules (20.5).
+  content ratings (Epic 20).
 - **23.6 Monitoring:** crash reporting (Sentry), performance (QoE 13.10), release health gates.
 - **23.7 Accessibility & RTL QA matrix** per platform; device lab (low-end Android, older Tizen/webOS).
 
@@ -525,7 +517,7 @@ Platform teams work in parallel after Phase A. Durations assume the team shape i
 | **C: Media engine + Studio mobile + Listen** | ~10 wk | **Epic 30** core (encode planning, transcription, EDL), Epic 18 (18.1–18.6, 18.8, **18.9 editor**), Epic 14, 21.3–21.5, 22.1–22.2 |
 | **D: TV** | ~10 wk | Epic 15: Apple TV (Swift) and Android TV / Fire TV (Kotlin) first; then Tizen (C#) and webOS; 13.6 casting |
 | **E: Desktop viewer + Studio desktop** | ~12 wk | Epic 16 (macOS, Windows, Linux) and Epic 19: batch upload and encoding first (19.2, 19.3), then transcription (19.4) and the editor (19.5). Retire the .NET importer |
-| **F: Live, Kids, Community** | ~8 wk | Epics 17, **18.7 (live from phone)**, 19.7 (after D3), Epic 20, 22.3–22.4, 21.2 (before Ramadan) |
+| **F: Live, Community** | ~8 wk | Epics 17, **18.7 (live from phone)**, 19.7 (after D3), 22.3–22.4, 21.2 (before Ramadan) |
 | **G: Monetisation (optional)** | TBD | Epic 24 after D4 |
 
 Ramadan is a natural launch moment: aim Phase B + 21.2 to ship **before Ramadan**.
@@ -551,10 +543,10 @@ Ramadan is a natural launch moment: aim Phase B + 21.2 to ship **before Ramadan*
 | D2 | Video delivery | Bunny (today) / R2 + Cloudflare CDN | **Decided 2026-11-10: R2 + Cloudflare CDN.** Cloudflare Support confirmed in writing that HLS in R2 served via a custom domain on our zone meets the CDN video terms on a self-serve plan (Workers Paid / Pro) while R2 is subscribed; no published usage level forces Enterprise. Stream ruled out (~$50k/mo at 50M min). Setup required: Cache Rule cache-everything on the media host (.m3u8/.ts not cached by default), Smart Tiered Cache, custom domain (never r2.dev). Limits: no Cache Reserve for R2 public buckets (cold tail = first-byte latency, $0 egress), 512 MB max cacheable file on Pro, 50 bucket-mgmt ops/s, 1,200 REST calls/5 min (management only). |
 | D3 | Live provider | Bunny Stream Live (preview) / self-hosted RTMP to R2 | **Unblocked by D2 (2026-11-10).** Recommended: self-hosted RTMP/SRT ingest → HLS segments in the same R2 bucket, served through the same CDN path (covered by Cloudflare's D2 confirmation). Awaiting owner decision. |
 | D4 | Monetisation | None / donations / premium / sponsorship | None at launch |
-| D5 | Kids content policy | Allow-list ownership, age bands | Moderator-curated allow-list |
+| D5 | Kids content policy | Rejected 2026-11-24 (wiki O45): no kids catalog, Kids Mode or kids app | — (decided) |
 | D6 | Fonts | Plex Arabic + Plex / Noto Kufi + Inter / licensed custom | Open-licensed pair |
 | D7 | Prayer-time data | On-device calculation (adhan-js) / API | On-device (privacy, offline) |
-| D8 | Brand naming | "Lamahat", "Sakinah", "Ummah Kids", "Fanous" | Confirm names and Arabic forms |
+| D8 | Brand naming | "Lamahat", "Sakinah", "Fanous" | Confirm names and Arabic forms |
 | D9 | Linux UI toolkit for C# | GTK 4 / libadwaita via Gir.Core (native GNOME look) / Avalonia (one C# UI for Windows + Linux, custom-drawn) | GTK 4 via Gir.Core (native); revisit if binding gaps block 19.5 |
 | D10 | Transcription location | On-device Whisper only / server-side (Workers AI) only / hybrid | Hybrid: on-device on desktop and for short mobile clips; server-side for long mobile uploads and web |
 | D11 | Who encodes renditions | Server (Bunny / Workers pipeline) only / Studio desktop uploads pre-encoded HLS renditions | Server by default; desktop pre-encode as an option once D2 settles (cuts encoding cost) |

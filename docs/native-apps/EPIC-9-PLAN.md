@@ -56,7 +56,7 @@ Conventions for every story:
   minimum versions exclude every app build that still calls it.
 - **`GET /api/v1/app-config`** (public, cacheable 5 min). Query: `platform`
   (`ios|ipados|tvos|macos|android|androidtv|firetv|windows|linux|tizen|webos|web`), `app`
-  (`viewer|studio|kids`), `version` (semver of the running build), optional `locale`.
+  (`viewer|studio|tools|admin`), `version` (semver of the running build), optional `locale`.
 
   ```json
   {

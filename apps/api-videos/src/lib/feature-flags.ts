@@ -12,7 +12,7 @@
  * matches is left out (clients use their built-in default).
  */
 import { z } from 'zod';
-import { APP_CONFIG_MAX_RULES, APP_CONFIG_RULE_KEY } from '@al-ummah/shared-types';
+import { APP_CONFIG_MAX_RULES, APP_CONFIG_RULE_KEY, isAppConfigApp } from '@al-ummah/shared-types';
 import { APPS, PLATFORMS, SEMVER, compareVersionCores as compareVersions } from './app-config';
 import type { AppName, Platform } from './app-config';
 import { readAppConfigDocument } from './app-config-store';
@@ -103,10 +103,35 @@ export function evaluateConfig(rules: FlagRule[], ctx: FlagContext): Record<stri
 // Loading
 // ---------------------------------------------------------------------------
 
+/**
+ * A stored rule list with the apps we no longer have taken out (an app can be removed after the document
+ * was written), so one old name never makes the whole document invalid. A rule left with no app is for
+ * nobody (`apps: []`), never widened to every app. Only for documents
+ * read from KV; a save is still refused when it names an unknown app.
+ */
+export function parseStoredRules(raw: unknown, key: 'flags' | 'config'): z.ZodSafeParseResult<FlagRule[]> {
+	const nobody = new Set<number>();
+	const known = Array.isArray(raw)
+		? raw.map((rule: unknown, i) => {
+				const apps = rule && typeof rule === 'object' ? (rule as { apps?: unknown }).apps : undefined;
+				if (!Array.isArray(apps) || apps.length === 0 || !apps.every((a) => typeof a === 'string')) return rule;
+				const kept = apps.filter(isAppConfigApp);
+				if (kept.length) return { ...(rule as object), apps: kept };
+				nobody.add(i);
+				const { apps: _removed, ...rest } = rule as Record<string, unknown>;
+				return rest;
+			})
+		: raw;
+	const parsed = (key === 'config' ? ConfigRulesDocumentSchema : RulesDocumentSchema).safeParse(known);
+	// The schema asks for at least one app; `[]` is set after it, and no app is in an empty list
+	if (parsed.success) for (const i of nobody) parsed.data[i].apps = [];
+	return parsed as z.ZodSafeParseResult<FlagRule[]>;
+}
+
 /** Parsed rules; a missing or invalid document yields [] and the error (logged by the caller). */
 export async function loadRules(kv: KVNamespace | undefined, key: 'flags' | 'config'): Promise<{ rules: FlagRule[]; error?: string }> {
 	const raw = await readAppConfigDocument(kv, key);
 	if (raw == null) return { rules: [] };
-	const parsed = (key === 'config' ? ConfigRulesDocumentSchema : RulesDocumentSchema).safeParse(raw);
+	const parsed = parseStoredRules(raw, key);
 	return parsed.success ? { rules: parsed.data } : { rules: [], error: parsed.error.message };
 }

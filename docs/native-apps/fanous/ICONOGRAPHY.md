@@ -38,12 +38,12 @@ Navigation: home, search, library, Lamahat, live, profile, settings, back, forwa
 Player: play, pause, seek back, seek forward, next, previous, volume, mute, captions, quality,
 speed, fullscreen, picture-in-picture, cast, download, listen mode.
 Actions: like, comment, share, save, subscribe, notify, report, edit, delete, upload, filter, sort.
-Status: verified scholar, live, offline, downloaded, error, warning, success, lock (kids and parental).
+Status: verified scholar, live, offline, downloaded, error, warning, success, lock.
 Islamic layer: prayer times, qibla, calendar, mosque, study circle.
 
 ## Illustrations
 
-Empty states (no results, offline, no downloads, no subscriptions, error, kids locked): geometric
+Empty states (no results, offline, no downloads, no subscriptions, error): geometric
 compositions using the lantern, arches and stars, in `night`, `lantern` and `glow`, with a light
 theme variant. SVG, no figurative elements, no embedded text so that they work in every locale.
 Provide a static version; any animation uses the lantern-glow motif and stops under reduced motion.
