@@ -27,20 +27,6 @@ export interface ListLibraryCard {
 
 export type HomeLibraryCard = ContinueLibraryCard | ListLibraryCard;
 
-/** Pure normalizer for GET /api/watch-history responses (usable on both server and client). */
-export function normalizeWatchHistoryPage(body: unknown): WatchHistoryPage {
-  const page = (body && typeof body === 'object' ? body : {}) as Partial<WatchHistoryPage>;
-  if (!Array.isArray(page.entries)) {
-    return { entries: [], total: 0, hasMore: false };
-  }
-  return {
-    ...page,
-    entries: page.entries,
-    total: typeof page.total === 'number' ? page.total : page.entries.length,
-    hasMore: page.hasMore === true,
-  } as WatchHistoryPage;
-}
-
 /** Continue watching card from pause setting + unfinished history page, or null when paused/empty. */
 export function buildContinueCard(
   paused: boolean | null,

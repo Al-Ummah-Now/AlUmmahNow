@@ -1,7 +1,6 @@
-'use server';
-
 /**
  * Server-side loader for the home page's "Your library" row (components/home/LibraryRow.tsx).
+ * Plain server module (not a Server Action: only invoked by app/[locale]/page.tsx).
  *
  * Fetches Continue watching, Watch later, and Liked videos in parallel on the server using the
  * viewer's session cookie so the row is already in the first HTML paint (CLS 0, no flash).
@@ -9,6 +8,11 @@
  * - Signed-out viewers: returns `{ cards: [], userId: null }` with zero API calls.
  * - Signed-in viewers with empty lists: returns `{ cards: [], userId }` so the client skips
  *   fetching and renders no hollow space.
+ * - Continue-watching covers: watch-history entries carry no `isPublic` flag, so any signed
+ *   thumbnail on the up-to-3 Continue-watching entries not already known public from Watch later
+ *   or Liked is verified anonymously via `loadPublicVideo` within the remaining budget and mapped
+ *   to `/thumb/<id>.jpg`. Public videos not in today's feed still render with their cover on first
+ *   paint and trigger zero client fetches; private videos stay signed so `stableImages` strips them.
  * - Partial list failures: omit the failed list (matching the client's optional-content rule).
  * - Total failure (every request failed with a network/5xx/401 error): returns `undefined` so
  *   the page can fall back cleanly without blocking or misreporting empty.
@@ -17,12 +21,15 @@
 import type { LibraryPage, LibraryVideo, WatchLaterPage } from '@/services/api/library';
 import { apiRequestServerResult, buildApiUrl, type ApiResult, type AuthContext } from './api-client';
 import { getServerAuthContext } from './server-auth';
-import { FIRST_DATA_BUDGET_MS } from '@/lib/ssr/first-data';
+import { loadPublicVideo } from '@/lib/embed/content';
+import { FIRST_DATA_BUDGET_MS, withinBudget } from '@/lib/ssr/first-data';
+import { hasStableThumb, isSignedMediaUrl } from '@/lib/ssr/stable-images';
+import { parseWatchHistoryPage } from '@/lib/watch-history/parse-page';
 import {
   buildContinueCard,
   buildListCard,
   LIBRARY_ROW_LOAD,
-  normalizeWatchHistoryPage,
+  withPublicHistoryThumbs,
   type HomeLibraryCard,
 } from '@/lib/home/library-row';
 import { logger } from '@/lib/logger-server';
@@ -35,7 +42,11 @@ export interface HomeLibraryResult {
 const isTransportOrAuthFailure = (res: ApiResult<unknown>): boolean =>
   res.status === null || res.status === 401 || res.status >= 500;
 
+/** Minimum remaining budget (ms) before doing anonymous visibility lookups for history thumbnails. */
+const MIN_THUMB_LOOKUP_BUDGET_MS = 50;
+
 export async function getHomeLibrary(budgetMs = FIRST_DATA_BUDGET_MS): Promise<HomeLibraryResult | undefined> {
+  const deadline = Date.now() + budgetMs;
   const auth = await getServerAuthContext();
   if (!auth?.accessToken) {
     return { cards: [], userId: null };
@@ -112,7 +123,7 @@ export async function getHomeLibrary(budgetMs = FIRST_DATA_BUDGET_MS): Promise<H
     }
 
     const paused = pausedRes.data ? pausedRes.data.paused === true : null;
-    const historyPage = historyRes.data ? normalizeWatchHistoryPage(historyRes.data) : null;
+    const historyPage = historyRes.data ? parseWatchHistoryPage(historyRes.data).page : null;
 
     const cards: HomeLibraryCard[] = [];
     const continueCard = buildContinueCard(paused, historyPage);
@@ -121,6 +132,37 @@ export async function getHomeLibrary(budgetMs = FIRST_DATA_BUDGET_MS): Promise<H
     if (watchLaterCard) cards.push(watchLaterCard);
     const likedCard = buildListCard('liked', likedRes.data?.result);
     if (likedCard) cards.push(likedCard);
+
+    if (continueCard) {
+      const publicIds = new Set<string>();
+      for (const card of [watchLaterCard, likedCard]) {
+        if (!card) continue;
+        for (const v of [card.top, ...card.next]) {
+          if (hasStableThumb(v) && v.id) publicIds.add(v.id);
+        }
+      }
+
+      const unknownSignedIds = [
+        ...new Set(
+          [continueCard.top, ...continueCard.next]
+            .filter((e) => typeof e.videoThumbnail === 'string' && isSignedMediaUrl(e.videoThumbnail) && !publicIds.has(e.videoId))
+            .map((e) => e.videoId),
+        ),
+      ];
+
+      const remaining = deadline - Date.now();
+      if (unknownSignedIds.length > 0 && remaining >= MIN_THUMB_LOOKUP_BUDGET_MS) {
+        const resolved = await withinBudget(
+          () => Promise.all(unknownSignedIds.map(async (id) => ((await loadPublicVideo(id))?.poster ? id : null))),
+          remaining,
+        );
+        for (const id of resolved ?? []) {
+          if (id) publicIds.add(id);
+        }
+      }
+
+      return { cards: withPublicHistoryThumbs(cards, publicIds), userId: auth.userId ?? null };
+    }
 
     return { cards, userId: auth.userId ?? null };
   } catch (error) {

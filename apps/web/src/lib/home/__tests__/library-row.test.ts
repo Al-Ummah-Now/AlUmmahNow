@@ -2,10 +2,10 @@ import {
   buildContinueCard,
   buildListCard,
   mergeFreshLibraryCards,
-  normalizeWatchHistoryPage,
   withPublicHistoryThumbs,
   type HomeLibraryCard,
 } from '../library-row';
+import { parseWatchHistoryPage } from '@/lib/watch-history/parse-page';
 import { stableImages } from '@/lib/ssr/stable-images';
 
 const SIGNED = 'https://vz-1.b-cdn.net/v1/thumbnail.jpg?token=abc&expires=1794603600';
@@ -32,14 +32,13 @@ const libraryVideo = (id: string, thumbnailUrl?: string, extra: Record<string, u
   ({ id, title: `Video ${id}`, thumbnailUrl, channelName: 'Noor', views: 5, isPublic: true, ...extra }) as never;
 
 describe('home library row helpers', () => {
-  it('normalizeWatchHistoryPage handles malformed payloads safely', () => {
-    expect(normalizeWatchHistoryPage(null)).toEqual({ entries: [], total: 0, hasMore: false });
-    expect(normalizeWatchHistoryPage({ total: 4 })).toEqual({ entries: [], total: 0, hasMore: false });
+  it('parseWatchHistoryPage handles malformed payloads safely', () => {
+    expect(parseWatchHistoryPage(null)).toMatchObject({ page: { entries: [], total: 0, hasMore: false }, malformed: true });
+    expect(parseWatchHistoryPage({ total: 4 })).toMatchObject({ page: { entries: [], total: 0, hasMore: false }, malformed: true });
     const entry = historyEntry('v1');
-    expect(normalizeWatchHistoryPage({ entries: [entry], total: 5, hasMore: true })).toEqual({
-      entries: [entry],
-      total: 5,
-      hasMore: true,
+    expect(parseWatchHistoryPage({ entries: [entry], total: 5, hasMore: true })).toMatchObject({
+      page: { entries: [entry], total: 5, hasMore: true },
+      malformed: false,
     });
   });
 
