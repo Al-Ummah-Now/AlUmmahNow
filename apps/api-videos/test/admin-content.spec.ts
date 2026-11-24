@@ -33,7 +33,8 @@ import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
-import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
+import { MemoryBucket, MemoryQueue, buildApp, commentFixture, videoFixture } from './helpers';
+import { LiveStreamStart } from '../src/endpoints/live/liveSession';
 import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS, openTransferJob, purgeDeletion } from '../src/lib/admin/service';
 import { createJob } from '../src/lib/admin/jobs';
@@ -624,6 +625,45 @@ describe('channel actions', () => {
 		await call('POST', `/jobs/${res.body.result.job.id}/retry`, {});
 		assert.equal((await jobOf(res)).status, 'succeeded');
 		assert.equal(JSON.parse(raw.videos.store.get('livestream:idx')!).userId, OTHER);
+	});
+
+	it('Go live answers 409 transfer_in_progress while a move of the channel is open, from its first moment (Gemini review)', async () => {
+		const { raw, env, db, call } = await setup({
+			videos: {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				'livestream:go': { id: 'go', title: 'Friday', userId: OWNER, channelId: 'ch1', status: 'scheduled' },
+			},
+		});
+		const app = buildApp((r) => r.post('/api/live-streams/:id/start', LiveStreamStart), { userId: OWNER });
+		const start = async () => {
+			const res = await app.request('/api/live-streams/go/start', { method: 'POST' }, env);
+			return { status: res.status, body: (await res.json()) as { code?: string } };
+		};
+		// Between taking the lock and creating the job
+		db.db.prepare(`INSERT INTO channel_transfer_locks (channel_id, job_id, created_at) VALUES ('ch1', '', '2026')`).run();
+		assert.deepEqual(await start(), { status: 409, body: { success: false, code: 'transfer_in_progress', error: 'This channel is being moved to another account. Try again shortly.' } });
+		db.db.prepare(`DELETE FROM channel_transfer_locks WHERE channel_id = 'ch1'`).run();
+		// While the move's job is queued
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }, { hold: true })).status, 200);
+		assert.equal((await start()).body.code, 'transfer_in_progress');
+		void raw;
+	});
+
+	it('a creator balance left on the channel counts as money attached, even with the payee closed (Gemini review)', async () => {
+		const { raw, call, db } = await setup();
+		const ledger = (id: string, account: string, amount: number) =>
+			db.db.prepare(`INSERT INTO support_ledger (id, entry_id, entry_key, account, amount, currency, kind, channel_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, 'USD', 'adjustment', 'ch1', 'test', '2026')`).run(id, `e-${id}`, `k-${id}`, account, amount);
+		// Balanced to zero: no money attached
+		ledger('l1', 'creator:ch1:available', -500);
+		ledger('l2', 'creator:ch1:available', 500);
+		ledger('l3', 'org:float', -500);
+		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN SELECT SUM(amount) FROM support_ledger WHERE channel_id = 'ch1' AND account >= 'creator:' AND account < 'creator;' GROUP BY account, currency`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		assert.match(plan, /idx_support_ledger_channel/, plan);
+		// A leftover balance, payee or not
+		ledger('l4', 'creator:ch1:available', -250);
+		const refused = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal(refused.body.code, 'channel_has_support');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER);
 	});
 
 	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
