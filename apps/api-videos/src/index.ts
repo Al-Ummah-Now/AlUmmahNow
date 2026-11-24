@@ -90,6 +90,7 @@ import { sweepEntitlements } from "./lib/billing/store";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
+import { ERASE_MEDIA_JOB, onEraseMediaFailed } from './lib/privacy/erase-media';
 import { sweepProfileEmailPointers, sweepProfileEmailReports } from './lib/admin/profile-email-reports';
 import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
@@ -1103,6 +1104,8 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 					? onBillingJobFailed(jobEnv, job, error)
 					: job.kind.startsWith('support.')
 						? onSupportJobFailed(jobEnv, job, error)
+						: job.kind === ERASE_MEDIA_JOB
+						? onEraseMediaFailed(jobEnv, job, error)
 						: job.kind === DISCOVERY_RANK_JOB
 						? Promise.resolve(flagDiscoveryRankFailed(jobEnv, job, error))
 						: job.kind === 'import.attach'

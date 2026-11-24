@@ -101,13 +101,13 @@ export async function eraseChannelPostImages(env: ImageFilesEnv, channelId: stri
 /**
  * A video's caption jobs (SEARCH_DB `caption_jobs`) and their work files (`captions-work/{jobId}/`).
  * An active job is cancelled first, which settles its minutes; one writing its draft (409
- * `job_finishing`) makes the step throw so the purge retries after it finished.
+ * `job_finishing`) makes the step throw so the purge retries after it finished, and so does work that
+ * could not be deleted. `limit`: at most so many jobs; returns how many it took.
  */
-export async function eraseCaptionJobs(env: CaptionJobsEnv, videoId: string): Promise<number> {
+export async function eraseCaptionJobs(env: CaptionJobsEnv, videoId: string, opts: { limit?: number } = {}): Promise<number> {
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return 0;
-	const rows = (await db.prepare('SELECT id, status FROM caption_jobs WHERE video_id = ?').bind(videoId).all<{ id: string; status: string }>()).results ?? [];
-	if (!rows.length) return 0;
+	const rows = (await db.prepare('SELECT id, status FROM caption_jobs WHERE video_id = ? LIMIT ?').bind(videoId, opts.limit ?? -1).all<{ id: string; status: string }>()).results ?? [];
 	for (const row of rows) {
 		if (!['ready', 'failed', 'cancelled'].includes(row.status)) {
 			try {
@@ -117,9 +117,10 @@ export async function eraseCaptionJobs(env: CaptionJobsEnv, videoId: string): Pr
 				throw error;
 			}
 		}
-		await clearJobWork(env, row.id);
+		// The row is how the work is found: it goes only once the work is gone
+		await clearJobWork(env, row.id, { strict: true });
+		await db.prepare('DELETE FROM caption_jobs WHERE id = ?').bind(row.id).run();
 	}
-	await db.prepare('DELETE FROM caption_jobs WHERE video_id = ?').bind(videoId).run();
 	return rows.length;
 }
 

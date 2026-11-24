@@ -601,7 +601,7 @@ describe('restore legacy profile fields: account erasure', () => {
 			assert.ok(warnings.some((args) => String(args[0]).includes('ADMIN_BACKUPS is not bound')));
 
 			// Admin job user.delete-data propagates the error into the job result
-			const jobEnv = { ...erasureBuckets(new MemoryBucket({ [USR]: currentProfile }), new MemoryBucket()), SEARCH_DB: new SqliteD1() };
+			const jobEnv = { ...erasureBuckets(new MemoryBucket({ [USR]: currentProfile }), new MemoryBucket()), SEARCH_DB: new SqliteD1(), ADMIN_JOBS_QUEUE: { send: async () => undefined } };
 			delete (jobEnv as { ADMIN_BACKUPS?: unknown }).ADMIN_BACKUPS;
 			await recordDeletion(jobEnv.SEARCH_DB as never, { kind: 'user', id: USR, title: USR, ownerId: USR, deletedBy: 'usr_admin', deletedAt: '2026-11-20T00:00:00.000Z' });
 			const outcome = await ADMIN_JOB_HANDLERS['user.delete-data'](jobEnv as never, {

@@ -148,21 +148,29 @@ export async function eraseRunUserData(
 		async () => {
 			const bucket = asBucket(env.videos);
 			for (const videoId of videos) {
+				budget.spend();
+				const stored = await bucket.get(videoId);
+				// The record names the Bunny library the media lives in
+				const record = stored ? await stored.json<Record<string, unknown>>().catch(() => undefined) : undefined;
+				if (stored) {
+					// Under an open takedown case: its own job copies the evidence, then deletes the record (lib/csam/contain.ts)
+					if (record?.csamTakedown) continue;
+					// Nothing of it goes before its media is written down, and the record is first: what follows is the job's too
+					if (hooks.onVideoDeleted) {
+						budget.reserve(2);
+						await hooks.onVideoDeleted(videoId, record as never);
+						if (record && (await readJson<Json>(bucket, videoId, budget))?.csamTakedown) continue;
+					}
+					await deleteKeys(bucket, [videoId], budget);
+					result.deletedVideoIds.push(videoId);
+					bump('videos', 1);
+				}
 				if (env.subtitles) {
 					const subtitles = asBucket(env.subtitles);
 					bump('subtitles', await deleteKeys(subtitles, await prefixKeys(subtitles, `${videoId}/`, budget), budget));
 				}
-				budget.spend();
-				const stored = await bucket.get(videoId);
-				if (!stored) continue;
-				// The record names the Bunny library the media lives in
-				const record = await stored.json<Record<string, unknown>>().catch(() => undefined);
 				// The scheduler entry and upload marker name the user too (lib/videoSideRecords.ts)
-				await deleteVideoSideRecords({ global_settings: env.global_settings, SCHEDULED_VIDEOS: env.SCHEDULED_VIDEOS ?? env['scheduled-videos'] }, videoId, record);
-				if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, record as never);
-				await deleteKeys(bucket, [videoId], budget);
-				result.deletedVideoIds.push(videoId);
-				bump('videos', 1);
+				if (stored) await deleteVideoSideRecords({ global_settings: env.global_settings, SCHEDULED_VIDEOS: env.SCHEDULED_VIDEOS ?? env['scheduled-videos'] }, videoId, record);
 			}
 		},
 		// Community posts of its channels with their subtrees
@@ -171,7 +179,11 @@ export async function eraseRunUserData(
 				for (const key of await prefixKeys(community, `posts/${channelId}/`, budget)) {
 					const file = key.split('/')[2];
 					if (file && file !== 'index.json') {
+						// Under an open takedown case: its own job deletes it
+						const post = await readJson<Json>(community, key, budget);
+						if (post?.csamTakedown) continue;
 						const postId = file.replace(/\.json$/, '');
+						if (hooks.onPostDeleted) await hooks.onPostDeleted(channelId, postId, post);
 						for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
 							await deleteKeys(community, await prefixKeys(community, prefix, budget), budget);
 						}

@@ -56,23 +56,27 @@ export function scheduleKey(date: Date, videoId: string): string {
 	return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}/${pad(date.getUTCHours())}/${videoId}.json`;
 }
 
-/** Deletes the video's subtitles, upload marker and scheduler entry. Returns the keys deleted. */
+/**
+ * Deletes the video's subtitles, upload marker and scheduler entry. Returns the keys deleted.
+ * `folders: false`: not what is found by listing (subtitles, playlist adds); the caller deletes those a page at a time.
+ */
 export async function deleteVideoSideRecords(
 	env: VideoSideRecordsEnv,
 	videoId: string,
 	record?: { scheduledPublishDate?: unknown; uploadFingerprint?: unknown; media?: unknown } | null,
+	opts: { folders?: boolean } = {},
 ): Promise<string[]> {
 	if (!videoId) return [];
 	const deleted: string[] = [];
 	const subtitles = env.subtitles as ListableBucket | undefined;
-	if (subtitles) deleted.push(...(await deletePrefix(subtitles, `${videoId}/`)).map((k) => `subtitles/${k}`));
+	if (subtitles && opts.folders !== false) deleted.push(...(await deletePrefix(subtitles, `${videoId}/`)).map((k) => `subtitles/${k}`));
 	const settings = env.global_settings as (ListableBucket & { get(key: string): Promise<{ etag: string; json<T>(): Promise<T> } | null> }) | undefined;
 	if (settings) {
 		const guid = record ? bunnyRef({ ...(record as object), id: videoId } as never) : null;
 		const markers = [...new Set([videoId, guid].filter((id): id is string => !!id))].map((id) => `${UPLOAD_MARKER_PREFIX}${id}`);
 		await settings.delete(markers);
 		deleted.push(...markers.map((key) => `global_settings/${key}`));
-		deleted.push(...(await deletePrefix(settings, `${PLAYLIST_ADD_PREFIX}${videoId}/`)).map((k) => `global_settings/${k}`));
+		if (opts.folders !== false) deleted.push(...(await deletePrefix(settings, `${PLAYLIST_ADD_PREFIX}${videoId}/`)).map((k) => `global_settings/${k}`));
 		if (typeof record?.uploadFingerprint === 'string' && record.uploadFingerprint) {
 			if (await releaseClaimFor(settings as never, record.uploadFingerprint, videoId)) deleted.push(`global_settings/upload-fingerprint/${record.uploadFingerprint}`);
 		}

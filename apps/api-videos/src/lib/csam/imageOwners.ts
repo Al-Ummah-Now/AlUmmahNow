@@ -32,6 +32,15 @@ export function imagePathOf(url: string | null | undefined): string | null {
 	}
 }
 
+/**
+ * The upload's own marker: an upload writes its time with the offset `+00:00`, everything else
+ * (the backfill, and every row from before the marker) with `Z`. A row without it is a guess from
+ * whichever record names the image, good enough to find an uploader to ask about and not to delete
+ * a file on (lib/privacy/erase-media.ts): a record can name any URL.
+ */
+const uploadedAt = (now: Date) => now.toISOString().replace(/Z$/, '+00:00');
+export const isUploadRow = (createdAt: string): boolean => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$/.test(createdAt);
+
 /** Records who uploaded an image. Never fails the upload: a lost row is logged (the backfill finds it). */
 export async function recordImageOwner(db: Db | undefined, url: string, owner: { kind: ImageOwnerKind; ownerId: string | null; channelId?: string | null }, now = new Date()): Promise<void> {
 	const path = imagePathOf(url);
@@ -39,7 +48,7 @@ export async function recordImageOwner(db: Db | undefined, url: string, owner: {
 	try {
 		await db
 			.prepare('INSERT OR REPLACE INTO image_owners (path, kind, owner_id, channel_id, created_at) VALUES (?, ?, ?, ?, ?)')
-			.bind(path, owner.kind, owner.ownerId, owner.channelId ?? null, now.toISOString())
+			.bind(path, owner.kind, owner.ownerId, owner.channelId ?? null, uploadedAt(now))
 			.run();
 	} catch (error) {
 		logger.warn('[ImageOwners] Could not record an image owner', { path, kind: owner.kind, error: error instanceof Error ? error.message : String(error) });
@@ -61,9 +70,15 @@ export async function forgetImageOwner(db: Db | undefined, path: string): Promis
 	await db.prepare('DELETE FROM image_owners WHERE path = ?').bind(path).run();
 }
 
-/** Account erasure: the index rows naming the account go with it. */
+/**
+ * Account erasure: the account's name leaves the index. A channel's image keeps its row without it: the
+ * row still proves which channel the file is, so it goes when that channel does. A profile image's own
+ * upload row stays until the erasure's media job has deleted the file, and goes with it: it is what that
+ * job proves the file by, and finds a surviving profile or a takedown by (lib/privacy/erase-media.ts).
+ */
 export async function eraseImageOwners(db: { prepare(sql: string): { bind(...v: unknown[]): { run(): Promise<unknown> } } }, userId: string): Promise<void> {
-	await db.prepare('DELETE FROM image_owners WHERE owner_id = ?').bind(userId).run();
+	await db.prepare('UPDATE image_owners SET owner_id = NULL WHERE owner_id = ? AND channel_id IS NOT NULL').bind(userId).run();
+	await db.prepare(`DELETE FROM image_owners WHERE owner_id = ? AND created_at NOT LIKE '%+00:00'`).bind(userId).run();
 }
 
 // --- Backfill (job images.index-owners) ------------------------------------------------

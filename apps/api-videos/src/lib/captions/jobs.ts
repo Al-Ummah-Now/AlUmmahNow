@@ -300,8 +300,8 @@ function jobMessage(job: CaptionJob, manifestKey: string, prompt: string | undef
 	};
 }
 
-/** Deletes the job's extracted audio and partial transcript (never the review media). */
-export async function clearJobWork(env: CaptionJobsEnv, jobId: string): Promise<void> {
+/** Deletes the job's extracted audio and partial transcript (never the review media). `strict` throws when some is left. */
+export async function clearJobWork(env: CaptionJobsEnv, jobId: string, opts: { strict?: boolean } = {}): Promise<void> {
 	const bucket = env.MEDIA_PRIVATE;
 	if (!bucket?.list || !bucket.delete) return;
 	try {
@@ -313,6 +313,7 @@ export async function clearJobWork(env: CaptionJobsEnv, jobId: string): Promise<
 		} while (cursor);
 	} catch (error) {
 		logger.warn('[CaptionJobs] Could not delete the job work', { jobId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
 	}
 }
 

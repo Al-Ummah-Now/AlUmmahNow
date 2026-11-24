@@ -1,6 +1,9 @@
 /**
  * Taking a CSAM match down (docs/specs/CSAM-RESPONSE.md §3–§5).
  *
+ * 0. The job's row is written first: from then on no account erasure deletes the media
+ *    (lib/privacy/erase-targets.ts). What an erasure already wrote down to delete is held for the case, and
+ *    stands in for a record that is gone.
  * 1. hideNow (the intake request, synchronous): the item stops being shown on every surface at
  *    once (a `csam` hold on the video, the post or comment deleted from view, the avatar or cover
  *    field cleared, the live stream ended and held), the matched URL is purged from the CDN, and a private video's media move starts.
@@ -40,7 +43,8 @@ import { accessDrift, purgeCdn, purgeVideoRenditions, queueMediaMove, type CdnPu
 import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
 import { copyStep, planEvidence, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
-import { forgetImageOwner } from './imageOwners';
+import { forgetImageOwner, lookupImageOwner } from './imageOwners';
+import { erasedRecord, erasedTargets, erasureNote, holdTargets, releaseHolds, type EraseTarget } from '../privacy/erase-targets';
 import { deleteImageFile } from '../media/imageFiles';
 import { findStoredComment, type StoredComment } from '../comments';
 import { locatePostComment } from '../channelComments/moderation';
@@ -73,6 +77,12 @@ const imagePathOfUrl = (url: unknown): string | null => {
 };
 const imageUrlOf = (path: string) => `https://${IMAGES_HOST}${path.split('/').map(encodeURIComponent).join('/')}`;
 
+/** The job starts once the request has hidden the item. */
+const HIDE_FIRST_SECONDS = 15;
+
+/** The snapshot of each target's record (evidence.ts planEvidence). */
+const RECORD_SNAPSHOT = { video: 'record-video.json', channel: 'record-channel.json', user: 'record-uploader-profile.json', post: 'record-post.json' } as const;
+
 export const CONTAIN_PHASES = ['plan', 'copy-public', 'purge-public', 'copy-source', 'purge', 'ban'] as const;
 export type ContainPhase = (typeof CONTAIN_PHASES)[number];
 
@@ -101,7 +111,8 @@ export function validResolution(r: CsamResolution): boolean {
 	if (r.imagePath !== undefined && (typeof r.imagePath !== 'string' || !r.imagePath.startsWith('/') || r.imagePath.includes('..') || r.imagePath.length > 1024)) return false;
 	if ((r.kind === 'video' || r.kind === 'video_thumbnail') && !r.videoId) return false;
 	if (r.kind === 'channel_image' && (!r.channelId || !r.imageField)) return false;
-	if (r.kind === 'profile_image' && (!r.uploaderId || !r.imageField)) return false;
+	// An erased profile's: no account, the image alone
+	if (r.kind === 'profile_image' && ((!r.uploaderId && !r.imagePath) || !r.imageField)) return false;
 	if (r.kind === 'post_image' && !r.channelId) return false;
 	// A comment or a stream never carries a video or a post: those would be taken down with it
 	if (r.kind === 'comment' && (!r.commentId || !r.commentParentId || (r.commentOn !== 'video' && r.commentOn !== 'post') || r.videoId || r.postId || r.imagePath)) return false;
@@ -155,8 +166,8 @@ export async function hideNow(env: ContainEnv, caseId: string, matchedUrl: strin
 	}
 	if ((r.kind === 'channel_image' || r.kind === 'profile_image') && r.imageField) {
 		const bucket = r.kind === 'channel_image' ? env.channels : env.profiles;
-		const key = r.kind === 'channel_image' ? r.channelId! : r.uploaderId!;
-		const saved = await repo(bucket).updateObject(key, (record) => {
+		const key = r.kind === 'channel_image' ? r.channelId! : r.uploaderId;
+		const saved = !key ? null : await repo(bucket).updateObject(key, (record) => {
 			const current = record[r.imageField!];
 			const pending = record.pendingImages?.[r.imageField!]?.url;
 			// Clear the field only when it still shows the matched image (or the path is unknown)
@@ -181,7 +192,7 @@ export async function hideNow(env: ContainEnv, caseId: string, matchedUrl: strin
 		hidden = !!saved || hidden;
 		if (saved) {
 			const type = r.kind === 'channel_image' ? MessageType.ChannelUpdate : MessageType.ProfileUpdate;
-			await queue.send(type, r.kind === 'channel_image' ? { channelId: key, userId: saved.userId, timestamp: now() } : { userId: key, timestamp: now() }).catch(() => undefined);
+			await queue.send(type, r.kind === 'channel_image' ? { channelId: key, userId: saved.userId, timestamp: now() } : { userId: key!, timestamp: now() }).catch(() => undefined);
 		}
 	}
 	if (r.kind === 'comment') hidden = (await hideComment(env, caseId, r)) || hidden;
@@ -268,6 +279,12 @@ async function streamMustBeHidden(env: ContainEnv, p: ContainParams): Promise<vo
 	if (!hidden(await read())) throw new Error('The live stream could not be hidden');
 }
 
+/** Hides the item unless it is hidden already (a stream is hidden and ended once: when, stays on its record). */
+export async function ensureHidden(env: ContainEnv, p: ContainParams): Promise<void> {
+	if (p.resolution.kind === 'live_stream') await streamMustBeHidden(env, p);
+	else await hideNow(env, p.caseId, p.matchedUrl, p.resolution);
+}
+
 /** The evidence files that were kept, by name. */
 const keptFiles = (p: ContainParams) => new Map((p.copied ?? []).map((f) => [f.name, f]));
 
@@ -343,15 +360,49 @@ async function removeFromPostIndex(env: ContainEnv, channelId: string, postId: s
 		.catch(() => null);
 }
 
-/** Hides the item and queues the job. The case id is admin-api's. */
-export async function startContainment(env: ContainEnv, input: { caseId: string; matchedUrl: string; resolution: CsamResolution; actorId: string }): Promise<{ hide: HideResult; job: AdminJob }> {
-	const { caseId, matchedUrl, resolution } = input;
-	const hide = await hideNow(env, caseId, matchedUrl, resolution);
+/** Whose media a takedown is about (admin_jobs target): what an erasure's parts are compared with (lib/privacy/erase-targets.ts). */
+export function containTarget(resolution: CsamResolution, caseId: string): { targetKind: 'video' | 'channel' | 'user'; targetId: string } {
 	const ofUser = resolution.kind === 'profile_image' || resolution.kind === 'comment';
 	const targetKind = resolution.videoId ? 'video' : ofUser ? 'user' : 'channel';
-	const targetId = resolution.videoId ?? (ofUser ? resolution.uploaderId : resolution.channelId) ?? caseId;
+	return { targetKind, targetId: resolution.videoId ?? (ofUser ? resolution.uploaderId : resolution.channelId) ?? caseId };
+}
+
+/** The case's own targets in an erasure's list: its media, and the post that names it. */
+async function heldTargets(env: ContainEnv, r: CsamResolution, caseId: string): Promise<EraseTarget[]> {
+	if (r.kind === 'profile_image' && !r.uploaderId) {
+		// An erased profile's image: whose it was is on its upload row, until the file is gone
+		const owner = r.imagePath ? await lookupImageOwner(env.SEARCH_DB, r.imagePath) : null;
+		return owner?.ownerId ? [{ kind: 'user', id: owner.ownerId }] : [];
+	}
+	// A stream's recordings are written down by its own id, like a video's; its case is the channel's
+	if (r.kind === 'live_stream') return [{ kind: 'video', id: r.streamId! }];
+	// Its author's, if known: the comment alone is taken down, never what it is on
+	if (r.kind === 'comment') return r.uploaderId ? [{ kind: 'user', id: r.uploaderId }] : [];
+	const { targetKind, targetId } = containTarget(r, caseId);
+	return [{ kind: targetKind, id: targetId }, ...(r.postId && r.channelId ? [{ kind: 'post' as const, id: `${r.channelId}/${r.postId}` }] : [])];
+}
+
+/** A record, or what stands in for it when an account erasure deleted it. */
+async function recordOf(env: ContainEnv, bucket: R2Bucket, key: string, target: EraseTarget): Promise<Row | null> {
+	const object = await bucket.get(key);
+	return object ? ((await object.json().catch(() => null)) as Row | null) : erasedRecord(env.SEARCH_DB, target);
+}
+
+/** How long a takedown waits before it looks again at a part an erasure is deleting. */
+const PART_WAIT_SECONDS = 30;
+
+/**
+ * Queues the job, then hides the item. The job's row comes first: from then on no account erasure starts
+ * deleting this media (lib/privacy/erase-targets.ts). The job hides the item again before anything else,
+ * so a hide that fails here is made up for. The case id is admin-api's.
+ */
+export async function startContainment(env: ContainEnv, input: { caseId: string; matchedUrl: string; resolution: CsamResolution; actorId: string }): Promise<{ hide: HideResult; job: AdminJob }> {
+	const { caseId, matchedUrl, resolution } = input;
+	const { targetKind, targetId } = containTarget(resolution, caseId);
 	const params: ContainParams = { caseId, matchedUrl, resolution, phase: 'plan', createdAt: now() };
-	const job = await createJob(env, { kind: 'csam.contain', targetKind, targetId, actorId: input.actorId, params: params as unknown as Record<string, unknown> });
+	const job = await createJob(env, { kind: 'csam.contain', targetKind, targetId, actorId: input.actorId, params: params as unknown as Record<string, unknown>, delaySeconds: HIDE_FIRST_SECONDS });
+	await holdTargets(env.SEARCH_DB!, await heldTargets(env, resolution, caseId), job);
+	const hide = await hideNow(env, caseId, matchedUrl, resolution);
 	return { hide, job };
 }
 
@@ -363,7 +414,7 @@ export async function startContainment(env: ContainEnv, input: { caseId: string;
 const deleteStoredImage = (env: ContainEnv, path: string) => deleteImageFile(env, path);
 
 /** Bunny's own edge (images are pulled through it): purged when an account API key is set. */
-async function purgeBunnyEdge(env: ContainEnv, urls: string[]): Promise<CdnPurge> {
+export async function purgeBunnyEdge(env: { BUNNY_API_KEY?: unknown }, urls: string[]): Promise<CdnPurge> {
 	const key = env.BUNNY_API_KEY ? await getSecret(env.BUNNY_API_KEY as never, 'BUNNY_API_KEY').catch(() => '') : '';
 	if (!key) return 'not_configured';
 	for (const url of urls) {
@@ -386,16 +437,14 @@ async function imagePathsOf(env: ContainEnv, r: CsamResolution): Promise<string[
 	const paths = new Set<string>();
 	if (r.imagePath) paths.add(r.imagePath);
 	if (r.kind === 'post_image' && r.channelId && r.postId) {
-		const object = await env.community_posts.get(postKey(r.channelId, r.postId));
-		const post = object ? ((await object.json().catch(() => null)) as { images?: Array<{ url?: string }> } | null) : null;
+		const post = (await recordOf(env, env.community_posts, postKey(r.channelId, r.postId), { kind: 'post', id: `${r.channelId}/${r.postId}` })) as { images?: Array<{ url?: string }> } | null;
 		for (const image of post?.images ?? []) {
 			const path = imagePathOfUrl(image.url);
 			if (path && under(path, `/community-posts/${r.channelId}/`)) paths.add(path);
 		}
 	}
 	if (r.videoId) {
-		const object = await env.videos.get(r.videoId);
-		const video = object ? ((await object.json().catch(() => null)) as Row | null) : null;
+		const video = await recordOf(env, env.videos, r.videoId, { kind: 'video', id: r.videoId });
 		const path = imagePathOfUrl(video?.thumbnailUrl);
 		if (path && under(path, `/thumbnails/${r.videoId}/`)) paths.add(path);
 	}
@@ -453,7 +502,7 @@ async function purgePublic(env: ContainEnv, p: ContainParams): Promise<ContainPa
 	const cdn = await purgeCdn(env as never, { files: urls });
 	if (cdn === 'failed') throw new Error('Cloudflare cache purge failed');
 	purge.cdn = cdn;
-	purge.bunnyEdge = await purgeBunnyEdge(env, urls);
+	purge.bunnyEdge = await purgeBunnyEdge(env as never, urls);
 	if (purge.bunnyEdge === 'failed') throw new Error('Bunny edge purge failed');
 	for (const path of paths) await forgetImageOwner(env.SEARCH_DB, path);
 	return { ...p, phase: 'copy-source', file: 0, purge };
@@ -509,7 +558,9 @@ async function eraseCommentText(env: ContainEnv, caseId: string, r: CsamResoluti
 async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result: Record<string, unknown> } | { again: ContainParams }> {
 	const uploaderId = p.resolution.uploaderId;
 	let ban = 'no_uploader';
-	if (uploaderId) {
+	// The profile was erased: there is no account's content left to freeze, and nothing names it again
+	if (uploaderId && p.resolution.kind === 'profile_image' && !(await env.profiles.head(uploaderId))) ban = 'account_erased';
+	else if (uploaderId) {
 		if (await readBan(env.SEARCH_DB!, uploaderId)) ban = 'already_banned';
 		else {
 			await banUser(env, uploaderId, CSAM_ACTOR, `CSAM match (case ${p.caseId})`);
@@ -556,11 +607,26 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 		let next: ContainParams;
 		switch (p.phase) {
 			case 'plan': {
-				if (p.resolution.kind === 'live_stream') await streamMustBeHidden(env, p);
+				await ensureHidden(env, p);
+				const own = await heldTargets(env, p.resolution, p.caseId);
+				await holdTargets(env.SEARCH_DB!, own, job);
+				const erased = new Map<EraseTarget, Awaited<ReturnType<typeof erasedTargets>>>();
+				for (const target of own) erased.set(target, await erasedTargets(env.SEARCH_DB, target));
+				// An account erasure is deleting a part of it now; it takes no other since this job's row exists
+				if ([...erased.values()].flat().some((row) => row.live)) return { done: false, params: p as unknown as Record<string, unknown>, result: { phase: p.phase }, delaySeconds: PART_WAIT_SECONDS, note: 'an account erasure is deleting part of this media' };
 				const keys = await evidenceKeys(env);
 				const { files, snapshots } = await planEvidence(env, keys, p.caseId, p.matchedUrl, p.resolution);
-				await writeManifest(env, keys, { v: 1, caseId: p.caseId, matchedUrl: p.matchedUrl, resolution: p.resolution, files: snapshots, missing: [], createdAt: p.createdAt });
-				next = { ...p, phase: 'copy-public', files: fileStages(files), file: 0, copied: snapshots, missing: [] };
+				const missing: NonNullable<ContainParams['missing']> = [];
+				for (const [target, name] of [
+					...own.map((target) => [target, p.resolution.kind === 'live_stream' ? 'record-live-stream.json' : RECORD_SNAPSHOT[target.kind]] as const),
+					...(p.resolution.videoId && p.resolution.channelId ? [[{ kind: 'channel' as const, id: p.resolution.channelId }, RECORD_SNAPSHOT.channel] as const] : []),
+				]) {
+					const note = erasureNote(target, erased.get(target) ?? (await erasedTargets(env.SEARCH_DB, target)), !snapshots.some((file) => file.name === name));
+					// A channel of the case's video: only that its record went
+					if (note && (erased.has(target) || note.name === 'record')) missing.push(note);
+				}
+				await writeManifest(env, keys, { v: 1, caseId: p.caseId, matchedUrl: p.matchedUrl, resolution: p.resolution, files: snapshots, missing, createdAt: p.createdAt });
+				next = { ...p, phase: 'copy-public', files: fileStages(files), file: 0, copied: snapshots, missing };
 				break;
 			}
 			case 'copy-public':
@@ -578,9 +644,11 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 			case 'ban': {
 				const out = await banUploader(env, p);
 				if ('again' in out) {
+					// A late recording goes back to the copy: the holds stay until nothing is left
 					next = out.again;
 					break;
 				}
+				await releaseHolds(env.SEARCH_DB!, job.id);
 				resolveNeedsAction(env, undefined, needsActionKey);
 				return { done: true, result: out.result };
 			}
@@ -608,7 +676,7 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 	}
 }
 
-/** The newest csam.contain job of a case (one per case; a retry reuses it). */
+/** The newest csam.contain job of a case (one per case; a retry reuses it; idx_admin_jobs_csam_case). */
 export async function containJobOf(env: ContainEnv, caseId: string): Promise<AdminJob | null> {
 	const row = await env.SEARCH_DB!
 		.prepare(`SELECT id FROM admin_jobs WHERE kind = 'csam.contain' AND json_extract(params, '$.caseId') = ? ORDER BY created_at DESC LIMIT 1`)

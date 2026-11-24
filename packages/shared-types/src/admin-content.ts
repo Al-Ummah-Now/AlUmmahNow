@@ -567,6 +567,8 @@ export const ADMIN_JOB_KINDS = [
   'user.sync-holds',
   /** Erase a user's videos data (privacy path), in resumable steps. */
   'user.delete-data',
+  /** Delete the media of an erased account's records, retried until gone (api-videos lib/privacy/erase-media.ts). */
+  'user.erase-media',
   /**
    * Erase an E2E run account (QA/stage) through the indexes, no bucket scans (#887). On its own
    * queue (RUN_ERASE_QUEUE) so the sweep never holds up admin jobs.
@@ -750,7 +752,7 @@ export const ADMIN_JOB_LOG_LIMIT = 50;
  * after its last step would leave the person's id in the job's own records).
  */
 /** A channel move can't be cancelled half way: a failed one is finished with Retry (wiki AUN-CHANNEL-CLAIM §3.3). */
-export const ADMIN_JOB_UNCANCELLABLE_KINDS: readonly AdminJobKind[] = ['user.delete-data', 'user.erase-run', 'channel.transfer'];
+export const ADMIN_JOB_UNCANCELLABLE_KINDS: readonly AdminJobKind[] = ['user.delete-data', 'user.erase-media', 'user.erase-run', 'channel.transfer'];
 
 /** The permission an admin needs to retry a job of each kind (the same one that started it). */
 export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly AdminContentPermission[]>> = {
@@ -761,6 +763,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'video.purge': ['content:delete'],
   'user.sync-holds': ['users:manage'],
   'user.delete-data': ['users:manage', 'content:delete'],
+  'user.erase-media': ['users:manage', 'content:delete'],
   'user.erase-run': ['users:manage', 'content:delete'],
   'profiles.restore-legacy': ['users:manage'],
   // admin-api also requires a super admin for this kind (its report names accounts' emails)

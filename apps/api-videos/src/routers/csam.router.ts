@@ -15,7 +15,7 @@ import { authAccountsWithDeleted } from '../lib/admin/authUsers';
 import { AdminError } from '../lib/admin/service';
 import { retryJob } from '../lib/admin/jobs';
 import { resolveByHand, resolveCsamUrl } from '../lib/csam/resolve';
-import { CSAM_ACTOR, containJobOf, startContainment, validResolution, type ContainEnv } from '../lib/csam/contain';
+import { CSAM_ACTOR, containJobOf, ensureHidden, startContainment, validResolution, type ContainEnv, type ContainParams } from '../lib/csam/contain';
 import { deleteEvidence, openEvidenceFile, readManifest } from '../lib/csam/evidence';
 import { EvidenceKeyError } from '../lib/csam/crypto';
 
@@ -99,7 +99,12 @@ app.post('/contain', async (c) => {
 	const resolution = input.resolution as CsamResolution;
 	if (!validResolution(resolution)) throw new BadRequest(400, 'invalid_resolution');
 	const existing = await containJobOf(c.env, input.caseId);
-	if (existing) return ok(c, { job: existing, existing: true });
+	if (existing) {
+		// The request that queued it may have stopped before it hid the item
+		const p = existing.params as unknown as ContainParams;
+		if (existing.status !== 'succeeded' && p.phase === 'plan') await ensureHidden(c.env, p);
+		return ok(c, { job: existing, existing: true });
+	}
 	const out = await startContainment(c.env, { caseId: input.caseId, matchedUrl: input.matchedUrl, resolution, actorId: actor(c) });
 	logger.info('[CSAM] Containment started', { caseId: input.caseId, kind: resolution.kind, jobId: out.job.id, hidden: out.hide.hidden, cdn: out.hide.cdn });
 	return ok(c, out);

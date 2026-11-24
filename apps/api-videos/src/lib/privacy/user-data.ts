@@ -795,11 +795,16 @@ export interface ErasurePass extends ErasureSummary {
 }
 
 export interface ErasureHooks {
-	/** Remove the streaming media of a deleted video (Bunny Stream). Must not throw. */
-	onVideoDeleted?: (videoId: string, video?: { bunnyLibraryId?: number | string | null; playUrl?: string | null; thumbnailUrl?: string | null }) => Promise<void>;
-	/** Remove what the profile owned outside R2 (its Bunny collections) just before it is deleted. Must not throw. */
+	/**
+	 * Before a video or stream record is deleted: write its media down for erasure (lib/privacy/erase-media.ts).
+	 * A throw keeps the record and ends the pass. The same holds for the two below.
+	 */
+	onVideoDeleted?: (videoId: string, video?: { bunnyLibraryId?: number | string | null; playUrl?: string | null; thumbnailUrl?: string | null }, key?: string) => Promise<void>;
+	/** The profile's images and what it owned outside R2 (its Bunny collections), just before it is deleted. */
 	onProfileDeleted?: (userId: string, profile: unknown) => Promise<void>;
-	/** Remove what an owned channel holds outside R2 (its Bunny collections) just before its record is deleted. Must not throw. */
+	/** A post's images, just before it is deleted. */
+	onPostDeleted?: (channelId: string, postId: string, post: unknown) => Promise<void>;
+	/** An owned channel's images and what it holds outside R2 (its Bunny collections), just before its record is deleted. */
 	onChannelDeleted?: (channelId: string, channel: unknown) => Promise<void>;
 }
 
@@ -1041,16 +1046,25 @@ export async function eraseUserData(
 		const videoId = video.id ?? key;
 		const standing = await own.standing(ctx, video);
 		if (standing.kind === 'mine') {
+			// Under an open takedown case: its own job copies the evidence, then deletes the record (lib/csam/contain.ts)
+			if (video.csamTakedown) return;
+			// Nothing of it goes before its media is written down, and the record is first: what follows is the job's too
+			if (hooks.onVideoDeleted) {
+				ctx.budget.reserve(2);
+				await hooks.onVideoDeleted(videoId, video as never, key);
+				if ((await readJson<Json>(videos, key, ctx.budget))?.csamTakedown) return;
+			}
+			await deleteKeys(videos, [key], ctx.budget);
+			summary.deletedVideoIds.push(videoId);
+			bump(summary.deleted, 'videos');
+			// Subtitles and side records go with the rest of its media, by the job and in its time
+			if (hooks.onVideoDeleted) return;
 			if (env.subtitles) {
 				const subtitles = asBucket(env.subtitles);
 				bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
 			}
 			// The scheduler entry and upload marker name the user too (lib/videoSideRecords.ts)
 			await deleteVideoSideRecords({ global_settings: env.global_settings, SCHEDULED_VIDEOS: env.SCHEDULED_VIDEOS ?? env['scheduled-videos'] }, videoId, video);
-			if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, video as never);
-			await deleteKeys(videos, [key], ctx.budget);
-			summary.deletedVideoIds.push(videoId);
-			bump(summary.deleted, 'videos');
 			return;
 		}
 		// Strip and anonymise on the fresh video with a conditional write
@@ -1100,8 +1114,10 @@ export async function eraseUserData(
 			return;
 		}
 		let postId = file.replace(/\.json$/, '');
+		// Under an open takedown case: its own job deletes it (lib/csam/contain.ts)
+		const post = await readJson<Json>(community, key, ctx.budget);
+		if (post?.csamTakedown) return;
 		if (!owned) {
-			const post = await readJson<Json>(community, key, ctx.budget);
 			if (!post) return;
 			const standing: Standing = post.userId === userId ? await own.standing(ctx, post, channelId) : NOT_MINE;
 			if (standing.kind !== 'mine') {
@@ -1122,9 +1138,14 @@ export async function eraseUserData(
 			}
 			postId = post.id ?? postId;
 		}
+		// Written down before anything of it goes; a case names the post by its file
+		if (hooks.onPostDeleted) await hooks.onPostDeleted(channelId, file.replace(/\.json$/, ''), post);
 		for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
 			await deleteKeys(community, await allKeys(community, prefix, ctx.budget), ctx.budget);
 		}
+		// A case that began meanwhile
+		ctx.budget.reserve(2);
+		if ((await readJson<Json>(community, key, ctx.budget))?.csamTakedown) return;
 		// The post and its location record (lib/community-posts.ts) in one delete
 		await deleteKeys(community, [key, postLocationKey(postId)], ctx.budget);
 		bump(summary.deleted, 'communityPosts');
@@ -1529,7 +1550,8 @@ export async function eraseUserData(
 				logger.warn('[Privacy] ADMIN_BACKUPS is not bound; skipped legacy-restore backup erasure', { userId });
 				summary.errors = [...(summary.errors ?? []), ADMIN_BACKUPS_UNBOUND_ERROR];
 			}
-			// Who uploaded which image (lib/csam/imageOwners.ts). CSAM evidence is not here: it
+			// Who uploaded which image (lib/csam/imageOwners.ts): all but the profile's own files, whose rows go with
+			// them (lib/privacy/erase-media.ts). CSAM evidence is not here: it
 			// lives in its own bucket that no erasure touches (docs/specs/CSAM-RESPONSE.md §4)
 			if (db) {
 				ctx.budget.spend();

@@ -102,6 +102,9 @@ function seed() {
 		global_settings: new MemoryBucket(),
 		ADMIN_BACKUPS: new MemoryBucket(),
 		queue: new MemoryQueue(),
+		// The media job is written there before a record goes (lib/privacy/erase-media.ts); no index pass: the bucket is scanned
+		SEARCH_DB: new SqliteD1(),
+		ADMIN_JOBS_QUEUE: new MemoryQueue(),
 	};
 }
 type Buckets = ReturnType<typeof seed>;
@@ -187,7 +190,7 @@ function edited(token: string, change: (state: Json) => void): string {
 
 /** Until the run has passed the channels phase: the first phases are done. */
 const started = (b: Buckets) => () => !b.watch_history.store.has(`${ME}:v-other`) && b.channels.read('ch-other').subscriptions.length === 0;
-const SMALL = { PRIVACY_OP_BUDGET: '16' };
+const SMALL = { PRIVACY_OP_BUDGET: '30' };
 const LARGE = { PRIVACY_OP_BUDGET: '10000' };
 
 describe('a multi-pass erase', () => {
@@ -257,7 +260,9 @@ describe('a multi-pass erase', () => {
 		const part = await erasePass(OTHER, workerEnv(b, LARGE), first.token);
 		assert.equal(part.complete, true);
 		assert.deepEqual(missing(b, [...mine, ...channels]), [], 'the first account keeps its data');
-		assert.deepEqual(missing(b, THEIRS).length, THEIRS.length, 'the caller\'s own erase ran from the start');
+		// Subtitles go with the media, a day later (lib/privacy/erase-media.ts)
+		const now = THEIRS.filter(([bucket]) => bucket !== 'subtitles');
+		assert.deepEqual(missing(b, now).length, now.length, 'the caller\'s own erase ran from the start');
 	});
 
 	it('starts over on an edited state', async () => {
@@ -591,7 +596,7 @@ describe('when a run cannot be continued', () => {
 
 	it('an erase that needs another pass is an error after its follow-ups', async () => {
 		const b = seed();
-		const env = workerEnv(b, { PRIVACY_OP_BUDGET: '40', INTERNAL_API_KEY: undefined });
+		const env = workerEnv(b, { PRIVACY_OP_BUDGET: '46', INTERNAL_API_KEY: undefined });
 		const body = await erasePass(ME, env, undefined, 503);
 		assert.equal(body.code, 'resume_unavailable');
 		const gone = ['v-mine', 'v-mine2'].filter((key) => !b.videos.store.has(key));
