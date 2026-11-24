@@ -29,11 +29,12 @@ export interface AuditFilterValues {
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 
 export function AuditFilters({ values, actions, actorItem, targetItem }: { values: AuditFilterValues; actions: { action: string; area: AdminAuditArea }[]; actorItem: AdminSuggestion | null; targetItem: AdminSuggestion | null }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [kind, setKind] = useState<AdminAuditItemKind | ''>(values.itemKind ?? '');
   const [area, setArea] = useState<AdminAuditArea | ''>(values.area ?? '');
   const shownActions = area ? actions.filter((a) => a.area === area || a.action === values.action) : actions;
-  const options = [...shownActions].sort((a, b) => actionLabel(a.action, t).localeCompare(actionLabel(b.action, t)));
+  // In the page's language, not the browser's: a different order than the server's is a hydration error, which drops dark mode
+  const options = [...shownActions].sort((a, b) => actionLabel(a.action, t).localeCompare(actionLabel(b.action, t), locale));
 
   return (
     <form method="get" action="/audit" aria-label={t('auditLog.filtersLabel')} className="bg-surface border border-border rounded-lg p-4 sm:p-6" data-testid="audit-filters">
