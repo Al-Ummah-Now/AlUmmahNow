@@ -39,6 +39,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
   const popRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusOnOpen = useRef(false);
+  const scrollAtOpen = useRef<[number, number] | null>(null);
 
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -55,6 +56,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
     (next: Exclude<Mode, 'closed'>) => {
       clearTimer();
       if (next === 'open') focusOnOpen.current = true;
+      scrollAtOpen.current = [window.scrollX, window.scrollY];
       setMode(next);
       document.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: uid }));
     },
@@ -69,6 +71,14 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
       return;
     }
     fitToViewport(pop);
+    // Before it is fitted the popover can stick out past the page's start edge for a moment; on an
+    // Arabic (RTL) phone the browser then scrolls the page sideways to show it. Put the page back
+    // and fit again, so the page never moves when help opens.
+    const at = scrollAtOpen.current;
+    if (at && (window.scrollX !== at[0] || window.scrollY !== at[1])) {
+      window.scrollTo({ left: at[0], top: at[1], behavior: 'instant' });
+      fitToViewport(pop);
+    }
     if (focusOnOpen.current) {
       focusOnOpen.current = false;
       pop?.focus({ preventScroll: true });
