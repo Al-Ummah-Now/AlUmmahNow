@@ -25,7 +25,7 @@ export function userMeta(user: AdminUserSearchItem, t: Translator): string {
   return parts.join(t('common.sep'));
 }
 
-/** A transfer search result as the Autocomplete shows it: name, email, facts, banned users not choosable. No @handle: handles belong to channels, never users. */
+/** A transfer search result as the Autocomplete shows it: name, account email (the box adds the user id), facts, banned users not choosable. No @handle: handles belong to channels, never users. */
 export function transferItem(user: AdminUserSearchItem, t: Translator): AutocompleteItem {
   const name = userName(user);
   const email = user.email || t('channels.pickerNoEmail');
@@ -41,25 +41,21 @@ export function transferItem(user: AdminUserSearchItem, t: Translator): Autocomp
   };
 }
 
-/** Values the admin may type to confirm a transfer: the channel's @handle (with or without "@") or the new owner's email. */
-export function transferConfirmValues(handle: string | null, email: string | null): string[] {
-  const values: string[] = [];
-  if (handle) values.push(`@${handle}`, handle);
-  if (email) values.push(email);
-  return values;
+/** Values the admin may type to confirm a transfer: the channel's @handle (with or without "@") or the new owner's user id. */
+export function transferConfirmValues(handle: string | null, userId: string): string[] {
+  return handle ? [`@${handle}`, handle, userId] : [userId];
 }
 
-/** Whether `typed` matches one of the confirm values (emails ignore case). */
+/** Whether `typed` matches one of the confirm values (exactly, spaces around it aside). */
 export function confirmMatches(typed: string, values: readonly string[]): boolean {
   const v = typed.trim();
-  if (!v) return false;
-  return values.some((value) => (value.includes('@') && !value.startsWith('@') ? value.toLowerCase() === v.toLowerCase() : value === v));
+  return !!v && values.includes(v);
 }
 
 /**
- * Wraps a Latin value (name, email, @handle) in Unicode isolates (FSI…PDI) for
+ * Wraps a Latin value (name, user id, @handle) in Unicode isolates (FSI…PDI) for
  * Arabic text, so it keeps its own order: "@handle" stays "@handle" and a
- * parenthesised email does not split across the sentence. Other locales: as is.
+ * parenthesised id does not split across the sentence. Other locales: as is.
  */
 export function bidiIsolate(value: string, locale: string): string {
   return locale === 'ar' && value ? `⁨${value}⁩` : value;

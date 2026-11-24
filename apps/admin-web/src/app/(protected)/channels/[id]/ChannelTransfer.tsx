@@ -6,7 +6,7 @@
  * The admin finds the new owner with the shared Autocomplete (email, name,
  * @handle or id; the channel's team before anything is typed; the current owner
  * never offered; banned users listed but not choosable), confirms in the app's own dialog by typing the channel's @handle or the
- * new owner's email, and then follows the queued job here until it succeeds
+ * new owner's user id, and then follows the queued job here until it succeeds
  * (the page refreshes and shows the new owner) or fails (its error is shown).
  * Outcomes are shown in this section, next to the button that caused them.
  */
@@ -124,8 +124,7 @@ export function ChannelTransfer({ channel }: Props) {
   const toggle = (key: keyof TransferOptions) => (e: ChangeEvent<HTMLInputElement>) => setOptions((o) => ({ ...o, [key]: e.target.checked }));
 
   const name = target ? userName(target) : '';
-  const email = target?.email ?? '';
-  const confirmValues = target ? transferConfirmValues(channel.handle, target.email) : [];
+  const confirmValues = target ? transferConfirmValues(channel.handle, target.id) : [];
   const iso = (value: string) => bidiIsolate(value, locale);
 
   return (
@@ -145,7 +144,6 @@ export function ChannelTransfer({ channel }: Props) {
             placeholder={t('channels.newOwnerPlaceholder')}
             source={source}
             allowIds={false}
-            showIds={false}
             chosen="card"
             changeLabel={t('channels.pickerChange')}
             showStatus
@@ -171,7 +169,7 @@ export function ChannelTransfer({ channel }: Props) {
         <div>
           <ConfirmButton
             label={t('channels.transfer')}
-            title={t('channels.transferConfirm', { name: iso(name), email: email ? iso(email) : t('channels.pickerNoEmail') })}
+            title={t('channels.transferConfirm', { name: iso(name), id: iso(target?.id ?? '') })}
             body={t('channels.transferBody', {
               channel: iso(channel.name || channel.id),
               name: iso(name),
@@ -187,8 +185,8 @@ export function ChannelTransfer({ channel }: Props) {
             typeToConfirm={confirmValues}
             typeToConfirmLabel={
               channel.handle
-                ? t('channels.transferTypeToConfirm', { handle: iso(`@${channel.handle}`), email: email ? iso(email) : t('channels.pickerNoEmail') })
-                : t('channels.transferTypeToConfirmNoHandle', { email: iso(email) })
+                ? t('channels.transferTypeToConfirm', { handle: iso(`@${channel.handle}`), id: iso(target?.id ?? '') })
+                : t('channels.transferTypeToConfirmNoHandle', { id: iso(target?.id ?? '') })
             }
             danger
             disabled={!!busy || !target || confirmValues.length === 0}
