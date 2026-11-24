@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { forgetFeatureSwitches, syncSearchDocument, writeFeatureSwitch } from '@al-ummah/shared-types';
+import { forgetFeatureSwitches, newVideoFanout, projectVideo, syncSearchDocument, writeFeatureSwitch } from '@al-ummah/shared-types';
 import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { CommentList } from '../src/endpoints/video/commentList';
 import { CommentRepliesList } from '../src/endpoints/video/commentRepliesList';
@@ -305,5 +305,17 @@ describe('made for kids never shapes what a viewer is suggested', () => {
 		const off = await score('off');
 		assert.ok((await score('on')) < off);
 		assert.ok((await score('unreadable')) < off);
+	});
+});
+
+describe('where else the flags travel', () => {
+	it('the index payload and the fan-out message carry a flag only when it is set', () => {
+		const video = { id: 'v1', title: 'Lesson', channelId: 'ch1', userId: 'u1', isPublic: true, uploadStatus: 'ready', dateCreated: '2026-11-01T00:00:00.000Z' };
+		const payload = (o: object) => projectVideo({ ...video, ...o })!.payload as unknown as Record<string, unknown>;
+		assert.ok(!('madeForKids' in payload({})) && !('ageRestricted' in payload({})));
+		assert.equal(payload({ madeForKids: true }).madeForKids, true);
+		assert.equal(payload({ ageRestricted: true }).ageRestricted, true);
+		assert.ok(!newVideoFanout(video as never, {}).madeForKids);
+		assert.equal(newVideoFanout({ ...video, importedFrom: { madeForKids: true } } as never, {}).madeForKids, true);
 	});
 });
