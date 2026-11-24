@@ -28,10 +28,10 @@ describe('channel move notifications', () => {
     const n = (name: string) => `\u2068${name}\u2069`;
     const params = { channel: 'Corner (Kids)', owner: 'Amina', member: 'أمينة' };
     const said = {
-      channelMoveOffered: [`${n('Amina')} wants to hand ${n('Corner (Kids)')} over to you. Open it to accept or decline.`, `يريد ${n('Amina')} أن يسلّمك القناة ${n('Corner (Kids)')}. افتحها لتقبل أو ترفض.`],
+      channelMoveOffered: [`${n('Amina')} wants to hand ${n('Corner (Kids)')} over to you. Open it to accept or decline.`, `وصلك عرض من ${n('Amina')} لنقل القناة ${n('Corner (Kids)')} إليك. يمكنك قبول العرض أو رفضه.`],
       channelMoveAccepted: [`${n('أمينة')} accepted, and ${n('Corner (Kids)')} is now theirs.`, `قُبل عرضك، وانتقلت ملكية القناة ${n('Corner (Kids)')} إلى ${n('أمينة')}.`],
-      channelMoveDeclined: [`${n('أمينة')} declined to take over ${n('Corner (Kids)')}.`, `رفض ${n('أمينة')} تسلّم القناة ${n('Corner (Kids)')}.`],
-      channelMoveCancelled: [`The offer to take over ${n('Corner (Kids)')} is no longer open.`, `لم يعد عرض تسلّم القناة ${n('Corner (Kids)')} قائمًا.`],
+      channelMoveDeclined: [`${n('أمينة')} declined to take over ${n('Corner (Kids)')}.`, `رُفض عرضك نقل القناة ${n('Corner (Kids)')} إلى ${n('أمينة')}.`],
+      channelMoveCancelled: [`The offer to take over ${n('Corner (Kids)')} is no longer open.`, `سُحب عرض نقل القناة ${n('Corner (Kids)')} إليك.`],
       channelMoveStopped: [`The Al Ummah Now team stopped the move of ${n('Corner (Kids)')}.`, `أوقف فريق الأمة الآن نقل القناة ${n('Corner (Kids)')}.`],
     };
     for (const [key, [en, ar]] of Object.entries(said)) {
