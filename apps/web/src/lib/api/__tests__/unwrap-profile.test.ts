@@ -21,4 +21,21 @@ describe('unwrapProfile', () => {
       expect(unwrapProfile(answer)).toBeNull();
     }
   });
+
+  it.each([
+    ['a failed answer', { success: false, result: { profile } }],
+    ['an empty profile', { profile: {} }],
+    ['a list', { profile: [] }],
+    ['a list in result', { success: true, result: { profile: [profile] } }],
+    ['a list answer', [profile]],
+    ['an empty id', { id: '' }],
+    ['a null id', { id: null }],
+    ['an empty id, wrapped', { success: true, result: { profile: { id: '' } } }],
+    ['a number id', { profile: { id: 7 } }],
+    ['an error with an id', { id: 'req_1', error: 'Not found' }],
+    ['an error beside a profile', { error: 'Not found', profile }],
+    ['an error in the profile', { profile: { id: 'req_1', error: 'Not found' } }],
+  ])('is null for %s', (_name, answer) => {
+    expect(unwrapProfile(answer)).toBeNull();
+  });
 });

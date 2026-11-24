@@ -20,14 +20,18 @@ export const isProfileComplete = (profile: Profile | null): boolean => {
     );
 };
 
+const plainObject = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
 /**
  * The profile in an API answer: `{ success, result: { profile } }`, `{ profile }` or the profile itself
- * (which may have no email). Null when there is none.
+ * (which may have no email). Null for an error or a failed answer, and for anything without an id.
  */
 export function unwrapProfile(response: unknown): Profile | null {
-    if (!response || typeof response !== 'object') return null;
-    const body = response as Record<string, unknown>;
-    const result = body.result as Record<string, unknown> | null | undefined;
-    const profile = result && typeof result === 'object' && 'profile' in result ? result.profile : 'profile' in body ? body.profile : 'id' in body && !('success' in body) ? body : null;
-    return profile && typeof profile === 'object' ? (profile as unknown as Profile) : null;
+    const body = plainObject(response);
+    if (!body || body.success === false || body.error) return null;
+    const result = plainObject(body.result);
+    const profile = plainObject(result && 'profile' in result ? result.profile : 'profile' in body ? body.profile : 'success' in body ? null : body);
+    if (!profile || profile.error || typeof profile.id !== 'string' || !profile.id) return null;
+    return profile as unknown as Profile;
 }
