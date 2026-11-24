@@ -29,6 +29,24 @@ describe('admin-api error envelope', () => {
     assert.match(res.headers.get('vary') ?? '', /X-App-Locale/);
   });
 
+  it('invites and admin transfers keep their own texts: the owner-move texts of api-videos are not theirs (CC-6)', async () => {
+    const own = new Hono();
+    own.use('*', errorEnvelope);
+    own.get('/purge', (c) => c.json({ success: false, code: 'confirm_mismatch', error: 'Type the invite email to confirm' }, 400));
+    own.get('/transfer/:code', (c) => c.json({ success: false, code: c.req.param('code'), error: c.req.param('code') }, 409));
+    const ask = async (path: string, lang: string) => (await (await own.request(path, { headers: { 'X-App-Locale': lang } })).json()) as { code: string; error: string; message: string };
+    const purge = { en: 'Something in this request isn’t right. Check it and try again.', ar: 'في هذا الطلب ما لا يصح. راجعه وحاول مرة أخرى.' };
+    const conflict = { en: 'This changed while you were working on it. Reload and try again.', ar: 'تغيّر هذا أثناء عملك عليه. أعد التحميل وحاول مرة أخرى.' };
+    for (const lang of ['en', 'ar'] as const) {
+      const p = await ask('/purge', lang);
+      assert.deepEqual([p.code, p.error, p.message], ['confirm_mismatch', 'Type the invite email to confirm', purge[lang]]);
+      for (const code of ['channel_is_live', 'channel_has_support', 'new_owner_banned', 'new_owner_channel_limit', 'already_owner', 'transfer_in_progress', 'transfer_unfinished', 'channel_suspended']) {
+        const t = await ask(`/transfer/${code}`, lang);
+        assert.deepEqual([t.code, t.error, t.message], [code, code, conflict[lang]]);
+      }
+    }
+  });
+
   it('wraps the onError answer with its reference and a retry action', async () => {
     const res = await app.request('/boom');
     const body = await res.json();

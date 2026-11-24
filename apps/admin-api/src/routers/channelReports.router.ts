@@ -6,11 +6,12 @@
 import { Hono } from 'hono';
 import type { AdminBindings } from '../base/types';
 import { apiError } from '../lib/api-error';
+import { safeEqual } from '../lib/contact';
 
 type Env = { Bindings: AdminBindings };
 
 async function internalKey(env: AdminBindings): Promise<string> {
-  const b = env.INTERNAL_API_KEY as string | { get(): Promise<string> } | undefined;
+  const b = env.INTERNAL_API_KEY;
   try {
     return typeof b === 'string' ? b : ((await b?.get()) ?? '');
   } catch {
@@ -18,16 +19,10 @@ async function internalKey(env: AdminBindings): Promise<string> {
   }
 }
 
-function sameKey(a: string, b: string): boolean {
-  if (!a || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 export const channelReportsRouter = new Hono<Env>();
 channelReportsRouter.get('/:id', async (c) => {
-  if (!sameKey(c.req.header('X-API-Key') ?? '', await internalKey(c.env))) return apiError(c, 401, 'unauthorized');
+  const expected = await internalKey(c.env);
+  if (!expected || !safeEqual(c.req.header('X-API-Key') ?? '', expected)) return apiError(c, 401, 'unauthorized');
   const row = await c.env.REPORTS_DB.prepare(`SELECT 1 AS found FROM reports WHERE status = 'reviewing' AND entity_type = 'channel' AND entity_id = ? LIMIT 1`)
     .bind(c.req.param('id'))
     .first<{ found: number }>();

@@ -117,7 +117,7 @@ async function checkMovable(env: Env, channel: Row, toUserId: string): Promise<v
 	if (!(await hasChannelRoom(db(env), toUserId))) throw new MoveError(409, 'new_owner_channel_limit');
 	// Spec §5: not while the team is reviewing a report about the channel; unknown is refused too
 	const underReview = await channelReportUnderReview(env, channel.id);
-	if (underReview === null) throw new MoveError(503, 'unavailable', 'Channel moves are not available right now');
+	if (underReview === null) throw new MoveError(503, 'move_check_unavailable', 'The channel could not be checked');
 	if (underReview) throw new MoveError(409, 'channel_under_review', 'A report about this channel is under review');
 }
 

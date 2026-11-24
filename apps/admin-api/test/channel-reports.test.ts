@@ -19,6 +19,9 @@ describe('internal channel report status', () => {
     const ask = (id: string, key?: string) => app.request(`/internal/channel-reports/${id}`, { headers: key ? { 'X-API-Key': key } : {} }, { REPORTS_DB: db, INTERNAL_API_KEY: 'k' });
     assert.equal((await ask('ch_review')).status, 401);
     assert.equal((await ask('ch_review', 'x')).status, 401);
+    const answer = await ask('ch_review', 'k');
+    assert.deepEqual(await answer.json(), { success: true, result: { underReview: true } }, 'no reporter, reason or report id');
+    assert.equal(answer.headers.get('Cache-Control'), 'no-store');
     const underReview = async (id: string) => ((await (await ask(id, 'k')).json()) as { result: { underReview: boolean } }).result.underReview;
     assert.equal(await underReview('ch_review'), true);
     for (const id of ['ch_pending', 'ch_done', 'ch_video', 'ch_none']) assert.equal(await underReview(id), false, id);
