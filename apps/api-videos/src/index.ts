@@ -90,6 +90,7 @@ import { sweepEntitlements } from "./lib/billing/store";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
+import { sweepProfileEmailReports } from './lib/admin/profile-email-reports';
 import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
@@ -976,6 +977,20 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[LiveChat] Retention purge failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'live-chat-retention', error);
+			}
+		})(),
+	);
+	// Profile email reports older than 30 days (lib/admin/profile-email-reports.ts), on a budget of their own
+	ctx.waitUntil(
+		(async () => {
+			const bucket = (rawEnv as unknown as { ADMIN_BACKUPS?: R2Bucket }).ADMIN_BACKUPS;
+			if (!bucket) return;
+			try {
+				const deleted = await sweepProfileEmailReports(bucket as never, new Date(), new OperationBudget(100));
+				if (deleted) logger.info('[ProfileEmails] Expired reports deleted', { deleted });
+			} catch (error) {
+				logger.error('[ProfileEmails] Report sweep failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'profile-email-reports', error);
 			}
 		})(),
 	);
