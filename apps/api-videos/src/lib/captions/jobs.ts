@@ -483,10 +483,13 @@ export async function requestTranslationJob(
 	if (!duration) throw new CaptionJobHttpError(409, 'video_not_ready');
 	if (!input.replace && (await env.subtitles?.get(captionDraftKey(video.id, input.language)))) throw new CaptionJobHttpError(409, 'draft_exists');
 
-	const subject = await captionSubject(db(env), { userId: input.userId, roles: input.roles, channelOwnerId: video.userId });
+	// A waived job charges nobody, so it never resolves a tier: the requester (an admin) has no known roles
+	// here, and the job is recorded against the channel owner
+	const subject = input.waive ? null : await captionSubject(db(env), { userId: input.userId, roles: input.roles, channelOwnerId: video.userId });
+	const subjectId = subject?.subjectId ?? video.userId ?? input.userId;
 	const minutes = captionMinutesFor(duration, 1);
 	const jobId = crypto.randomUUID();
-	if (!input.waive) {
+	if (subject) {
 		const reserved = await reserveMinutes(db(env), subject, jobId, minutes, now);
 		if ('usage' in reserved) return { refused: 'upgrade_required', usage: reserved.usage, minutes };
 	}
@@ -503,7 +506,7 @@ export async function requestTranslationJob(
 			key,
 			video.id,
 			video.channelId ?? null,
-			subject.subjectId,
+			subjectId,
 			input.userId,
 			input.language,
 			input.sourceLanguage,

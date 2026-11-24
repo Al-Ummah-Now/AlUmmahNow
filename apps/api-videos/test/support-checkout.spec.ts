@@ -13,6 +13,7 @@ import { MemoryBucket } from './helpers';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { writeSupportPolicy } from '../src/lib/support/config';
+import { computeFeatures } from '../src/lib/features';
 import { creatorBalance } from '../src/lib/support/ledger';
 import { onSupportJobFailed, vendorContext, type SupportJobEnv } from '../src/lib/support/jobs';
 import { handleMySupport, handleMySupportCheckout, handleStopMyPledge, handleSupportCheckout, handleSupportQuote, handleSupportSettingsSave, handleSupportSheet } from '../src/endpoints/support/supportCheckout';
@@ -110,6 +111,19 @@ describe('the sheet and the breakdown', () => {
 		assert.ok(covered.body.result.creatorReceives.amount >= 500);
 		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=100`)).body.code, 'support_amount_too_small');
 		assert.equal((await t.as(null)('GET', `/api/channels/${CH}/support/quote?amount=500&currency=EUR`)).body.code, 'support_currency_unavailable');
+	});
+});
+
+describe('the owner’s tier is only read', () => {
+	it('a super admin owner keeps their automatic Unlimited tier after the sheet and the feature keys check it', async () => {
+		const t = await setup();
+		await t.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'unlimited', 'admin', 'system:super-admin', 'now')").bind(OWNER).run();
+		const sheet = await t.as(FAN)('GET', `/api/channels/${CH}/support`);
+		assert.equal(sheet.status, 200);
+		const keys = await computeFeatures(t.env as never, { userId: FAN, roles: [] }, CH);
+		assert.equal(keys.support, true);
+		const row = await t.db.prepare('SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = ?').bind(OWNER).first();
+		assert.deepEqual(row, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
 	});
 });
 

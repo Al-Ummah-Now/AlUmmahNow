@@ -41,7 +41,7 @@ import {
 	type UserFeatures,
 } from '@al-ummah/shared-types';
 import { loadChannelRecord } from '../channelAccess';
-import { resolveCreator } from '../creatorTiers';
+import { channelOwnerTier, resolveCreator } from '../creatorTiers';
 import { cachedPendingUserDeletion } from '../admin/pendingUserDeletion';
 import { memberUploadChannelIds } from '../../endpoints/creator/creatorAccess';
 import { readCaptionSettings, type CaptionJobsEnv, type CaptionSettings } from '../captions/jobs';
@@ -330,7 +330,7 @@ async function supportKeysFor(env: FeaturesEnv, who: FeaturesWho, channelId: str
 					callerRole: who.userId ? channelRoleOf(record, who.userId) : null,
 				}
 			: null;
-		const ownerTierAllows = async (ownerId: string) => (await resolveCreator(db, { userId: ownerId, roles: null })).tier?.supportReceive === true;
+		const ownerTierAllows = async (ownerId: string) => (await channelOwnerTier(db, ownerId))?.supportReceive === true;
 		return await supportFeatureKeys(env as never, { userId: who.userId ?? null, country: request.country ?? null, client: request.client ?? null }, channel, ownerTierAllows);
 	} catch (error) {
 		logger.warn('[features] Support keys not computed; hidden', { error: error instanceof Error ? error.message : String(error) });
