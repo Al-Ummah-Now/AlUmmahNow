@@ -6,12 +6,14 @@
  * The videos site samples one page load in 20 and writes its field LCP, CLS and INP to Workers
  * Analytics Engine (apps/web app/api/rum, dataset al_ummah_now_rum[_stage|_qa]; blobs metric, page
  * kind, device, locale, environment; no URL, ids or personal data, D-SEO-9; automated browsers dropped). This reads the weighted p75 back
- * with the Analytics Engine SQL API (CF_ANALYTICS_TOKEN, Account Analytics Read), overall and per
- * page kind × device. No D1; answers are cached 5 minutes per env, window and locale. Needs `ops:read`.
+ * with the Analytics Engine SQL API (lib/analytics-engine.ts: CF_ANALYTICS_TOKEN, Account Analytics Read), overall and per
+ * page kind × device. 503 `not_configured` without the token or account; 503 `unavailable` with a `reason`
+ * (auth, rate_limited, query, upstream, unreachable, bad_response) and the Errors page item's `ref` when
+ * Cloudflare refuses; a dataset with no rows yet is a summary with no samples. No D1; answers are cached 5 minutes per env, window and locale. Needs `ops:read`.
  */
 import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
-import { logger } from '../lib/logger';
+import { analyticsCredentials, analyticsQuery, AnalyticsEngineError, flagAnalyticsFailure, newErrorRef, resolveAnalyticsFailure } from '../lib/analytics-engine';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
@@ -122,43 +124,6 @@ export function summarizeVitals(
 	return { env, days, locale, generatedAt: now.toISOString(), overall, rows };
 }
 
-async function secret(binding: unknown): Promise<string> {
-	if (typeof binding === 'string') return binding;
-	try {
-		return ((await (binding as { get?: () => Promise<string> })?.get?.()) ?? '') || '';
-	} catch {
-		return '';
-	}
-}
-
-class Unavailable extends Error {}
-
-/** One SQL API call; a dataset nobody has written to yet does not exist, which is "no data" */
-async function query(account: string, token: string, sql: string): Promise<Array<Record<string, unknown>>> {
-	let res: Response;
-	try {
-		res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/analytics_engine/sql`, {
-			method: 'POST',
-			headers: { Authorization: `Bearer ${token}` },
-			body: sql,
-		});
-	} catch (error) {
-		logger.error('[Vitals] Analytics Engine unreachable', { error: error instanceof Error ? error.message : String(error) });
-		throw new Unavailable();
-	}
-	const text = await res.text();
-	if (!res.ok && /unknown table|does not exist|not found/i.test(text)) return [];
-	if (!res.ok) {
-		logger.error('[Vitals] Analytics Engine query failed', { status: res.status, body: text.slice(0, 300) });
-		throw new Unavailable();
-	}
-	try {
-		return ((JSON.parse(text) as { data?: Array<Record<string, unknown>> }).data ?? []) as Array<Record<string, unknown>>;
-	} catch {
-		return [];
-	}
-}
-
 const app = new Hono<Env>();
 const roles = (c: C) => normalizeRoles(c.get('auth')?.roles);
 
@@ -177,12 +142,11 @@ app.get('/summary', async (c) => {
 	const localeParam = c.req.query('locale') ?? 'all';
 	const locale: VitalsLocale = (VITALS_LOCALES as readonly string[]).includes(localeParam) ? (localeParam as VitalsLocale) : 'all';
 
-	const bindings = c.env as unknown as { CF_ANALYTICS_TOKEN?: unknown; CLOUDFLARE_ACCOUNT_ID?: string };
-	const token = await secret(bindings.CF_ANALYTICS_TOKEN);
-	const account = bindings.CLOUDFLARE_ACCOUNT_ID;
-	if (!token || !account) {
+	const creds = await analyticsCredentials(c.env);
+	if (!creds) {
 		return c.json({ success: false, code: 'not_configured', error: 'Web vitals are not configured here' }, 503);
 	}
+	const { account, token } = creds;
 
 	const cacheKey = new Request(`https://vitals.cache.invalid/summary?env=${env}&days=${days}&locale=${locale}`);
 	const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
@@ -190,16 +154,27 @@ app.get('/summary', async (c) => {
 	if (hit) return c.json({ success: true, result: await hit.json() });
 
 	let summary: VitalsSummary;
+	const defer = (p: Promise<unknown>) => {
+		try {
+			c.executionCtx.waitUntil(p);
+		} catch {
+			// outside a request (tests): the promise still runs
+		}
+	};
 	try {
 		const dataset = VITALS_DATASETS[env];
-		const [overallData, detailData] = await Promise.all([
-			query(account, token, vitalsQuery(dataset, days, locale, 'metric', env)),
-			query(account, token, vitalsQuery(dataset, days, locale, 'detail', env)),
-		]);
+		// One after the other: two parallel calls on a refused token double the account's failed calls
+		// and Cloudflare then throttles every panel (429)
+		const overallData = await analyticsQuery(account, token, vitalsQuery(dataset, days, locale, 'metric', env), { panel: 'vitals' });
+		const detailData = await analyticsQuery(account, token, vitalsQuery(dataset, days, locale, 'detail', env), { panel: 'vitals' });
 		summary = summarizeVitals(env, days, locale, overallData, detailData);
-	} catch {
-		return c.json({ success: false, code: 'unavailable', error: 'Web vitals are unavailable right now' }, 503);
+	} catch (error) {
+		const failure = error instanceof AnalyticsEngineError ? error : new AnalyticsEngineError('bad_response', 0, error instanceof Error ? error.message : String(error));
+		const ref = newErrorRef();
+		defer(flagAnalyticsFailure(c.env as never, 'vitals', failure, ref));
+		return c.json({ success: false, code: 'unavailable', reason: failure.reason, ref, error: 'Web vitals are unavailable right now' }, 503);
 	}
+	defer(resolveAnalyticsFailure(c.env as never, 'vitals'));
 	if (cache) {
 		const put = cache
 			.put(cacheKey, new Response(JSON.stringify(summary), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `max-age=${CACHE_SECONDS}` } }))

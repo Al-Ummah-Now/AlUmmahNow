@@ -197,7 +197,10 @@ and only what is registered there:
   again; `lib/contact-mail-queue.ts` raises that item when the mail queue gives
   up, and the inbox's own Retry closes it; `device-tokens` queues a "Sign out
   this device" revocation at auth again, raised by
-  `lib/deviceTokenRevocation.ts` when that call gives up, #442).
+  `lib/deviceTokenRevocation.ts` when that call gives up, #442;
+  `analytics-engine` ("Check again") re-tests `CF_ANALYTICS_TOKEN` against the
+  Analytics Engine SQL API after the Web vitals or Abuse panel was refused,
+  raised by `lib/analytics-engine.ts`, one item per panel).
 - `{ kind: 'service', service, path, body }` — POST with the internal API key
   to an allowlisted path of a Worker admin-api has a service binding to
   (`SERVICE_RETRIES`; today: `processor` `/dlq/replay` replays a dead letter,

@@ -12,6 +12,8 @@ export class AdminApiError extends Error {
     public readonly problems?: { problem: string; detail?: string }[],
     /** Per-field error codes (e.g. { labelEn: 'required' }), when given. */
     public readonly fields?: Record<string, string>,
+    /** Why a read failed (e.g. Analytics Engine "auth") and the Errors page reference admin-api flagged it under, when given. */
+    public readonly detail?: { reason?: string; ref?: string },
   ) {
     super(message);
     this.name = 'AdminApiError';
