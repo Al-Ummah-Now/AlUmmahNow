@@ -738,7 +738,8 @@ async function cancelInvitesToNewOwner(env: AdminServiceEnv, channelId: string, 
 			`UPDATE channel_invites SET status = 'cancelled', responded_at = ?, invitee_email = NULL
 			 WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`,
 		)
-		.bind(at, channelId, to, typeof email === 'string' ? email.trim().toLowerCase() : '')
+		// No email on the profile: null, so it can never match a stored address
+		.bind(at, channelId, to, typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null)
 		.run();
 	return Number(res.meta?.changes ?? 0);
 }
@@ -788,7 +789,7 @@ async function verifyTransfer(env: AdminServiceEnv, channelId: string, from: str
 	const invites = env.SEARCH_DB as D1Database | undefined;
 	if (invites) {
 		const newOwner = await repo(env.profiles).getObject(to);
-		const email = typeof newOwner?.email === 'string' ? newOwner.email.trim().toLowerCase() : '';
+		const email = typeof newOwner?.email === 'string' && newOwner.email.trim() ? newOwner.email.trim().toLowerCase() : null;
 		const row = await invites
 			.prepare(`SELECT COUNT(*) AS n FROM channel_invites WHERE channel_id = ? AND status = 'pending' AND (invitee_user_id = ? OR invitee_email = ?)`)
 			.bind(channelId, to, email)
