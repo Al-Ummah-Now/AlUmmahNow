@@ -78,4 +78,20 @@ test.describe('hidden tiers', () => {
     await page.getByTestId('invite-days').blur();
     await expect(page.getByTestId('invite-days')).toHaveValue('30');
   });
+
+  test('TH-03 live and what it includes are saved and read back (wiki E17 §3.2)', async ({ page }) => {
+    await page.goto(`/tiers#tier-${tierId}`);
+    await page.getByTestId(`tier-${tierId}-liveAllowed`).check();
+    for (const field of ['liveChat', 'livePremieres', 'liveEvents']) await expect(page.getByTestId(`tier-${tierId}-${field}`)).toBeChecked();
+    await page.getByTestId(`tier-${tierId}-liveEvents`).uncheck();
+    await page.getByTestId(`tier-${tierId}-save`).click();
+    const dialog = page.getByTestId(`tier-${tierId}-confirm-dialog`);
+    await expect(dialog).toContainText('No event tags.');
+    await page.getByTestId(`tier-${tierId}-confirm-confirm`).click();
+    await expect(page.getByTestId(`tier-${tierId}-status`)).toHaveText('Tier saved.');
+    await page.reload();
+    await expect(page.getByTestId(`tier-${tierId}-effect`)).toContainText('No event tags.');
+    await expect(page.getByTestId(`tier-${tierId}-liveChat`)).toBeChecked();
+    await expect(page.getByTestId(`tier-${tierId}-liveEvents`)).not.toBeChecked();
+  });
 });

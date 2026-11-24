@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AI_HIDEABLE_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, parseDigits, type ModerationCategoryPolicy } from '@al-ummah/shared-types';
+import { AI_HIDEABLE_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, DEFAULT_LIVE_CHAT_SHARE, parseDigits, type ModerationCategoryPolicy } from '@al-ummah/shared-types';
 import { updateAiConfig } from '@/lib/api/admin';
 import type { AiConfigView } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -21,6 +21,7 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
   const readOnly = !initial.canEdit;
   const [enabled, setEnabled] = useState(initial.enabled);
   const [cap, setCap] = useState(String(initial.dailyNeuronCap ?? ''));
+  const [share, setShare] = useState(String(Math.round((initial.liveChatShare ?? DEFAULT_LIVE_CHAT_SHARE) * 100)));
   const [extensions, setExtensions] = useState(initial.extensionsEnabled);
   const [policies, setPolicies] = useState<Record<string, Policy>>(initial.policies as Record<string, Policy>);
   const [changed, setChanged] = useState<Record<string, Policy>>({});
@@ -39,11 +40,13 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
     setError(null);
     setSaved(false);
     const capNumber = Number(parseDigits(cap));
+    const shareNumber = Number(parseDigits(share));
     try {
       const result = await updateAiConfig({
         enabled,
         extensionsEnabled: extensions,
         ...(cap !== '' && Number.isFinite(capNumber) ? { dailyNeuronCap: Math.round(capNumber) } : {}),
+        ...(share !== '' && Number.isFinite(shareNumber) ? { liveChatShare: Math.round(shareNumber) / 100 } : {}),
         ...(Object.keys(changed).length ? { policies: changed } : {}),
       });
       if (!result.ok) {
@@ -85,55 +88,68 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
           <NumberField min={0} max={10000000} step={1000} value={cap} disabled={readOnly} onChange={(e) => { setCap(e.target.value); setSaved(false); }} className={`${fieldClass} mt-1 w-48`} dir="ltr" data-testid="ai-cap" />
           <span className="block text-sm text-fg-muted mt-1">{t('ai.dailyCapHint')}</span>
         </label>
+        <label className="block">
+          <span className="block font-medium text-fg">{t('ai.liveChatShare')}</span>
+          <NumberField min={0} max={100} step={5} value={share} disabled={readOnly} onChange={(e) => { setShare(e.target.value); setSaved(false); }} className={`${fieldClass} mt-1 w-48`} dir="ltr" data-testid="ai-live-chat-share" />
+          <span className="block text-sm text-fg-muted mt-1">{t('ai.liveChatShareHint')}</span>
+        </label>
       </section>
 
       <section className={cardClass}>
         <h2 className="font-semibold text-fg mb-1">{t('ai.policiesTitle')}</h2>
         <p className="text-sm text-fg-muted mb-4">{t('ai.enforceWarning')}</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colCategory')}</th>
-                <th scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colEnabled')}</th>
-                <th scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colMode')}</th>
-                <th scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colThreshold')}</th>
-                <th scope="col" className="text-start py-2 text-fg-muted">{t('ai.colAction')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {CATEGORIES.map((category) => {
-                const p = policies[category] ?? {};
-                const canHide = (AI_HIDEABLE_CATEGORIES as readonly string[]).includes(category);
-                const label = translateDynamic(t, 'aiCategory', category);
-                return (
-                  <tr key={category} data-testid="ai-policy-row" data-category={category}>
-                    <td className="py-2 pe-4 text-fg">{label}</td>
-                    <td className="py-2 pe-4">
+        {/* A table from xl; below it each category is its own block, so no control is cut or scrolled away.
+            The roles are written out because a table laid out as blocks loses them in some browsers. */}
+        <table role="table" className="block w-full text-sm xl:table">
+          <thead role="rowgroup" className="sr-only xl:not-sr-only xl:table-header-group">
+            <tr role="row">
+              <th role="columnheader" scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colCategory')}</th>
+              <th role="columnheader" scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colEnabled')}</th>
+              <th role="columnheader" scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colMode')}</th>
+              <th role="columnheader" scope="col" className="text-start py-2 pe-4 text-fg-muted">{t('ai.colThreshold')}</th>
+              <th role="columnheader" scope="col" className="text-start py-2 text-fg-muted">{t('ai.colAction')}</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup" className="block divide-y divide-border xl:table-row-group">
+            {CATEGORIES.map((category) => {
+              const p = policies[category] ?? {};
+              const canHide = (AI_HIDEABLE_CATEGORIES as readonly string[]).includes(category);
+              const label = translateDynamic(t, 'aiCategory', category);
+              // Beside its control below xl, where the header row is not shown
+              const small = (text: string) => <span aria-hidden="true" className="mb-1 block text-xs text-fg-muted xl:hidden">{text}</span>;
+              return (
+                <tr role="row" key={category} className="grid grid-cols-2 gap-x-4 gap-y-2 py-3 xl:table-row" data-testid="ai-policy-row" data-category={category}>
+                  <td role="cell" className="font-medium text-fg xl:py-2 xl:pe-4 xl:font-normal">{label}</td>
+                  <td role="cell" className="xl:py-2 xl:pe-4">
+                    <span className="flex items-center justify-end gap-2 xl:justify-start">
+                      <span aria-hidden="true" className="text-xs text-fg-muted xl:hidden">{t('ai.colEnabled')}</span>
                       <input type="checkbox" aria-label={`${label}: ${t('ai.colEnabled')}`} checked={p.enabled ?? category !== 'religious_authenticity'} disabled={readOnly} onChange={(e) => setPolicy(category, { enabled: e.target.checked })} />
-                    </td>
-                    <td className="py-2 pe-4">
-                      <Select aria-label={`${label}: ${t('ai.colMode')}`} value={p.mode ?? 'shadow'} disabled={readOnly} onChange={(e) => setPolicy(category, { mode: e.target.value as 'shadow' | 'enforce' })} className={fieldClass}>
-                        <option value="shadow">{t('aiMode.shadow')}</option>
-                        <option value="enforce">{t('aiMode.enforce')}</option>
-                      </Select>
-                    </td>
-                    <td className="py-2 pe-4">
-                      <NumberField aria-label={`${label}: ${t('ai.colThreshold')}`} min={0} max={1} step={0.05} value={p.threshold ?? ''} placeholder="—" disabled={readOnly} onChange={(e) => setPolicy(category, { threshold: Number(e.target.value) })} className={`${fieldClass} w-24`} dir="ltr" />
-                    </td>
-                    <td className="py-2">
-                      <Select aria-label={`${label}: ${t('ai.colAction')}`} value={p.action ?? (canHide ? 'hide' : 'flag')} disabled={readOnly} onChange={(e) => setPolicy(category, { action: e.target.value as 'none' | 'flag' | 'hide' })} className={fieldClass}>
-                        <option value="none">{t('aiAction.none')}</option>
-                        <option value="flag">{t('aiAction.flag')}</option>
-                        {canHide && <option value="hide">{t('aiAction.hide')}</option>}
-                      </Select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                  </td>
+                  <td role="cell" className="xl:py-2 xl:pe-4">
+                    {small(t('ai.colMode'))}
+                    <Select aria-label={`${label}: ${t('ai.colMode')}`} value={p.mode ?? 'shadow'} disabled={readOnly} onChange={(e) => setPolicy(category, { mode: e.target.value as 'shadow' | 'enforce' })} className={`${fieldClass} w-full min-w-32`}>
+                      <option value="shadow">{t('aiMode.shadow')}</option>
+                      <option value="enforce">{t('aiMode.enforce')}</option>
+                    </Select>
+                  </td>
+                  <td role="cell" className="xl:py-2 xl:pe-4">
+                    {small(t('ai.colThreshold'))}
+                    <NumberField aria-label={`${label}: ${t('ai.colThreshold')}`} min={0} max={1} step={0.05} value={p.threshold ?? ''} placeholder="—" disabled={readOnly} onChange={(e) => setPolicy(category, { threshold: Number(e.target.value) })} className={`${fieldClass} w-full xl:w-24`} dir="ltr" />
+                  </td>
+                  <td role="cell" className="col-span-2 xl:py-2">
+                    {small(t('ai.colAction'))}
+                    <Select aria-label={`${label}: ${t('ai.colAction')}`} value={p.action ?? (canHide ? 'hide' : 'flag')} disabled={readOnly} onChange={(e) => setPolicy(category, { action: e.target.value as 'none' | 'flag' | 'hide' })} className={`${fieldClass} w-full min-w-32`}>
+                      <option value="none">{t('aiAction.none')}</option>
+                      <option value="flag">{t('aiAction.flag')}</option>
+                      {canHide && <option value="hide">{t('aiAction.hide')}</option>}
+                    </Select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </section>
 
       {!readOnly && (

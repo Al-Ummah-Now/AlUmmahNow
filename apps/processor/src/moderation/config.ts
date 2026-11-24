@@ -11,12 +11,10 @@ import type {
   ModerationCategoryPolicy,
   D1Database,
 } from '@al-ummah/shared-types';
-import { AI_HIDEABLE_CATEGORIES } from '@al-ummah/shared-types';
+import { AI_HIDEABLE_CATEGORIES, DEFAULT_LIVE_CHAT_SHARE } from '@al-ummah/shared-types';
 
 export const PROMPT_VERSION = 'mod-v1';
 export const DEFAULT_DAILY_NEURON_CAP = 10_000;
-/** Most of the daily cap live chat may use (wiki E17-D4); remote key `live_chat_share`, 0 to 1 */
-export const DEFAULT_LIVE_CHAT_SHARE = 0.25;
 
 const flag = (threshold: number): ModerationCategoryPolicy => ({ mode: 'shadow', threshold, action: 'flag', enabled: true });
 

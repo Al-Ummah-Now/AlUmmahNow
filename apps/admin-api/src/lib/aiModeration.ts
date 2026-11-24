@@ -9,6 +9,7 @@
 import { updateJson } from './r2Cas';
 import {
   AI_HIDEABLE_CATEGORIES,
+  DEFAULT_LIVE_CHAT_SHARE,
   LLAMA_GUARD_CATEGORIES,
   MODERATION_EXTENSION_CATEGORIES,
   type AiModerationConfig,
@@ -307,9 +308,11 @@ export async function readConfig(db: D1Like, envCap?: string): Promise<AiModerat
   const latest = [...map.values()].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))[0];
   const cap = parse<number>('daily_neuron_cap');
   const envCapNum = Number(envCap);
+  const share = parse<number>('live_chat_share');
   return {
     enabled: parse<boolean>('enabled') === true,
     dailyNeuronCap: typeof cap === 'number' ? cap : Number.isFinite(envCapNum) && envCap ? envCapNum : DEFAULT_CAP,
+    liveChatShare: typeof share === 'number' && share >= 0 && share <= 1 ? share : DEFAULT_LIVE_CHAT_SHARE,
     extensionsEnabled: parse<boolean>('extensions_enabled') === true,
     policies: parse<AiModerationConfig['policies']>('policies') ?? {},
     updatedAt: latest?.updated_at ?? null,
@@ -320,6 +323,8 @@ export async function readConfig(db: D1Like, envCap?: string): Promise<AiModerat
 export interface ConfigPatch {
   enabled?: boolean | undefined;
   dailyNeuronCap?: number | undefined;
+  /** Live chat's part of the daily cap, 0 to 1 (wiki E17-D4) */
+  liveChatShare?: number | undefined;
   extensionsEnabled?: boolean | undefined;
   policies?: Record<string, Partial<ModerationCategoryPolicy>> | undefined;
 }
@@ -329,6 +334,7 @@ export function validateConfigPatch(patch: ConfigPatch): string | null {
   if (patch.dailyNeuronCap !== undefined && (!Number.isFinite(patch.dailyNeuronCap) || patch.dailyNeuronCap < 0 || patch.dailyNeuronCap > 10_000_000)) {
     return 'dailyNeuronCap must be between 0 and 10,000,000';
   }
+  if (patch.liveChatShare !== undefined && (!Number.isFinite(patch.liveChatShare) || patch.liveChatShare < 0 || patch.liveChatShare > 1)) return 'liveChatShare must be between 0 and 1';
   for (const [category, policy] of Object.entries(patch.policies ?? {})) {
     if (!ALL_CATEGORIES.includes(category)) return `Unknown category: ${category}`;
     if (policy.threshold !== undefined && (typeof policy.threshold !== 'number' || policy.threshold < 0 || policy.threshold > 1)) return `${category}: threshold must be between 0 and 1`;
@@ -351,6 +357,7 @@ export async function writeConfig(db: D1Like, patch: ConfigPatch, actorId: strin
     );
   if (patch.enabled !== undefined) upsert('enabled', patch.enabled);
   if (patch.dailyNeuronCap !== undefined) upsert('daily_neuron_cap', patch.dailyNeuronCap);
+  if (patch.liveChatShare !== undefined) upsert('live_chat_share', patch.liveChatShare);
   if (patch.extensionsEnabled !== undefined) upsert('extensions_enabled', patch.extensionsEnabled);
   if (patch.policies !== undefined) {
     const current = await readConfig(db);

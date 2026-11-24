@@ -6,11 +6,13 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CREATOR_TIER, LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-types';
+import { Hono } from 'hono';
+import { DEFAULT_CREATOR_TIER, LIVE_TIER_ERROR_CODES, TIER_LIVE_CAPABILITIES } from '@al-ummah/shared-types';
 import { assignTier, readTier, saveTier, validateTier } from '../src/lib/creatorTiers';
 import { checkLiveTier, liveAccess, liveUsage, streamTierContext } from '../src/lib/live/tier-gate';
 import { endOverTierLimit } from '../src/lib/live/service';
 import { eraseLiveSessionOwner, insertSession, readSession, updateSession } from '../src/lib/live/store';
+import adminRouter from '../src/routers/admin.router';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
@@ -183,5 +185,29 @@ describe('live in creator tiers', () => {
 		await eraseLiveSessionOwner(d1, 'alice');
 		assert.equal((await readSession(d1, mine))!.owner_id, null);
 		assert.equal((await readSession(d1, theirs))!.owner_id, 'carol');
+	});
+
+	it('the admin routes create and save a tier with live chat, premieres and event tags', async () => {
+		const d1 = await setup();
+		const admin = new Hono();
+		admin.route('/internal/admin', adminRouter as never);
+		const call = async (method: string, path: string, body: unknown) => {
+			const res = await admin.request(`/internal/admin/creator-tiers${path}`, { method, headers: { 'content-type': 'application/json', 'x-admin-actor': 'admin-1' }, body: JSON.stringify(body) }, { SEARCH_DB: d1 } as never);
+			return { status: res.status, json: (await res.json()) as any };
+		};
+		const stored = async () => { const t = (await readTier(d1, 'live-tier'))!; return TIER_LIVE_CAPABILITIES.map((c) => t[c]); };
+		// What the admin's form sends (admin-web tierFormPayload): all three, on every save
+		const created = await call('POST', '', { name: 'Live tier', nameAr: 'فئة البث', description: 'A tier', descriptionAr: 'فئة', perHour: 5, perDay: 10, maxConcurrent: 1, maxChannels: 1, live: true, liveChat: true, livePremieres: false, liveEvents: true });
+		assert.equal(created.status, 200, JSON.stringify(created.json));
+		assert.deepEqual(await stored(), [true, false, true]);
+		const saved = await call('PUT', '/live-tier', { liveChat: false, livePremieres: true, liveEvents: false });
+		assert.equal(saved.status, 200, JSON.stringify(saved.json));
+		assert.deepEqual(TIER_LIVE_CAPABILITIES.map((c) => saved.json.result.tier[c]), [false, true, false]);
+		// Left out keeps what is stored; null follows live again
+		assert.equal((await call('PUT', '/live-tier', { perHour: 6 })).status, 200);
+		assert.deepEqual(await stored(), [false, true, false]);
+		assert.equal((await call('PUT', '/live-tier', { liveChat: null })).status, 200);
+		assert.deepEqual(await stored(), [undefined, true, false]);
+		assert.equal((await call('PUT', '/live-tier', { liveChat: 'yes' })).status, 400);
 	});
 });

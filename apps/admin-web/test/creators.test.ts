@@ -22,7 +22,7 @@ import {
   tierToForm,
   validateTierForm,
   type TierFormValues, tierLabel, arabicMissing } from '../src/lib/creator-tiers';
-import { memberCounts } from '../src/components/creators/CreatorTiersView';
+import { auditSummary, memberCounts } from '../src/components/creators/CreatorTiersView';
 import { createTranslator } from '../src/i18n/translate';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { CaptionGrantControls } from '../src/components/creators/CaptionGrantControls';
@@ -71,6 +71,20 @@ describe('tier effect (stated in every confirmation)', () => {
     assert.equal(tierEffect({ ...CREATOR, live: false }, tEn, 'en').includes('No live streaming.'), true);
     assert.equal(tierEffect({ ...CREATOR, liveMaxConcurrent: 3 }, tEn, 'en').includes('Live: 20 hours a month, 3 at once, up to 240 minutes per stream.'), true);
     assert.equal(tierEffect({ ...CREATOR, live: undefined }, tEn, 'en').includes('Live'), false);
+    // What live leaves out on the tier (wiki E17 §3.2); nothing is said while it follows live
+    assert.equal(tierEffect({ ...CREATOR, liveChat: true, livePremieres: undefined }, tEn, 'en'), tierEffect(CREATOR, tEn, 'en'));
+    assert.equal(tierEffect({ ...CREATOR, liveChat: false, livePremieres: false, liveEvents: false }, tEn, 'en').endsWith('per stream. No live chat. No premieres. No event tags.'), true);
+    assert.match(tierEffect({ ...CREATOR, liveChat: false }, tAr, 'ar'), /بلا محادثة في البث\./);
+    assert.equal(tierEffect({ ...CREATOR, live: false, liveChat: false }, tEn, 'en').endsWith('No live streaming.'), true);
+    // The change log names what changed; a choice that only follows live is not a change when it is sent as on
+    const entry = (details: Record<string, unknown>, previous: Record<string, unknown>) => ({ id: 'a', key: 'content:creator-tier:creator', action: 'edit', actorId: 'u', createdAt: '2026-11-24', details, previous }) as never;
+    const summary = (t: typeof tEn, locale: 'en' | 'ar') => auditSummary(entry({ liveChat: false, livePremieres: true, liveEvents: false, perHour: 5 }, { liveChat: true, liveEvents: true, perHour: 5 }), t, null, locale);
+    assert.match(summary(tEn, 'en'), /Live chat, Event tags/);
+    assert.match(summary(tAr, 'ar'), /محادثة البث المباشر، وسوم المناسبات/);
+    assert.doesNotMatch(summary(tEn, 'en'), /Premieres|per hour/i);
+    // The form starts from the stored value, on when the tier sets none, and sends all three
+    const { liveChat, livePremieres, liveEvents } = tierFormPayload(tierToForm({ ...CREATOR, liveChat: false, liveEvents: undefined }));
+    assert.deepEqual([liveChat, livePremieres, liveEvents], [false, true, true]);
     assert.match(tierEffect({ ...CREATOR, live: false }, tAr, 'ar'), /بلا بث مباشر/);
     assert.equal(tierEffect({ ...CREATOR, maxChannels: null, live: undefined }, tEn, 'en').endsWith('own any number of channels.'), true);
     // Caption minutes join the sentence only when the tier gives some

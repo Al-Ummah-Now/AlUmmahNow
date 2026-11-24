@@ -99,6 +99,8 @@ export type AiConfigView = AiModerationConfig & { updatedAt: string | null; upda
 export interface AiConfigPatch {
   enabled?: boolean;
   dailyNeuronCap?: number;
+  /** Live chat's part of the daily cap, 0 to 1 */
+  liveChatShare?: number;
   extensionsEnabled?: boolean;
   policies?: Record<string, Partial<ModerationCategoryPolicy>>;
 }
