@@ -387,6 +387,11 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
             <h2 id="errors-videos" className="text-xl font-semibold text-fg">{t('errorsPage.videosTitle')}</h2>
             <Link href="/processing?status=failed" className={linkClass}>{t('errorsPage.openProcessing')}</Link>
           </div>
+          {data.truncated && (
+            <p role="status" data-testid="errors-videos-partial" className="mb-3 rounded-lg border border-border border-s-4 border-s-warning-fg bg-surface-2 px-4 py-3 text-sm text-fg">
+              {t('errorsPage.videosPartial')}
+            </p>
+          )}
           {data.videos.length === 0 ? (
             <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-videos-empty">{t('errorsPage.videosEmpty')}</div>
           ) : (

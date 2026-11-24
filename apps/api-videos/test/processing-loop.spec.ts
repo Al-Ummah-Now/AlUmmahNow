@@ -160,6 +160,24 @@ describe('planSync', () => {
 		assert.equal(stalled.patch.processingIssue?.kind, 'stalled');
 		assert.equal(stalled.patch.uploadStatus, undefined, 'stalled keeps processing');
 	});
+
+	it('already ready while Bunny is still encoding: never flagged stalled and clears any prior issue', () => {
+		const readyVideo = stuck({
+			uploadStatus: 'ready',
+			processingIssue: { kind: 'stalled', reason: 'Old flag', at: '2026-11-09T20:00:00.000Z' },
+		});
+		const young = planSync(readyVideo, { status: 3, encodeProgress: 40 }, { host: HOST, now: NOW, loopStartedAt: '2026-11-10T04:30:00.000Z' });
+		assert.equal(young.outcome, 'playable');
+		assert.equal(young.patch.uploadStatus, undefined);
+		assert.equal(young.patch.processingIssue, undefined);
+		assert.deepEqual(young.unset, ['processingIssue']);
+
+		const pastStall = planSync(readyVideo, { status: 3, encodeProgress: 40 }, { host: HOST, now: NOW, loopStartedAt: '2026-11-09T20:00:00.000Z' });
+		assert.equal(pastStall.outcome, 'ready');
+		assert.equal(pastStall.patch.uploadStatus, undefined);
+		assert.equal(pastStall.patch.processingIssue, undefined);
+		assert.deepEqual(pastStall.unset, ['processingIssue']);
+	});
 });
 
 describe('backoff and loop decisions', () => {
@@ -1041,6 +1059,21 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		const cappedBody = (await cappedRes.json()) as any;
 		assert.equal(cappedBody.result.scanned, PROCESSING_INDEX_SCAN_CAP);
 		assert.equal(cappedBody.result.truncated, true);
+
+		// /errors also reports truncated: true when hitting PROCESSING_INDEX_SCAN_CAP before filling the page
+		const procStatements = [];
+		for (let i = 0; i < PROCESSING_INDEX_SCAN_CAP + 20; i++) {
+			const id = `66666666-7777-4000-8000-${String(i).padStart(12, '0')}`;
+			const iso = new Date(base + (5000 + i) * 60_000).toISOString();
+			const v = videoFixture({ id, dateCreated: iso, uploadStatus: 'processing' });
+			videos.store.set(id, JSON.stringify(v));
+			procStatements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, v)!, now, now));
+		}
+		for (let i = 0; i < procStatements.length; i += 500) await db.batch(procStatements.slice(i, i + 500) as never);
+		const cappedErrRes = await app.request('/errors?limit=10', {}, env);
+		const cappedErrBody = (await cappedErrRes.json()) as any;
+		assert.equal(cappedErrBody.result.truncated, true, '/errors surfaces truncated when capped');
+		assert.equal(cappedErrBody.result.videos.length, 0);
 	});
 
 	it('avoids short pages when abandoned records still have is_deleted = 0 in the index', async () => {
@@ -1107,6 +1140,8 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 			videoFixture({ id: 'p0000001-0000-4000-8000-000000000009', channelId: 'ch-0', dateCreated: new Date(base + 9_000).toISOString(), uploadStatus: 'failed', isDeleted: true }),
 			videoFixture({ id: 'p0000001-0000-4000-8000-000000000010', channelId: 'ch-0', dateCreated: new Date(base + 10_000).toISOString(), uploadStatus: 'failed', isDeleted: true, abandoned: { at: new Date(base + 10_000).toISOString(), reason: 'stale', by: 'reaper', bunnyDeleted: true } }),
 			videoFixture({ id: 'p0000001-0000-4000-8000-000000000011', channelId: 'ch-1', dateCreated: new Date(base + 11_000).toISOString(), uploadStatus: 'failed', isDeleted: false, abandoned: { at: new Date(base + 11_000).toISOString(), reason: 'stale', by: 'reaper', bunnyDeleted: true } }),
+			// Historical ready record carrying a stale stalled issue: excluded from non-all views in both paths
+			videoFixture({ id: 'p0000001-0000-4000-8000-000000000012', channelId: 'ch-0', dateCreated: new Date(base + 12_000).toISOString(), uploadStatus: 'ready', processingIssue: { kind: 'stalled', reason: 'Stale flag on ready video', at: new Date(base + 12_000).toISOString() } }),
 		];
 		const statements = [];
 		for (const v of fixtures) {
@@ -1120,25 +1155,24 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 		const scanEnv = makeEnv(videos);
 		const app = createProcessingInternalRouter();
 
-		for (const path of [
-			'/videos?status=stuck',
-			'/videos?status=processing',
-			'/videos?status=failed',
-			'/videos?status=stalled',
-			'/videos?status=needs_reupload',
-			'/videos?status=all',
-			'/videos?status=stuck&channelId=ch-0',
-			'/videos?status=all&channelId=ch-0',
-		]) {
+		const readyStalledId = 'p0000001-0000-4000-8000-000000000012';
+		const statuses = ['stuck', 'processing', 'failed', 'stalled', 'needs_reupload', 'all'] as const;
+		const paths = [
+			...statuses.map((s) => `/videos?status=${s}`),
+			...statuses.map((s) => `/videos?status=${s}&channelId=ch-0`),
+			...statuses.map((s) => `/videos?status=${s}&channelId=ch-1`),
+		];
+		for (const path of paths) {
 			const [a, b] = await Promise.all([
 				app.request(path, {}, indexedEnv).then((r) => r.json() as Promise<any>),
 				app.request(path, {}, scanEnv).then((r) => r.json() as Promise<any>),
 			]);
-			assert.deepEqual(
-				a.result.items.map((x: any) => x.id).sort(),
-				b.result.items.map((x: any) => x.id).sort(),
-				`parity mismatch for ${path}`,
-			);
+			const idsA = a.result.items.map((x: any) => x.id).sort();
+			const idsB = b.result.items.map((x: any) => x.id).sort();
+			assert.deepEqual(idsA, idsB, `parity mismatch for ${path}`);
+			if (!path.includes('status=all')) {
+				assert.ok(!idsA.includes(readyStalledId), `${path} must exclude ready video with stale issue`);
+			}
 		}
 
 		const [errIdx, errScan] = await Promise.all([
@@ -1150,5 +1184,6 @@ describe('processing health speed guards (index seeks, R2 budget, Bunny call cap
 			errScan.result.videos.map((x: any) => x.id),
 			'parity mismatch for /errors',
 		);
+		assert.ok(!errIdx.result.videos.some((x: any) => x.id === readyStalledId), '/errors must exclude ready video with stale issue');
 	});
 });
