@@ -263,7 +263,7 @@ app.post('/channels/:id/transfer', async (c) => {
   // A reason is kept in the audit log (wiki AUN-CHANNEL-CLAIM §3.7)
   const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
   if (reason.length < TRANSFER_REASON_MIN || reason.length > TRANSFER_REASON_MAX) {
-    return c.json({ success: false, code: 'transfer_reason_required', error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` }, 400);
+    return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
   }
   const options = {
     keepPreviousOwnerAsAdmin: input.keepPreviousOwnerAsAdmin === true,
