@@ -23,6 +23,8 @@ import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
 import { createReviewInternalRouter } from './endpoints/review/reviewInternal';
 import { createYoutubeImportInternalRouter } from './endpoints/youtube-import/youtubeImportInternal';
+import { accountEventsHandler, createAccountEventsInternalRouter } from './endpoints/account-events/accountEvents';
+import { handleAccountEventBatch, isAccountEventQueue, sweepAccountEvents } from './lib/account-events/jobs';
 import { oauthCallback, type YtEnv } from './lib/youtube-import/service';
 import { handleYtImportBatch } from './lib/youtube-import/jobs';
 import { sweepYoutubeImports } from './lib/youtube-import/sweep';
@@ -367,6 +369,8 @@ app.get('/webhooks/billing/fake/checkout/:id', handleFakeCheckoutPage);
 app.post('/webhooks/billing/fake/checkout/:id/pay', handleFakePay);
 app.post('/webhooks/billing/fake/checkout/:id/cancel', handleFakeCancel);
 app.post('/webhooks/billing/:provider', handleWebhook);
+// Account events from Auth (signed; 404 feature_off while the switch accountEvents is off)
+app.post('/webhooks/auth/account-events', accountEventsHandler() as never);
 // Creator support (wiki AUN-MEMBERS): collector and payout-rail webhooks; 404 for any vendor not available here
 // The test rail's hosted onboarding page (QA and local only; registered before the webhook route)
 app.get('/webhooks/support/rail/test/onboard/:ref', handleTestRailOnboardPage);
@@ -461,6 +465,7 @@ app.route('/internal/downloads', createDownloadsInternalRouter() as never);
 app.route('/internal/review', createReviewInternalRouter() as never);
 // Move from YouTube (wiki AUN-YT-IMPORT): admin settings (admin-api proxies with media:manage + audit), Errors page retry
 app.route('/internal/youtube-import', createYoutubeImportInternalRouter() as never);
+app.route('/internal/account-events', createAccountEventsInternalRouter() as never);
 // Google's redirect after the creator's consent (no bearer token: the single-use state names the import's owner)
 app.get('/api/youtube-import/oauth/callback', async (c) => {
 	const q = c.req.query();
@@ -737,6 +742,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				(error) => {
 					logger.error('[Billing] Entitlement sweep failed', { error: error instanceof Error ? error.message : String(error) });
 					reportJobFailure(rawEnv, ctx, 'billing-entitlements', error);
+				},
+			),
+		);
+		// Account events whose queue message was lost, and clean-up (lib/account-events/jobs.ts)
+		ctx.waitUntil(
+			sweepAccountEvents(rawEnv as never).then(
+				(r) => (r.queued || r.removed ? logger.info('[AccountEvents] Sweep', r) : undefined),
+				(error) => {
+					logger.error('[AccountEvents] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'account-events', error);
 				},
 			),
 		);
@@ -1093,6 +1108,7 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
  * - al-ummah-now-run-erase*: E2E run-account erasures, admin jobs on their own queue (#887).
  * - al-ummah-now-yt-import*: Move from YouTube jobs (lib/youtube-import/jobs.ts).
+ * - al-ummah-now-account-events*: account events from Auth (lib/account-events/jobs.ts).
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
  *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
  *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
@@ -1136,6 +1152,11 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 		// Move from YouTube jobs (lib/youtube-import/jobs.ts), one per invocation
 		if (batch.queue.startsWith('al-ummah-now-yt-import')) {
 			await handleYtImportBatch(batch as never, withSearchSync(env, ctx) as never, ctx);
+			return;
+		}
+		// Account events from Auth (lib/account-events/jobs.ts), one per invocation
+		if (isAccountEventQueue(batch.queue)) {
+			await handleAccountEventBatch(batch as never, withSearchSync(env, ctx) as never, ctx);
 			return;
 		}
 		const synced = withSearchSync(env, ctx) as never;

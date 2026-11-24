@@ -26,19 +26,19 @@ function fakeCf(queues: string[], buckets: string[], lifecycle: Record<string, u
 describe('ensure-resources', () => {
 	it('names each environment', () => {
 		assert.deepEqual(resourcesFor('production'), {
-			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq', 'al-ummah-now-yt-import', 'al-ummah-now-status-notify', 'al-ummah-cost-jobs', 'al-ummah-cost-jobs-dlq'],
+			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq', 'al-ummah-now-yt-import', 'al-ummah-now-account-events', 'al-ummah-now-status-notify', 'al-ummah-cost-jobs', 'al-ummah-cost-jobs-dlq'],
 			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals', 'al-ummah-now-csam-evidence'],
 			placeholderSecrets: { [SECRETS_STORE_ID]: ['google-oauth-client-secret'] },
 			turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['alummahnow.net', 'www.alummahnow.net'] },
 		});
 		assert.deepEqual(resourcesFor('qa').turnstileHostnames?.hostnames, ['qa.alummahnow.net', 'www.qa.alummahnow.net']);
 		assert.deepEqual(resourcesFor('stage').turnstileHostnames?.hostnames, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
-		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa']);
+		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-account-events-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa']);
 		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage', 'al-ummah-now-media-originals-stage', 'al-ummah-now-csam-evidence-stage']);
 	});
 
 	it('creates only what is missing', async () => {
-		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa', 'al-ummah-now-media-originals-qa', 'al-ummah-now-csam-evidence-qa']);
+		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa', 'al-ummah-now-account-events-qa', 'al-ummah-now-status-notify-qa', 'al-ummah-cost-jobs-qa', 'al-ummah-cost-jobs-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa', 'al-ummah-now-media-originals-qa', 'al-ummah-now-csam-evidence-qa']);
 		const { created } = await ensureResources(cf, resourcesFor('qa'), () => undefined);
 		assert.deepEqual(created, ['queue al-ummah-now-errors-dlq-qa', 'bucket al-ummah-now-sourcemaps-qa', 'lifecycle al-ummah-now-sourcemaps-qa 14d']);
 		assert.ok(calls.includes('POST /queues {"queue_name":"al-ummah-now-errors-dlq-qa"}'));

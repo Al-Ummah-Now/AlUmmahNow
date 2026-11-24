@@ -84,6 +84,8 @@ export interface AppBindings {
   PROCESSING_CHECK_QUEUE?: Queue;
   /** Move from YouTube jobs (lib/youtube-import/jobs.ts). Optional: imports answer 503 without it. */
   YT_IMPORT_QUEUE?: Queue;
+  /** Account events from Auth (lib/account-events/jobs.ts). Optional: they answer 503 without it. */
+  ACCOUNT_EVENTS_QUEUE?: Queue;
 
   // Secrets (accessed via .text() method)
   image_storage_key: { text(): Promise<string> };

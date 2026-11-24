@@ -162,6 +162,9 @@ export const APPS: AppRule[] = [
 				// Move from YouTube (wiki AUN-YT-IMPORT): its jobs and the Google client secret
 				{ kind: 'queue_producer', name: 'YT_IMPORT_QUEUE' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-yt-import' },
+				// Account events from Auth (AlUmmahNowAuth#507)
+				{ kind: 'queue_producer', name: 'ACCOUNT_EVENTS_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-account-events' },
 				{ kind: 'secrets_store_secrets', name: 'GOOGLE_OAUTH_CLIENT_SECRET' },
 				// Restore legacy profile fields (lib/admin/legacy-restore.ts): verified emails, backups
 				{ kind: 'd1_databases', name: 'AUTH_DB' },
@@ -172,7 +175,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', addresses: 'own-hosts', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'queue_producer', name: 'YT_IMPORT_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-yt-import-stage' }, { kind: 'secrets_store_secrets', name: 'GOOGLE_OAUTH_CLIENT_SECRET' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'd1_databases', name: 'AUTH_DB' }, { kind: 'r2_buckets', name: 'ADMIN_BACKUPS' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }, { kind: 'kv_namespaces', name: 'APP_CONFIG' }] }),
+		stage: stageRule({ name: 'videos-stage', addresses: 'own-hosts', requireRoutes: true, vars: { VIDEO_REVIEW_ALLOWED: 'false', Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'queue_producer', name: 'YT_IMPORT_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-yt-import-stage' }, { kind: 'queue_producer', name: 'ACCOUNT_EVENTS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-account-events-stage' }, { kind: 'secrets_store_secrets', name: 'GOOGLE_OAUTH_CLIENT_SECRET' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'd1_databases', name: 'AUTH_DB' }, { kind: 'r2_buckets', name: 'ADMIN_BACKUPS' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }, { kind: 'kv_namespaces', name: 'APP_CONFIG' }] }),
 	},
 	{
 		app: 'processor',

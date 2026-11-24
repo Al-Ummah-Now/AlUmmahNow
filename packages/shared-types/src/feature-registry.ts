@@ -109,6 +109,7 @@ export const FEATURE_KEYS = [
   'offlineDownloads',
   'appUpdates',
   'ageRules',
+  'accountEvents',
   'parentsGuide',
   'channelMove',
 ] as const;
@@ -736,6 +737,23 @@ export const FEATURE_REGISTRY: readonly FeatureDefinition[] = Object.freeze([
       ar: 'لا يُطلب من أحد تاريخ ميلاده، وتُعامل المرئيات المقيّدة بالعمر والمخصصة للأطفال كغيرها من المرئيات. تبقى تواريخ الميلاد المُدخلة محفوظة.',
     },
     offMessage: { en: 'Age settings aren’t available right now.', ar: 'إعدادات العمر غير متاحة الآن.' },
+    default: false,
+    toggle: 'superAdmin',
+    confirm: 'both',
+    requires: [],
+    userFeatureKeys: [],
+    offline: 'lastKnownElseHidden',
+  },
+  // --- Account events from Auth (AlUmmahNowAuth#507) -------------------------
+  {
+    key: 'accountEvents',
+    group: 'people',
+    name: { en: 'Account events', ar: 'أحداث الحسابات' },
+    help: {
+      en: 'Videos isn’t told when an account is disabled, restored or erased, so its content stays as it is. Events already received are still finished. Age rules need this on.',
+      ar: 'لا تُبلَّغ المرئيات بتعطيل الحسابات أو استعادتها أو محوها، فيبقى محتواها كما هو. تكتمل الأحداث التي وصلت من قبل. تحتاج قواعد العمر إلى تشغيلها.',
+    },
+    offMessage: { en: 'Account events aren’t available right now.', ar: 'أحداث الحسابات غير متاحة الآن.' },
     default: false,
     toggle: 'superAdmin',
     confirm: 'both',
