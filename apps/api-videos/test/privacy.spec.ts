@@ -342,9 +342,15 @@ describe('privacy endpoints', () => {
 		assert.ok(env.profiles.read(ME));
 	});
 
-	it('DELETE /api/privacy/data erases and queues follow-up messages', async () => {
+	it('DELETE /api/privacy/data erases R2 media, custom thumbnails, and queues follow-up messages', async () => {
 		const app = buildApp(privacyRoutes, { userId: ME });
-		const env = seed();
+		const media = new MemoryBucket({
+			'pub/v-mine/master.m3u8': 'hls',
+			'pub/v-mine/720p/seg0.ts': 'ts',
+			'pub/thumbs/v-mine/custom.jpg': 'jpg',
+			'pub/v-other/master.m3u8': 'keep',
+		});
+		const env = { ...seed(), MEDIA: media };
 		const res = await app.request(
 			'/api/privacy/data',
 			{ method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }), headers: { 'content-type': 'application/json' } },
@@ -354,9 +360,27 @@ describe('privacy endpoints', () => {
 		const body = await res.json();
 		assert.equal(body.complete, true);
 		assert.equal(env.profiles.read(ME), null);
+		assert.equal(media.store.has('pub/v-mine/master.m3u8'), false);
+		assert.equal(media.store.has('pub/v-mine/720p/seg0.ts'), false);
+		assert.equal(media.store.has('pub/thumbs/v-mine/custom.jpg'), false);
+		assert.equal(media.store.has('pub/v-other/master.m3u8'), true);
 		const types = env.queue.messages.map((m: any) => m.type);
 		assert.ok(types.includes(MessageType.UserDataErased));
 		assert.ok(types.includes(MessageType.VideoDelete));
+	});
+
+	it('DELETE /api/privacy/data returns 503 when follow-up queue fails instead of silently succeeding', async () => {
+		const app = buildApp(privacyRoutes, { userId: ME });
+		const failingQueue = { send: async () => { throw new Error('queue down'); } };
+		const env = { ...seed(), queue: failingQueue };
+		const res = await app.request(
+			'/api/privacy/data',
+			{ method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }), headers: { 'content-type': 'application/json' } },
+			env,
+		);
+		assert.equal(res.status, 503);
+		const body = await res.json();
+		assert.equal(body.code, 'service_unavailable');
 	});
 
 	it('records consent decisions as an audit trail on the profile', async () => {

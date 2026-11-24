@@ -1,4 +1,8 @@
 import { bunnyRef } from '../../lib/media/providers';
+import { purgeVideoMedia, type MediaEnv } from '../../lib/media/r2-delivery';
+import { eraseChannelPostImages, eraseVideoImages } from '../../lib/admin/purgeCopies';
+import { deleteImageFiles, imagePathOfUrl, imageStorageConfigured, type ImageFilesEnv } from '../../lib/media/imageFiles';
+import { apiError } from '../../lib/api-error';
 import { stopSupportBeforeErasure } from '../../lib/support/erasure';
 import { vendorContext } from '../../lib/support/jobs';
 import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
@@ -117,51 +121,84 @@ export class PrivacyErase extends AuthenticatedRoute {
 		}
 
 		const env = c.env;
+		const eraseOwnedRecordImages = async (record: unknown) => {
+			if (!record || typeof record !== 'object') return;
+			if (!imageStorageConfigured(env as unknown as ImageFilesEnv)) return;
+			const r = record as Record<string, unknown>;
+			const paths = [r.avatarUrl, r.coverUrl].map((u) => imagePathOfUrl(u)).filter((p): p is string => Boolean(p));
+			if (paths.length) await deleteImageFiles(env as unknown as ImageFilesEnv, paths);
+		};
 		const onVideoDeleted = async (videoId: string, video?: LibraryHints) => {
-			// Bunny's id of the video; none when Bunny holds no copy (R2 copies go with the media purge)
+			// Purge R2 renditions, R2 custom thumbnails, kept original, audio tracks, and CDN prefix (idempotent).
+			await purgeVideoMedia(env as unknown as MediaEnv, videoId);
+			// Purge Bunny Storage custom thumbnails for this video (no-op when image storage is unconfigured).
+			await eraseVideoImages(env as unknown as ImageFilesEnv, videoId, video as Record<string, unknown> | undefined);
+			// Bunny's id of the video; none when Bunny holds no copy.
 			const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
 			if (!bunnyId) return;
+			// When Bunny Stream credentials are configured, remove the Bunny copy too (404 = already gone).
+			let bunny: Awaited<ReturnType<typeof bunnyClientForVideo>>;
 			try {
-				// The video's own library (lib/bunny/libraries.ts)
-				const bunny = await bunnyClientForVideo(env as never, video);
-				await bunny.client.deleteVideo(bunny.libraryId, bunnyId);
+				bunny = await bunnyClientForVideo(env as never, video);
 			} catch (error) {
-				// Media removal is best-effort: the R2 record is already gone, so the
-				// stream is unreachable from the app. Logged for manual follow-up.
-				logger.warn('[Privacy] Failed to delete Bunny Stream media', {
+				// Local/unit environments without Bunny Stream keys skip Bunny deletion.
+				logger.warn('[Privacy] Bunny Stream not configured; skipping Bunny media delete', {
 					videoId,
 					error: error instanceof Error ? error.message : String(error),
 				});
+				return;
+			}
+			try {
+				await bunny.client.deleteVideo(bunny.libraryId, bunnyId);
+			} catch (error) {
+				const msg = error instanceof Error ? error.message : String(error);
+				if (/\b404\b|not found/i.test(msg)) return;
+				logger.error('[Privacy] Failed to delete Bunny Stream media', { videoId, error: msg });
+				throw error;
 			}
 		};
 
 		const budget = budgetFor(c);
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
-		// The profile's and each owned channel's Bunny collections (lib/channelCollection.ts); never throws
-		const onProfileDeleted = (id: string, profile: unknown) => removeCollectionsFor(env as never, id, profile as never).then(() => undefined);
+		// The profile's and each owned channel's Bunny collections + stored images; idempotent
+		const onProfileDeleted = async (id: string, profile: unknown) => {
+			await removeCollectionsFor(env as never, id, profile as never);
+			await eraseOwnedRecordImages(profile);
+		};
 		const onChannelDeleted = async (id: string, channel: unknown) => {
 			await removeCollectionsFor(env as never, id, channel as never);
 			await eraseChannelSocial(env, id, userId);
+			await eraseChannelPostImages(env as unknown as ImageFilesEnv, id);
+			await eraseOwnedRecordImages(channel);
 		};
 		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted, onChannelDeleted }, { resumeToken });
 		// Upload markers and TUS sessions that name the user (#1059)
 		await eraseUploadTraces(env as never, userId, summary.deletedVideoIds);
 
 		try {
-			const queue = new Queue(c.env.queue);
+			const sendRequired = async (type: MessageType, payload: Record<string, unknown>) => {
+				if (!c.env.queue) return;
+				await c.env.queue.send({
+					id: crypto.randomUUID(),
+					type,
+					payload,
+					timestamp: Date.now(),
+				});
+			};
 			if (summary.complete) {
 				// Monthly support stops at the collector before the erasure (wiki AUN-MEMBERS §9.8)
 				await stopSupportBeforeErasure(env as never, userId, (mode) => vendorContext(env as never, mode)).catch((error) =>
 					logger.warn('[Privacy] Support not stopped before erasure; the processor marks it canceled', { userId, error: error instanceof Error ? error.message : String(error) }),
 				);
 				// Lets the processor anonymise copies it owns (D1 moderation reports).
-				await queue.send(MessageType.UserDataErased, { userId, timestamp: new Date().toISOString() });
+				await sendRequired(MessageType.UserDataErased, { userId, timestamp: new Date().toISOString() });
 			}
 			for (const videoId of summary.deletedVideoIds) {
-				await queue.send(MessageType.VideoDelete, { videoId, userId, reason: 'gdpr-erasure', timestamp: new Date().toISOString() });
+				await sendRequired(MessageType.VideoDelete, { videoId, userId, reason: 'gdpr-erasure', timestamp: new Date().toISOString() });
 			}
 		} catch (error) {
 			logger.error('[Privacy] Failed to queue erasure follow-up', { userId, error: error instanceof Error ? error.message : String(error) });
+			return apiError(c, 503, 'service_unavailable', { error: 'Could not queue erasure follow-up; retry to complete.' });
 		}
 
 		logger.debug('[Privacy] User data erased', {
