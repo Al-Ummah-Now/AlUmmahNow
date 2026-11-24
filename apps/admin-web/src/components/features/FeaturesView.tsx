@@ -52,7 +52,7 @@ export interface FeatureActions {
   featureHistory: (key: FeatureKey, cursor?: string | null) => Promise<FeatureHistoryPage>;
 }
 
-export function FeaturesView({ initial, canManage, me, actions, now }: { initial: FeatureItem[]; canManage: boolean; me: { id: string; name: string }; actions: FeatureActions; now?: string }) {
+export function FeaturesView({ initial, canManage, me, actions, now }: { initial: FeatureItem[]; canManage: boolean; me: { id: string; name: string | null }; actions: FeatureActions; now?: string }) {
   const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
   const router = useRouter();

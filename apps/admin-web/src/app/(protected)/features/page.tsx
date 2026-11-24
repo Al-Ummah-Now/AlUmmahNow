@@ -3,7 +3,6 @@ import { featureHistory, listFeatures, setFeature, type FeatureItem } from '@/li
 import { getAdminSession } from '@/lib/auth';
 import { normalizeRole } from '@/lib/roles';
 import { getNames } from '@/lib/api/audit';
-import { adminUserName } from '@/lib/user-name';
 import { logger } from '@/lib/logger';
 import { FeaturesView } from '@/components/features/FeaturesView';
 import { FeaturesLoadError } from '@/components/features/FeaturesLoadError';
@@ -43,6 +42,7 @@ export default async function FeaturesPage() {
   }
   const id = session?.user.id ?? '';
   const known = id ? names?.users[id] : undefined;
-  const me = { id, name: adminUserName({ displayName: known?.name || session?.user.displayName, email: known?.email || session?.user.email }) };
+  // the same rule as admin-api's rows (a name, else null: the page says "an admin"), so the line doesn't change on reload
+  const me = { id, name: known?.name?.trim() || session?.user.displayName?.trim() || null };
   return <FeaturesView initial={items} canManage={canManage} me={me} actions={{ setFeature, featureHistory }} />;
 }

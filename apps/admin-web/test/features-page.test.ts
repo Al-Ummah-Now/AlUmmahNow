@@ -13,6 +13,7 @@ import {
   applyConflict,
   applyWrite,
   preconditionText,
+  sentencePart,
   confirmContent,
   featureNotes,
   foldSearch,
@@ -137,6 +138,14 @@ describe('Features page model: acting', () => {
     assert.equal(row.updatedAt, before.updatedAt, 'who and when come with the reload');
     assert.equal(items.find((i) => i.key === 'youtubeImport')!.effective, false, 'what needs it follows at once');
     assert.deepEqual(applyConflict(list, 'upload', null), list, 'no current: the reload does it all');
+  });
+
+  it('a setup note from admin-api loses its own full stop inside our sentence (never "budget..")', () => {
+    assert.equal(sentencePart('Needs a monthly translation budget.'), 'Needs a monthly translation budget');
+    assert.equal(sentencePart('يحتاج إلى ميزانية شهرية للترجمة.'), 'يحتاج إلى ميزانية شهرية للترجمة');
+    assert.equal(sentencePart('  '), null);
+    const notes = featureNotes(item('youtubeImport', { ready: false, setupNote: { en: 'No Google client yet.', ar: 'لم يُضف عميل Google بعد.' } }), 'en');
+    assert.deepEqual(notes.find((n) => n.kind === 'needsSetup'), { kind: 'needsSetup', note: 'No Google client yet', href: '/platform-settings' });
   });
 
   it('the precondition sentence is the reason in the page language, else the page\'s own fallback, never the bare server text', () => {
