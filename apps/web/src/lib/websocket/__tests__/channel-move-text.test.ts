@@ -24,8 +24,21 @@ describe('channel move notifications', () => {
 
   it('an owner’s offer reads with their name, in English and Arabic (CC-6)', () => {
     expect(isCenterKey('channelMoveOffered')).toBe(true);
-    expect(resolveNotificationText(event('channelMoveOffered', { channel: 'Corner', owner: 'Amina' }), EN_TRANSLATIONS).message).toBe('Amina wants to hand Corner over to you. Open it to accept or decline.');
-    expect(resolveNotificationText(event('channelMoveOffered', { channel: 'Corner', owner: 'Amina' }), AR_TRANSLATIONS, 'ar').message).toBe('يريد Amina أن يسلّمك القناة Corner. افتحها لتقبل أو ترفض.');
+    // Names are isolated (FSI … PDI), so either script keeps its own order inside the other
+    const n = (name: string) => `\u2068${name}\u2069`;
+    const params = { channel: 'Corner (Kids)', owner: 'Amina', member: 'أمينة' };
+    const said = {
+      channelMoveOffered: [`${n('Amina')} wants to hand ${n('Corner (Kids)')} over to you. Open it to accept or decline.`, `يريد ${n('Amina')} أن يسلّمك القناة ${n('Corner (Kids)')}. افتحها لتقبل أو ترفض.`],
+      channelMoveAccepted: [`${n('أمينة')} accepted, and ${n('Corner (Kids)')} is now theirs.`, `قُبل عرضك، وانتقلت ملكية القناة ${n('Corner (Kids)')} إلى ${n('أمينة')}.`],
+      channelMoveDeclined: [`${n('أمينة')} declined to take over ${n('Corner (Kids)')}.`, `رفض ${n('أمينة')} تسلّم القناة ${n('Corner (Kids)')}.`],
+      channelMoveCancelled: [`The offer to take over ${n('Corner (Kids)')} is no longer open.`, `لم يعد عرض تسلّم القناة ${n('Corner (Kids)')} قائمًا.`],
+      channelMoveStopped: [`The Al Ummah Now team stopped the move of ${n('Corner (Kids)')}.`, `أوقف فريق الأمة الآن نقل القناة ${n('Corner (Kids)')}.`],
+    };
+    for (const [key, [en, ar]] of Object.entries(said)) {
+      expect(isCenterKey(key)).toBe(true);
+      expect(resolveNotificationText(event(key, params), EN_TRANSLATIONS).message).toBe(en);
+      expect(resolveNotificationText(event(key, params), AR_TRANSLATIONS, 'ar').message).toBe(ar);
+    }
     expect(changesChannelAccess('channelMoveAccepted')).toBe(true);
   });
 

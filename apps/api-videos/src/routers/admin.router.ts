@@ -328,9 +328,9 @@ app.post('/channels/:id/handle/take', async (c) => {
 	return ok(c, await admin.takeOfficialHandle(c.env, c.req.param('id'), handle, actor(c)));
 });
 // An admin stops an owner's open channel offer (wiki AUN-CHANNEL-CLAIM §5, CC-D1)
-app.post('/move-offers/:id/stop', async (c) => {
+app.post('/channels/:id/move-offers/:offerId/stop', async (c) => {
 	try {
-		return ok(c, await stopMoveOffer(c.env as never, c.req.param('id')));
+		return ok(c, await stopMoveOffer(c.env as never, c.req.param('id'), c.req.param('offerId')));
 	} catch (error) {
 		if (error instanceof MoveError) throw new admin.AdminError(error.status === 503 ? 409 : (error.status as 400 | 403 | 404 | 409), error.code);
 		throw error;

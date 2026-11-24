@@ -342,13 +342,14 @@ app.post('/channels/:id/handle/take', async (c) => {
 });
 
 // Stop an owner's open channel offer (wiki AUN-CHANNEL-CLAIM §5): super admins, with a reason
-app.post('/move-offers/:id/stop', async (c) => {
+app.post('/channels/:id/move-offers/:offerId/stop', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');
+  const offerId = c.req.param('offerId');
   const reason = await handleReason(c);
   if (!reason) return apiError(c, 400, 'transfer_reason_required', { error: `A reason of ${TRANSFER_REASON_MIN} to ${TRANSFER_REASON_MAX} characters is required` });
   return ok(c, await audited(c, { kind: 'channel', id, action: 'move-offer-stop', details: { reason } }, () =>
-    videos(c, `/move-offers/${encodeURIComponent(id)}/stop`, { method: 'POST' })));
+    videos(c, `/channels/${encodeURIComponent(id)}/move-offers/${encodeURIComponent(offerId)}/stop`, { method: 'POST' })));
 });
 
 app.post('/channels/:id/handle/release', async (c) => {
