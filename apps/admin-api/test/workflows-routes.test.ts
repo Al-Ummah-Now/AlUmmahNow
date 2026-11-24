@@ -253,3 +253,28 @@ describe('review fixes (#1827)', () => {
     assert.ok(adm.some((a) => a.type === 'support.financeList.add'), 'finance-list changes are people actions super admins decide');
   });
 });
+
+describe('what the viewer may do (canEdit, can.retry)', () => {
+  it('canEdit follows the same checks as proposing: super admins for platform rules, the finance list for money rules, nothing for unconnected ones', async () => {
+    const t = await setup();
+    const flags = async (u: string, roles: string[]) => {
+      const actions = (await t.as(u, roles)('GET', '/actions')).body.result.actions as { type: string; rules: { scope: string; canEdit: boolean }[] }[];
+      const rule = (type: string, scope = '') => actions.find((a) => a.type === type)?.rules.find((r) => r.scope === scope)?.canEdit;
+      return { platform: rule('features.set'), money: rule('features.set', 'creatorSupport'), fees: rule('support.fees.set') };
+    };
+    assert.deepEqual(await flags('sa1', ['super_admin']), { platform: true, money: false, fees: false });
+    assert.deepEqual(await flags('owner', ['super_admin']), { platform: true, money: false, fees: false });
+    assert.deepEqual(await flags('fin1', []), { platform: false, money: true, fees: false });
+    assert.deepEqual(await flags('adm', ['admin']), { platform: false, money: undefined, fees: undefined });
+  });
+
+  it('can.retry is only on a failed request, for the people the retry route allows', async () => {
+    const t = await setup();
+    const proposed = await t.as('sa1', ['super_admin'])('POST', '/rules/features.set', { scope: 'live', config: featureRule(1), reason: 'r' });
+    const id = proposed.body.result.request.id as string;
+    assert.equal((await t.as('sa2', ['super_admin'])('GET', `/requests/${id}`)).body.result.can.retry, false, 'not failed');
+    t.search.raw.exec(`UPDATE workflow_requests SET status = 'failed' WHERE id = '${id}'`);
+    assert.equal((await t.as('sa2', ['super_admin'])('GET', `/requests/${id}`)).body.result.can.retry, true);
+    assert.equal((await t.as('adm', ['admin'])('GET', `/requests/${id}`)).body.result.can.retry, false);
+  });
+});
