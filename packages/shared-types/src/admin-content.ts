@@ -53,6 +53,8 @@ export const ADMIN_CONTENT_PERMISSIONS = [
    */
   'support:read',
   'support:manage',
+  /** The Islamic experience settings: prayer-time provider, Hijri source, limits, country methods, cache purge, seasons (wiki Epic 21). */
+  'islamic:manage',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
@@ -64,7 +66,7 @@ export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn', 'live:manage', 'billing:read', 'billing:manage'],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn', 'live:manage', 'billing:read', 'billing:manage', 'islamic:manage'],
   moderator: ['users:warn'],
 };
 

@@ -37,6 +37,9 @@ import { listProfileEmailJobs, profileEmailsReport, startProfileEmails } from '.
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
+import { PrayerSettingsError, readPrayerAdminSettings, writePrayerAdminSettings } from '../lib/prayer/settings';
+import { COUNTRY_METHOD_DEFAULTS, PRAYER_METHOD_IDS, isPrayerMethodId } from '../lib/prayer/methods';
+import { prayerKey } from '../lib/prayer/service';
 import { apiError } from '../lib/api-error';
 import { createSeason, deleteSeason, listSeasons, purgeSeasons, readSeason, restoreSeason, SEASON_ITEMS_MAX, SEASON_ITEM_TYPES, SEASON_KINDS, SeasonError, updateSeason } from '../lib/islamic-seasons';
 import R2Repository from '../lib/r2Repo';
@@ -210,12 +213,38 @@ app.onError((error, c) => {
 	if (error instanceof admin.AdminError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
+	if (error instanceof PrayerSettingsError) return apiError(c, error.status, error.code, { error: error.detail ?? error.code });
 	if (error instanceof SeasonError) return apiError(c, error.status, error.code, { error: error.message });
 	if (error instanceof LegacyRestoreError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
 	logger.error('[AdminInternal] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
+});
+
+// Prayer-time proxy settings (wiki Epic 21 §3, story 21.1c): admin-api checks the permission and audits
+const PrayerSettingsBody = z
+	.object({
+		version: z.number().int().min(0),
+		provider: z.string().optional(),
+		hijriSource: z.string().optional(),
+		limits: z.object({ maxInFlight: z.number().int().optional(), perSecond: z.number().int().optional() }).strict().optional(),
+		countryMethods: z.record(z.string(), z.number().int().nullable()).optional(),
+	})
+	.strict();
+app.get('/prayer-settings', async (c) => ok(c, { settings: await readPrayerAdminSettings(c.env as never, { fresh: true }), countryDefaults: COUNTRY_METHOD_DEFAULTS, methods: PRAYER_METHOD_IDS }));
+app.put('/prayer-settings', async (c) => ok(c, await writePrayerAdminSettings(c.env as never, parse(PrayerSettingsBody, await body(c)), actor(c))));
+// Removes one stored month so the next request asks the provider again (edge copies expire within a day)
+const PrayerPurgeBody = z
+	.object({ cityId: z.string().regex(/^[1-9][0-9]{0,9}$/), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), method: z.number().int(), asr: z.enum(['standard', 'hanafi']) })
+	.strict();
+app.post('/prayer-cache/purge', async (c) => {
+	const input = parse(PrayerPurgeBody, await body(c));
+	if (!isPrayerMethodId(input.method)) throw new admin.AdminError(400, 'invalid_request', 'method');
+	const settings = await readPrayerAdminSettings(c.env as never, { fresh: true });
+	const key = prayerKey(settings.provider, settings.hijriSource, input.method, input.asr, input.cityId, input.month);
+	await (c.env as { global_settings?: R2Bucket }).global_settings?.delete(key);
+	return ok(c, { key });
 });
 
 // Islamic seasons (wiki Epic 21 §4 21.2): admin-api checks the admin's permission and audits each change
