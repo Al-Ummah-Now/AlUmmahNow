@@ -9,6 +9,7 @@ import { smallButtonClass } from '@/components/content/parts';
 import { useSentRequest } from '@/components/workflows/useSentRequest';
 import { SentForApproval } from '@/components/workflows/SentForApproval';
 import { useUndoableAction } from '@/components/undo/UndoToast';
+import type { PendingRequest } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 
@@ -27,13 +28,13 @@ class DefaultTierFailure extends Error {
  * (every account stores its own tier); Undo puts the previous one back. When the
  * default tier's rule has approvers it is sent for approval instead: nothing to undo.
  */
-export function DefaultTierButton({ tierId, tierName, label, setDefault, testId, pendingRequest }: { /** A default-tier change waiting for approval: no other can be asked for */ pendingRequest?: string; tierId: string; tierName: string; label: string; setDefault: SetDefaultTierAction; testId: string }) {
+export function DefaultTierButton({ tierId, tierName, label, setDefault, testId, pendingRequest }: { /** A default-tier change waiting for approval: no other can be asked for */ pendingRequest?: PendingRequest; tierId: string; tierName: string; label: string; setDefault: SetDefaultTierAction; testId: string }) {
   const router = useRouter();
   const { t } = useLanguage();
   const { run } = useUndoableAction();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useSentRequest(pendingRequest);
+  const [sent, send] = useSentRequest(pendingRequest);
 
   async function call(id: string, undo = false) {
     const result = await setDefault(id, undo ? { undo: true } : undefined);
@@ -45,7 +46,6 @@ export function DefaultTierButton({ tierId, tierName, label, setDefault, testId,
   async function onClick() {
     setBusy(true);
     setError(null);
-    setSent(null);
     try {
       await run({
         action: () => call(tierId),
@@ -59,8 +59,7 @@ export function DefaultTierButton({ tierId, tierName, label, setDefault, testId,
       router.refresh();
     } catch (e) {
       if (e instanceof TierChangeSent) {
-        setSent(e.requestId);
-        router.refresh();
+        send(e.requestId);
         return;
       }
       const result = e instanceof DefaultTierFailure ? e.result : { status: 0 };

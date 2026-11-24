@@ -1,6 +1,7 @@
 import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
 import { creatorTierAudit, deleteCreatorTier, listCreatorTiers, reorderCreatorTiers, saveCreatorTier, setDefaultCreatorTier } from '@/lib/api/creators';
 import { openWorkflowRequests } from '@/lib/api/workflows';
+import type { PendingRequests } from '@/lib/workflows';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -19,7 +20,7 @@ export default async function CreatorTiersPage() {
   const canManage = canManageCreators(session?.user.role);
   let list: CreatorTiersList | null = null;
   let audit: AdminAuditEntry[] = [];
-  let pending: Record<string, string> = {};
+  let pending: PendingRequests = {};
   try {
     [list, audit] = await Promise.all([listCreatorTiers(), creatorTierAudit().catch(() => [])]);
     if (canManage) pending = await openWorkflowRequests('tiers.change', ['creator-tiers:setDefault', 'creator-tiers:reorder', ...list.items.map((tier) => `creator-tier:${tier.id}`)]);

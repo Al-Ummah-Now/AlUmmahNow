@@ -114,3 +114,13 @@ export function scopeName(type: WorkflowActionType, scope: string, locale: Local
   if (type === 'features.set' && isFeatureKey(scope)) return { text: featureDefinition(scope).name[locale], named: true };
   return { text: scope, named: false };
 }
+
+/** A target's open request on a page: its id, `undefined` when it has none, `null` when the page couldn't read it. */
+export type PendingRequest = string | null | undefined;
+/** Open requests by target (lib/api/workflows openWorkflowRequests); null when they couldn't be read. */
+export type PendingRequests = Readonly<Record<string, string>> | null;
+export const pendingFor = (pending: PendingRequests, target: string): PendingRequest => (pending ? pending[target] : null);
+
+/** Whether a "Sent for approval" notice is over: the page was read again and the request is no longer the open one. */
+export const sentNoticeEnds = (sent: string, pendingRequest: PendingRequest, readAgain: boolean): boolean =>
+  readAgain && pendingRequest !== null && pendingRequest !== sent;

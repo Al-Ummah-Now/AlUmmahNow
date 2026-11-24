@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { type MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
+import type { PendingRequest } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { useSentRequest } from '@/components/workflows/useSentRequest';
@@ -41,7 +42,7 @@ export interface CreatorTierControlProps {
   testId?: string;
   setTier: SetTierAction;
   /** A change of this user's tier waiting for approval */
-  pendingRequest?: string;
+  pendingRequest?: PendingRequest;
   /** How wide the approval notices may be (the Users table's phone column is narrow) */
   noticeClassName?: string;
 }
@@ -79,7 +80,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   // undefined: no change pending; string: assign that tier (every account keeps a tier: no "remove")
   const [pending, setPending] = useState<string | undefined>(undefined);
   const [unlocked, setUnlocked] = useState(false);
-  const [sent, setSent] = useSentRequest(pendingRequest);
+  const [sent, send] = useSentRequest(pendingRequest);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   // The tier just saved, shown at once: the page's refresh (router.refresh) re-reads the whole list
   // and can take seconds, and until it lands the row showed the old tier under "Saved". Dropped as
@@ -107,9 +108,8 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
     }
     if (result.ok === 'sent') {
       setStatus({ kind: 'idle' });
-      setSent(result.requestId);
       setUnlocked(false);
-      router.refresh();
+      send(result.requestId);
       return;
     }
     if (!result.ok) {

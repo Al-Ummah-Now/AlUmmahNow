@@ -3,6 +3,7 @@ import { ADMIN_USER_SORTS, type AdminUsersPage, type CreatorTier } from '@al-umm
 import { listUsers } from '@/lib/api/content';
 import { bulkSetCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
 import { openWorkflowRequests } from '@/lib/api/workflows';
+import type { PendingRequests } from '@/lib/workflows';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { parseUserTierFilter, tierLabel } from '@/lib/creator-tiers';
@@ -37,7 +38,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   let data: AdminUsersPage | null = null;
   // Definitions only (no per-tier counts: those scan every profile; the Tiers page shows them)
   let tiers: CreatorTier[] | null = null;
-  let pending: Record<string, string> = {};
+  let pending: PendingRequests = {};
   try {
     let choices: { items: CreatorTier[]; defaultTierId: string } | null;
     [data, choices] = await Promise.all([

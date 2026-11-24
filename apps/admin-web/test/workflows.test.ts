@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { WORKFLOW_ACTIONS, WORKFLOW_STATUSES, type WorkflowField } from '@al-ummah/shared-types';
 import { createTranslator } from '../src/i18n/translate';
-import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, permissionLabel, ruleSummary, scopeName, statusLabel, workflowPeople, workflowValue } from '../src/lib/workflows';
+import { WORKFLOW_STATUS_CHIP, fieldChanges, parseWorkflowView, pendingFor, permissionLabel, ruleSummary, scopeName, sentNoticeEnds, statusLabel, workflowPeople, workflowValue } from '../src/lib/workflows';
 
 const en = createTranslator('en');
 const ar = createTranslator('ar');
@@ -73,6 +73,19 @@ describe('statuses and views', () => {
     assert.equal(parseWorkflowView('mine'), 'mine');
     assert.equal(parseWorkflowView('nope'), 'waiting');
     assert.equal(parseWorkflowView(undefined), 'waiting');
+  });
+});
+
+describe('the "Sent for approval" notice', () => {
+  it('ends once the page was read again and the request is not open, never on the page from before or an unknown answer', () => {
+    assert.equal(sentNoticeEnds('wfr_1', undefined, false), false, 'the page from before it was sent');
+    assert.equal(sentNoticeEnds('wfr_1', 'wfr_1', true), false, 'open');
+    assert.equal(sentNoticeEnds('wfr_1', undefined, true), true, 'decided, even before the refresh came back');
+    assert.equal(sentNoticeEnds('wfr_1', 'wfr_2', true), true, 'another request is open now');
+    assert.equal(sentNoticeEnds('wfr_1', null, true), false, 'the open requests could not be read');
+    assert.equal(pendingFor(null, 'user:u1'), null);
+    assert.equal(pendingFor({}, 'user:u1'), undefined);
+    assert.equal(pendingFor({ 'user:u1': 'wfr_1' }, 'user:u1'), 'wfr_1');
   });
 });
 

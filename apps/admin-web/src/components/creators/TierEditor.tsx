@@ -11,6 +11,7 @@ import Link from '@/components/AppLink';
 import { cardClass, fieldClass, linkClass } from '@/components/ui';
 import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { Chip, dangerButtonClass } from '@/components/content/parts';
+import { pendingFor, type PendingRequest, type PendingRequests } from '@/lib/workflows';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog, confirmButtonClass } from './TierChangeDialog';
@@ -126,7 +127,7 @@ class HiddenFailure extends Error {
 }
 
 /** One tier's limits, editable by admins (creators:manage); saved through admin-api with an audit row. */
-function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, create = false, isDefault = false, pendingRequest }: { pendingRequest?: string; tier?: CreatorTier; users: number; invites?: number; canManage: boolean; actions: TierActions; create?: boolean; isDefault?: boolean }) {
+function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, create = false, isDefault = false, pendingRequest }: { pendingRequest?: PendingRequest; tier?: CreatorTier; users: number; invites?: number; canManage: boolean; actions: TierActions; create?: boolean; isDefault?: boolean }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
@@ -135,9 +136,10 @@ function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, cre
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const [message, setMessage] = useState<Message>(null);
-  const [sent, setSent] = useSentRequest(pendingRequest);
+  // A new tier has no target to look up before it exists: its notice stays until the next one
+  const [sent, send] = useSentRequest(create ? null : pendingRequest);
   // A change waiting for approval holds the tier: read only until it is decided
-  const canManage = mayManage && !pendingRequest;
+  const canManage = mayManage && !pendingRequest && (create || !sent);
   const key = create ? 'new' : tier?.id ?? '';
   const fixedUnlimited = tier?.id === CREATOR_TIER_IDS.unlimited;
   const errors = validateTierForm(form, { create });
@@ -146,18 +148,16 @@ function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, cre
   const set = <K extends keyof TierFormValues>(field: K, value: TierFormValues[K]) => setForm((f) => ({ ...f, [field]: value }));
 
   function onSent(requestId: string) {
-    setSent(requestId);
+    send(requestId);
     // Nothing changed yet: the form goes back to the stored tier (a new one is kept in the request)
     setForm(tierToForm(tier));
     setTouched(false);
-    router.refresh();
   }
 
   async function run(action: () => Promise<GovernedResult<unknown>>, ok: string) {
     setPending(null);
     setBusy(true);
     setMessage(null);
-    setSent(null);
     let result: GovernedResult<unknown>;
     try {
       result = await action();
@@ -491,7 +491,7 @@ function TierCard({ tier, users, invites = 0, canManage: mayManage, actions, cre
   );
 }
 
-export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canManage, actions, pending = {} }: { /** Open change requests by target (creator-tier:<id>, creator-tiers:setDefault) */ pending?: Record<string, string>; tiers: CreatorTier[]; counts: Record<string, number>; invites?: Record<string, number>; defaultTierId?: string; canManage: boolean; actions: TierActions }) {
+export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canManage, actions, pending = {} }: { /** Open change requests by target (creator-tier:<id>, creator-tiers:setDefault) */ pending?: PendingRequests; tiers: CreatorTier[]; counts: Record<string, number>; invites?: Record<string, number>; defaultTierId?: string; canManage: boolean; actions: TierActions }) {
   const { t, locale } = useLanguage();
   return (
     <div className="flex flex-col gap-6">
@@ -513,11 +513,11 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
             ) : (
               // A hidden tier cannot be the default (every new account gets the default): show it first
               canManage && actions.setDefault && !tier.hidden && (
-                <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} pendingRequest={pending['creator-tiers:setDefault']} />
+                <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} pendingRequest={pendingFor(pending, 'creator-tiers:setDefault')} />
               )
             )}
           </div>
-          <TierCard tier={tier} users={counts[tier.id] ?? 0} invites={invites[tier.id] ?? 0} canManage={canManage} actions={actions} isDefault={tier.id === defaultTierId} pendingRequest={pending[`creator-tier:${tier.id}`]} />
+          <TierCard tier={tier} users={counts[tier.id] ?? 0} invites={invites[tier.id] ?? 0} canManage={canManage} actions={actions} isDefault={tier.id === defaultTierId} pendingRequest={pendingFor(pending, `creator-tier:${tier.id}`)} />
         </section>
       ))}
       {canManage && (

@@ -487,6 +487,37 @@ describe('tiers.change: a bulk change', () => {
   });
 });
 
+describe('tiers.change: a rule that becomes direct while a change is being proposed', () => {
+  for (const [outcome, fail] of [['applied', null], ['failed', 'refused']] as const) {
+    it(`answers like a direct change that ${outcome}`, async () => {
+      const t = setup();
+      await t.needApprover('assign');
+      // The rule is made direct after the route has read it (the proposer's facts are read in between)
+      const prepare = t.search.prepare;
+      let done = false;
+      t.search.prepare = (sql: string) => {
+        if (!done && sql.includes('support_tech_staff')) {
+          done = true;
+          void t.rule('assign', { approvalsNeeded: 0 });
+        }
+        return prepare(sql);
+      };
+      t.videos.fail.next = fail;
+      const res = await t.call('PUT', '/users/u1/creator-tier', { tierId: 'creator' });
+      assert.ok(done);
+      if (outcome === 'applied') {
+        assert.equal(res.status, 200, JSON.stringify(res.body));
+        assert.equal(res.body.result.assignment.tierId, 'creator', 'the same answer as a direct change');
+      } else {
+        assert.equal(res.status, 500, 'never an answer that reads as saved');
+        assert.equal(res.body.success, false);
+        assert.equal(res.body.requestId, t.requests()[0].id);
+        assert.deepEqual(t.videos.writes, []);
+      }
+    });
+  }
+});
+
 describe('tiers.change: step-up', () => {
   for (const op of OPERATIONS) {
     it(`${op.name}: the scope's rule decides, direct or with approvers`, async () => {

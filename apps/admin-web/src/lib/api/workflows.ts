@@ -59,9 +59,9 @@ export type WorkflowProposeResult = { status: 'applied'; requestId: string; resu
 
 /**
  * The open change request of each target (`kind:id`), so a page shows "Waiting for approval" in place of the
- * control (§10). A failure only hides the marks: a second change is refused by admin-api (change_pending).
+ * control (§10). null when they couldn't be read: no marks then, and a second change is refused by admin-api (change_pending).
  */
-export async function openWorkflowRequests(type: WorkflowActionType, targets: string[]): Promise<Record<string, string>> {
+export async function openWorkflowRequests(type: WorkflowActionType, targets: string[]): Promise<Record<string, string> | null> {
   if (!targets.length) return {};
   const q = new URLSearchParams({ type });
   for (const target of targets.slice(0, 100)) q.append('target', target);
@@ -70,7 +70,7 @@ export async function openWorkflowRequests(type: WorkflowActionType, targets: st
     return (body.result as { items?: Record<string, string> } | undefined)?.items ?? {};
   } catch (error) {
     logger.warn('[approvals] Open requests unavailable', { type, error: error instanceof Error ? error.message : String(error) });
-    return {};
+    return null;
   }
 }
 
