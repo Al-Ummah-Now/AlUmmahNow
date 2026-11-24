@@ -36,6 +36,7 @@ import { stepUpAnswer } from '../middleware/passkeys';
 import {
   WorkflowError,
   approveRequest,
+  hasWorkflowExecutor,
   commentOnRequest,
   getRequestView,
   listRequests,
@@ -50,6 +51,8 @@ import {
 import { createWorkflowDirectory, ownerIdsFrom } from '../lib/workflows/directory';
 import { registerRuleChangeExecutor } from '../lib/workflows/rule-change';
 import { registerSupportFinanceExecutors } from '../lib/workflows/support-finance-actions';
+import { registerFeatureExecutor } from '../lib/workflows/feature-actions';
+import { FEATURE_PRECONDITIONS } from '../lib/feature-preconditions';
 import type { WorkflowCtx, WorkflowEvent } from '../lib/workflows/types';
 import { enqueueWorkflowNotify } from '../lib/workflows/notify';
 import type { D1Database } from '../lib/types';
@@ -59,6 +62,7 @@ type C = Context<Env>;
 
 registerRuleChangeExecutor();
 registerSupportFinanceExecutors();
+registerFeatureExecutor(FEATURE_PRECONDITIONS);
 
 const app = new Hono<Env>();
 const ok = (c: C, result: unknown, status: 200 | 202 = 200) => c.json({ success: true, result }, status);
@@ -160,7 +164,8 @@ app.get('/actions', async (c) => {
       rules.push({ scope, version: r.version, config: r.config, floor: workflowFloorFor(type, scope) });
     }
     if (!rules.length) continue;
-    out.push({ type, domain: def.domain, label: def.label, scoped: def.scoped, floor: def.floor, rules });
+    // connected: false = registered for later; its rule can't be changed yet (rule-change.ts)
+    out.push({ type, domain: def.domain, label: def.label, scoped: def.scoped, floor: def.floor, connected: hasWorkflowExecutor(type), rules });
   }
   return ok(c, { actions: out });
 });

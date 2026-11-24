@@ -14,7 +14,7 @@ import {
   type WorkflowField,
   type WorkflowRuleConfig,
 } from '@al-ummah/shared-types';
-import { registerWorkflowExecutor, ruleInForce, ruleVersionStatement, WorkflowError } from './engine';
+import { hasWorkflowExecutor, registerWorkflowExecutor, ruleInForce, ruleVersionStatement, WorkflowError } from './engine';
 import type { WorkflowExecutor } from './types';
 
 export interface RuleChangePayload {
@@ -63,6 +63,9 @@ export const ruleChangeExecutor: WorkflowExecutor<RuleChangePayload, { version: 
     const scope = typeof i.scope === 'string' ? i.scope.trim() : '';
     if (scope && !def.scoped) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
     if (!/^[A-Za-z0-9._:-]{0,64}$/.test(scope)) throw new WorkflowError(400, 'rule_invalid', { problems: ['invalid_shape'] });
+    // A rule only means something once its action is connected: until then it can't be changed, so the
+    // rules page never shows approvers that nothing enforces
+    if (!hasWorkflowExecutor(i.type)) throw new WorkflowError(409, 'rule_invalid', { problems: ['not_connected'] });
     const min = (await minApprovalsHooks.get(i.type)?.()) ?? 0;
     const res = validateWorkflowRule(i.type, i.config, { minApprovals: min, scope });
     // (admin-api compiles without strict null checks, so the result union is narrowed by hand)

@@ -65,6 +65,11 @@ export function registerWorkflowExecutor<P, R>(executor: WorkflowExecutor<P, R>)
   executors.set(executor.type, executor);
 }
 
+/** Whether a feature has connected this action type to the engine (its rule then really gates it). */
+export function hasWorkflowExecutor(type: WorkflowActionType): boolean {
+  return executors.has(type);
+}
+
 /** Tests only. */
 export function clearWorkflowExecutors(): void {
   executors.clear();
@@ -114,6 +119,15 @@ export async function ruleInForce(ctx: WorkflowCtx, type: WorkflowActionType, sc
  */
 export function floorFor(type: WorkflowActionType, scope: string): WorkflowFloor {
   return workflowFloorFor(type, scope);
+}
+
+/**
+ * Whether a change of this type and scope waits for approvers under the rule in force (with its floor).
+ * Routes that keep their own direct write for direct rules (the Features page) ask this first.
+ */
+export async function ruleNeedsApproval(ctx: WorkflowCtx, type: WorkflowActionType, scope: string): Promise<boolean> {
+  const inForce = await ruleInForce(ctx, type, scope);
+  return enforceFloor(type, scope, inForce.config, 0).approvalsNeeded > 0;
 }
 
 /** The rule with its floor applied: a stored rule can never be weaker than the floor (§4.3). */
