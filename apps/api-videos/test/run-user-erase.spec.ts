@@ -67,7 +67,11 @@ describe('run-account erasure through the indexes (#887)', () => {
 
 		assert.equal(result.complete, true);
 		assert.deepEqual(scans, [], 'no bucket was listed without a prefix');
-		assert.deepEqual(backupListPrefixes, [`${LEGACY_RESTORE_POINTERS_PREFIX}run1/`], 'ADMIN_BACKUPS only lists the user pointer prefix');
+		assert.ok(backupListPrefixes.includes(`${LEGACY_RESTORE_POINTERS_PREFIX}run1/`), 'ADMIN_BACKUPS lists the user legacy-restore pointer prefix');
+		assert.ok(
+			backupListPrefixes.every((p) => p === `${LEGACY_RESTORE_POINTERS_PREFIX}run1/` || p === 'profile-emails/by-user/run1/'),
+			`ADMIN_BACKUPS only lists per-user pointer prefixes (got ${JSON.stringify(backupListPrefixes)})`,
+		);
 		assert.equal(result.deleted.legacyRestoreBackups, 1);
 		assert.deepEqual(result.deletedVideoIds.sort(), ['v1', 'v2'], 'its soft-deleted video too');
 		assert.deepEqual(deletedMedia.sort(), ['v1', 'v2']);

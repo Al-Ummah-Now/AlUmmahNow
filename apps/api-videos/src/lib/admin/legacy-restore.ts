@@ -271,6 +271,7 @@ async function restoreOne(env: LegacyRestoreEnv, job: AdminJob, item: ApprovedRe
 		created.push({ key, pointer });
 
 		let written: R2Object | null;
+		let profilePutAttempted = false;
 		try {
 			await backups.put(pointer, '', JSON_META);
 			await backups.put(key, raw, {
@@ -280,14 +281,24 @@ async function restoreOne(env: LegacyRestoreEnv, job: AdminJob, item: ApprovedRe
 			});
 			const next: Record<string, unknown> = { ...plan.next };
 			if (!('id' in stored)) delete next.id;
+			profilePutAttempted = true;
 			written = await env.profiles.put(item.id, JSON.stringify(next), {
 				...JSON_META,
 				onlyIf: { etagMatches: object.etag },
 			});
 		} catch (error) {
-			await cleanupBackups().catch(() => undefined);
-			const gone = await env.profiles.head(item.id).then((h) => !h, () => false);
-			if (gone) await eraseLegacyRestoreBackups(asBucket(backups), item.id, new OperationBudget(DEFAULT_OPERATION_BUDGET)).catch(() => undefined);
+			const current = await env.profiles.head(item.id).catch(() => undefined);
+			if (!profilePutAttempted) {
+				await cleanupBackups().catch(() => undefined);
+			} else if (current === null) {
+				await cleanupBackups().catch(() => undefined);
+				await eraseLegacyRestoreBackups(asBucket(backups), item.id, new OperationBudget(DEFAULT_OPERATION_BUDGET)).catch(() => undefined);
+			} else if (current && current.etag === object.etag) {
+				// Confirmed the profile was not modified; safe to remove uncommitted backup
+				await cleanupBackups().catch(() => undefined);
+			}
+			// If head failed or the etag changed (the profile write may have committed), keep the
+			// pre-change backup and its pointer so the write never loses its backup.
 			throw error;
 		}
 		if (written) {
