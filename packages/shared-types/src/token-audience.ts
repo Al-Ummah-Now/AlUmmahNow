@@ -105,6 +105,11 @@ export type AudienceService = keyof typeof SERVICE_AUDIENCES;
  * gets that route and nothing else of the service.
  */
 export const ROUTE_AUDIENCES: Partial<Record<AudienceService, Readonly<Record<string, readonly FirstPartyClient[]>>>> = {
+  'api-videos': {
+    /** Auth's profile site: self-service /delete-account erases the signed-in user's Videos data
+     *  before deleting their Auth account (AlUmmahNowAuth#532). */
+    'DELETE /api/privacy/data': ['authProfile'],
+  },
   'admin-api': {
     /** Auth's admin site: the Translate buttons on its en/ar fields (client names, theme texts) send the
      *  signed-in staff member's own token from its server; content:translate still decides (L10N). */
