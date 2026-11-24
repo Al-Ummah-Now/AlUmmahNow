@@ -1,6 +1,6 @@
 'use server';
 
-import { LiveStream } from "@al-ummah/shared-types";
+import { LiveStream, isLiveEventType } from "@al-ummah/shared-types";
 import {
   ApiResponse,
   PaginationResponse,
@@ -26,12 +26,14 @@ function validateQueryParams(params?: LiveStreamQueryParams): {
   cursor?: string;
   status?: string;
   channelId?: string;
+  eventType?: string;
 } {
   const validated: {
     limit?: number;
     cursor?: string;
     status?: string;
     channelId?: string;
+    eventType?: string;
   } = {};
 
   if (params?.limit !== undefined) {
@@ -75,6 +77,11 @@ function validateQueryParams(params?: LiveStreamQueryParams): {
     }
   }
 
+  if (params?.eventType !== undefined) {
+    if (isLiveEventType(params.eventType)) validated.eventType = params.eventType;
+    else logger.warn('[listLiveStreams] Invalid eventType parameter', { provided: params.eventType });
+  }
+
   return validated;
 }
 
@@ -91,7 +98,8 @@ export async function listLiveStreams(
     limit: validatedParams.limit,
     cursor: validatedParams.cursor,
     status: validatedParams.status,
-    channelId: validatedParams.channelId
+    channelId: validatedParams.channelId,
+    eventType: validatedParams.eventType
   });
 
   return apiRequestServer<ApiResponse<PaginationResponse<LiveStream>>>({

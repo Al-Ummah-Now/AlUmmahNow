@@ -3,6 +3,7 @@
  * These types are shared between frontend and backend
  */
 
+import type { LiveEventType, LiveStreamKind } from './live-apps';
 import { Timestamps, SoftDelete, Moderation } from './common';
 import { SubtitleTrack } from './subtitle';
 import { VideoCategory } from './upload-defaults';
@@ -356,4 +357,8 @@ export interface LiveStream {
   scheduledStartTime?: Date;
   endedAt?: Date;
   duration?: number; // seconds
+  /** A live stream unless it says premiere (wiki E17) */
+  kind?: LiveStreamKind;
+  /** Event tag; null while event tags are off */
+  eventType?: LiveEventType | null;
 }

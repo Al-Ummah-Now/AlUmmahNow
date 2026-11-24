@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { LiveStream, PaginatedResponse } from '@al-ummah/shared-types';
+import { LiveStream, PaginatedResponse, type LiveEventType } from '@al-ummah/shared-types';
 import { listLiveStreams } from '@/lib/api/livestreams';
 import { logger } from '@/lib/logger-client';
 import { BRAND_LOGO_LARGE } from '@/components/brand/BrandLogo';
@@ -35,6 +35,8 @@ function toCardModel(stream: ApiLiveStream): LiveStream {
     scheduledStartTime: toDate(stream.scheduledStartTime),
     endedAt: toDate(stream.actualEndTime),
     duration: stream.duration,
+    kind: stream.kind,
+    eventType: stream.eventType ?? null,
   };
 }
 
@@ -79,6 +81,9 @@ export interface UseLiveStreamsOptions {
    * Filter streams by channel ID
    */
   channelId?: string;
+
+  /** Only streams with this event tag (wiki E17) */
+  eventType?: LiveEventType;
 
   /**
    * Number of items to fetch per page
@@ -202,12 +207,13 @@ export interface UseLiveStreamsReturn {
 export function useLiveStreams({
   status = 'live',
   channelId,
+  eventType,
   limit = 20,
   enabled = true,
   refetchInterval
 }: UseLiveStreamsOptions = {}): UseLiveStreamsReturn {
   // Build query key for React Query caching
-  const queryKey = ['live-streams', { status, channelId, limit }];
+  const queryKey = ['live-streams', { status, channelId, eventType, limit }];
 
   // Realtime: the processor broadcasts `live_stream_updated` on `live-streams`
   // whenever a stream is created or changes status; refetch instead of waiting
@@ -248,6 +254,7 @@ export function useLiveStreams({
       const response = await listLiveStreams({
         status,
         channelId,
+        ...(eventType ? { eventType } : {}),
         limit,
         cursor: pageParam
       });

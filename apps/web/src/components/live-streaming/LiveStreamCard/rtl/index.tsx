@@ -9,11 +9,12 @@
 
 'use client';
 
-import { formatCountNoun, numberFormat, pluralCategory } from '@al-ummah/shared-types';
+import { formatCountNoun, formatDateTime, numberFormat, pluralCategory } from '@al-ummah/shared-types';
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LiveKindBadges } from '@/components/live/LiveKindBadges';
 import { StreamStatusBadgeRTL } from '../../StreamStatusBadge/rtl';
 import { ViewerCountRTL } from '../../ViewerCount/rtl';
 import type { LiveStreamCardProps } from '../types';
@@ -120,6 +121,8 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
       }
       if (stream.status === 'scheduled' && stream.scheduledStartTime) {
         const diff = stream.scheduledStartTime.getTime() - Date.now();
+        // More than a day ahead, the day says more than a number of hours
+        if (diff > 24 * 3_600_000) return formatDateTime('ar', stream.scheduledStartTime);
         if (diff > 0) return formatStartsInArabic(diff);
       }
       if (stream.status === 'ended' && stream.endedAt) {
@@ -230,17 +233,13 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
           )}
 
           {/* Play Button Overlay (shown on hover) - CENTERED, no RTL change */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
-            <button
+          {/* A picture only: the whole card is the button, and a button inside a button is not reachable */}
+          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/30">
+            <span
               className="rounded-full bg-white/90 p-3 md:p-4 hover:bg-white transform hover:scale-110 transition-transform duration-200"
-              aria-label="تشغيل البث"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClick();
-              }}
             >
               <Play className="w-5 h-5 md:w-6 md:h-6 text-primary fill-primary" />
-            </button>
+            </span>
           </div>
         </div>
 
@@ -274,6 +273,8 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
               </span>
             </div>
           )}
+
+          <LiveKindBadges kind={stream.kind} eventType={stream.eventType} lang="ar" />
 
           {/* Metadata: a plain row in the dir="rtl" card reads right to left (time, then category) */}
           <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-gray-500 dark:text-gray-500 justify-start">

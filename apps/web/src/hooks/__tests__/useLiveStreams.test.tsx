@@ -108,6 +108,15 @@ describe('useLiveStreams Hook', () => {
   });
 
   describe('Filtering', () => {
+    it('asks for one event tag, and for none unless one is chosen', async () => {
+      mockListLiveStreams.mockResolvedValue(createSuccessResponse([]));
+      const { result, rerender } = renderHook(({ eventType }: { eventType?: 'halqa' }) => useLiveStreams({ status: 'live', eventType }), { wrapper, initialProps: {} });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(mockListLiveStreams.mock.calls[0]![0]).not.toHaveProperty('eventType');
+      rerender({ eventType: 'halqa' });
+      await waitFor(() => expect(mockListLiveStreams).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'live', eventType: 'halqa' })));
+    });
+
     it('filters by live status', async () => {
       const mockStreams = createMockLiveStreams(3, 'live');
       const mockResponse = createSuccessResponse(mockStreams);

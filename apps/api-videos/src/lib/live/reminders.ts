@@ -1,6 +1,6 @@
 /**
  * Reminders (wiki E17 §5.5): who asked to hear of a stream or premiere (NOTIFICATIONS_DB.live_reminders)
- * and the heads-up 15 minutes before. Sending is the processor's fan-out: notification settings, quiet
+ * and the heads-up 30 minutes before. Sending is the processor's fan-out: notification settings, quiet
  * hours and the one-per-person dedupe are its. The start itself is announced with the channel's bell.
  */
 import { LIVE_METADATA_TABLE, featureGate } from '@al-ummah/shared-types';
@@ -10,7 +10,7 @@ import { enqueueFanout } from '../notifications';
 import { cancelPremiere, premiereStillPossible, isPremiere, type PremiereEnv } from './premieres';
 import { readStream } from './streams';
 
-export const HEADS_UP_MS = 15 * 60_000;
+export const HEADS_UP_MS = 30 * 60_000;
 
 interface Row {
 	kind: string;
@@ -56,7 +56,7 @@ export async function hasReminder(ndb: D1Database | undefined, streamId: string,
 type HeadsUpEnv = PremiereEnv & { NOTIFICATIONS_DB?: D1Database };
 
 /**
- * Every minute: streams starting within 15 minutes are announced to those who asked. Each is claimed for
+ * Every minute: streams starting within 30 minutes are announced to those who asked. Each is claimed for
  * its start time, so it is announced once, and again when it is moved. A premiere that can no longer be
  * shown is cancelled instead.
  */

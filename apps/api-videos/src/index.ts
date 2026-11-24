@@ -692,7 +692,7 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 					reportJobFailure(rawEnv, ctx, 'premieres', error);
 				}),
 		);
-		// Every minute: people who asked hear of streams starting within 15 minutes (lib/live/reminders.ts, wiki E17)
+		// Every minute: people who asked hear of streams starting within 30 minutes (lib/live/reminders.ts, wiki E17)
 		ctx.waitUntil(
 			runHeadsUps(withSearchSync(rawEnv, ctx) as never)
 				.then((r) => (r.sent || r.cancelled || r.failed ? logger.info('[LiveReminders] Tick', r) : undefined))

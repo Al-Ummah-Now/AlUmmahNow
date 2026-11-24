@@ -1,3 +1,4 @@
+import type { LiveEventType } from './live-apps';
 /**
  * API Request/Input Types
  * Additional request types not defined in domain-specific files
@@ -68,6 +69,8 @@ export interface LiveStreamQueryParams {
   cursor?: string;
   status?: 'scheduled' | 'live' | 'ended' | 'cancelled';
   channelId?: string;
+  /** Only streams with this event tag (404 feature_off while event tags are off) */
+  eventType?: LiveEventType;
 }
 
 // ============================================================================

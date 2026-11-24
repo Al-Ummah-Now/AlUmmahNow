@@ -1,4 +1,4 @@
-import type { Channel, ChannelSection, ChannelSectionType, LiveStream, VideoObject } from '@al-ummah/shared-types';
+import type { Channel, ChannelSection, ChannelSectionType, LiveEventType, LiveStream, LiveStreamKind, VideoObject } from '@al-ummah/shared-types';
 import { BRAND_LOGO_LARGE } from '@/components/brand/BrandLogo';
 
 /**
@@ -134,6 +134,8 @@ export interface ApiLiveStream {
   actualStartTime?: string;
   actualEndTime?: string;
   duration?: number;
+  kind?: LiveStreamKind;
+  eventType?: LiveEventType | null;
 }
 
 /**
@@ -178,6 +180,8 @@ export function toLiveStreamCardModel(stream: ApiLiveStream, channelName = ''): 
     scheduledStartTime: toDate(stream.scheduledStartTime),
     endedAt: toDate(stream.actualEndTime),
     duration: stream.duration,
+    kind: stream.kind,
+    eventType: stream.eventType ?? null,
   };
 }
 
