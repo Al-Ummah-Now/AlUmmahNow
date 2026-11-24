@@ -91,6 +91,7 @@ export async function prune(db: D1Database, now: Date, days = RETENTION_DAYS): P
     ['DELETE FROM ops_hourly WHERE rowid IN (SELECT rowid FROM ops_hourly WHERE hour < ? LIMIT ?)', cutoffHour],
     ['DELETE FROM ops_daily WHERE rowid IN (SELECT rowid FROM ops_daily WHERE day < ? LIMIT ?)', cutoffDay],
     ['DELETE FROM collector_runs WHERE rowid IN (SELECT rowid FROM collector_runs WHERE started_at < ? LIMIT ?)', runsCutoff],
+    ['DELETE FROM d1_account_storage WHERE hour IN (SELECT hour FROM d1_account_storage WHERE hour < ? LIMIT ?)', cutoffHour],
   ] as const) {
     for (let round = 0; round < 20; round++) {
       const r = await db.prepare(sql).bind(arg, PRUNE_BATCH).run();
@@ -100,6 +101,17 @@ export async function prune(db: D1Database, now: Date, days = RETENTION_DAYS): P
     }
   }
   return deleted;
+}
+
+/** One hour of the account-wide D1 total (idempotent per hour). */
+export async function upsertAccountStorage(db: D1Database, hour: string, total: { bytes: number; databases: number }, now: Date): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO d1_account_storage (hour, bytes, databases, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (hour) DO UPDATE SET bytes = excluded.bytes, databases = excluded.databases, updated_at = excluded.updated_at`,
+    )
+    .bind(hour, total.bytes, total.databases, now.toISOString())
+    .run();
 }
 
 export async function startRun(db: D1Database, kind: 'hourly' | 'daily', now: Date): Promise<string> {

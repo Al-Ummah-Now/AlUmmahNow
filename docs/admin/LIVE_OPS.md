@@ -147,6 +147,30 @@ These come later, in the order of cost spec Phases 1–3: CDN by host, container
 
 ---
 
+### A.8 D1 capacity alerts (wiki AUN-D1-SCALING, D1-1)
+
+The collector also watches every D1 database against Cloudflare's limits: 10 GB per database, 1 TB per account, and one query at a time per database. The limits are kept in `cost_settings` `d1_limits` (`maxDbBytes`, `accountBytes`), so a change is a setting, not a deploy.
+
+- **Rules.** Migration `0004_d1_capacity.sql` adds four threshold metrics and seeds default rules:
+
+  | Metric | Default rule | Measures |
+  |---|---|---|
+  | `storage_pct` | > 70% (`d1-storage-70`) and > 90% (`d1-storage-90`) | the database's size ÷ `maxDbBytes` |
+  | `storage_days_to_70` | < 60 days (`d1-storage-forecast`) | days until the database reaches 70% of `maxDbBytes`. It is a least-squares slope of `ops_daily.stored_bytes` over 14 days and needs at least 7 days; there is no forecast when the database is not growing |
+  | `busy_pct` | > 70% in every hour of a 3-hour window (`d1-busy-70`) | requests × p50 query time ÷ 1 hour. This is an estimate, because GraphQL exposes no total query time |
+  | `account_storage_pct` | > 70% (`d1-account-storage-70`) | the account total ÷ `accountBytes` (kind `d1_account`) |
+
+  The migration also adds `capacity` to `cost_alert_subscriptions.kind`, for the email that D1-1b sends.
+- **Account total.** Every hourly run lists `GET /accounts/:id/d1/database` once, with paging, and stores the sum of `file_size` and the number of databases in `d1_account_storage (hour, …)`.
+  - It counts other projects' databases, but never stores their names.
+  - A failed listing is recorded in the run's detail and never fails the run.
+  - The table is kept 396 days.
+  - The `ops_*` tables are not touched: their `env` CHECK allows only production, stage and qa.
+- **Errors items.** A crossing opens a needs-action item with key `ops:<rule>:<resource>`; the account total's resource id is `d1_account:all`.
+  - The title starts with `Capacity:`.
+  - The item links to `/costs#databases`, the Databases section added by D1-1b.
+  - It resolves on recovery, like the other ops rules.
+
 ## Part B: live updates in the admin over WebSockets
 
 ### B.1 Today

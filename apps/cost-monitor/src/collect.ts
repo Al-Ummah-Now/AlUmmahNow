@@ -5,11 +5,11 @@
  */
 import { reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { ManifestIndex, manifestFor, mergeResources, parseEnvs, type OpsEnv, type Resource } from './manifest';
-import { DISCOVERY_MAX_AGE_MS, discoverResources, loadDiscovered, storeDiscovered } from './discover';
+import { DISCOVERY_MAX_AGE_MS, accountD1Storage, discoverResources, loadDiscovered, storeDiscovered } from './discover';
 import { queryVariables, runOpsQuery } from './graphql';
 import { normalize } from './normalize';
-import { finishRun, prune, rollupDay, startRun, upsertHourly } from './store';
-import { alertTitle, evaluateThresholds, formatValue, type ThresholdChange } from './thresholds';
+import { finishRun, prune, rollupDay, startRun, upsertAccountStorage, upsertHourly } from './store';
+import { CAPACITY_METRICS, alertTitle, evaluateThresholds, formatValue, type ThresholdChange } from './thresholds';
 import { logger } from './logger';
 import { cloudflareToken, type CredentialEnv } from './credentials';
 import type { JobsEnv } from './jobs';
@@ -46,6 +46,7 @@ function reportChange(change: ThresholdChange, env: CollectorEnv, ctx: Execution
     resolveNeedsAction(env, ctx, change.key, fetchImpl);
     return;
   }
+  const capacity = CAPACITY_METRICS.includes(change.rule.metric);
   reportNeedsAction('cost-monitor', env, ctx, {
     key: change.key,
     source: 'ops',
@@ -53,7 +54,7 @@ function reportChange(change: ThresholdChange, env: CollectorEnv, ctx: Execution
     message: `${change.name} (${change.env}): ${formatValue(change.rule, change.value)} ${change.rule.op} ${formatValue(change.rule, change.rule.value)} over ${change.rule.window_hours}h`,
     itemType: 'ops-resource',
     itemId: change.resourceId,
-    itemUrl: `/operations?env=${change.env}`,
+    itemUrl: capacity ? '/costs#databases' : `/operations?env=${change.env}`,
   }, fetchImpl);
 }
 
@@ -129,6 +130,15 @@ export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | u
     const { rows, dropped } = normalize(result.data, index);
     outcome.dropped = dropped;
     outcome.rows = await upsertHourly(env.COSTS_DB, rows, now);
+    // The account-wide D1 total (every database on the account, names never kept). A failed
+    // listing is recorded and leaves the account rule unjudged this hour; it never fails the run.
+    try {
+      const total = await accountD1Storage(token, env.CLOUDFLARE_ACCOUNT_ID, fetchImpl);
+      await upsertAccountStorage(env.COSTS_DB, new Date(end.getTime() - 3_600_000).toISOString().replace('.000Z', 'Z'), total, now);
+      detail.accountD1 = { databases: total.databases };
+    } catch (e) {
+      detail.accountD1Error = e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200);
+    }
     const today = end.toISOString().slice(0, 10);
     await rollupDay(env.COSTS_DB, today, now);
     const firstHour = start.toISOString().slice(0, 10);

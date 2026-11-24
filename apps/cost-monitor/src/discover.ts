@@ -66,6 +66,21 @@ export async function discoverResources(token: string, accountId: string, envs: 
   return out;
 }
 
+/**
+ * The size of every D1 database on the account (D1-1 account total). Other projects share the
+ * account and count toward its storage limit, so nothing is filtered, but only the sum and the
+ * count leave this function: no name is returned or stored.
+ */
+export async function accountD1Storage(token: string, accountId: string, fetchImpl: typeof fetch = fetch): Promise<{ bytes: number; databases: number }> {
+  const rows = await list(token, `/accounts/${accountId}/d1/database`, fetchImpl);
+  let bytes = 0;
+  for (const d of rows) {
+    const n = Number(d.file_size);
+    if (Number.isFinite(n) && n > 0) bytes += n;
+  }
+  return { bytes, databases: rows.length };
+}
+
 export interface StoredResource {
   id: string;
   kind: Resource['kind'];
