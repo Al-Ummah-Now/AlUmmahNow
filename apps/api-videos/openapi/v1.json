@@ -20814,6 +20814,36 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "premiere"
+              ],
+              "description": "Live streams or premieres only"
+            },
+            "required": false,
+            "description": "Live streams or premieres only",
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jumuah",
+                "taraweeh",
+                "conference",
+                "halqa"
+              ],
+              "description": "Streams with this event tag (404 feature_off while event tags are off)"
+            },
+            "required": false,
+            "description": "Streams with this event tag (404 feature_off while event tags are off)",
+            "name": "eventType",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": [
                 "string",
                 "null"
@@ -20939,6 +20969,32 @@
                               "duration": {
                                 "type": "number",
                                 "description": "Stream duration in seconds"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "live",
+                                  "premiere"
+                                ],
+                                "description": "A live stream unless it says premiere"
+                              },
+                              "eventType": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "jumuah",
+                                  "taraweeh",
+                                  "conference",
+                                  "halqa",
+                                  null
+                                ],
+                                "description": "Event tag; null while event tags are off"
+                              },
+                              "reminderCount": {
+                                "type": "integer",
+                                "description": "People who asked to be reminded; 0 while reminders are off"
                               },
                               "isDeleted": {
                                 "type": "boolean"
@@ -21113,6 +21169,19 @@
                   "madeForKids": {
                     "type": "boolean"
                   },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21234,6 +21303,32 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "live",
+                                "premiere"
+                              ],
+                              "description": "A live stream unless it says premiere"
+                            },
+                            "eventType": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "jumuah",
+                                "taraweeh",
+                                "conference",
+                                "halqa",
+                                null
+                              ],
+                              "description": "Event tag; null while event tags are off"
+                            },
+                            "reminderCount": {
+                              "type": "integer",
+                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -21687,6 +21782,19 @@
                   "madeForKids": {
                     "type": "boolean"
                   },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
+                  },
                   "maxViewers": {
                     "type": "number"
                   },
@@ -21815,6 +21923,32 @@
                             "duration": {
                               "type": "number",
                               "description": "Stream duration in seconds"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "live",
+                                "premiere"
+                              ],
+                              "description": "A live stream unless it says premiere"
+                            },
+                            "eventType": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "enum": [
+                                "jumuah",
+                                "taraweeh",
+                                "conference",
+                                "halqa",
+                                null
+                              ],
+                              "description": "Event tag; null while event tags are off"
+                            },
+                            "reminderCount": {
+                              "type": "integer",
+                              "description": "People who asked to be reminded; 0 while reminders are off"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -24100,7 +24234,8 @@
                       "video",
                       "comment",
                       "channel",
-                      "livestream"
+                      "livestream",
+                      "live_chat"
                     ]
                   },
                   "entityId": {
@@ -24158,7 +24293,8 @@
                                 "video",
                                 "comment",
                                 "channel",
-                                "livestream"
+                                "livestream",
+                                "live_chat"
                               ]
                             },
                             "entityId": {
@@ -24281,6 +24417,31 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "A live chat message that is not there for this person, or live chat is off (feature_off)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
                 }
               }
             }
@@ -29227,7 +29388,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -29315,7 +29475,7 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "description": "User email address"
+                    "description": "Ignored: the profile's email is the signed-in account's"
                   },
                   "userName": {
                     "type": "string",
@@ -29523,7 +29683,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -30747,7 +30906,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -31426,8 +31584,7 @@
                 "properties": {
                   "email": {
                     "type": "string",
-                    "format": "email",
-                    "description": "User email address"
+                    "description": "Ignored: the profile's email is the signed-in account's"
                   },
                   "userName": {
                     "type": "string",
@@ -31489,10 +31646,7 @@
                     "type": "string",
                     "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
                   }
-                },
-                "required": [
-                  "email"
-                ]
+                }
               }
             }
           }
@@ -31638,7 +31792,6 @@
                           },
                           "required": [
                             "id",
-                            "email",
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
@@ -49921,6 +50074,19 @@
                   "description": {
                     "type": "string",
                     "maxLength": 5000
+                  },
+                  "eventType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "jumuah",
+                      "taraweeh",
+                      "conference",
+                      "halqa",
+                      null
+                    ]
                   },
                   "allowChat": {
                     "type": "boolean"
