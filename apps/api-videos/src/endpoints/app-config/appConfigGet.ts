@@ -12,6 +12,7 @@ import { emptyReleases, readReleases } from '../../lib/app-updates/releases';
 import { appUpdatesOn } from '../../lib/app-updates/switch';
 import { evaluateConfig, evaluateFlags, loadRules } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
+import { apiError } from '../../lib/api-error';
 
 const Localized = z.object({ en: z.string(), ar: z.string() });
 
@@ -152,7 +153,7 @@ export class AppUpdateFailurePost extends PublicRoute {
 		const limiter = c.env.SUGGEST_LIMITER;
 		if (limiter) {
 			const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
-			if (!(await limiter.limit({ key: `update-failure:${ip}` })).success) return c.json({ success: false, error: 'rate_limited' }, 429);
+			if (!(await limiter.limit({ key: `update-failure:${ip}` })).success) return apiError(c, 429, 'rate_limited');
 		}
 		const kv = c.env.APP_CONFIG;
 		const releases = await readReleases(kv);
