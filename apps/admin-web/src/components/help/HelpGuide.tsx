@@ -6,6 +6,7 @@
 import Link from 'next/link';
 import { getI18n } from '@/i18n/server';
 import type { LocalizedEntry } from '@/lib/help/content';
+import { RichText } from './RichText';
 
 const term = 'text-sm font-semibold text-fg';
 
@@ -23,16 +24,16 @@ export async function HelpEntryCard({ entry, settingHref }: { entry: LocalizedEn
       <h2 id={titleId} className="text-xl font-semibold text-fg">
         {entry.label}
       </h2>
-      <p className="mt-1 text-fg">{entry.summary}</p>
+      <p className="mt-1 text-fg"><RichText text={entry.summary} /></p>
 
       <dl className="mt-4 space-y-4">
         <div>
           <dt className={term}>{t('adminHelp.whatItIs')}</dt>
-          <dd className="mt-1 text-sm text-fg">{entry.what}</dd>
+          <dd className="mt-1 text-sm text-fg"><RichText text={entry.what} /></dd>
         </div>
         <div>
           <dt className={term}>{t('adminHelp.whatChanges')}</dt>
-          <dd className="mt-1 text-sm text-fg">{entry.changes}</dd>
+          <dd className="mt-1 text-sm text-fg"><RichText text={entry.changes} /></dd>
         </div>
         {entry.options.length > 0 && (
           <div>
@@ -47,7 +48,7 @@ export async function HelpEntryCard({ entry, settingHref }: { entry: LocalizedEn
                         {t('adminHelp.defaultTag')}
                       </span>
                     )}
-                    <span className="block text-fg-muted">{o.text}</span>
+                    <span className="block text-fg-muted"><RichText text={o.text} /></span>
                   </li>
                 ))}
               </ul>
@@ -57,13 +58,13 @@ export async function HelpEntryCard({ entry, settingHref }: { entry: LocalizedEn
         {entry.default && (
           <div>
             <dt className={term}>{t('adminHelp.defaultValue')}</dt>
-            <dd className="mt-1 text-sm text-fg">{entry.default}</dd>
+            <dd className="mt-1 text-sm text-fg"><RichText text={entry.default} /></dd>
           </div>
         )}
         {entry.range && (
           <div>
             <dt className={term}>{t('adminHelp.range')}</dt>
-            <dd className="mt-1 text-sm text-fg">{entry.range}</dd>
+            <dd className="mt-1 text-sm text-fg"><RichText text={entry.range} /></dd>
           </div>
         )}
         {entry.cautions.length > 0 && (
@@ -72,7 +73,7 @@ export async function HelpEntryCard({ entry, settingHref }: { entry: LocalizedEn
             <dd className="mt-1">
               <ul className="list-disc space-y-1 ps-5 text-sm text-fg">
                 {entry.cautions.map((c) => (
-                  <li key={c}>{c}</li>
+                  <li key={c}><RichText text={c} /></li>
                 ))}
               </ul>
             </dd>
@@ -85,7 +86,7 @@ export async function HelpEntryCard({ entry, settingHref }: { entry: LocalizedEn
               <ul className="list-disc space-y-1 ps-5 text-sm text-fg" data-testid="help-entry-rules">
                 {entry.rules.map((r) => (
                   <li key={r.text}>
-                    {r.text}
+                    <RichText text={r.text} />
                     {r.source && (
                       <>
                         {' '}

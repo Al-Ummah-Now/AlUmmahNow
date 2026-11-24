@@ -36,7 +36,7 @@ export default async function AdminHelpPage({ searchParams }: { searchParams: Pr
                   {m.label}
                 </Link>
                 <span className="text-sm text-fg-muted"> · {m.area}</span>
-                <p className="text-sm text-fg-muted">{m.summary}</p>
+                <p className="text-sm text-fg-muted">{m.summary.replace(/`/g, '')}</p>
               </li>
             ))}
           </ul>

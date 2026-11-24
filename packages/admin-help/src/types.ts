@@ -4,9 +4,11 @@
  * One JSON file per settings area (`content/<app>/<area>.json`), one entry per setting, every text
  * in English and Arabic. The "?" popover shows only `label`, `summary` and `tipCaution`; the admin
  * help guide shows the whole entry. Both read the same entry, so they cannot say different things.
- * Native admin apps read the same files (bundled, or the admin's /help/content/<locale>.json).
+ * Native admin apps vendor the same files at build time.
  *
- * Numbers in text are written `{#123}` so Arabic shows ٠–٩ through the shared formatter.
+ * Numbers in text are written `{#123}` so Arabic shows ٠–٩ through the shared formatter. A literal
+ * value the admin types (a version, a key, a JSON value) goes in backticks: it is shown as code,
+ * left to right, exactly as written.
  */
 
 export const HELP_LOCALES = ['en', 'ar'] as const;

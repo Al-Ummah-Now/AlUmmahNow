@@ -19,6 +19,7 @@ export interface HelpSearchItem {
 /** Folds case and Arabic letter forms so «اعداد» finds «إعداد». */
 export function fold(text: string): string {
   return text
+    .replace(/`/g, '')
     .toLocaleLowerCase()
     .normalize('NFKD')
     .replace(/[ً-ْٰـ]/g, '')
@@ -49,10 +50,10 @@ export function HelpSearch({ items, defaultValue }: { items: HelpSearchItem[]; d
       items: matchHelp(items, query).slice(0, 8).map((i) => ({
         kind: 'help' as const,
         id: i.href,
-        label: i.label,
+        label: i.label.replace(/`/g, ''),
         secondary: i.area,
         imageUrl: null,
-        meta: i.summary,
+        meta: i.summary.replace(/`/g, ''),
       })),
       next: null,
     }),

@@ -80,3 +80,7 @@ test('localizing fills numbers and builds the guide link', () => {
   const tips = tipData([a], 'en', fill);
   assert.deepEqual(Object.keys(tips['demo.thing.limit'] ?? {}).sort(), ['href', 'id', 'label', 'summary', 'tipCaution']);
 });
+
+test('code spans in backticks may hold 0–9 in Arabic', () => {
+  assert.deepEqual(latinDigitsInArabic('مثل `1.4.0` أو {#5}'), []);
+});

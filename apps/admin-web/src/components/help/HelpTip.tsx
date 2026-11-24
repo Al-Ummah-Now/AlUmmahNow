@@ -21,6 +21,7 @@ import { fitToViewport, releaseFit } from '../../../../../packages/fanous-tokens
 import { useLanguage } from '@/i18n/I18nProvider';
 import { logger } from '@/lib/logger-client';
 import { useHelpTip } from './HelpTips';
+import { RichText, plainText } from './RichText';
 
 const OPEN_EVENT = 'aun-help-open';
 const PREVIEW_DELAY_MS = 400;
@@ -135,7 +136,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
         role="button"
         tabIndex={0}
         className="aun-help-btn"
-        aria-label={t('adminHelp.buttonLabel', { label: tip.label })}
+        aria-label={t('adminHelp.buttonLabel', { label: plainText(tip.label) })}
         aria-expanded={mode !== 'closed'}
         aria-controls={popId}
         data-testid="help-tip-button"
@@ -169,7 +170,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
           {tip.label}
         </p>
         <p className="aun-help-text" id={textId}>
-          {tip.summary}
+          <RichText text={tip.summary} />
         </p>
         {tip.tipCaution && (
           <p className="aun-help-caution" data-testid="help-tip-caution">
@@ -179,7 +180,7 @@ export function HelpTip({ id, className = '' }: { id: string; className?: string
             </svg>
             <span>
               <span className="sr-only">{t('adminHelp.cautionLabel')} </span>
-              {tip.tipCaution}
+              <RichText text={tip.tipCaution} />
             </span>
           </p>
         )}

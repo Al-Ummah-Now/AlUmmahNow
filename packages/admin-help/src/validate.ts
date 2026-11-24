@@ -20,10 +20,14 @@ const ID = /^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9]*)+$/;
 const ANCHOR = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-/** 0–9 a reader would see in Arabic text: not in `{#…}`, a URL, or a Latin word like OAuth2 or AES-256. */
+/**
+ * 0–9 a reader would see in Arabic text: not in `{#…}`, a URL, a Latin word like OAuth2 or AES-256,
+ * or a code span in backticks (a literal value the admin types, like a version `1.4.0`).
+ */
 export function latinDigitsInArabic(text: string): string[] {
   const stripped = text
     .replace(/\{#[^}]*\}/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
     .replace(/https?:\/\/\S+/g, ' ')
     .replace(/[A-Za-z][A-Za-z0-9._-]*/g, ' ');
   return stripped.match(/[0-9]+/g) ?? [];
