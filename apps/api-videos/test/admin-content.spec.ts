@@ -1880,6 +1880,9 @@ describe('channel actions', () => {
 				if (!point.includes('not queued')) assert.equal(locked(), false, 'no lock is left');
 				const job = db.db.prepare(`SELECT status FROM admin_jobs WHERE kind = 'channel.transfer'`).get() as { status: string } | undefined;
 				if (point.endsWith('Auth is down')) assert.equal(job!.status, 'succeeded');
+				// A move that never changed hands says so on its job, however it ended
+				const ended = db.db.prepare(`SELECT result FROM admin_jobs WHERE kind = 'channel.transfer' AND status = 'succeeded'`).all() as Array<{ result: string | null }>;
+				for (const { result } of ended) if (!flipped) assert.match(JSON.parse(result ?? '{}').skipped ?? '', /^(stopped|channel_not_found)$/);
 				// The cooldown counts only a move that happened
 				if (ch && !flipped) {
 					raw.channels.store.set('ch1', JSON.stringify({ ...ch, members: [{ userId: 'usr_new', role: 'admin', addedBy: OWNER, addedAt: '2026' }] }));
@@ -2220,6 +2223,15 @@ describe('channel actions', () => {
 		await eraseUserData(env as never, 'usr_third', new OperationBudget(5000));
 		db.db.prepare(`UPDATE admin_jobs SET updated_at = '2099-01-01T00:00:00.000Z' WHERE status = 'queued'`).run();
 		await jobs.drain(env);
+		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
+	});
+
+	it('a move whose retry found the channel deleted still counts once the channel is back (CC-6 review)', async () => {
+		const { raw, env, db, call, jobOf } = await setup();
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		db.db.prepare(`UPDATE admin_jobs SET result = '{"skipped":"channel_deleted"}' WHERE kind = 'channel.transfer'`).run();
 		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
 		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
 		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);

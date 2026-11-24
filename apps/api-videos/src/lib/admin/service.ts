@@ -1025,11 +1025,14 @@ export async function reverifyRecentTransfers(env: AdminServiceEnv, at = Date.no
 		for (const row of page) {
 			if (seen.has(row.target_id)) continue;
 			try {
-				// Stopped or skipped before the owner changed: the move before it is still the channel's latest
-				if (row.result && (JSON.parse(row.result) as { skipped?: string }).skipped) continue;
-				seen.add(row.target_id);
+				const skipped = !!(row.result && (JSON.parse(row.result) as { skipped?: string }).skipped);
+				if (!skipped) seen.add(row.target_id);
 				const params = JSON.parse(row.params || '{}') as { newOwnerId: string; previousOwnerId: string | null };
 				const channel = await repo(env.channels).getObject(row.target_id);
+				// Stopped, or skipped before the owner changed: the move before it is still the channel's latest.
+				// One skipped after (a retry that found the channel deleted) did move it
+				if (skipped && channel?.userId !== params.newOwnerId) continue;
+				seen.add(row.target_id);
 				// Deleted, or no longer on this move's new owner (moved on, or back): nothing to check
 				if (!channel || channel.isDeleted || channel.userId !== params.newOwnerId || !params.previousOwnerId) continue;
 				// Being moved again: that move's own steps and verify handle its records
