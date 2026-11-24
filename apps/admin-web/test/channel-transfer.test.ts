@@ -106,7 +106,7 @@ describe('transfer confirmation', () => {
     const html = render(
       el(ConfirmButton, {
         label: 'Transfer',
-        title: tEn('channels.transferConfirm', { name: 'Amina Yusuf', id: 'usr_amina' }),
+        title: tEn('channels.transferConfirm', { name: 'Amina Yusuf', id: '(usr_amina)' }),
         body: tEn('channels.transferBody', { channel: 'QA Nasheeds', name: 'Amina Yusuf', videos: 4, playlists: 1 }),
         confirmLabel: 'Transfer',
         typeToConfirm: transferConfirmValues('nasheeds', 'usr_amina'),
@@ -164,6 +164,13 @@ describe('the new owner field', () => {
     assert.ok(html.includes(tAr('autocomplete.selected', { name: 'أمينة' })), 'the choice is announced');
     assert.doesNotMatch(html, /role="combobox"/);
     assert.doesNotMatch(html, /data-testid="p-clear"/, 'one way back, no Remove');
+  });
+});
+
+describe('names after a preposition', () => {
+  it('the Arabic link back to the users says «المستخدمين»', () => {
+    assert.equal(tAr('content.back', { section: tAr('users.backName') }), 'العودة إلى المستخدمين');
+    assert.equal(tEn('content.back', { section: tEn('users.backName') }), 'Back to Users');
   });
 });
 
