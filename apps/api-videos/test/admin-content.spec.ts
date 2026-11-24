@@ -692,8 +692,63 @@ describe('channel actions', () => {
 		// Clean now: checked, nothing to repair; past 48 hours it is not checked at all
 		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
 		assert.deepEqual(await reverifyRecentTransfers(env as never, Date.now() + 49 * 3600 * 1000), { checked: 0, repaired: 0, failed: 0 });
-		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM admin_jobs WHERE status = 'succeeded' AND updated_at >= '2026' AND kind = 'channel.transfer'`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		const plan = (db.db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM admin_jobs WHERE status = 'succeeded' AND updated_at >= '2026' AND kind = 'channel.transfer' ORDER BY updated_at DESC, id DESC LIMIT 100`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
 		assert.match(plan, /idx_admin_jobs_status/, plan);
+	});
+
+	it("the re-verify repair moves only records back on the previous owner and leaves the new owner's changes alone (CC-1c)", async () => {
+		const { raw, env, call, jobOf, db, flush } = await setup({
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { isMain: false }), ch3: channel('ch3', { isMain: false }) },
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1', 'ch2', 'ch3'] }), [OTHER]: profile(OTHER) },
+		});
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }))).status, 'succeeded');
+		// Since the move: the previous owner picks ch3 as main, the new owner renames ch1 and goes live on it
+		const edit = (bucket: any, key: string, change: Record<string, unknown>) => bucket.store.set(key, JSON.stringify({ ...JSON.parse(bucket.store.get(key)!), ...change }));
+		edit(raw.channels, 'ch2', { isMain: false });
+		edit(raw.channels, 'ch3', { isMain: true });
+		edit(raw.channels, 'ch1', { handle: 'newname' });
+		await raw.channel_tabs.put('channel-handles/newname', JSON.stringify({ handle: 'newname', channelId: 'ch1', userId: OTHER }));
+		await raw.videos.put('livestream:mine', JSON.stringify({ id: 'mine', title: 'Mine', userId: OTHER, channelId: 'ch1', status: 'live' }));
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-mine', 'mine', 'ch1', 'selfhosted', 'live', 'test', 1)`).run();
+		// and a late write of the previous owner puts a video and a stream back on them
+		edit(raw.videos, 'v1', { userId: OWNER });
+		await raw.videos.put('livestream:old', JSON.stringify({ id: 'old', title: 'Old', userId: OWNER, channelId: 'ch1', status: 'offline' }));
+		db.db.prepare(`INSERT INTO live_sessions (id, stream_id, channel_id, provider, status, reason, created_at) VALUES ('s-old', 'old', 'ch1', 'selfhosted', 'provisioned', 'test', 2)`).run();
+
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 1, failed: 0 });
+		await flush();
+		const read = (bucket: any, key: string) => JSON.parse(bucket.store.get(key)!);
+		assert.equal(read(raw.videos, 'v1').userId, OTHER);
+		assert.equal(read(raw.videos, 'livestream:old').userId, OTHER);
+		const status = (id: string) => (db.db.prepare('SELECT status FROM live_sessions WHERE id = ?').get(id) as { status: string }).status;
+		assert.equal(status('s-old'), 'ended', "the stream the previous owner held has its session ended");
+		assert.equal(status('s-mine'), 'live', "the new owner's broadcast goes on");
+		assert.equal(read(raw.videos, 'livestream:mine').userId, OTHER);
+		assert.equal(read(raw.channels, 'ch1').handle, 'newname');
+		assert.deepEqual([read(raw.channels, 'ch2').isMain, read(raw.channels, 'ch3').isMain], [false, true], "the previous owner's main channel is theirs to pick");
+	});
+
+	it('the re-verify checks only the latest move of a live channel, a page at a time (CC-1c)', async () => {
+		const { raw, env, call, jobOf, db } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER), usr_third: profile('usr_third') },
+		});
+		const first = await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER }));
+		assert.equal(first.status, 'succeeded');
+		assert.equal((await jobOf(await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }))).status, 'succeeded');
+		db.db.prepare('UPDATE admin_jobs SET updated_at = ? WHERE id = ?').run(new Date(Date.now() - 60_000).toISOString(), first.id);
+		// A video back on the first move's previous owner is not the second move's business
+		raw.videos.store.set('v1', JSON.stringify({ ...JSON.parse(raw.videos.store.get('v1')!), userId: OWNER }));
+		// More moves of other (since deleted) channels than one page holds
+		const at = new Date().toISOString();
+		for (let i = 0; i < 150; i++) {
+			db.db.prepare(`INSERT INTO admin_jobs (id, kind, target_kind, target_id, actor_id, status, params, created_at, updated_at) VALUES (?, 'channel.transfer', 'channel', ?, 'usr_admin', 'succeeded', ?, ?, ?)`)
+				.run(`old-${i}`, `gone-${i}`, JSON.stringify({ newOwnerId: OTHER, previousOwnerId: OWNER }), at, at);
+		}
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 1, repaired: 0, failed: 0 });
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OWNER, 'left as it is');
+		// Deleted: not checked at all
+		raw.channels.store.set('ch1', JSON.stringify({ ...JSON.parse(raw.channels.store.get('ch1')!), isDeleted: true }));
+		assert.deepEqual(await reverifyRecentTransfers(env as never), { checked: 0, repaired: 0, failed: 0 });
 	});
 
 	it('a move is refused while another move of the channel is open or the channel is on air', async () => {
