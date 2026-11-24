@@ -536,7 +536,8 @@ export interface WorkflowRequestView {
   version: number;
   appliedAt: string | null;
   steps: { seq: number; actor: string; kind: WorkflowStepKind; note: string | null; stepUp: boolean; at: string }[];
-  can?: { approve: boolean; reject: boolean; withdraw: boolean; blocks: WorkflowApprovalBlock[] };
+  /** What the viewer may do (admin-api decides; `retry` only on a failed request they may retry) */
+  can?: { approve: boolean; reject: boolean; withdraw: boolean; retry?: boolean; blocks: WorkflowApprovalBlock[] };
 }
 
 /** What a governed route answers: applied at once (direct rule) or waiting for approval. */

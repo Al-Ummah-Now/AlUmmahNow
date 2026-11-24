@@ -24,6 +24,7 @@ import {
   workflowFloorFor,
   hasContentPermission,
   isWorkflowActionType,
+  type WorkflowActionType,
   type WorkflowActor,
   type WorkflowStatus,
 } from '@al-ummah/shared-types';
@@ -127,6 +128,13 @@ async function needRead(c: C, ctx: WorkflowCtx): Promise<WorkflowActor> {
   if (!hasAdminRole(actor.roles) && !actor.financePermissions.length) throw new Refused(403, 'forbidden');
   return actor;
 }
+/** Money is decided by the finance list, never tech staff or the owner (the engine's money floor). */
+const moneyPerson = (actor: WorkflowActor) => actor.financePermissions.length > 0 && !actor.techStaff && !actor.owner;
+/** May this person propose a change to this rule? The same checks as rule-change.ts and the engine. */
+const mayEditRule = (actor: WorkflowActor, type: WorkflowActionType, scope: string) =>
+  hasWorkflowExecutor(type) && (isMoneyRule(type, scope) ? moneyPerson(actor) : actor.roles.includes('super_admin'));
+/** May this person retry a failed apply? The same check as POST /requests/:id/retry. */
+const mayRetry = (actor: WorkflowActor, domain: string | undefined) => (domain === 'money' ? moneyPerson(actor) : actor.roles.includes('super_admin'));
 const seesMoney = (c: C, actor: WorkflowActor) => actor.financePermissions.length > 0 || hasContentPermission(c.get('auth')?.roles, 'support:read');
 
 app.onError((error, c) => {
@@ -161,7 +169,7 @@ app.get('/actions', async (c) => {
       // Money rules (by their floor, not only the action's domain) are for people who can see money
       if (isMoneyRule(type, scope) && !money) continue;
       const r = await ruleInForce(ctx, type, scope);
-      rules.push({ scope, version: r.version, config: r.config, floor: workflowFloorFor(type, scope) });
+      rules.push({ scope, version: r.version, config: r.config, floor: workflowFloorFor(type, scope), canEdit: mayEditRule(actor, type, scope) });
     }
     if (!rules.length) continue;
     // connected: false = registered for later; its rule can't be changed yet (rule-change.ts)
@@ -255,7 +263,9 @@ async function visible(c: C, ctx: WorkflowCtx, id: string): Promise<WorkflowActo
 app.get('/requests/:id', async (c) => {
   const ctx = ctxFor(c);
   const actor = await visible(c, ctx, c.req.param('id'));
-  return ok(c, await getRequestView(ctx, c.req.param('id'), actor));
+  const view = await getRequestView(ctx, c.req.param('id'), actor);
+  if (view.can) view.can.retry = view.status === 'failed' && mayRetry(actor, view.domain);
+  return ok(c, view);
 });
 
 app.post('/requests/:id/approve', async (c) => {
@@ -291,7 +301,7 @@ app.post('/requests/:id/retry', async (c) => {
   const actor = await visible(c, ctx, c.req.param('id'));
   const row = await ctx.db.prepare('SELECT domain FROM workflow_requests WHERE id = ?').bind(c.req.param('id')).first<{ domain: string }>();
   // Money (the stored domain follows the floor): the finance list, never tech staff or the owner
-  const allowed = row?.domain === 'money' ? actor.financePermissions.length > 0 && !actor.techStaff && !actor.owner : actor.roles.includes('super_admin');
+  const allowed = mayRetry(actor, row?.domain);
   if (!allowed) throw new Refused(403, 'forbidden');
   return ok(c, await retryRequest(ctx, actor, c.req.param('id')));
 });
