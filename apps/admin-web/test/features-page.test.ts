@@ -223,8 +223,7 @@ describe('Features page render', () => {
     assert.match(html, /غيّرها <bdi>Yusuf Ali<\/bdi>، <time/);
     assert.doesNotMatch(html, /·/);
     const line = renderToStaticMarkup(React.createElement(Provider, { locale: 'ar', theme: 'dark' }, React.createElement(FeatureStatusLine, { featureKey: 'captionsTranscribe', item: { effective: true } })) as never);
-    assert.match(line, /«التفريغ النصي» مفعّلة/);
-    assert.match(line, /، /);
+    assert.match(line, /«التفريغ النصي» مفعّلة<span[^>]*>،<\/span>/, 'the comma touches the word before it');
     assert.match(line, /href="\/features#captionsTranscribe"/);
   });
 });
