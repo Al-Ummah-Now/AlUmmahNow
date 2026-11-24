@@ -57,7 +57,7 @@ export const COMMUNITY_GUIDELINES_EN: CommunityGuidelinesTranslations = {
       points: [
         'Hate speech or incitement against any people because of religion, sect, ethnicity, nationality or gender.',
         'Violent extremism: promoting, praising or recruiting for terrorist groups or violence.',
-        'Sexual or indecent content, and any content that sexualises or endangers children.',
+        'Sexual or indecent content, and any content that sexualizes or endangers children.',
         'Graphic violence shown to shock, or content that encourages self-harm.',
         'Spam, scams, fake giveaways, misleading links and fraudulent fundraising.',
         'Impersonating a person, a scholar, a channel or an organization.',

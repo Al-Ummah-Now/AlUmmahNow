@@ -50,7 +50,7 @@ const Method = z.union([z.literal('auto'), z.number().int().min(0).max(99)]);
 
 const Preferences = z.object({
 	version: z.number().int().describe('Send it back with a change; a different stored version answers 409'),
-	cityId: z.string().nullable().describe('Catalogue city id (GeoNames); the only location value that leaves the device'),
+	cityId: z.string().nullable().describe('Catalog city id (GeoNames); the only location value that leaves the device'),
 	calculationMethod: Method.describe("'auto' = the city's country default, else a provider method id"),
 	asrMethod: z.enum(['standard', 'hanafi']),
 	adjustmentsMinutes: Adjustments.describe('Applied on the device, never sent to the prayer API'),
@@ -100,7 +100,7 @@ export class IslamicPreferencesUpdate extends AuthenticatedRoute {
 		{
 			tags: ['Profiles'],
 			summary: "Update the current user's prayer, Qibla and Hijri preferences",
-			description: 'Send the `version` you read with the fields to change. Exact coordinates are never accepted: only a catalogue city id.',
+			description: 'Send the `version` you read with the fields to change. Exact coordinates are never accepted: only a catalog city id.',
 			request: { body: { content: { 'application/json': { schema: Patch } } } },
 			responses: {
 				'200': { description: 'Saved preferences', content: { 'application/json': { schema: Preferences } } },

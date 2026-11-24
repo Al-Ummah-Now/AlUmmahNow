@@ -365,8 +365,8 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     cancelBody: 'The caption minutes it holds come back to you.',
     cancelConfirm: 'Cancel transcription',
     keep: 'Keep transcribing',
-    cancelled: 'Transcription cancelled. The minutes are back.',
-    finishing: "It’s almost done: the draft is being written, so it can’t be cancelled now.",
+    cancelled: 'Transcription canceled. The minutes are back.',
+    finishing: "It’s almost done: the draft is being written, so it can’t be canceled now.",
     ready: 'The {language} draft is ready to check.',
     failed: {
       audio_unavailable: "We couldn’t get the audio of this video.",
@@ -503,7 +503,7 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     unavailable: "Quran translations can’t be loaded right now. Try again later.",
     addLanguage: 'Add a language',
     viewerTitles: 'Let viewers see machine-translated titles',
-    viewerTitlesHint: "When a video has no title in a viewer’s language, they may see a labelled machine translation with “Show original”.",
+    viewerTitlesHint: "When a video has no title in a viewer’s language, they may see a labeled machine translation with “Show original”.",
   },
 };
 

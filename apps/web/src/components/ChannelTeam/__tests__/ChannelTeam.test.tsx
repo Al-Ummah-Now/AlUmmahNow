@@ -63,7 +63,7 @@ describe('ChannelTeam', () => {
     expect(invite).toHaveTextContent('Channel moderator • expires in 12 days');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel the invitation for new@example.com' }));
     await waitFor(() => expect(api.cancelTeamInvite).toHaveBeenCalledWith('team', 'i1'));
-    expect(await screen.findByTestId('team-message')).toHaveTextContent('Invitation cancelled.');
+    expect(await screen.findByTestId('team-message')).toHaveTextContent('Invitation canceled.');
     expect(screen.queryByTestId('team-invite')).toBeNull();
   });
 

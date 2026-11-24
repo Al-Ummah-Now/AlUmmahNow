@@ -117,7 +117,7 @@ export const YT_IMPORT_EN = {
     cancelBody: 'Videos already imported stay on your channel. Uploads in progress stop, and our access to your YouTube account is removed.',
     cancelConfirm: 'Cancel import',
     cancelKeep: 'Keep importing',
-    cancelled: 'Import cancelled',
+    cancelled: 'Import canceled',
     errors: {
       upload_limit: 'Your upload limit was reached. It continues when the limit resets.',
       uploads_by_invitation: 'This channel can’t take uploads, so this video wasn’t imported.',
@@ -162,7 +162,7 @@ export const YT_IMPORT_EN = {
     ready: 'Ready to import',
     importing: 'Importing',
     finished: 'Finished',
-    cancelled: 'Cancelled',
+    cancelled: 'Canceled',
     failed: 'Failed',
   },
 };

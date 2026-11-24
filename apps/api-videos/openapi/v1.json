@@ -29184,7 +29184,7 @@
           "Privacy"
         ],
         "summary": "Erase the authenticated user's data (GDPR Art. 17)",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nDeletes the profile, owned channels/videos/playlists/posts, watch history, subscriptions, likes, votes and templates; anonymises comments and reports filed. Requires `{ \"confirm\": \"DELETE\" }`. Idempotent and resumable: while `complete` is false, call again with the returned `resumeToken`.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nDeletes the profile, owned channels/videos/playlists/posts, watch history, subscriptions, likes, votes and templates; anonymizes comments and reports filed. Requires `{ \"confirm\": \"DELETE\" }`. Idempotent and resumable: while `complete` is false, call again with the returned `resumeToken`.",
         "operationId": "delete_PrivacyErase",
         "requestBody": {
           "content": {
@@ -30143,7 +30143,7 @@
                         "string",
                         "null"
                       ],
-                      "description": "Catalogue city id (GeoNames); the only location value that leaves the device"
+                      "description": "Catalog city id (GeoNames); the only location value that leaves the device"
                     },
                     "calculationMethod": {
                       "anyOf": [
@@ -30281,7 +30281,7 @@
           "Profiles"
         ],
         "summary": "Update the current user's prayer, Qibla and Hijri preferences",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nSend the `version` you read with the fields to change. Exact coordinates are never accepted: only a catalogue city id.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nSend the `version` you read with the fields to change. Exact coordinates are never accepted: only a catalog city id.",
         "operationId": "put_IslamicPreferencesUpdate",
         "requestBody": {
           "content": {
@@ -30398,7 +30398,7 @@
                         "string",
                         "null"
                       ],
-                      "description": "Catalogue city id (GeoNames); the only location value that leaves the device"
+                      "description": "Catalog city id (GeoNames); the only location value that leaves the device"
                     },
                     "calculationMethod": {
                       "anyOf": [
@@ -32544,7 +32544,7 @@
           "Quran"
         ],
         "summary": "Quran credits",
-        "description": "🌐 Public. Quran Foundation's attribution and short credit, and every translation edition translated caption tracks can show (the shipped defaults, the platform's and the channels' picks), named as QF's catalogue gives them. 404 `feature_off` when no Quran text from QF is shown here.",
+        "description": "🌐 Public. Quran Foundation's attribution and short credit, and every translation edition translated caption tracks can show (the shipped defaults, the platform's and the channels' picks), named as QF's catalog gives them. 404 `feature_off` when no Quran text from QF is shown here.",
         "operationId": "get_QuranCreditsGet",
         "responses": {
           "200": {
@@ -33102,10 +33102,10 @@
             "schema": {
               "type": "string",
               "maxLength": 200,
-              "description": "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalised)"
+              "description": "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalized)"
             },
             "required": false,
-            "description": "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalised)",
+            "description": "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalized)",
             "name": "q",
             "in": "query"
           },
@@ -33653,7 +33653,7 @@
           "Search"
         ],
         "summary": "Search suggestions",
-        "description": "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails. An empty `q` returns a picker's first page instead (pickers open with content): most viewed channels, or with `channelId` that channel's newest videos and playlists (newest public videos without it); page with `offset`, a page shorter than `limit` is the last.",
+        "description": "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalization (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails. An empty `q` returns a picker's first page instead (pickers open with content): most viewed channels, or with `channelId` that channel's newest videos and playlists (newest public videos without it); page with `offset`, a page shorter than `limit` is the last.",
         "operationId": "get_SearchSuggestionsGet",
         "parameters": [
           {
@@ -34997,7 +34997,7 @@
           "Studio"
         ],
         "summary": "Save the account brand kit",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nColours are #rrggbb. `logo` must be an image and `intro`/`outro` videos from the asset library. Account owner only (403 when acting as someone else's channel).",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nColors are #rrggbb. `logo` must be an image and `intro`/`outro` videos from the asset library. Account owner only (403 when acting as someone else's channel).",
         "operationId": "put_BrandKitPut",
         "requestBody": {
           "content": {
@@ -44832,7 +44832,7 @@
           "Videos"
         ],
         "summary": "Resume Video Upload",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRe-authorise an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRe-authorize an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
         "operationId": "get_UploadResumeEndpoint",
         "parameters": [
           {
@@ -50211,7 +50211,7 @@
           "Live Streams"
         ],
         "summary": "Schedule a premiere",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; cancelling leaves it as it was.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; canceling leaves it as it was.",
         "operationId": "post_VideoPremiereCreate",
         "parameters": [
           {
@@ -52162,7 +52162,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Schedule cancelled successfully",
+            "description": "Schedule canceled successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -57428,7 +57428,7 @@
           "Captions"
         ],
         "summary": "Transcribe a video into a caption draft",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. Asking again while a job of the same language runs returns that job (200). Reserves `ceil(duration in minutes)` caption minutes; a failed or cancelled job gives them back. 409 `draft_exists` unless `replace`; 402 `upgrade_required` when the balance is 0 or below. The estimate is charged at the start and may take the balance below 0: a started job always runs to the end.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. Asking again while a job of the same language runs returns that job (200). Reserves `ceil(duration in minutes)` caption minutes; a failed or canceled job gives them back. 409 `draft_exists` unless `replace`; 402 `upgrade_required` when the balance is 0 or below. The estimate is charged at the start and may take the balance below 0: a started job always runs to the end.",
         "operationId": "post_CaptionJobCreate",
         "parameters": [
           {
@@ -61292,7 +61292,7 @@
           "Translation"
         ],
         "summary": "A public video's title and description translated for the viewer",
-        "description": "A machine translation of the title and description for a viewer of `lang`, shown labelled with \"Show original\". `translation` is null while an admin has paused it, when the channel opted out, when the creator wrote a title in that language, or when it is being made (`pending`). Never written into the creator's own text.",
+        "description": "A machine translation of the title and description for a viewer of `lang`, shown labeled with \"Show original\". `translation` is null while an admin has paused it, when the channel opted out, when the creator wrote a title in that language, or when it is being made (`pending`). Never written into the creator's own text.",
         "operationId": "get_VideoTranslatedMetadataGet",
         "parameters": [
           {

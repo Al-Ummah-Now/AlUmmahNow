@@ -76,7 +76,7 @@ const statusConfig: Record<ScheduledPublishStatus, {
     borderColor: 'border-l-gray-500',
     hoverBg: 'hover:bg-gray-100 dark:hover:bg-gray-700/50',
     icon: XCircle,
-    label: 'Cancelled',
+    label: 'Canceled',
     labelAr: 'ملغي'
   },
 };

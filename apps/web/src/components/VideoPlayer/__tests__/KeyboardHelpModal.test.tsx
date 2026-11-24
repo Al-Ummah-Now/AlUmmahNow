@@ -28,7 +28,7 @@ describe('KeyboardHelpModal', () => {
     expect(screen.getByText('Show this list of shortcuts')).toBeInTheDocument();
     expect(screen.getByText('Move between player controls')).toBeInTheDocument();
     expect(screen.getByText('Turn captions on or off')).toBeInTheDocument();
-    expect(screen.getByText('Theatre mode')).toBeInTheDocument();
+    expect(screen.getByText('Theater mode')).toBeInTheDocument();
     expect(screen.getByText('Next video')).toBeInTheDocument();
   });
 

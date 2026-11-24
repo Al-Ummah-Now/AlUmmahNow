@@ -316,7 +316,7 @@ export const EXPORT_LIST_FIELDS = [
 const EXPORT_NOTES = [
 	'Your sign-in account (email, password, sessions) is held by the Al Ummah Now account service; export it from your account settings.',
 	'Pseudonymous event logs (views, likes, analytics beacons) are kept for 13 months for abuse prevention and statistics and are not individually exportable; see docs/compliance/GDPR.md.',
-	"Video metadata is included for videos you own; comments other people left on them are summarised as counts because they are those people's data.",
+	"Video metadata is included for videos you own; comments other people left on them are summarized as counts because they are those people's data.",
 ];
 
 function emptyExport(userId: string): UserDataExport {

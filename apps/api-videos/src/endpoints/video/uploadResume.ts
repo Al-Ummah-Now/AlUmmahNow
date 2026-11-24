@@ -27,7 +27,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Videos"],
 		summary: "Resume Video Upload",
-		description: "Re-authorise an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
+		description: "Re-authorize an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
 		request: {
 			headers: z.object({
           channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),

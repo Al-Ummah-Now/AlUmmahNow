@@ -20,7 +20,7 @@ const C = {
       b2: 'Create an account',
       intro: 'Al Ummah Now is a platform where you can share videos, Shorts and community posts.\n\n## What you will find\n\n- Watch and share **videos and Shorts**.\n- Read **community posts** from the channels you subscribe to.\n- Watch **live streams** as they happen.',
       imgAlt: 'A lantern-lit street at dusk',
-      imgCap: 'Every theme brings its own colours; the page follows.',
+      imgCap: 'Every theme brings its own colors; the page follows.',
       g: ['Lanterns over a market', 'A courtyard at night', 'Prayer beads on wood', 'A tiled archway'],
       cols: [
          ['Watch', 'Videos and Shorts from creators you **subscribe** to.', 'Browse videos'],

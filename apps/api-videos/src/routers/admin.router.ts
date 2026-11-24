@@ -795,14 +795,14 @@ app.get('/jobs/:id', async (c) => {
 app.post('/jobs/:id/retry', async (c) => {
 	const existing = await getJob(c.env, c.req.param('id'));
 	if (!existing) throw new admin.AdminError(404, 'job_not_found');
-	if (!canRetry(existing)) throw new admin.AdminError(409, 'job_not_failed', 'Only failed or cancelled jobs can be retried');
+	if (!canRetry(existing)) throw new admin.AdminError(409, 'job_not_failed', 'Only failed or canceled jobs can be retried');
 	return ok(c, await retryJob(c.env, existing.id, { allowCancelled: true }));
 });
 // Stops a job that has not finished (a running step finishes first); Retry starts it again
 app.post('/jobs/:id/cancel', async (c) => {
 	const existing = await getJob(c.env, c.req.param('id'));
 	if (!existing) throw new admin.AdminError(404, 'job_not_found');
-	if (!cancellableKind(existing.kind)) throw new admin.AdminError(409, 'job_not_cancellable', 'A data erasure cannot be cancelled');
+	if (!cancellableKind(existing.kind)) throw new admin.AdminError(409, 'job_not_cancellable', 'A data erasure cannot be canceled');
 	if (!canCancel(existing)) throw new admin.AdminError(409, 'job_finished', 'The job has already finished');
 	const job = await cancelJob(c.env, existing.id);
 	// Finished between the read and the update: the conditional update left it as it was

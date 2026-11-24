@@ -51,7 +51,7 @@ export class VideoPremiereCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ['Live Streams'],
 		summary: 'Schedule a premiere',
-		description: '🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; cancelling leaves it as it was.',
+		description: '🔒 A finished private or draft video, shown to everyone at the same time from 5 minutes to 365 days ahead. The video is closed until then; canceling leaves it as it was.',
 		request: {
 			params: z.object({ id: Str({ description: 'Video id' }) }),
 			body: { content: { 'application/json': { schema: z.object({ scheduledStartTime: z.string(), title: z.string().min(1).max(200).optional(), description: z.string().max(5000).optional(), eventType: LiveEventTypeInput, ...LiveChatSettingsInput }) } } },
