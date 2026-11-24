@@ -195,5 +195,6 @@ test('the qoe-live object sends its minute to admins on admin:media', async () =
   const recent = await ns.call('qoe-live', (o: any) => o.fetch(new Request('http://internal/qoe/recent?minutes=5')));
   const body = await recent.json();
   assert.equal(body.minutes.length, 5);
-  assert.equal(body.minutes[4].r2.startupMsSum, 900);
+  // This object runs on the real clock: the minute may turn between the beat and this read
+  assert.equal(body.minutes.reduce((sum: number, m: any) => sum + m.r2.startupMsSum, 0), 900);
 });
