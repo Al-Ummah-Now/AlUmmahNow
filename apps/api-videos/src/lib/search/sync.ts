@@ -35,6 +35,7 @@ import {
   type IndexRepairReason,
   CHANNEL_ACCESS_TABLE,
   channelMembersOf,
+  isVideoRemoved,
   liveChatChannel,
   liveChatOpenToAnyone,
   projectLiveMetadata,
@@ -56,6 +57,7 @@ import { kickLivePurge } from '../live/metadata';
 import { deleteEdgeCache } from '../edge-cache';
 import { chatCacheUrl } from '../live/chat';
 import { accessChangedFor, broadcast } from '../websocket-notify';
+import { onHeldVideoRemoved } from '../live/premieres';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -262,6 +264,7 @@ function wrapBucket(
   ctx: RepairContext,
   onVideo?: (decoded: unknown) => Promise<void>,
   onVideoComments?: (id: string, decoded: unknown) => Promise<void>,
+  onPremiereRemoved?: (decoded: unknown) => Promise<void>,
 ): R2Bucket {
   const { db, waitUntil } = ctx;
   const tracksOwnership = ownershipKindFor(type) !== null;
@@ -305,6 +308,8 @@ function wrapBucket(
             if (onVideoComments && decoded && typeof decoded === 'object') await onVideoComments(id, decoded);
             // R2 renditions follow the video's visibility (lib/media/r2-delivery.ts)
             if (type === 'video' && decoded && onVideo) waitUntil(onVideo(decoded));
+            // A removed video's premiere is off (lib/live/premieres.ts)
+            if (type === 'video' && onPremiereRemoved && (decoded as { premiereHold?: unknown } | null | undefined)?.premiereHold && isVideoRemoved(decoded as never)) waitUntil(onPremiereRemoved(decoded));
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
@@ -471,7 +476,9 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
       // The hook gets the unwrapped env: its own writes need no search sync of their own
       const onVideo = type === 'video' && (env as { MEDIA?: unknown }).MEDIA ? (decoded: unknown) => onVideoWritten(env as never, decoded) : undefined;
       const onVideoComments = type === 'video' ? channelCommentsSync(env, db, ctx) : undefined;
-      wrapped[binding] = wrapBucket(bucket, type, queue, repair, onVideo, onVideoComments);
+      // Writes the stream and the video: through a wrapper of their own, so both are indexed
+      const onPremiereRemoved = type === 'video' ? (decoded: unknown) => onHeldVideoRemoved(withSearchSync(env, ctx) as never, decoded as never).catch(error => logger.warn('[Premiere] Not cancelled after its video was removed; the start check will', { error: error instanceof Error ? error.message : String(error) })) : undefined;
+      wrapped[binding] = wrapBucket(bucket, type, queue, repair, onVideo, onVideoComments, onPremiereRemoved);
     }
   }
   const profiles = wrapped.profiles as R2Bucket | undefined;

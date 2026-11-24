@@ -1077,7 +1077,11 @@ export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoE
 			fresh.description = edit.description;
 			if (fresh.descriptionLocalized && typeof fresh.descriptionLocalized === 'object') delete fresh.descriptionLocalized;
 		}
-		if (edit.isPublic !== undefined) fresh.isPublic = edit.isPublic;
+		if (edit.isPublic !== undefined) {
+			// Waiting for its premiere (wiki E17): its visibility is the premiere's
+			if (fresh.premiereHold && edit.isPublic !== fresh.isPublic) throw new AdminError(409, 'premiere_scheduled');
+			fresh.isPublic = edit.isPublic;
+		}
 		if (edit.thumbnailUrl !== undefined) {
 			fresh.thumbnailUrl = edit.thumbnailUrl;
 			fresh.thumbnailType = 'custom';

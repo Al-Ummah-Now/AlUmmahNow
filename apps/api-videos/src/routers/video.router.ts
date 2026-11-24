@@ -34,6 +34,7 @@ import { UploadResumeEndpoint } from '../endpoints/video/uploadResume';
 import { UploadBatchInitiateEndpoint } from '../endpoints/video/uploadBatchInitiate';
 
 // Video chapters endpoints
+import { VideoPremiereCreate } from '../endpoints/live/premiere';
 import { VideoChaptersGet } from '../endpoints/video/chapters';
 import { VideoChaptersUpdate } from '../endpoints/video/chaptersUpdate';
 
@@ -235,6 +236,7 @@ videoRouter.delete('/:id/schedule', VideoScheduleDelete);
 
 // Publish video immediately (authenticated)
 videoRouter.post('/:id/publish-now', VideoSchedulePublishNow);
+videoRouter.post('/:id/premiere', VideoPremiereCreate);
 // Pre-publication review: the creator's appeal and resubmit (docs/specs/VIDEO-REVIEW.md)
 videoRouter.post('/:id/review/appeal', VideoReviewAppeal);
 videoRouter.post('/:id/review/resubmit', VideoReviewResubmit);

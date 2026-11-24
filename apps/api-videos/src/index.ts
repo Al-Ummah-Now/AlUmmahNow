@@ -59,6 +59,7 @@ import { handleLiveEdge, isLiveHost } from "./lib/live/edge";
 import type { LiveEnv } from "./lib/live/providers";
 import { sweepLiveSessions } from "./lib/live/service";
 import { maintainLiveMetadata } from './lib/live/metadata';
+import { runPremieres } from './lib/live/premieres';
 import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
 import { pruneLiveData } from "./lib/live/qoe";
 import { loggingMiddleware } from "./middleware/logging";
@@ -674,6 +675,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepLiveSessions(withSearchSync(rawEnv, ctx) as unknown as LiveEnv)
 				.then((r) => (r.idleEnded || r.bunnyPolled ? logger.info('[Live] Sweep', r) : undefined))
 				.catch((error) => logger.error('[Live] Sweep failed', { error: error instanceof Error ? error.message : String(error) })),
+		);
+		// Every minute: premieres start and end (lib/live/premieres.ts, wiki E17). Through the search-sync wrapper:
+		// its write hooks index the stream and move the video's media
+		ctx.waitUntil(
+			runPremieres(withSearchSync(rawEnv, ctx) as never)
+				.then((r) => (r.started || r.ended || r.cancelled || r.failed ? logger.info('[Premiere] Tick', r) : undefined))
+				.catch((error) => {
+					logger.error('[Premiere] Tick failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'premieres', error);
+				}),
 		);
 		// Every minute: probe each enabled media provider; playback moves off a failing one (lib/media/health.ts).
 		// Never throws; the next minute is the retry, and a provider turning unhealthy is an Errors page item.

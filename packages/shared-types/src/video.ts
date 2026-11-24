@@ -122,6 +122,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   scheduledBy?: string;                 // User ID who scheduled
   scheduledAt?: string;                 // When it was scheduled
   publishedViaSchedule?: boolean;       // True if published via scheduler
+  /** Waiting for its premiere (wiki E17 §5.4): closed until it starts; nothing else on the video says so */
+  premiereHold?: PremiereHold;
 
   /** Brought from YouTube by its creator (wiki AUN-YT-IMPORT): the watch page says "Originally published on YouTube" */
   importedFrom?: import('./youtube-import').ImportedFrom | import('./import-sources').SourceImportedFrom;
@@ -130,6 +132,15 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   isPremiered?: boolean;
   premiereDate?: string;
   premiereCountdownStarted?: boolean;
+}
+
+/** Why a video waits: the premiere it will be shown in. */
+export interface PremiereHold {
+  streamId: string;
+  heldAt: string;
+  heldBy: string;
+  /** It was a draft: cancelling makes it one again, whatever was written meanwhile */
+  draft?: boolean;
 }
 
 export type ScheduledPublishStatus =

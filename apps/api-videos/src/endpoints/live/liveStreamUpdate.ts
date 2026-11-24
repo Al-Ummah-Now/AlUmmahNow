@@ -13,6 +13,8 @@ import { inBackground } from "../../lib/websocket-notify";
 import { announceLiveStarted } from "../../lib/notification-events";
 import { CHANNEL_SUSPENDED_CODE } from "../../middleware/auth";
 import { hasSuspensionHolds, liveStreamIsFrozen } from "../../lib/admin/frozen";
+import { apiError } from '../../lib/api-error';
+import { cancelPremiere, isPremiere, premiereTimeProblem } from '../../lib/live/premieres';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamUpdate extends AuthenticatedRoute {
@@ -143,12 +145,25 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
+			// A premiere (wiki E17) starts and ends on its own routes, and its video's visibility is its own
+			if (isPremiere(existingStream)) {
+				if ((updateData.status !== undefined && updateData.status !== 'cancelled') || updateData.isPrivate === true || (updateData.status === 'cancelled' && updateData.scheduledStartTime !== undefined)) return apiError(c, 400, 'premiere_fixed');
+				if (updateData.scheduledStartTime !== undefined && premiereTimeProblem(updateData.scheduledStartTime, Date.now())) return apiError(c, 400, 'premiere_bad_time');
+				if (updateData.scheduledStartTime !== undefined) updateData.scheduledStartTime = new Date(updateData.scheduledStartTime).toISOString();
+				if (updateData.status === 'cancelled') {
+					const { outcome } = await cancelPremiere(c.env as never, id, 'owner');
+					if (outcome === 'started') return apiError(c, 409, 'premiere_started');
+				}
+			}
+
 			// Update the stream on the fresh copy with a conditional write
 			// (SCALABILITY-AUDIT AV-3)
 			let previousStatus = existingStream.status;
-			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true>(`livestream:${id}`, (fresh) => {
+			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true | 'premiere_started'>(`livestream:${id}`, (fresh) => {
 				// The stream's owner and channel never change under an update
 				if (fresh.userId !== existingStream.userId || fresh.channelId !== existingStream.channelId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
+				// Moved only while it waits
+				if (isPremiere(fresh) && updateData.scheduledStartTime !== undefined && fresh.status !== 'scheduled') return { reject: 'premiere_started' };
 				previousStatus = fresh.status;
 				Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
 
@@ -164,6 +179,7 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			if (!updatedStream) {
 				return c.json({ success: false, error: "Live stream not found" }, 404);
 			}
+			if (rejected === 'premiere_started') return apiError(c, 409, 'premiere_started');
 			if (rejected) {
 				return c.json({ success: false, error: "Insufficient permissions to modify this stream" }, 403);
 			}

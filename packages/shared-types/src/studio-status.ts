@@ -13,6 +13,8 @@ export function studioVideoStatus(video: {
   processingStatus?: unknown;
   scheduledPublishStatus?: unknown;
   isDraft?: unknown;
+  /** Waiting for its premiere (wiki E17) */
+  premiereHold?: unknown;
   /** Pre-publication review (video-review.ts): checking, in_review, appealed → In review; rejected → Not approved */
   review?: { status?: unknown } | null;
 }): StudioVideoStatus {
@@ -23,7 +25,7 @@ export function studioVideoStatus(video: {
   if (processingStatus === 'pending' || processingStatus === 'processing' || processingStatus === 'transcoding') return 'processing';
   if (review === 'checking' || review === 'in_review' || review === 'appealed') return 'in_review';
   if (review === 'rejected') return 'not_approved';
-  if (scheduledPublishStatus === 'scheduled' || scheduledPublishStatus === 'publishing') return 'scheduled';
+  if (scheduledPublishStatus === 'scheduled' || scheduledPublishStatus === 'publishing' || video.premiereHold) return 'scheduled';
   return isDraft === true ? 'drafts' : 'published';
 }
 

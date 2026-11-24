@@ -11,9 +11,10 @@ import { VideoChapterDataSchema } from '@al-ummah/shared-types';
 import { ResponseError } from '../../lib/types';
 import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
-import { PublicRoute, AppContext } from '../../base';
+import { OptionalAuthRoute, AppContext } from '../../base';
+import { videoReadAccess } from '../../lib/videoReadAccess';
 
-export class VideoChaptersGet extends PublicRoute {
+export class VideoChaptersGet extends OptionalAuthRoute {
   schema = {
     tags: ['Videos'],
     summary: 'Get video chapters',
@@ -80,7 +81,11 @@ export class VideoChaptersGet extends PublicRoute {
 
       // Fetch video
       const video = await videoRepo.getObject(videoId);
-      if (!video) {
+      // The video's own read rule: a private, held or removed video's chapters are not public either
+      const access = video ? await videoReadAccess(c.env, video as never, this.getUserId(c)) : null;
+      // Only its team may read it: never kept by a shared cache
+      const headers = access === 'viewer' ? { 'Cache-Control': 'private, no-store' } : undefined;
+      if (!video || !access) {
         logger.debug('Video not found for chapters', { videoId });
         return c.json(
           {
@@ -97,10 +102,7 @@ export class VideoChaptersGet extends PublicRoute {
           videoId,
           chapterCount: video.chapters.chapters.length,
         });
-        return c.json({
-          success: true,
-          chapters: video.chapters,
-        });
+        return c.json({ success: true, chapters: video.chapters }, 200, headers);
       }
 
       // Parse chapters from description
@@ -108,11 +110,7 @@ export class VideoChaptersGet extends PublicRoute {
         // Not an error: most videos have no chapters. A 400 here logged a failed
         // request in the browser console on every such watch page.
         logger.debug('No description to parse chapters from', { videoId });
-        return c.json({
-          success: true,
-          chapters: null,
-          message: 'No chapters',
-        });
+        return c.json({ success: true, chapters: null, message: 'No chapters' }, 200, headers);
       }
 
       const parseResult = parseChapters(
@@ -148,10 +146,7 @@ export class VideoChaptersGet extends PublicRoute {
         chapterCount: parseResult.chapters.length,
       });
 
-      return c.json({
-        success: true,
-        chapters: chapterData,
-      });
+      return c.json({ success: true, chapters: chapterData }, 200, headers);
     } catch (error) {
       logger.error('Error fetching/parsing chapters', {
         error: error instanceof Error ? error.message : String(error),

@@ -8,6 +8,7 @@
 import { LIVE_METADATA_TABLE, type AdminJob, type SearchDb } from '@al-ummah/shared-types';
 import { createJob, listJobs, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
+import { releaseHold } from './premieres';
 import { startOwnershipRebuild, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
 
 export const LIVE_PURGE_JOB = 'live.purge-streams' as const;
@@ -65,9 +66,11 @@ async function deleteStreamReminders(db: D1Database, streamId: string): Promise<
 export async function runLivePurgeStep(env: LivePurgeEnv, job: AdminJob): Promise<JobOutcome> {
 	const db = env.SEARCH_DB as unknown as SearchDb;
 	const totals = { streams: Number(job.params.streams) || 0, messages: Number(job.params.messages) || 0, reminders: Number(job.params.reminders) || 0 };
-	const { results } = await db.prepare(`SELECT stream_id FROM ${LIVE_METADATA_TABLE} WHERE purge_pending = 1 LIMIT 20`).all<{ stream_id: string }>();
+	const { results } = await db.prepare(`SELECT stream_id, premiere_video_id FROM ${LIVE_METADATA_TABLE} WHERE purge_pending = 1 LIMIT 20`).all<{ stream_id: string; premiere_video_id: string | null }>();
 	let left = DELETES_PER_STEP;
-	for (const { stream_id: streamId } of results ?? []) {
+	for (const { stream_id: streamId, premiere_video_id: videoId } of results ?? []) {
+		// The premiere it was is gone: the video is free again
+		if (videoId && env.videos) await releaseHold(env as never, videoId, streamId);
 		for (let n = LIVE_DELETE_BATCH; n === LIVE_DELETE_BATCH; ) {
 			if (left-- <= 0) return { done: false, params: totals, result: totals };
 			totals.messages += n = await deleteStreamChat(db, streamId);

@@ -4,6 +4,7 @@ import { LiveStreamCreate } from '../endpoints/live/liveStreamCreate';
 import { LiveStreamsList } from '../endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../endpoints/live/liveStreamUpdate';
 import { LiveChatList, LiveChatModerate, LiveChatPost, LiveChatSettingsUpdate } from '../endpoints/live/liveChat';
+import { PremiereSwap } from '../endpoints/live/premiere';
 import { LiveStreamDelete, LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamQoe, LiveStreamStart, LiveStreamStateGet, LiveStreamViewers } from '../endpoints/live/liveSession';
 
 const app = new Hono();
@@ -25,6 +26,8 @@ liveRouter.get('/:id/ingest', LiveStreamIngestGet);
 liveRouter.post('/:id/start', LiveStreamStart);
 liveRouter.post('/:id/end', LiveStreamEnd);
 
+// Premieres (wiki E17): another video before the start
+liveRouter.patch('/:id/premiere', PremiereSwap);
 // Live chat (wiki E17), behind the liveChat switch
 liveRouter.get('/:id/chat', LiveChatList);
 liveRouter.post('/:id/chat', LiveChatPost);
