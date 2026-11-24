@@ -582,6 +582,8 @@ export async function openTransferJob(env: Pick<AdminServiceEnv, 'SEARCH_DB'>, c
 const REPAIR_LOCK_PREFIX = 'reverify:';
 /** A repair's lock older than this is stale: its worker died (a scheduled run lasts 15 minutes at most). */
 const REPAIR_LOCK_MS = 20 * 60 * 1000;
+/** A repair starts no write later than this, so it never writes once its lock is stale; the next day's run goes on. */
+const REPAIR_MAX_MS = 15 * 60 * 1000;
 
 /**
  * The channel's move lock (channel_transfer_locks, wiki AUN-CHANNEL-CLAIM §3.3) with its job's
@@ -791,11 +793,12 @@ async function movePosts(env: AdminServiceEnv, channelId: string, from: string |
 	});
 }
 
-/** The handle index entry (`channel-handles/{handle}` in channel_tabs) names the owner too. */
-async function moveHandleEntry(env: AdminServiceEnv, channelId: string, handle: unknown, to: string): Promise<void> {
+/** The handle index entry (`channel-handles/{handle}` in channel_tabs) names the owner too. With `from`, only an entry still on them (or on nobody) moves. */
+async function moveHandleEntry(env: AdminServiceEnv, channelId: string, handle: unknown, to: string, from?: string): Promise<void> {
 	if (!env.channel_tabs || typeof handle !== 'string' || !handle) return;
 	await repo(env.channel_tabs).updateObject(handleKey(handle), (entry) => {
 		if (entry.channelId !== channelId || entry.userId === to) return false;
+		if (from && entry.userId && entry.userId !== from) return false;
 		entry.userId = to;
 		return true;
 	});
@@ -1038,9 +1041,10 @@ class RepairSuperseded extends Error {}
  */
 async function repairMovedChannel(env: AdminServiceEnv, id: string, from: string, to: string): Promise<boolean> {
 	const holder = `${REPAIR_LOCK_PREFIX}${crypto.randomUUID()}`;
+	const started = Date.now();
 	if (await takeTransferLock(env, id, now(), holder)) return false;
 	try {
-		await repairUnderLock(env, id, from, to);
+		await repairUnderLock(env, id, from, to, started + REPAIR_MAX_MS);
 		return true;
 	} catch (error) {
 		if (error instanceof RepairSuperseded) {
@@ -1058,9 +1062,10 @@ async function repairMovedChannel(env: AdminServiceEnv, id: string, from: string
 	}
 }
 
-async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, to: string): Promise<void> {
-	/** The channel, still on the new owner; asked before every write. */
+async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, to: string, until: number): Promise<void> {
+	/** The channel, still on the new owner, while the lock still holds; asked before every write. */
 	const current = async (): Promise<Row> => {
+		if (Date.now() > until) throw new Error('The repair ran out of time; the next run goes on');
 		const channel = await repo(env.channels).getObject(id);
 		if (!channel || channel.isDeleted || channel.userId !== to) throw new RepairSuperseded();
 		return channel;
@@ -1077,7 +1082,7 @@ async function repairUnderLock(env: AdminServiceEnv, id: string, from: string, t
 	});
 	await current();
 	await removeFromProfile(env, from, id);
-	await moveHandleEntry(env, id, (await current()).handle, to);
+	await moveHandleEntry(env, id, (await current()).handle, to, from);
 	await current();
 	const videos = await cascade(env.videos, videoIds, (v) => {
 		if (v.channelId !== id || v.userId !== from) return false;

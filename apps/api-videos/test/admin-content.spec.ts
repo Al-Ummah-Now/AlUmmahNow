@@ -925,6 +925,48 @@ describe('channel actions', () => {
 		assert.equal((await t.jobOf(await t.call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_third' }))).status, 'succeeded');
 	});
 
+	it('a repair releases only its own lock, and starts no write once its lock may be stale (CC-1c review)', async () => {
+		const lock = (t: Awaited<ReturnType<typeof leftBehind>>) => ({ ...(t.db.db.prepare(`SELECT job_id FROM channel_transfer_locks WHERE channel_id = 'ch1'`).get() as { job_id: string } | undefined) });
+		// Another holder has the lock by the time the repair ends
+		const taken = await leftBehind();
+		const { result } = await taken.reverify((n) => {
+			if (n === 3) taken.db.db.prepare(`UPDATE channel_transfer_locks SET job_id = 'job-other' WHERE channel_id = 'ch1'`).run();
+		});
+		assert.equal(result.checked, 1);
+		assert.deepEqual(lock(taken), { job_id: 'job-other' }, "the other holder's lock stays");
+		// A repair that hangs: past its time it writes nothing more, reports it, and gives its lock back
+		const slow = await leftBehind();
+		const clock = Date.now;
+		try {
+			const late = await slow.reverify((n) => {
+				if (n !== 5) return;
+				Date.now = () => clock() + 16 * 60_000;
+			});
+			// The read that was running may still write its own step; the next check stops it
+			assert.deepEqual(late.result, { checked: 1, repaired: 0, failed: 1 });
+		} finally {
+			Date.now = clock;
+		}
+		assert.deepEqual([slow.read(slow.raw.playlists, 'pl1').userId, slow.session(), slow.subscriber(), slow.invite()], [OWNER, 'provisioned', OWNER, 'pending'], 'nothing after the deadline');
+		assert.deepEqual(lock(slow), {}, 'released');
+		// The next run finishes it
+		assert.deepEqual(await reverifyRecentTransfers(slow.env as never), { checked: 1, repaired: 1, failed: 0 });
+	});
+
+	it('a repair never takes a handle entry back from whoever holds it now (CC-1c review)', async () => {
+		const t = await leftBehind();
+		const { result } = await t.reverify((n) => {
+			if (n === 2) t.edit(t.raw.channel_tabs, 'channel-handles/ch1', { userId: 'usr_third' });
+		});
+		assert.equal(t.read(t.raw.channel_tabs, 'channel-handles/ch1').userId, 'usr_third');
+		assert.deepEqual(result, { checked: 1, repaired: 0, failed: 1 }, 'the mismatch is reported');
+		// An entry that names nobody is completed
+		const blank = await leftBehind();
+		blank.edit(blank.raw.channel_tabs, 'channel-handles/ch1', { userId: undefined });
+		assert.deepEqual((await blank.reverify(() => {})).result, { checked: 1, repaired: 1, failed: 0 });
+		assert.equal(blank.read(blank.raw.channel_tabs, 'channel-handles/ch1').userId, OTHER);
+	});
+
 	it("a repair of a channel with more than 100 live streams ends only the sessions left from before, never the new owner's (CC-1c review)", async () => {
 		const t = await leftBehind();
 		for (let i = 0; i < 130; i++) {
