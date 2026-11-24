@@ -18,7 +18,7 @@
  * write per request.
  */
 import { logger } from '../logger';
-import { isViewToken, sessionAccess, verifyViewToken } from './access';
+import { isViewToken, mayFetch, sessionState, type SessionState } from './access';
 import { verifySelfHostedKey, type LiveEnv } from './providers';
 import { addSessionCounters, readSession, recordEvent, updateSession, type LiveSessionRow } from './store';
 
@@ -244,15 +244,14 @@ async function deliver(request: Request, env: LiveEnv, ctx: ExecutionContext, pa
 	if (rest.length === 2 && !RENDITION.test(rest[0])) return text(404, 'Not found');
 	if (!/\.(m3u8|m4s|mp4|ts)$/.test(file)) return text(404, 'Not found');
 	// The stream's state first, before anything kept at the edge
-	let access: Awaited<ReturnType<typeof sessionAccess>>;
+	let state: SessionState;
 	try {
-		access = await sessionAccess(env, sessionId);
+		state = await sessionState(env, sessionId);
 	} catch (error) {
 		logger.error('[LiveEdge] The stream\'s state could not be read; refusing', { sessionId, error: error instanceof Error ? error.message : String(error) });
 		return new Response('Unavailable', { status: 503, headers: { ...CORS, 'cache-control': 'no-store', 'retry-after': '2' } });
 	}
-	const open = access === 'public' || (access === 'managers' && !!token && (await verifyViewToken(env, sessionId, token)));
-	if (!open) return new Response('Not found', { status: 404, headers: { ...CORS, 'cache-control': 'no-store' } });
+	if (!(await mayFetch(env, sessionId, state, token))) return new Response('Not found', { status: 404, headers: { ...CORS, 'cache-control': 'no-store' } });
 	const url = new URL(request.url);
 	// One copy per file, whoever asks for it
 	const cacheKey = new Request(`${url.origin}/hls/${sessionId}/${rest.join('/')}`, { method: 'GET' });
@@ -265,7 +264,7 @@ async function deliver(request: Request, env: LiveEnv, ctx: ExecutionContext, pa
 		count(sessionId, { r2_reads: 1 });
 		if (!object) {
 			ctx.waitUntil(flushEdgeCounters(env.SEARCH_DB!).catch(() => undefined));
-			return new Response('Not found', { status: 404, headers: { ...CORS, 'cache-control': 'public, max-age=1' } });
+			return new Response('Not found', { status: 404, headers: { ...CORS, 'cache-control': state.access === 'public' ? 'public, max-age=1' : 'no-store' } });
 		}
 		const headers = new Headers(CORS);
 		object.writeHttpMetadata(headers);
@@ -280,6 +279,6 @@ async function deliver(request: Request, env: LiveEnv, ctx: ExecutionContext, pa
 	const out = new Response(request.method === 'HEAD' ? null : response.body, response);
 	out.headers.set('x-live-cache', hit ? 'HIT' : 'MISS');
 	// Not for everyone: no browser or proxy keeps it
-	if (access === 'managers') out.headers.set('cache-control', 'private, no-store');
+	if (state.access !== 'public') out.headers.set('cache-control', 'private, no-store');
 	return out;
 }

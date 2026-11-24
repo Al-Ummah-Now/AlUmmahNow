@@ -1,10 +1,12 @@
 /** The self-hosted live edge serves a session's media only while its stream's state allows it (lib/live/access.ts). */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACCESS_STALE_MS, ACCESS_TTL_MS, MANAGER_URL_SECONDS, forgetLiveAccess, liveSessionAccess, sessionAccess, signLiveUrl, verifyViewToken } from '../src/lib/live/access';
+import { ACCESS_STALE_MS, ACCESS_TTL_MS, MANAGER_URL_SECONDS, REVIEW_URL_SECONDS, forgetLiveAccess, liveSessionAccess, mayFetch, openReviewIds, sessionState, signManagerUrl as signLiveUrl } from '../src/lib/live/access';
 import { handleLiveEdge } from '../src/lib/live/edge';
 import { selfHostedKey } from '../src/lib/live/providers';
-import { LiveStreamGet, LiveStreamStateGet } from '../src/endpoints/live/liveSession';
+import { LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamStart, LiveStreamStateGet } from '../src/endpoints/live/liveSession';
+import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
+import { liveReviewSubject } from '../src/lib/review/live';
 import { moderateLive } from '../src/lib/admin/liveModeration';
 import { deleteStream, streamKey } from '../src/lib/live/streams';
 import { signReviewVodUrl } from '../src/lib/live/vod-sign';
@@ -175,7 +177,7 @@ describe('who may fetch a session', () => {
 		const res = await t.get(`/hls/${A}/720/seg_1.m4s`);
 		assert.deepEqual([res.status, res.cache], [503, 'no-store']);
 		forgetLiveAccess();
-		await assert.rejects(sessionAccess({ ...t.raw, videos: undefined } as never, A));
+		await assert.rejects(sessionState({ ...t.raw, videos: undefined } as never, A));
 	});
 });
 
@@ -213,12 +215,14 @@ describe('signed URLs', () => {
 		const sign = async () => (await signLiveUrl(t.raw as never, `https://${HOST}/hls/${A}/vod.m3u8`))!;
 		const url = await sign();
 		const token = url.split('/')[5]!;
+		const may = (value: string) => mayFetch(t.raw as never, A, { access: 'managers', reviewIds: [] }, value, now);
 		now += 5_000;
 		assert.equal(await sign(), url);
-		assert.equal(await verifyViewToken(t.raw as never, A, token, now), true);
-		assert.equal(await verifyViewToken(t.raw as never, A, `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`, now), false);
-		assert.equal(await verifyViewToken(t.raw as never, A, `${Number(token.slice(0, 10)) + 1}${token.slice(10)}`, now), false);
-		assert.equal(await verifyViewToken(t.raw as never, A, await selfHostedKey(t.raw as never, A, 1), now), false);
+		assert.equal(await may(token), true);
+		assert.equal(await may(`${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`), false);
+		assert.equal(await may(token.replace(/\d{10}/, (n) => String(Number(n) + 1))), false);
+		assert.equal(await may(await selfHostedKey(t.raw as never, A, 1)), false)
+		assert.equal(await may(token.replace(/^m/, 'r')), false);
 		now += 2 * MANAGER_URL_SECONDS * 1000;
 		assert.equal((await t.get(url)).status, 404);
 		// Other URLs are left alone, and nothing is signed without the secret
@@ -250,9 +254,126 @@ describe('signed URLs', () => {
 		assert.equal((await read(hidden, 'owner')).body.result.stream.vodUrl, `https://${HOST}/hls/${A}/vod.m3u8`);
 	});
 
-	it('a recording held for review still reaches its review', async () => {
-		const t = await setup({ review: { status: 'rejected', reviewId: 'r1' } });
-		const url = (await signReviewVodUrl(t.raw as never, `https://${HOST}/hls/${A}/vod.m3u8`))!;
+	it('every answer that carries one is the caller\'s alone: ingest, start, end and the list too', async () => {
+		const t = await setup({ isPrivate: true });
+		await updateSession(t.db as never, A, { status: 'live' });
+		await t.write({ isPrivate: true, status: 'live' });
+		const app = buildApp((r) => {
+			r.get('/api/live-streams', LiveStreamsList);
+			r.get('/api/live-streams/:id/ingest', LiveStreamIngestGet);
+			r.post('/api/live-streams/:id/start', LiveStreamStart);
+			r.post('/api/live-streams/:id/end', LiveStreamEnd);
+			r.get('/api/live-streams/:id', LiveStreamGet);
+		}, { userId: 'owner' });
+		const ask = async (path: string, method = 'GET') => {
+			const res = await app.request(`/api/live-streams${path}`, { method }, t.env as never);
+			return { status: res.status, cache: res.headers.get('cache-control'), result: ((await res.json()) as Json).result };
+		};
+		const plays = async (url: string) => { assert.match(url, /\/hls\/[^/]+\/m\.\d{10}\.[0-9a-f]{40}\//); assert.equal((await t.get(url)).status, 200); };
+		const one = await ask('/s1');
+		assert.equal(one.cache, 'no-store');
+		await plays(one.result.stream.playbackUrl);
+		await plays(one.result.stream.vodUrl);
+		const list = await ask('');
+		assert.equal(list.status, 200, JSON.stringify(list.result));
+		assert.equal(list.cache, 'no-store');
+		await plays(list.result.data[0].playbackUrl);
+		await plays(list.result.data[0].vodUrl);
+		const end = await ask('/s1/end', 'POST');
+		assert.equal(end.status, 200, JSON.stringify(end.result));
+		assert.equal(end.cache, 'no-store');
+		await plays(end.result.state.vodUrl);
+		const ingest = await ask('/s1/ingest');
+		assert.equal(ingest.status, 200, JSON.stringify(ingest.result));
+		assert.equal(ingest.cache, 'no-store');
+		await plays(ingest.result.state.vodUrl);
+		// Nothing is signed for a stream that is open to everyone
+		const open = await setup();
+		const list2 = await app.request('/api/live-streams', {}, open.env as never);
+		assert.equal(((await list2.json()) as Json).result.data[0].vodUrl, `https://${HOST}/hls/${A}/vod.m3u8`);
+	});
+});
+
+describe('the review of a recording', () => {
+	const review = (status: string, reviewId = 'r1') => ({ review: { status, reviewId, timing: 'post', since: '2026-11-24T00:00:00Z' } });
+	const urlOf = async (t: Awaited<ReturnType<typeof setup>>, reviewId = 'r1') => (await signReviewVodUrl(t.raw as never, `https://${HOST}/hls/${A}/vod.m3u8`, reviewId))!;
+
+	it('reads it whatever the stream\'s state, while the review is open', async () => {
+		for (const state of [{}, { isHidden: true }, { isHidden: true, suspensionHolds: ['user:owner'] }, { isDeleted: true, isHidden: true }, { isPrivate: true }]) {
+			for (const status of ['checking', 'in_review', 'appealed', 'post_review', 'rejected']) {
+				const t = await setup({ ...review(status), ...state });
+				const url = await urlOf(t);
+				for (const path of ['vod.m3u8', '720/index.m3u8', '720/seg_1.m4s']) {
+					const res = await t.get(url.replace('vod.m3u8', path));
+					assert.equal(res.status, 200, JSON.stringify([state, status, path]));
+					if (Object.keys(state).length) assert.equal(res.cache, 'private, no-store');
+				}
+				forgetLiveAccess();
+			}
+		}
+		const shadow = await setup({ isHidden: true, reviewShadow: { reviewId: 'r1', queuedAt: 'x' } });
+		assert.equal((await shadow.get(await urlOf(shadow))).status, 200);
+	});
+
+	it('nobody else does, and not after it: a manager\'s token, another review, another session, approved, a takedown, no record', async () => {
+		const t = await setup({ ...review('in_review'), isHidden: true });
+		const url = await urlOf(t);
 		assert.equal((await t.get(url)).status, 200);
+		assert.equal((await t.get((await signLiveUrl(t.raw as never, `https://${HOST}/hls/${A}/vod.m3u8`))!)).status, 404);
+		assert.equal((await t.get(await urlOf(t, 'r2'))).status, 404);
+		assert.equal((await t.get(url.replace(A, B))).status, 404);
+		assert.equal((await t.get(url.replace('/r.', '/m.'))).status, 404);
+		for (const over of [{ ...review('approved'), isHidden: true }, { ...review('in_review', 'r2'), isHidden: true }, { isHidden: true }, { ...review('in_review'), isHidden: true, csamTakedown: { caseId: 'c' } }]) {
+			await t.write(over);
+			assert.equal((await t.get(url)).status, 404, JSON.stringify(over));
+		}
+		await t.write({ ...review('in_review'), isHidden: true });
+		assert.equal((await t.get(url)).status, 200);
+		now += 2 * REVIEW_URL_SECONDS * 1000;
+		assert.equal((await t.get(url)).status, 404, 'expired');
+		await t.env.videos.delete(streamKey('s1'));
+		await t.settle();
+		now += ACCESS_TTL_MS;
+		assert.equal((await t.get(await urlOf(t))).status, 404, 'the stream is gone');
+		assert.deepEqual(openReviewIds(null), []);
+	});
+
+	it('the moderators\' page gets a URL that plays for a hidden recording', async () => {
+		const t = await setup({ ...review('in_review'), isHidden: true });
+		const subject = await liveReviewSubject(t.env as never, 's1');
+		assert.equal((await t.get(subject!.playUrl!)).status, 200);
+	});
+});
+
+describe('the CDN purge', () => {
+	it('runs when fewer people may watch, once, in a bounded number of calls', async () => {
+		const t = await setup();
+		assert.equal(purges.length, 0);
+		await t.write({ title: 'Renamed' });
+		assert.equal(purges.length, 0, 'an open stream edited');
+		await t.write({ isPrivate: true });
+		assert.equal(purges.length, 1);
+		for (const title of ['a', 'b', 'c']) await t.write({ isPrivate: true, title });
+		assert.equal(purges.length, 1, 'a private stream edited');
+		await t.write({ isPrivate: true, isHidden: true });
+		assert.equal(purges.length, 2, 'now nobody');
+		await t.write({ isPrivate: true });
+		await t.write({});
+		assert.equal(purges.length, 2, 'opened again');
+		await t.write({ review: { status: 'rejected', reviewId: 'r1' } });
+		assert.equal(purges.length, 3, 'held by review');
+		await t.env.videos.delete(streamKey('s1'));
+		await t.settle();
+		assert.equal(purges.length, 4, 'deleted');
+		await t.env.videos.delete(streamKey('s1'));
+		await t.settle();
+		assert.equal(purges.length, 4, 'already gone');
+		// A stream with a great many sessions
+		const many = await setup();
+		purges = [];
+		for (let i = 0; i < 200; i++) await many.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at, first_segment_at) VALUES (?, 's1', 'selfhosted', 'ended', 'round_robin', ?, 1)").bind(`sess-${i}`, i).run();
+		await many.write({ isHidden: true });
+		assert.equal(purges.length, 3);
+		assert.ok(purges.every((p) => p.length <= 30));
 	});
 });

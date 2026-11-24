@@ -16,7 +16,7 @@ describe('the recording the container may read', () => {
 	it('self-hosted: the session directory and vod.m3u8', () => {
 		assert.deepEqual(liveVodSource('https://live.qa.alummahnow.net/hls/sess-1/vod.m3u8'), { base: 'https://live.qa.alummahnow.net/hls/sess-1/', file: 'vod.m3u8' });
 		// Signed for the review: the token is part of the directory, so every file under it keeps it
-		const token = `1764000000.${'a'.repeat(40)}`;
+		const token = `r.1764000000.${'a'.repeat(40)}`;
 		const signed = liveVodSource(`https://live.qa.alummahnow.net/hls/sess-1/${token}/vod.m3u8`)!;
 		assert.deepEqual(signed, { base: `https://live.qa.alummahnow.net/hls/sess-1/${token}/`, file: 'vod.m3u8' });
 		assert.equal(liveVodTarget(signed.base, '720/seg_1.m4s'), `https://live.qa.alummahnow.net/hls/sess-1/${token}/720/seg_1.m4s`);
