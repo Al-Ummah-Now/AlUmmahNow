@@ -66,7 +66,7 @@ export function featureNotes(item: FeatureItem, locale: Locale): FeatureNote[] {
   const notes: FeatureNote[] = [];
   if (item.envOverride) notes.push({ kind: 'envOverride' });
   if (item.blockedBy.length > 0) notes.push({ kind: 'blocked', by: [...item.blockedBy] });
-  if (item.enabled && !item.ready && !item.envOverride) notes.push({ kind: 'needsSetup', note: item.setupNote?.[locale] ?? null, href: def.setupHref ?? null });
+  if (item.enabled && !item.ready && !item.envOverride) notes.push({ kind: 'needsSetup', note: sentencePart(item.setupNote?.[locale]), href: def.setupHref ?? null });
   if (item.parked > 0) notes.push({ kind: 'parked', count: item.parked });
   return notes;
 }
@@ -153,4 +153,10 @@ export function preconditionOf(body: Record<string, unknown> | undefined): { rea
 /** The sentence under the switch, in the page's language; `fallback` (a message key's text) when no reason came. */
 export function preconditionText(reason: FeatureText | null, locale: Locale, fallback: string): string {
   return reason?.[locale]?.trim() || fallback;
+}
+
+/** A setup note goes inside our own sentence, which ends it: admin-api's notes end with «.», so drop it (never "budget.."). */
+export function sentencePart(note: string | null | undefined): string | null {
+  const trimmed = note?.trim().replace(/[.。؛!]+$/u, '').trim();
+  return trimmed ? trimmed : null;
 }
