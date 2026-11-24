@@ -2,12 +2,16 @@
  * The age rules' numbers (wiki E20 §5.1, §5.2): how old an account must be for each thing. One row in the search
  * D1 (`age_rules`, api-videos migration 0121) next to `feature_switches`: admin-api writes it, api-videos reads it
  * through the same 30-second memo. Videos never knows an age, only the band in the account's token, so a number is
- * one a band can answer: 13, 16 or 18. 13 is Auth's own minimum and no number goes below it.
+ * one a band can answer: 13, 16 or 18. Only the three limits of E20-D3 are numbers; comments, posts, uploads and
+ * channels need the account minimum (ACCOUNT_MINIMUM_AGE, Auth's own), which is never a setting.
  */
 import { SWITCHES_TTL_MS } from './feature-switch-store';
 
-export const AGE_RULE_KEYS = ['comment', 'post', 'liveChat', 'upload', 'support', 'ageRestricted'] as const;
+export const AGE_RULE_KEYS = ['liveChat', 'support', 'ageRestricted'] as const;
 export type AgeRuleKey = (typeof AGE_RULE_KEYS)[number];
+
+/** What an account needs to exist, and so for everything that isn't one of the three limits. */
+export const ACCOUNT_MINIMUM_AGE = 13;
 
 export const AGE_CHOICES = [13, 16, 18] as const;
 export type AgeChoice = (typeof AGE_CHOICES)[number];
@@ -15,7 +19,7 @@ export type AgeChoice = (typeof AGE_CHOICES)[number];
 export type AgeNumbers = Record<AgeRuleKey, AgeChoice>;
 
 /** What the page starts from before the numbers are saved (E20-D3); never used to decide anything. */
-export const SUGGESTED_AGE_NUMBERS: Readonly<AgeNumbers> = Object.freeze({ comment: 13, post: 13, liveChat: 16, upload: 13, support: 18, ageRestricted: 18 });
+export const SUGGESTED_AGE_NUMBERS: Readonly<AgeNumbers> = Object.freeze({ liveChat: 16, support: 18, ageRestricted: 18 });
 
 /** Exactly the known keys with allowed numbers, or null. */
 export function parseAgeNumbers(raw: unknown): AgeNumbers | null {

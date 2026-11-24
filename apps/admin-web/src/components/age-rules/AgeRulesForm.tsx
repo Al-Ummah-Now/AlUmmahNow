@@ -16,10 +16,7 @@ import { LocalTime } from '@/components/LocalTime';
 import { logger } from '@/lib/logger-client';
 
 const LABELS = {
-  comment: 'ageRules.keyComment',
-  post: 'ageRules.keyPost',
   liveChat: 'ageRules.keyLiveChat',
-  upload: 'ageRules.keyUpload',
   support: 'ageRules.keySupport',
   ageRestricted: 'ageRules.keyAgeRestricted',
 } as const satisfies Record<AgeRuleKey, string>;

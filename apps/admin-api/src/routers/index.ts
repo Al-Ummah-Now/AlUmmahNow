@@ -8,6 +8,7 @@ import authRequestsRouter from './authRequests.router';
 import errorsRouter from './errors.router';
 import categorySuggestionsRouter from './categorySuggestions.router';
 import videoFormatRouter from './video-format.router';
+import ageRulesRouter from './ageRules.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -42,4 +43,7 @@ export function registerAllRouters(openapi: any) {
 
   // Short vs video formats (backfill runs, unclassifiable videos, manual set) at /api/video-format
   openapi.route('/api/video-format', videoFormatRouter);
+
+  // Age rules (wiki E20 §5.2): the three limits and what the switch still needs, at /api/age-rules
+  openapi.route('/api/age-rules', ageRulesRouter);
 }
