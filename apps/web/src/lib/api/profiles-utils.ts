@@ -19,3 +19,15 @@ export const isProfileComplete = (profile: Profile | null): boolean => {
         profile.firstName !== profile.email?.split('@')[0]  // Not just the default email prefix
     );
 };
+
+/**
+ * The profile in an API answer: `{ success, result: { profile } }`, `{ profile }` or the profile itself
+ * (which may have no email). Null when there is none.
+ */
+export function unwrapProfile(response: unknown): Profile | null {
+    if (!response || typeof response !== 'object') return null;
+    const body = response as Record<string, unknown>;
+    const result = body.result as Record<string, unknown> | null | undefined;
+    const profile = result && typeof result === 'object' && 'profile' in result ? result.profile : 'profile' in body ? body.profile : 'id' in body && !('success' in body) ? body : null;
+    return profile && typeof profile === 'object' ? (profile as unknown as Profile) : null;
+}

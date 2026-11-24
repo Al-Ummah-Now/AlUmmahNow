@@ -106,7 +106,8 @@ export interface VideoInfo {
 
 export interface Profile {
     id: string;
-    email: string;
+    /** The account's email; absent when the token that made the profile had none */
+    email?: string;
     displayName?: string;
     displayNameLocalized?: Record<string, string>; // Multi-language display names
     firstName?: string;
@@ -170,7 +171,6 @@ export interface Playlist {
 export interface Channel {
     id: string;
     userId: string;
-    email: string;
     name: string;
     nameLocalized?: Record<string, string>; // Multi-language names
     description?: string;

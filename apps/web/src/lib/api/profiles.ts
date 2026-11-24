@@ -2,6 +2,7 @@
 
 import { Profile } from "@/interfaces";
 import { ApiResponse, ProfileUpdateRequest } from "./types";
+import { unwrapProfile } from "./profiles-utils";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import {
@@ -47,33 +48,9 @@ export async function getProfileCurrent(): Promise<Profile | null> {
     return null;
   }
 
-  // Handle different response formats
-  let profile: Profile | null = null;
-
-  if (result && typeof result === 'object') {
-    const response = result as Record<string, unknown>;
-
-    // If it's already a Profile object
-    if ('id' in response && 'email' in response) {
-      logApiSuccess(fnName, 'Response format: Direct Profile object');
-      profile = response as unknown as Profile;
-    }
-    // If it's wrapped in a success/result structure
-    else if ('success' in response && 'result' in response) {
-      const resultObj = response.result as Record<string, unknown>;
-      if (resultObj && 'profile' in resultObj) {
-        logApiSuccess(fnName, 'Response format: Wrapped in success/result structure');
-        profile = resultObj.profile as Profile;
-      }
-    }
-    // If it's wrapped differently
-    else if ('profile' in response) {
-      logApiSuccess(fnName, 'Response format: Wrapped in profile property');
-      profile = response.profile as Profile;
-    }
-    else {
-      logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(response) });
-    }
+  const profile = unwrapProfile(result);
+  if (!profile && result && typeof result === 'object') {
+    logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(result) });
   }
 
   if (profile) {
@@ -126,33 +103,9 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
     return null;
   }
 
-  // Handle different response formats
-  let profile: Profile | null = null;
-
-  if (result && typeof result === 'object') {
-    const response = result as Record<string, unknown>;
-
-    // If it's already a Profile object
-    if ('id' in response && 'email' in response) {
-      logApiSuccess(fnName, 'Response format: Direct Profile object');
-      profile = response as unknown as Profile;
-    }
-    // If it's wrapped in a success/result structure
-    else if ('success' in response && 'result' in response) {
-      const resultObj = response.result as Record<string, unknown>;
-      if (resultObj && 'profile' in resultObj) {
-        logApiSuccess(fnName, 'Response format: Wrapped in success/result structure');
-        profile = resultObj.profile as Profile;
-      }
-    }
-    // If it's wrapped differently
-    else if ('profile' in response) {
-      logApiSuccess(fnName, 'Response format: Wrapped in profile property');
-      profile = response.profile as Profile;
-    }
-    else {
-      logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(response) });
-    }
+  const profile = unwrapProfile(result);
+  if (!profile && result && typeof result === 'object') {
+    logApiError(fnName, 'Response format not recognized', { responseKeys: Object.keys(result) });
   }
 
   if (profile) {
@@ -312,7 +265,8 @@ export async function createProfile(data: {
   bioLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
-  email: string;
+  /** The API takes the email from the signed-in account */
+  email?: string;
   timezone?: string;
 }) {
   return createProfileAPI(data);
