@@ -2,14 +2,16 @@ import { AdminRoute, AppContext } from "../../base";
 import { Str } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { addAuthToSchema } from "../../lib/openapi-auth";
-import { ResponseError, ReportSchema } from "../../lib/types";
+import { hasContentPermission, reportOutcomeOptions, REPORT_OUTCOMES, type ReportableEntityType } from '@al-ummah/shared-types';
+import { ResponseError, ReportSchema, type Report } from "../../lib/types";
+import { decidableItem, type DecisionEnv } from '../../lib/moderation/reportDecision';
 import { logger } from "../../lib/logger";
 
 export class ReportGet extends AdminRoute {
   schema = addAuthToSchema({
     tags: ["Moderation"],
     summary: "Get Report",
-    description: "Get details of a specific report by ID.",
+    description: "Get details of a specific report by ID, and the outcomes the reader may choose.",
     request: {
       params: z.object({
         reportId: Str({ description: "Report ID" }),
@@ -24,6 +26,9 @@ export class ReportGet extends AdminRoute {
               success: z.boolean().default(true),
               result: z.object({
                 report: ReportSchema,
+                outcomes: z
+                  .array(z.object({ action: z.enum(REPORT_OUTCOMES as [string, ...string[]]), available: z.boolean(), reason: z.enum(['not_for_type', 'not_for_post_comment', 'item_gone', 'permission']).nullable() }))
+                  .describe('What the reader may decide about the reported item, and why the rest is not offered'),
               }),
             }),
           },
@@ -57,7 +62,7 @@ export class ReportGet extends AdminRoute {
 
       const report = await db.prepare(
         'SELECT * FROM reports WHERE id = ?'
-      ).bind(reportId).first();
+      ).bind(reportId).first<Report>();
 
       if (!report) {
         return c.json({
@@ -75,6 +80,11 @@ export class ReportGet extends AdminRoute {
         success: true,
         result: {
           report,
+          outcomes: reportOutcomeOptions({
+            type: report.entity_type as ReportableEntityType,
+            item: await decidableItem(c.env as DecisionEnv, report.entity_type, report.entity_id),
+            may: (permission) => hasContentPermission(this.getRoles(c), permission),
+          }),
         },
       };
     } catch (error) {

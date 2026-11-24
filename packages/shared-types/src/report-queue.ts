@@ -42,6 +42,60 @@ export const REPORT_OUTCOMES: readonly ModerationAction[] = ['warning', 'removed
 /** Outcomes that need a content permission on top of the moderator role. */
 export const REPORT_OUTCOME_PERMISSION: Readonly<Partial<Record<ModerationAction, 'users:manage'>>> = { banned: 'users:manage' };
 
+const ALL_OUTCOMES: readonly ModerationAction[] = ['warning', 'removed', 'banned', 'deleted', 'dismissed'];
+
+/**
+ * The outcomes each type of item really has. An outcome that would change nothing is not here, and is
+ * refused (a report never closes as acted on when nothing happened):
+ *   comment    removed holds it (as AI review's Hide does); deleted is the admin delete (video comments
+ *              only, see reportOutcomeOptions). A warning is a notice to the person, sent from their page.
+ *   post       deleted is the admin delete, restorable for 30 days; posts have no separate hide.
+ *   live_chat  a message can be removed; it cannot carry a warning.
+ */
+export const REPORT_OUTCOMES_BY_TYPE: Readonly<Record<ReportableEntityType, readonly ModerationAction[]>> = {
+  video: ALL_OUTCOMES,
+  channel: ALL_OUTCOMES,
+  playlist: ALL_OUTCOMES,
+  livestream: ALL_OUTCOMES,
+  live_chat: ['removed', 'banned', 'deleted', 'dismissed'],
+  comment: ['removed', 'banned', 'deleted', 'dismissed'],
+  post: ['banned', 'deleted', 'dismissed'],
+};
+
+/** The outcomes that go through an admin delete of a content list page, and need its permission. */
+const DELETES_THROUGH_ADMIN: ReadonlySet<ReportableEntityType> = new Set(['comment', 'post']);
+
+/** Why an outcome is not offered: the type has no such action, the item is not there, or the admin's role. */
+export type ReportOutcomeReason = 'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission';
+
+export interface ReportOutcomeOption {
+  action: ModerationAction;
+  available: boolean;
+  reason: ReportOutcomeReason | null;
+}
+
+/** What one admin may decide about one reported item, and why the rest is not offered. */
+export function reportOutcomeOptions(input: {
+  type: ReportableEntityType;
+  /** The item as api-videos finds it now; null when it could not be read. Only comments and posts need it. */
+  item: Pick<AdminLookupItem, 'found' | 'parentType'> | null;
+  may: (permission: 'users:manage' | 'content:delete') => boolean;
+}): ReportOutcomeOption[] {
+  const { type, item, may } = input;
+  const reasonFor = (action: ModerationAction): ReportOutcomeReason | null => {
+    if (action === 'dismissed') return null;
+    if (!(REPORT_OUTCOMES_BY_TYPE[type] ?? []).includes(action)) return 'not_for_type';
+    if (type === 'comment' && action === 'deleted' && item?.parentType === 'post') return 'not_for_post_comment';
+    if (DELETES_THROUGH_ADMIN.has(type) && item?.found === false) return 'item_gone';
+    const permission = REPORT_OUTCOME_PERMISSION[action] ?? (action === 'deleted' && DELETES_THROUGH_ADMIN.has(type) ? 'content:delete' : null);
+    return permission && !may(permission) ? 'permission' : null;
+  };
+  return REPORT_OUTCOMES.map((action) => {
+    const reason = reasonFor(action);
+    return { action, available: reason === null, reason };
+  });
+}
+
 export const REPORT_QUEUE_SORTS = ['oldest', 'newest', 'most_reports'] as const;
 /** oldest: first reported first (default; nothing waits forever); newest: last reported first; most_reports: most open reports first. */
 export type ReportQueueSort = (typeof REPORT_QUEUE_SORTS)[number];
@@ -104,8 +158,10 @@ export interface ReportedItemSummary {
   id: string;
   /** Title, or a text excerpt for comments and posts; null when unknown. */
   title: string | null;
-  /** Video id of a reported comment, stream id of a reported chat message (for its link). */
+  /** Video (or post) id of a reported comment, stream id of a reported chat message (for its link). */
   parentId: string | null;
+  /** comment: what `parentId` is; null when it could not be read now. */
+  parentType: 'video' | 'post' | null;
   channel: { id: string; name: string | null } | null;
   owner: (ReportPerson & { isBanned: boolean | null }) | null;
   /**
@@ -191,6 +247,8 @@ export interface ReportItemResult {
   open: ReportExcerpt[];
   /** Its closed reports, newest first (up to 50). */
   history: ReportHistoryRow[];
+  /** What the reader may decide about it. */
+  outcomes: ReportOutcomeOption[];
 }
 
 /** POST /api/moderation/queue/items/:entityType/:entityId/action (and the per-report action) body. */
@@ -235,6 +293,8 @@ export interface AdminLookupItem {
   found: boolean;
   title: string | null;
   parentId: string | null;
+  /** comment: what `parentId` is. Absent for every other type. */
+  parentType?: 'video' | 'post';
   channelId: string | null;
   channelName: string | null;
   ownerId: string | null;

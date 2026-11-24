@@ -41,8 +41,8 @@ test.describe('axe - signed in pages', () => {
       await setPreferences(page, variant);
       await page.goto(`/moderation/reports/${report.id}`);
       await expect(page.getByTestId('report-actions')).toBeVisible();
-      // Selected state and error alert are part of the scanned UI too
-      await page.getByTestId('report-actions').locator('button[data-action="removed"]').click();
+      // Selected state, the outcomes that are not offered and the error alert are part of the scanned UI too
+      await page.getByTestId('report-actions').locator('button[data-action="dismissed"]').click();
       await expectNoAxeViolations(page, `report ${variant.locale}/${variant.theme}`);
     });
   }

@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
 import { adminApi, getReport, waitForReport } from './support/api';
+import { createReportedVideo } from './support/reported-video';
 import { E2E_DESCRIPTION_TAG, storageStatePath } from './support/env';
 import type { Page } from '@playwright/test';
 import { openMainNav } from './support/ui';
@@ -82,37 +83,64 @@ test.describe('moderation actions', () => {
     expect(after?.moderator_notes).toBe(notes);
   });
 
-  test('ACT-02 issuing a warning resolves the report', async ({ page, makeReport }) => {
-    const report = await makeReport({ label: 'warn', entityType: 'video' });
-    await page.goto(`/moderation/reports/${report.id}`);
-    await takeAction(page, 'Issue Warning');
-    const after = await waitForReport(report.id, (r) => r.status !== 'pending');
-    expect(after.status).toBe('resolved');
-    expect(after.action).toBe('warning');
-    await page.goto(`/moderation/reports/${report.id}`);
-    await expect(page.getByTestId('status-chip')).toHaveText('Resolved');
-    await expect(page.getByTestId('action-taken')).toHaveText('Warning');
+  test('ACT-02 a warning really marks the video and resolves the report', async ({ page, makeReport }) => {
+    const video = await createReportedVideo();
+    try {
+      const warned = await makeReport({ label: 'warn', entityType: 'video', entityId: video.id });
+      await page.goto(`/moderation/reports/${warned.id}`);
+      await takeAction(page, 'Issue Warning');
+      const afterWarning = await waitForReport(warned.id, (r) => r.status !== 'pending');
+      expect(afterWarning.status).toBe('resolved');
+      expect(afterWarning.action).toBe('warning');
+      await page.goto(`/moderation/reports/${warned.id}`);
+      await expect(page.getByTestId('status-chip')).toHaveText('Resolved');
+      await expect(page.getByTestId('action-taken')).toHaveText('Warning');
+    } finally {
+      await video.remove();
+    }
   });
 
-  test('ACT-03 remove content (hide) resolves the report with action removed', async ({ page, makeReport }) => {
-    // Fabricated entity id: the hide is attempted but no real content is touched
-    const report = await makeReport({ label: 'hide', entityType: 'video' });
-    await page.goto(`/moderation/reports/${report.id}`);
-    await takeAction(page, 'Remove Content', `${E2E_DESCRIPTION_TAG} hide`);
-    const after = await waitForReport(report.id, (r) => r.status !== 'pending');
-    expect(after.status).toBe('resolved');
-    expect(after.action).toBe('removed');
-    await page.waitForTimeout(5_000);
-    expect((await getReport(report.id))?.moderator_notes).toBe(`${E2E_DESCRIPTION_TAG} hide`);
+  test('ACT-03 remove content (hide) hides the video and resolves the report with action removed', async ({ page, makeReport }) => {
+    const video = await createReportedVideo();
+    try {
+      const report = await makeReport({ label: 'hide', entityType: 'video', entityId: video.id });
+      await page.goto(`/moderation/reports/${report.id}`);
+      await takeAction(page, 'Remove Content', `${E2E_DESCRIPTION_TAG} hide`);
+      const after = await waitForReport(report.id, (r) => r.status !== 'pending');
+      expect(after.status).toBe('resolved');
+      expect(after.action).toBe('removed');
+      expect((await video.read()).isHidden).toBe(true);
+      await page.waitForTimeout(5_000);
+      expect((await getReport(report.id))?.moderator_notes).toBe(`${E2E_DESCRIPTION_TAG} hide`);
+    } finally {
+      await video.remove();
+    }
   });
 
-  test('ACT-04 ban content resolves the report with action banned', async ({ page, makeReport }) => {
-    const report = await makeReport({ label: 'ban', entityType: 'channel' });
+  test('ACT-04 an item that is gone can only be dismissed, and its report stays open until then', async ({ page, makeReport }) => {
+    const report = await makeReport({ label: 'gone', entityType: 'video' });
     await page.goto(`/moderation/reports/${report.id}`);
-    await takeAction(page, 'Ban Content');
-    const after = await waitForReport(report.id, (r) => r.status !== 'pending');
-    expect(after.status).toBe('resolved');
-    expect(after.action).toBe('banned');
+    const actions = page.getByTestId('report-actions');
+    for (const action of ['removed', 'banned', 'deleted']) {
+      await actions.locator(`button[data-action="${action}"]`).click();
+      await page.getByTestId('confirm-action').click();
+      await expect(page.getByTestId('action-error')).toHaveText('The item is not there any more. Dismiss the report');
+      expect((await getReport(report.id))?.status).toBe('pending');
+    }
+    await actions.locator('button[data-action="dismissed"]').click();
+    await page.getByTestId('confirm-action').click();
+    await expect(page).toHaveURL(/\/moderation$/, { timeout: 30_000 });
+  });
+
+  test('ACT-09 a comment report offers only what can be done to a comment, and says why', async ({ page, makeReport }) => {
+    const report = await makeReport({ label: 'comment', entityType: 'comment' });
+    await page.goto(`/moderation/reports/${report.id}`);
+    const option = (action: string) => page.getByTestId('report-actions').locator(`button[data-action="${action}"]`);
+    await expect(option('warning')).toBeDisabled();
+    await expect(option('warning')).toContainText('Not available for this kind of item');
+    await expect(option('removed')).toBeDisabled();
+    await expect(option('removed')).toContainText('The item is not there any more');
+    await expect(option('dismissed')).toBeEnabled();
   });
 
   test('ACT-05 a closed report cannot be actioned again', async ({ makeReport }) => {
@@ -140,7 +168,7 @@ test.describe('moderation actions', () => {
       method: 'POST',
       body: JSON.stringify({ action: 'dismissed' }),
     });
-    await page.getByTestId('report-actions').locator('button[data-action="banned"]').click();
+    await page.getByTestId('report-actions').locator('button[data-action="dismissed"]').click();
     await page.getByTestId('confirm-action').click();
     await expect(page.getByTestId('action-error')).toHaveText('This report has already been closed by another moderator.');
     await expect(page).toHaveURL(new RegExp(`/moderation/reports/${report.id}$`));

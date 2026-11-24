@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
-import { isChannelDeleted, readPostLocation } from '../../lib/community-posts';
+import { isChannelDeleted, postChannelId } from '../../lib/community-posts';
 import { logger } from '../../lib/logger';
 
 const NOT_FOUND = { error: 'Post not found' };
@@ -39,8 +39,7 @@ export class LocateCommunityPost extends OptionalAuthRoute {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(postId)) return c.json(NOT_FOUND, 404);
     const db = (c.env as { SEARCH_DB?: D1Database }).SEARCH_DB;
     try {
-      const row = db ? await db.prepare('SELECT channel_id FROM search_posts WHERE id = ?1').bind(postId).first<{ channel_id: string | null }>() : null;
-      const channelId = row?.channel_id || (await readPostLocation(c.env.community_posts, postId));
+      const channelId = await postChannelId({ community_posts: c.env.community_posts, SEARCH_DB: db }, postId);
       if (!channelId) return c.json(NOT_FOUND, 404);
       const object = await c.env.community_posts.get(`posts/${channelId}/${postId}.json`);
       if (!object) return c.json(NOT_FOUND, 404);

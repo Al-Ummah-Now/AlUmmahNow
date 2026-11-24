@@ -65,3 +65,9 @@ export async function readPostLocation(bucket: R2Bucket, postId: string): Promis
 	const channelId = record?.channelId;
 	return typeof channelId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(channelId) ? channelId : null;
 }
+
+/** The channel a post was published on, from its id alone: the search index, else its location record. */
+export async function postChannelId(env: { community_posts: R2Bucket; SEARCH_DB?: D1Database }, postId: string): Promise<string | null> {
+	const row = env.SEARCH_DB ? await env.SEARCH_DB.prepare('SELECT channel_id FROM search_posts WHERE id = ?1').bind(postId).first<{ channel_id: string | null }>() : null;
+	return row?.channel_id || (await readPostLocation(env.community_posts, postId));
+}

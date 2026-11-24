@@ -74,7 +74,7 @@ app.get('/history', async (c) => {
 
 app.get('/items/:entityType/:entityId', async (c) => {
   const { type, id } = itemParams(c);
-  return c.json({ success: true, result: await readItem(c.env, type, id) });
+  return c.json({ success: true, result: await readItem(c.env, type, id, c.get('auth')?.roles) });
 });
 
 app.post('/items/:entityType/:entityId/action', async (c) => {

@@ -4,22 +4,28 @@
  * action of the reports queue (POST /api/moderation/queue/items/:type/:id/action).
  *
  *   warning / removed / deleted  flags on the content document (lib/contentModeration.ts); a live stream
- *                                or a chat message is changed by api-videos (POST /internal/admin/live-moderation)
+ *                                or a chat message is changed by api-videos (POST /internal/admin/live-moderation);
+ *                                a comment is held by api-videos (removed) or deleted through the admin delete
+ *                                (deleted: audited, content:delete, restorable for 30 days); a post is deleted
+ *                                through the admin delete
  *   banned                       bans the item's owner through the user ban path
  *                                (lib/content/userBan.ts: users:manage, audited) and
  *                                hides the item
  *   dismissed                    nothing
  *
+ * Which outcomes a type has is shared-types report-queue.ts (REPORT_OUTCOMES_BY_TYPE); another one is refused.
  * The reports are claimed first (only open ones), so two moderators acting at
- * once cannot both win. If the content or the ban could not be changed, the
- * claim is given back and nothing is recorded.
+ * once cannot both win. If the content or the ban could not be changed, or the item is not there any
+ * more, the claim is given back and nothing is recorded: a report never closes as acted on when
+ * nothing happened.
  */
-import { hasContentPermission, REPORT_OUTCOME_PERMISSION, type ModerationAction, type ReportDecisionEffect } from '@al-ummah/shared-types';
+import { hasContentPermission, REPORT_OUTCOME_PERMISSION, reportOutcomeOptions, type AdminLookupItem, type ModerationAction, type ReportableEntityType, type ReportDecisionEffect } from '@al-ummah/shared-types';
 import { applyContentModeration } from '../contentModeration';
 import type { CasBucket } from '../r2Cas';
 import { banVideosUser } from '../content/userBan';
-import { callVideos, type VideosClientEnv } from '../content/videosClient';
-import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, lookupMany } from './reportMeta';
+import { callVideos, VideosError, type VideosClientEnv } from '../content/videosClient';
+import { dropAudit, writeAudit } from '../content/audit';
+import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany } from './reportMeta';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
 import type { AdminBindings } from '../../base/types';
@@ -55,6 +61,21 @@ export function assertMayDecide(roles: readonly unknown[] | undefined, action: M
   }
 }
 
+/** The item as api-videos has it now, for the types whose decision needs it. Null when it could not be read. */
+export async function decidableItem(env: DecisionEnv, type: string, id: string): Promise<AdminLookupItem | null> {
+  if (type !== 'comment' && type !== 'post') return null;
+  const lookup = await lookupMany(env, [{ type, id }], []);
+  return lookup?.items.get(itemKey(type, id)) ?? null;
+}
+
+const REFUSAL: Record<'not_for_type' | 'not_for_post_comment' | 'item_gone' | 'permission', [status: 403 | 409, code: string, message: string]> = {
+  not_for_type: [409, 'outcome_not_available', 'This kind of item has no such action'],
+  not_for_post_comment: [409, 'outcome_not_available', 'Comments on posts can be hidden, not deleted'],
+  item_gone: [409, 'item_gone', 'The item is not there any more; dismiss the report'],
+  permission: [403, 'forbidden', 'You do not have the permission this action needs'],
+};
+const refusal = (reason: keyof typeof REFUSAL) => new DecisionError(...REFUSAL[reason]);
+
 const statusFor = (action: ModerationAction) => (action === 'dismissed' ? 'dismissed' : 'resolved');
 
 export async function decide(env: DecisionEnv, input: DecisionInput): Promise<DecisionOutcome> {
@@ -64,6 +85,13 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
   assertMayDecide(input.roles, action);
   const { entity_type: entityType, entity_id: entityId } = reports[0];
   const db = env.REPORTS_DB;
+  const item = await decidableItem(env, entityType, entityId);
+  const option = reportOutcomeOptions({ type: entityType as ReportableEntityType, item, may: (p) => hasContentPermission(input.roles, p) }).find((o) => o.action === action);
+  if (!option) throw refusal('not_for_type');
+  if (option.reason) throw refusal(option.reason);
+  if (!item && action !== 'dismissed' && (entityType === 'comment' || entityType === 'post')) {
+    throw new DecisionError(503, 'not_applied', 'The item could not be read; the report is open. Try again.');
+  }
   const now = new Date().toISOString();
   const status = statusFor(action);
 
@@ -87,7 +115,7 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
   let effect: ReportDecisionEffect = { performed: false, action, notes: 'No action taken' };
   if (action !== 'dismissed') {
     try {
-      effect = await perform(env, { entityType, entityId, action, notes, actorId, reportIds: claimed });
+      effect = await perform(env, { entityType, entityId, action, notes, actorId, reportIds: claimed, item, roles: input.roles });
     } catch (error) {
       logger.error('[Moderation] Decision could not be applied; reopening the reports', {
         entityType,
@@ -96,6 +124,7 @@ export async function decide(env: DecisionEnv, input: DecisionInput): Promise<De
         error: error instanceof Error ? error.message : String(error),
       });
       await giveBack(env, reports, claimed, actorId, now);
+      if (error instanceof DecisionError) throw error;
       throw new DecisionError(503, 'not_applied', 'The content could not be updated; the report is open again. Try again.');
     }
   }
@@ -149,7 +178,16 @@ const LIVE = new Set(['livestream', 'live_chat']);
 /** Applies the outcome. Throws when the change failed (the caller reopens the reports). */
 async function perform(
   env: DecisionEnv,
-  p: { entityType: string; entityId: string; action: Exclude<ModerationAction, 'dismissed'>; notes: string | null; actorId: string; reportIds: string[] },
+  p: {
+    entityType: string;
+    entityId: string;
+    action: Exclude<ModerationAction, 'dismissed'>;
+    notes: string | null;
+    actorId: string;
+    reportIds: string[];
+    item: AdminLookupItem | null;
+    roles: readonly unknown[] | undefined;
+  },
 ): Promise<ReportDecisionEffect> {
   const notes: string[] = [];
   let bannedUserId: string | null | undefined;
@@ -174,33 +212,22 @@ async function perform(
     }
   }
 
-  const bucketName = BUCKET[p.entityType];
-  const bucket = bucketName ? (env[bucketName] as unknown as CasBucket | undefined) : undefined;
+  let found = false;
   let changed = false;
-  if (LIVE.has(p.entityType)) {
-    try {
-      const result = await callVideos<{ found: boolean; changed: boolean }>(env, '/live-moderation', { method: 'POST', json: { entityType: p.entityType, entityId: p.entityId, action: p.action, notes: p.notes }, actorId: p.actorId });
-      changed = result.changed;
-      notes.push(!result.found ? `${p.entityType} not found: ${p.entityId}` : changed ? describe(p.action, p.notes) : 'Nothing to change');
-    } catch (error) {
-      if (!bannedUserId) throw error;
-      logger.warn('[Moderation] Owner banned but the item could not be hidden', { entityType: p.entityType, entityId: p.entityId, error: error instanceof Error ? error.message : String(error) });
-      notes.push('The item could not be hidden; the ban hides the owner\'s videos and channels');
-    }
-  } else if (!bucket) {
-    notes.push(`Entity type ${p.entityType} not supported for content actions`);
-  } else {
-    try {
-      const updated = await applyContentModeration(bucket, p.entityId, p.action, { moderatorId: p.actorId, notes: p.notes ?? undefined });
-      changed = !!updated;
-      notes.push(updated ? describe(p.action, p.notes) : `${p.entityType} not found: ${p.entityId}`);
-    } catch (error) {
-      // Once the owner is banned the decision stands (the ban already hides their videos and channels)
-      if (!bannedUserId) throw error;
-      logger.warn('[Moderation] Owner banned but the item could not be hidden', { entityType: p.entityType, entityId: p.entityId, error: error instanceof Error ? error.message : String(error) });
-      notes.push('The item could not be hidden; the ban hides the owner\'s videos and channels');
-    }
+  try {
+    const result = await changeItem(env, p);
+    found = result.found;
+    changed = result.changed;
+    notes.push(!found ? `${p.entityType} not found: ${p.entityId}` : changed ? result.note ?? describe(p.action, p.notes) : 'Nothing to change');
+  } catch (error) {
+    // Once the owner is banned the decision stands (the ban already hides their videos and channels)
+    if (!bannedUserId) throw error;
+    logger.warn('[Moderation] Owner banned but the item could not be hidden', { entityType: p.entityType, entityId: p.entityId, error: error instanceof Error ? error.message : String(error) });
+    notes.push('The item could not be hidden; the ban hides the owner\'s videos and channels');
+    found = true;
   }
+  // Neither the item nor its owner: nothing happened, so the report stays open
+  if (!found && !bannedUserId) throw refusal('item_gone');
 
   return {
     performed: changed || !!bannedUserId,
@@ -208,6 +235,60 @@ async function perform(
     notes: notes.join('; '),
     ...(bannedUserId !== undefined ? { bannedUserId } : {}),
   };
+}
+
+/** Changes the item itself. `changed: false` when it already is as the outcome wants it. */
+async function changeItem(
+  env: DecisionEnv,
+  p: { entityType: string; entityId: string; action: Exclude<ModerationAction, 'dismissed'>; notes: string | null; actorId: string; reportIds: string[]; item: AdminLookupItem | null; roles: readonly unknown[] | undefined },
+): Promise<{ found: boolean; changed: boolean; note?: string }> {
+  if (LIVE.has(p.entityType)) {
+    return callVideos<{ found: boolean; changed: boolean }>(env, '/live-moderation', { method: 'POST', json: { entityType: p.entityType, entityId: p.entityId, action: p.action, notes: p.notes }, actorId: p.actorId });
+  }
+  if (p.entityType === 'comment') {
+    const { parentId, parentType } = p.item ?? {};
+    if (!parentId || !parentType) return { found: false, changed: false };
+    if (p.action === 'deleted') {
+      return adminDelete(env, p, 'comment', `/videos/${encodeURIComponent(parentId)}/comments/${encodeURIComponent(p.entityId)}`, { videoId: parentId });
+    }
+    const audit = await writeAudit(env.REPORTS_DB as never, { kind: 'comment', id: p.entityId, action: 'hide', actorId: p.actorId, details: { on: parentType, parentId, ...reportDetails(p) } });
+    try {
+      const result = await callVideos<{ found: boolean; changed: boolean }>(env, '/comment-moderation', { method: 'POST', json: { on: parentType, parentId, commentId: p.entityId }, actorId: p.actorId });
+      if (!result.changed) await dropAudit(env.REPORTS_DB as never, audit);
+      return { ...result, note: 'Comment hidden' };
+    } catch (error) {
+      await dropAudit(env.REPORTS_DB as never, audit).catch((e) => logger.error('[Moderation] Could not drop the audit row of a failed action', { audit, error: String(e) }));
+      throw error;
+    }
+  }
+  if (p.entityType === 'post') {
+    const channelId = p.item?.channelId;
+    if (!channelId) return { found: false, changed: false };
+    // A post is hidden by the admin delete: a ban alone leaves one written on someone else's channel
+    if (!hasContentPermission(p.roles, 'content:delete')) throw refusal('permission');
+    if (p.item?.isDeleted) return { found: true, changed: false };
+    return adminDelete(env, p, 'post', `/posts/${encodeURIComponent(channelId)}/${encodeURIComponent(p.entityId)}`, { channelId });
+  }
+  const bucketName = BUCKET[p.entityType];
+  const bucket = bucketName ? (env[bucketName] as unknown as CasBucket | undefined) : undefined;
+  if (!bucket) throw new Error(`Entity type ${p.entityType} has no store to change`);
+  const updated = await applyContentModeration(bucket, p.entityId, p.action, { moderatorId: p.actorId, notes: p.notes ?? undefined });
+  return { found: !!updated, changed: !!updated };
+}
+
+const reportDetails = (p: { notes: string | null; reportIds: string[] }) => ({ source: 'report', reportIds: p.reportIds, ...(p.notes ? { reason: p.notes } : {}) });
+
+/** The admin delete of the content lists (content.router.ts): audited first, restorable for 30 days. */
+async function adminDelete(env: DecisionEnv, p: { entityId: string; actorId: string; notes: string | null; reportIds: string[] }, kind: 'comment' | 'post', path: string, details: Record<string, unknown>): Promise<{ found: boolean; changed: boolean; note?: string }> {
+  const audit = await writeAudit(env.REPORTS_DB as never, { kind, id: p.entityId, action: 'delete', actorId: p.actorId, details: { ...details, soft: true, ...reportDetails(p) } });
+  try {
+    await callVideos(env, path, { method: 'DELETE', json: { reason: p.notes ?? undefined }, actorId: p.actorId });
+    return { found: true, changed: true, note: 'Deleted (restorable for 30 days)' };
+  } catch (error) {
+    await dropAudit(env.REPORTS_DB as never, audit).catch((e) => logger.error('[Moderation] Could not drop the audit row of a failed action', { audit, error: String(e) }));
+    if (error instanceof VideosError && error.status === 404) return { found: false, changed: false };
+    throw error;
+  }
 }
 
 function describe(action: Exclude<ModerationAction, 'dismissed'>, notes: string | null): string {

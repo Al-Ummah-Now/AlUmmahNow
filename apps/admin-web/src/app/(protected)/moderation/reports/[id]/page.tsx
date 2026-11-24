@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from '@/components/AppLink';
-import type { Report } from '@al-ummah/shared-types';
+import type { Report, ReportOutcomeOption } from '@al-ummah/shared-types';
 import { getReport } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
@@ -22,11 +22,13 @@ export default async function ReportDetailPage({ params }: PageProps) {
   const { t } = await getI18n();
 
   let report: Report | null = null;
+  let outcomes: ReportOutcomeOption[] = [];
   let failed = false;
 
   try {
     const data = await getReport(id);
     report = data.report;
+    outcomes = data.outcomes ?? [];
   } catch (e) {
     if (e instanceof AdminApiError && e.status === 404) {
       notFound();
@@ -121,7 +123,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
           <div className="lg:col-span-1">
             {report.status === 'pending' || report.status === 'reviewing' ? (
-              <ReportActions reportId={report.id} />
+              <ReportActions reportId={report.id} entityType={report.entity_type} outcomes={outcomes} />
             ) : (
               <div className={cardClass} data-testid="report-closed">
                 <h2 className="text-lg font-semibold text-fg mb-4">{t('report.closedTitle')}</h2>

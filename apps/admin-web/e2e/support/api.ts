@@ -97,11 +97,13 @@ export interface CreateReportOptions {
   reason?: 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';
   description?: string;
   label?: string;
+  /** A real item to report; without it the id is made up and nothing is there (only Dismiss is left for those) */
+  entityId?: string;
 }
 
 /** File a report as the reporter account and wait until admin-api can see it. */
 export async function createReport(options: CreateReportOptions = {}): Promise<AdminReport> {
-  const entityId = `${E2E_ENTITY_PREFIX}${options.label ?? 'r'}-${crypto.randomUUID()}`;
+  const entityId = options.entityId ?? `${E2E_ENTITY_PREFIX}${options.label ?? 'r'}-${crypto.randomUUID()}`;
   const response = await fetch(`${VIDEOS_API_URL}/api/moderation/reports`, {
     method: 'POST',
     headers: {
