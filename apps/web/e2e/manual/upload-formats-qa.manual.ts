@@ -138,6 +138,7 @@ async function uploadViaApi(user: WebUser, channelId: string, file: string, mime
   return id;
 }
 
+type UploadStatus = { status?: string; r2?: { status?: string; error?: string } };
 const terminal = (v: string | undefined) => v === 'ready' || v === 'failed';
 
 async function status(user: WebUser, id: string, channelId: string): Promise<{ status?: string; r2?: { status?: string; error?: string } }> {
@@ -227,7 +228,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
     const bunnyAnsweredAt = new Map<string, number>();
     const last = new Map<string, Awaited<ReturnType<typeof status>>>();
     for (let pending = waiting.slice(); pending.length > 0 && Date.now() < deadline; ) {
-      for (const w of pending) last.set(w.id, await status(user, w.id, channelId).catch(() => ({})));
+      for (const w of pending) last.set(w.id, await status(user, w.id, channelId).catch((): UploadStatus => ({})));
       pending = pending.filter((w) => {
         const s = last.get(w.id)!;
         if (terminal(s.status) && !bunnyAnsweredAt.has(w.id)) bunnyAnsweredAt.set(w.id, Date.now());
@@ -237,7 +238,7 @@ test('every accepted format uploads on QA, is encoded by Bunny and by our transc
       if (pending.length > 0) await page.waitForTimeout(10_000);
     }
     for (const w of waiting) {
-      const s = last.get(w.id) ?? (await status(user, w.id, channelId).catch(() => ({})));
+      const s = last.get(w.id) ?? (await status(user, w.id, channelId).catch((): UploadStatus => ({})));
       w.out.bunny = s.status ?? 'unknown';
       w.out.r2 = s.r2 ? `${s.r2.status}${s.r2.error ? `: ${s.r2.error}` : ''}` : 'no r2';
       const graceOver = bunnyAnsweredAt.has(w.id) && Date.now() - bunnyAnsweredAt.get(w.id)! > 60_000;
