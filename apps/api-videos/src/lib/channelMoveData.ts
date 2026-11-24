@@ -22,6 +22,9 @@ export const RUNNING_OFFERS_SQL = SIDES.map(
 	 WHERE o.${side} = ? AND (o.status = 'accepting' OR (o.status = 'moved' AND j.status IS NOT 'succeeded'))`,
 );
 
+/** The moves that brought the account a channel (until the channel is erased or someone else's). */
+export const RECEIVED_OFFERS_SQL = `SELECT id, channel_id FROM channel_move_offers WHERE to_user_id = ? AND status = 'moved'`;
+
 interface RunningOffer {
 	id: string;
 	channel_id: string;
@@ -46,44 +49,53 @@ const MAX_ROUNDS = 10;
  *                      Never: the offer is cancelled and its job's lock released, which nothing needs now
  *   closed, or moved   the account's id leaves the row. Never before: an open row keeps the ids the
  *                      accept checks, and the next round stops it
+ *   moved to it        and the channel is still its own: the row keeps naming it until the channel is
+ *                      erased, so nothing about that channel is forgotten when a run stops half-way
  *
- * Rounds repeat until no row names the account. `afterProfile` is the run's last word, once no accept
- * can pass the receiver check any more: `received` says a channel came to the account meanwhile, and its
- * row keeps naming it, so the erasure starts over. `flippedAt`: when the last one it found did.
+ * Rounds repeat until no other row names the account. `received`: the channels of the rows that stay;
+ * `flippedAt`: the latest time one of them says it came (its own record, whichever worker's clock wrote it).
  */
 export async function eraseMoveOffers(
 	env: { SEARCH_DB: D1Database; channels: unknown },
 	userId: string,
 	deletedId: string,
-	opts: { afterProfile?: boolean; spend?: (n: number) => void } = {},
-): Promise<{ closed: number; received: boolean; flippedAt: number }> {
+	spend: (n: number) => void = () => {},
+): Promise<{ closed: number; received: string[]; flippedAt: number }> {
 	const db = env.SEARCH_DB;
-	const spend = opts.spend ?? (() => {});
+	const channels = new R2Repository<Record<string, unknown>>(env.channels as R2Bucket);
 	let closed = 0;
 	let flippedAt = 0;
 	for (let round = 0; round < MAX_ROUNDS; round++) {
 		const at = new Date().toISOString();
 		spend(1);
-		const [a, b, ...found] = await db.batch<RunningOffer>([
+		const [a, b, moved, ...found] = await db.batch<RunningOffer>([
 			...SIDES.map((side) => db.prepare(`UPDATE channel_move_offers SET status = 'cancelled', responded_at = ?, updated_at = ? WHERE ${side} = ? AND status = 'offered'`).bind(at, at, userId)),
+			db.prepare(RECEIVED_OFFERS_SQL).bind(userId),
 			...RUNNING_OFFERS_SQL.map((sql) => db.prepare(sql).bind(userId)),
 		]);
 		closed += Number(a.meta?.changes ?? 0) + Number(b.meta?.changes ?? 0);
 		/** Over: their channel is not the sender's any more, so their move changed hands or never will */
 		const over: string[] = [];
+		/** Moved to the account, and its channel still is: offer id to channel id */
+		const kept = new Map<string, string>();
+		const keep = (offer: Pick<RunningOffer, 'id' | 'channel_id'>, transferredAt: unknown) => {
+			kept.set(offer.id, offer.channel_id);
+			flippedAt = Math.max(flippedAt, Date.parse(String(transferredAt ?? '')) || 0);
+		};
 		for (const offer of found.flatMap((r) => r.results ?? [])) {
 			spend(4);
 			let owner: unknown;
-			let transferredAt = NaN;
-			await new R2Repository<Record<string, unknown>>(env.channels as R2Bucket).updateObject(offer.channel_id, (channel) => {
-				owner = channel.userId;
-				transferredAt = Date.parse(String(channel.transferredAt ?? ''));
+			let transferredAt: unknown;
+			await channels.updateObject(offer.channel_id, (channel) => {
+				({ userId: owner, transferredAt } = channel);
 				if (owner !== offer.from_user_id || channel.moveStopped === offer.id) return false;
 				channel.moveStopped = offer.id;
 				return true;
+			}).catch((error) => {
+				// Not a channel record: no job can change its owner either, and the erasure reports it (ownershipOf)
+				if (!(error instanceof SyntaxError)) throw error;
 			});
 			if (owner === offer.to_user_id) {
-				flippedAt = Math.max(flippedAt, transferredAt || 0);
 				await db.prepare(`UPDATE channel_move_offers SET status = 'moved', responded_at = COALESCE(responded_at, ?), updated_at = ? WHERE id = ? AND status = 'accepting'`).bind(at, at, offer.id).run();
 			} else {
 				// Still the sender's: an accepted one never moves. Anyone else's, or gone: only an unfinished accept closes
@@ -97,22 +109,25 @@ export async function eraseMoveOffers(
 				// The row an accept put back or settled meanwhile is the next round's
 				if (owner === offer.from_user_id) continue;
 			}
-			over.push(offer.id);
+			if (owner === userId) keep(offer, transferredAt);
+			else over.push(offer.id);
 		}
-		// A move that finished, or is over as found above; on the run's last word a received one stays (it starts the run over)
+		for (const offer of moved.results ?? []) {
+			if (kept.has(offer.id) || over.includes(offer.id)) continue;
+			spend(1);
+			const channel = await channels.getObject(offer.channel_id);
+			if (channel?.userId === userId) keep(offer, channel.transferredAt);
+			else over.push(offer.id);
+		}
+		// A move that finished, or is over as found above. One to the account only when it was read above: one that finishes now is the next round's
 		const settled = `(status = 'moved' AND (id IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM admin_jobs j WHERE j.id = job_id AND j.status = 'succeeded')))`;
 		spend(1);
 		const result = await db.batch<{ x: number }>([
-			opts.afterProfile
-				? db.prepare(`UPDATE channel_move_offers SET to_user_id = ? WHERE to_user_id = ? AND status IN ${CLOSED}`).bind(deletedId, userId)
-				: db.prepare(`UPDATE channel_move_offers SET to_user_id = ? WHERE to_user_id = ? AND (status IN ${CLOSED} OR ${settled})`).bind(deletedId, userId, JSON.stringify(over)),
+			db.prepare(`UPDATE channel_move_offers SET to_user_id = ? WHERE to_user_id = ? AND (status IN ${CLOSED} OR (status = 'moved' AND id IN (SELECT value FROM json_each(?))))`).bind(deletedId, userId, JSON.stringify(over)),
 			db.prepare(`UPDATE channel_move_offers SET from_user_id = ? WHERE from_user_id = ? AND (status IN ${CLOSED} OR ${settled})`).bind(deletedId, userId, JSON.stringify(over)),
-			db.prepare(`SELECT 1 AS x FROM channel_move_offers WHERE to_user_id = ? AND status = 'moved' LIMIT 1`).bind(userId),
-			...SIDES.map((side) => db.prepare(`SELECT 1 AS x FROM channel_move_offers WHERE ${side} = ? LIMIT 1`).bind(userId)),
+			...SIDES.map((side) => db.prepare(`SELECT 1 AS x FROM channel_move_offers WHERE ${side} = ? AND id NOT IN (SELECT value FROM json_each(?)) LIMIT 1`).bind(userId, JSON.stringify([...kept.keys()]))),
 		]);
-		const any = (k: number) => (result[k].results ?? []).length > 0;
-		if (opts.afterProfile && any(2)) return { closed, received: true, flippedAt };
-		if (!any(3) && !any(4)) return { closed, received: false, flippedAt };
+		if (![2, 3].some((k) => (result[k].results ?? []).length > 0)) return { closed, received: [...new Set(kept.values())], flippedAt };
 	}
 	throw new Error('Channel move offers kept changing during an erasure; it is tried again');
 }

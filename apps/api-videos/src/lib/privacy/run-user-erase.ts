@@ -86,7 +86,7 @@ async function prefixKeys(bucket: BucketLike, prefix: string, budget: OperationB
 }
 
 /** The account's channels and the videos it owns or that sit on them, from the ownership index. */
-export async function runUserOwnedIds(db: D1Database, userId: string): Promise<{ channels: string[]; videos: string[] }> {
+export async function runUserOwnedIds(db: D1Database, userId: string, received: string[] = []): Promise<{ channels: string[]; videos: string[] }> {
 	if (!(await isOwnershipComplete(db as never, 'channel')) || !(await isOwnershipComplete(db as never, 'video'))) {
 		throw new OwnershipIndexIncomplete();
 	}
@@ -95,7 +95,7 @@ export async function runUserOwnedIds(db: D1Database, userId: string): Promise<{
 		.prepare(`SELECT id FROM content_ownership WHERE kind = 'channel' AND owner_id = ?`)
 		.bind(userId)
 		.all<{ id: string }>();
-	const channels = (ch ?? []).map((r) => r.id);
+	const channels = [...new Set([...(ch ?? []).map((r) => r.id), ...received])];
 	// Two index searches joined with UNION ALL (deduplicated below), not `owner_id = ? OR channel_id IN (...)`:
 	// SQLite does not use the (kind, owner_id) and (kind, channel_id) indexes for an OR under
 	// `kind = 'video'` (nor for a plain UNION, which merges in id order), so it read every video
@@ -124,8 +124,16 @@ export async function eraseRunUserData(
 	};
 	// Its moves stop before its channels are listed (lib/channelMoveData.ts)
 	const moves = { SEARCH_DB: db, channels: env.channels };
-	await eraseMoveOffers(moves, userId, DELETED_USER_ID);
-	const { channels, videos } = await runUserOwnedIds(db, userId);
+	const spend = (n: number) => budget.spend(n);
+	let received: string[];
+	try {
+		({ received } = await eraseMoveOffers(moves, userId, DELETED_USER_ID, spend));
+	} catch (error) {
+		if (!(error instanceof BudgetExhausted)) throw error;
+		return result;
+	}
+	// And what a move just brought, in case the index has not followed yet
+	const { channels, videos } = await runUserOwnedIds(db, userId, received);
 	const community = asBucket(env.community_posts);
 	let again = false;
 
@@ -272,8 +280,12 @@ export async function eraseRunUserData(
 		},
 		// Again after the profile, as the full erasure does: a channel a move brought meanwhile starts the steps over
 		async () => {
-			const { received } = await eraseMoveOffers(moves, userId, DELETED_USER_ID, { afterProfile: true, spend: (n) => budget.spend(n) });
-			again = received;
+			const late = await eraseMoveOffers(moves, userId, DELETED_USER_ID, spend);
+			again = late.received.length > 0;
+			// A move that finished its records as the profile went may have brought the channel's subscriptions (runTransfer)
+			if (again || !env.NOTIFICATIONS_DB) return;
+			spend(1);
+			bump('subscriptions', await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId));
 		},
 	];
 
