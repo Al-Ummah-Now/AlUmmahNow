@@ -1,7 +1,7 @@
 'use client';
 
 /** Live chat messages the AI scan held (wiki E17, E17-D4): for those who moderate, who show or remove each. */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LiveChatMessage } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -58,7 +58,18 @@ export function HeldList({ messages, onDecide }: { messages: LiveChatMessage[]; 
   const { t } = useLanguage();
   const text = t.liveWatch;
   const [failed, setFailed] = useState(false);
-  const decide = async (message: LiveChatMessage, action: 'restore' | 'remove') => setFailed(!(await onDecide(message, action)));
+  // Being decided: a second press would be refused as a conflict
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const running = useRef(new Set<string>());
+  const decide = async (message: LiveChatMessage, action: 'restore' | 'remove') => {
+    if (running.current.has(message.id)) return;
+    running.current.add(message.id);
+    setBusy(new Set(running.current));
+    const done = await onDecide(message, action);
+    running.current.delete(message.id);
+    setBusy(new Set(running.current));
+    setFailed(!done);
+  };
   return (
     <>
       <ul className="divide-y divide-border" data-testid="live-chat-held-list">
@@ -69,8 +80,8 @@ export function HeldList({ messages, onDecide }: { messages: LiveChatMessage[]; 
               <span className="text-foreground" dir="auto">{m.text}</span>
             </p>
             <div className="mt-1 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => void decide(m, 'restore')} data-testid="live-chat-held-show">{text.chatHeldShow}</Button>
-              <Button variant="ghost" size="sm" onClick={() => void decide(m, 'remove')} data-testid="live-chat-held-remove">{text.chatHeldRemove}</Button>
+              <Button variant="outline" size="sm" disabled={busy.has(m.id)} onClick={() => void decide(m, 'restore')} data-testid="live-chat-held-show">{text.chatHeldShow}</Button>
+              <Button variant="ghost" size="sm" disabled={busy.has(m.id)} onClick={() => void decide(m, 'remove')} data-testid="live-chat-held-remove">{text.chatHeldRemove}</Button>
             </div>
           </li>
         ))}

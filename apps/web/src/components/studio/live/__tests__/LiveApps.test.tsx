@@ -233,6 +233,21 @@ describe('the held review', () => {
     expect(await screen.findByText(text.heldEmpty)).toBeInTheDocument();
   });
 
+  it('decides once however often it is pressed', async () => {
+    let finish: () => void = () => undefined;
+    api.heldChat.mockResolvedValue([message]);
+    api.moderateChat.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    render(<PremiereManage locale="en" channelId="c1" stream={premiere()} offers={{ ...OFF, chat: true }} />);
+    const show = await screen.findByTestId('live-chat-held-show');
+    fireEvent.click(show);
+    fireEvent.click(show);
+    fireEvent.click(screen.getByTestId('live-chat-held-remove'));
+    expect(api.moderateChat).toHaveBeenCalledTimes(1);
+    expect(show).toBeDisabled();
+    finish();
+    expect(await screen.findByText(text.heldEmpty)).toBeInTheDocument();
+  });
+
   it('is nothing for who may not moderate', async () => {
     api.heldChat.mockRejectedValue(new LiveApiError(403, 'forbidden'));
     render(<PremiereManage locale="en" channelId="c1" stream={premiere()} offers={{ ...OFF, chat: true }} />);
