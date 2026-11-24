@@ -90,7 +90,7 @@ import { sweepEntitlements } from "./lib/billing/store";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
-import { sweepProfileEmailReports } from './lib/admin/profile-email-reports';
+import { sweepProfileEmailPointers, sweepProfileEmailReports } from './lib/admin/profile-email-reports';
 import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
@@ -987,7 +987,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			if (!bucket) return;
 			try {
 				const deleted = await sweepProfileEmailReports(bucket as never, new Date(), new OperationBudget(100));
-				if (deleted) logger.info('[ProfileEmails] Expired reports deleted', { deleted });
+				const pointers = await sweepProfileEmailPointers(bucket as never, new Date(), new OperationBudget(100));
+				if (deleted || pointers) logger.info('[ProfileEmails] Expired reports deleted', { deleted, pointers });
 			} catch (error) {
 				logger.error('[ProfileEmails] Report sweep failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'profile-email-reports', error);

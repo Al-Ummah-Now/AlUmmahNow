@@ -13,7 +13,7 @@ import { runOwnershipPass } from '../src/lib/search/ownership';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { PROFILE_EMAILS_PAGE } from '../src/lib/admin/profile-emails';
-import { REPORT_PREFIX, eraseProfileEmailReports, sweepProfileEmailReports } from '../src/lib/admin/profile-email-reports';
+import { REPORT_PREFIX, eraseProfileEmailReports, sweepProfileEmailPointers, sweepProfileEmailReports } from '../src/lib/admin/profile-email-reports';
 import { eraseRunUserData } from '../src/lib/privacy/run-user-erase';
 import { OperationBudget } from '../src/lib/privacy/scan';
 import { eraseUserData } from '../src/lib/privacy/user-data';
@@ -242,6 +242,7 @@ describe('profile emails: repair', () => {
 		assert.equal(r.entries.length, 5);
 		assert.equal(r.entries.find((e) => e.id === 'usr_differs')?.stored, 'copy@example.com');
 		assert.deepEqual([result(job).profilesWritten, result(job).channelsWritten], [2, 3]);
+		assert.deepEqual([result(job).matching, result(job).differs, result(job).missing], [1, 1, 1], 'a retry counts its own earlier writes as differing');
 	});
 });
 
@@ -296,6 +297,19 @@ describe('profile emails: reports', () => {
 		}
 		assert.equal(await sweepProfileEmailReports(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(20)), 1200);
 		assert.equal(t.raw.ADMIN_BACKUPS.store.size, 0);
+	});
+
+	it('an expired pointer without a record goes too; newer pointers stay', async () => {
+		const t = await setup();
+		await t.run({ mode: 'check' });
+		const kept = keysOf(t).pointers.sort();
+		await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}by-user/usr_differs/2020-01-01/old-job/000000`, '');
+		await t.raw.ADMIN_BACKUPS.put(`${REPORT_PREFIX}by-user/usr_erased/2020-01-02/old-job/000003`, '');
+		assert.equal(await sweepProfileEmailReports(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(10)), 0);
+		t.raw.ADMIN_BACKUPS.calls = 0;
+		assert.equal(await sweepProfileEmailPointers(t.raw.ADMIN_BACKUPS as never, new Date(), new OperationBudget(10)), 2);
+		assert.equal(t.raw.ADMIN_BACKUPS.calls, 2, 'one list, one delete');
+		assert.deepEqual(keysOf(t).pointers.sort(), kept);
 	});
 
 	it("account erasure deletes the user's records and pointers in every report, and nobody else's", async () => {
@@ -364,6 +378,7 @@ describe('profile emails: reports', () => {
 			const job = await t.run({ mode: 'repair', checkJobId: check.id });
 			assert.equal(fired, true);
 			assert.equal(job.status, 'succeeded', job.lastError ?? '');
+			assert.equal(result(job).matching, 1, 'an erased profile is not counted as matching');
 			assert.equal([...t.raw.ADMIN_BACKUPS.store.keys()].some((k) => k.includes('usr_differs')), false, when);
 			assert.equal(t.raw.profiles.read('usr_differs'), null, 'the profile does not come back');
 		}
