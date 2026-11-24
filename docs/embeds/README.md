@@ -54,7 +54,7 @@ Unknown params are ignored. Invalid values fall back to the default.
   presses play, or at once with `autoplay=1`. A "Watch on Al Ummah Now" link opens the full watch page in a new tab,
   at the current time.
 - **Any frame size:** the player fills the frame and the video is fitted inside it at its own ratio, on the night
-  colour (a Short in a wide card, such as X's, is pillarboxed). The control bar (one row) and the progress bar sit
+  color (a Short in a wide card, such as X's, is pillarboxed). The control bar (one row) and the progress bar sit
   at the bottom of the frame across its full width, as on YouTube for vertical videos, so a narrow Short still gets
   full-size controls; the least important controls (picture in picture, the volume slider, the duration) go only
   when the frame itself is narrow. The "Watch on" link sits in the frame's top corner, outside the video when there
@@ -70,7 +70,7 @@ Unknown params are ignored. Invalid values fall back to the default.
   frame instead of a browser error page); use oEmbed (404) to check availability from code.
 - **Playlist:** the player plus a list of the playlist's public videos in the playlist's saved order (manual, or its
   automatic sort), read from the playback queue API (`GET /api/playlists/{id}/queue`, up to 500 videos). When a video
-  ends, a 3-second "Up next" countdown (cancellable) plays the next one, which starts on its own (muted if the
+  ends, a 3-second "Up next" countdown (cancelable) plays the next one, which starts on its own (muted if the
   browser refuses sound); after the last video the playlist stops. "Watch on Al Ummah Now" opens the watch page
   inside the playlist (`?list=&index=`). Private videos inside a public playlist are skipped. A private or missing
   playlist shows the unavailable frame. See docs/specs/PLAYLIST-PLAYBACK.md.
@@ -123,7 +123,7 @@ GET {host}/oembed?url={url}&maxwidth={px}&maxheight={px}&format=json
 
 - `url` (required) accepts: `{host}/{en|ar}/video/{id}`, `{host}/{en|ar}/video?vid={id}`, `{host}/embed/v/{id}`,
   `{host}/{en|ar}/playlist/{id}`, `{host}/embed/p/{id}`, with or without a query string (`?t=` / `?start=` is
-  carried into the embed). Only URLs on the same host as the endpoint are recognised (QA oEmbed answers for QA URLs,
+  carried into the embed). Only URLs on the same host as the endpoint are recognized (QA oEmbed answers for QA URLs,
   production for production URLs).
 - `maxwidth` / `maxheight` (optional): the returned size is the largest 16:9 size that fits, at most 1280×720,
   default 640×360 (minimum 200×113).
@@ -156,7 +156,7 @@ Response `200 application/json`:
 - For a playlist URL, `type` is still `video`, `html` points at `/embed/p/{id}`, `aun_playlist_id` replaces
   `aun_video_id`, and `aun_duration` is omitted.
 - `author_name` / `author_url` / `thumbnail_*` / `aun_duration` are omitted when unknown (legacy videos).
-- Errors: **400** missing or malformed `url`, **404** URL not recognised or the content is not public / not
+- Errors: **400** missing or malformed `url`, **404** URL not recognized or the content is not public / not
   available, **501** non-JSON `format`. Error bodies are `{ "error": "…" }`.
 
 Watch pages advertise the endpoint for discovery:
