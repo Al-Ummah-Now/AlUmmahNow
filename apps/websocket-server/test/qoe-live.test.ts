@@ -166,7 +166,9 @@ after(() => {
   restoreWorkerGlobals();
 });
 
-test('the qoe-live object sends its minute to admins on admin:media', async () => {
+test('the qoe-live object sends its minute to admins on admin:media', async (t) => {
+  // The object reads Date.now itself: held still, so the minute can't turn between the beat and the last read
+  t.mock.timers.enable({ apis: ['Date'], now: T0 });
   const ns = new FakeNamespace<any>((ctx, env) => new WebSocketDurableObject(ctx as any, env));
   const env = { Issuer: ISSUER, ALLOWED_CLIENT_IDS: WEB_CLIENT, ENVIRONMENT: 'production', WEBSOCKET_DO: ns, SOCKET_SHARDS: 2, INTERNAL_API_KEY: 'k' };
   ns.env = env;
@@ -195,6 +197,5 @@ test('the qoe-live object sends its minute to admins on admin:media', async () =
   const recent = await ns.call('qoe-live', (o: any) => o.fetch(new Request('http://internal/qoe/recent?minutes=5')));
   const body = await recent.json();
   assert.equal(body.minutes.length, 5);
-  // This object runs on the real clock: the minute may turn between the beat and this read
-  assert.equal(body.minutes.reduce((sum: number, m: any) => sum + m.r2.startupMsSum, 0), 900);
+  assert.equal(body.minutes[4].r2.startupMsSum, 900);
 });
