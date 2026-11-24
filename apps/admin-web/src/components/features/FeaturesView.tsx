@@ -42,6 +42,8 @@ import { FeatureConfirmDialog } from './FeatureConfirmDialog';
 import { FeatureHistorySheet } from './FeatureHistorySheet';
 
 export const FEATURES_UNDO_MS = 10_000;
+/** How often a page with a change waiting for approval looks again */
+export const PENDING_REFRESH_MS = 30_000;
 
 type RowMessage = { kind: 'conflict' } | { kind: 'pending'; requestId: string; enabled: boolean } | { kind: 'precondition'; reason: FeatureText | null } | { kind: 'error'; message: string };
 
@@ -57,7 +59,7 @@ export function FeaturesView({ initial, canManage, me, actions, now }: { initial
   const { run } = useUndoableAction();
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  // a refresh (after a conflict) brings the rows as admin-api has them now
+  // a refresh brings the rows as admin-api has them now (after a conflict, or a waiting change decided elsewhere)
   useEffect(() => setItems(initial), [initial]);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<FeatureKey | null>(null);
@@ -65,6 +67,14 @@ export function FeaturesView({ initial, canManage, me, actions, now }: { initial
   const [confirm, setConfirm] = useState<ConfirmContent | null>(null);
   const [historyKey, setHistoryKey] = useState<FeatureKey | null>(null);
   const [target, setTarget] = useState<string | null>(null);
+
+  // While a change waits for approval, look again every 30 s so the row clears once it is decided
+  const waiting = items.some((i) => i.pending);
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setInterval(() => router.refresh(), PENDING_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [waiting, router]);
 
   const groups = useMemo(() => groupFeatures(items, query, locale), [items, query, locale]);
   const off = offCount(items);
@@ -100,6 +110,7 @@ export function FeaturesView({ initial, canManage, me, actions, now }: { initial
         return result.data;
       }
       if (result.kind === 'pending') {
+        setItems((list) => list.map((i) => (i.key === key ? { ...i, pending: { requestId: result.requestId, enabled: result.enabled } } : i)));
         setMessage(key, { kind: 'pending', requestId: result.requestId, enabled: result.enabled });
       } else if (result.kind === 'changed') {
         setItems((list) => applyConflict(list, key, result.current));
@@ -293,7 +304,8 @@ function FeatureRowView({
           words={words}
           labelledBy={nameId}
           describedBy={helpId}
-          locked={lock !== null}
+          // A change already waits for approval: one at a time (the server refuses a second)
+          locked={lock !== null || !!item.pending}
           busy={busy}
           onChange={onToggle}
           testId={`feature-switch-${item.key}`}
@@ -317,6 +329,17 @@ function FeatureRowView({
         </ul>
       )}
 
+      {item.pending && message?.kind !== 'pending' && (
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="feature-pending">
+          <span className="inline-flex items-center gap-1 rounded bg-chip-pending-bg px-2 py-0.5 font-medium text-chip-pending-fg">
+            <Icon name="clock" className="size-4" />
+            {t(item.pending.enabled ? 'features.pending.chipOn' : 'features.pending.chipOff')}
+          </span>
+          <AppLink href={`/approvals/${encodeURIComponent(item.pending.requestId)}`} className={linkClass} data-testid="feature-pending-link">
+            {t('features.pending.view')}
+          </AppLink>
+        </p>
+      )}
       {message && <RowMessageView message={message} />}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">

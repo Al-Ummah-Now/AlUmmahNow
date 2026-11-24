@@ -2375,6 +2375,14 @@ const en = {
     },
     preconditionFallback: 'This can’t be switched on yet. Check its setup, then try again.',
     writeFailed: 'The change wasn’t saved. Try again.',
+    /** A switch whose approval rule asks for approvers (wiki AUN-WORKFLOWS) */
+    pending: {
+      sentOn: 'Sent for approval. It switches on once it is approved.',
+      sentOff: 'Sent for approval. It switches off once it is approved.',
+      chipOn: 'Waiting for approval to switch on',
+      chipOff: 'Waiting for approval to switch off',
+      view: 'View request',
+    },
     toastOn: '“{name}” switched on',
     toastOff: '“{name}” switched off',
     toastUndone: '“{name}” is back as it was',
