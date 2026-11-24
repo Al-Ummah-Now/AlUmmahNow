@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mediaFileToken, mediaFrameUrl, mediaPlayUrl, mediaToken, mediaTokenExpiry, verifyMediaFileToken } from '@al-ummah/shared-types';
-import { handlePrivate } from '../src/edge';
+import { handleDownload, handlePrivate } from '../src/edge';
 import type { Env } from '../src/env';
 
 const VID = '0b3c2a1e-1111-2222-3333-444455556666';
@@ -10,13 +10,32 @@ const HOST = 'media.qa.alummahnow.net';
 
 function fakeBucket(objects: Record<string, string>) {
 	const reads: string[] = [];
+	const heads: string[] = [];
 	return {
 		reads,
-		async get(key: string) {
+		heads,
+		async head(key: string) {
+			heads.push(key);
+			const body = objects[key];
+			if (body === undefined) return null;
+			return { size: body.length, httpEtag: '"etag-v1"', httpMetadata: { contentType: 'video/mp4' } };
+		},
+		async get(key: string, opts?: { range?: { offset?: number; length?: number } | Headers }) {
 			reads.push(key);
 			const body = objects[key];
 			if (body === undefined) return null;
-			return { body: new Response(body).body, size: body.length, httpEtag: '"e"', httpMetadata: {}, range: undefined };
+			const rangeOpt = opts?.range && !(opts.range instanceof Headers) ? opts.range : undefined;
+			if (rangeOpt && rangeOpt.offset !== undefined && rangeOpt.length !== undefined) {
+				const slice = body.slice(rangeOpt.offset, rangeOpt.offset + rangeOpt.length);
+				return {
+					body: new Response(slice).body,
+					size: body.length,
+					httpEtag: '"etag-v1"',
+					httpMetadata: { contentType: 'video/mp4' },
+					range: { offset: rangeOpt.offset, length: slice.length },
+				};
+			}
+			return { body: new Response(body).body, size: body.length, httpEtag: '"etag-v1"', httpMetadata: {}, range: undefined };
 		},
 	};
 }
@@ -104,5 +123,155 @@ describe('/priv/ edge', () => {
 		const pre = await handlePrivate(new Request(url, { method: 'OPTIONS' }), s.env, s.ctx, s.cache as unknown as Cache);
 		assert.equal(pre.status, 204);
 		assert.equal(pre.headers.get('access-control-allow-methods'), 'GET, HEAD, OPTIONS');
+	});
+});
+
+describe('/dl/ Web Download attachment edge (E14-D6)', () => {
+	function setupPub(objects: Record<string, string>) {
+		const pub = fakeBucket(objects);
+		const priv = fakeBucket({ [`priv/${VID}/${REV}/video.mp4`]: 'SECRET-PRIV' });
+		const env = { MEDIA: pub, MEDIA_PRIVATE: priv, MEDIA_SIGN_KEY: 'k' } as unknown as Env;
+		return { env, pub, priv };
+	}
+
+	it('serves public video.mp4 with attachment Content-Disposition, no edge cache, and never reads MEDIA_PRIVATE', async () => {
+		const s = setupPub({ [`pub/${VID}/${REV}/video.mp4`]: '0123456789' });
+		const res = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/Friday%20Khutbah.mp4`), s.env);
+		assert.equal(res.status, 200);
+		assert.equal(await res.text(), '0123456789');
+		assert.equal(res.headers.get('cache-control'), 'private, no-store');
+		assert.equal(res.headers.get('accept-ranges'), 'bytes');
+		assert.equal(res.headers.get('etag'), '"etag-v1"');
+		assert.equal(res.headers.get('content-length'), '10');
+		assert.equal(
+			res.headers.get('content-disposition'),
+			`attachment; filename="Friday Khutbah.mp4"; filename*=UTF-8''Friday%20Khutbah.mp4`,
+		);
+		assert.deepEqual(s.priv.reads, []);
+		assert.deepEqual(s.priv.heads, []);
+	});
+
+	it('handles pure Arabic titles with <videoId>.mp4 ASCII fallback and UTF-8 filename*', async () => {
+		const s = setupPub({ [`pub/${VID}/${REV}/video.mp4`]: '0123456789' });
+		const arabic = encodeURIComponent('سورة الكهف كاملة.mp4');
+		const res = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/${arabic}`), s.env);
+		assert.equal(res.status, 200);
+		const cd = res.headers.get('content-disposition') ?? '';
+		assert.ok(cd.includes(`filename="${VID}.mp4"`), `expected videoId ASCII fallback, got: ${cd}`);
+		assert.ok(cd.includes(`filename*=UTF-8''${arabic}`), `expected UTF-8 Arabic filename*, got: ${cd}`);
+	});
+
+	it('sanitizes filename injection (CRLF, quotes, semicolons, traversal, bad encoding, non-mp4, >80 chars)', async () => {
+		const s = setupPub({ [`pub/${VID}/${REV}/video.mp4`]: '0123456789' });
+		const evilCases = [
+			'evil%0d%0aX-Injected:%201.mp4',
+			'bad%22%3bfilename%3d%22x.exe.mp4',
+			'..%2f..%2fsecret.mp4',
+			'%252e%252e%252fsecret.mp4',
+			'%E0%A4%A.mp4',
+			'not-an-mp4.exe',
+		];
+		for (const raw of evilCases) {
+			const res = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/${raw}`), s.env);
+			assert.equal(res.status, 200, `case ${raw}`);
+			const cd = res.headers.get('content-disposition') ?? '';
+			assert.ok(!cd.includes('\r') && !cd.includes('\n'), `no CRLF for ${raw}`);
+			assert.ok(!cd.includes('..'), `no traversal for ${raw}`);
+			assert.ok(cd.startsWith('attachment; filename="') && cd.includes('.mp4"; filename*=UTF-8\'\''), `safe header for ${raw}: ${cd}`);
+		}
+		// > 80 char stem clamped to <= 80 chars
+		const longTitle = `${'a'.repeat(120)}.mp4`;
+		const longRes = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/${longTitle}`), s.env);
+		const longCd = longRes.headers.get('content-disposition') ?? '';
+		const m = /filename="([^"]+)"/.exec(longCd);
+		assert.ok(m && m[1].length <= 84, `stem should clamp to <= 80 + .mp4: ${longCd}`);
+
+		// Bidi override controls (U+202E, U+2066..U+2069, U+200E/F, U+061C) are stripped to prevent extension spoofing
+		const bidi = encodeURIComponent('Lecture\u202Egpj.mp4');
+		const bidiRes = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/${bidi}`), s.env);
+		const bidiCd = bidiRes.headers.get('content-disposition') ?? '';
+		assert.ok(!bidiCd.includes('\u202E') && !bidiCd.includes('%E2%80%AE'), `bidi override must be stripped: ${bidiCd}`);
+		assert.ok(bidiCd.includes('filename="Lecturegpj.mp4"'), `sanitized bidi filename: ${bidiCd}`);
+
+		// Ordinary title with ellipsis ("Part 1... Intro") preserves title without falling back to videoId
+		const ellipsis = encodeURIComponent('Part 1... Intro.mp4');
+		const ellipsisRes = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/${ellipsis}`), s.env);
+		const ellipsisCd = ellipsisRes.headers.get('content-disposition') ?? '';
+		assert.ok(ellipsisCd.includes('filename="Part 1. Intro.mp4"'), `ellipsis title should be preserved: ${ellipsisCd}`);
+		assert.ok(!ellipsisCd.includes('..'), `ellipsis must not leave '..': ${ellipsisCd}`);
+	});
+
+	it('supports HEAD, Range (206), suffix Range, 416 Range Not Satisfiable, and If-Range/ETag', async () => {
+		const s = setupPub({ [`pub/${VID}/${REV}/video.mp4`]: '0123456789' });
+		const url = `https://${HOST}/dl/${VID}/${REV}/Lecture.mp4`;
+
+		const head = await handleDownload(new Request(url, { method: 'HEAD' }), s.env);
+		assert.equal(head.status, 200);
+		assert.equal(head.headers.get('content-length'), '10');
+		assert.equal(head.headers.get('accept-ranges'), 'bytes');
+		assert.equal(head.headers.get('etag'), '"etag-v1"');
+		assert.equal(await head.text(), '');
+
+		const partial = await handleDownload(new Request(url, { headers: { Range: 'bytes=2-5' } }), s.env);
+		assert.equal(partial.status, 206);
+		assert.equal(partial.headers.get('content-range'), 'bytes 2-5/10');
+		assert.equal(partial.headers.get('content-length'), '4');
+		assert.equal(await partial.text(), '2345');
+
+		const suffix = await handleDownload(new Request(url, { headers: { Range: 'bytes=-3' } }), s.env);
+		assert.equal(suffix.status, 206);
+		assert.equal(suffix.headers.get('content-range'), 'bytes 7-9/10');
+		assert.equal(await suffix.text(), '789');
+
+		const badRange = await handleDownload(new Request(url, { headers: { Range: 'bytes=50-60' } }), s.env);
+		assert.equal(badRange.status, 416);
+		assert.equal(badRange.headers.get('content-range'), 'bytes */10');
+
+		// If-Range matching strong ETag -> 206
+		const ifMatch = await handleDownload(
+			new Request(url, { headers: { Range: 'bytes=0-1', 'If-Range': '"etag-v1"' } }),
+			s.env,
+		);
+		assert.equal(ifMatch.status, 206);
+		assert.equal(await ifMatch.text(), '01');
+
+		// If-Range mismatching ETag -> full 200
+		const ifMismatch = await handleDownload(
+			new Request(url, { headers: { Range: 'bytes=0-1', 'If-Range': '"etag-old"' } }),
+			s.env,
+		);
+		assert.equal(ifMismatch.status, 200);
+		assert.equal(ifMismatch.headers.get('content-length'), '10');
+		assert.equal(await ifMismatch.text(), '0123456789');
+
+		// Weak ETag in If-Range must NOT match (RFC 9110 §13.1.5) -> full 200
+		const ifWeak = await handleDownload(
+			new Request(url, { headers: { Range: 'bytes=0-1', 'If-Range': 'W/"etag-v1"' } }),
+			s.env,
+		);
+		assert.equal(ifWeak.status, 200);
+
+		// RFC 9110 §14.1.2: unsupported multi-range or non-bytes range unit is ignored -> full 200 OK
+		const multiRange = await handleDownload(
+			new Request(url, { headers: { Range: 'bytes=0-1,5-6' } }),
+			s.env,
+		);
+		assert.equal(multiRange.status, 200);
+		assert.equal(await multiRange.text(), '0123456789');
+
+		const nonBytesRange = await handleDownload(
+			new Request(url, { headers: { Range: 'items=0-2' } }),
+			s.env,
+		);
+		assert.equal(nonBytesRange.status, 200);
+		assert.equal(await nonBytesRange.text(), '0123456789');
+	});
+
+	it('returns 404 immediately once R2 object is deleted across any :filename variant', async () => {
+		const s = setupPub({});
+		const res1 = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/a.mp4`), s.env);
+		const res2 = await handleDownload(new Request(`https://${HOST}/dl/${VID}/${REV}/other-name.mp4`), s.env);
+		assert.equal(res1.status, 404);
+		assert.equal(res2.status, 404);
 	});
 });

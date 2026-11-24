@@ -641,6 +641,104 @@ export function parsePrivatePath(pathname: string): { token: string; videoId: st
 	return { token, videoId, rev, rest };
 }
 
+/** Max length (in Unicode code points) of a sanitized Web download filename stem (before `.mp4`). */
+export const DOWNLOAD_FILENAME_MAX_STEM = 80;
+
+function isBidiFormatChar(code: number): boolean {
+	return (
+		code === 0x061c || // ARABIC LETTER MARK
+		code === 0x200e || // LEFT-TO-RIGHT MARK
+		code === 0x200f || // RIGHT-TO-LEFT MARK
+		(code >= 0x202a && code <= 0x202e) || // LRE, RLE, PDF, LRO, RLO
+		(code >= 0x2066 && code <= 0x2069) // LRI, RLI, FSI, PDI
+	);
+}
+
+function stripUnsafeFilenameChars(input: string): string {
+	let out = '';
+	for (const ch of input) {
+		const code = ch.charCodeAt(0);
+		// Strip ASCII C0/DEL control characters (incl. CR, LF, NUL), Unicode bidi/format controls, and header/path delimiters
+		if (code <= 0x1f || code === 0x7f || isBidiFormatChar(code)) continue;
+		if (ch === '"' || ch === '\\' || ch === '/' || ch === ';') continue;
+		out += ch;
+	}
+	return out;
+}
+
+const PATH_TRAVERSAL_SEGMENT = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
+
+/**
+ * Derive a safe UTF-8 `<stem>.mp4` filename from a video title or decoded URL segment (Epic 14, E14-D6).
+ * Strips control chars (`0x00–0x1F`, `0x7F`), Unicode bidi/format overrides, `"`, `\`, `/`, `;`,
+ * rejects path-traversal `..` segments while preserving ordinary titles containing ellipses,
+ * clamps the stem to <= 80 Unicode characters, and falls back to `<videoId>.mp4`.
+ */
+export function sanitizeDownloadFilename(raw: string | null | undefined, videoId: string, requireMp4Ext = false): string {
+	const fallback = `${videoId}.mp4`;
+	if (typeof raw !== 'string') return fallback;
+	if (PATH_TRAVERSAL_SEGMENT.test(raw)) return fallback;
+	const stripped = stripUnsafeFilenameChars(raw).replace(/\s+/g, ' ').trim();
+	if (!stripped) return fallback;
+	let stem = stripped;
+	if (stem.toLowerCase().endsWith('.mp4')) {
+		stem = stem.slice(0, -4);
+	} else if (requireMp4Ext) {
+		return fallback;
+	}
+	// Collapse any run of 2+ dots (e.g. ellipsis "Part 1... Intro") so no `..` survives while keeping the title.
+	stem = stem.replace(/\.{2,}/g, '.').replace(/^[.\s]+|[.\s]+$/g, '');
+	if (!stem) return fallback;
+	const chars = Array.from(stem);
+	const clamped = chars.slice(0, DOWNLOAD_FILENAME_MAX_STEM).join('').replace(/^[.\s]+|[.\s]+$/g, '');
+	return clamped ? `${clamped}.mp4` : fallback;
+}
+
+/** Build the Web Download attachment URL `https://<host>/dl/<videoId>/<rev>/<encoded-filename>.mp4`. */
+export function buildDownloadAttachmentUrl(host: string, videoId: string, rev: string, title?: string | null): string {
+	const filename = sanitizeDownloadFilename(title, videoId, false);
+	return `https://${host}/dl/${videoId}/${rev}/${encodeURIComponent(filename)}`;
+}
+
+/**
+ * Parse `/dl/<videoId>/<rev>/<filename>` on the media Worker edge (Epic 14, E14-D6).
+ * Validates `videoId` and `rev`, URL-decodes `:filename` **exactly once** (falling back to `<videoId>.mp4`
+ * on invalid percent-encoding), and defensively re-sanitizes the decoded filename.
+ */
+export function parseDownloadPath(pathname: string): { videoId: string; rev: string; filename: string } | null {
+	const m = /^\/dl\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(pathname);
+	if (!m) return null;
+	const [, videoId, rev, rawFilename] = m as unknown as [string, string, string, string];
+	if (!isMediaVideoId(videoId) || !isMediaRev(rev)) return null;
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(rawFilename);
+	} catch {
+		return { videoId, rev, filename: `${videoId}.mp4` };
+	}
+	return { videoId, rev, filename: sanitizeDownloadFilename(decoded, videoId, true) };
+}
+
+/**
+ * Build a safe `Content-Disposition: attachment` header with both an ASCII fallback `filename="..."`
+ * and an RFC 5987 UTF-8 `filename*=UTF-8''...` parameter (Wiki E14 §5.2).
+ *
+ * When fewer than 3 ASCII alphanumeric characters remain in the stem (e.g. pure Arabic titles),
+ * the ASCII fallback uses `<videoId>.mp4` while `filename*` preserves the full sanitized UTF-8 title.
+ */
+export function buildContentDispositionAttachment(sanitizedFilename: string, videoId: string): string {
+	const safe = sanitizeDownloadFilename(sanitizedFilename, videoId, true);
+	const stem = safe.slice(0, -4);
+	const asciiStem = stem
+		.replace(/[^A-Za-z0-9._ -]/g, '')
+		.replace(/\s+/g, ' ')
+		.replace(/^[.\s]+|[.\s]+$/g, '');
+	const asciiAlnumCount = (asciiStem.match(/[A-Za-z0-9]/g) ?? []).length;
+	const asciiFilename = asciiAlnumCount >= 3 ? `${asciiStem}.mp4` : `${videoId}.mp4`;
+	const rfc5987 = encodeURIComponent(safe).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+	return `attachment; filename="${asciiFilename}"; filename*=UTF-8''${rfc5987}`;
+}
+
 /** Content type by file name, for R2 writes and the /priv/ edge. */
 export function mediaContentType(name: string): string {
 	const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();

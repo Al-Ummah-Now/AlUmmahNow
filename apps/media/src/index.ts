@@ -14,7 +14,7 @@ import { isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessag
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
 import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { audioQueueAction } from './audio';
-import { handlePrivate } from './edge';
+import { handleDownload, handlePrivate } from './edge';
 import { errorText, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
 import { handleInternalJob } from './internal-jobs';
@@ -61,6 +61,7 @@ async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): P
 	// Release smoke: one real container start (limited per version in the DO; the answer is ok, timing and a plain reason)
 	if (url.pathname === SELFTEST_PATH && request.method === 'GET') return handleSelfTest(env);
 	if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
+	if (url.pathname.startsWith('/dl/')) return handleDownload(request, env);
 	if (url.pathname === '/health') return Response.json({ ok: true });
 	const m = /^\/internal\/jobs\/([^/]+)(?:\/(cancel|retry-now))?$/.exec(url.pathname);
 	if (m) return handleInternalJob(request, env, decodeURIComponent(m[1]!), m[2] as 'cancel' | 'retry-now' | undefined);

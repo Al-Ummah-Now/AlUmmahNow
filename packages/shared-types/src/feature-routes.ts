@@ -142,6 +142,8 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'POST', '/api/move-offers/:id/accept', 'channelMove'),
   r('api-videos', 'POST', '/api/move-offers/:id/decline', 'channelMove'),
   r('api-videos', 'DELETE', '/api/move-offers/:id', 'channelMove'),
+  // Offline downloads (Epic 14, E14-S3a)
+  r('api-videos', 'POST', '/api/videos/:id/downloads', 'offlineDownloads'),
 ]);
 
 export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
@@ -175,6 +177,7 @@ export const FEATURE_AREAS: readonly FeatureArea[] = Object.freeze([
   { app: 'admin-api', prefix: '/internal/newsletter', key: 'newsletter' },
   { app: 'admin-api', prefix: '/api/newsletter', key: 'newsletter' },
   { app: 'api-videos', prefix: '/api/move-offers', key: 'channelMove' },
+  { app: 'api-videos', prefix: '/api/downloads', key: 'offlineDownloads' },
 ]);
 
 const FINISH = 'finishes work already started';
@@ -280,6 +283,7 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
   x('admin-api', 'DELETE', '/api/newsletter/subscribers/:id', `${REMOVE} (erasing a subscriber)`),
   x('api-videos', 'GET', '/api/me/tier-requests', READ),
   x('api-videos', 'POST', '/api/me/tier-requests/:id/withdraw', REMOVE),
+  x('api-videos', 'POST', '/api/downloads/sync', 'cleanup hygiene runs even while offlineDownloads is off'),
 ]);
 
 /**
@@ -290,8 +294,7 @@ export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, st
   liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   charityDonations: 'MEMBERS adds its routes and maps them here',
   supportDormantTransfer: 'no route: the monthly support.dormant job reads it',
-  listenMode: 'E14-S3 adds the audio playback route and maps it here',
-  offlineDownloads: 'E14-S3 adds the offline download routes and maps them here',
+  listenMode: 'E14-S3b adds the audio playback route and maps it here',
   eventCalendar: 'E22-S3 adds its routes and maps them here',
   qibla: 'E21.1 calculates locally; any preference routes arrive with that story',
   ageRules: 'the content flag and made-for-kids handlers read it (E20-B1); E20-B4 adds requireMinimumAge and maps its routes here',

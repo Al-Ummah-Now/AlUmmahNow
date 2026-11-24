@@ -19296,6 +19296,110 @@
         }
       }
     },
+    "/api/v1/downloads/sync": {
+      "post": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "Check availability of locally downloaded videos",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication (exempt from `offlineDownloads` switch so cleanup always runs). Returns uniform `available: false, reason: \"unavailable\"` for missing, deleted, hidden, private, unlisted, draft, live, and not-ready videos.",
+        "operationId": "post_DownloadsSync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "videoIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Availability status per requested video ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "available": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "unavailable",
+                              "disabled_by_creator"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "available"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user download sync rate limit exceeded"
+          },
+          "503": {
+            "description": "Rate-limit store unavailable"
+          }
+        }
+      }
+    },
     "/api/v1/explore": {
       "get": {
         "tags": [
@@ -51639,6 +51743,138 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{id}/downloads": {
+      "post": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "Get plain R2 progressive MP4 download URL for a video",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Requires authentication (gated by `offlineDownloads`, per-user rate limit). Returns the public R2 `video.mp4` URL for native apps or an attachment `/dl/` URL when `disposition: \"attachment\"` is passed.",
+        "operationId": "post_VideoDownloadCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "disposition": {
+                    "type": "string",
+                    "enum": [
+                      "inline",
+                      "attachment"
+                    ],
+                    "description": "Omit for native direct R2 `/pub/` URL; pass `\"attachment\"` for Web `/dl/` Save-As URL."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Downloadable MP4 rendition URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "r2Rev": {
+                      "type": "string"
+                    },
+                    "media": {
+                      "type": "object",
+                      "properties": {
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "mp4"
+                          ]
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "contentType": {
+                          "type": "string",
+                          "enum": [
+                            "video/mp4"
+                          ]
+                        },
+                        "bytes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "rung": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "format",
+                        "url",
+                        "contentType",
+                        "rung"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "videoId",
+                    "r2Rev",
+                    "media"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Non-public/live video or creator disabled downloads"
+          },
+          "404": {
+            "description": "Video not found or feature off"
+          },
+          "409": {
+            "description": "R2 progressive MP4 rendition not ready"
+          },
+          "429": {
+            "description": "Per-user download rate limit exceeded"
           }
         }
       }

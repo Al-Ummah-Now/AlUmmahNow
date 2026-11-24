@@ -9,8 +9,11 @@
   "preview_urls": false,
   // Logging policy (docs/operations/logging.md): every invocation kept, no invocation log, LOG_LEVEL warn
   "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
-  // Only private renditions run this Worker; /pub/* is the R2 custom domain + Cache Rule
-  "routes": [{ "pattern": "media.qa.alummahnow.net/priv/*", "zone_name": "alummahnow.net" }],
+  // Private renditions (/priv/*) and Web Download attachment helper (/dl/*) run this Worker; /pub/* is the R2 custom domain + Cache Rule
+  "routes": [
+    { "pattern": "media.qa.alummahnow.net/priv/*", "zone_name": "alummahnow.net" },
+    { "pattern": "media.qa.alummahnow.net/dl/*", "zone_name": "alummahnow.net" }
+  ],
   "containers": [
     {
       "class_name": "Transcoder",
