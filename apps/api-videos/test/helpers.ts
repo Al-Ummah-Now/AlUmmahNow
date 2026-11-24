@@ -112,14 +112,14 @@ export class MemoryQueue {
  */
 export function buildApp(
 	register: (router: any) => void,
-	auth?: { userId: string; roles?: string[]; channelOwnerId?: string } | null,
+	auth?: { userId: string; email?: string; roles?: string[]; channelOwnerId?: string } | null,
 ) {
 	const app = new Hono();
 	// The production error handler (index.ts): status mapping, Retry-After on a lost write race
 	app.onError(errorHandler);
 	app.use('*', async (c, next) => {
 		if (auth) {
-			c.set('auth' as never, { userId: auth.userId, email: `${auth.userId}@test.local`, payload: auth.roles ? { roles: auth.roles } : {} } as never);
+			c.set('auth' as never, { userId: auth.userId, email: auth.email ?? `${auth.userId}@test.local`, payload: auth.roles ? { roles: auth.roles } : {} } as never);
 			c.set('userId' as never, auth.userId as never);
 			// A channel member acting as the channel (lib/channelAccess.ts)
 			if (auth.channelOwnerId) c.set('channelOwnerId' as never, auth.channelOwnerId as never);

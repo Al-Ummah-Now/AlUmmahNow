@@ -2,6 +2,7 @@ import { nameLocale } from "../../lib/name-locale";
 import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
 import { bearerOf, namesChanged, syncNamesToAuth } from "../../lib/auth-name-sync";
+import { withAccountEmail } from "../../lib/account-email";
 import { Bool } from "../../lib/chanfana-params";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -65,8 +66,8 @@ export class ProfileUpdate extends AuthenticatedRoute {
         // Get user ID from auth - profile ID is always the user ID
         const userId = this.getUserId(c);
 
-        // Retrieve the validated request body
-        const profileUpdateInput = request.body;
+        // The validated request body, with the signed-in account's email (a submitted one is ignored)
+        const profileUpdateInput = withAccountEmail(request.body, this.getAuth(c));
 
         // Get existing profile from storage (profile ID = user ID)
         const bucket = c.env.profiles;
