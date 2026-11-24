@@ -31,7 +31,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { enqueueNotification, type NotificationsEnv } from '../notifications';
 import { streamKey, type LiveStreamRecord } from '../live/streams';
-import { signLiveVodUrl, type VodSignEnv } from '../live/vod-sign';
+import { signReviewVodUrl, type VodSignEnv } from '../live/vod-sign';
 import { decisionTransition, outcomeTransition } from './apply';
 import { reviewExtractionFor, type ReviewScanEnv } from './scan';
 
@@ -91,7 +91,7 @@ export async function startLiveVodReview(env: LiveReviewEnv, streamId: string, s
 		});
 		if (why || !saved) return { started: false, why: why ?? 'stream not found' };
 		const review = await reviewExtractionFor(env);
-		const vodUrl = await signLiveVodUrl(env, session.vod_url);
+		const vodUrl = await signReviewVodUrl(env as never, session.vod_url);
 		if (env.TRANSCODE_QUEUE && review && vodUrl) {
 			const job: LiveReviewJobMessage = { kind: 'live_review', streamId, reviewId, rev: rev(), vodUrl, review, queuedAt: now.toISOString() };
 			try {
@@ -244,7 +244,7 @@ export async function liveReviewSubject(env: LiveReviewEnv, streamId: string) {
 		duration,
 		status: s.status,
 		review: s.review ?? null,
-		playUrl: await signLiveVodUrl(env, s.vodUrl ?? null),
+		playUrl: await signReviewVodUrl(env as never, s.vodUrl ?? null),
 		thumbnailUrl: s.thumbnailUrl ?? null,
 	};
 }
