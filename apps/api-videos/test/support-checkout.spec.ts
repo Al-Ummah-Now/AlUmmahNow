@@ -123,7 +123,7 @@ describe('the owner’s tier is only read', () => {
 		const keys = await computeFeatures(t.env as never, { userId: FAN, roles: [] }, CH);
 		assert.equal(keys.support, true);
 		const row = await t.db.prepare('SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = ?').bind(OWNER).first();
-		assert.deepEqual(row, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
+		assert.deepEqual({ ...row }, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
 	});
 });
 

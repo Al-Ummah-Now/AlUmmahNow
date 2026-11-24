@@ -652,7 +652,7 @@ describe('creator tiers: channels, access and admin', () => {
     for (const roles of [null, undefined]) {
       const out = await resolveCreator(h.d1, { userId: 'boss', roles });
       assert.deepEqual([out.subjectId, out.via, out.tier?.unlimited], ['boss', 'super_admin', true]);
-      assert.deepEqual(stored(), { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
+      assert.deepEqual({ ...stored() }, { tier_id: 'unlimited', assigned_by: 'system:super-admin' });
     }
     // A caller's own roles (known, without Super Admin) still remove it, as before
     await resolveCreator(h.d1, { userId: 'boss', roles: [] });
