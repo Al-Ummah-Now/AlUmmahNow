@@ -65,12 +65,15 @@ export function usePremiereSync(player: SyncedPlayer | null, clock: PremiereCloc
     const drift = () => position() - (player.currentTime() ?? 0);
     const tick = () => {
       if (over()) return setBehind(false);
-      // Caught up; a viewer who has just paused is at the moment too, and stays paused there
-      if (!following.current && !player.paused() && Math.abs(drift()) <= AHEAD_SECONDS) following.current = true;
+      // Caught up, or past it between two ticks (a late tick, a background tab); a viewer who has just paused
+      // is at the moment too, and stays paused there
+      if (!following.current && !player.paused() && drift() <= AHEAD_SECONDS) following.current = true;
       if (following.current) {
         // Faster or slower than everyone else only while catching up
         if (player.playbackRate() !== 1) player.playbackRate(1);
-        if (!player.paused() && !player.seeking() && player.readyState() >= PLAYABLE && Math.abs(drift()) > RESYNC_SECONDS) toMoment();
+        // Ahead is taken back at once, behind only when it is more than a hiccup
+        const off = drift();
+        if (!player.paused() && !player.seeking() && player.readyState() >= PLAYABLE && (off > RESYNC_SECONDS || off < -AHEAD_SECONDS)) toMoment();
       }
       setBehind(!following.current && drift() > RESYNC_SECONDS);
     };
