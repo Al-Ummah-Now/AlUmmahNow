@@ -30,6 +30,7 @@ import type { AdminBindings, AuthContext } from '../base/types';
 import { apiError } from '../lib/api-error';
 import { dropAudit, setAuditPrevious, writeAudit, type AuditAction } from '../lib/content/audit';
 import { logger } from '../lib/logger';
+import { resolveNames } from '../lib/queue/names';
 import { hasAdminRole, hasModeratorRole } from '../lib/roles';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
@@ -198,6 +199,94 @@ const toReviewView = (row: ReviewRow) => ({
   decidedAt: row.decided_at,
   createdAt: row.created_at,
 });
+
+async function lookupSearchTitles(
+  db: SearchDb,
+  table: 'search_videos' | 'search_channels' | 'search_playlists',
+  rawIds: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(rawIds.filter(Boolean))].slice(0, 200);
+  if (ids.length === 0) return out;
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT id, COALESCE(NULLIF(json_extract(payload, '$.title'), ''), json_extract(payload, '$.name')) AS title
+         FROM ${table} WHERE id IN (SELECT value FROM json_each(?))`,
+      )
+      .bind(JSON.stringify(ids))
+      .all<{ id: string; title: string | null }>();
+    for (const r of results ?? []) {
+      const clean = r.title?.replace(/\s+/g, ' ').trim();
+      if (clean) out.set(r.id, clean);
+    }
+  } catch (err) {
+    logger.warn('[KidsAdmin] Search title lookup failed', { table, error: err instanceof Error ? err.message : String(err) });
+  }
+  return out;
+}
+
+async function resolveTargetTitles(
+  db: SearchDb,
+  refs: ReadonlyArray<{ targetType: KidsTargetType; targetId: string }>,
+  extra?: { channelIds?: readonly string[]; profileIds?: readonly string[] },
+) {
+  const videoIds = refs.filter((r) => r.targetType === 'video').map((r) => r.targetId);
+  const channelIds = [...refs.filter((r) => r.targetType === 'channel').map((r) => r.targetId), ...(extra?.channelIds ?? [])];
+  const playlistIds = refs.filter((r) => r.targetType === 'playlist').map((r) => r.targetId);
+  const names = await resolveNames(db as never, {
+    videos: videoIds,
+    channels: channelIds,
+    profiles: extra?.profileIds ?? [],
+  });
+  const missingVideos = videoIds.filter((id) => !names.videos.has(id));
+  const missingChannels = channelIds.filter((id) => !names.channels.has(id));
+  const [videoTitles, channelTitles, playlistTitles] = await Promise.all([
+    lookupSearchTitles(db, 'search_videos', missingVideos),
+    lookupSearchTitles(db, 'search_channels', missingChannels),
+    lookupSearchTitles(db, 'search_playlists', playlistIds),
+  ]);
+  const pickTargetTitle = (type: KidsTargetType, id: string): string | null => {
+    if (type === 'video') return names.videos.get(id) ?? videoTitles.get(id) ?? null;
+    if (type === 'channel') return names.channels.get(id) ?? channelTitles.get(id) ?? null;
+    return playlistTitles.get(id) ?? null;
+  };
+  return {
+    pickTargetTitle,
+    pickChannel: (id: string) => names.channels.get(id) ?? channelTitles.get(id) ?? null,
+    pickProfile: (id: string) => names.profiles.get(id) ?? null,
+  };
+}
+
+async function hydrateCatalogItems(db: SearchDb, rows: CatalogRow[]) {
+  const items = rows.map(toCatalogView);
+  if (items.length === 0) return items;
+  const resolved = await resolveTargetTitles(db, items);
+  return items.map((item) => {
+    const targetTitle = resolved.pickTargetTitle(item.targetType, item.targetId);
+    return targetTitle ? { ...item, targetTitle } : item;
+  });
+}
+
+async function hydrateReviewRequests(db: SearchDb, rows: ReviewRow[]) {
+  const items = rows.map(toReviewView);
+  if (items.length === 0) return items;
+  const resolved = await resolveTargetTitles(db, items, {
+    channelIds: items.map((r) => r.channelId),
+    profileIds: items.map((r) => r.requestedBy),
+  });
+  return items.map((item) => {
+    const targetTitle = resolved.pickTargetTitle(item.targetType, item.targetId);
+    const channelName = resolved.pickChannel(item.channelId);
+    const requestedByName = resolved.pickProfile(item.requestedBy);
+    return {
+      ...item,
+      ...(targetTitle ? { targetTitle } : {}),
+      ...(channelName ? { channelName } : {}),
+      ...(requestedByName ? { requestedByName } : {}),
+    };
+  });
+}
 
 async function writeKidsAudit(
   db: SearchDb,
@@ -431,9 +520,9 @@ app.get('/catalog', async (c) => {
   }
 
   return ok(c, {
-    items: page.map((row) => ({
-      ...toCatalogView(row),
-      ...(revokeMeta.get(row.id) ?? {}),
+    items: (await hydrateCatalogItems(db, page)).map((item) => ({
+      ...item,
+      ...(revokeMeta.get(item.id) ?? {}),
     })),
     hasMore,
     nextCursor: hasMore && last ? encodeCursor({ pos: Number(last.position) || 0, upd: last.updated_at, id: last.id }) : null,
@@ -611,7 +700,8 @@ app.post('/catalog', async (c) => {
     () => (existing ? { status: existing.status, ageBand: existing.age_band } : null),
   );
 
-  return ok(c, { item: toCatalogView(out) }, existing ? 200 : 201);
+  const [item] = await hydrateCatalogItems(db, [out]);
+  return ok(c, { item }, existing ? 200 : 201);
 });
 
 app.patch('/catalog/:id', async (c) => {
@@ -681,7 +771,8 @@ app.patch('/catalog/:id', async (c) => {
       return row;
     },
   );
-  return ok(c, { item: toCatalogView(updated) });
+  const [item] = await hydrateCatalogItems(db, [updated]);
+  return ok(c, { item });
 });
 
 app.delete('/catalog/:id', async (c) => {
@@ -715,7 +806,8 @@ app.delete('/catalog/:id', async (c) => {
       return marked;
     },
   );
-  return ok(c, { item: toCatalogView(updated) });
+  const [item] = await hydrateCatalogItems(db, [updated]);
+  return ok(c, { item });
 });
 
 app.post('/catalog/:id/restore', async (c) => {
@@ -755,7 +847,8 @@ app.post('/catalog/:id/restore', async (c) => {
       return row;
     },
   );
-  return ok(c, { item: toCatalogView(restored) });
+  const [item] = await hydrateCatalogItems(db, [restored]);
+  return ok(c, { item });
 });
 
 // ---------------------------------------------------------------------------
@@ -788,7 +881,7 @@ app.get('/review-requests', async (c) => {
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
   return ok(c, {
-    items: page.map(toReviewView),
+    items: await hydrateReviewRequests(db, page),
     hasMore,
     nextCursor: hasMore && last ? encodeCursor({ ts: last.created_at, id: last.id }) : null,
   });
@@ -926,7 +1019,8 @@ app.post('/review-requests/:id/decide', async (c) => {
       return claimed;
     },
   );
-  return ok(c, { request: toReviewView(out) });
+  const [request] = await hydrateReviewRequests(db, [out]);
+  return ok(c, { request });
 });
 
 // ---------------------------------------------------------------------------
@@ -954,12 +1048,20 @@ app.get('/policy', async (c) => {
     decisions = {};
   }
   const staffChannelIds = parseStaffChannelIdsJson(row?.staff_channel_ids_json);
+  const legalBy = row?.legal_approved_by ?? null;
+  const resolved = await resolveTargetTitles(db, [], {
+    channelIds: staffChannelIds,
+    profileIds: legalBy ? [legalBy] : [],
+  });
+  const staffChannels = staffChannelIds.map((id) => ({ id, name: resolved.pickChannel(id) }));
   const readiness = await kidsCanTurnOn({ SEARCH_DB: db });
   return ok(c, {
     decisions,
     staffChannelIds,
+    staffChannels,
     legalApproved: Number(row?.legal_approved ?? 0) === 1,
-    legalApprovedBy: row?.legal_approved_by ?? null,
+    legalApprovedBy: legalBy,
+    legalApprovedByName: legalBy ? resolved.pickProfile(legalBy) : null,
     legalApprovedAt: row?.legal_approved_at ?? null,
     updatedAt: row?.updated_at ?? null,
     readiness,
@@ -1073,12 +1175,19 @@ app.put('/policy', async (c) => {
     },
   );
 
+  const resolved = await resolveTargetTitles(db, [], {
+    channelIds: nextStaffChannels,
+    profileIds: legalBy ? [legalBy] : [],
+  });
+  const staffChannels = nextStaffChannels.map((id) => ({ id, name: resolved.pickChannel(id) }));
   const readiness = await kidsCanTurnOn({ SEARCH_DB: db });
   return ok(c, {
     decisions: nextDecisions,
     staffChannelIds: nextStaffChannels,
+    staffChannels,
     legalApproved: legalApproved === 1,
     legalApprovedBy: legalBy,
+    legalApprovedByName: legalBy ? resolved.pickProfile(legalBy) : null,
     legalApprovedAt: legalAt,
     updatedAt: now,
     readiness,

@@ -69,6 +69,7 @@ export interface KidsCatalogItem {
   id: string;
   targetType: KidsTargetType;
   targetId: string;
+  targetTitle?: string | null;
   ageBand: KidsAgeBand;
   status: KidsCatalogStatus;
   topics: KidsTopic[];
@@ -89,8 +90,11 @@ export interface KidsReviewRequest {
   id: string;
   targetType: KidsTargetType;
   targetId: string;
+  targetTitle?: string | null;
   channelId: string;
+  channelName?: string | null;
   requestedBy: string;
+  requestedByName?: string | null;
   suggestedAgeBand: KidsAgeBand;
   notes: string | null;
   status: KidsReviewStatus;

@@ -307,9 +307,18 @@ describe('admin /api/kids', () => {
     const decisions = Object.fromEntries(KIDS_DECISION_IDS.map((id) => [id, 'Option A']));
     // Approving a staff playlist alone must NOT satisfy the precondition without an approved visible video
     await sa.json('POST', '/api/kids/catalog', { targetType: 'playlist', targetId: 'pl_staff', ageBand: 'all' });
+    sa.search.raw
+      .prepare("INSERT OR IGNORE INTO content_ownership (kind, id, admin_title) VALUES ('channel', 'ch_staff', 'Al Noor Kids Studio')")
+      .run();
+    sa.search.raw
+      .prepare("INSERT OR IGNORE INTO content_ownership (kind, id, admin_title) VALUES ('profile', 'usr_staff1', 'Super Admin')")
+      .run();
     const putRes1 = await sa.json('PUT', '/api/kids/policy', { decisions, legalApproved: true, staffChannelIds: ['ch_staff'] });
     assert.equal(putRes1.status, 200);
-    assert.equal(((await putRes1.json()) as any).result.readiness.ready, false);
+    const putBody1 = ((await putRes1.json()) as any).result;
+    assert.equal(putBody1.readiness.ready, false);
+    assert.equal(putBody1.legalApprovedByName, 'Super Admin');
+    assert.deepEqual(putBody1.staffChannels, [{ id: 'ch_staff', name: 'Al Noor Kids Studio' }]);
 
     await sa.json('POST', '/api/kids/catalog', { targetType: 'video', targetId: 'vid_ready', ageBand: 'all' });
     const check = await checkCanTurnOn(sa.env as never, 'ummahKids');
@@ -411,5 +420,37 @@ describe('admin /api/kids', () => {
     const revItem = ((await listRevoked.json()) as any).result.items.find((x: any) => x.id === reapproved.id);
     assert.equal(revItem?.revokedByEdit, true);
     assert.equal(revItem?.revocationReason, 'chapters_update');
+  });
+
+  it('hydrates human titles and creator names for catalog and review rows when indexed', async () => {
+    const t = setup(['moderator']);
+    t.search.raw
+      .prepare("INSERT INTO search_videos (id, payload) VALUES ('vid_named', ?)")
+      .run(JSON.stringify({ title: 'Bedtime Duas for Little Hearts' }));
+    t.search.raw
+      .prepare("INSERT INTO content_ownership (kind, id, admin_title) VALUES ('channel', 'ch_named', 'Noor Kids Channel')")
+      .run();
+    t.search.raw
+      .prepare("INSERT INTO content_ownership (kind, id, admin_title) VALUES ('profile', 'usr_named', 'Sister Amina')")
+      .run();
+    t.search.raw
+      .prepare(
+        `INSERT INTO kids_review_requests (id, target_type, target_id, channel_id, requested_by, suggested_age_band, status, created_at)
+         VALUES ('krev_named', 'video', 'vid_named', 'ch_named', 'usr_named', '3-6', 'pending', '2026-11-23T00:00:00Z')`,
+      )
+      .run();
+    await t.json('POST', '/api/kids/catalog', { targetType: 'video', targetId: 'vid_named', ageBand: '3-6' });
+
+    const catRes = await t.req('/api/kids/catalog');
+    assert.equal(catRes.status, 200);
+    const catItem = ((await catRes.json()) as any).result.items[0];
+    assert.equal(catItem.targetTitle, 'Bedtime Duas for Little Hearts');
+
+    const revRes = await t.req('/api/kids/review-requests');
+    assert.equal(revRes.status, 200);
+    const revItem = ((await revRes.json()) as any).result.items[0];
+    assert.equal(revItem.targetTitle, 'Bedtime Duas for Little Hearts');
+    assert.equal(revItem.channelName, 'Noor Kids Channel');
+    assert.equal(revItem.requestedByName, 'Sister Amina');
   });
 });

@@ -41,8 +41,8 @@ export interface KidsReadiness {
 
 export const KIDS_TURN_ON_REASONS: Readonly<Record<KidsTurnOnBlocker, FeatureText>> = Object.freeze({
   decisions_open: {
-    en: 'Resolve all Epic 20 owner decisions before turning on Ummah Kids.',
-    ar: 'يجب حسم جميع قرارات المالك للملحمة العشرين قبل تشغيل أطفال الأمة.',
+    en: 'Record all launch policy decisions before turning on Ummah Kids.',
+    ar: 'يجب حسم جميع قرارات سياسة الإطلاق قبل تشغيل أطفال الأمة.',
   },
   legal_not_approved: {
     en: 'Record legal counsel sign-off before turning on Ummah Kids.',

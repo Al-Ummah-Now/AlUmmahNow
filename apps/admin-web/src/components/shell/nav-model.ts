@@ -103,6 +103,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/imports', label: 'nav.imports', icon: 'archive', group: 'content', requires: (a) => a.imports === true },
   { href: '/categories', label: 'nav.categories', icon: 'tag', group: 'content' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions', icon: 'tag', group: 'content' },
+  { href: '/kids', label: 'nav.kids', icon: 'spark', group: 'content' },
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },
   // Captions & translation (AUN-CAPTIONS): budgets, models, DeepL, inline fair use, viewer titles, Quran editions; creators:manage changes
   { href: '/captions-settings', label: 'nav.captionSettings', icon: 'sliders', group: 'content' },
