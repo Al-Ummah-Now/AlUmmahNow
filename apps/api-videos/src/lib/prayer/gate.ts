@@ -1,6 +1,6 @@
 /**
  * The prayer provider gate (wiki Epic 21 §3 and §5.2): protects AlAdhan, which publishes no rate
- * limit or SLA, and protects us from it. It lives in the search D1 (search migration 0110), not a
+ * limit or SLA, and protects us from it. It lives in the search D1 (search migration 0119), not a
  * Durable Object, because the release promotes api-videos with versions upload, which cannot
  * apply a Durable Object migration. It is touched only on a cache miss.
  *
