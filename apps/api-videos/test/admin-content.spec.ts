@@ -1280,6 +1280,7 @@ describe('channel actions', () => {
 		// Only the owner, only to an admin, with a recent sign-in and the handle typed
 		assert.deepEqual((await moveReceivers(env as never, 'ch1', OWNER, 'ami')).map((r) => r.userId), [OTHER]);
 		assert.deepEqual(await moveReceivers(env as never, 'ch1', OWNER, 'usr_viewer'), [], 'an editor is not offered');
+		assert.deepEqual(await moveReceivers(env as never, 'ch1', OWNER, `${OTHER}@example.com`), [], 'never matched by an email');
 		await refused(moveReceivers(env as never, 'ch1', OTHER, ''), 'not_owner');
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: 'usr_viewer', typed: '@ch1', authTime: fresh }), 'receiver_not_channel_admin');
 		await refused(createMoveOffer(env as never, { channelId: 'ch1', ownerId: OWNER, toUserId: OTHER, typed: '@ch1', authTime: fresh - 3600 }), 'reauth_required');

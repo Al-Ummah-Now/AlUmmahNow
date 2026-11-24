@@ -71,7 +71,10 @@ function nameOf(profile: Row | null, fallback: string): string {
 	return pick(profile?.displayName) || [pick(profile?.firstName), pick(profile?.lastName)].filter(Boolean).join(' ') || pick(profile?.userName) || fallback;
 }
 
-/** The channel's admins (channel roles), for the owner's receiver autocomplete, matched on name, @username or email. */
+/**
+ * The channel's admins (channel roles), for the owner's receiver autocomplete, matched on name or
+ * @username. The receiver is always picked by user id from this list, never matched by an email.
+ */
 export async function moveReceivers(env: Env, channelId: string, ownerId: string, q: string): Promise<Array<{ userId: string; name: string; userName: string | null; avatarUrl: string | null }>> {
 	const channel = await loadChannel(env, channelId);
 	if (channel.userId !== ownerId) throw new MoveError(403, 'not_owner', 'Only the channel owner can move it');
@@ -83,8 +86,7 @@ export async function moveReceivers(env: Env, channelId: string, ownerId: string
 		if (!profile || profile.isDeleted) continue;
 		const name = nameOf(profile, member.userId);
 		const userName = typeof profile.userName === 'string' ? profile.userName : null;
-		const email = typeof profile.email === 'string' ? profile.email.toLowerCase() : '';
-		if (needle && ![name.toLowerCase(), (userName ?? '').toLowerCase(), email].some((v) => v.includes(needle))) continue;
+		if (needle && ![name.toLowerCase(), (userName ?? '').toLowerCase()].some((v) => v.includes(needle))) continue;
 		out.push({ userId: member.userId, name, userName, avatarUrl: typeof profile.avatarUrl === 'string' ? profile.avatarUrl : null });
 	}
 	return out;
