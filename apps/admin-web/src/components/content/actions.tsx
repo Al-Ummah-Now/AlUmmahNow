@@ -202,7 +202,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, bullets,
           onConfirm(text);
         }}
       >
-        <h2 id={`${ids}-title`} className="text-lg font-semibold">
+        <h2 id={`${ids}-title`} className="text-lg font-semibold [overflow-wrap:anywhere]">
           {title}
         </h2>
         <p id={`${ids}-body`} className="text-fg-muted text-sm [text-wrap:balance]">
