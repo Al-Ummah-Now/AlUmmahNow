@@ -33,6 +33,7 @@ import { openTransferJob } from '../../lib/admin/service';
 import { LIVE_TIER_ERROR_CODES, featureGate, type FeatureKey } from '@al-ummah/shared-types';
 import { apiError } from '../../lib/api-error';
 import { readChatStream } from '../../lib/live/chat';
+import { hasReminder, remindable } from '../../lib/live/reminders';
 import { cancelPremiere, endPremiere, isPremiere, startPremiere } from '../../lib/live/premieres';
 import { chatState } from './liveChat';
 
@@ -186,11 +187,14 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const appDb = env(c).SEARCH_DB;
 		const chatOn = appDb ? (await featureGate(c.env as never, 'liveChat').catch(() => ({ on: false as const }))).on : false;
 		const chat = await chatState(c, chatOn ? await readChatStream(appDb as never, stream.id).catch(() => null) : null, this.getUserId(c), chatOn);
+		const remindersOn = appDb ? (await featureGate(c.env as never, 'liveReminders').catch(() => ({ on: false as const }))).on : false;
+		const open = remindersOn ? await remindable(c.env as never, stream.id).catch(() => null) : null;
+		const reminder = { enabled: !!open, count: open?.count ?? 0, set: open ? await hasReminder(env(c).NOTIFICATIONS_DB, stream.id, this.getUserId(c)).catch(() => false) : false };
 		c.header('cache-control', 'no-store');
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), ...chat },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now(), ...liveAppState(stream, manages), ...chat, reminder },
 		};
 	}
 }

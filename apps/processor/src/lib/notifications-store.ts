@@ -34,11 +34,12 @@ export function isNotificationKey(value: unknown): value is NotificationKey {
   return typeof value === 'string' && (NOTIFICATION_KEYS as readonly string[]).includes(value);
 }
 
-function fanoutKey(kind: NotificationFanoutPayload['kind']): NotificationKey {
-  return kind === 'live_started' ? 'liveStarted' : 'newVideo';
+export function fanoutKey(kind: NotificationFanoutPayload['kind']): NotificationKey {
+  return kind === 'live_started' ? 'liveStarted' : kind === 'live_soon' ? 'liveSoon' : 'newVideo';
 }
 
-function fanoutDedupe(kind: NotificationFanoutPayload['kind'], entityId: string): string {
+function fanoutDedupe({ kind, entityId, startsAt }: Pick<NotificationFanoutPayload, 'kind' | 'entityId' | 'startsAt'>): string {
+  if (kind === 'live_soon') return `live-soon:${entityId}:${startsAt ?? 0}`;
   return `${kind === 'live_started' ? 'live' : 'video'}:${entityId}`;
 }
 
@@ -122,16 +123,18 @@ export async function fanoutNotificationPage(
   const levels = bellLevelsFor(payload.isHighlight);
   const placeholders = levels.map(() => '?').join(', ');
   const afterUserId = payload.afterUserId ?? '';
-  const dedupe = fanoutDedupe(payload.kind, payload.entityId);
+  const dedupe = fanoutDedupe(payload);
+  // Reminders (wiki E17): the people who asked about this stream, by its primary key; their bell does not matter
+  const reminders = payload.audience === 'reminders';
 
   // The page boundary: the FANOUT_PAGE-th subscriber after the cursor (primary key order)
   const bound = await db
     .prepare(
       `SELECT COUNT(*) AS n, MAX(user_id) AS last FROM (
-         SELECT user_id FROM channel_subscribers WHERE channel_id = ? AND user_id > ? ORDER BY user_id LIMIT ?
+         SELECT user_id FROM ${reminders ? 'live_reminders WHERE stream_id' : 'channel_subscribers WHERE channel_id'} = ? AND user_id > ? ORDER BY user_id LIMIT ?
        )`,
     )
-    .bind(payload.channelId, afterUserId, FANOUT_PAGE)
+    .bind(reminders ? payload.entityId : payload.channelId, afterUserId, FANOUT_PAGE)
     .first<{ n: number; last: string | null }>();
   const lastUserId = bound?.last ?? null;
   if (!lastUserId) return { rows: [], afterUserId, lastUserId: null, more: false };
@@ -142,10 +145,10 @@ export async function fanoutNotificationPage(
         `INSERT OR IGNORE INTO notifications
            (id, user_id, category, notification_type, notification_key, params_json, action_url, actor_id, entity_id, dedupe_key, is_read, created_at)
          SELECT lower(hex(randomblob(16))), s.user_id, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?
-         FROM channel_subscribers s
-         WHERE s.channel_id = ?
+         FROM ${reminders ? 'live_reminders' : 'channel_subscribers'} s
+         WHERE s.${reminders ? 'stream_id' : 'channel_id'} = ?
            AND s.user_id > ? AND s.user_id <= ?
-           AND s.bell IN (${placeholders})
+           ${reminders ? '' : `AND s.bell IN (${placeholders})`}
            AND s.user_id != ?
            AND NOT EXISTS (
              SELECT 1 FROM notification_settings ns
@@ -162,10 +165,10 @@ export async function fanoutNotificationPage(
         payload.entityId,
         dedupe,
         now,
-        payload.channelId,
+        reminders ? payload.entityId : payload.channelId,
         afterUserId,
         lastUserId,
-        ...levels,
+        ...(reminders ? [] : levels),
         payload.actorUserId ?? '',
         category,
       ),

@@ -60,6 +60,7 @@ import type { LiveEnv } from "./lib/live/providers";
 import { sweepLiveSessions } from "./lib/live/service";
 import { maintainLiveMetadata } from './lib/live/metadata';
 import { runPremieres } from './lib/live/premieres';
+import { runHeadsUps } from './lib/live/reminders';
 import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
 import { pruneLiveData } from "./lib/live/qoe";
 import { loggingMiddleware } from "./middleware/logging";
@@ -295,6 +296,7 @@ app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.repor
 // Live watching heartbeats (AlUmmahNow#30), per IP: bounds made-up viewers with the per-network cap in the object
 app.use('/api/live-streams/:id/viewers', edgeRateLimit('LIVE_VIEWER_LIMITER', 'videos.live_viewers'));
 // Live chat (wiki E17): its own per-person limit, apart from comments; the per-address one is in the endpoint
+app.use('/api/live-streams/:id/reminders', edgeRateLimit('REACTION_LIMITER', 'videos.live_reminder', ['POST', 'DELETE']));
 app.use('/api/live-streams/:id/chat', edgeRateLimit('LIVE_CHAT_LIMITER', 'videos.live_chat'));
 app.use('/api/live-streams/:id/chat', requireHuman('videos.live_chat', 'first'));
 app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
@@ -684,6 +686,15 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				.catch((error) => {
 					logger.error('[Premiere] Tick failed', { error: error instanceof Error ? error.message : String(error) });
 					reportJobFailure(rawEnv, ctx, 'premieres', error);
+				}),
+		);
+		// Every minute: people who asked hear of streams starting within 15 minutes (lib/live/reminders.ts, wiki E17)
+		ctx.waitUntil(
+			runHeadsUps(withSearchSync(rawEnv, ctx) as never)
+				.then((r) => (r.sent || r.cancelled || r.failed ? logger.info('[LiveReminders] Tick', r) : undefined))
+				.catch((error) => {
+					logger.error('[LiveReminders] Tick failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'live-reminders', error);
 				}),
 		);
 		// Every minute: probe each enabled media provider; playback moves off a failing one (lib/media/health.ts).

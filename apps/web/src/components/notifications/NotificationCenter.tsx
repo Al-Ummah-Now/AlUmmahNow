@@ -61,6 +61,8 @@ function KindIcon({ kind }: { kind: string }) {
     case 'subscription':
       return <UserPlus {...props} />;
     case 'liveStarted':
+    case 'liveSoon':
+    case 'premiereCancelled':
       return <Radio {...props} />;
     case 'like':
       return <Heart {...props} />;

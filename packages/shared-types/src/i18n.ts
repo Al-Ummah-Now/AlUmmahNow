@@ -1811,6 +1811,10 @@ export interface AppTranslations {
       newVideoMessage: string;
       liveStartedTitle: string;
       liveStartedMessage: string;
+      liveSoonTitle: string;
+      liveSoonMessage: string;
+      premiereCancelledTitle: string;
+      premiereCancelledMessage: string;
       commentReplyTitle: string;
       commentReplyMessage: string;
     };

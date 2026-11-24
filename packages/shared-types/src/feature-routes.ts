@@ -66,6 +66,9 @@ export const FEATURE_ROUTES: readonly FeatureRoute[] = Object.freeze([
   r('api-videos', 'POST', '/api/live-streams', 'live'),
   // Starts a stream (live) or a premiere (livePremieres, wiki E17): the handler knows which
   r('api-videos', 'POST', '/api/live-streams/:id/start', 'live', 'handler'),
+  // Reminders (wiki E17); sending them is checked where it happens
+  r('api-videos', 'POST', '/api/live-streams/:id/reminders', 'liveReminders'),
+  r('api-videos', 'DELETE', '/api/live-streams/:id/reminders', 'liveReminders'),
   // Premieres (wiki E17): scheduling one and swapping its video; a running one ends as usual
   r('api-videos', 'POST', '/api/videos/:id/premiere', 'livePremieres'),
   r('api-videos', 'PATCH', '/api/live-streams/:id/premiere', 'livePremieres'),
@@ -250,7 +253,6 @@ export const FEATURE_ROUTE_EXEMPTIONS: readonly FeatureRouteExemption[] = Object
  * creator support's routes arrive with their MEMBERS stories and are mapped then.
  */
 export const FEATURE_KEYS_WITHOUT_ROUTES: Readonly<Partial<Record<FeatureKey, string>>> = Object.freeze({
-  liveReminders: 'E17 maps its reminder routes here when registered',
   liveEvents: 'E17 enforces event stream tags in the live stream handlers',
   supportExternalLinks: 'MEMBERS adds its routes and maps them here',
   charityDonations: 'MEMBERS adds its routes and maps them here',

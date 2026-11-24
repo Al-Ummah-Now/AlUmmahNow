@@ -13,7 +13,7 @@ import { RankViewerBatch, rankViewerRow } from './lib/discovery-viewers';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
-  fanoutNotificationPage,
+  fanoutKey, fanoutNotificationPage,
   markPushed,
   unpushedNotification,
   insertNotification,
@@ -21,6 +21,7 @@ import {
   pushStoredNotifications,
   reconcileChannelSubscriber,
 } from './lib/notifications-store';
+import { reminderMaySend } from './lib/live-reminders';
 import { eraseUserModerationData } from './moderation/store';
 import { eraseUserContactData } from './contact/erase';
 import { eraseUserTraces } from './erasure/user-traces';
@@ -608,20 +609,25 @@ export class MessageProcessor {
   /** Fan a new-video / live-started notification out to the channel's subscribers. */
   private async processNotificationFanout(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     const payload = message.payload as unknown as NotificationFanoutPayload;
-    if (!payload.channelId || !payload.entityId || (payload.kind !== 'new_video' && payload.kind !== 'live_started')) {
+    if (!payload.channelId || !payload.entityId || (payload.kind !== 'new_video' && payload.kind !== 'live_started' && payload.kind !== 'live_soon')) {
       throw new Error('Notification fan-out message missing required fields: kind, channelId, entityId');
     }
     if (!env.NOTIFICATIONS_DB) {
       this.logger.warn('NOTIFICATIONS_DB not bound; fan-out skipped', { kind: payload.kind, channelId: payload.channelId });
       return;
     }
+    const reminders = payload.audience === 'reminders';
+    if (reminders && !(await reminderMaySend(env, payload))) {
+      this.logger.debug('Reminder fan-out skipped', { kind: payload.kind, entityId: payload.entityId });
+      return;
+    }
     const data = {
-      notificationKey: payload.kind === 'live_started' ? ('liveStarted' as const) : ('newVideo' as const),
+      notificationKey: fanoutKey(payload.kind),
       params: payload.params,
       actionUrl: payload.actionUrl,
     };
     // The first page also tells social (auto-posts, webhooks): once per event, whatever the subscriber count
-    if (!payload.afterUserId) await this.announceToSocial(env, { channelId: payload.channelId, event: payload.kind === 'live_started' ? 'live' : payload.isHighlight ? 'video' : 'short', entityId: payload.entityId });
+    if (!payload.afterUserId && !reminders) await this.announceToSocial(env, { channelId: payload.channelId, event: payload.kind === 'live_started' ? 'live' : payload.isHighlight ? 'video' : 'short', entityId: payload.entityId });
     // One page of subscribers per message (SCALABILITY-AUDIT PR-5): the next
     // page is queued first, so a failure below retries only this page
     const page = await fanoutNotificationPage(env.NOTIFICATIONS_DB, payload);
@@ -642,6 +648,14 @@ export class MessageProcessor {
     const pushed = await pushStoredNotifications(env, page.rows, data);
     await enqueuePush(env, page.rows, data);
     await markPushed(env.NOTIFICATIONS_DB, page.rows);
+    // A live start then goes to those who asked to be reminded. After the subscribers, never beside them: both
+    // use the dedupe key live:<id>, and two fan-outs in flight could push the same row twice
+    if (payload.kind === 'live_started' && !reminders && !page.more) {
+      const { afterUserId: _done, ...rest } = payload;
+      const next: AlUmmahMessage = { id: `${message.id}:reminders`, type: MessageType.NotificationFanout, timestamp: Date.now(), payload: { ...rest, audience: 'reminders' } as unknown as Record<string, unknown> };
+      if (env.MESSAGE_QUEUE) await env.MESSAGE_QUEUE.send(next);
+      else await this.processNotificationFanout(next, env);
+    }
     this.logger.debug('Notification fan-out page finished', {
       kind: payload.kind,
       channelId: payload.channelId,
