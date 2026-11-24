@@ -71,6 +71,7 @@
 --   apps/api-videos/migrations/search/0117_support_app_settings.sql
 --   apps/api-videos/migrations/search/0118_support_dormant_trolley.sql
 --   apps/api-videos/migrations/search/0119_prayer_provider_gate.sql
+--   apps/api-videos/migrations/search/0120_islamic_seasons.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -124,6 +125,8 @@ CREATE TABLE import_takeout_files (id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
+CREATE TABLE islamic_season_items (season_id TEXT NOT NULL, position INTEGER NOT NULL, item_type TEXT NOT NULL, item_id TEXT NOT NULL, PRIMARY KEY (season_id, position)) WITHOUT ROWID;
+CREATE TABLE islamic_seasons (id TEXT PRIMARY KEY, kind TEXT NOT NULL, title_en TEXT NOT NULL, title_ar TEXT NOT NULL, description_en TEXT NOT NULL DEFAULT '', description_ar TEXT NOT NULL DEFAULT '', source_en TEXT NOT NULL, source_ar TEXT NOT NULL, starts_on TEXT NOT NULL, ends_on TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'draft', version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL, deleted_at TEXT, purge_after TEXT) WITHOUT ROWID;
 CREATE TABLE live_channel_overrides (channel_id TEXT PRIMARY KEY, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), note TEXT, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_chat_messages (id TEXT PRIMARY KEY, stream_id TEXT NOT NULL, user_id TEXT NOT NULL, author_channel_id TEXT, author_name TEXT NOT NULL, author_handle TEXT, author_avatar TEXT, author_role TEXT CHECK (author_role IS NULL OR author_role IN ('owner', 'moderator')), text TEXT NOT NULL, offset_ms INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('published', 'held', 'removed')), held_by TEXT CHECK (held_by IS NULL OR held_by IN ('channel_block', 'moderation')), removed_by TEXT CHECK (removed_by IS NULL OR removed_by IN ('author', 'moderator', 'admin')), is_pinned INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
@@ -332,6 +335,8 @@ CREATE INDEX idx_import_takeout_files_item ON import_takeout_files (source_id, i
 CREATE INDEX idx_import_takeout_files_state ON import_takeout_files (source_id, state);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
+CREATE INDEX idx_islamic_seasons_purge ON islamic_seasons (purge_after) WHERE purge_after IS NOT NULL;
+CREATE INDEX idx_islamic_seasons_state_start ON islamic_seasons (state, starts_on, id);
 CREATE INDEX idx_live_chat_pinned ON live_chat_messages (stream_id) WHERE is_pinned = 1;
 CREATE INDEX idx_live_chat_purge ON live_chat_messages (status, updated_at) WHERE status IN ('held', 'removed');
 CREATE INDEX idx_live_chat_stream_created ON live_chat_messages (stream_id, status, created_at, id);
