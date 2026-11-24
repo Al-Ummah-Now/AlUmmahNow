@@ -15,6 +15,7 @@ import {
 } from '@al-ummah/shared-types';
 import { handle, type Env } from '../src/index';
 import { robotsTxt } from '../src/pages';
+import { resetShortLinksWellKnownCache, shortLinksWellKnownResponse } from '../src/well-known';
 
 const ENV: Env = {
   SITE_ORIGIN: 'https://videos.alummahnow.net',
@@ -251,5 +252,89 @@ describe('API down', () => {
     assert.equal(live.res.status, 302);
     assert.equal(live.res.headers.get('location'), 'https://videos.alummahnow.net/ar/live/ls_1');
     assert.equal((await run('/p/post_1', {}, down)).res.status, 503);
+  });
+});
+
+describe('short-links domain association files (/.well-known/*, E22-D8)', () => {
+  it('answers 404 while unconfigured, serves 200 application/json when configured, and keeps last good across outages', async () => {
+    resetShortLinksWellKnownCache();
+    // Unconfigured (no ADMIN_API_ORIGIN or ERRORS_INGEST_URL) -> 404
+    const none = await run('/.well-known/apple-app-site-association');
+    assert.equal(none.res.status, 404);
+
+    resetShortLinksWellKnownCache();
+    const aasaBody = JSON.stringify({
+      applinks: { details: [{ appIDs: ['ABCDE12345.net.alummahnow.viewer'], components: [{ '/': '/v/*' }] }] },
+      appclips: { apps: ['ABCDE12345.net.alummahnow.viewer.clip'] },
+    });
+    const assetBody = JSON.stringify([
+      {
+        relation: ['delegate_permission/common.handle_all_urls'],
+        target: { namespace: 'android_app', package_name: 'net.alummahnow.app', sha256_cert_fingerprints: ['AA'] },
+      },
+    ]);
+
+    let shouldFail = false;
+    const fetchMock = async (input: string) => {
+      if (shouldFail) return new Response('bad gateway', { status: 502 });
+      if (input.endsWith('/public/mobile-apps/short-links/apple-app-site-association')) {
+        return new Response(aasaBody, { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (input.endsWith('/public/mobile-apps/short-links/assetlinks.json')) {
+        return new Response(assetBody, { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 404 });
+    };
+
+    const envWithAdmin = { ADMIN_API_ORIGIN: 'https://admin.api.alummahnow.net' };
+    const t0 = 1_000_000;
+    const r1 = (await shortLinksWellKnownResponse(
+      new Request('https://alummahnow.link/.well-known/apple-app-site-association'),
+      envWithAdmin,
+      fetchMock,
+      t0,
+    ))!;
+    assert.equal(r1.status, 200);
+    assert.equal(r1.headers.get('content-type'), 'application/json');
+    assert.equal(await r1.text(), aasaBody);
+
+    // Legacy Apple CDN path shares the same answer
+    const legacy = (await shortLinksWellKnownResponse(
+      new Request('https://alummahnow.link/apple-app-site-association'),
+      envWithAdmin,
+      fetchMock,
+      t0 + 1000,
+    ))!;
+    assert.equal(legacy.status, 200);
+
+    // Android Asset Links
+    const asset = (await shortLinksWellKnownResponse(
+      new Request('https://alummahnow.link/.well-known/assetlinks.json'),
+      envWithAdmin,
+      fetchMock,
+      t0,
+    ))!;
+    assert.equal(asset.status, 200);
+    assert.equal(await asset.text(), assetBody);
+
+    // Admin API outage after 2 minutes still serves last-good within 10-minute grace window
+    shouldFail = true;
+    const stale = (await shortLinksWellKnownResponse(
+      new Request('https://alummahnow.link/.well-known/apple-app-site-association'),
+      envWithAdmin,
+      fetchMock,
+      t0 + 120_000,
+    ))!;
+    assert.equal(stale.status, 200);
+    assert.equal(await stale.text(), aasaBody);
+
+    // Past 10 minutes with outage -> 503
+    const expired = (await shortLinksWellKnownResponse(
+      new Request('https://alummahnow.link/.well-known/apple-app-site-association'),
+      envWithAdmin,
+      fetchMock,
+      t0 + 11 * 60_000,
+    ))!;
+    assert.equal(expired.status, 503);
   });
 });

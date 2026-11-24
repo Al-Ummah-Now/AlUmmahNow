@@ -28,6 +28,7 @@ import { youtubeImportRouter } from './youtube-import.router';
 import { channelInvitesRouter } from './channel-invites.router';
 import { moveOffersRouter } from './move-offers.router';
 import { downloadsRouter } from './downloads.router';
+import eventsRouter from './events.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -131,6 +132,9 @@ export function registerAllRouters(openapi: any) {
 
   // Move from YouTube (wiki AUN-YT-IMPORT): the Studio wizard's import API
   openapi.route('/api/youtube-import', youtubeImportRouter);
+
+  // Unified online Event Calendar & .ics feeds (Epic 22, E22-D7)
+  openapi.route('', eventsRouter);
 
   // Search v2 domain - index-backed search, explore, internal backfill (root level)
   openapi.route('', searchRouter);

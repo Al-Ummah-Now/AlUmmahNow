@@ -22,8 +22,9 @@ import {
 import { logger } from './logger';
 import { notFoundPage, robotsTxt } from './pages';
 import { lookupTarget, redirectUrl, trim, type FetchLike, type Lookup, type ResolveEnv } from './resolve';
+import { shortLinksWellKnownResponse, type WellKnownEnv } from './well-known';
 
-export interface Env extends ResolveEnv, ErrorReporterEnv {
+export interface Env extends ResolveEnv, WellKnownEnv, ErrorReporterEnv {
   ENVIRONMENT?: string;
   LOG_LEVEL?: string;
 }
@@ -130,6 +131,8 @@ function notFound(url: URL, env: Env, method: string): Response {
 
 export async function handle(request: Request, env: Env, ctx: Ctx, deps: Deps): Promise<Response> {
   const url = new URL(request.url);
+  const wellKnown = await shortLinksWellKnownResponse(request, env, deps.fetch);
+  if (wellKnown) return wellKnown;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response(null, { status: 405, headers: { ...NOINDEX, Allow: 'GET, HEAD' } });
   }

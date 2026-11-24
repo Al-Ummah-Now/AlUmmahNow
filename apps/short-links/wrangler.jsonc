@@ -26,6 +26,7 @@
 		"API_ORIGIN": "https://videos.api.alummahnow.net",
 		// 'shorts' sends Shorts straight to /shorts/<id> (D-SEO-10); 'video' lets the site redirect them
 		"SHORTS_PATH": "video",
+		"ADMIN_API_ORIGIN": "https://admin.api.alummahnow.net",
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors"
 	},
 
@@ -47,6 +48,7 @@
 				"WWW_ORIGIN": "https://www.stage.alummahnow.net",
 				"API_ORIGIN": "https://videos.api.stage.alummahnow.net",
 				"SHORTS_PATH": "video",
+				"ADMIN_API_ORIGIN": "https://admin.api.stage.alummahnow.net",
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors"
 			}
 		}

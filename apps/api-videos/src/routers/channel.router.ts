@@ -7,6 +7,7 @@ import { ChannelDeletedVideos } from '../endpoints/video/videoTrash';
 import { ChannelTopContent } from '../endpoints/channel/channelTopContent';
 import { ChannelCommentsBulk, ChannelCommentsList, ChannelCommentsSummary } from '../endpoints/channel/channelComments';
 import { ChannelBlockAdd, ChannelBlockRemove, ChannelBlocksList } from '../endpoints/channel/channelBlocks';
+import { ChannelEventsCalendarIcs } from '../endpoints/events/eventsCalendar';
 
 // Channel CRUD endpoints
 import { ChannelsList } from '../endpoints/channel/channelList';
@@ -77,6 +78,7 @@ channelRouter.put('/:channelId/quran-translations/:language', ChannelQuranTransl
 channelRouter.delete('/:channelId/quran-translations/:language', ChannelQuranTranslationReset);
 channelRouter.get('/:channelId/translation-settings', ChannelTranslationSettingsGet);
 channelRouter.put('/:channelId/translation-settings', ChannelTranslationSettingsSet);
+channelRouter.get('/:channelId/events.ics', ChannelEventsCalendarIcs);
 
 // Get channel by ID (public)
 channelRouter.get('/:id', ChannelFetch);
