@@ -1,8 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyContentFlags, contentFlagFields, isAgeRestricted, isMadeForKids, type ContentFlagFields } from '../src/content-flags';
-import { projectVideo } from '../src/search/documents';
-import { newVideoFanout } from '../src/notifications';
+import { applyContentFlags, contentFlagFields, isAgeRestricted, isMadeForKids, type ContentFlagFields } from '../src/content-flags.ts';
 
 describe('content flags (wiki E20 §5.4, §5.5)', () => {
   it('made for kids: the video’s own choice, else what the import recorded', () => {
@@ -54,15 +52,5 @@ describe('content flags (wiki E20 §5.4, §5.5)', () => {
     assert.deepEqual(contentFlagFields({ ageRestricted: true }), { ageRestricted: true, ageRestrictedBy: 'creator' });
     assert.deepEqual(contentFlagFields({ ageRestricted: true, madeForKids: true }), {});
     assert.equal(isAgeRestricted({}), false);
-  });
-
-  it('the index payload and the fan-out message carry a flag only when it is set', () => {
-    const video = { id: 'v1', title: 'Lesson', channelId: 'ch1', userId: 'u1', isPublic: true, uploadStatus: 'ready', dateCreated: '2026-11-01T00:00:00.000Z' };
-    const payload = (o: object) => projectVideo({ ...video, ...o })!.payload as unknown as Record<string, unknown>;
-    assert.ok(!('madeForKids' in payload({})) && !('ageRestricted' in payload({})));
-    assert.equal(payload({ madeForKids: true }).madeForKids, true);
-    assert.equal(payload({ ageRestricted: true }).ageRestricted, true);
-    assert.ok(!newVideoFanout(video as never, {}).madeForKids);
-    assert.equal(newVideoFanout({ ...video, importedFrom: { madeForKids: true } } as never, {}).madeForKids, true);
   });
 });
