@@ -5197,7 +5197,6 @@ const en = {
     appNames: {
       viewer: 'Viewer',
       studio: 'Studio',
-      kids: 'Kids',
       tools: 'Tools',
       admin: 'Admin',
     },

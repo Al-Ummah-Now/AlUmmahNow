@@ -22,7 +22,7 @@ import { APPS, PLATFORMS, SEMVER, VersionsDocumentSchema, buildAppConfig } from 
 import type { VersionsDocument } from '../../lib/app-config';
 import { APP_CONFIG_KEYS, forgetAppConfigDocument } from '../../lib/app-config-store';
 import type { AppConfigKey } from '../../lib/app-config-store';
-import { ConfigRulesDocumentSchema, RulesDocumentSchema, evaluateConfig, evaluateFlags } from '../../lib/feature-flags';
+import { ConfigRulesDocumentSchema, RulesDocumentSchema, evaluateConfig, evaluateFlags, parseStoredRules } from '../../lib/feature-flags';
 import type { FlagContext, FlagRule } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
 import { apiError } from '../../lib/api-error';
@@ -130,9 +130,11 @@ export class AppConfigEvaluate extends PublicRoute {
 		const docs: { flags?: FlagRule[]; config?: FlagRule[]; versions?: VersionsDocument } = {};
 		for (const key of APP_CONFIG_KEYS) {
 			// A draft is checked exactly as a save would check it; otherwise the stored document (straight from KV)
-			const raw = body.documents[key] !== undefined ? body.documents[key] : await kv.get(key, { type: 'json' });
+			const draft = body.documents[key] !== undefined;
+			const raw = draft ? body.documents[key] : await kv.get(key, { type: 'json' });
 			if (raw == null) continue;
-			const parsed = APP_CONFIG_SCHEMAS[key].safeParse(raw);
+			// A stored document is read as GET /api/app-config reads it (apps we no longer have are ignored)
+			const parsed = draft || key === 'versions' ? APP_CONFIG_SCHEMAS[key].safeParse(raw) : parseStoredRules(raw, key);
 			if (!parsed.success) {
 				return c.json({ success: false, error: 'invalid_document', key, problems: parsed.error.issues }, 400);
 			}

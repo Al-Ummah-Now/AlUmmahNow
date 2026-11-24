@@ -55,7 +55,7 @@ Values are the seeds as Free / Plus / Pro / Institution. "unl." means unlimited.
 | Ummah Comments widget | `sites.max`, `discussions.*` (Epic 26) | Seeded. Feature not built | Moderation per comment |
 | Social media management | `social.enabled`, `.accounts.max` 10, `.monthlyPosts` 300, `.scheduledPosts.max` 200, `.automation`, `.inbox`, `.analytics.retentionDays` (`docs/specs/social-media-management.md` §11.2) | Spec defaults. Not built | **D (X pricing page): $0.015 per native X post, $0.20 per post with a URL, $0.005 per metrics read.** Other networks' APIs are free. Containers and Media Transformations ≈ $0.15–0.25 per active channel a month (D, §18). **The social spec's X cap default is high relative to other social lines and needs to be lowered** |
 | Cost display | `studio.costs.dollars` (cost-monitoring Q6) | Flag | $0 |
-| Offline downloads, viewer premium | `premium.offline`, `kids.curation` (EMBEDS-COMMENTS-TIERS §27.4); Epics 14 and 24 | Not built; E24 deferred (D4) | Delivery, as for VOD |
+| Offline downloads, viewer premium | `premium.offline` (EMBEDS-COMMENTS-TIERS §27.4); Epics 14 and 24 | Not built; E24 deferred (D4) | Delivery, as for VOD |
 
 ### 1.3 CMS (AlUmmahNowCMS)
 

@@ -5,7 +5,7 @@
  * before saving), the order of rules (the first match decides a key), and api-videos' own
  * problems placed on the rule and field they name.
  */
-import { APP_CONFIG_APPS, APP_CONFIG_MAX_RULES, APP_CONFIG_PLATFORMS, APP_CONFIG_RULE_KEY, APP_CONFIG_SEMVER, compareAppVersionCores, compareAppVersions, parseDigits, type AppConfigRule, type AppConfigVersionPolicy, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_MAX_RULES, APP_CONFIG_PLATFORMS, APP_CONFIG_RULE_KEY, APP_CONFIG_SEMVER, compareAppVersionCores, compareAppVersions, isAppConfigApp, parseDigits, type AppConfigRule, type AppConfigVersionPolicy, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 
 export type RulesKind = 'flags' | 'config';
 
@@ -91,9 +91,17 @@ export function newRule(kind: RulesKind): RuleDraft {
   return { ...ruleToDraft({ key: '' }), value: kind === 'config' ? '""' : '' };
 }
 
-/** A stored `rules` document as drafts; anything that is not a list starts empty. */
+/**
+ * A stored `rules` document as drafts; anything that is not a list starts empty. Apps we no longer have
+ * are ignored, as api-videos ignores them; a rule for those apps only is left out, because with no app
+ * ticked it would be for every app.
+ */
 export function rulesToDrafts(value: unknown): RuleDraft[] {
-  return Array.isArray(value) ? value.filter((r) => r && typeof r === 'object').map((r) => ruleToDraft(r as AppConfigRule)) : [];
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((r): r is AppConfigRule => !!r && typeof r === 'object')
+    .filter((r) => !r.apps?.length || r.apps.some(isAppConfigApp))
+    .map((r) => ruleToDraft(r.apps ? { ...r, apps: r.apps.filter(isAppConfigApp) } : r));
 }
 
 /** The locales typed as a list (commas or spaces between them). */
@@ -167,19 +175,20 @@ export function moveItem<T>(list: T[], index: number, by: -1 | 1): T[] {
 // versions
 // ---------------------------------------------------------------------------
 
-/** The stored `versions` document as drafts, in its own order. */
+/** The stored `versions` document as drafts, in its own order. Entries of apps we no longer have are left out. */
 export function versionsToDrafts(value: unknown): VersionDraft[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-  return Object.entries(value as Record<string, AppConfigVersionPolicy>).map(([target, policy]) => {
+  return Object.entries(value as Record<string, AppConfigVersionPolicy>).flatMap(([target, policy]) => {
     const [app = '', platform = ''] = target.split('/');
-    return {
+    if (!isAppConfigApp(app)) return [];
+    return [{
       id: draftId('ver'),
       app,
       platform,
       minimumVersion: policy?.minimumVersion ?? '',
       latestVersion: policy?.latestVersion ?? '',
       storeUrl: policy?.storeUrl ?? '',
-    };
+    }];
   });
 }
 

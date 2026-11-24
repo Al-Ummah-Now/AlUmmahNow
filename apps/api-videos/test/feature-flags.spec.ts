@@ -124,6 +124,29 @@ describe('documents', () => {
 		assert.ok(bad.error);
 	});
 
+	it('a stored document that names an app we no longer have still works; that rule is for nobody', async () => {
+		const flags = [
+			{ key: 'both', apps: ['kids', 'viewer'] },
+			{ key: 'kids_only', apps: ['kids'] },
+			{ key: 'kids_first', apps: ['kids'], enabled: false },
+			{ key: 'kids_first' },
+			{ key: 'everyone' },
+		];
+		const loaded = await loadRules(new MemoryKV({ flags }) as never, 'flags');
+		assert.equal(loaded.error, undefined);
+		assert.deepEqual(evaluateFlags(loaded.rules, ctx), { both: true, kids_only: false, kids_first: true, everyone: true });
+		assert.deepEqual(evaluateFlags(loaded.rules, { ...ctx, app: 'studio' }), { both: false, kids_only: false, kids_first: true, everyone: true });
+		const config = await loadRules(new MemoryKV({ config: [{ key: 'rows', value: 1, apps: ['kids'] }, { key: 'rows', value: 2 }] }) as never, 'config');
+		assert.deepEqual(evaluateConfig(config.rules, ctx), { rows: 2 });
+	});
+
+	it('other mistakes in a stored document are still refused, and so is saving an unknown app', async () => {
+		for (const bad of [[{ key: 'f', apps: [] }], [{ key: 'f', apps: [3] }], [{ key: 'f', apps: 'kids' }], [{ key: 'f', apps: ['kids'], surprise: true }]]) {
+			assert.ok((await loadRules(new MemoryKV({ flags: bad }) as never, 'flags')).error, JSON.stringify(bad));
+		}
+		assert.equal(RulesDocumentSchema.safeParse([{ key: 'f', apps: ['kids'] }]).success, false);
+	});
+
 	it('reads are cached per isolate for 60 s', async () => {
 		const kv = new MemoryKV({ flags: [] });
 		await readAppConfigDocument(kv as never, 'flags', 1_000);
@@ -229,6 +252,16 @@ describe('POST /internal/app-config/evaluate (admin dry run)', () => {
 	it('a key without a draft uses the stored document', async () => {
 		const res = await run({ context }, new MemoryKV({ flags: [{ key: 'stored', enabled: true }] }));
 		assert.deepEqual(((await res.json()) as any).result.flags, { stored: true });
+	});
+
+	it('reads a stored document as the apps get it, and refuses a draft that names an app we no longer have', async () => {
+		const kv = new MemoryKV({ flags: [{ key: 'old', apps: ['kids'] }, { key: 'kept' }], versions: { 'kids/ios': { minimumVersion: '9.0.0' } } });
+		const res = await run({ context }, kv);
+		assert.equal(res.status, 200);
+		const { result }: any = await res.json();
+		assert.deepEqual(result.flags, { old: false, kept: true });
+		assert.equal(result.update.status, 'ok');
+		assert.equal((await run({ context, documents: { flags: [{ key: 'old', apps: ['kids'] }] } }, kv)).status, 400);
 	});
 
 	it('an invalid draft is refused with its problems, naming the key', async () => {

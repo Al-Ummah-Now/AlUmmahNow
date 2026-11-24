@@ -263,7 +263,7 @@ assigned to specific subjects.
 
 Existing features get keys too (non-exhaustive): `upload.maxDurationMinutes`,
 `upload.monthlyHours`, `storage.gb`, `live.monthlyMinutes`, `analytics.retentionDays`,
-`studio.bulkImport`, `channel.max`, `kids.curation` (moderator only), `premium.offline` (viewer).
+`studio.bulkImport`, `channel.max`, `premium.offline` (viewer).
 
 ### 27.5 Metering & limits
 - Counters incremented asynchronously (queue → processor) and checked synchronously against cached

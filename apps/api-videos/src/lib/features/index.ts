@@ -29,7 +29,6 @@ import {
 	captionPeriod,
 	can,
 	channelRoleOf,
-	isKidsClientApp,
 	liveIneligibility,
 	tierAllowsChannels,
 	tierAllowsLive,
@@ -301,7 +300,7 @@ const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[
  * the caller's role there; a caller without a role sees none of it.
  */
 export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null, request: FeaturesRequest = {}): Promise<UserFeatures> {
-	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId, request), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
+	const [features, switches] = await Promise.all([computeConfiguredFeatures(env, who, channelId), readFeatureSwitches(env, NEUTRAL_LEGACY)]);
 	// Creator support (wiki AUN-MEMBERS §9.5): computed only while its switch is on, for viewers too
 	// (the Support button sits on the channel page), so nothing is read while support is off
 	if (switches.effective.creatorSupport) Object.assign(features, await supportKeysFor(env, who, channelId ?? null, request));
@@ -347,10 +346,9 @@ const NEUTRAL_LEGACY: Partial<Record<FeatureKey, boolean>> = Object.fromEntries(
 	FEATURE_REGISTRY.filter((d) => d.legacy).map((d) => [d.key, true]),
 );
 
-async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null, request: FeaturesRequest = {}): Promise<UserFeatures> {
+async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
 	const settings = await readCaptionSettings(env);
 	const [quran, quranText] = await Promise.all([quranEditionsConfigured(env), quranTextAvailable(env)]);
-	const kidsClient = isKidsClientApp(request.client);
 	const features: UserFeatures = {
 		...NO_FEATURES,
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
@@ -359,15 +357,15 @@ async function computeConfiguredFeatures(env: FeaturesEnv, who: FeaturesWho, cha
 		quranText,
 		// Listen mode works for signed-out and signed-in viewers once the admin switch is on (wiki E14-D3)
 		listenMode: true,
-		eventCalendar: !kidsClient,
+		eventCalendar: true,
 		// E21.6: finite viewing and the daily reminder need no provider (wiki Epic 21 §6)
 		intentionalViewing: true,
 		// Viewers follow the switch alone: no tier, and no provider (streams on air and recordings go on).
 		// With a channel these say what the caller may set up there (below), so they start off
-		liveChat: !channelId && !kidsClient,
+		liveChat: !channelId,
 		livePremieres: !channelId,
 		liveEvents: !channelId,
-		liveReminders: !kidsClient,
+		liveReminders: true,
 		recitationTools: quranText,
 	};
 	const userId = who.userId ?? null;
