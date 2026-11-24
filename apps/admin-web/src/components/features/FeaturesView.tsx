@@ -361,7 +361,7 @@ function NoteLine({ note, locale }: { note: FeatureNote; locale: Locale }) {
             {note.href && (
               <>
                 {' '}
-                <AppLink href={note.href} className={`${linkClass} whitespace-nowrap`} data-testid="feature-setup-link">
+                <AppLink href={note.href} className={`${linkClass} whitespace-nowrap underline underline-offset-2`} data-testid="feature-setup-link">
                   {t('features.notes.setUp')}
                 </AppLink>
               </>

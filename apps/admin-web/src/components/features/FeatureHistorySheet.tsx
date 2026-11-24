@@ -90,7 +90,8 @@ export function FeatureHistorySheet({ featureKey, load: fetchPage, onClose }: { 
             <Icon name="close" />
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto px-5 py-4" aria-busy={state === 'loading' || undefined}>
+        {/* Focusable so keyboard users can scroll the list once Show more is gone (axe scrollable-region-focusable) */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-title`} aria-busy={state === 'loading' || undefined}>
           {state === 'loading' && (
             <ul className="space-y-4" aria-hidden="true">
               {[0, 1, 2, 3].map((i) => (
