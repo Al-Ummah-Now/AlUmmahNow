@@ -13,6 +13,7 @@ import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upg
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { moderateLive } from '../lib/admin/liveModeration';
+import { holdComment } from '../lib/admin/commentModeration';
 import {
 	ADMIN_CHANNEL_SORTS,
 	ADMIN_USER_SORTS,
@@ -977,6 +978,13 @@ const LiveModeration = z.object({ entityType: z.enum(['livestream', 'live_chat']
 app.post('/live-moderation', async (c) => {
 	const input = parse(LiveModeration, await body(c));
 	return ok(c, await moderateLive(liveEnv(c), { ...input, actorId: actor(c) }));
+});
+/** Hides a reported comment (lib/admin/commentModeration.ts). */
+const CommentModeration = z.object({ on: z.enum(['video', 'post']), parentId: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/), commentId: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/) }).strict();
+app.post('/comment-moderation', async (c) => {
+	const input = parse(CommentModeration, await body(c));
+	const executionCtx = waitUntilOf(c);
+	return ok(c, await holdComment(c.env as never, { ...input, actorId: actor(c) }, executionCtx && { waitUntil: executionCtx }));
 });
 /** The stream's next session goes to `provider` (null cancels). A live session is never moved. */
 app.post('/live/streams/:id/move', async (c) => {

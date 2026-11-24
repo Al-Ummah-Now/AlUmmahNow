@@ -2,10 +2,10 @@
  * Batch lookup for the admin reports queue (POST /internal/admin/lookup):
  * titles, channels and owners of many reported items, and the names and ban
  * state of many users, in one call. Reads the admin index in D1
- * (content_ownership, admin_comments, live_chat_messages, videos_bans); only playlists, which the
- * index does not hold, are read from R2 (one get each, bounded by the caller's
- * page size). Posts are stored under their channel and cannot be found by id
- * alone, so they come back `found: false`.
+ * (content_ownership, channel_comments, admin_comments, live_chat_messages, videos_bans); only
+ * playlists, posts and post comments, which the index does not hold, are read from R2 (a few gets
+ * each, bounded by the caller's page size). A post's channel comes from its search row or its
+ * location record, a post comment's post from the channel comments index.
  */
 import {
 	ADMIN_LOOKUP_MAX_ITEMS,
@@ -19,12 +19,16 @@ import {
 	type ReportableEntityType,
 	type SearchDb,
 } from '@al-ummah/shared-types';
+import { locatePostComment } from '../channelComments/moderation';
+import { readPostLocation } from '../community-posts';
 import { readMany, type AdminEnv } from './directory';
 
 type Row = Record<string, any>;
 
 /** Longest text excerpt kept for a comment. */
 const EXCERPT = 200;
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 
 /** On one line; null when empty. A chat message is short enough to judge whole. */
 const flat = (text: unknown): string | null => (typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '') || null;
@@ -61,6 +65,76 @@ async function ownershipRows(db: SearchDb, kind: 'video' | 'stream' | 'channel' 
 	return out;
 }
 
+interface FoundComment {
+	parentType: 'video' | 'post';
+	parentId: string;
+	channelId: string | null;
+	ownerId: string | null;
+	text: unknown;
+	isHidden: boolean;
+	isDeleted: boolean;
+}
+
+/**
+ * Comments by id. channel_comments (primary key) says which video or post a comment is on, so admin_comments is
+ * read by its own key; only comments of videos that are on no channel are looked for by id alone.
+ */
+async function commentsByIds(env: AdminEnv, db: SearchDb, ids: string[]): Promise<Map<string, FoundComment>> {
+	const out = new Map<string, FoundComment>();
+	if (ids.length === 0) return out;
+	const { results: indexed } = await db
+		.prepare('SELECT c.comment_id, c.target_kind, c.target_id, c.channel_id FROM json_each(?) j JOIN channel_comments c ON c.comment_id = j.value')
+		.bind(JSON.stringify(ids))
+		.all<{ comment_id: string; target_kind: 'video' | 'post'; target_id: string; channel_id: string }>();
+	const onVideo = (indexed ?? []).filter((r) => r.target_kind === 'video');
+	const onPost = (indexed ?? []).filter((r) => r.target_kind === 'post');
+	const known = new Set((indexed ?? []).map((r) => r.comment_id));
+	const rest = ids.filter((id) => !known.has(id));
+	const columns = 'c.comment_id, c.video_id, c.user_id, c.channel_id, c.text, c.is_hidden, c.status';
+	const [byKey, byId] = await Promise.all([
+		onVideo.length
+			? db
+					.prepare(`SELECT ${columns} FROM json_each(?) j JOIN admin_comments c ON c.video_id = json_extract(j.value, '$[0]') AND c.comment_id = json_extract(j.value, '$[1]')`)
+					.bind(JSON.stringify(onVideo.map((r) => [r.target_id, r.comment_id])))
+					.all<Row>()
+			: { results: [] as Row[] },
+		rest.length ? db.prepare(`SELECT ${columns} FROM json_each(?) j JOIN admin_comments c ON c.comment_id = j.value`).bind(JSON.stringify(rest)).all<Row>() : { results: [] as Row[] },
+	]);
+	for (const r of [...(byKey.results ?? []), ...(byId.results ?? [])]) {
+		out.set(r.comment_id, { parentType: 'video', parentId: r.video_id, channelId: r.channel_id ?? null, ownerId: r.user_id ?? null, text: r.text, isHidden: r.is_hidden === 1 || r.status === 'held', isDeleted: false });
+	}
+	const bucket = env.community_posts;
+	if (bucket) {
+		const read = await Promise.all(onPost.map((r) => locatePostComment(bucket, r.target_id, r.comment_id).catch(() => null)));
+		onPost.forEach((r, i) => {
+			const comment = read[i]?.comment;
+			if (!comment) return;
+			out.set(r.comment_id, { parentType: 'post', parentId: r.target_id, channelId: r.channel_id, ownerId: comment.userId || null, text: comment.content, isHidden: comment.isHidden === true || comment.status === 'held', isDeleted: comment.isDeleted === true || !!comment.deletedAt });
+		});
+	}
+	return out;
+}
+
+/** Posts by id, with their channel. */
+async function postsByIds(env: AdminEnv, db: SearchDb, ids: string[]): Promise<Map<string, { channelId: string; value: Row }>> {
+	const out = new Map<string, { channelId: string; value: Row }>();
+	const bucket = env.community_posts;
+	const safe = ids.filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id));
+	if (!bucket || safe.length === 0) return out;
+	const { results } = await db.prepare('SELECT p.id, p.channel_id FROM json_each(?) j JOIN search_posts p ON p.id = j.value').bind(JSON.stringify(safe)).all<{ id: string; channel_id: string | null }>();
+	const channelOf = new Map((results ?? []).flatMap((r) => (r.channel_id ? [[r.id, r.channel_id] as const] : [])));
+	await Promise.all(
+		safe.map(async (id) => {
+			const channelId = channelOf.get(id) ?? (await readPostLocation(bucket, id).catch(() => null));
+			if (!channelId) return;
+			const object = await bucket.get(`posts/${channelId}/${id}.json`);
+			const value = object ? ((await object.json().catch(() => null)) as Row | null) : null;
+			if (value) out.set(id, { channelId, value });
+		}),
+	);
+	return out;
+}
+
 /** Normalises and caps the request (the caller is admin-api; this keeps a bad call cheap). */
 export function cleanLookup(input: Partial<AdminLookupRequest> | null | undefined): AdminLookupRequest {
 	const items: AdminLookupRequest['items'] = [];
@@ -84,17 +158,12 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 
 	const commentIds = idsOf('comment');
 	const chatIds = idsOf('live_chat');
-	const [videos, streams, channels, comments, chats, playlists] = await Promise.all([
+	const [videos, streams, channels, comments, posts, chats, playlists] = await Promise.all([
 		ownershipRows(db, 'video', idsOf('video')),
 		ownershipRows(db, 'stream', idsOf('livestream')),
 		ownershipRows(db, 'channel', idsOf('channel')),
-		commentIds.length
-			? db
-					.prepare('SELECT c.comment_id, c.video_id, c.user_id, c.channel_id, c.text, c.is_hidden FROM json_each(?) j JOIN admin_comments c ON c.comment_id = j.value')
-					.bind(JSON.stringify(commentIds))
-					.all<Row>()
-					.then(({ results }) => new Map((results ?? []).map((r) => [r.comment_id as string, r])))
-			: Promise.resolve(new Map<string, Row>()),
+		commentsByIds(env, db, commentIds),
+		postsByIds(env, db, idsOf('post')),
 		chatIds.length
 			? db
 					.prepare(`SELECT m.id, m.stream_id, m.user_id, m.text, m.status, s.channel_id FROM json_each(?) j JOIN live_chat_messages m ON m.id = j.value LEFT JOIN ${LIVE_METADATA_TABLE} s ON s.stream_id = m.stream_id`)
@@ -121,7 +190,13 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 		if (type === 'comment') {
 			const cm = comments.get(id);
 			return cm
-				? { type, id, found: true, title: excerpt(cm.text), parentId: cm.video_id ?? null, channelId: cm.channel_id ?? null, channelName: null, ownerId: cm.user_id ?? null, isHidden: cm.is_hidden === 1, isDeleted: false }
+				? { type, id, found: true, title: excerpt(cm.text), parentId: cm.parentId, parentType: cm.parentType, channelId: cm.channelId, channelName: null, ownerId: cm.ownerId, isHidden: cm.isHidden, isDeleted: cm.isDeleted }
+				: notFound(type, id);
+		}
+		if (type === 'post') {
+			const post = posts.get(id);
+			return post
+				? { type, id, found: true, title: excerpt(post.value.content), parentId: null, channelId: post.channelId, channelName: null, ownerId: str(post.value.userId), isHidden: post.value.isHidden === true, isDeleted: post.value.status === 'deleted' || post.value.isDeleted === true }
 				: notFound(type, id);
 		}
 		if (type === 'live_chat') {
@@ -140,7 +215,7 @@ export async function lookup(env: AdminEnv, request: AdminLookupRequest): Promis
 	});
 
 	// Channel names for items that name a channel; a comment without one takes its video's channel
-	const missingVideoChannels = items.filter((i) => i.type === 'comment' && i.found && !i.channelId && i.parentId).map((i) => i.parentId!);
+	const missingVideoChannels = items.filter((i) => i.type === 'comment' && i.parentType === 'video' && i.found && !i.channelId && i.parentId).map((i) => i.parentId!);
 	const parentVideos = await ownershipRows(db, 'video', [...new Set(missingVideoChannels)]);
 	for (const item of items) {
 		if (item.type === 'comment' && item.found && !item.channelId && item.parentId) item.channelId = parentVideos.get(item.parentId)?.channel_id ?? null;

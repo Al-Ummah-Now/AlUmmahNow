@@ -99,13 +99,14 @@ function Takedown({ c, t }: { c: CsamCaseDetail; t: Translator; locale: Locale }
   const r = c.resolution;
   const freeze = c.freeze;
   const job = c.job;
+  const itemId = r ? r.videoId ?? r.postId ?? r.commentId ?? r.streamId : undefined;
   return (
     <dl>
       <Row label={t('csamPage.detail.item')} testId="csam-item">
         {r ? (
           <>
             {t(`csamPage.kinds.${r.kind}` as MessageKey)}
-            {(r.videoId || r.postId) && <span className="text-fg-muted"><Sep /><bdi dir="ltr">{r.videoId ?? r.postId}</bdi></span>}
+            {itemId && <span className="text-fg-muted"><Sep /><bdi dir="ltr">{itemId}</bdi></span>}
           </>
         ) : (
           t('csamPage.detail.unmapped')

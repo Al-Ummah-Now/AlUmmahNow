@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportOutcomeOption, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -61,8 +61,8 @@ export async function listReports(params?: ListReportsParams): Promise<ListRepor
   return fetchAdmin<ListReportsResponse>(`/api/moderation/reports${query ? `?${query}` : ''}`);
 }
 
-export async function getReport(reportId: string): Promise<{ report: Report }> {
-  return fetchAdmin<{ report: Report }>(`/api/moderation/reports/${encodeURIComponent(reportId)}`);
+export async function getReport(reportId: string): Promise<{ report: Report; outcomes: ReportOutcomeOption[] }> {
+  return fetchAdmin<{ report: Report; outcomes: ReportOutcomeOption[] }>(`/api/moderation/reports/${encodeURIComponent(reportId)}`);
 }
 
 /**
@@ -79,7 +79,7 @@ export async function takeAction(reportId: string, params: TakeActionParams): Pr
   } catch (error) {
     await navigateForPasskey(error);
     if (error instanceof AdminApiError) {
-      return { ok: false, status: error.status, error: error.message };
+      return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}) };
     }
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }

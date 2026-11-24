@@ -281,7 +281,7 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
     detectedAt,
     incidentTimeZone: 'UTC',
     itemKind: r?.kind ?? 'video',
-    itemId: r?.videoId ?? r?.postId ?? r?.imagePath ?? null,
+    itemId: r?.videoId ?? r?.postId ?? r?.commentId ?? r?.streamId ?? r?.imagePath ?? null,
     uploadedAt: video?.createdAt ?? null,
     uploader: {
       userId: r?.uploaderId ?? null,

@@ -25,7 +25,9 @@ interface VideosCall { method: string; path: string; body: any; actor: string | 
 const ITEMS: Record<string, any> = {
   'video:v_1': { found: true, title: 'Bad video', parentId: null, channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
   'live_chat:m_1': { found: true, title: 'rude message', parentId: 's_1', channelId: 'ch_1', channelName: 'Sunrise Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
-  'comment:c_1': { found: true, title: 'rude words', parentId: 'v_9', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
+  'comment:pc_1': { found: true, title: 'rude reply', parentId: 'p_1', parentType: 'post', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
+  'post:p_1': { found: true, title: 'bad post', parentId: null, channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_owner', isHidden: false, isDeleted: false },
+  'comment:c_1': { found: true, title: 'rude words', parentId: 'v_9', parentType: 'video', channelId: 'ch_2', channelName: 'Other Channel', ownerId: 'usr_commenter', isHidden: false, isDeleted: false },
 };
 const USERS: Record<string, any> = {
   usr_owner: { displayName: 'Omar Owner', isBanned: false },
@@ -36,7 +38,7 @@ const USERS: Record<string, any> = {
   usr_mod: { displayName: 'Maryam Moderator', isBanned: false },
 };
 
-interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean } }
+interface FakeOptions { banStatus?: number; live?: { status?: number; found?: boolean; changed?: boolean }; hold?: { status?: number; found?: boolean; changed?: boolean }; deleteStatus?: number; lookupDown?: boolean }
 
 function fakeVideos(opts: FakeOptions = {}) {
   const calls: VideosCall[] = [];
@@ -51,6 +53,14 @@ function fakeVideos(opts: FakeOptions = {}) {
       };
       calls.push(call);
       const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+      if (call.path === '/comment-moderation') {
+        const { status, found = true, changed = true } = opts.hold ?? {};
+        return status ? json(status, { success: false, code: 'boom', error: 'refused' }) : json(200, { success: true, result: { found, changed } });
+      }
+      if (call.method === 'DELETE' && /^\/(?:videos\/[^/]+\/comments|posts\/[^/]+)\/[^/]+$/.test(call.path)) {
+        return opts.deleteStatus ? json(opts.deleteStatus, { success: false, code: 'boom', error: 'refused' }) : json(200, { success: true, result: { deleted: true } });
+      }
+      if (call.path === '/lookup' && opts.lookupDown) return json(503, { success: false, code: 'down', error: 'down' });
       if (call.path === '/lookup') {
         const items = call.body.items.map((i: { type: string; id: string }) => ({ type: i.type, id: i.id, ...(ITEMS[`${i.type}:${i.id}`] ?? { found: false, title: null, parentId: null, channelId: null, channelName: null, ownerId: null, isHidden: null, isDeleted: null }) }));
         const ids = [...new Set([...call.body.users, ...items.map((i: any) => i.ownerId).filter(Boolean)])] as string[];
@@ -293,12 +303,144 @@ describe('reports queue: decisions', () => {
     assert.equal((await t.rows('SELECT COUNT(*) AS n FROM site_settings_log'))[0].n, 0);
   });
 
-  it('`banned` on an item whose owner cannot be found still closes the reports, banning nobody', async () => {
-    const t = setup([{ id: 'x1', type: 'channel', entity: 'ch_fake', reporter: 'usr_r1', created: '2026-11-01T00:00:00Z' }]);
-    const res = await t.call('/api/moderation/queue/items/channel/ch_fake/action', { method: 'POST', json: { action: 'banned' } });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.result.contentAction.bannedUserId, null);
-    assert.equal(t.calls.filter((c) => c.path.endsWith('/ban')).length, 0);
+  it('an item that is not there any more keeps its reports open, whatever its type and the outcome', async () => {
+    const missing: Record<string, string[]> = {
+      video: ['warning', 'removed', 'banned', 'deleted'],
+      channel: ['warning', 'removed', 'banned', 'deleted'],
+      playlist: ['warning', 'removed', 'banned', 'deleted'],
+      livestream: ['warning', 'removed', 'banned', 'deleted'],
+      live_chat: ['removed', 'banned', 'deleted'],
+      comment: ['removed', 'banned', 'deleted'],
+      post: ['banned', 'deleted'],
+    };
+    for (const [type, actions] of Object.entries(missing)) {
+      for (const action of actions) {
+        const t = setup([{ id: 'x1', type, entity: 'gone_1', reporter: 'usr_r1', created: '2026-11-01T00:00:00Z' }], { live: { found: false, changed: false } });
+        const res = await t.call(`/api/moderation/queue/items/${type}/gone_1/action`, { method: 'POST', json: { action } });
+        assert.deepEqual([res.status, res.body.code], [409, 'item_gone'], `${type} ${action}`);
+        assert.deepEqual(await t.rows('SELECT status, action, moderator_id, resolved_at FROM reports'), [{ status: 'pending', action: null, moderator_id: null, resolved_at: null }], `${type} ${action}`);
+        assert.equal(t.sent.length, 0, 'nobody is told it was resolved');
+        assert.equal((await t.rows('SELECT COUNT(*) AS n FROM site_settings_log'))[0].n, 0, 'no audit row of something that did not happen');
+        // It can still be dismissed
+        assert.equal((await t.call(`/api/moderation/queue/items/${type}/gone_1/action`, { method: 'POST', json: { action: 'dismissed' } })).status, 200);
+      }
+    }
+  });
+
+  describe('comments and posts', () => {
+    const report = (type: string, entity: string): Seed[] => [{ id: 'x1', type, entity, reporter: 'usr_r1', created: '2026-11-01T00:00:00Z' }];
+    const act = (t: ReturnType<typeof setup>, type: string, id: string, action: string, roles = 'admin') => t.call(`/api/moderation/queue/items/${type}/${id}/action`, { method: 'POST', roles, json: { action, notes: 'why' } });
+    const closed = async (t: ReturnType<typeof setup>) => (await t.rows('SELECT status, action FROM reports'))[0];
+    const audit = async (t: ReturnType<typeof setup>) => (await t.rows('SELECT key, actor_id, new_value FROM site_settings_log')).map((r: any) => ({ key: r.key, by: r.actor_id, ...JSON.parse(r.new_value) }));
+
+    for (const [id, on, parentId] of [['c_1', 'video', 'v_9'], ['pc_1', 'post', 'p_1']] as const) {
+      it(`removed hides a comment on a ${on} (a moderator may), audited`, async () => {
+        const t = setup(report('comment', id));
+        const res = await act(t, 'comment', id, 'removed', 'moderator');
+        assert.equal(res.status, 200);
+        assert.equal(res.body.result.contentAction.performed, true);
+        const call = t.calls.find((c) => c.path === '/comment-moderation')!;
+        assert.deepEqual([call.body, call.actor], [{ on, parentId, commentId: id }, 'usr_mod']);
+        assert.deepEqual(await closed(t), { status: 'resolved', action: 'removed' });
+        assert.deepEqual(await audit(t), [{ key: `content:comment:${id}`, by: 'usr_mod', action: 'hide', details: { on, parentId, source: 'report', reportIds: ['x1'], reason: 'why' } }]);
+      });
+    }
+
+    it('deleted deletes a video comment through the admin delete, audited and restorable', async () => {
+      const t = setup(report('comment', 'c_1'));
+      assert.equal((await act(t, 'comment', 'c_1', 'deleted')).status, 200);
+      const call = t.calls.find((c) => c.method === 'DELETE')!;
+      assert.deepEqual([call.path, call.body, call.actor], ['/videos/v_9/comments/c_1', { reason: 'why' }, 'usr_mod']);
+      assert.deepEqual(await closed(t), { status: 'resolved', action: 'deleted' });
+      const [row] = await audit(t);
+      assert.deepEqual([row.key, row.action, row.details.videoId, row.details.soft], ['content:comment:c_1', 'delete', 'v_9', true]);
+    });
+
+    it('deleted and banned delete a post through the admin delete', async () => {
+      const t = setup(report('post', 'p_1'));
+      assert.equal((await act(t, 'post', 'p_1', 'deleted')).status, 200);
+      assert.equal(t.calls.find((c) => c.method === 'DELETE')!.path, '/posts/ch_2/p_1');
+      assert.deepEqual(await closed(t), { status: 'resolved', action: 'deleted' });
+      const b = setup(report('post', 'p_1'));
+      const res = await act(b, 'post', 'p_1', 'banned');
+      assert.equal(res.body.result.contentAction.bannedUserId, 'usr_owner');
+      assert.ok(b.calls.some((c) => c.method === 'DELETE' && c.path === '/posts/ch_2/p_1'));
+    });
+
+    it('banned bans the comment author (never the video owner) and hides the comment', async () => {
+      const t = setup(report('comment', 'c_1'));
+      const res = await act(t, 'comment', 'c_1', 'banned');
+      assert.equal(res.body.result.contentAction.bannedUserId, 'usr_commenter');
+      assert.deepEqual(t.calls.filter((c) => c.path.endsWith('/ban')).map((c) => c.path), ['/users/usr_commenter/ban']);
+      assert.ok(t.calls.some((c) => c.path === '/comment-moderation'));
+      assert.equal(t.videos.read('v_1').isHidden, undefined);
+    });
+
+    it('an outcome the type does not have is refused and the report stays open', async () => {
+      for (const [type, id, action] of [['comment', 'c_1', 'warning'], ['comment', 'pc_1', 'deleted'], ['post', 'p_1', 'removed'], ['post', 'p_1', 'warning'], ['live_chat', 'm_1', 'warning']]) {
+        const t = setup(report(type, id));
+        const res = await act(t, type, id, action);
+        assert.deepEqual([res.status, res.body.code], [409, 'outcome_not_available'], `${type} ${action}`);
+        assert.deepEqual(await closed(t), { status: 'pending', action: null });
+        const one = await t.call('/api/moderation/reports/x1/action', { method: 'POST', json: { action } });
+        assert.deepEqual([one.status, one.body.code], [409, 'outcome_not_available'], `${type} ${action}, from the report page`);
+        assert.equal(t.sent.length, 0);
+      }
+    });
+
+    it('deleting needs content:delete, as on the content lists', async () => {
+      for (const [type, id] of [['comment', 'c_1'], ['post', 'p_1']]) {
+        const t = setup(report(type, id));
+        assert.equal((await act(t, type, id, 'deleted', 'moderator')).status, 403);
+        assert.deepEqual(await closed(t), { status: 'pending', action: null });
+        assert.equal(t.calls.filter((c) => c.method === 'DELETE').length, 0);
+      }
+    });
+
+    it('a failed change reopens the report and leaves no audit row', async () => {
+      for (const [type, id, action, opts] of [['comment', 'c_1', 'removed', { hold: { status: 500 } }], ['comment', 'c_1', 'deleted', { deleteStatus: 500 }], ['post', 'p_1', 'deleted', { deleteStatus: 500 }]] as const) {
+        const t = setup(report(type, id), opts);
+        assert.equal((await act(t, type, id, action)).status, 503);
+        assert.deepEqual(await closed(t), { status: 'pending', action: null });
+        assert.equal((await audit(t)).length, 0);
+      }
+    });
+
+    it('gone between the read and the change: the report stays open; api-videos unreachable: too', async () => {
+      const gone = setup(report('comment', 'c_1'), { hold: { found: false, changed: false } });
+      assert.equal((await act(gone, 'comment', 'c_1', 'removed')).body.code, 'item_gone');
+      assert.deepEqual(await closed(gone), { status: 'pending', action: null });
+      assert.equal((await audit(gone)).length, 0);
+      const deleted = setup(report('post', 'p_1'), { deleteStatus: 404 });
+      assert.equal((await act(deleted, 'post', 'p_1', 'deleted')).body.code, 'item_gone');
+      assert.deepEqual(await closed(deleted), { status: 'pending', action: null });
+      const down = setup(report('comment', 'c_1'), { lookupDown: true });
+      assert.equal((await act(down, 'comment', 'c_1', 'removed')).status, 503);
+      assert.deepEqual(await closed(down), { status: 'pending', action: null });
+      assert.equal((await act(down, 'comment', 'c_1', 'dismissed')).status, 200);
+    });
+
+    it('already hidden: the decision stands, with no second audit row', async () => {
+      const t = setup(report('comment', 'c_1'), { hold: { found: true, changed: false } });
+      const res = await act(t, 'comment', 'c_1', 'removed');
+      assert.deepEqual([res.status, res.body.result.contentAction.performed], [200, false]);
+      assert.equal((await audit(t)).length, 0);
+    });
+
+    it('the report page is told what may be chosen and why the rest may not', async () => {
+      const options = async (type: string, id: string, roles = 'admin') => {
+        const t = setup(report(type, id));
+        const one = (await t.call('/api/moderation/reports/x1', { roles })).body.result.outcomes;
+        assert.deepEqual((await t.call(`/api/moderation/queue/items/${type}/${id}`, { roles })).body.result.outcomes, one, 'the queue says the same');
+        return Object.fromEntries(one.map((o: any) => [o.action, o.reason ?? 'ok']));
+      };
+      assert.deepEqual(await options('video', 'v_1'), { warning: 'ok', removed: 'ok', banned: 'ok', deleted: 'ok', dismissed: 'ok' });
+      assert.deepEqual(await options('comment', 'c_1'), { warning: 'not_for_type', removed: 'ok', banned: 'ok', deleted: 'ok', dismissed: 'ok' });
+      assert.deepEqual(await options('comment', 'c_1', 'moderator'), { warning: 'not_for_type', removed: 'ok', banned: 'permission', deleted: 'permission', dismissed: 'ok' });
+      assert.deepEqual(await options('comment', 'pc_1'), { warning: 'not_for_type', removed: 'ok', banned: 'ok', deleted: 'not_for_post_comment', dismissed: 'ok' });
+      assert.deepEqual(await options('post', 'p_1'), { warning: 'not_for_type', removed: 'not_for_type', banned: 'ok', deleted: 'ok', dismissed: 'ok' });
+      assert.deepEqual(await options('comment', 'nope'), { warning: 'not_for_type', removed: 'item_gone', banned: 'item_gone', deleted: 'item_gone', dismissed: 'ok' });
+    });
   });
 
   it('`deleted` removes permanently; an item without open reports answers 409; bad input 400', async () => {
@@ -521,13 +663,14 @@ describe('live streams and live chat (wiki E17 §5.2)', () => {
     assert.deepEqual((await t.rows("SELECT status FROM reports WHERE entity_type = 'live_chat'")).map((r: any) => r.status), ['pending', 'pending']);
   });
 
-  it('a dismissal changes nothing, and a message that is gone still closes its reports', async () => {
+  it('a dismissal changes nothing, and a message that is gone keeps its reports open until they are dismissed', async () => {
     const t = setup(LIVE, { live: { found: false, changed: false } });
     assert.equal((await act(t, 'livestream/s_1', 'dismissed')).status, 200);
     assert.deepEqual(sentOf(t), []);
     const gone = await act(t, 'live_chat/m_1', 'removed');
-    assert.equal(gone.status, 200, JSON.stringify(gone.body));
-    assert.equal((await t.rows("SELECT status FROM reports WHERE id = 'm1'"))[0].status, 'resolved');
+    assert.deepEqual([gone.status, gone.body.code], [409, 'item_gone']);
+    assert.equal((await t.rows("SELECT status FROM reports WHERE id = 'm1'"))[0].status, 'pending');
+    assert.equal((await act(t, 'live_chat/m_1', 'dismissed')).status, 200);
   });
 
   it('`banned` bans the author of the message and removes it', async () => {

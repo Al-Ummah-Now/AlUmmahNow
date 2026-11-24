@@ -52,6 +52,8 @@ export function moderationStatus(error: ModerationError): 400 | 403 | 404 | 409 
 export interface ModerationContext {
 	env: IndexEnv & { videos: R2Bucket; community_posts: R2Bucket; [binding: string]: unknown };
 	executionCtx?: { waitUntil(promise: Promise<unknown>): void };
+	/** A platform moderator acts, not the channel: `hold` marks the comment so the channel cannot release it. */
+	platform?: boolean;
 }
 
 const RETENTION_MS = STUDIO_REMOVED_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -111,9 +113,10 @@ export async function moderateVideoComment(c: ModerationContext, videoId: string
 			case 'hold': {
 				if (removedByChannel) return { reject: 'removed' };
 				if (heldByPlatform(comment)) return { reject: 'held_by_moderation' };
-				if (comment.status === 'held') return false;
+				if (comment.status === 'held' && !c.platform) return false;
 				comment.status = 'held';
 				delete comment.heldBy;
+				if (c.platform) comment.heldBy = 'moderation';
 				comment.isPinned = false;
 				break;
 			}
@@ -189,7 +192,7 @@ const topKey = (postId: string, commentId: string) => `comments/${postId}/top-le
 const replyKey = (postId: string, parentId: string, replyId: string) => `comments/${postId}/replies/${parentId}/${replyId}.json`;
 
 /** A post comment's key from its id: the top-level key, else the reply-parent pointer. */
-async function locatePostComment(bucket: R2Bucket, postId: string, commentId: string, parentHint?: string | null): Promise<{ key: string; comment: PostComment } | null> {
+export async function locatePostComment(bucket: R2Bucket, postId: string, commentId: string, parentHint?: string | null): Promise<{ key: string; comment: PostComment } | null> {
 	const candidates = parentHint ? [replyKey(postId, parentHint, commentId), topKey(postId, commentId)] : [topKey(postId, commentId)];
 	for (const key of candidates) {
 		const object = await bucket.get(key);
@@ -281,10 +284,11 @@ export async function moderatePostComment(c: ModerationContext, postChannelId: s
 			case 'hold':
 				if (removedByChannel) return { reject: 'removed' };
 				if (heldByPlatform(fresh)) return { reject: 'held_by_moderation' };
-				if (fresh.status === 'held') return false;
+				if (fresh.status === 'held' && !c.platform) return false;
+				countDelta = fresh.status === 'held' ? 0 : -1;
 				fresh.status = 'held';
 				delete fresh.heldBy;
-				countDelta = -1;
+				if (c.platform) fresh.heldBy = 'moderation';
 				break;
 			case 'remove': {
 				if (removedByChannel) return false;

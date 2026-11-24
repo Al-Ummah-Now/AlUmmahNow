@@ -13,6 +13,7 @@ import {
 	CSAM_HOLD,
 	CSAM_RETENTION_MIN_DAYS,
 	csamRetainUntil,
+	csamUrlKey,
 	extractCsamUrls,
 	originalManifestKey,
 	originalPartKey,
@@ -178,6 +179,8 @@ function setup(opts: { key?: string | null } = {}) {
 	const env = {
 		SEARCH_DB: db,
 		videos: new MemoryBucket({
+			'vid-synth-02': videoFixture({ id: 'vid-synth-02', userId: OWNER, channelId: 'chan-synth-01', isPublic: true, comments: [{ id: 'cmt-synth-01', userId: 'usr_commenter', videoId: 'vid-synth-02', text: PLACEHOLDER, replies: [{ id: 'rep-synth-01', userId: 'usr_replier', text: 'a reply', parentCommentId: 'cmt-synth-01' }] }, { id: 'cmt-synth-02', userId: 'usr_other', videoId: 'vid-synth-02', text: 'another comment' }] } as never),
+			'livestream:live-synth-01': { id: 'live-synth-01', title: 'synthetic', userId: OWNER, channelId: 'chan-synth-01', status: 'ended' },
 			'vid-synth-01': videoFixture({ id: 'vid-synth-01', userId: OWNER, channelId: 'chan-synth-01', isPublic: true, thumbnailUrl: 'https://images.alummahnow.net/thumbnails/vid-synth-01/custom.jpg', r2: { status: 'ready', access: 'pub', rev: 'r1' } }),
 		}),
 		profiles: new MemoryBucket({ [OWNER]: { id: OWNER, userName: 'synthetic', avatarUrl: 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg' } }),
@@ -185,7 +188,12 @@ function setup(opts: { key?: string | null } = {}) {
 		community_posts: new MemoryBucket({
 			'posts/chan-synth-01/post-synth-01.json': { id: 'post-synth-01', userId: OWNER, channelId: 'chan-synth-01', status: 'published', content: 'synthetic', images: [{ url: 'https://images.alummahnow.net/community-posts/chan-synth-01/a.jpg' }, { url: 'https://images.alummahnow.net/community-posts/chan-synth-01/b.jpg' }] },
 			'posts/chan-synth-01/index.json': { postIds: ['post-synth-01'] },
+			'post-locations/post-synth-01': { channelId: 'chan-synth-01' },
+			'comments/post-synth-01/top-level/pcm-synth-01.json': { id: 'pcm-synth-01', postId: 'post-synth-01', userId: 'usr_commenter', content: PLACEHOLDER, createdAt: '2026-11-01T00:00:00Z' },
+			'comments/post-synth-01/top-level/index.json': { postId: 'post-synth-01', commentIds: ['pcm-synth-01'], lastUpdated: '' },
 		}),
+		channel_tabs: new MemoryBucket({ 'channel-handles/synthetic': { handle: 'synthetic', channelId: 'chan-synth-01', userId: OWNER, dateClaimed: '' }, 'site-hosts/scholar.example.json': { host: 'scholar.example', channelId: 'chan-synth-01', kind: 'custom', createdAt: '' }, 'site-hosts/synth.alummahnow.org.json': { host: 'synth.alummahnow.org', channelId: 'chan-synth-01', kind: 'subdomain', createdAt: '' }, 'site-hosts/else.alummahnow.org.json': { host: 'else.alummahnow.org', channelId: 'chan-synth-99', kind: 'subdomain', createdAt: '' } }),
+		LIVE_MEDIA: new BinaryBucket(),
 		playlists: new MemoryBucket(),
 		watch_history: new MemoryBucket(),
 		reports: new MemoryBucket(),
@@ -255,6 +263,101 @@ describe('CSAM URLs (shared-types)', () => {
 		assert.deepEqual(parseCsamUrl('https://vz-abc123.b-cdn.net/vid-synth-01/thumbnail.jpg'), { kind: 'video_thumbnail', videoId: 'vid-synth-01' });
 	});
 
+	it('knows every host our content is on, in each environment, and refuses look-alikes', () => {
+		const video = { kind: 'page', page: 'video', id: 'vid-synth-01' };
+		for (const host of ['videos.alummahnow.net', 'videos.stage.alummahnow.net', 'videos.qa.alummahnow.net', 'alummahnow.net', 'www.alummahnow.net', 'qa.alummahnow.net', 'stage.alummahnow.net', 'VIDEOS.alummahnow.net', 'videos.alummahnow.net.', 'videos.alummahnow.com']) {
+			assert.deepEqual(parseCsamUrl(`https://${host}/en/video/vid-synth-01`), video, host);
+			assert.deepEqual(extractCsamUrls(`${host.replace(/\.$/, '')}/en/video/vid-synth-01`).length, 1, host);
+		}
+		for (const host of ['alummahnow.link', 'stage.alummahnow.link', 'qa.alummahnow.link']) assert.deepEqual(parseCsamUrl(`https://${host}/v/vid-synth-01`), video, host);
+		for (const host of ['media.alummahnow.net', 'media.stage.alummahnow.net', 'media.qa.alummahnow.net']) assert.equal(parseCsamUrl(`${host}/pub/vid-synth-01/r1/a.ts`)?.kind, 'video', host);
+		for (const host of ['live.alummahnow.net', 'live.stage.alummahnow.net', 'live.qa.alummahnow.net']) assert.deepEqual(parseCsamUrl(`https://${host}/hls/sess-synth-01/720/seg_1.m4s`), { kind: 'live_session', sessionId: 'sess-synth-01' }, host);
+		for (const host of ['scholar.alummahnow.org', 'scholar.stage.alummahnow.org', 'scholar.qa.alummahnow.org', 'one.qa-sites.alummahnow.com', 'one.stage-sites.alummahnow.com']) {
+			assert.deepEqual(parseCsamUrl(`https://${host}/ar/watch/vid-synth-01/`), { kind: 'site', host, ours: true, item: 'video', id: 'vid-synth-01' }, host);
+		}
+		for (const url of [
+			'https://videos.alummahnow.net.example.com/video/vid-synth-01',
+			'https://videos-alummahnow.net/video/vid-synth-01',
+			'https://evilalummahnow.net/video/vid-synth-01',
+			'https://videos.alummahnow.net@example.com/video/vid-synth-01',
+			'https://videos.alummahnow.net%2eexample.com/video/vid-synth-01',
+			'https://alummahnow.link.example.com/v/vid-synth-01',
+			'https://live.alummahnow.net.example.com/hls/sess-synth-01/x.m3u8',
+			'https://scholar.alummahnow.org.example.com/video/vid-synth-01',
+			'https://videos.alummahnow.net:8443/video/vid-synth-01',
+			'https://videos.alummahnow.co/video/vid-synth-01',
+			'https://\u0430lummahnow.net/video/vid-synth-01',
+			'https://admin.alummahnow.net/videos/vid-synth-01',
+			'https://admin.api.qa.alummahnow.net/api/videos/vid-synth-01',
+			'https://example.com/en/video/vid-synth-01',
+		]) {
+			assert.equal(parseCsamUrl(url), null, url);
+		}
+		assert.deepEqual(extractCsamUrls('https://videos.alummahnow.net.example.com/video/vid-synth-01 evil-alummahnow.net/x https://example.com/?u=alummahnow.net/video/vid-synth-01'), []);
+	});
+
+	it('knows every page of the site, with and without a locale', () => {
+		const site = 'https://videos.alummahnow.net';
+		const video = (page: string) => ({ kind: 'page', page, id: 'vid-synth-01' });
+		const cases: Array<[string, unknown]> = [
+			['/video/vid-synth-01', video('video')],
+			['/ar/video/vid-synth-01?list=pl-synth-01&index=2&t=30', video('video')],
+			['/en/video/vid-synth-01/edit', video('video')],
+			['/en/video?vid=vid-synth-01', video('video')],
+			['/en/shorts/vid-synth-01', video('shorts')],
+			['/embed/v/vid-synth-01?lang=ar', video('embed')],
+			['/en/studio/video/vid-synth-01/edit', video('video')],
+			['/en/studio/chan-synth-01/content/videos/vid-synth-01/edit', video('video')],
+			['/en/analytics/videos/vid-synth-01', video('video')],
+			['/studio-download/clip/chan-synth-01/vid-synth-01.mp4', video('video')],
+			['/thumb/vid-synth-01.jpg?w=640', { kind: 'video_thumbnail', videoId: 'vid-synth-01' }],
+			['/og/v/vid-synth-01.jpg', { kind: 'video_thumbnail', videoId: 'vid-synth-01' }],
+			['/en/live/live-synth-01', { kind: 'live_stream', streamId: 'live-synth-01' }],
+			['/en/studio/chan-synth-01/content/live/live-synth-01', { kind: 'live_stream', streamId: 'live-synth-01' }],
+			['/en/post/post-synth-01', { kind: 'page', page: 'post', id: null, postId: 'post-synth-01' }],
+			['/channels/chan-synth-01?tab=community&post=post-synth-01#post-post-synth-01', { kind: 'page', page: 'post', id: 'chan-synth-01', postId: 'post-synth-01' }],
+			['/en/@synthetic.channel?tab=community&post=post-synth-01', { kind: 'page', page: 'post', id: null, postId: 'post-synth-01', handle: 'synthetic.channel' }],
+			['/ar/c/synthetic?post=post-synth-01', { kind: 'page', page: 'post', id: null, postId: 'post-synth-01', handle: 'synthetic' }],
+			['/en/channels/chan-synth-01', { kind: 'page', page: 'channel', id: 'chan-synth-01' }],
+		];
+		for (const [path, expected] of cases) assert.deepEqual(parseCsamUrl(site + path), expected, path);
+		// Ours, but no single item: the case opens for a hand mapping, and nothing is taken down
+		for (const path of ['/en/@synthetic', '/en/u/@synthetic', '/en/playlist/pl-synth-01', '/embed/p/pl-synth-01', '/embed/comments/vid-synth-01', '/feeds/chan-synth-01/videos.xml', '/og/c/chan-synth-01.jpg', '/en/search?q=x', '/en/video/%zz', '/some/file.jpg']) {
+			assert.ok(['other', undefined].includes(parseCsamUrl(site + path)?.kind), path);
+		}
+		assert.equal(parseCsamUrl(`${site}/en/@synthetic`)?.kind, 'other');
+		assert.equal(parseCsamUrl('https://cms.alummahnow.net/api/media/file/x.jpg')?.kind, 'other');
+		const short: Array<[string, unknown]> = [
+			['/s/vid-synth-01', video('shorts')],
+			['/p/post-synth-01', { kind: 'page', page: 'post', id: null, postId: 'post-synth-01' }],
+			['/e/live-synth-01', { kind: 'live_stream', streamId: 'live-synth-01' }],
+			['/c/chan-synth-01', { kind: 'page', page: 'channel', id: 'chan-synth-01' }],
+			['/l/pl-synth-01', { kind: 'other', host: 'alummahnow.link', path: '/l/pl-synth-01' }],
+			['/@synthetic', { kind: 'other', host: 'alummahnow.link', path: '/@synthetic' }],
+		];
+		for (const [path, expected] of short) assert.deepEqual(parseCsamUrl(`https://alummahnow.link${path}`), expected, path);
+	});
+
+	it('a comment URL names the comment, never what it is on', () => {
+		const site = 'https://videos.alummahnow.net';
+		const onVideo = { kind: 'comment', on: 'video', parentId: 'vid-synth-01', commentId: 'cmt-synth-01' };
+		for (const path of ['/en/video/vid-synth-01#comment-cmt-synth-01', '/video/vid-synth-01?comment=cmt-synth-01', '/ar/shorts/vid-synth-01?commentId=cmt-synth-01', '/en/video?vid=vid-synth-01&lc=cmt-synth-01', '/embed/comments/vid-synth-01#comment-cmt-synth-01', '/en/video/vid-synth-01#comment%3Dcmt-synth-01']) assert.deepEqual(parseCsamUrl(site + path), onVideo, path);
+		for (const path of ['/en/post/post-synth-01?comment=cmt-synth-01', '/channels/chan-synth-01?post=post-synth-01#comment-cmt-synth-01', '/en/@synthetic?post=post-synth-01#comment-cmt-synth-01']) {
+			assert.deepEqual(parseCsamUrl(site + path), { kind: 'comment', on: 'post', parentId: 'post-synth-01', commentId: 'cmt-synth-01' }, path);
+		}
+		// About comments, but not which: nothing to act on, and least of all the video
+		for (const path of ['/en/video/vid-synth-01#comments', '/en/video/vid-synth-01?comment=', '/en/video/vid-synth-01?comment=../x', '/en/post/post-synth-01#comment-x', '/channels/chan-synth-01?post=a', '/en/live/live-synth-01?comment=cmt-synth-01']) assert.equal(parseCsamUrl(site + path)?.kind, 'other', path);
+	});
+
+	it('cases are told apart by what the URL names on the same path', () => {
+		const key = (u: string) => csamUrlKey(u);
+		assert.equal(key('https://VIDEOS.alummahnow.net/en/video/vid-synth-01?t=9'), 'videos.alummahnow.net/en/video/vid-synth-01');
+		assert.equal(key('alummahnow.net/channels/chan-synth-01?post=post-synth-01&x=1'), 'alummahnow.net/channels/chan-synth-01?post=post-synth-01');
+		assert.notEqual(key('videos.alummahnow.net/en/video?vid=vid-synth-01'), key('videos.alummahnow.net/en/video?vid=vid-synth-02'));
+		assert.notEqual(key('videos.alummahnow.net/en/video/vid-synth-01'), key('videos.alummahnow.net/en/video/vid-synth-01#comment-cmt-synth-01'));
+		assert.notEqual(key('videos.alummahnow.net/en/video/vid-synth-01?comment=cmt-synth-01'), key('videos.alummahnow.net/en/video/vid-synth-01?comment=cmt-synth-02'));
+	});
+
 	it('unwraps optimizer URLs and refuses foreign hosts and traversal', () => {
 		const wrapped = 'https://alummahnow.net/_next/image?url=https%3A%2F%2Fimages.alummahnow.net%2Fcommunity-posts%2Fchan-synth-01%2Fa.jpg&w=640&q=75';
 		assert.deepEqual(parseCsamUrl(wrapped), { kind: 'post_image', channelId: 'chan-synth-01', path: '/community-posts/chan-synth-01/a.jpg' });
@@ -268,6 +371,15 @@ describe('CSAM URLs (shared-types)', () => {
 	it('pulls every URL out of a pasted alert', () => {
 		const text = `Synthetic alert\n- images.alummahnow.net/community-posts/chan-synth-01/a.jpg\n- https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg.\n- https://example.com/other.jpg`;
 		assert.deepEqual(extractCsamUrls(text), ['images.alummahnow.net/community-posts/chan-synth-01/a.jpg', 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg']);
+	});
+
+	it('takes an optimizer URL without a scheme whole, and pages shaped like a scholar site', () => {
+		const wrapped = 'videos.alummahnow.net/_next/image?url=https%3A%2F%2Fimages.alummahnow.net%2Fcommunity-posts%2Fchan-synth-01%2Fa.jpg&w=640';
+		assert.deepEqual(extractCsamUrls(`- ${wrapped}`), [wrapped]);
+		assert.deepEqual(extractCsamUrls('videos.alummahnow.net/_next/image?url=https://images.alummahnow.net/x.jpg'), ['videos.alummahnow.net/_next/image?url=https://images.alummahnow.net/x.jpg']);
+		assert.deepEqual(extractCsamUrls('https://scholar.example/en/watch/vid-synth-01. scholar.example/ar/posts/post-synth-01 https://scholar.example/en/about'), ['https://scholar.example/en/watch/vid-synth-01', 'scholar.example/ar/posts/post-synth-01']);
+		assert.deepEqual(parseCsamUrl(`https://videos.alummahnow.net/og/i/${Buffer.from('https://images.alummahnow.net/community-posts/chan-synth-01/a.jpg').toString('base64url')}.jpg`), { kind: 'post_image', channelId: 'chan-synth-01', path: '/community-posts/chan-synth-01/a.jpg' });
+		assert.equal(parseCsamUrl(`https://videos.alummahnow.net/_next/image?url=${encodeURIComponent('https://images.alummahnow.net.example.com/a.jpg')}`), null);
 	});
 
 	it('finds URLs after other text in a token, and stays fast on long runs of - and ,', () => {
@@ -322,6 +434,40 @@ describe('mapping a matched URL', () => {
 		assert.deepEqual(await resolveCsamUrl(env as never, 'https://example.com/x.jpg'), { ok: false, reason: 'not_ours' });
 	});
 
+	it('finds posts by id alone, by handle and on scholar sites; an item the page did not show is left for a person', async () => {
+		const { env } = setup();
+		const post = { ok: true, resolution: { kind: 'post_image', channelId: 'chan-synth-01', postId: 'post-synth-01', uploaderId: OWNER } };
+		const site = 'https://videos.alummahnow.net';
+		for (const url of [`${site}/en/post/post-synth-01`, 'https://alummahnow.link/p/post-synth-01', `${site}/en/@synthetic?post=post-synth-01`, `${site}/channels/chan-synth-01?post=post-synth-01`, 'https://synth.alummahnow.org/en/posts/post-synth-01/', 'https://scholar.example/ar/posts/post-synth-01']) {
+			assert.deepEqual(await resolveCsamUrl(env as never, url), post, url);
+		}
+		const video = { ok: true, resolution: { kind: 'video', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } };
+		for (const url of ['https://scholar.example/en/watch/vid-synth-01', `${site}/embed/v/vid-synth-01`, 'https://alummahnow.link/s/vid-synth-01', `${site}/en/video?vid=vid-synth-01`]) assert.deepEqual(await resolveCsamUrl(env as never, url), video, url);
+		const reason = async (url: string) => { const r = await resolveCsamUrl(env as never, url); return r.ok ? 'mapped' : r.reason; };
+		// Another channel's site, another channel's handle, an unknown handle, a gone site, a page with no item
+		for (const url of ['https://else.alummahnow.org/en/watch/vid-synth-01', 'https://else.alummahnow.org/en/posts/post-synth-01', `${site}/channels/chan-synth-99?post=post-synth-01`, `${site}/en/@nobody?post=post-synth-01`, 'https://gone.alummahnow.org/en/watch/vid-synth-01', 'https://synth.alummahnow.org/en/about', `${site}/en/post/post-synth-99`, `${site}/en/search`, `${site}/embed/comments/vid-synth-02`]) {
+			assert.equal(await reason(url), 'not_found', url);
+		}
+		assert.equal(await reason('https://someone-else.example/en/watch/vid-synth-01'), 'not_ours');
+	});
+
+	it('finds a comment and its author, and a live stream by its page or its media', async () => {
+		const { env, db } = setup();
+		const site = 'https://videos.alummahnow.net';
+		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/video/vid-synth-02#comment-cmt-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: 'usr_commenter' } });
+		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/video/vid-synth-02?comment=rep-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'rep-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', uploaderId: 'usr_replier' } });
+		assert.deepEqual(await resolveCsamUrl(env as never, `${site}/en/post/post-synth-01?comment=pcm-synth-01`), { ok: true, resolution: { kind: 'comment', commentId: 'pcm-synth-01', commentOn: 'post', commentParentId: 'post-synth-01', uploaderId: 'usr_commenter' } });
+		// A comment that is gone never falls back to what it was on
+		for (const url of [`${site}/en/video/vid-synth-02#comment-cmt-synth-99`, `${site}/en/post/post-synth-01?comment=cmt-synth-99`, `${site}/en/video/vid-synth-02#comments`]) {
+			const r = await resolveCsamUrl(env as never, url);
+			assert.equal(r.ok, false, url);
+		}
+		await db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1)").run();
+		const stream = { ok: true, resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } };
+		for (const url of [`${site}/ar/live/live-synth-01`, 'https://alummahnow.link/e/live-synth-01', 'https://live.alummahnow.net/hls/sess-synth-01/720/seg_1.m4s']) assert.deepEqual(await resolveCsamUrl(env as never, url), stream, url);
+		assert.equal((await resolveCsamUrl(env as never, 'https://live.alummahnow.net/hls/sess-synth-99/master.m3u8')).ok, false);
+	});
+
 	it('the backfill indexes stored avatars, covers and post images', async () => {
 		const { env, db } = setup();
 		let params: Record<string, unknown> = {};
@@ -333,6 +479,89 @@ describe('mapping a matched URL', () => {
 		assert.equal((await lookupImageOwner(db as never, '/avatar-placeholder_avatar.jpeg'))?.ownerId, OWNER);
 		assert.equal((await lookupImageOwner(db as never, '/cover-placeholder_cover.png'))?.kind, 'channel_cover');
 		assert.equal((await lookupImageOwner(db as never, '/community-posts/chan-synth-01/a.jpg'))?.channelId, 'chan-synth-01');
+	});
+});
+
+describe('taking a comment down', () => {
+	for (const on of ['video', 'post'] as const) {
+		it(`on a ${on}: the comment and its author only`, async () => {
+			const t = setup();
+			const url = on === 'video' ? 'https://videos.alummahnow.net/en/video/vid-synth-02#comment-cmt-synth-01' : 'https://videos.alummahnow.net/en/post/post-synth-01?comment=pcm-synth-01';
+			const { resolution } = (await t.json('POST', '/resolve', { url })).body.result;
+			const started = await t.json('POST', '/contain', { caseId: CASE, matchedUrl: url, resolution });
+			assert.equal(started.status, 200);
+			const stored = () => (on === 'video' ? t.env.videos.read('vid-synth-02').comments[0] : t.env.community_posts.read('comments/post-synth-01/top-level/pcm-synth-01.json'));
+			assert.equal(stored().isDeleted, true);
+			assert.ok(stored().csamTakedown);
+			await t.drain();
+			const job = (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+			assert.equal(job.status, 'succeeded', job.lastError);
+			assert.equal(JSON.stringify(stored()).includes(PLACEHOLDER), false, 'the text is gone once it is kept');
+			const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+			assert.deepEqual(manifest.files.map((f: { name: string }) => f.name), ['record-comment.json']);
+			const kept = await (await t.call('GET', `/cases/${CASE}/files/record-comment.json`)).text();
+			assert.ok(kept.includes(PLACEHOLDER) && !kept.includes('a reply'));
+			// What it was on, the replies of other people and everyone else stay
+			const video = t.env.videos.read('vid-synth-02');
+			assert.ok(!video.isHidden && !video.suspensionHolds && !video.csamTakedown);
+			assert.equal(video.comments[0].replies[0].text, 'a reply');
+			assert.equal(video.comments[1].text, 'another comment');
+			assert.equal(t.env.community_posts.read('posts/chan-synth-01/post-synth-01.json').status, 'published');
+			const banned = ((await t.db.prepare('SELECT user_id FROM videos_bans').bind().all()).results as Array<{ user_id: string }>).map((r) => r.user_id);
+			assert.deepEqual(banned, ['usr_commenter']);
+		});
+	}
+
+	it('a resolution can never carry a comment and what it is on', async () => {
+		const t = setup();
+		for (const resolution of [
+			{ kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', commentParentId: 'vid-synth-02', videoId: 'vid-synth-02', uploaderId: 'usr_commenter' },
+			{ kind: 'comment', commentId: 'cmt-synth-01', commentOn: 'video', uploaderId: 'usr_commenter' },
+			{ kind: 'video', videoId: 'vid-synth-02', commentId: 'cmt-synth-01', uploaderId: OWNER },
+			{ kind: 'live_stream', streamId: 'live-synth-01', videoId: 'vid-synth-01', uploaderId: OWNER },
+		]) {
+			assert.equal((await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'x', resolution })).status, 400);
+		}
+		assert.ok(!t.env.videos.read('vid-synth-02').csamTakedown && !t.env.videos.read('vid-synth-01').csamTakedown);
+	});
+});
+
+describe('taking a live stream down', () => {
+	const contain = async (t: ReturnType<typeof setup>) => {
+		await t.db.prepare("INSERT INTO live_sessions (id, stream_id, provider, status, reason, created_at) VALUES ('sess-synth-01', 'live-synth-01', 'selfhosted', 'ended', 'round_robin', 1)").run();
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://videos.alummahnow.net/en/live/live-synth-01', resolution: { kind: 'live_stream', streamId: 'live-synth-01', channelId: 'chan-synth-01', uploaderId: OWNER } });
+		await t.drain();
+		return (await t.json('GET', `/cases/${CASE}/job`)).body.result.job;
+	};
+
+	it('hides and holds it, keeps its records and bans the uploader; nothing else is touched', async () => {
+		const t = setup();
+		const job = await contain(t);
+		assert.equal(job.status, 'succeeded', job.lastError);
+		const stream = t.env.videos.read('livestream:live-synth-01');
+		assert.ok(stream.isHidden && stream.csamTakedown && stream.suspensionHolds.includes(CSAM_HOLD));
+		assert.doesNotMatch(stream.hiddenReason, /csam|abuse|child/i);
+		assert.ok(!t.env.videos.read('vid-synth-01').csamTakedown);
+		const names = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result.files.map((f: { name: string }) => f.name).sort();
+		assert.deepEqual(names, ['record-channel.json', 'record-live-sessions.json', 'record-live-stream.json', 'record-uploader-profile.json']);
+	});
+
+	it('with a recording still stored the takedown does not count as done, and the recording is not destroyed', async () => {
+		const t = setup();
+		t.env.LIVE_MEDIA.set('live/sess-synth-01/720/seg_1.m4s', PLACEHOLDER);
+		const job = await contain(t);
+		assert.equal(job.status, 'failed');
+		assert.match(job.lastError, /recording/);
+		assert.ok(t.env.LIVE_MEDIA.store.has('live/sess-synth-01/720/seg_1.m4s'));
+		assert.equal(t.env.videos.read('livestream:live-synth-01').isHidden, true);
+		const manifest = (await t.json('GET', `/cases/${CASE}/manifest`)).body.result;
+		assert.deepEqual(manifest.missing.map((m: { source: string }) => m.source), ['LIVE_MEDIA/live/sess-synth-01/']);
+		assert.equal(manifest.completedAt, undefined);
+		// Removed by hand: the retry finishes
+		t.env.LIVE_MEDIA.store.clear();
+		await t.json('POST', '/retry', { caseId: CASE });
+		await t.drain();
+		assert.equal((await t.json('GET', `/cases/${CASE}/job`)).body.result.job.status, 'succeeded');
 	});
 });
 

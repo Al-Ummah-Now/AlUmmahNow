@@ -20,6 +20,8 @@ import {
   REPORT_QUEUE_MAX_PAGE_SIZE,
   REPORT_QUEUE_SORTS,
   REPORT_REASONS,
+  hasContentPermission,
+  reportOutcomeOptions,
   type ModerationAction,
   type ReportableEntityType,
   type ReportAiSummary,
@@ -287,6 +289,7 @@ export function itemSummary(copy: ItemCopy, lookup: Lookup | null): ReportedItem
       id: copy.entity_id,
       title: live.title,
       parentId: live.parentId,
+      parentType: live.parentType ?? null,
       channel: live.channelId ? { id: live.channelId, name: live.channelName } : null,
       owner: live.ownerId ? { id: live.ownerId, name: owner?.found ? owner.displayName || owner.userName : null, isBanned: owner ? owner.isBanned : null } : null,
       found: true,
@@ -300,6 +303,7 @@ export function itemSummary(copy: ItemCopy, lookup: Lookup | null): ReportedItem
     id: copy.entity_id,
     title: copy.entity_title,
     parentId: copy.entity_parent_id,
+    parentType: null,
     channel: copy.channel_id ? { id: copy.channel_id, name: copy.channel_name } : null,
     owner: copy.owner_id ? { id: copy.owner_id, name: owner?.found ? owner.displayName || owner.userName : copy.owner_name, isBanned: owner ? owner.isBanned : null } : null,
     found: live ? false : null,
@@ -482,7 +486,7 @@ export async function listHistory(env: MetaEnv, query: ReturnType<typeof parseHi
 }
 
 /** One item: its open group (if any), every open report and its closed ones. */
-export async function readItem(env: MetaEnv, type: ReportableEntityType, id: string): Promise<ReportItemResult> {
+export async function readItem(env: MetaEnv, type: ReportableEntityType, id: string, roles?: readonly unknown[]): Promise<ReportItemResult> {
   const db = env.REPORTS_DB;
   const [{ results: groupRows = [] }, { results: open = [] }, { results: closed = [] }] = await Promise.all([
     db
@@ -507,6 +511,7 @@ export async function readItem(env: MetaEnv, type: ReportableEntityType, id: str
     item: itemSummary(copy, lookup),
     open: open.map((r) => excerpt(r, lookup)),
     history: closed.map((r) => historyRow(r, lookup)),
+    outcomes: reportOutcomeOptions({ type, item: lookup?.items.get(itemKey(type, id)) ?? null, may: (p) => hasContentPermission(roles, p) }),
   };
 }
 

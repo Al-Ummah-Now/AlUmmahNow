@@ -7,6 +7,12 @@
  * case still opens and a super admin maps it by hand.
  */
 import { parseCsamUrl, type CsamResolution, type CsamUrlTarget } from '@al-ummah/shared-types';
+import { resolveHandle, resolveHandleHistory } from '../channelHandles';
+import { locatePostComment } from '../channelComments/moderation';
+import { postChannelId } from '../community-posts';
+import { findStoredComment, type StoredComment } from '../comments';
+import { readHost } from '../sites/store';
+import { streamKey } from '../live/streams';
 import { lookupImageOwner } from './imageOwners';
 import { isInternalVideoKey } from '@al-ummah/shared-types';
 
@@ -15,6 +21,8 @@ export interface ResolveEnv {
 	profiles?: R2Bucket;
 	channels?: R2Bucket;
 	community_posts?: R2Bucket;
+	/** Channel handles, and the scholar sites' host index */
+	channel_tabs?: R2Bucket;
 	SEARCH_DB?: D1Database;
 }
 
@@ -57,6 +65,53 @@ async function postShowing(env: ResolveEnv, channelId: string, path: string): Pr
 	return null;
 }
 
+/**
+ * A post by its id. `expectChannel`: what the URL said about its channel; a post that is somewhere
+ * else is not what the page showed, so it is left for a person.
+ */
+async function postResolution(env: ResolveEnv, postId: string, expectChannel: string | null, target: CsamUrlTarget): Promise<ResolveOutcome> {
+	const channelId = expectChannel ?? (env.community_posts ? await postChannelId({ community_posts: env.community_posts, SEARCH_DB: env.SEARCH_DB }, postId) : null);
+	const post = channelId ? await json<{ userId?: string }>(env.community_posts, `posts/${channelId}/${postId}.json`) : null;
+	if (!post) return { ok: false, reason: 'not_found', target };
+	return { ok: true, resolution: { kind: 'post_image', channelId, postId, uploaderId: post.userId ?? null } };
+}
+
+/** The comment and its author. Never the video or post it is on, nor whoever made that. */
+async function commentResolution(env: ResolveEnv, target: Extract<CsamUrlTarget, { kind: 'comment' }>): Promise<ResolveOutcome> {
+	const { on, parentId, commentId } = target;
+	let author: string | null | undefined;
+	if (on === 'video') {
+		const video = await json<{ comments?: StoredComment[] }>(env.videos, parentId);
+		author = findStoredComment(video?.comments, commentId)?.comment.userId;
+	} else {
+		author = env.community_posts ? (await locatePostComment(env.community_posts, parentId, commentId))?.comment.userId : undefined;
+	}
+	if (author === undefined) return { ok: false, reason: 'not_found', target };
+	return { ok: true, resolution: { kind: 'comment', commentId, commentOn: on, commentParentId: parentId, uploaderId: author || null } };
+}
+
+async function streamResolution(env: ResolveEnv, streamId: string, target: CsamUrlTarget): Promise<ResolveOutcome> {
+	const stream = await json<{ userId?: string; channelId?: string | null }>(env.videos, streamKey(streamId));
+	if (!stream) return { ok: false, reason: 'not_found', target };
+	return { ok: true, resolution: { kind: 'live_stream', streamId, channelId: stream.channelId ?? null, uploaderId: stream.userId ?? null } };
+}
+
+/** The stream of a self-hosted live session (the id in the live edge's URLs). */
+async function streamOfSession(env: ResolveEnv, sessionId: string): Promise<string | null> {
+	const row = await env.SEARCH_DB?.prepare('SELECT stream_id FROM live_sessions WHERE id = ?').bind(sessionId).first<{ stream_id: string }>();
+	return row?.stream_id ?? null;
+}
+
+async function siteResolution(env: ResolveEnv, target: Extract<CsamUrlTarget, { kind: 'site' }>): Promise<ResolveOutcome> {
+	const entry = env.channel_tabs ? await readHost(env as never, target.host) : null;
+	// Somebody else's domain: not ours, whatever its paths look like
+	if (!entry && !target.ours) return { ok: false, reason: 'not_ours' };
+	if (!entry || !target.item || !target.id) return { ok: false, reason: 'not_found', target };
+	const found = target.item === 'video' ? await videoResolution(env, target.id, 'video', target) : await postResolution(env, target.id, entry.channelId, target);
+	// A site shows its own channel only: another channel's item was not on that page
+	return found.ok && found.resolution.channelId !== entry.channelId ? { ok: false, reason: 'not_found', target } : found;
+}
+
 export async function resolveCsamUrl(env: ResolveEnv, input: string): Promise<ResolveOutcome> {
 	const target = parseCsamUrl(input);
 	if (!target) return { ok: false, reason: 'not_ours' };
@@ -67,10 +122,13 @@ export async function resolveCsamUrl(env: ResolveEnv, input: string): Promise<Re
 			return videoResolution(env, target.videoId, 'video_thumbnail', target);
 		case 'page': {
 			if (target.page === 'video' || target.page === 'shorts' || target.page === 'embed') return videoResolution(env, target.id, 'video', target);
-			if (target.page === 'post' && target.postId) {
-				const post = await json<{ userId?: string }>(env.community_posts, `posts/${target.id}/${target.postId}.json`);
-				if (!post) return { ok: false, reason: 'not_found', target };
-				return { ok: true, resolution: { kind: 'post_image', channelId: target.id, postId: target.postId, uploaderId: post.userId ?? null } };
+			if (target.page === 'post') {
+				let channelId = target.id;
+				if (target.handle) {
+					channelId = env.channel_tabs ? ((await resolveHandle(env.channel_tabs, target.handle)) ?? (await resolveHandleHistory(env.channel_tabs, target.handle))) : null;
+					if (!channelId) return { ok: false, reason: 'not_found', target };
+				}
+				return postResolution(env, target.postId, channelId, target);
 			}
 			// A channel page shows several images: which one matched is not in the URL
 			return { ok: false, reason: 'not_found', target };
@@ -97,6 +155,18 @@ export async function resolveCsamUrl(env: ResolveEnv, input: string): Promise<Re
 			if (owner.kind === 'post_image') return { ok: true, resolution: { kind: 'post_image', imagePath: target.path, channelId: owner.channelId, uploaderId: owner.ownerId } };
 			return { ok: false, reason: 'not_found', target };
 		}
+		case 'comment':
+			return commentResolution(env, target);
+		case 'live_stream':
+			return streamResolution(env, target.streamId, target);
+		case 'live_session': {
+			const streamId = await streamOfSession(env, target.sessionId);
+			return streamId ? streamResolution(env, streamId, target) : { ok: false, reason: 'not_found', target };
+		}
+		case 'site':
+			return siteResolution(env, target);
+		case 'other':
+			return { ok: false, reason: 'not_found', target };
 	}
 }
 

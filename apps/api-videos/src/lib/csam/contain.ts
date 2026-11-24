@@ -2,8 +2,8 @@
  * Taking a CSAM match down (docs/specs/CSAM-RESPONSE.md §3–§5).
  *
  * 1. hideNow (the intake request, synchronous): the item stops being shown on every surface at
- *    once (a `csam` hold on the video, the post deleted from view, the avatar or cover field
- *    cleared), the matched URL is purged from the CDN, and a private video's media move starts.
+ *    once (a `csam` hold on the video, the post or comment deleted from view, the avatar or cover
+ *    field cleared, the live stream ended and held), the matched URL is purged from the CDN, and a private video's media move starts.
  *    Nothing is deleted yet: the data is still needed for the evidence copy.
  * 2. Job `csam.contain` (admin-jobs queue, resumable, retry with backoff, DLQ):
  *      plan          snapshots of the records, the files to keep
@@ -42,6 +42,13 @@ import { evidenceKeys } from './crypto';
 import { copyStep, planEvidence, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
 import { forgetImageOwner } from './imageOwners';
 import { deleteImageFile } from '../media/imageFiles';
+import { findStoredComment, type StoredComment } from '../comments';
+import { locatePostComment } from '../channelComments/moderation';
+import { indexPostComment } from '../channelComments/index';
+import { swapPinnedPointer } from '../community-comments';
+import { bumpPostComments, postChannelId } from '../community-posts';
+import { moderateLive } from '../admin/liveModeration';
+import { streamKey } from '../live/streams';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -88,13 +95,17 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,200}$/;
 
 /** Checks a resolution before anything acts on it (it names R2 keys). */
 export function validResolution(r: CsamResolution): boolean {
-	const ids = [r.videoId, r.channelId ?? undefined, r.postId, r.uploaderId ?? undefined].filter((v) => v !== undefined);
+	const ids = [r.videoId, r.channelId ?? undefined, r.postId, r.commentId, r.commentParentId, r.streamId, r.uploaderId ?? undefined].filter((v) => v !== undefined);
 	if (ids.some((v) => typeof v !== 'string' || !SAFE_ID.test(v))) return false;
 	if (r.imagePath !== undefined && (typeof r.imagePath !== 'string' || !r.imagePath.startsWith('/') || r.imagePath.includes('..') || r.imagePath.length > 1024)) return false;
 	if ((r.kind === 'video' || r.kind === 'video_thumbnail') && !r.videoId) return false;
 	if (r.kind === 'channel_image' && (!r.channelId || !r.imageField)) return false;
 	if (r.kind === 'profile_image' && (!r.uploaderId || !r.imageField)) return false;
 	if (r.kind === 'post_image' && !r.channelId) return false;
+	// A comment or a stream never carries a video or a post: those would be taken down with it
+	if (r.kind === 'comment' && (!r.commentId || !r.commentParentId || (r.commentOn !== 'video' && r.commentOn !== 'post') || r.videoId || r.postId || r.imagePath)) return false;
+	if (r.kind === 'live_stream' && (!r.streamId || r.videoId || r.postId || r.imagePath)) return false;
+	if (r.kind !== 'comment' && (r.commentId || r.commentParentId)) return false;
 	return true;
 }
 
@@ -172,10 +183,92 @@ export async function hideNow(env: ContainEnv, caseId: string, matchedUrl: strin
 			await queue.send(type, r.kind === 'channel_image' ? { channelId: key, userId: saved.userId, timestamp: now() } : { userId: key, timestamp: now() }).catch(() => undefined);
 		}
 	}
+	if (r.kind === 'comment') hidden = (await hideComment(env, caseId, r)) || hidden;
+	if (r.kind === 'live_stream' && r.streamId) hidden = (await hideStream(env, caseId, r.streamId)) || hidden;
 	// A bare image (no record shows it any more): nothing to hide; the file goes in purge-public
 	const urls = [matchedUrl, ...(r.imagePath ? [imageUrlOf(r.imagePath)] : [])].filter((u) => /^https?:\/\//.test(u));
 	const cdn = await purgeCdn(env as never, { files: [...new Set(urls)] });
 	return { hidden, cdn };
+}
+
+type MarkedComment = StoredComment & { csamTakedown?: unknown; content?: string; deletedAt?: string; adminDeletion?: unknown };
+
+/** The stored comment as a takedown leaves it: gone for everyone, its replies untouched (other people wrote them). */
+function takeCommentDown(comment: MarkedComment, caseId: string): boolean {
+	if (comment.csamTakedown) return false;
+	// An earlier removal (by its channel, or by an admin) could be undone: the takedown replaces it
+	const { removedBy, removedAt, removedByUserId, adminDeletion } = comment;
+	comment.csamTakedown = mark(caseId, removedBy || adminDeletion ? { previous: { removedBy, removedAt, removedByUserId, adminDeletion } } : {});
+	delete comment.removedBy;
+	delete comment.removedAt;
+	delete comment.removedByUserId;
+	delete comment.adminDeletion;
+	comment.isDeleted = true;
+	comment.isPinned = false;
+	return true;
+}
+
+/** Hides the comment alone. The video or post it is on keeps everything else. */
+async function hideComment(env: ContainEnv, caseId: string, r: CsamResolution): Promise<boolean> {
+	const commentId = r.commentId!;
+	const parentId = r.commentParentId!;
+	const queue = new Queue(env.queue as never);
+	if (r.commentOn === 'video') {
+		let found = false;
+		await repo(env.videos).updateObject(parentId, (video) => {
+			const comment = findStoredComment(video.comments as MarkedComment[], commentId)?.comment;
+			found = !!comment;
+			return !!comment && takeCommentDown(comment, caseId);
+		});
+		if (found) await queue.send(MessageType.CommentDelete, { commentId, videoId: parentId, reason: 'admin' } as never).catch(() => undefined);
+		return found;
+	}
+	const located = await locatePostComment(env.community_posts, parentId, commentId);
+	if (!located) return false;
+	let changed = false;
+	const saved = await repo<MarkedComment>(env.community_posts).updateObject(located.key, (comment) => {
+		const wasLive = !comment.deletedAt && comment.isDeleted !== true && comment.status !== 'held' && comment.isHidden !== true;
+		changed = takeCommentDown(comment, caseId) && wasLive;
+		if (comment.csamTakedown) comment.deletedAt ??= now();
+		return true;
+	});
+	const channelId = saved ? await postChannelId({ community_posts: env.community_posts, SEARCH_DB: env.SEARCH_DB }, parentId) : null;
+	if (saved && channelId) {
+		if (changed) await bumpPostComments(env.community_posts, postKey(channelId, parentId), -1);
+		await indexPostComment(env as never, undefined, parentId, channelId, saved as never);
+	}
+	await swapPinnedPointer(env.community_posts, parentId, (current) => (current === commentId ? '' : false)).catch(() => undefined);
+	return !!saved;
+}
+
+/** Ends the stream and hides it for good (the hold no restore lifts). */
+async function hideStream(env: ContainEnv, caseId: string, streamId: string): Promise<boolean> {
+	// The reason is read by the stream's owner and by moderators, so it never says why
+	const done = await moderateLive(env as never, { entityType: 'livestream', entityId: streamId, action: 'removed', notes: `Trust and safety action (ref ${caseId})`, actorId: CSAM_ACTOR });
+	if (!done.found) return false;
+	const saved = await repo(env.videos).updateObject(streamKey(streamId), (stream) => {
+		const changed = applySuspensionHold(stream as SuspendableRecord, CSAM_HOLD);
+		if (stream.csamTakedown) return changed;
+		stream.csamTakedown = mark(caseId);
+		return true;
+	});
+	return !!saved;
+}
+
+/** Recordings of a stream that are still stored. A takedown neither copies nor deletes them. */
+async function storedRecordings(env: ContainEnv, streamId: string): Promise<string[]> {
+	const { results } = await env.SEARCH_DB!.prepare('SELECT id, provider, provider_ref, vod_url FROM live_sessions WHERE stream_id = ? ORDER BY created_at LIMIT 100').bind(streamId).all<{ id: string; provider: string; provider_ref: string | null; vod_url: string | null }>();
+	const out: string[] = [];
+	for (const s of results ?? []) {
+		if (s.provider === 'bunny') {
+			if (s.vod_url) out.push(`bunny/${s.provider_ref ?? s.id}`);
+			continue;
+		}
+		const media = (env as { LIVE_MEDIA?: R2Bucket }).LIVE_MEDIA;
+		const listed = media ? await media.list({ prefix: `live/${s.id}/`, limit: 1 }) : null;
+		if (!media || listed!.objects.length) out.push(`LIVE_MEDIA/live/${s.id}/`);
+	}
+	return out;
 }
 
 async function removeFromPostIndex(env: ContainEnv, channelId: string, postId: string): Promise<void> {
@@ -193,8 +286,9 @@ async function removeFromPostIndex(env: ContainEnv, channelId: string, postId: s
 export async function startContainment(env: ContainEnv, input: { caseId: string; matchedUrl: string; resolution: CsamResolution; actorId: string }): Promise<{ hide: HideResult; job: AdminJob }> {
 	const { caseId, matchedUrl, resolution } = input;
 	const hide = await hideNow(env, caseId, matchedUrl, resolution);
-	const targetKind = resolution.videoId ? 'video' : resolution.kind === 'profile_image' ? 'user' : 'channel';
-	const targetId = resolution.videoId ?? (resolution.kind === 'profile_image' ? resolution.uploaderId : resolution.channelId) ?? caseId;
+	const ofUser = resolution.kind === 'profile_image' || resolution.kind === 'comment';
+	const targetKind = resolution.videoId ? 'video' : ofUser ? 'user' : 'channel';
+	const targetId = resolution.videoId ?? (ofUser ? resolution.uploaderId : resolution.channelId) ?? caseId;
 	const params: ContainParams = { caseId, matchedUrl, resolution, phase: 'plan', createdAt: now() };
 	const job = await createJob(env, { kind: 'csam.contain', targetKind, targetId, actorId: input.actorId, params: params as unknown as Record<string, unknown> });
 	return { hide, job };
@@ -301,7 +395,33 @@ async function purgeItem(env: ContainEnv, p: ContainParams): Promise<ContainPara
 		await env.community_posts.delete(postKey(r.channelId, r.postId));
 		purge.post = 'deleted';
 	}
+	if (r.kind === 'comment') purge.comment = (await eraseCommentText(env, p.caseId, r)) ? 'deleted' : 'gone';
 	return { ...p, phase: 'ban', purge };
+}
+
+/** What the comment said, after the evidence kept it. The replies of other people stay. */
+async function eraseCommentText(env: ContainEnv, caseId: string, r: CsamResolution): Promise<boolean> {
+	const erase = (comment: MarkedComment) => {
+		takeCommentDown(comment, caseId);
+		comment.text = '';
+		if (comment.content !== undefined) comment.content = '';
+	};
+	if (r.commentOn === 'video') {
+		let found = false;
+		await repo(env.videos).updateObject(r.commentParentId!, (video) => {
+			const comment = findStoredComment(video.comments as MarkedComment[], r.commentId!)?.comment;
+			found = !!comment;
+			if (comment) erase(comment);
+			return found;
+		});
+		return found;
+	}
+	const located = await locatePostComment(env.community_posts, r.commentParentId!, r.commentId!);
+	if (!located) return false;
+	return !!(await repo<MarkedComment>(env.community_posts).updateObject(located.key, (comment) => {
+		erase(comment);
+		return true;
+	}));
 }
 
 async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result: Record<string, unknown> }> {
@@ -315,16 +435,20 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		}
 	}
 	const keys = await evidenceKeys(env);
+	const recordings = p.resolution.kind === 'live_stream' ? await storedRecordings(env, p.resolution.streamId!) : [];
+	const missing = [...(p.missing ?? []), ...recordings.map((source) => ({ name: 'live-recording', source, reason: 'kept at its source: the takedown does not copy live recordings' }))];
 	await writeManifest(env, keys, {
 		v: 1,
 		caseId: p.caseId,
 		matchedUrl: p.matchedUrl,
 		resolution: p.resolution,
 		files: p.copied ?? [],
-		missing: p.missing ?? [],
+		missing,
 		createdAt: p.createdAt,
-		completedAt: now(),
+		...(recordings.length ? {} : { completedAt: now() }),
 	});
+	// Not contained while a recording can still be fetched: a person copies and removes it, then retries
+	if (recordings.length) throw new Error(`The stream is hidden and its uploader banned, but ${recordings.length} recording(s) are still stored: keep a copy, remove them, then retry`);
 	return { result: { caseId: p.caseId, files: (p.copied ?? []).length, missing: (p.missing ?? []).length, purge: p.purge ?? {}, ban } };
 }
 

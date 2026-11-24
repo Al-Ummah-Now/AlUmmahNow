@@ -3,14 +3,19 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { takeAction } from '@/lib/api/admin';
-import type { ModerationAction } from '@al-ummah/shared-types';
+import type { ModerationAction, ReportableEntityType, ReportOutcomeOption } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 
+import { actionDescription, actionErrorKey, outcomeReasonKey } from './outcomes';
+
 interface ReportActionsProps {
   reportId: string;
+  entityType: ReportableEntityType;
+  /** What this admin may decide about the item, from the server; an outcome it does not name is not offered */
+  outcomes: ReportOutcomeOption[];
 }
 
 const actionOptions: {
@@ -51,7 +56,7 @@ const actionOptions: {
   },
 ];
 
-export function ReportActions({ reportId }: ReportActionsProps) {
+export function ReportActions({ reportId, entityType, outcomes }: ReportActionsProps) {
   const router = useRouter();
   const { t } = useLanguage();
   const notesId = useId();
@@ -88,11 +93,7 @@ export function ReportActions({ reportId }: ReportActionsProps) {
     if (!result.ok) {
       logger.warn('[moderation] Action failed', { reportId, action: selectedAction, status: result.status });
       setError(
-        result.status === 409
-          ? t('actions.alreadyClosed')
-          : result.status === 401
-            ? t('errors.notAuthenticated')
-            : t('actions.failed'),
+        t(actionErrorKey(result.status, result.code)),
       );
       setLoading(false);
       return;
@@ -114,23 +115,30 @@ export function ReportActions({ reportId }: ReportActionsProps) {
       {error && <ErrorAlert testId="action-error">{error}</ErrorAlert>}
 
       <div className="space-y-3 mb-6" role="group" aria-label={t('actions.choose')}>
-        {actionOptions.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            data-action={option.value}
-            aria-pressed={selectedAction === option.value}
-            onClick={() => setSelectedAction(option.value)}
-            className={`w-full text-start p-3 rounded border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-              selectedAction === option.value
-                ? 'border-focus bg-surface-hover'
-                : 'border-border hover:bg-surface-hover'
-            }`}
-          >
-            <span className="font-medium text-fg">{t(option.label)}</span>
-            <span className="block text-sm text-fg-muted">{t(option.description)}</span>
-          </button>
-        ))}
+        {actionOptions.map((option) => {
+          const reason = outcomes.find((o) => o.action === option.value)?.reason ?? null;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              data-action={option.value}
+              data-reason={reason ?? undefined}
+              aria-pressed={selectedAction === option.value}
+              disabled={reason !== null}
+              onClick={() => setSelectedAction(option.value)}
+              className={`w-full text-start p-3 rounded border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+                reason
+                  ? 'border-border border-dashed cursor-not-allowed'
+                  : selectedAction === option.value
+                    ? 'border-focus bg-surface-hover'
+                    : 'border-border hover:bg-surface-hover'
+              }`}
+            >
+              <span className={`font-medium ${reason ? 'text-fg-muted' : 'text-fg'}`}>{t(option.label)}</span>
+              <span className="block text-sm text-fg-muted">{t(reason ? outcomeReasonKey(reason) : actionDescription(entityType, option.value) ?? option.description)}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="mb-6">

@@ -20,11 +20,19 @@ function seed() {
 	db.db.prepare("UPDATE content_ownership SET email = 'rep@example.com' WHERE kind = 'profile' AND id = 'usr_rep'").run();
 	db.db.prepare('INSERT INTO admin_comments (video_id, comment_id, user_id, channel_id, text) VALUES (?, ?, ?, ?, ?)').run('v_1', 'c_1', 'usr_commenter', null, '  a   rude comment ');
 	db.db.prepare('INSERT INTO videos_bans (user_id, reason, banned_by, banned_at) VALUES (?, ?, ?, ?)').run('usr_owner', 'x', 'admin', '2026-01-01T00:00:00Z');
+	db.db.prepare("INSERT INTO channel_comments (comment_id, channel_id, target_kind, target_id, author_user_id, status, created_at, updated_at) VALUES ('pc_1', 'ch_1', 'post', 'post_1', 'usr_commenter', 'published', '', '')").run();
+	db.db.prepare("INSERT INTO channel_comments (comment_id, channel_id, target_kind, target_id, author_user_id, status, created_at, updated_at) VALUES ('c_2', 'ch_1', 'video', 'v_1', 'usr_rep', 'held', '', '')").run();
+	db.db.prepare('INSERT INTO admin_comments (video_id, comment_id, user_id, channel_id, text, status) VALUES (?, ?, ?, ?, ?, ?)').run('v_1', 'c_2', 'usr_rep', null, 'held comment', 'held');
+	const community_posts = new MemoryBucket({
+		'post-locations/post_1': { channelId: 'ch_1' },
+		'posts/ch_1/post_1.json': { id: 'post_1', userId: 'usr_owner', channelId: 'ch_1', content: 'A  post', status: 'published' },
+		'comments/post_1/top-level/pc_1.json': { id: 'pc_1', postId: 'post_1', userId: 'usr_commenter', content: 'a post comment' },
+	});
 	const profiles = new MemoryBucket({ usr_commenter: { displayName: 'Commenter', email: 'commenter@example.com' } });
 	const playlists = new MemoryBucket({ p_1: { id: 'p_1', title: 'List', userId: 'usr_rep', channelId: 'ch_1' } });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter as never);
-	const env = { SEARCH_DB: db, profiles, playlists };
+	const env = { SEARCH_DB: db, profiles, playlists, community_posts };
 	return (json: unknown) =>
 		app.request('/internal/admin/lookup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(json) }, env as never);
 }
@@ -40,12 +48,15 @@ describe('admin lookup', () => {
 				{ type: 'channel', id: 'ch_1' },
 				{ type: 'video', id: 'gone' },
 				{ type: 'post', id: 'post_1' },
+				{ type: 'comment', id: 'pc_1' },
+				{ type: 'comment', id: 'c_2' },
+				{ type: 'post', id: 'post_9' },
 			],
 			users: ['usr_rep', 'usr_unknown'],
 		});
 		assert.equal(res.status, 200);
 		const { result } = (await res.json()) as { result: { items: any[]; users: any[] } };
-		const [video, comment, playlist, channel, gone, post] = result.items;
+		const [video, comment, playlist, channel, gone, post, postComment, held, noPost] = result.items;
 		assert.deepEqual(
 			{ title: video.title, channelName: video.channelName, ownerId: video.ownerId, isHidden: video.isHidden, found: video.found },
 			{ title: 'A video', channelName: 'Good Channel', ownerId: 'usr_owner', isHidden: true, found: true },
@@ -58,7 +69,11 @@ describe('admin lookup', () => {
 		assert.equal(playlist.channelName, 'Good Channel');
 		assert.equal(channel.ownerId, 'usr_owner');
 		assert.equal(gone.found, false);
-		assert.equal(post.found, false);
+		const of = (i: any) => ({ found: i.found, title: i.title, parentId: i.parentId, parentType: i.parentType, channelName: i.channelName, ownerId: i.ownerId, isHidden: i.isHidden });
+		assert.deepEqual(of(post), { found: true, title: 'A post', parentId: null, parentType: undefined, channelName: 'Good Channel', ownerId: 'usr_owner', isHidden: false });
+		assert.deepEqual(of(postComment), { found: true, title: 'a post comment', parentId: 'post_1', parentType: 'post', channelName: 'Good Channel', ownerId: 'usr_commenter', isHidden: false });
+		assert.deepEqual(of(held), { found: true, title: 'held comment', parentId: 'v_1', parentType: 'video', channelName: 'Good Channel', ownerId: 'usr_rep', isHidden: true });
+		assert.equal(noPost.found, false);
 		const users = Object.fromEntries(result.users.map((u) => [u.id, u]));
 		assert.equal(users.usr_owner.displayName, 'Owner Name');
 		assert.equal(users.usr_owner.isBanned, true);

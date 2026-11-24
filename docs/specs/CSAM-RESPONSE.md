@@ -58,7 +58,18 @@ Each URL becomes one **case**. A URL that already has an open case is attached t
 | `images.alummahnow.*/thumbnails/<video>/…` | the video's custom thumbnail | video `userId` |
 | `images.alummahnow.*/community-posts/<channel>/<file>` | the post that shows it (the channel's posts are scanned) | post `userId`, else the image index |
 | `images.alummahnow.*/<id>_avatar.<ext>`, `_cover` | an avatar or cover, found in `image_owners` | whoever uploaded it |
-| site pages `/video/<id>`, `/shorts/<id>`, `/embed/v/<id>`, `/channels/<id>?post=<id>` | the video or post | as above |
+| site pages `/video/<id>` (also `/video?vid=<id>`), `/shorts/<id>`, `/embed/v/<id>`, `/thumb/<id>.jpg`, `/og/v/<id>.jpg`, Studio and analytics pages of one video | the video | video `userId` |
+| site pages `/post/<id>`, `/channels/<id>?post=<id>`, `/@<handle>?post=<id>` | the post (the channel from the URL, else the search index or the post's location record) | post `userId` |
+| `?comment=<id>`, `?commentId=<id>`, `?lc=<id>` or `#comment-<id>` on any of those, and `/embed/comments/<id>#comment-<id>` | **the comment** (`comment`), on the video or the post | the comment's author |
+| `/live/<id>`, `live[.qa\|.stage].alummahnow.net/hls/<session>/…` | the live stream (`live_stream`) | stream `userId` |
+| short links `alummahnow.link/v\|s\|p\|e/<id>` | the video, post or live stream | as above |
+| scholar sites `/<lang>/watch/<id>`, `/<lang>/posts/<id>` (`<slug>.alummahnow.org` and own domains, looked up in the site host index) | the video or post, when it is on that site's channel | as above |
+
+**Hosts.** Site pages count on `videos.`, `www.` and the apex, in every environment (`qa.`, `stage.`), on `.net`, `.com` and `.org`. The check is anchored, so look-alike names (`alummahnow.net.example.com`, `evil-alummahnow.net`) and other ports are refused. Any other name in our zones is ours too (`cms.`, `auth.`, …), except the admin and status consoles. A page of someone else's domain is refused unless the site host index holds that domain.
+
+**A comment URL never acts on what it is on.** When the comment it names is gone, or it names comments without saying which (`#comments`), the case stays unmapped.
+
+**Ours, but no single item** (a channel, playlist, profile, search, a file we do not know): the case opens as unmapped.
 
 Optimizer URLs (`/_next/image?url=…`, `/cdn-cgi/image/<opts>/…`) are unwrapped first. An encoded slash or dot segment makes a URL unmappable.
 
@@ -75,6 +86,8 @@ Optimizer URLs (`/_next/image?url=…`, `/cdn-cgi/image/<opts>/…`) are unwrapp
 - A video gets the `csam` hold. Every API surface stops serving it at once, and its media starts moving to the private bucket.
 - A post is set to status `deleted` and leaves its channel's index.
 - An avatar or cover field is cleared.
+- A comment is marked deleted. The video or post it is on, and the replies other people wrote, stay as they are.
+- A live stream is ended and hidden, and gets the `csam` hold.
 
 Every touched record keeps a `csamTakedown` mark (case id, time, the removed URL). Nothing is deleted at this point. The matched URL and the image URL are purged from the Cloudflare cache.
 
@@ -89,7 +102,9 @@ Every touched record keeps a `csamTakedown` mark (case id, time, the removed URL
 | `purge` | Deletes the video record, its side records, the original, the Bunny Stream video and its notifications. A post is deleted for good. |
 | `ban` | Bans the uploader on videos (`videos_bans` and the holds job) and writes the final manifest. |
 
-The order guarantees that nothing is destroyed before it is kept. The public copies go first, so the window during which a stray public URL still answers stays short. A takedown never goes through `admin_deletions`, so no admin can restore it. Nothing lifts the `csam` hold.
+The order guarantees that nothing is destroyed before it is kept. The public copies go first, so the window during which a stray public URL still answers stays short. **Live recordings.** The takedown does not copy or delete a live stream's recording (`live/<session>/` in the live bucket, or Bunny). When one is still stored, the job ends as **failed** after the stream is hidden, its records are kept and its uploader is banned: the manifest lists the recording as missing, and the case stays `containment_failed`. A person keeps a copy, removes the recording, and retries from the case page.
+
+A takedown never goes through `admin_deletions`, so no admin can restore it. Nothing lifts the `csam` hold.
 
 The job's last failed attempt flags the admin on the Errors page, key `csam-contain:<caseId>`.
 - The flag links to the case page. The flag itself has no Retry, because any admin can open the Errors page. A super admin retries from the case page (audited), and a success resolves the flag.

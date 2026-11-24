@@ -20,6 +20,9 @@ import {
 	type OriginalManifest,
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
+import { findStoredComment, type StoredComment } from '../comments';
+import { locatePostComment } from '../channelComments/moderation';
+import { streamKey } from '../live/streams';
 import { sourceCandidates, type MediaEnv } from '../media/r2-delivery';
 import { imagePathOf } from './imageOwners';
 import { CHUNK_BYTES, SEALED_CHUNK_BYTES, evidenceKeys, openChunk, openJson, sealChunk, sealJson, sha256Hex, type EvidenceKeys } from './crypto';
@@ -36,6 +39,7 @@ export interface EvidenceEnv {
 	community_posts?: R2Bucket;
 	image_storage_key?: unknown;
 	ZONE?: string;
+	SEARCH_DB?: D1Database;
 }
 
 /** Where a file comes from; plain data so it survives between job deliveries. */
@@ -146,6 +150,25 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 			const path = imagePathOf(image.url);
 			if (path && path !== r.imagePath && path.startsWith(`/community-posts/${r.channelId}/`)) files.push({ name: `05-post-image-${i + 1}.${extOf(path, 'jpg')}`, source: { type: 'image', path }, contentType: typeOf(extOf(path, 'jpg')) });
 		});
+	}
+	if (r.kind === 'comment' && r.commentId && r.commentParentId) {
+		// The comment only: what it is on, and what other people replied, is not evidence
+		let comment: Record<string, unknown> | null = null;
+		if (r.commentOn === 'video') {
+			const video = await json<{ comments?: StoredComment[] }>(env.videos, r.commentParentId);
+			comment = (findStoredComment(video?.comments, r.commentId)?.comment as unknown as Record<string, unknown>) ?? null;
+		} else if (env.community_posts) {
+			comment = ((await locatePostComment(env.community_posts, r.commentParentId, r.commentId))?.comment as unknown as Record<string, unknown>) ?? null;
+		}
+		if (comment) {
+			const { replies: _replies, ...own } = comment;
+			await snapshot('record-comment.json', `${r.commentOn}:${r.commentParentId}/comments/${r.commentId}`, own);
+		}
+	}
+	if (r.kind === 'live_stream' && r.streamId) {
+		await snapshot('record-live-stream.json', `videos/${streamKey(r.streamId)}`, await json(env.videos, streamKey(r.streamId)));
+		const sessions = await env.SEARCH_DB?.prepare('SELECT * FROM live_sessions WHERE stream_id = ? ORDER BY created_at LIMIT 100').bind(r.streamId).all();
+		if (sessions?.results?.length) await snapshot('record-live-sessions.json', `live_sessions/${r.streamId}`, sessions.results);
 	}
 	if (r.channelId) await snapshot('record-channel.json', `channels/${r.channelId}`, await json(env.channels, r.channelId));
 	if (r.uploaderId) await snapshot('record-uploader-profile.json', `profiles/${r.uploaderId}`, await json(env.profiles, r.uploaderId));
