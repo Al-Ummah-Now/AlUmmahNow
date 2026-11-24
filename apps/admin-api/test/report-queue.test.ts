@@ -421,6 +421,16 @@ describe('reports queue: decisions', () => {
         await e.db.prepare("UPDATE reports SET owner_id = 'deleted-user'").run();
         assert.equal((await act(e, type, id, 'banned')).body.code, 'item_gone');
         assert.equal(e.calls.filter((c) => c.path.endsWith('/ban')).length, 0);
+        // Not when its reports name two people, or one was erased since, or an erasure has not reached them yet
+        for (const [first, second, tombstone] of [['usr_owner', 'usr_commenter', null], ['deleted-user', 'usr_commenter', null], ['usr_commenter', 'usr_commenter', 'usr_commenter']] as const) {
+          const u = setup([...report(type, id), { id: 'x2', type, entity: id, reporter: 'usr_r2', created: '2026-11-02T00:00:00Z' }], { live: { found: false, changed: false } });
+          await u.db.prepare("UPDATE reports SET owner_id = CASE id WHEN 'x1' THEN ? ELSE ? END").bind(first, second).run();
+          if (tombstone) await u.db.prepare('INSERT INTO erased_users (user_key, erased_at) VALUES (?, ?)').bind(await eraseTombstoneKey(tombstone), 1).run();
+          const shown = await u.call(`/api/moderation/queue/items/${type}/${id}`);
+          assert.equal(shown.body.result.outcomes.find((o: any) => o.action === 'banned').available, false, `${first} ${second}`);
+          assert.equal((await act(u, type, id, 'banned')).body.code, 'item_gone', `${first} ${second}`);
+          assert.equal(u.calls.filter((c) => c.path.endsWith('/ban')).length, 0);
+        }
       }
     });
 

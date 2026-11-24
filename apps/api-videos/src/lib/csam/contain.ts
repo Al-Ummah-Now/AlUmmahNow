@@ -49,7 +49,7 @@ import { swapPinnedPointer } from '../community-comments';
 import { bumpPostComments, postChannelId } from '../community-posts';
 import { moderateLive } from '../admin/liveModeration';
 import { streamKey } from '../live/streams';
-import { deleteBunny, deleteSessionMedia, forgetRecording, recordingInstruction, storedRecordings, type RecordingEnv, type StoredRecording } from './recordings';
+import { deleteBunny, deleteSessionMedia, forgetRemovedRecordings, recordingFiles, recordingInstruction, recordingParts, storedRecordings, type RecordingEnv, type StoredRecording } from './recordings';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -256,34 +256,68 @@ async function hideStream(env: ContainEnv, caseId: string, streamId: string): Pr
 	return true;
 }
 
-/** The names of the evidence files that were kept. */
-const keptNames = (p: ContainParams) => new Set((p.copied ?? []).map((f) => f.name));
+/** The evidence files that were kept, by name. */
+const keptFiles = (p: ContainParams) => new Map((p.copied ?? []).map((f) => [f.name, f]));
 
-/** Whether a recording's copy is in the store (or there was nothing to copy: no segments). */
-function recordingKept(p: ContainParams, r: StoredRecording): boolean {
-	const kept = keptNames(p);
-	const planned = (p.files ?? []).filter((f) => (f.source.type === 'live' && f.source.sessionId === r.sessionId) || (f.source.type === 'bunny_live' && f.source.guid === r.guid));
-	return planned.length > 0 && planned.every((f) => kept.has(f.name));
+/** A recording's planned copies. */
+const plannedFor = (p: ContainParams, r: StoredRecording) =>
+	(p.files ?? []).filter((f) => (f.source.type === 'live' && f.source.sessionId === r.sessionId) || (f.source.type === 'bunny_live' && f.source.guid === r.guid));
+
+/** Whether a whole copy of the recording is in the store (or there was nothing to copy). What was streamed after the copy is not in it. */
+async function recordingKept(env: ContainEnv, p: ContainParams, r: StoredRecording): Promise<boolean> {
+	// A session with no segment holds playlists only: nothing was streamed
+	if (r.provider === 'selfhosted' && !r.rendition) return true;
+	const kept = keptFiles(p);
+	for (const f of plannedFor(p, r)) {
+		const file = kept.get(f.name);
+		if (!file) continue;
+		if (f.source.type !== 'live') return true;
+		const parts = await recordingParts(env as RecordingEnv, f.source.sessionId, f.source.rendition);
+		// Fewer bytes than were kept: its removal has begun
+		if (parts.reduce((n, part) => n + part.size, 0) <= file.bytes) return true;
+	}
+	return false;
 }
 
-/** Removes the recordings whose copies are in the store, one provider at a time (self-hosted ones with the public files). */
-async function purgeRecordings(env: ContainEnv, p: ContainParams, provider: StoredRecording['provider']): Promise<number> {
+/** Copies of recordings of one case: a stream that keeps growing ends with a person. */
+const MAX_RECORDING_FILES = 250;
+
+/** Pages of 1000 objects one step deletes at most. */
+const PURGE_PAGES = 200;
+
+/**
+ * Removes the recordings whose copies are in the store, one provider at a time (self-hosted ones with the public
+ * files). `more`: there is more to remove than one step does.
+ */
+async function purgeRecordings(env: ContainEnv, p: ContainParams, provider: StoredRecording['provider']): Promise<{ removed: number; more: boolean }> {
+	const streamId = p.resolution.streamId!;
+	const left: StoredRecording[] = [];
 	let removed = 0;
-	for (const r of await storedRecordings(env as RecordingEnv, p.resolution.streamId!)) {
-		// A session with no segment holds playlists only: nothing was streamed
-		const nothing = r.provider === 'selfhosted' && !r.rendition;
-		if (r.provider !== provider || (!nothing && !recordingKept(p, r))) continue;
-		if (provider === 'selfhosted') await deleteSessionMedia(env as RecordingEnv, r.sessionId);
-		else await deleteBunny(env as RecordingEnv, r.guid!);
-		await forgetRecording(env as RecordingEnv, r.sessionId);
+	let pages = PURGE_PAGES;
+	let more = false;
+	for (const r of await storedRecordings(env as RecordingEnv, streamId)) {
+		if (more || r.provider !== provider || !(await recordingKept(env, p, r))) {
+			left.push(r);
+			continue;
+		}
+		if (provider === 'selfhosted') {
+			const out = await deleteSessionMedia(env as RecordingEnv, r.sessionId, pages);
+			pages -= out.pages;
+			if (!out.done || pages <= 0) more = true;
+			if (!out.done) {
+				left.push(r);
+				continue;
+			}
+		} else await deleteBunny(env as RecordingEnv, r.guid!);
 		removed++;
 	}
+	await forgetRemovedRecordings(env as RecordingEnv, streamId, left);
 	const host = (env as { LIVE_PUBLIC_HOST?: string }).LIVE_PUBLIC_HOST;
 	if (provider === 'selfhosted' && host) {
-		const { results } = await env.SEARCH_DB!.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' LIMIT 200").bind(p.resolution.streamId!).all<{ id: string }>();
+		const { results } = await env.SEARCH_DB!.prepare("SELECT id FROM live_sessions WHERE stream_id = ? AND provider = 'selfhosted' LIMIT 200").bind(streamId).all<{ id: string }>();
 		if (results?.length && (await purgeCdn(env as never, { prefixes: results.map((s) => `${host}/hls/${s.id}/`) })) === 'failed') throw new Error('Cloudflare cache purge failed');
 	}
-	return removed;
+	return { removed, more };
 }
 
 async function removeFromPostIndex(env: ContainEnv, channelId: string, postId: string): Promise<void> {
@@ -375,8 +409,10 @@ async function recordingMustBeGone(env: ContainEnv, p: ContainParams, file: Plan
 async function copyPhase(env: ContainEnv, p: ContainParams, stage: 'public' | 'source', next: ContainPhase): Promise<ContainParams> {
 	const keys = await evidenceKeys(env);
 	const files = p.files ?? [];
+	// Done already: a recording found later adds files to a plan that was carried out (banUploader)
+	const done = new Set([...(p.copied ?? []), ...(p.missing ?? [])].map((f) => f.name));
 	let index = p.file ?? 0;
-	while (index < files.length && files[index]!.stage !== stage) index++;
+	while (index < files.length && (files[index]!.stage !== stage || done.has(files[index]!.name))) index++;
 	if (index >= files.length || files[index]!.stage !== stage) return { ...p, phase: next, file: index, copy: undefined };
 	const step = await copyStep(env, keys, p.caseId, files[index]!, p.copy ?? { file: index, parts: [], chunk: 0, chunkSha256: [], bytes: 0 });
 	if (step.status === 'copying') return { ...p, file: index, copy: step.state };
@@ -396,7 +432,11 @@ async function purgePublic(env: ContainEnv, p: ContainParams): Promise<ContainPa
 	let deleted = 0;
 	for (const path of paths) if ((await deleteStoredImage(env, path)) === 'deleted') deleted++;
 	purge.images = deleted;
-	if (r.kind === 'live_stream') purge.recordings = await purgeRecordings(env, p, 'selfhosted');
+	if (r.kind === 'live_stream') {
+		const recordings = await purgeRecordings(env, p, 'selfhosted');
+		purge.recordings = Number(purge.recordings ?? 0) + recordings.removed;
+		if (recordings.more) return { ...p, purge };
+	}
 	const urls = paths.map(imageUrlOf);
 	const cdn = await purgeCdn(env as never, { files: urls });
 	if (cdn === 'failed') throw new Error('Cloudflare cache purge failed');
@@ -423,7 +463,7 @@ async function purgeItem(env: ContainEnv, p: ContainParams): Promise<ContainPara
 		await env.community_posts.delete(postKey(r.channelId, r.postId));
 		purge.post = 'deleted';
 	}
-	if (r.kind === 'live_stream') purge.bunnyRecordings = await purgeRecordings(env, p, 'bunny');
+	if (r.kind === 'live_stream') purge.bunnyRecordings = Number(purge.bunnyRecordings ?? 0) + (await purgeRecordings(env, p, 'bunny')).removed;
 	if (r.kind === 'comment') purge.comment = (await eraseCommentText(env, p.caseId, r)) ? 'deleted' : 'gone';
 	return { ...p, phase: 'ban', purge };
 }
@@ -453,7 +493,8 @@ async function eraseCommentText(env: ContainEnv, caseId: string, r: CsamResoluti
 	}));
 }
 
-async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result: Record<string, unknown> }> {
+/** The last step. `again`: a recording turned up that is not kept yet (it goes back to the copy). */
+async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result: Record<string, unknown> } | { again: ContainParams }> {
 	const uploaderId = p.resolution.uploaderId;
 	let ban = 'no_uploader';
 	if (uploaderId) {
@@ -464,11 +505,20 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		}
 	}
 	const keys = await evidenceKeys(env);
-	if (p.resolution.kind === 'live_stream') for (const provider of ['selfhosted', 'bunny'] as const) await purgeRecordings(env, p, provider);
+	if (p.resolution.kind === 'live_stream') for (const provider of ['selfhosted', 'bunny'] as const) if ((await purgeRecordings(env, p, provider)).more) return { again: { ...p } };
 	const left = p.resolution.kind === 'live_stream' ? await storedRecordings(env as RecordingEnv, p.resolution.streamId!) : [];
+	const unkept: StoredRecording[] = [];
+	for (const r of left) if (!(await recordingKept(env, p, r))) unkept.push(r);
+	// Only there since the plan (Bunny makes the library video later; a last segment came in), or the copy is not whole
+	const isDone = new Set([...(p.copied ?? []), ...(p.missing ?? [])].map((f) => f.name));
+	const planned = (p.files ?? []).filter((f) => f.source.type === 'live' || f.source.type === 'bunny_live').length;
+	const late = unkept.filter((r) => plannedFor(p, r).every((f) => isDone.has(f.name)));
+	if (late.length && planned + late.length <= MAX_RECORDING_FILES) {
+		return { again: { ...p, phase: 'copy-public', file: 0, copy: undefined, files: fileStages([...(p.files ?? []), ...recordingFiles(late, planned)]) } };
+	}
 	const missing = [
 		...(p.missing ?? []).filter((m) => !m.name.startsWith('06-live-recording') || !left.length),
-		...left.filter((r) => !recordingKept(p, r)).map((r, i) => ({ name: `live-recording-${i + 1}`, source: r.guid ? `bunny/${r.guid}` : `LIVE_MEDIA/live/${r.sessionId}/`, reason: recordingInstruction(r, false) })),
+		...unkept.map((r, i) => ({ name: `live-recording-${i + 1}`, source: r.guid ? `bunny/${r.guid}` : `LIVE_MEDIA/live/${r.sessionId}/`, reason: recordingInstruction(r, false) })),
 	];
 	await writeManifest(env, keys, {
 		v: 1,
@@ -481,7 +531,7 @@ async function banUploader(env: ContainEnv, p: ContainParams): Promise<{ result:
 		...(left.length ? {} : { completedAt: now() }),
 	});
 	// Hidden, held and off the CDN already; what is still stored needs another run or a person, and the case says which
-	if (left.length) throw new Error(`Nobody can reach the stream, and ${left.length} recording(s) are still stored. ${left.map((r) => recordingInstruction(r, recordingKept(p, r))).join(' ')}`);
+	if (left.length) throw new Error(`Nobody can reach the stream, and ${left.length} recording(s) are still stored. ${left.map((r) => recordingInstruction(r, !unkept.includes(r))).join(' ')}`);
 	return { result: { caseId: p.caseId, files: (p.copied ?? []).length, missing: (p.missing ?? []).length, purge: p.purge ?? {}, ban } };
 }
 
@@ -513,9 +563,13 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 				next = await purgeItem(env, p);
 				break;
 			case 'ban': {
-				const { result } = await banUploader(env, p);
+				const out = await banUploader(env, p);
+				if ('again' in out) {
+					next = out.again;
+					break;
+				}
 				resolveNeedsAction(env, undefined, needsActionKey);
-				return { done: true, result };
+				return { done: true, result: out.result };
 			}
 			default:
 				throw new Error(`unknown phase ${String(p.phase)}`);

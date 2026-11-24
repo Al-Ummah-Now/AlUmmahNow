@@ -77,8 +77,10 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 		.prepare('UPDATE live_sessions SET segments = ?, ingest_bytes = ? WHERE id = ?')
 		.bind(results?.length ?? 0, (results ?? []).reduce((n, r) => n + (r.bytes || 0), 0), session.id)
 		.run();
-	if (!opts.recordVod || !byRendition.size) {
-		if (!opts.recordVod && !(await keptForTakedown(env, session.stream_id))) await deletePrefix(bucket, base);
+	// Under a takedown: the takedown keeps it and removes it; no recording is published and none is reviewed
+	const taken = await keptForTakedown(env, session.stream_id);
+	if (taken || !opts.recordVod || !byRendition.size) {
+		if (!taken && !opts.recordVod) await deletePrefix(bucket, base);
 		await d1.prepare('UPDATE live_sessions SET r2_writes = r2_writes + ? WHERE id = ?').bind(writes, session.id).run();
 		return;
 	}

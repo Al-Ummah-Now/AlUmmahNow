@@ -38,6 +38,7 @@ import {
 } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
 import { DELETED_USER_ID, NOBODY_ERASED, erasedKeysOf, itemKey, lookupMany, type Lookup, type MetaEnv } from './reportMeta';
+import { knownOwner } from './reportDecision';
 import { logger } from '../logger';
 
 export const OPEN = "('pending', 'reviewing')";
@@ -507,7 +508,7 @@ export async function readItem(env: MetaEnv, type: ReportableEntityType, id: str
   const lookup = await lookupMany(env, [{ type, id }], [...people, anyRow?.owner_id ?? '']) ?? groupLookup;
   const copy: ItemCopy = anyRow ?? { entity_type: type, entity_id: id, entity_title: null, entity_parent_id: null, channel_id: null, channel_name: null, owner_id: null, owner_name: null };
   const live = lookup?.items.get(itemKey(type, id)) ?? null;
-  const ownerId = live?.found ? live.ownerId : [...open, ...closed].map((r) => r.owner_id).find((o) => o && o !== DELETED_USER_ID);
+  const ownerId = live?.found ? live.ownerId : await knownOwner(env as never, type, id);
   return {
     group: groups[0] ?? null,
     item: itemSummary(copy, lookup),
