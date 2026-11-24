@@ -59,6 +59,7 @@ CREATE INDEX idx_live_reminders_user ON live_reminders (user_id, created_at, str
 CREATE INDEX idx_notifications_created ON notifications(created_at);
 CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL;
 CREATE INDEX idx_notifications_entity ON notifications (entity_id) WHERE entity_id IS NOT NULL;
+CREATE INDEX idx_notifications_read_created ON notifications(created_at) WHERE is_read = 1;
 CREATE INDEX idx_notifications_unpushed ON notifications(dedupe_key, user_id) WHERE pushed_at IS NULL;
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC, id DESC);
 CREATE INDEX idx_notifications_user_unread_created ON notifications(user_id, is_read, created_at);

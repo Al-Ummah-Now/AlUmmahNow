@@ -301,81 +301,79 @@ const changes = (r: unknown) => Number((r as { meta?: { changes?: number } })?.m
  * idx_notifications_created, at most PURGE_MAX_ROUNDS per run. Returns rows deleted.
  */
 export async function purgeExpiredNotifications(db: D1Database, now = Date.now()): Promise<number> {
-  const cutoff = now - NOTIFICATION_RETENTION_DAYS * DAY_MS;
   let deleted = 0;
-  for (let round = 0; round < PURGE_MAX_ROUNDS; round++) {
-    const n = changes(
-      await db
-        .prepare('DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE created_at < ?1 ORDER BY created_at LIMIT ?2)')
-        .bind(cutoff, PURGE_BATCH)
-        .run(),
-    );
-    deleted += n;
-    if (n < PURGE_BATCH) break;
+  // Every notification after 90 days (idx_notifications_created), then every read one after 30 days,
+  // for every user, notified recently or not (partial idx_notifications_read_created)
+  for (const [sql, cutoff] of [
+    ['DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE created_at < ?1 ORDER BY created_at LIMIT ?2)', now - NOTIFICATION_RETENTION_DAYS * DAY_MS],
+    ['DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE is_read = 1 AND created_at < ?1 ORDER BY created_at LIMIT ?2)', now - NOTIFICATION_READ_RETENTION_DAYS * DAY_MS],
+  ] as const) {
+    for (let round = 0; round < PURGE_MAX_ROUNDS; round++) {
+      const n = changes(await db.prepare(sql).bind(cutoff, PURGE_BATCH).run());
+      deleted += n;
+      if (n < PURGE_BATCH) break;
+    }
   }
   return deleted;
 }
 
-/** The three trim statements of one user (all on idx_notifications_user_unread_created). */
-function trimStatements(db: D1Database, userId: string, readCutoff: number): D1PreparedStatement[] {
-  return [
-    // Read rows past the read retention (30 days)
-    db
-      .prepare('DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 1 AND created_at < ?2 LIMIT ?3)')
-      .bind(userId, readCutoff, PURGE_BATCH),
-    // The newest NOTIFICATION_READ_CAP read rows are kept
+/** Rows one cap statement deletes at most; a user over the cap by more takes several rounds. */
+export const TRIM_DELETE_BATCH = 500;
+
+/** The two cap statements of one user (idx_notifications_user_unread_created), each at most TRIM_DELETE_BATCH rows. */
+function capStatements(db: D1Database, userId: string): D1PreparedStatement[] {
+  const over = (isRead: 0 | 1, keep: number) =>
     db
       .prepare(
-        `DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 1
-         ORDER BY created_at DESC LIMIT -1 OFFSET ?2)`,
+        `DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = ?2
+         ORDER BY created_at DESC LIMIT ?3 OFFSET ?4)`,
       )
-      .bind(userId, NOTIFICATION_READ_CAP),
-    // Unread rows are trimmed only past NOTIFICATION_UNREAD_CAP (the badge shows 99+ long before)
-    db
-      .prepare(
-        `DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE user_id = ?1 AND is_read = 0
-         ORDER BY created_at DESC LIMIT -1 OFFSET ?2)`,
-      )
-      .bind(userId, NOTIFICATION_UNREAD_CAP),
-  ];
+      .bind(userId, isRead, TRIM_DELETE_BATCH, keep);
+  // The newest NOTIFICATION_READ_CAP read rows stay; unread rows only past NOTIFICATION_UNREAD_CAP
+  return [over(1, NOTIFICATION_READ_CAP), over(0, NOTIFICATION_UNREAD_CAP)];
 }
 
 export const TRIM_JOB = 'inbox-trim';
 /** Notifications read per walk page, and pages per run (the cursor keeps the rest for the next run). */
 export const TRIM_PAGE = 2000;
 export const TRIM_MAX_PAGES = 25;
-/** Users trimmed per D1 batch (3 statements each). */
-const TRIM_USERS_PER_BATCH = 30;
+/** Users trimmed per D1 batch (2 statements each, so at most 10,000 rows per transaction). */
+const TRIM_USERS_PER_BATCH = 10;
+/** Wall time one trim run may take; a page not finished in time is walked again next run. */
+export const TRIM_TIME_BOX_MS = 20_000;
 
 export interface TrimOutcome {
   users: number;
   deleted: number;
   /** The walk reached the newest notification (nothing left for this run). */
   caughtUp: boolean;
+  /** The run stopped at its time box (the unfinished page is walked again next run). */
+  timedOut: boolean;
 }
 
 /**
- * The inbox cap and read retention (wiki AUN-D1-SCALING D1-2), enforced after the fact, never on
- * insert: fanoutNotificationPage stays one set-based INSERT … SELECT. Walks the notifications
- * created since the last run on idx_notifications_created with a (created_at, rowid) cursor kept
- * in notification_trim_state, and trims each recipient it meets once:
- *   - read rows older than NOTIFICATION_READ_RETENTION_DAYS go;
- *   - only the newest NOTIFICATION_READ_CAP read rows stay;
- *   - only the newest NOTIFICATION_UNREAD_CAP unread rows stay.
- * Users who got nothing new are not visited; every row still goes at NOTIFICATION_RETENTION_DAYS.
- * The first run starts one read-retention window back.
+ * The inbox caps (wiki AUN-D1-SCALING D1-2), enforced after the fact, never on insert:
+ * fanoutNotificationPage stays one set-based INSERT … SELECT. Walks the notifications created
+ * since the last run on idx_notifications_created with a (created_at, rowid) cursor kept in
+ * notification_trim_state, and trims each recipient it meets: only the newest NOTIFICATION_READ_CAP
+ * read and NOTIFICATION_UNREAD_CAP unread rows stay. Each statement deletes at most
+ * TRIM_DELETE_BATCH rows and is repeated for users still over; the run stops at TRIM_TIME_BOX_MS
+ * without moving the cursor past an unfinished page. Read retention (30 days) is the purge's job
+ * (purgeExpiredNotifications), for every user. The first run starts one read-retention window back.
  */
-export async function trimNotificationInboxes(db: D1Database, now = Date.now()): Promise<TrimOutcome> {
-  const readCutoff = now - NOTIFICATION_READ_RETENTION_DAYS * DAY_MS;
+export async function trimNotificationInboxes(db: D1Database, now = Date.now(), clock: () => number = Date.now): Promise<TrimOutcome> {
+  const started = clock();
+  const timeUp = () => clock() - started >= TRIM_TIME_BOX_MS;
   const state = await db
     .prepare('SELECT created_at, row_id FROM notification_trim_state WHERE job = ?')
     .bind(TRIM_JOB)
     .first<{ created_at: number; row_id: number }>();
-  let cursor = state ?? { created_at: readCutoff, row_id: 0 };
+  let cursor = state ?? { created_at: now - NOTIFICATION_READ_RETENTION_DAYS * DAY_MS, row_id: 0 };
   const done = new Set<string>();
   let deleted = 0;
   let caughtUp = false;
-  for (let page = 0; page < TRIM_MAX_PAGES; page++) {
+  let timedOut = false;
+  pages: for (let page = 0; page < TRIM_MAX_PAGES; page++) {
     const rows =
       (
         await db
@@ -387,12 +385,26 @@ export async function trimNotificationInboxes(db: D1Database, now = Date.now()):
           .bind(cursor.created_at, cursor.row_id, TRIM_PAGE)
           .all<{ row_id: number; created_at: number; user_id: string }>()
       ).results ?? [];
-    const users = [...new Set(rows.map((r) => r.user_id))].filter((u) => !done.has(u));
-    for (let i = 0; i < users.length; i += TRIM_USERS_PER_BATCH) {
-      const slice = users.slice(i, i + TRIM_USERS_PER_BATCH);
-      const results = await db.batch(slice.flatMap((u) => trimStatements(db, u, readCutoff)));
-      for (const r of results) deleted += changes(r);
-      for (const u of slice) done.add(u);
+    let pending = [...new Set(rows.map((r) => r.user_id))].filter((u) => !done.has(u));
+    while (pending.length) {
+      const still: string[] = [];
+      for (let i = 0; i < pending.length; i += TRIM_USERS_PER_BATCH) {
+        if (timeUp()) {
+          timedOut = true;
+          break pages;
+        }
+        const slice = pending.slice(i, i + TRIM_USERS_PER_BATCH);
+        const results = await db.batch(slice.flatMap((u) => capStatements(db, u)));
+        slice.forEach((u, j) => {
+          const read = changes(results[2 * j]);
+          const unread = changes(results[2 * j + 1]);
+          deleted += read + unread;
+          // A full batch means this user may still be over a cap: another round
+          if (read >= TRIM_DELETE_BATCH || unread >= TRIM_DELETE_BATCH) still.push(u);
+          else done.add(u);
+        });
+      }
+      pending = still;
     }
     const last = rows[rows.length - 1];
     if (last) {
@@ -410,7 +422,7 @@ export async function trimNotificationInboxes(db: D1Database, now = Date.now()):
       break;
     }
   }
-  return { users: done.size, deleted, caughtUp };
+  return { users: done.size, deleted, caughtUp, timedOut };
 }
 
 /** GDPR erasure: a user's notifications, settings, menu-seen time, subscriber rows and push devices are personal data. */
