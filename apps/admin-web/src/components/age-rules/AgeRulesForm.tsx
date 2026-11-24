@@ -118,7 +118,7 @@ export function AgeRulesForm({
             : t('ageRules.neverSaved')}
         </div>
         {view.canEdit ? (
-          <button type="submit" className={primaryButtonClass} disabled={busy || unchanged} data-testid="age-rules-save">
+          <button type="submit" className={`${primaryButtonClass} disabled:opacity-60 disabled:cursor-not-allowed`} disabled={busy || unchanged} data-testid="age-rules-save">
             {t(busy ? 'ageRules.saving' : 'ageRules.save')}
           </button>
         ) : (
