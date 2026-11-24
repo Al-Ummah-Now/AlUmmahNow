@@ -285,6 +285,9 @@ describe('costs sections render', () => {
       assert.match(html, /data-testid="costs-budget-unset"/);
       assert.ok(!html.includes('data-testid="costs-budget-meter"'));
       assert.ok(html.includes(locale === 'ar' ? 'غير محددة' : 'Not set'));
+      const spentCard = html.match(/<div class="cost-tile p-4">[^]*?data-testid="costs-spent"[^]*?<\/div>/)?.[0] ?? '';
+      assert.ok(spentCard.includes(locale === 'ar' ? 'منذ بداية الشهر' : 'Month to date'), `spent card sub-label: ${spentCard}`);
+      assert.ok(!spentCard.includes(locale === 'ar' ? 'غير محددة' : 'Not set'), `spent card should not say Not set: ${spentCard}`);
       assert.match(html, /data-stale="true"/);
       assert.match(html, /data-testid="costs-alerts-empty"/);
       assert.match(html, /data-testid="costs-movers-up-empty"/);

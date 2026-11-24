@@ -246,7 +246,7 @@ export function BudgetSection({ d, t, f }: Common & { d: CostsDashboard }) {
       </div>
 
       <dl className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.percent(b.share) }) : t('costs.budget.notSet')} tone={m.tone} testId="costs-spent" />
+        <Stat label={t('costs.budget.spent')} value={f.usd(b.mtd)} sub={cap !== null && b.share !== null ? t('costs.budget.share', { percent: f.percent(b.share) }) : t('costs.budget.spentSub')} tone={m.tone} testId="costs-spent" />
         <Stat
           label={t('costs.budget.forecast')}
           value={f.usd(d.forecast.trailing)}
